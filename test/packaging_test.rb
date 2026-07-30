@@ -29,6 +29,7 @@ class PackagingTest < Minitest::Test
           next unless name == "tamoz-evals"
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
+          assert_equal 4, contents.grep(%r{\Asuites/m1/core/.+\.case\.json\z}).length
           assert_includes contents, "baselines/m0/baseline.result.json"
           assert_includes contents, "baselines/m0/evidence/baseline-summary.json"
           assert_equal(
@@ -105,6 +106,79 @@ class PackagingTest < Minitest::Test
       )
       assert_equal Tamoz::Evals::CLI::INSUFFICIENT_EVIDENCE, status.exitstatus
       assert_includes stdout, '"decision":"insufficient_evidence"'
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_core_runs_all_m1_primitives_without_repository_load_paths
+    root = GEM_ROOTS.fetch("tamoz-core")
+
+    Dir.mktmpdir("tamoz-installed-core") do |directory|
+      package = File.join(directory, "tamoz-core.gem")
+      install_root = File.join(directory, "install")
+      spec = Gem::Specification.load(root.join("tamoz-core.gemspec").to_s)
+      Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
+      clean_environment = ENV.each_key
+                             .grep(/\A(?:BUNDLE|BUNDLER)/)
+                             .to_h { |key| [key, nil] }
+                             .merge(
+                               "GEM_HOME" => install_root,
+                               "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+                               "RUBYLIB" => nil,
+                               "RUBYOPT" => nil
+                             )
+      _stdout, stderr, status = Open3.capture3(
+        clean_environment,
+        RbConfig.ruby,
+        "-S",
+        "gem",
+        "install",
+        "--no-document",
+        "--ignore-dependencies",
+        "--install-dir",
+        install_root,
+        package
+      )
+      assert status.success?, stderr
+
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/core"
+        state = Tamoz::StateCodec.new.normalize("steps" => [{"id" => "inspect"}])
+        context = Tamoz::Context.new(
+          run_id: "run.1",
+          execution_id: "execution.1",
+          request_id: "request.1"
+        )
+        results = Tamoz::Pool.for(:threads, size: 1).map(state.fetch("steps")) do |step|
+          context.child(step.fetch("id")).check!
+          step.fetch("id")
+        end
+        sink = Tamoz::StreamSink.new(capacity: 1, run_id: "run.1")
+        sink.emit(:custom, [], {"status" => "ok"})
+        sink.finish
+        feature = $LOADED_FEATURES.find { |path| path.end_with?("/tamoz/core.rb") }
+        puts JSON.generate(
+          "feature" => feature,
+          "result" => results.first.value,
+          "stream" => sink.each.first.data.fetch("status"),
+          "graph_loaded" => $LOADED_FEATURES.any? { |path| path.end_with?("/tamoz/graph.rb") }
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(
+        clean_environment,
+        RbConfig.ruby,
+        "-e",
+        script
+      )
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+      assert Pathname.new(result.fetch("feature")).realpath.to_s.start_with?(
+        "#{Pathname.new(install_root).realpath}#{File::SEPARATOR}"
+      )
+      assert_equal "inspect", result.fetch("result")
+      assert_equal "ok", result.fetch("stream")
+      assert_equal false, result.fetch("graph_loaded")
       assert_empty stderr
     end
   end

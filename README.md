@@ -19,11 +19,15 @@ precedes persistence, and persistence precedes model integration.
 
 ## Current status
 
-M0 establishes the package boundaries and evaluation contract. It intentionally contains no
-agent execution behavior. The authoritative design is committed under
-[`docs/design-v0.1/`](docs/design-v0.1/). The exact artifact contract is documented in
-[`docs/evaluation-artifacts-v1.md`](docs/evaluation-artifacts-v1.md), and the M0 findings
-and resolutions are recorded in [`docs/reviews/M0_DEEP_REVIEW.md`](docs/reviews/M0_DEEP_REVIEW.md).
+M1 adds the dependency-light `tamoz-core` runtime: immutable state encoding, explicit
+Context propagation, cooperative cancellation, safe instrumentation, bounded streaming,
+and ordered inline/thread execution. It intentionally contains no graph, persistence,
+provider, model, or agent behavior. See [`docs/M1.md`](docs/M1.md) for exact evidence and
+[`docs/reviews/M1_DEEP_REVIEW.md`](docs/reviews/M1_DEEP_REVIEW.md) for the phase review.
+
+The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
+The evaluation artifact contract is documented in
+[`docs/evaluation-artifacts-v1.md`](docs/evaluation-artifacts-v1.md).
 
 ## Development
 

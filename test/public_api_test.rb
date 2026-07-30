@@ -9,7 +9,52 @@ class PublicAPITest < Minitest::Test
     assert_equal(
       {
         "tamoz-agent" => ["Tamoz::Agent::VERSION"],
-        "tamoz-core" => ["Tamoz::Core::VERSION"],
+        "tamoz-core" => [
+          "Tamoz.configuration",
+          "Tamoz.configure",
+          "Tamoz.configuration_finalized?",
+          "Tamoz.finalize_configuration!",
+          "Tamoz.instrument",
+          "Tamoz::CancellationToken",
+          "Tamoz::CancelledError",
+          "Tamoz::CheckpointConflictError",
+          "Tamoz::CheckpointCorruptionError",
+          "Tamoz::CheckpointError",
+          "Tamoz::CheckpointVersionError",
+          "Tamoz::Clock.monotonic",
+          "Tamoz::Configuration",
+          "Tamoz::ConfigurationError",
+          "Tamoz::Context",
+          "Tamoz::Core::VERSION",
+          "Tamoz::EffectUnknownError",
+          "Tamoz::Emitter::Null",
+          "Tamoz::Error",
+          "Tamoz::GraphDefinitionError",
+          "Tamoz::InvalidUpdateError",
+          "Tamoz::LeaseLostError",
+          "Tamoz::NodeError",
+          "Tamoz::Notifier::Null",
+          "Tamoz::Pool.for",
+          "Tamoz::PoolCircuitOpenError",
+          "Tamoz::PoolWorkerError",
+          "Tamoz::RecursionLimitError",
+          "Tamoz::Secret",
+          "Tamoz::SensitiveValueError",
+          "Tamoz::StateCodec",
+          "Tamoz::StateCodec::Registration",
+          "Tamoz::StateLimitError",
+          "Tamoz::StoreError",
+          "Tamoz::StreamClosedError",
+          "Tamoz::StreamPart",
+          "Tamoz::StreamSink",
+          "Tamoz::TaskResult::Cancelled",
+          "Tamoz::TaskResult::Failed",
+          "Tamoz::TaskResult::Interrupted",
+          "Tamoz::TaskResult::Stuck",
+          "Tamoz::TaskResult::Succeeded",
+          "Tamoz::TimeoutError",
+          "Tamoz::UnsupportedValueError"
+        ],
         "tamoz-evals" => [
           "Tamoz::Evals::Case.load",
           "Tamoz::Evals::Result.load",
@@ -53,8 +98,8 @@ class PublicAPITest < Minitest::Test
   private
 
   def assert_public_entry(entry)
-    if entry.match?(/\.[a-z_][a-z0-9_]*\z/)
-      constant_name, method_name = entry.split(/\.(?=[a-z_][a-z0-9_]*\z)/)
+    if entry.match?(/\.[a-z_][a-z0-9_]*[!?]?\z/)
+      constant_name, _separator, method_name = entry.rpartition(".")
       constant = constant_name.split("::").reject(&:empty?).reduce(Object) do |scope, name|
         scope.const_get(name, false)
       end

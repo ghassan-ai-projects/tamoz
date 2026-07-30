@@ -16,6 +16,16 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  def test_core_loads_only_its_declared_runtime_boundary
+    features = loaded_features_after("tamoz/core")
+
+    assert_includes features, "tamoz/core.rb"
+    refute(
+      features.any? { |path| path.match?(%r{tamoz/(?:graph|sqlite|agent|evals)|ruby_llm}) },
+      features.inspect
+    )
+  end
+
   def test_agent_does_not_load_evals_sqlite_or_rubyllm_in_m0
     features = loaded_features_after("tamoz/agent")
 

@@ -34,13 +34,14 @@ namespace :design do
 end
 
 namespace :fixtures do
-  desc "Regenerate canonical M0 evaluation fixtures"
+  desc "Regenerate canonical evaluation fixtures"
   task :refresh do
     ruby "script/generate_m0_fixtures"
+    ruby "script/generate_m1_fixtures"
   end
 end
 
-desc "Run every M0 quality gate"
+desc "Run every implemented milestone quality gate"
 task ci: ["design:validate", :syntax, :test]
 
 task default: :ci

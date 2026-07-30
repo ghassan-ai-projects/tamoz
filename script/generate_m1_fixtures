@@ -1,0 +1,156 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+require "tamoz/evals"
+
+root = ENV.fetch(
+  "TAMOZ_FIXTURE_ROOT",
+  File.expand_path("../gems/tamoz-evals", __dir__)
+)
+case_root = File.join(root, "suites", "m1", "core")
+FileUtils.mkdir_p(case_root)
+
+def write_artifact(path, document)
+  document["content_digest"] = Tamoz::Evals::CanonicalJSON.content_digest(
+    document,
+    domain: "eval.case"
+  )
+  File.write(
+    path,
+    "#{Tamoz::Evals::CanonicalJSON.dump(document)}\n",
+    encoding: Encoding::UTF_8
+  )
+end
+
+def m1_case(index:, id:, title:, purpose:, risk:, test_file:, test_pattern:, done:)
+  {
+    "artifact_type" => "case",
+    "format_version" => 1,
+    "digest_version" => 1,
+    "content_digest" => "pending",
+    "case_id" => id,
+    "case_version" => 1,
+    "suite_id" => "tamoz.m1.core",
+    "split" => "conformance",
+    "title" => title,
+    "purpose" => purpose,
+    "tags" => ["conformance", "core", format("m1-%02d", index)],
+    "risk_class" => risk,
+    "input" => {
+      "kind" => "ruby-test-selection",
+      "payload" => {
+        "test_file" => test_file,
+        "test_pattern" => test_pattern
+      }
+    },
+    "environment" => {
+      "profile" => "pr",
+      "isolation" => "sandbox",
+      "network" => "denied"
+    },
+    "capabilities" => {
+      "allowed" => ["test.execute"],
+      "prohibited" => ["network.write", "state.external-effect"]
+    },
+    "definition_of_done" => done,
+    "evidence" => {
+      "required" => [
+        {
+          "id" => format("m1.evidence.%02d", index),
+          "kind" => "test",
+          "oracle" => "The fixed M1 runner exits successfully and retains its complete output."
+        }
+      ],
+      "optional" => []
+    },
+    "scorers" => [
+      {
+        "id" => "tamoz.m1.fixed-test",
+        "kind" => "deterministic",
+        "version" => "v1"
+      }
+    ],
+    "budgets" => {
+      "turns" => 1,
+      "steps" => 1,
+      "tool_calls" => 0,
+      "tokens" => 0,
+      "cost_microusd" => 0,
+      "time_ms" => 30_000
+    },
+    "repetitions" => {
+      "count" => 1,
+      "comparison_method" => "exact"
+    },
+    "content_policy" => {
+      "classification" => "public",
+      "capture" => "metadata"
+    },
+    "references" => []
+  }
+end
+
+specifications = [
+  {
+    id: "m1.state-codec-boundary",
+    title: "State codec is versioned, allowlisted, immutable, and bounded",
+    purpose: "Prove durable values round-trip without arbitrary revival or secret leakage.",
+    risk: "critical",
+    test_file: "test/core_state_codec_test.rb",
+    test_pattern: "/./",
+    done: [
+      "Supported values and registered immutable values round-trip.",
+      "Unknown versions, secrets, cycles, malformed wire, and exceeded limits fail closed."
+    ]
+  },
+  {
+    id: "m1.context-isolation",
+    title: "Context carries explicit isolated identity and cooperative services",
+    purpose: "Prevent ambient tenant state and mutable metadata from crossing calls.",
+    risk: "critical",
+    test_file: "test/core_context_test.rb,test/core_instrumentation_test.rb",
+    test_pattern: "/./",
+    done: [
+      "Context values are copied and frozen while injected handles remain externally owned.",
+      "Cancellation, deadlines, child lineage, emission, and instrumentation are explicit."
+    ]
+  },
+  {
+    id: "m1.ordered-pool",
+    title: "Inline and threaded pools return one ordered typed result model",
+    purpose: "Make completion timing irrelevant without unsafe Ruby thread termination.",
+    risk: "critical",
+    test_file: "test/core_pool_test.rb",
+    test_pattern: "/./",
+    done: [
+      "Submission order determines result order.",
+      "Interrupts, failures, cancellation, stuck workers, and fatal errors stay distinct."
+    ]
+  },
+  {
+    id: "m1.bounded-stream-shutdown",
+    title: "Execution stream backpressure and shutdown are bounded",
+    purpose: "Prevent early consumer closure from leaking buffered events or blocked producers.",
+    risk: "high",
+    test_file: "test/core_stream_test.rb",
+    test_pattern: "/./",
+    done: [
+      "Capacity is enforced and blocked producers wake on closure.",
+      "Natural finish drains; early close cancels; late emissions fail."
+    ]
+  }
+]
+
+specifications.each_with_index do |specification, offset|
+  index = offset + 1
+  document = m1_case(index:, **specification)
+  filename = format(
+    "%02d_%s.case.json",
+    index,
+    specification.fetch(:id).delete_prefix("m1.").tr(".", "_")
+  )
+  write_artifact(File.join(case_root, filename), document)
+end

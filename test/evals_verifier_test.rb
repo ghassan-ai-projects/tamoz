@@ -4,6 +4,7 @@ require_relative "test_helper"
 
 class EvalsVerifierTest < Minitest::Test
   GOLDEN_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "m0", "golden")
+  M1_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "m1", "core")
   BASELINE = GEM_ROOTS.fetch("tamoz-evals").join(
     "baselines", "m0", "baseline.result.json"
   )
@@ -28,6 +29,12 @@ class EvalsVerifierTest < Minitest::Test
         ROOT.join("script", "generate_m0_fixtures").to_s
       )
       assert status.success?, stderr
+      _stdout, stderr, status = Open3.capture3(
+        {"TAMOZ_FIXTURE_ROOT" => directory},
+        RbConfig.ruby,
+        ROOT.join("script", "generate_m1_fixtures").to_s
+      )
+      assert status.success?, stderr
 
       expected_root = GEM_ROOTS.fetch("tamoz-evals")
       expected = fixture_files(expected_root).to_h do |path|
@@ -39,6 +46,20 @@ class EvalsVerifierTest < Minitest::Test
       end
 
       assert_equal expected, actual
+    end
+  end
+
+  def test_all_four_m1_core_cases_are_public_and_digest_pinned
+    cases = M1_ROOT.glob("*.case.json").sort
+
+    assert_equal 4, cases.length
+    assert_equal 4, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    cases.each do |path|
+      artifact = Tamoz::Evals::Case.load(path)
+      assert_equal "tamoz.m1.core", artifact["suite_id"]
+      assert_equal "conformance", artifact["split"]
+      assert_equal "public", artifact["content_policy"].fetch("classification")
+      assert_equal "ruby-test-selection", artifact["input"].fetch("kind")
     end
   end
 
