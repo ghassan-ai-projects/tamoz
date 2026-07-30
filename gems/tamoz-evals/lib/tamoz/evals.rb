@@ -1,0 +1,24 @@
+# frozen_string_literal: true
+
+require "pathname"
+
+require_relative "evals/version"
+require_relative "evals/errors"
+require_relative "evals/canonical_json"
+require_relative "evals/duplicate_key_detector"
+require_relative "evals/schema"
+require_relative "evals/artifact"
+require_relative "evals/verifier"
+require_relative "evals/case"
+require_relative "evals/result"
+require_relative "evals/cli"
+
+module Tamoz
+  module Evals
+    module_function
+
+    def verify(path)
+      Verifier.new.verify(path)
+    end
+  end
+end

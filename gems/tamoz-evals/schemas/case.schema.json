@@ -1,0 +1,424 @@
+{
+  "$id": "https://github.com/ghassan-ai-projects/tamoz/schemas/eval-case-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "case"
+    },
+    "budgets": {
+      "$ref": "#/$defs/budgets"
+    },
+    "capabilities": {
+      "$ref": "#/$defs/capabilities"
+    },
+    "case_id": {
+      "$ref": "#/$defs/id"
+    },
+    "case_version": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "content_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "content_policy": {
+      "$ref": "#/$defs/content_policy"
+    },
+    "definition_of_done": {
+      "items": {
+        "$ref": "#/$defs/nonempty"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "digest_version": {
+      "const": 1
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "evidence": {
+      "$ref": "#/$defs/evidence"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "input": {
+      "$ref": "#/$defs/input"
+    },
+    "purpose": {
+      "$ref": "#/$defs/nonempty"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/reference"
+      },
+      "maxItems": 128,
+      "type": "array"
+    },
+    "repetitions": {
+      "$ref": "#/$defs/repetitions"
+    },
+    "risk_class": {
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "type": "string"
+    },
+    "scorers": {
+      "items": {
+        "$ref": "#/$defs/scorer"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "split": {
+      "enum": [
+        "conformance",
+        "development",
+        "adversarial",
+        "protected"
+      ],
+      "type": "string"
+    },
+    "suite_id": {
+      "$ref": "#/$defs/id"
+    },
+    "tags": {
+      "items": {
+        "$ref": "#/$defs/id"
+      },
+      "maxItems": 32,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "title": {
+      "$ref": "#/$defs/nonempty"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "format_version",
+    "digest_version",
+    "content_digest",
+    "case_id",
+    "case_version",
+    "suite_id",
+    "split",
+    "title",
+    "purpose",
+    "tags",
+    "risk_class",
+    "input",
+    "environment",
+    "capabilities",
+    "definition_of_done",
+    "evidence",
+    "scorers",
+    "budgets",
+    "repetitions",
+    "content_policy",
+    "references"
+  ],
+  "title": "Tamoz evaluation case v1",
+  "type": "object",
+  "$defs": {
+    "budgets": {
+      "additionalProperties": false,
+      "properties": {
+        "cost_microusd": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "steps": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "time_ms": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tool_calls": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "turns": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "turns",
+        "steps",
+        "tool_calls",
+        "tokens",
+        "cost_microusd",
+        "time_ms"
+      ],
+      "type": "object"
+    },
+    "capabilities": {
+      "additionalProperties": false,
+      "properties": {
+        "allowed": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "prohibited": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "allowed",
+        "prohibited"
+      ],
+      "type": "object"
+    },
+    "content_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "capture": {
+          "enum": [
+            "none",
+            "metadata",
+            "redacted",
+            "full"
+          ],
+          "type": "string"
+        },
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "classification",
+        "capture"
+      ],
+      "type": "object"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "isolation": {
+          "enum": [
+            "in_process",
+            "subprocess",
+            "sandbox"
+          ],
+          "type": "string"
+        },
+        "network": {
+          "enum": [
+            "denied",
+            "recorded",
+            "allowlisted"
+          ],
+          "type": "string"
+        },
+        "profile": {
+          "enum": [
+            "pr",
+            "nightly",
+            "adversarial",
+            "release"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "isolation",
+        "network"
+      ],
+      "type": "object"
+    },
+    "evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "optional": {
+          "items": {
+            "$ref": "#/$defs/evidence_spec"
+          },
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "$ref": "#/$defs/evidence_spec"
+          },
+          "minItems": 1,
+          "type": "array"
+        }
+      },
+      "required": [
+        "required",
+        "optional"
+      ],
+      "type": "object"
+    },
+    "evidence_spec": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "assertion",
+            "diff",
+            "event",
+            "receipt",
+            "state",
+            "test"
+          ],
+          "type": "string"
+        },
+        "oracle": {
+          "$ref": "#/$defs/nonempty"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "oracle"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "type": "string"
+    },
+    "input": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/id"
+        },
+        "payload": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "payload"
+      ],
+      "type": "object"
+    },
+    "nonempty": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string"
+    },
+    "reference": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ],
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "digest",
+        "classification"
+      ],
+      "type": "object"
+    },
+    "repetitions": {
+      "additionalProperties": false,
+      "properties": {
+        "comparison_method": {
+          "enum": [
+            "exact",
+            "paired_binary",
+            "paired_distribution"
+          ],
+          "type": "string"
+        },
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "count",
+        "comparison_method"
+      ],
+      "type": "object"
+    },
+    "scorer": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "deterministic",
+            "rubric",
+            "judge",
+            "human"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "version"
+      ],
+      "type": "object"
+    }
+  }
+}

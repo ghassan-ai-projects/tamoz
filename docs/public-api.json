@@ -1,0 +1,23 @@
+{
+  "format_version": 1,
+  "packages": {
+    "tamoz-agent": [
+      "Tamoz::Agent::VERSION"
+    ],
+    "tamoz-core": [
+      "Tamoz::Core::VERSION"
+    ],
+    "tamoz-evals": [
+      "Tamoz::Evals::Case.load",
+      "Tamoz::Evals::Result.load",
+      "Tamoz::Evals::VERSION",
+      "Tamoz::Evals.verify"
+    ],
+    "tamoz-graph": [
+      "Tamoz::Graph::VERSION"
+    ],
+    "tamoz-sqlite": [
+      "Tamoz::SQLite::VERSION"
+    ]
+  }
+}

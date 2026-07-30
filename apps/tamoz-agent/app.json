@@ -1,0 +1,8 @@
+{
+  "activation_milestone": "M5a",
+  "format_version": 1,
+  "name": "Tamoz Agent",
+  "namespace": "Tamoz::App",
+  "runtime_package": "tamoz-agent",
+  "status": "skeleton"
+}

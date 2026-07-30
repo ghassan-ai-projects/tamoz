@@ -1,0 +1,72 @@
+PATH
+  remote: gems/tamoz-agent
+  specs:
+    tamoz-agent (0.1.0.alpha.1)
+      tamoz-graph (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-core
+  specs:
+    tamoz-core (0.1.0.alpha.1)
+      zeitwerk (~> 2.6)
+
+PATH
+  remote: gems/tamoz-evals
+  specs:
+    tamoz-evals (0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-graph
+  specs:
+    tamoz-graph (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-sqlite
+  specs:
+    tamoz-sqlite (0.1.0.alpha.1)
+      tamoz-graph (= 0.1.0.alpha.1)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    drb (2.2.3)
+    minitest (6.0.6)
+      drb (~> 2.0)
+      prism (~> 1.5)
+    prism (1.9.0)
+    rake (13.4.2)
+    zeitwerk (2.8.2)
+
+PLATFORMS
+  arm64-darwin-25
+  ruby
+
+DEPENDENCIES
+  minitest (~> 6.0)
+  rake (~> 13.2)
+  tamoz-agent!
+  tamoz-core!
+  tamoz-evals!
+  tamoz-graph!
+  tamoz-sqlite!
+  zeitwerk (~> 2.6)
+
+CHECKSUMS
+  bundler (4.0.12) sha256=7f8b757d28dfb636e7b24fba2344ac6dd13b5b24f4b46d62573d483f211825ac
+  drb (2.2.3)
+  minitest (6.0.6)
+  prism (1.9.0)
+  rake (13.4.2)
+  tamoz-agent (0.1.0.alpha.1)
+  tamoz-core (0.1.0.alpha.1)
+  tamoz-evals (0.1.0.alpha.1)
+  tamoz-graph (0.1.0.alpha.1)
+  tamoz-sqlite (0.1.0.alpha.1)
+  zeitwerk (2.8.2)
+
+RUBY VERSION
+  ruby 3.3.11
+
+BUNDLED WITH
+  4.0.12

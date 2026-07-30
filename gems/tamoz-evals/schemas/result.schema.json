@@ -1,0 +1,377 @@
+{
+  "$id": "https://github.com/ghassan-ai-projects/tamoz/schemas/eval-result-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "result"
+    },
+    "baseline_ref": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/artifact_ref"
+        }
+      ]
+    },
+    "case_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "content_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "cost": {
+      "$ref": "#/$defs/cost"
+    },
+    "decision": {
+      "enum": [
+        "pass",
+        "fail",
+        "invalid",
+        "infrastructure_failure",
+        "insufficient_evidence"
+      ],
+      "type": "string"
+    },
+    "decision_authority": {
+      "$ref": "#/$defs/identity"
+    },
+    "digest_version": {
+      "const": 1
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "hard_gates": {
+      "items": {
+        "$ref": "#/$defs/hard_gate"
+      },
+      "type": "array"
+    },
+    "invalid_evidence": {
+      "items": {
+        "$ref": "#/$defs/nonempty"
+      },
+      "type": "array"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/reference"
+      },
+      "maxItems": 256,
+      "type": "array"
+    },
+    "result_id": {
+      "$ref": "#/$defs/id"
+    },
+    "scores": {
+      "items": {
+        "$ref": "#/$defs/score"
+      },
+      "type": "array"
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "invalid",
+        "infrastructure_error",
+        "insufficient_evidence"
+      ],
+      "type": "string"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject"
+    },
+    "suite_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "timing": {
+      "$ref": "#/$defs/timing"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "format_version",
+    "digest_version",
+    "content_digest",
+    "result_id",
+    "case_ref",
+    "suite_ref",
+    "subject",
+    "environment",
+    "references",
+    "scores",
+    "hard_gates",
+    "invalid_evidence",
+    "cost",
+    "timing",
+    "baseline_ref",
+    "status",
+    "decision",
+    "decision_authority"
+  ],
+  "title": "Tamoz evaluation result v1",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "cost": {
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_tokens": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total_microusd": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "total_microusd"
+      ],
+      "type": "object"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "platform": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "profile": {
+          "enum": [
+            "pr",
+            "nightly",
+            "adversarial",
+            "release"
+          ],
+          "type": "string"
+        },
+        "ruby_version": {
+          "$ref": "#/$defs/nonempty"
+        }
+      },
+      "required": [
+        "profile",
+        "ruby_version",
+        "platform"
+      ],
+      "type": "object"
+    },
+    "hard_gate": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_ids": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 1,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "evidence_ids"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "type": "string"
+    },
+    "identity": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "deterministic_gate",
+            "human",
+            "release_identity"
+          ],
+          "type": "string"
+        },
+        "version": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "version"
+      ],
+      "type": "object"
+    },
+    "nonempty": {
+      "maxLength": 4096,
+      "minLength": 1,
+      "type": "string"
+    },
+    "reference": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "confidential",
+            "restricted"
+          ],
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "digest",
+        "classification"
+      ],
+      "type": "object"
+    },
+    "score": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "invalid",
+            "not_applicable"
+          ],
+          "type": "string"
+        },
+        "value_basis_points": {
+          "maximum": 10000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "value_basis_points"
+      ],
+      "type": "object"
+    },
+    "subject": {
+      "additionalProperties": false,
+      "properties": {
+        "behavior_version": {
+          "$ref": "#/$defs/id"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "git_revision": {
+          "pattern": "^[0-9a-f]{7,64}$",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "git_revision",
+        "behavior_version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "timing": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_ms": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "started_at": {
+          "$ref": "#/$defs/nonempty"
+        }
+      },
+      "required": [
+        "started_at",
+        "finished_at",
+        "duration_ms"
+      ],
+      "type": "object"
+    }
+  }
+}
