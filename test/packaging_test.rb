@@ -34,7 +34,11 @@ class PackagingTest < Minitest::Test
           assert_includes contents, "baselines/m0/baseline.result.json"
           assert_includes contents, "baselines/m0/evidence/baseline-summary.json"
           assert_equal(
-            ["schemas/case.schema.json", "schemas/result.schema.json"],
+            [
+              "schemas/case.schema.json",
+              "schemas/evidence.schema.json",
+              "schemas/result.schema.json"
+            ],
             contents.grep(%r{\Aschemas/}).sort
           )
         end

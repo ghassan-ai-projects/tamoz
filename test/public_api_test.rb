@@ -57,6 +57,7 @@ class PublicAPITest < Minitest::Test
         ],
         "tamoz-evals" => [
           "Tamoz::Evals::Case.load",
+          "Tamoz::Evals::Evidence.load",
           "Tamoz::Evals::Result.load",
           "Tamoz::Evals::VERSION",
           "Tamoz::Evals.verify"

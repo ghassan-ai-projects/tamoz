@@ -11,7 +11,9 @@ require_relative "evals/schema"
 require_relative "evals/artifact"
 require_relative "evals/verifier"
 require_relative "evals/case"
+require_relative "evals/evidence"
 require_relative "evals/result"
+require_relative "evals/harness/subprocess_runner"
 require_relative "evals/cli"
 
 module Tamoz

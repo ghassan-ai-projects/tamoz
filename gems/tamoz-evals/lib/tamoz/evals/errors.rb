@@ -8,5 +8,6 @@ module Tamoz
     class SchemaError < InvalidArtifactError; end
     class DigestError < InvalidArtifactError; end
     class ReferenceError < InvalidArtifactError; end
+    class ExecutionError < Error; end
   end
 end

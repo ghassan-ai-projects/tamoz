@@ -11,6 +11,7 @@ module Tamoz
       MAX_TOTAL_REFERENCE_BYTES = 64 * 1024 * 1024
       DIGEST_DOMAINS = {
         "case" => "eval.case",
+        "evidence" => "eval.evidence",
         "result" => "eval.result"
       }.freeze
       RESULT_DECISIONS = {
@@ -149,6 +150,9 @@ module Tamoz
           verify_case_semantics!(document)
           return "verified"
         end
+        if artifact_type == "evidence"
+          return verify_evidence_semantics!(document)
+        end
 
         expected = RESULT_DECISIONS.fetch(document.fetch("status"))
         actual = document.fetch("decision")
@@ -189,6 +193,137 @@ module Tamoz
         unless overlap.empty?
           raise InvalidArtifactError,
                 "capabilities cannot be both allowed and prohibited: #{overlap.sort.inspect}"
+        end
+      end
+
+      def verify_evidence_semantics!(document)
+        references = document.fetch("references")
+        reference_ids = references.map { |reference| reference.fetch("id") }
+        claims = document.fetch("claims")
+        measurements = document.fetch("measurements")
+        assert_unique_ids!(claims, "claims")
+        assert_unique_ids!(measurements, "measurements")
+        content_policy = document.fetch("content_policy")
+        if content_policy.fetch("classification") == "public" &&
+           !content_policy.fetch("sanitized")
+          raise InvalidArtifactError,
+                "public evidence must declare sanitized content"
+        end
+
+        claims.each do |claim|
+          missing = claim.fetch("evidence_ids") - reference_ids
+          unless missing.empty?
+            raise InvalidArtifactError,
+                  "claim #{claim.fetch("id").inspect} cites missing evidence " \
+                  "#{missing.inspect}"
+          end
+        end
+
+        processes = document.fetch("processes")
+        assert_unique_ids!(processes, "processes")
+        processes.each { |process| verify_evidence_process!(process) }
+        if %w[process crash race fault].include?(document.fetch("kind")) &&
+           processes.empty?
+          raise InvalidArtifactError,
+                "#{document.fetch("kind")} evidence requires a process record"
+        end
+
+        timing = document.fetch("timing")
+        verify_timing!(timing)
+        process_exceeds_envelope = processes.any? do |process|
+          process.fetch("duration_ms") > timing.fetch("duration_ms")
+        end
+        if process_exceeds_envelope
+          raise InvalidArtifactError,
+                "process duration exceeds evidence envelope duration"
+        end
+        verify_evidence_status!(document, claims)
+        RESULT_DECISIONS.fetch(document.fetch("status"))
+      end
+
+      def verify_evidence_process!(process)
+        return unless process
+
+        exited = !process.fetch("exit_status").nil?
+        signaled = !process.fetch("term_signal").nil?
+        if exited == signaled
+          raise InvalidArtifactError,
+                "evidence process requires exactly one exit status or terminating signal"
+        end
+
+        timed_out = process.fetch("timed_out")
+        termination = process.fetch("termination")
+        if timed_out == (termination == "none")
+          raise InvalidArtifactError,
+                "process timeout and harness termination disagree"
+        end
+        if termination == "kill" && process.fetch("term_signal") != "KILL"
+          raise InvalidArtifactError,
+                "SIGKILL harness termination requires KILL process status"
+        end
+
+        %w[stdout stderr].each do |name|
+          stream = process.fetch(name)
+          bytes = stream.fetch("bytes")
+          captured = stream.fetch("captured_bytes")
+          if captured > bytes
+            raise InvalidArtifactError,
+                  "#{name} captured bytes exceed produced bytes"
+          end
+          unless stream.fetch("truncated") == (captured < bytes)
+            raise InvalidArtifactError,
+                  "#{name} truncation flag disagrees with byte counts"
+          end
+        end
+      end
+
+      def verify_evidence_status!(document, claims)
+        diagnostics = document.fetch("diagnostics")
+        invalid = diagnostics.fetch("invalid_evidence")
+        gaps = diagnostics.fetch("evidence_gaps")
+        infrastructure = diagnostics.fetch("infrastructure_errors")
+
+        case document.fetch("status")
+        when "passed"
+          unless claims.all? { |claim| claim.fetch("status") == "pass" }
+            raise InvalidArtifactError,
+                  "passed evidence requires every claim to pass"
+          end
+          assert_no_diagnostic_errors!("passed evidence", invalid, gaps, infrastructure)
+        when "failed"
+          unless claims.any? { |claim| claim.fetch("status") == "fail" }
+            raise InvalidArtifactError,
+                  "failed evidence requires at least one failed claim"
+          end
+          assert_no_diagnostic_errors!("failed evidence", invalid, gaps, infrastructure)
+        when "invalid"
+          if invalid.empty?
+            raise InvalidArtifactError,
+                  "invalid evidence must identify invalid material"
+          end
+          unless gaps.empty? && infrastructure.empty?
+            raise InvalidArtifactError,
+                  "invalid evidence cannot mix gaps or infrastructure errors"
+          end
+        when "infrastructure_error"
+          if infrastructure.empty?
+            raise InvalidArtifactError,
+                  "infrastructure evidence must identify an infrastructure error"
+          end
+          unless invalid.empty? && gaps.empty?
+            raise InvalidArtifactError,
+                  "infrastructure evidence cannot mix invalid material or gaps"
+          end
+        when "insufficient_evidence"
+          unless claims.any? { |claim| claim.fetch("status") == "unknown" } ||
+                 !gaps.empty?
+            raise InvalidArtifactError,
+                  "insufficient evidence requires an unknown claim or evidence gap"
+          end
+          unless invalid.empty? && infrastructure.empty?
+            raise InvalidArtifactError,
+                  "insufficient evidence cannot mix invalid or infrastructure material"
+          end
         end
       end
 
@@ -264,7 +399,7 @@ module Tamoz
       def verify_timing!(timing)
         started_at = Time.iso8601(timing.fetch("started_at"))
         finished_at = Time.iso8601(timing.fetch("finished_at"))
-        raise InvalidArtifactError, "result finished before it started" if finished_at < started_at
+        raise InvalidArtifactError, "artifact finished before it started" if finished_at < started_at
 
         actual_duration = ((finished_at - started_at) * 1000).round
         declared_duration = timing.fetch("duration_ms")
@@ -274,7 +409,7 @@ module Tamoz
               "duration mismatch: timestamps imply #{actual_duration}ms, " \
               "artifact declares #{declared_duration}ms"
       rescue ArgumentError => error
-        raise InvalidArtifactError, "invalid result timestamp: #{error.message}"
+        raise InvalidArtifactError, "invalid artifact timestamp: #{error.message}"
       end
 
       def verify_decision_evidence!(document, hard_gates, references)
@@ -289,12 +424,22 @@ module Tamoz
             raise InvalidArtifactError, "passed result requires every applicable hard gate to pass"
           end
           raise InvalidArtifactError, "passed result requires referenced evidence" if references.empty?
-          assert_no_diagnostic_errors!(status, invalid_evidence, evidence_gaps, infrastructure_errors)
+          assert_no_diagnostic_errors!(
+            "#{status} result",
+            invalid_evidence,
+            evidence_gaps,
+            infrastructure_errors
+          )
         when "failed"
           unless hard_gates.any? { |gate| gate.fetch("status") == "fail" }
             raise InvalidArtifactError, "failed result requires at least one failed hard gate"
           end
-          assert_no_diagnostic_errors!(status, invalid_evidence, evidence_gaps, infrastructure_errors)
+          assert_no_diagnostic_errors!(
+            "#{status} result",
+            invalid_evidence,
+            evidence_gaps,
+            infrastructure_errors
+          )
         when "invalid"
           if invalid_evidence.empty?
             raise InvalidArtifactError, "invalid result must identify invalid evidence"
@@ -321,10 +466,11 @@ module Tamoz
         end
       end
 
-      def assert_no_diagnostic_errors!(status, invalid_evidence, evidence_gaps, infrastructure_errors)
+      def assert_no_diagnostic_errors!(label, invalid_evidence, evidence_gaps, infrastructure_errors)
         return if invalid_evidence.empty? && evidence_gaps.empty? && infrastructure_errors.empty?
 
-        raise InvalidArtifactError, "#{status} result cannot contain evidence or infrastructure errors"
+        raise InvalidArtifactError,
+              "#{label} cannot contain evidence or infrastructure errors"
       end
 
       def read_stable_file(path, max_bytes:, kind:)

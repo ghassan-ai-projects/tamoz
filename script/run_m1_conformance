@@ -3,7 +3,6 @@
 
 require "fileutils"
 require "json"
-require "open3"
 require "rbconfig"
 require "time"
 
@@ -24,12 +23,29 @@ SELECTIONS = {
   "m1.bounded-stream-shutdown" => ["test/core_stream_test.rb"]
 }.freeze
 NETWORK_SANDBOX_PROFILE = "(version 1)(allow default)(deny network*)".freeze
+OUTPUT_LIMIT_BYTES = 1024 * 1024
 
 def git(*arguments)
-  stdout, stderr, status = Open3.capture3("git", *arguments, chdir: ROOT)
-  abort("git #{arguments.join(" ")} failed: #{stderr}") unless status.success?
+  executable = Tamoz::Evals::Harness::SubprocessRunner.resolve_executable(
+    "git",
+    path: ENV.fetch("PATH", "")
+  )
+  runner = Tamoz::Evals::Harness::SubprocessRunner.new(
+    root: ROOT,
+    environment: child_environment,
+    output_limit_bytes: OUTPUT_LIMIT_BYTES
+  )
+  execution = runner.capture(
+    [executable, *arguments],
+    timeout_ms: 5_000,
+    command: "m1.git-metadata"
+  )
+  unless execution.success? && !execution.stdout.truncated &&
+         !execution.stderr.truncated
+    abort("git #{arguments.join(" ")} failed: #{execution.stderr.text}")
+  end
 
-  stdout.strip
+  execution.stdout.text.strip
 end
 
 def digest(document, domain:)
@@ -57,54 +73,33 @@ def sandboxed(command)
 end
 
 def child_environment
-  ENV.each_key.grep(/\ABUNDLE_/).to_h { |key| [key, nil] }.merge(
+  passthrough = %w[
+    GEM_HOME GEM_PATH LANG LC_ALL LC_CTYPE PATH TMPDIR TZ
+  ].each_with_object({}) do |key, result|
+    result[key] = ENV.fetch(key) if ENV.key?(key)
+  end
+  passthrough.merge(
     "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"),
     "BUNDLE_IGNORE_CONFIG" => "1",
-    "MT_CPU" => "1",
-    "RUBYLIB" => nil,
-    "RUBYOPT" => nil
+    "MT_CPU" => "1"
   )
 end
 
-def capture_sandboxed(command, timeout_ms:)
+def capture_sandboxed(command, timeout_ms:, label:)
   sandboxed_command, sandbox_name = sandboxed(command)
-  stdout_text = nil
-  stderr_text = nil
-  status = nil
-  timed_out = false
-
-  Open3.popen3(
-    child_environment,
-    *sandboxed_command,
-    chdir: ROOT,
-    pgroup: true
-  ) do |stdin, stdout, stderr, wait_thread|
-    stdin.close
-    stdout_reader = Thread.new { stdout.read }
-    stderr_reader = Thread.new { stderr.read }
-
-    unless wait_thread.join(timeout_ms.fdiv(1000))
-      timed_out = true
-      begin
-        Process.kill("TERM", -wait_thread.pid)
-      rescue Errno::ESRCH
-        nil
-      end
-      unless wait_thread.join(1)
-        begin
-          Process.kill("KILL", -wait_thread.pid)
-        rescue Errno::ESRCH
-          nil
-        end
-      end
-    end
-
-    status = wait_thread.value
-    stdout_text = stdout_reader.value
-    stderr_text = stderr_reader.value
-  end
-
-  [stdout_text, stderr_text, status, timed_out, sandbox_name]
+  runner = Tamoz::Evals::Harness::SubprocessRunner.new(
+    root: ROOT,
+    environment: child_environment,
+    output_limit_bytes: OUTPUT_LIMIT_BYTES
+  )
+  [
+    runner.capture(
+      sandboxed_command,
+      timeout_ms:,
+      command: label
+    ),
+    sandbox_name
+  ]
 end
 
 def verify_execution_isolation!
@@ -120,19 +115,21 @@ def verify_execution_isolation!
       exit 71
     end
   RUBY
-  _stdout, stderr, status, timed_out, sandbox_name = capture_sandboxed(
+  execution, sandbox_name = capture_sandboxed(
     [RbConfig.ruby, "-e", network_probe],
-    timeout_ms: 1_000
+    timeout_ms: 1_000,
+    label: "m1.network-self-test"
   )
-  unless status.success? && !timed_out
-    abort("network sandbox self-test failed: #{stderr}")
+  unless execution.success?
+    abort("network sandbox self-test failed: #{execution.stderr.text}")
   end
 
-  _stdout, _stderr, _status, deadline_enforced, = capture_sandboxed(
+  deadline_execution, = capture_sandboxed(
     [RbConfig.ruby, "-e", "sleep 60"],
-    timeout_ms: 10
+    timeout_ms: 10,
+    label: "m1.deadline-self-test"
   )
-  abort("evidence deadline self-test failed") unless deadline_enforced
+  abort("evidence deadline self-test failed") unless deadline_execution.timed_out
 
   sandbox_name
 end
@@ -220,15 +217,16 @@ SELECTIONS.each_with_index do |(case_id, test_files), offset|
     "0"
   ]
   timeout_ms = eval_case["budgets"].fetch("time_ms")
-  stdout, stderr, status, timed_out, sandbox_name = capture_sandboxed(
+  execution, sandbox_name = capture_sandboxed(
     command,
-    timeout_ms:
+    timeout_ms:,
+    label: case_id
   )
   duration_ms = (
     (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_monotonic) * 1000
   ).round
   finished_at = started_at + Rational(duration_ms, 1000)
-  passed = status.success? && !timed_out
+  passed = execution.success?
   failures << case_id unless passed
 
   evidence_id = "m1.run.%02d" % (offset + 1)
@@ -241,10 +239,18 @@ SELECTIONS.each_with_index do |(case_id, test_files), offset|
       "test_files" => test_files,
       "sandbox" => sandbox_name,
       "timeout_ms" => timeout_ms,
-      "timed_out" => timed_out,
-      "exit_status" => status.exitstatus,
-      "stdout" => stdout,
-      "stderr" => stderr
+      "timed_out" => execution.timed_out,
+      "termination" => execution.termination,
+      "exit_status" => execution.exit_status,
+      "term_signal" => execution.term_signal,
+      "stdout" => execution.stdout.text,
+      "stdout_bytes" => execution.stdout.bytes,
+      "stdout_truncated" => execution.stdout.truncated,
+      "stdout_digest" => execution.stdout.digest,
+      "stderr" => execution.stderr.text,
+      "stderr_bytes" => execution.stderr.bytes,
+      "stderr_truncated" => execution.stderr.truncated,
+      "stderr_digest" => execution.stderr.digest
     }
   )
 

@@ -46,8 +46,9 @@ class M1EvidenceTest < Minitest::Test
     assert_includes source, "SELECTIONS = {"
     assert_includes source, "(deny network*)"
     assert_includes source, "BUNDLE_IGNORE_CONFIG"
-    assert_includes source, "Process.kill(\"TERM\", -wait_thread.pid)"
+    assert_includes source, "Tamoz::Evals::Harness::SubprocessRunner"
+    assert_includes source, "OUTPUT_LIMIT_BYTES"
     assert_includes source, "\"--seed\""
-    refute_match(/input.*(?:command|test_file)|system\s*\(|shell|sh\s+-c/i, source)
+    refute_match(/input.*(?:command|test_file)|system\s*\(|shell|sh\s+-c|Open3/i, source)
   end
 end

@@ -1,0 +1,609 @@
+{
+  "$id": "https://github.com/ghassan-ai-projects/tamoz/schemas/eval-evidence-v1.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact_type": {
+      "const": "evidence"
+    },
+    "case_ref": {
+      "$ref": "#/$defs/artifact_ref"
+    },
+    "claims": {
+      "items": {
+        "$ref": "#/$defs/claim"
+      },
+      "maxItems": 256,
+      "minItems": 1,
+      "type": "array"
+    },
+    "content_digest": {
+      "$ref": "#/$defs/digest"
+    },
+    "content_policy": {
+      "$ref": "#/$defs/content_policy"
+    },
+    "diagnostics": {
+      "$ref": "#/$defs/diagnostics"
+    },
+    "digest_version": {
+      "const": 1
+    },
+    "environment": {
+      "$ref": "#/$defs/environment"
+    },
+    "evidence_id": {
+      "$ref": "#/$defs/id"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "kind": {
+      "enum": [
+        "process",
+        "crash",
+        "race",
+        "fault",
+        "resource",
+        "benchmark",
+        "summary"
+      ],
+      "type": "string"
+    },
+    "measurements": {
+      "items": {
+        "$ref": "#/$defs/measurement"
+      },
+      "maxItems": 1024,
+      "type": "array"
+    },
+    "processes": {
+      "items": {
+        "$ref": "#/$defs/process"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "producer": {
+      "$ref": "#/$defs/identity"
+    },
+    "references": {
+      "items": {
+        "$ref": "#/$defs/reference"
+      },
+      "maxItems": 256,
+      "type": "array"
+    },
+    "scenario": {
+      "$ref": "#/$defs/identity"
+    },
+    "selection": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/selection"
+        }
+      ]
+    },
+    "status": {
+      "enum": [
+        "passed",
+        "failed",
+        "invalid",
+        "infrastructure_error",
+        "insufficient_evidence"
+      ],
+      "type": "string"
+    },
+    "subject": {
+      "$ref": "#/$defs/subject"
+    },
+    "timing": {
+      "$ref": "#/$defs/timing"
+    }
+  },
+  "required": [
+    "artifact_type",
+    "format_version",
+    "digest_version",
+    "content_digest",
+    "content_policy",
+    "evidence_id",
+    "case_ref",
+    "kind",
+    "status",
+    "scenario",
+    "selection",
+    "subject",
+    "producer",
+    "environment",
+    "processes",
+    "claims",
+    "measurements",
+    "references",
+    "diagnostics",
+    "timing"
+  ],
+  "title": "Tamoz evaluation evidence v1",
+  "type": "object",
+  "$defs": {
+    "artifact_ref": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "claim": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_ids": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "maxItems": 64,
+          "type": "array",
+          "uniqueItems": true
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "oracle": {
+          "$ref": "#/$defs/description"
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "unknown"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "status",
+        "oracle",
+        "evidence_ids"
+      ],
+      "type": "object"
+    },
+    "content_policy": {
+      "additionalProperties": false,
+      "properties": {
+        "capture": {
+          "enum": [
+            "none",
+            "metadata",
+            "summary"
+          ],
+          "type": "string"
+        },
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "protected"
+          ],
+          "type": "string"
+        },
+        "sanitized": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "classification",
+        "capture",
+        "sanitized"
+      ],
+      "type": "object"
+    },
+    "description": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "type": "string"
+    },
+    "diagnostics": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence_gaps": {
+          "$ref": "#/$defs/diagnostic_list"
+        },
+        "infrastructure_errors": {
+          "$ref": "#/$defs/diagnostic_list"
+        },
+        "invalid_evidence": {
+          "$ref": "#/$defs/diagnostic_list"
+        }
+      },
+      "required": [
+        "invalid_evidence",
+        "evidence_gaps",
+        "infrastructure_errors"
+      ],
+      "type": "object"
+    },
+    "diagnostic_list": {
+      "items": {
+        "$ref": "#/$defs/description"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "digest": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "environment": {
+      "additionalProperties": false,
+      "properties": {
+        "isolation": {
+          "enum": [
+            "subprocess",
+            "sandbox"
+          ],
+          "type": "string"
+        },
+        "network": {
+          "enum": [
+            "denied",
+            "not_used"
+          ],
+          "type": "string"
+        },
+        "platform": {
+          "$ref": "#/$defs/version"
+        },
+        "profile": {
+          "enum": [
+            "pr",
+            "nightly",
+            "adversarial",
+            "release",
+            "reference"
+          ],
+          "type": "string"
+        },
+        "ruby_version": {
+          "$ref": "#/$defs/version"
+        },
+        "sqlite_version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "profile",
+        "ruby_version",
+        "platform",
+        "sqlite_version",
+        "isolation",
+        "network"
+      ],
+      "type": "object"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+      "type": "string"
+    },
+    "identity": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "measurement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "unit": {
+          "maxLength": 32,
+          "minLength": 1,
+          "pattern": "^[a-z0-9._/%-]+$",
+          "type": "string"
+        },
+        "value": {
+          "maximum": 9007199254740991,
+          "minimum": -9007199254740991,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "value",
+        "unit"
+      ],
+      "type": "object"
+    },
+    "process": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "$ref": "#/$defs/id"
+        },
+        "duration_ms": {
+          "maximum": 3630000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "exit_status": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ]
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "stderr": {
+          "$ref": "#/$defs/stream"
+        },
+        "stdout": {
+          "$ref": "#/$defs/stream"
+        },
+        "term_signal": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "maxLength": 32,
+              "minLength": 1,
+              "pattern": "^[A-Z0-9]+$",
+              "type": "string"
+            }
+          ]
+        },
+        "termination": {
+          "enum": [
+            "none",
+            "term",
+            "kill"
+          ],
+          "type": "string"
+        },
+        "timed_out": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "command",
+        "exit_status",
+        "term_signal",
+        "timed_out",
+        "termination",
+        "duration_ms",
+        "stdout",
+        "stderr"
+      ],
+      "type": "object"
+    },
+    "reference": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "public",
+            "internal",
+            "protected"
+          ],
+          "type": "string"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "$ref": "#/$defs/id"
+        },
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "digest",
+        "size_bytes",
+        "classification"
+      ],
+      "type": "object"
+    },
+    "selection": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_class": {
+          "enum": [
+            "absent",
+            "first",
+            "retry",
+            "exhausted"
+          ],
+          "type": "string"
+        },
+        "iteration_class": {
+          "enum": [
+            "single",
+            "first",
+            "middle",
+            "final",
+            "exhausted"
+          ],
+          "type": "string"
+        },
+        "operation": {
+          "$ref": "#/$defs/id"
+        },
+        "point": {
+          "$ref": "#/$defs/id"
+        },
+        "selector_digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "statement": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/id"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operation",
+        "point",
+        "statement",
+        "attempt_class",
+        "iteration_class",
+        "selector_digest"
+      ],
+      "type": "object"
+    },
+    "stream": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "captured_bytes": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "bytes",
+        "captured_bytes",
+        "truncated",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "subject": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "git_revision": {
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "git_tree": {
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/version"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "git_revision",
+        "git_tree",
+        "dirty",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "timing": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_ms": {
+          "maximum": 86400000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "finished_at": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "started_at": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "started_at",
+        "finished_at",
+        "duration_ms"
+      ],
+      "type": "object"
+    },
+    "timestamp": {
+      "maxLength": 32,
+      "minLength": 20,
+      "type": "string"
+    },
+    "version": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    }
+  }
+}

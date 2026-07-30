@@ -23,7 +23,7 @@ class SchemaTest < Minitest::Test
   end
 
   def test_packaged_schemas_use_only_supported_keywords
-    %w[case result].each do |artifact_type|
+    %w[case evidence result].each do |artifact_type|
       assert Tamoz::Evals::Schema.load(artifact_type)
     end
   end

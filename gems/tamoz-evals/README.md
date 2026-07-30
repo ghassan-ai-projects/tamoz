@@ -7,6 +7,7 @@ never a runtime dependency of a production Tamoz gem.
 tamoz-eval verify path/to/artifact.json
 ```
 
-The gem includes its public M0 conformance cases, honest baseline, JSON schemas, and
-verifier. See the repository's `docs/evaluation-artifacts-v1.md` for the exact v1
-canonicalization, provenance, evidence-containment, and exit-code contract.
+The gem includes its public conformance cases, honest baseline, case/evidence/result JSON
+schemas, verifier, and the internal bounded subprocess primitive used by fixed runners. See
+the repository's `docs/evaluation-artifacts-v1.md` for the exact v1 canonicalization,
+provenance, evidence-containment, and exit-code contract.

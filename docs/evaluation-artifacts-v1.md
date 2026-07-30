@@ -1,7 +1,7 @@
 # Evaluation artifacts v1
 
-Tamoz evaluation cases and results are immutable, UTF-8 JSON artifacts. Version 1 uses a
-Tamoz-specific canonical form; it does not claim RFC 8785 compatibility.
+Tamoz evaluation cases, evidence, and results are immutable, UTF-8 JSON artifacts. Version
+1 uses a Tamoz-specific canonical form; it does not claim RFC 8785 compatibility.
 
 ## Canonical form and digest
 
@@ -18,7 +18,7 @@ sequence, where `NUL` is one zero byte:
 "tamoz-evals" NUL domain NUL "v1" NUL canonical_json
 ```
 
-The domain is `eval.case` or `eval.result`. The stored value is
+The domain is `eval.case`, `eval.evidence`, or `eval.result`. The stored value is
 `sha256:<lowercase-hex>`. This algorithm is identified by `digest_version: 1`; changing it
 requires a new digest version.
 
@@ -32,6 +32,31 @@ did not change during verification, then compares its declared size and digest.
 
 These are verification bounds, not permission to expose sensitive content. Reports should
 prefer classified, redacted evidence and opaque identifiers.
+
+## Evidence envelopes
+
+An evidence artifact binds the exact case version/digest, scenario version/digest, subject
+revision and tree, producer, environment, timing, claims, measurements, and classified
+references. Its bounded process list represents single-child, crash, and multi-process race
+treatments. Process records use public participant and command labels plus stream byte
+counts/digests; raw arguments, environment variables, paths, operating-system process ids,
+and output are never embedded in the envelope.
+
+Every envelope declares its classification, capture level, and sanitization status. Public
+evidence that does not declare sanitization is invalid; the declaration is bound to the
+producer and artifact digests and must be backed by the fixed runner's sanitizer tests.
+
+Process output can be retained as a classified reference after separate sanitization.
+Truncation is explicit and must agree with produced/captured byte counts. Exit and signal
+status are mutually exclusive, harness timeout/termination must agree, and a passing
+envelope requires every claim to pass with no invalid, missing, or infrastructure
+diagnostic.
+
+The shared subprocess primitive uses an exact caller-supplied environment, an absolute
+executable, argument-vector execution without a shell, process groups, monotonic deadlines,
+bounded simultaneous stdout/stderr capture, and bounded `TERM` then `KILL` cleanup. It is an
+execution primitive, not an operating-system security boundary; runners that claim network
+denial must add and self-test an OS sandbox.
 
 ## Result provenance
 
