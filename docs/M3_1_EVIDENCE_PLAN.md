@@ -342,7 +342,8 @@ remain an explicit external release gate.
 
 1. Evidence schema and shared subprocess harness — implemented and deep-reviewed in
    [M3_1_PHASE1_REVIEW.md](reviews/M3_1_PHASE1_REVIEW.md).
-2. Trace recorder and checkpoint/request/lease kill scenarios.
+2. Trace recorder and checkpoint/request/lease kill scenarios — implementation plan
+   accepted in [M3_1_PHASE2_PLAN.md](M3_1_PHASE2_PLAN.md).
 3. Effect target ledger and ambiguity matrix.
 4. Store/deletion/backup/migration kill scenarios.
 5. Multi-process races and storage faults.
