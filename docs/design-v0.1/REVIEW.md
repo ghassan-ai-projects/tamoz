@@ -1,6 +1,6 @@
 # Architecture review
 
-Status: resolved in this revision  
+Status: resolved in this revision
 Date: 2026-07-30
 Scope: `agentic-framework/design-v0.1/`
 

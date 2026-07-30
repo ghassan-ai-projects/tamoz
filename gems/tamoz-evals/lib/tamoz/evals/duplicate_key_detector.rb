@@ -6,6 +6,7 @@ require "set"
 module Tamoz
   module Evals
     class DuplicateKeyDetector
+      MAX_NESTING = 100
       WHITESPACE = [" ", "\t", "\r", "\n"].freeze
 
       def self.validate!(text)
@@ -19,7 +20,7 @@ module Tamoz
 
       def validate!
         skip_whitespace
-        parse_value
+        parse_value(0)
         skip_whitespace
         raise InvalidArtifactError, "unexpected trailing JSON content" unless eof?
 
@@ -30,17 +31,19 @@ module Tamoz
 
       private
 
-      def parse_value
+      def parse_value(depth)
+        raise InvalidArtifactError, "JSON nesting exceeds #{MAX_NESTING}" if depth > MAX_NESTING
+
         case current
-        when "{" then parse_object
-        when "[" then parse_array
+        when "{" then parse_object(depth)
+        when "[" then parse_array(depth)
         when '"' then parse_string
         when nil then raise InvalidArtifactError, "unexpected end of JSON"
         else parse_scalar
         end
       end
 
-      def parse_object
+      def parse_object(depth)
         advance("{")
         skip_whitespace
         return advance("}") if current == "}"
@@ -55,7 +58,7 @@ module Tamoz
           skip_whitespace
           advance(":")
           skip_whitespace
-          parse_value
+          parse_value(depth + 1)
           skip_whitespace
 
           return advance("}") if current == "}"
@@ -65,13 +68,13 @@ module Tamoz
         end
       end
 
-      def parse_array
+      def parse_array(depth)
         advance("[")
         skip_whitespace
         return advance("]") if current == "]"
 
         loop do
-          parse_value
+          parse_value(depth + 1)
           skip_whitespace
           return advance("]") if current == "]"
 
@@ -86,17 +89,17 @@ module Tamoz
         escaped = false
 
         until eof?
-          character = current
+          byte = @text.getbyte(@index)
           @index += 1
 
           if escaped
             escaped = false
-          elsif character == "\\"
+          elsif byte == 0x5c
             escaped = true
-          elsif character == '"'
+          elsif byte == 0x22
             literal = @text.byteslice(start...@index)
             return JSON.parse(literal)
-          elsif character.ord < 0x20
+          elsif byte < 0x20
             raise InvalidArtifactError, "unescaped control character in JSON string"
           end
         end

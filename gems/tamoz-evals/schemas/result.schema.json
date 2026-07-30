@@ -44,6 +44,12 @@
     "environment": {
       "$ref": "#/$defs/environment"
     },
+    "evidence_gaps": {
+      "items": {
+        "$ref": "#/$defs/nonempty"
+      },
+      "type": "array"
+    },
     "format_version": {
       "const": 1
     },
@@ -58,6 +64,23 @@
         "$ref": "#/$defs/nonempty"
       },
       "type": "array"
+    },
+    "infrastructure_errors": {
+      "items": {
+        "$ref": "#/$defs/infrastructure_error"
+      },
+      "type": "array"
+    },
+    "comparison_method": {
+      "enum": [
+        "exact",
+        "paired_binary",
+        "paired_distribution"
+      ],
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/provenance"
     },
     "references": {
       "items": {
@@ -105,13 +128,17 @@
     "suite_ref",
     "subject",
     "environment",
+    "provenance",
     "references",
     "scores",
     "hard_gates",
     "invalid_evidence",
+    "evidence_gaps",
+    "infrastructure_errors",
     "cost",
     "timing",
     "baseline_ref",
+    "comparison_method",
     "status",
     "decision",
     "decision_authority"
@@ -173,6 +200,23 @@
         "platform": {
           "$ref": "#/$defs/nonempty"
         },
+        "isolation": {
+          "enum": [
+            "in_process",
+            "subprocess",
+            "sandbox",
+            "not_executed"
+          ],
+          "type": "string"
+        },
+        "network": {
+          "enum": [
+            "denied",
+            "recorded",
+            "allowlisted"
+          ],
+          "type": "string"
+        },
         "profile": {
           "enum": [
             "pr",
@@ -189,7 +233,9 @@
       "required": [
         "profile",
         "ruby_version",
-        "platform"
+        "platform",
+        "isolation",
+        "network"
       ],
       "type": "object"
     },
@@ -243,6 +289,9 @@
           ],
           "type": "string"
         },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
         "version": {
           "$ref": "#/$defs/id"
         }
@@ -250,7 +299,8 @@
       "required": [
         "id",
         "kind",
-        "version"
+        "version",
+        "digest"
       ],
       "type": "object"
     },
@@ -284,6 +334,11 @@
           "maxLength": 1024,
           "minLength": 1,
           "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -291,6 +346,7 @@
         "kind",
         "path",
         "digest",
+        "size_bytes",
         "classification"
       ],
       "type": "object"
@@ -348,6 +404,179 @@
         "version",
         "git_revision",
         "behavior_version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "attempt": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "index": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "reference_ids": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "status": {
+          "enum": [
+            "passed",
+            "failed",
+            "invalid",
+            "infrastructure_error",
+            "insufficient_evidence",
+            "not_executed"
+          ],
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "index",
+        "status",
+        "reference_ids"
+      ],
+      "type": "object"
+    },
+    "component": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "role": {
+          "$ref": "#/$defs/id"
+        },
+        "version": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "role",
+        "id",
+        "version",
+        "digest"
+      ],
+      "type": "object"
+    },
+    "infrastructure_error": {
+      "additionalProperties": false,
+      "properties": {
+        "attempt_id": {
+          "$ref": "#/$defs/id"
+        },
+        "code": {
+          "$ref": "#/$defs/id"
+        },
+        "message_safe": {
+          "$ref": "#/$defs/nonempty"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message_safe",
+        "retryable",
+        "attempt_id"
+      ],
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/attempt"
+          },
+          "maxItems": 32,
+          "type": "array"
+        },
+        "components": {
+          "items": {
+            "$ref": "#/$defs/component"
+          },
+          "minItems": 2,
+          "type": "array"
+        },
+        "fixtures": {
+          "items": {
+            "$ref": "#/$defs/artifact_ref"
+          },
+          "type": "array"
+        },
+        "repetition": {
+          "$ref": "#/$defs/repetition"
+        },
+        "seed": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "minimum": 0,
+              "type": "integer"
+            }
+          ]
+        },
+        "snapshots": {
+          "items": {
+            "$ref": "#/$defs/snapshot"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "components",
+        "snapshots",
+        "fixtures",
+        "seed",
+        "repetition",
+        "attempts"
+      ],
+      "type": "object"
+    },
+    "repetition": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 1,
+          "type": "integer"
+        },
+        "index": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "count"
+      ],
+      "type": "object"
+    },
+    "snapshot": {
+      "additionalProperties": false,
+      "properties": {
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "kind": {
+          "$ref": "#/$defs/id"
+        }
+      },
+      "required": [
+        "kind",
         "digest"
       ],
       "type": "object"

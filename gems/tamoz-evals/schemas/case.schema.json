@@ -361,6 +361,11 @@
           "maxLength": 1024,
           "minLength": 1,
           "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 16777216,
+          "minimum": 0,
+          "type": "integer"
         }
       },
       "required": [
@@ -368,6 +373,7 @@
         "kind",
         "path",
         "digest",
+        "size_bytes",
         "classification"
       ],
       "type": "object"

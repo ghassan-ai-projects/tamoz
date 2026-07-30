@@ -6,6 +6,11 @@ module Tamoz
   module Evals
     class Schema
       SCHEMA_ROOT = File.expand_path("../../../schemas", __dir__).freeze
+      SUPPORTED_KEYWORDS = %w[
+        $defs $id $ref $schema additionalProperties allOf anyOf const enum items
+        maxItems maxLength maximum minItems minLength minimum pattern properties
+        required title type uniqueItems
+      ].freeze
       TYPES = {
         "array" => Array,
         "boolean" => [TrueClass, FalseClass],
@@ -20,11 +25,14 @@ module Tamoz
         path = File.join(SCHEMA_ROOT, "#{artifact_type}.schema.json")
         raise UnsupportedFormatError, "unsupported artifact type: #{artifact_type.inspect}" unless File.file?(path)
 
-        new(JSON.parse(File.read(path, encoding: Encoding::UTF_8)))
+        text = File.read(path, encoding: Encoding::UTF_8)
+        DuplicateKeyDetector.validate!(text)
+        new(JSON.parse(text))
       end
 
       def initialize(document)
-        @document = document
+        validate_schema_definition!(document, "$")
+        @document = DeepFreeze.call(document)
       end
 
       def validate!(value)
@@ -35,7 +43,7 @@ module Tamoz
       private
 
       def validate_node!(schema, value, path)
-        schema = resolve_reference(schema.fetch("$ref")) if schema.key?("$ref")
+        validate_node!(resolve_reference(schema.fetch("$ref")), value, path) if schema.key?("$ref")
 
         if schema.key?("allOf")
           schema.fetch("allOf").each { |branch| validate_node!(branch, value, path) }
@@ -72,7 +80,42 @@ module Tamoz
         rescue SchemaError
           false
         end
-        raise SchemaError, "#{path}: expected exactly one anyOf branch, matched #{matches}" unless matches == 1
+        raise SchemaError, "#{path}: expected at least one anyOf branch" if matches.zero?
+      end
+
+      def validate_schema_definition!(schema, path)
+        raise SchemaError, "#{path}: schema node must be an object" unless schema.is_a?(Hash)
+
+        unknown = schema.keys - SUPPORTED_KEYWORDS
+        unless unknown.empty?
+          raise SchemaError, "#{path}: unsupported schema keywords #{unknown.sort.inspect}"
+        end
+
+        schema.fetch("properties", {}).each do |name, child|
+          validate_schema_definition!(child, "#{path}.properties.#{name}")
+        end
+        schema.fetch("$defs", {}).each do |name, child|
+          validate_schema_definition!(child, "#{path}.$defs.#{name}")
+        end
+        %w[allOf anyOf].each do |keyword|
+          Array(schema[keyword]).each_with_index do |child, index|
+            validate_schema_definition!(child, "#{path}.#{keyword}[#{index}]")
+          end
+        end
+        validate_schema_definition!(schema.fetch("items"), "#{path}.items") if schema.key?("items")
+
+        additional = schema["additionalProperties"]
+        if !additional.nil? && additional != true && additional != false
+          raise SchemaError, "#{path}: schema-valued additionalProperties is unsupported"
+        end
+
+        Array(schema["type"]).each do |type|
+          raise SchemaError, "#{path}: unsupported schema type #{type.inspect}" unless TYPES.key?(type)
+        end
+
+        Regexp.new(schema.fetch("pattern")) if schema.key?("pattern")
+      rescue RegexpError => error
+        raise SchemaError, "#{path}: invalid schema pattern: #{error.message}"
       end
 
       def validate_type!(expected, value, path)

@@ -4,6 +4,7 @@ require "pathname"
 
 require_relative "evals/version"
 require_relative "evals/errors"
+require_relative "evals/deep_freeze"
 require_relative "evals/canonical_json"
 require_relative "evals/duplicate_key_detector"
 require_relative "evals/schema"

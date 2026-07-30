@@ -21,7 +21,14 @@ module TamozGemspec
       spec.required_ruby_version = Gem::Requirement.new(">= 3.3", "< 5.0")
       spec.required_rubygems_version = Gem::Requirement.new(">= 3.5")
 
-      patterns = ["lib/**/*.rb", "schemas/**/*.json", "exe/*", *ALLOWED_FILES]
+      patterns = [
+        "lib/**/*.rb",
+        "schemas/**/*.json",
+        "suites/**/*.json",
+        "baselines/**/*.json",
+        "exe/*",
+        *ALLOWED_FILES
+      ]
       spec.files = Dir.chdir(root) do
         patterns.flat_map { |pattern| Dir.glob(pattern) }
                 .select { |path| File.file?(path) }

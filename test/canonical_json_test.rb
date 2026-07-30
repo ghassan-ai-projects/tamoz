@@ -38,4 +38,14 @@ class CanonicalJSONTest < Minitest::Test
       Tamoz::Evals::CanonicalJSON.dump(composed => 1, decomposed => 2)
     end
   end
+
+  def test_non_ascii_strings_are_normalized_without_corrupting_utf8
+    composed = "Tamoz café"
+    decomposed = "Tamoz cafe\u0301"
+
+    assert_equal(
+      Tamoz::Evals::CanonicalJSON.dump("title" => composed),
+      Tamoz::Evals::CanonicalJSON.dump("title" => decomposed)
+    )
+  end
 end

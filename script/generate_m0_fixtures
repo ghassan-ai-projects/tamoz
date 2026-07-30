@@ -279,6 +279,14 @@ subject_digest = Tamoz::Evals::CanonicalJSON.content_digest(
   {"subject_id" => "tamoz-agent", "version" => "0.1.0.alpha.1"},
   domain: "eval.subject"
 )
+evaluator_digest = Tamoz::Evals::CanonicalJSON.content_digest(
+  {"id" => "tamoz-evals", "version" => Tamoz::Evals::VERSION},
+  domain: "eval.component"
+)
+gate_digest = Tamoz::Evals::CanonicalJSON.content_digest(
+  {"id" => "tamoz.m0.gate", "version" => "v1"},
+  domain: "eval.component"
+)
 
 baseline = {
   "artifact_type" => "result",
@@ -306,7 +314,33 @@ baseline = {
   "environment" => {
     "profile" => "pr",
     "ruby_version" => "not-executed",
-    "platform" => "not-executed"
+    "platform" => "not-executed",
+    "isolation" => "not_executed",
+    "network" => "denied"
+  },
+  "provenance" => {
+    "components" => [
+      {
+        "role" => "evaluator",
+        "id" => "tamoz-evals",
+        "version" => Tamoz::Evals::VERSION,
+        "digest" => evaluator_digest
+      },
+      {
+        "role" => "gate",
+        "id" => "tamoz.m0.gate",
+        "version" => "v1",
+        "digest" => gate_digest
+      }
+    ],
+    "snapshots" => [],
+    "fixtures" => [],
+    "seed" => nil,
+    "repetition" => {
+      "index" => 1,
+      "count" => 1
+    },
+    "attempts" => []
   },
   "references" => [
     {
@@ -314,6 +348,7 @@ baseline = {
       "kind" => "summary",
       "path" => "evidence/baseline-summary.json",
       "digest" => Tamoz::Evals::CanonicalJSON.file_digest(summary_path),
+      "size_bytes" => File.size(summary_path),
       "classification" => "public"
     }
   ],
@@ -326,6 +361,8 @@ baseline = {
     }
   ],
   "invalid_evidence" => [],
+  "evidence_gaps" => ["The Tamoz runtime does not exist in M0."],
+  "infrastructure_errors" => [],
   "cost" => {
     "input_tokens" => 0,
     "output_tokens" => 0,
@@ -337,12 +374,14 @@ baseline = {
     "duration_ms" => 0
   },
   "baseline_ref" => nil,
+  "comparison_method" => "exact",
   "status" => "insufficient_evidence",
   "decision" => "insufficient_evidence",
   "decision_authority" => {
     "id" => "tamoz.m0.gate",
     "kind" => "deterministic_gate",
-    "version" => "v1"
+    "version" => "v1",
+    "digest" => gate_digest
   }
 }
 
