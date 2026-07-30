@@ -17,6 +17,9 @@ require_relative "evals/harness/sqlite_trace_recorder"
 require_relative "evals/harness/sqlite_trace_selector_deriver"
 require_relative "evals/harness/sqlite_trace_manifest_verifier"
 require_relative "evals/harness/subprocess_runner"
+require_relative "evals/harness/sqlite_selector_control"
+require_relative "evals/harness/sqlite_selector_control_stopper"
+require_relative "evals/harness/sqlite_selector_control_intervention"
 require_relative "evals/cli"
 
 module Tamoz

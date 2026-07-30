@@ -435,6 +435,8 @@ Phase 2B is accepted in
 [M3_1_PHASE2B_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2B_IMPLEMENTATION_REVIEW.md).
 Phase 2C is accepted in
 [M3_1_PHASE2C_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2C_IMPLEMENTATION_REVIEW.md).
+Phase 2D is accepted in
+[M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
