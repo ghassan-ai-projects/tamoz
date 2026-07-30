@@ -75,6 +75,7 @@ class SubprocessRunnerTest < Minitest::Test
 
   def test_timeout_escalates_to_kill_for_term_resistant_child
     runner = build_runner(termination_grace_ms: 50)
+    previous_term_handler = Signal.trap("TERM", "IGNORE")
     script = <<~'RUBY'
       trap("TERM") {}
       loop { sleep 1 }
@@ -92,6 +93,8 @@ class SubprocessRunnerTest < Minitest::Test
     assert_nil result.exit_status
     assert_equal "KILL", result.term_signal
     assert_operator result.duration_ms, :<, 2_000
+  ensure
+    Signal.trap("TERM", previous_term_handler) if previous_term_handler
   end
 
   def test_timeout_stops_cooperative_child_with_term

@@ -197,11 +197,35 @@ statement
 attempt_class
 occurrence
 iteration_class
+selector_digest
 ```
 
-`occurrence` is the concrete child target. Coverage identity replaces unbounded repetition
-with `single`, `first`, `middle`, `final`, or `exhausted`. Phase 2 fixtures have bounded
-write/consume counts and no unbounded loop. Duplicate coverage identities are rejected.
+`occurrence` is the concrete child target. `iteration_class` replaces unbounded repetition
+with `single`, `first`, `middle`, or `final`; `attempt_class` has the separately bounded
+`first`, `retry`, and `exhausted` vocabulary. Phase 2 fixtures have bounded write/consume
+counts and no unbounded loop. Duplicate coverage identities are rejected.
+
+The Phase 2B recorder is disarmed during bootstrap, binds to exactly one Phase 2
+kill-required operation and the arming thread, and accepts one complete first-attempt
+protocol:
+
+```text
+before_begin
+after_begin
+(before_sql, after_sql)+
+before_commit
+after_commit
+```
+
+Hook input must be deeply frozen and is copied into recorder ownership. Dynamic statement
+indices are zero-based, contiguous, and bounded by both the registry and the 256-event
+scenario ceiling. Selector groups retain `first`, the lower-median `middle`, and `final`
+representatives, then sort by the domain-separated selector digest.
+
+The manifest verifier preflights all container, scalar, string, integer, event, and selector
+bounds before canonicalization. It verifies the manifest digest and exact recorder/registry
+references, replays the ordered events through a fresh recorder, re-derives selectors, and
+requires byte-semantic equality with the supplied manifest.
 
 Successful traces use `attempt_class: first`. The data model supports `retry` and
 `exhausted`, but real locked-writer traces are owned by phase 5. Phase 2 artifacts must
@@ -407,6 +431,8 @@ Artifacts remain internal and unsanitized in phase 2. Public sanitization and th
 
 Phase 2A is accepted in
 [M3_1_PHASE2A_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2A_IMPLEMENTATION_REVIEW.md).
+Phase 2B is accepted in
+[M3_1_PHASE2B_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2B_IMPLEMENTATION_REVIEW.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
