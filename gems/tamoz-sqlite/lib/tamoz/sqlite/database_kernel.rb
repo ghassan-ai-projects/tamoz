@@ -38,6 +38,7 @@ module Tamoz
               tx = Transaction.new(
                 connection:,
                 operation:,
+                attempt:,
                 fault_injector:
               )
               result = yield tx
@@ -71,6 +72,7 @@ module Tamoz
           transaction = Transaction.new(
             connection:,
             operation:,
+            attempt: nil,
             fault_injector:
           )
           yield transaction
@@ -96,10 +98,7 @@ module Tamoz
       def inject(point, operation, attempt)
         fault_injector.call(
           point,
-          {
-            "operation" => String(operation),
-            "attempt" => attempt
-          }.freeze
+          FaultHook.transaction(operation:, attempt:)
         )
       end
 

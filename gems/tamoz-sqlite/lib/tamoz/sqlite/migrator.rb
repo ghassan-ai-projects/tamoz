@@ -380,6 +380,7 @@ module Tamoz
         transaction = Transaction.new(
           connection:,
           operation: "migration.1",
+          attempt: 1,
           fault_injector:
         )
         MIGRATION_1.each_with_index do |sql, index|

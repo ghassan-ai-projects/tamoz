@@ -19,6 +19,10 @@ five directions:
 It also checked the plan against the committed M3.1 scope and the user's phase discipline.
 No phase 2 code may begin before this review and plan are committed.
 
+Process amendment on 2026-07-30: the user replaced the original atomic phase-commit rule
+with independently reviewed slice commits. Each slice must pass full CI and record its own
+review before the next begins; Phase 2 still ends with a cross-slice review.
+
 ## Findings resolved
 
 | Severity | Finding | Root cause | Resolution |
@@ -91,7 +95,8 @@ Implementation may begin because:
 - expected state is independently specified;
 - every scenario, selector, process, shard, artifact, and deadline is bounded;
 - phase 5 retry evidence and phase 3/4 capabilities remain visible and unclaimed;
-- phase completion requires deep review, complete CI, and an atomic commit.
+- every implementation slice requires deep review, complete CI, and its own commit;
+- phase completion additionally requires a final cross-slice review.
 
 Implementation stops and this plan is revised if:
 

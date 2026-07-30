@@ -2,6 +2,11 @@
 
 Status: accepted for implementation after adversarial review on 2026-07-30.
 
+Process amendment on 2026-07-30: each implementation slice below is independently
+reviewed, regression-tested, and committed before the next slice begins. This supersedes
+the original single-commit phase rule. Phase 2 still receives one final cross-slice review
+before it is called complete.
+
 Depends on:
 
 - reviewed M3.1 plan `5670f11`;
@@ -389,20 +394,26 @@ records:
 Artifacts remain internal and unsanitized in phase 2. Public sanitization and the six
 `m3.persistence` cases land in phase 7.
 
-## Implementation order inside the phase
+## Reviewed implementation slices
 
-1. Registry model, source audit, and hook metadata v1.
-2. Trace recorder, selector derivation, and deterministic manifest tests.
-3. Intentional subprocess intervention and evidence-schema correction.
-4. Fsynced control protocol and malicious/mismatch treatments.
-5. Fixed scenario setup/action drivers.
-6. Independent raw-SQL projector and classification tests.
-7. PR/release matrix, sharding/merge checks, and evidence envelopes.
-8. Regression integration, deep review, full gate, and one atomic phase commit.
+1. Phase 2A: registry model, source audit, and hook metadata v1.
+2. Phase 2B: trace recorder, selector derivation, and deterministic manifest tests.
+3. Phase 2C: intentional subprocess intervention and evidence-schema correction.
+4. Phase 2D: fsynced control protocol and malicious/mismatch treatments.
+5. Phase 2E: fixed scenario setup/action drivers.
+6. Phase 2F: independent raw-SQL projector and classification tests.
+7. Phase 2G: PR/release matrix, sharding/merge checks, and evidence envelopes.
+8. Phase 2H: regression integration and final cross-slice review.
 
-This order is for working-tree development only. No intermediate implementation is called
-complete or committed as phase 2. If a runtime correctness defect is found, implementation
-stops for a named Five Whys analysis, regression, and explicit review correction.
+Phase 2A is accepted in
+[M3_1_PHASE2A_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2A_IMPLEMENTATION_REVIEW.md).
+
+Every slice follows the same gate: bounded implementation, adversarial self-review,
+focused tests, full CI, a recorded review decision, and one slice commit. No later slice
+begins while the current slice is uncommitted or has an unresolved finding. An intermediate
+slice commit does not imply that Phase 2, M3.1, or any crash-safety claim is complete. If a
+runtime correctness defect is found, implementation stops for a named Five Whys analysis,
+regression, and explicit review correction.
 
 ## Test matrix
 
@@ -458,7 +469,8 @@ Implementation begins only if every answer is yes:
 - Are all selectors and shards finite, deterministic, and merge-verifiable?
 - Does PR evidence exercise every scenario while release evidence covers every selector?
 - Are phase 3–7 claims explicitly absent?
-- Does phase 2 end with deep review, full CI, and one atomic code commit?
+- Does every slice have a recorded deep review, full CI, and its own commit?
+- Does phase 2 end with a final cross-slice review before any completion claim?
 
 Any “no” revises this plan before runtime implementation.
 

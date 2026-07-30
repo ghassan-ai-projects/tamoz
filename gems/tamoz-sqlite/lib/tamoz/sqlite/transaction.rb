@@ -3,11 +3,12 @@
 module Tamoz
   module SQLite
     class Transaction
-      attr_reader :connection, :operation, :fault_injector
+      attr_reader :connection, :operation, :attempt, :fault_injector
 
-      def initialize(connection:, operation:, fault_injector:)
+      def initialize(connection:, operation:, attempt:, fault_injector:)
         @connection = connection
         @operation = String(operation).dup.freeze
+        @attempt = attempt
         @fault_injector = fault_injector
       end
 
@@ -62,10 +63,11 @@ module Tamoz
       def inject(point, label)
         fault_injector.call(
           point,
-          {
-            "operation" => operation,
-            "statement" => label
-          }.freeze
+          FaultHook.statement(
+            operation:,
+            statement: label,
+            attempt:
+          )
         )
       end
     end
