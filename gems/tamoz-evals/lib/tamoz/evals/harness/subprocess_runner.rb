@@ -17,6 +17,7 @@ module Tamoz
         MAX_OUTPUT_LIMIT_BYTES = 16 * 1024 * 1024
         MAX_TIMEOUT_MS = 3_600_000
         MAX_TERMINATION_GRACE_MS = 10_000
+        INTERVENTION_KILL = "kill"
         READ_CHUNK_BYTES = 16 * 1024
 
         Stream = Data.define(
@@ -42,12 +43,16 @@ module Tamoz
           :term_signal,
           :timed_out,
           :termination,
+          :termination_reason,
           :duration_ms,
           :stdout,
           :stderr
         ) do
           def success?
-            !timed_out && termination == "none" && exit_status == 0
+            !timed_out &&
+              termination == "none" &&
+              termination_reason == "none" &&
+              exit_status == 0
           end
 
           def to_h
@@ -57,6 +62,7 @@ module Tamoz
               "term_signal" => term_signal,
               "timed_out" => timed_out,
               "termination" => termination,
+              "termination_reason" => termination_reason,
               "duration_ms" => duration_ms,
               "stdout" => stdout.to_h,
               "stderr" => stderr.to_h
@@ -121,9 +127,10 @@ module Tamoz
           freeze
         end
 
-        def capture(argv, timeout_ms:, command:)
+        def capture(argv, timeout_ms:, command:, intervention: nil)
           arguments = normalize_arguments(argv)
           command_label = normalize_label(command, name: "command")
+          intervention_object = normalize_intervention(intervention)
           timeout = bounded_integer(
             timeout_ms,
             name: "timeout_ms",
@@ -131,12 +138,17 @@ module Tamoz
             maximum: MAX_TIMEOUT_MS
           )
 
-          execute(arguments, timeout_ms: timeout, command: command_label)
+          execute(
+            arguments,
+            timeout_ms: timeout,
+            command: command_label,
+            intervention: intervention_object
+          )
         end
 
         private
 
-        def execute(arguments, timeout_ms:, command:)
+        def execute(arguments, timeout_ms:, command:, intervention:)
           pid = nil
           reaped = false
           stdout_reader, stdout_writer = IO.pipe
@@ -152,7 +164,11 @@ module Tamoz
 
           stdout_thread = capture_thread(stdout_reader)
           stderr_thread = capture_thread(stderr_reader)
-          status, timed_out, termination = wait_for_child(pid, timeout_ms)
+          status, timed_out, termination, termination_reason = wait_for_child(
+            pid,
+            timeout_ms,
+            intervention
+          )
           reaped = true
           drain_readers!(
             pid,
@@ -167,6 +183,7 @@ module Tamoz
             term_signal: status.signaled? ? Signal.signame(status.termsig) : nil,
             timed_out: timed_out,
             termination: termination,
+            termination_reason: termination_reason,
             duration_ms: duration_ms,
             stdout: stdout_thread.value,
             stderr: stderr_thread.value
@@ -235,21 +252,53 @@ module Tamoz
           end
         end
 
-        def wait_for_child(pid, timeout_ms)
-          timeout_seconds = timeout_ms.fdiv(1_000)
-          _, status = Process.waitpid2(pid, Process::WNOHANG)
-          unless status
-            deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout_seconds
-            loop do
-              remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-              break if remaining <= 0
+        def wait_for_child(pid, timeout_ms, intervention)
+          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) +
+                     timeout_ms.fdiv(1_000)
+          stop_signal = nil
 
-              sleep([remaining, 0.01].min)
-              _, status = Process.waitpid2(pid, Process::WNOHANG)
-              break if status
+          loop do
+            _, observed = Process.waitpid2(
+              pid,
+              Process::WNOHANG | Process::WUNTRACED
+            )
+            if observed&.stopped?
+              stop_signal = Signal.signame(observed.stopsig)
+            elsif observed
+              return [observed, false, "none", "none"]
             end
+
+            remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+            break if remaining <= 0
+
+            if stop_signal && intervention
+              decision = poll_intervention(
+                intervention,
+                stop_signal,
+                [(remaining * 1_000).floor, 0].max
+              )
+              unless decision.nil? ||
+                     (decision.instance_of?(String) && decision == INTERVENTION_KILL)
+                raise ExecutionError,
+                      "intervention must return nil or #{INTERVENTION_KILL.inspect}"
+              end
+              break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+
+              if decision == INTERVENTION_KILL
+                signal_group("KILL", pid)
+                status = wait_for_exit(pid, @termination_grace_ms)
+                unless status&.signaled? &&
+                       Signal.signame(status.termsig) == "KILL"
+                  raise ExecutionError,
+                        "intervention did not produce SIGKILL process status"
+                end
+
+                return [status, false, "kill", "intervention"]
+              end
+            end
+
+            sleep([remaining, 0.01].min)
           end
-          return [status, false, "none"] if status
 
           term_sent = signal_group("TERM", pid, allow_missing: true)
           status = wait_for_exit(pid, @termination_grace_ms)
@@ -257,18 +306,37 @@ module Tamoz
             return [
               status,
               term_sent,
-              term_sent ? "term" : "none"
+              term_sent ? "term" : "none",
+              term_sent ? "timeout" : "none"
             ]
           end
 
-          signal_group("KILL", pid, allow_missing: true)
+          kill_sent = signal_group("KILL", pid, allow_missing: true)
           status = wait_for_exit(pid, @termination_grace_ms)
           unless status
             raise ExecutionError,
                   "child process group did not exit after SIGKILL"
           end
 
-          [status, true, "kill"]
+          if kill_sent
+            unless status.signaled? && Signal.signame(status.termsig) == "KILL"
+              raise ExecutionError,
+                    "timeout SIGKILL did not produce SIGKILL process status"
+            end
+            [status, true, "kill", "timeout"]
+          elsif term_sent
+            [status, true, "term", "timeout"]
+          else
+            [status, false, "none", "none"]
+          end
+        end
+
+        def poll_intervention(intervention, stop_signal, remaining_ms)
+          intervention.poll(stop_signal:, remaining_ms:)
+        rescue StandardError => error
+          raise ExecutionError.new(
+            "intervention poll failed: #{error.class}"
+          ), cause: error
         end
 
         def wait_for_exit(pid, timeout_ms)
@@ -311,7 +379,11 @@ module Tamoz
 
         def terminate_and_reap(pid)
           signal_group("KILL", pid, allow_missing: true)
-          Process.waitpid(pid)
+          status = wait_for_exit(pid, @termination_grace_ms)
+          return if status
+
+          raise ExecutionError,
+                "child process cleanup exceeded its termination budget"
         rescue Errno::ECHILD
           nil
         end
@@ -423,6 +495,13 @@ module Tamoz
           end
 
           text
+        end
+
+        def normalize_intervention(intervention)
+          return nil if intervention.nil?
+          return intervention if intervention.respond_to?(:poll)
+
+          raise ExecutionError, "intervention must respond to poll"
         end
 
         def normalize_text(value, name:, maximum_bytes:, allow_empty: false)

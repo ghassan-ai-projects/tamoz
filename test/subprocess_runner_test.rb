@@ -4,6 +4,12 @@ require_relative "test_helper"
 require "digest"
 
 class SubprocessRunnerTest < Minitest::Test
+  Intervention = Data.define(:handler) do
+    def poll(stop_signal:, remaining_ms:)
+      handler.call(stop_signal:, remaining_ms:)
+    end
+  end
+
   def test_captures_exact_environment_exit_and_stream_digests
     previous_hidden = ENV["TAMOZ_HIDDEN"]
     ENV["TAMOZ_HIDDEN"] = "ambient-secret"
@@ -28,6 +34,7 @@ class SubprocessRunnerTest < Minitest::Test
     assert_nil result.term_signal
     refute result.timed_out
     assert_equal "none", result.termination
+    assert_equal "none", result.termination_reason
     assert_equal "present:false", result.stdout.text
     assert_equal "warning", result.stderr.text
     assert_equal digest("present:false"), result.stdout.digest
@@ -90,6 +97,7 @@ class SubprocessRunnerTest < Minitest::Test
     refute result.success?
     assert result.timed_out
     assert_equal "kill", result.termination
+    assert_equal "timeout", result.termination_reason
     assert_nil result.exit_status
     assert_equal "KILL", result.term_signal
     assert_operator result.duration_ms, :<, 2_000
@@ -109,6 +117,7 @@ class SubprocessRunnerTest < Minitest::Test
     refute result.success?
     assert result.timed_out
     assert_equal "term", result.termination
+    assert_equal "timeout", result.termination_reason
     assert(result.exit_status || result.term_signal)
     refute_equal 0, result.exit_status
   end
@@ -147,6 +156,202 @@ class SubprocessRunnerTest < Minitest::Test
     end
 
     assert_includes error.message, "retained output streams"
+  end
+
+  def test_parent_intervention_observes_stop_and_intentionally_kills_child
+    observations = []
+    intervention = Intervention.new(
+      handler: lambda do |**keywords|
+        observations << keywords
+        "kill"
+      end
+    )
+    runner = build_runner(termination_grace_ms: 100)
+    script = <<~'RUBY'
+      STDOUT.sync = true
+      STDOUT.write("ready")
+      Process.kill("STOP", Process.pid)
+      STDOUT.write("unreachable")
+    RUBY
+
+    result = runner.capture(
+      [RbConfig.ruby, "-e", script],
+      timeout_ms: 2_000,
+      command: "test.intervention",
+      intervention:
+    )
+
+    refute result.success?
+    refute result.timed_out
+    assert_equal "kill", result.termination
+    assert_equal "intervention", result.termination_reason
+    assert_nil result.exit_status
+    assert_equal "KILL", result.term_signal
+    assert_equal "ready", result.stdout.text
+    assert_equal 1, observations.length
+    assert_equal ["remaining_ms", "stop_signal"], observations.first.keys.map(&:to_s).sort
+    assert_equal "STOP", observations.first.fetch(:stop_signal)
+    assert_operator observations.first.fetch(:remaining_ms), :>, 0
+    assert_operator observations.first.fetch(:remaining_ms), :<=, 2_000
+    refute_includes result.to_h.keys, "pid"
+    assert_equal "intervention", result.to_h.fetch("termination_reason")
+  end
+
+  def test_intervention_is_polled_from_retained_stop_state
+    observations = []
+    intervention = Intervention.new(
+      handler: lambda do |stop_signal:, remaining_ms:|
+        observations << [stop_signal, remaining_ms]
+        observations.length >= 3 ? "kill" : nil
+      end
+    )
+
+    result = build_runner.capture(
+      [
+        RbConfig.ruby,
+        "-e",
+        'Process.kill("STOP", Process.pid); abort "resumed"'
+      ],
+      timeout_ms: 2_000,
+      command: "test.intervention-poll",
+      intervention:
+    )
+
+    assert_equal "intervention", result.termination_reason
+    assert_equal 3, observations.length
+    assert observations.all? { |stop_signal,| stop_signal == "STOP" }
+    assert_equal observations.map(&:last).sort.reverse, observations.map(&:last)
+  end
+
+  def test_nil_intervention_decision_remains_bounded_by_process_timeout
+    polls = 0
+    intervention = Intervention.new(
+      handler: lambda do |stop_signal:, remaining_ms:|
+        assert_equal "STOP", stop_signal
+        assert_operator remaining_ms, :>=, 0
+        polls += 1
+        nil
+      end
+    )
+
+    result = build_runner(termination_grace_ms: 50).capture(
+      [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
+      timeout_ms: 75,
+      command: "test.intervention-timeout",
+      intervention:
+    )
+
+    assert result.timed_out
+    assert_equal "timeout", result.termination_reason
+    assert_equal "kill", result.termination
+    assert_equal "KILL", result.term_signal
+    assert_operator polls, :>, 0
+    assert_operator polls, :<=, 10
+  end
+
+  def test_timeout_wins_when_intervention_decision_crosses_deadline
+    polls = 0
+    intervention = Intervention.new(
+      handler: lambda do |stop_signal:, remaining_ms:|
+        assert_equal "STOP", stop_signal
+        assert_operator remaining_ms, :>, 0
+        polls += 1
+        sleep 0.15
+        "kill"
+      end
+    )
+
+    result = build_runner(termination_grace_ms: 50).capture(
+      [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
+      timeout_ms: 100,
+      command: "test.intervention-timeout-race",
+      intervention:
+    )
+
+    assert_equal 1, polls
+    assert result.timed_out
+    assert_equal "timeout", result.termination_reason
+    assert_equal "kill", result.termination
+    assert_equal "KILL", result.term_signal
+  end
+
+  def test_configured_intervention_is_not_polled_without_a_stop
+    intervention = Intervention.new(
+      handler: ->(**) { flunk "intervention must not poll a running child" }
+    )
+
+    result = build_runner.capture(
+      [RbConfig.ruby, "-e", "exit 0"],
+      timeout_ms: 2_000,
+      command: "test.unused-intervention",
+      intervention:
+    )
+
+    assert result.success?
+    assert_equal "none", result.termination_reason
+  end
+
+  def test_intervention_failure_and_invalid_decision_trigger_bounded_cleanup
+    [
+      [
+        Intervention.new(handler: ->(**) { raise "control read failed" }),
+        "intervention poll failed"
+      ],
+      [
+        Intervention.new(handler: ->(**) { :kill }),
+        "must return nil or"
+      ]
+    ].each do |intervention, expected_message|
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      error = assert_raises(Tamoz::Evals::ExecutionError) do
+        build_runner(termination_grace_ms: 100).capture(
+          [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
+          timeout_ms: 2_000,
+          command: "test.intervention-failure",
+          intervention:
+        )
+      end
+
+      assert_includes error.message, expected_message
+      if expected_message == "intervention poll failed"
+        refute_includes error.message, "control read failed"
+      end
+      duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+      assert_operator duration, :<, 2
+    end
+  end
+
+  def test_invalid_intervention_decision_fails_even_after_deadline
+    intervention = Intervention.new(
+      handler: lambda do |**|
+        sleep 0.15
+        :kill
+      end
+    )
+
+    error = assert_raises(Tamoz::Evals::ExecutionError) do
+      build_runner(termination_grace_ms: 50).capture(
+        [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
+        timeout_ms: 100,
+        command: "test.late-invalid-intervention",
+        intervention:
+      )
+    end
+
+    assert_includes error.message, "must return nil or"
+  end
+
+  def test_intervention_contract_is_validated_before_spawning
+    error = assert_raises(Tamoz::Evals::ExecutionError) do
+      build_runner.capture(
+        [RbConfig.ruby, "-e", "exit 99"],
+        timeout_ms: 100,
+        command: "test.invalid-intervention",
+        intervention: Object.new
+      )
+    end
+
+    assert_includes error.message, "respond to poll"
   end
 
   def test_rejects_shell_lookup_nul_and_ambient_environment

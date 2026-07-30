@@ -401,6 +401,15 @@
           ],
           "type": "string"
         },
+        "termination_reason": {
+          "enum": [
+            "none",
+            "timeout",
+            "intervention",
+            "cleanup"
+          ],
+          "type": "string"
+        },
         "timed_out": {
           "type": "boolean"
         }
@@ -412,6 +421,7 @@
         "term_signal",
         "timed_out",
         "termination",
+        "termination_reason",
         "duration_ms",
         "stdout",
         "stderr"

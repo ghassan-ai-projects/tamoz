@@ -227,6 +227,11 @@ module Tamoz
           raise InvalidArtifactError,
                 "#{document.fetch("kind")} evidence requires a process record"
         end
+        if document.fetch("selection") &&
+           processes.none? { |process| intentional_intervention?(process) }
+          raise InvalidArtifactError,
+                "selector evidence requires an intentional SIGKILL process record"
+        end
 
         timing = document.fetch("timing")
         verify_timing!(timing)
@@ -253,10 +258,35 @@ module Tamoz
 
         timed_out = process.fetch("timed_out")
         termination = process.fetch("termination")
-        if timed_out == (termination == "none")
+        termination_reason = process.fetch("termination_reason")
+        unless timed_out == (termination_reason == "timeout")
           raise InvalidArtifactError,
-                "process timeout and harness termination disagree"
+                "process timed_out and termination reason disagree"
         end
+
+        case termination_reason
+        when "none"
+          unless termination == "none"
+            raise InvalidArtifactError,
+                  "ordinary process termination requires no harness action"
+          end
+        when "timeout"
+          if termination == "none"
+            raise InvalidArtifactError,
+                  "process timeout requires a harness termination action"
+          end
+        when "intervention"
+          unless intentional_intervention?(process)
+            raise InvalidArtifactError,
+                  "process intervention requires intentional SIGKILL status"
+          end
+        when "cleanup"
+          if termination == "none"
+            raise InvalidArtifactError,
+                  "process cleanup requires a harness termination action"
+          end
+        end
+
         if termination == "kill" && process.fetch("term_signal") != "KILL"
           raise InvalidArtifactError,
                 "SIGKILL harness termination requires KILL process status"
@@ -285,6 +315,12 @@ module Tamoz
 
         case document.fetch("status")
         when "passed"
+          if document.fetch("processes").any? do |process|
+               process.fetch("termination_reason") == "cleanup"
+             end
+            raise InvalidArtifactError,
+                  "passed evidence cannot rely on cleanup termination"
+          end
           unless claims.all? { |claim| claim.fetch("status") == "pass" }
             raise InvalidArtifactError,
                   "passed evidence requires every claim to pass"
@@ -325,6 +361,13 @@ module Tamoz
                   "insufficient evidence cannot mix invalid or infrastructure material"
           end
         end
+      end
+
+      def intentional_intervention?(process)
+        process.fetch("termination") == "kill" &&
+          process.fetch("termination_reason") == "intervention" &&
+          process.fetch("term_signal") == "KILL" &&
+          !process.fetch("timed_out")
       end
 
       def verify_provenance!(document, reference_ids)

@@ -65,6 +65,143 @@ class EvidenceArtifactTest < Minitest::Test
     end
   end
 
+  def test_process_termination_reason_relations_fail_closed
+    Dir.mktmpdir("tamoz-evidence") do |directory|
+      path = write_valid_evidence(directory)
+
+      document = read_json(path)
+      process = document.fetch("processes").first
+      process["timed_out"] = true
+      write_artifact(path, document, domain: "eval.evidence")
+      error = assert_raises(Tamoz::Evals::InvalidArtifactError) do
+        Tamoz::Evals.verify(path)
+      end
+      assert_includes error.message, "timed_out and termination reason"
+
+      document = read_json(write_valid_evidence(directory))
+      process = document.fetch("processes").first
+      process["termination"] = "term"
+      process["termination_reason"] = "timeout"
+      process["timed_out"] = true
+      process["exit_status"] = nil
+      process["term_signal"] = "TERM"
+      write_artifact(path, document, domain: "eval.evidence")
+      assert_equal "pass", Tamoz::Evals.verify(path).decision
+
+      process["termination_reason"] = "intervention"
+      process["timed_out"] = false
+      write_artifact(path, document, domain: "eval.evidence")
+      error = assert_raises(Tamoz::Evals::InvalidArtifactError) do
+        Tamoz::Evals.verify(path)
+      end
+      assert_includes error.message, "intentional SIGKILL"
+    end
+  end
+
+  def test_process_termination_action_matrix_rejects_contradictions
+    cases = [
+      [
+        {
+          "termination" => "term",
+          "termination_reason" => "none",
+          "exit_status" => nil,
+          "term_signal" => "TERM"
+        },
+        "ordinary process termination"
+      ],
+      [
+        {
+          "termination" => "none",
+          "termination_reason" => "timeout",
+          "timed_out" => true
+        },
+        "timeout requires a harness termination"
+      ],
+      [
+        {
+          "termination" => "none",
+          "termination_reason" => "cleanup"
+        },
+        "cleanup requires a harness termination"
+      ],
+      [
+        {
+          "termination" => "kill",
+          "termination_reason" => "timeout",
+          "timed_out" => true,
+          "exit_status" => nil,
+          "term_signal" => "TERM"
+        },
+        "SIGKILL harness termination"
+      ]
+    ]
+
+    Dir.mktmpdir("tamoz-evidence") do |directory|
+      cases.each do |attributes, expected_message|
+        path = write_valid_evidence(directory)
+        document = read_json(path)
+        document.fetch("processes").first.merge!(attributes)
+        write_artifact(path, document, domain: "eval.evidence")
+
+        error = assert_raises(Tamoz::Evals::InvalidArtifactError) do
+          Tamoz::Evals.verify(path)
+        end
+        assert_includes error.message, expected_message
+      end
+    end
+  end
+
+  def test_selector_evidence_requires_intentional_intervention
+    Dir.mktmpdir("tamoz-evidence") do |directory|
+      path = write_valid_evidence(directory)
+      document = read_json(path)
+      document["selection"] = {
+        "operation" => "request.enqueue",
+        "point" => "after_sql",
+        "statement" => "insert_request",
+        "attempt_class" => "first",
+        "iteration_class" => "single",
+        "selector_digest" => sha("selector")
+      }
+      write_artifact(path, document, domain: "eval.evidence")
+      error = assert_raises(Tamoz::Evals::InvalidArtifactError) do
+        Tamoz::Evals.verify(path)
+      end
+      assert_includes error.message, "selector evidence"
+
+      process = document.fetch("processes").first
+      process["exit_status"] = nil
+      process["term_signal"] = "KILL"
+      process["termination"] = "kill"
+      process["termination_reason"] = "intervention"
+      write_artifact(path, document, domain: "eval.evidence")
+      assert_equal "pass", Tamoz::Evals.verify(path).decision
+    end
+  end
+
+  def test_cleanup_termination_cannot_be_successful_evidence
+    Dir.mktmpdir("tamoz-evidence") do |directory|
+      path = write_valid_evidence(directory)
+      document = read_json(path)
+      process = document.fetch("processes").first
+      process["exit_status"] = nil
+      process["term_signal"] = "TERM"
+      process["termination"] = "term"
+      process["termination_reason"] = "cleanup"
+      write_artifact(path, document, domain: "eval.evidence")
+
+      error = assert_raises(Tamoz::Evals::InvalidArtifactError) do
+        Tamoz::Evals.verify(path)
+      end
+      assert_includes error.message, "cannot rely on cleanup"
+
+      document["status"] = "failed"
+      document.fetch("claims").first["status"] = "fail"
+      write_artifact(path, document, domain: "eval.evidence")
+      assert_equal "fail", Tamoz::Evals.verify(path).decision
+    end
+  end
+
   def test_schema_rejects_unknown_and_unbounded_fields
     Dir.mktmpdir("tamoz-evidence") do |directory|
       path = write_valid_evidence(directory)
@@ -84,6 +221,14 @@ class EvidenceArtifactTest < Minitest::Test
         Tamoz::Evals.verify(path)
       end
       assert_includes error.message, "above"
+
+      document = read_json(write_valid_evidence(directory))
+      document.fetch("processes").first.delete("termination_reason")
+      write_artifact(path, document, domain: "eval.evidence")
+      error = assert_raises(Tamoz::Evals::SchemaError) do
+        Tamoz::Evals.verify(path)
+      end
+      assert_includes error.message, "termination_reason"
     end
   end
 
@@ -230,6 +375,7 @@ class EvidenceArtifactTest < Minitest::Test
           "term_signal" => nil,
           "timed_out" => false,
           "termination" => "none",
+          "termination_reason" => "none",
           "duration_ms" => 25,
           "stdout" => stream("ok\n"),
           "stderr" => stream("")
