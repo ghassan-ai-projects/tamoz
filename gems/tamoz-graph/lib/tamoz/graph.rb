@@ -6,6 +6,7 @@ require_relative "graph/version"
 
 module Tamoz
   module Graph
+    CHECKPOINT_PROTOCOL_VERSION = 1
     ROOT = File.expand_path("../../..", __dir__).freeze
 
     loader = Zeitwerk::Loader.new

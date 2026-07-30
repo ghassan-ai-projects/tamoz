@@ -10,10 +10,18 @@ module Tamoz
         @limits = compiled.limits
       end
 
-      def run(checkpoint, context:, concurrency:, resume_values: checkpoint.resume_values)
+      def run(
+        checkpoint,
+        writer:,
+        context:,
+        concurrency:,
+        resume_values: checkpoint.resume_values,
+        durable_request_id: nil
+      )
         current = checkpoint
         loop do
           context.check!
+          writer.check!
           return completed(current) if current.frontier.empty?
 
           logical_step = current.frontier.map(&:logical_step).max
@@ -30,6 +38,7 @@ module Tamoz
           results = execute_tasks(
             to_execute,
             current,
+            writer:,
             context:,
             concurrency:,
             resume_values:
@@ -51,13 +60,22 @@ module Tamoz
           unless errors.empty?
             current = append_noncommitting(
               current,
+              writer:,
               status: :failed,
               pending: all_successes,
               interrupts: interruptions,
               attempts:,
               resume_values:,
               total_tasks:,
-              failure: failure_descriptors(errors)
+              failure: failure_descriptors(errors),
+              request_transition: terminal_request_transition(
+                writer,
+                request_id: durable_request_id,
+                execution_id: current.execution_id,
+                action: :failed,
+                graph_status: :failed,
+                retryable: false
+              )
             )
             emit_errors(context, errors)
             emit_checkpoint(context, current)
@@ -72,13 +90,21 @@ module Tamoz
           unless interruptions.empty?
             current = append_noncommitting(
               current,
+              writer:,
               status: :paused,
               pending: all_successes,
               interrupts: interruptions,
               attempts:,
               resume_values:,
               total_tasks:,
-              failure: nil
+              failure: nil,
+              request_transition: terminal_request_transition(
+                writer,
+                request_id: durable_request_id,
+                execution_id: current.execution_id,
+                action: :completed,
+                graph_status: :paused
+              )
             )
             emit_interrupts(context, interruptions)
             emit_checkpoint(context, current)
@@ -107,7 +133,9 @@ module Tamoz
             logical_step: logical_step + 1
           )
           context.check!
+          writer.check!
           current = compiled.append_checkpoint(
+            writer:,
             thread: current.thread_id,
             namespace: current.namespace,
             expected_base_id: current.id,
@@ -122,7 +150,17 @@ module Tamoz
             resume_values:,
             attempts:,
             failure: nil,
-            total_tasks:
+            total_tasks:,
+            consumed_task_ids: tasks.map(&:id),
+            request_transition: if frontier.empty?
+                                  terminal_request_transition(
+                                    writer,
+                                    request_id: durable_request_id,
+                                    execution_id: current.execution_id,
+                                    action: :completed,
+                                    graph_status: :completed
+                                  )
+                                end
           )
           ordered.each { |outcome| emit_update(context, outcome) }
           emit_checkpoint(context, current)
@@ -133,7 +171,14 @@ module Tamoz
 
       private
 
-      def execute_tasks(tasks, checkpoint, context:, concurrency:, resume_values:)
+      def execute_tasks(
+        tasks,
+        checkpoint,
+        writer:,
+        context:,
+        concurrency:,
+        resume_values:
+      )
         return [] if tasks.empty?
 
         pool = compiled.pool_for(concurrency)
@@ -141,6 +186,7 @@ module Tamoz
           execute_task(
             task,
             checkpoint,
+            writer:,
             context:,
             concurrency:,
             resume_values: resume_values.fetch(task.id, {}.freeze)
@@ -148,7 +194,14 @@ module Tamoz
         end
       end
 
-      def execute_task(task, checkpoint, context:, concurrency:, resume_values:)
+      def execute_task(
+        task,
+        checkpoint,
+        writer:,
+        context:,
+        concurrency:,
+        resume_values:
+      )
         cursor = InterruptCursor.new(task_id: task.id, resume_values:)
         task_context = context.with(
           run_id: task.id,
@@ -191,6 +244,7 @@ module Tamoz
             "status" => "succeeded"
           }
         )
+        writer.append_writes(task:, outcome:)
         outcome
       end
 
@@ -222,6 +276,8 @@ module Tamoz
           case result
           when TaskResult::Succeeded
             successes[task.id] = result.value
+          when TaskResult::Fatal
+            raise result.error
           when TaskResult::Interrupted
             descriptor = result.descriptor
             unless descriptor.fetch("task_id") == task.id
@@ -267,15 +323,18 @@ module Tamoz
 
       def append_noncommitting(
         checkpoint,
+        writer:,
         status:,
         pending:,
         interrupts:,
         attempts:,
         resume_values:,
         total_tasks:,
-        failure:
+        failure:,
+        request_transition:
       )
         compiled.append_checkpoint(
+          writer:,
           thread: checkpoint.thread_id,
           namespace: checkpoint.namespace,
           expected_base_id: checkpoint.id,
@@ -290,7 +349,31 @@ module Tamoz
           resume_values:,
           attempts:,
           failure:,
-          total_tasks:
+          total_tasks:,
+          request_transition:
+        )
+      end
+
+      def terminal_request_transition(
+        writer,
+        request_id:,
+        execution_id:,
+        action:,
+        graph_status:,
+        retryable: nil
+      )
+        return nil unless request_id
+        unless writer.respond_to?(:request_transition)
+          raise ConfigurationError,
+                "durable request execution requires a request-capable writer"
+        end
+
+        writer.request_transition(
+          request_id:,
+          execution_id:,
+          action:,
+          graph_status:,
+          retryable:
         )
       end
 

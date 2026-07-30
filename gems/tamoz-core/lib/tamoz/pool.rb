@@ -83,6 +83,10 @@ module Tamoz
           begin
             [NORMAL_RESULT, block.call(item)]
           rescue StandardError => error
+            if error.is_a?(FatalRuntimeFailure)
+              return TaskResult::Fatal.new(index:, error:)
+            end
+
             return TaskResult::Failed.new(index:, error:)
           end
         end

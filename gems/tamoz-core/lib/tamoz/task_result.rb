@@ -39,6 +39,19 @@ module Tamoz
       def status = :failed
     end
 
+    Fatal = Data.define(:index, :error) do
+      def initialize(index:, error:)
+        unless error.is_a?(Exception) && error.is_a?(FatalRuntimeFailure)
+          raise ConfigurationError,
+                "fatal task result requires a Tamoz::FatalRuntimeFailure"
+        end
+
+        super(index: Validation.index(index), error:)
+      end
+
+      def status = :fatal
+    end
+
     Interrupted = Data.define(:index, :descriptor) do
       def initialize(index:, descriptor:)
         super(index: Validation.index(index), descriptor: Immutable.copy(descriptor))

@@ -91,11 +91,15 @@ module Tamoz
                codec.respond_to?(:load)
           raise GraphDefinitionError, "codec must implement normalize, dump, and load"
         end
-        unless @checkpointer.respond_to?(:synchronize) &&
-               @checkpointer.respond_to?(:latest) &&
-               @checkpointer.respond_to?(:find) &&
-               @checkpointer.respond_to?(:history) &&
-               @checkpointer.respond_to?(:append)
+        protocol = @checkpointer.respond_to?(:checkpoint_protocol_version) &&
+               @checkpointer.checkpoint_protocol_version == CHECKPOINT_PROTOCOL_VERSION &&
+               @checkpointer.respond_to?(:durable?)
+        bound_contract = @checkpointer.respond_to?(:open_writer) &&
+                         @checkpointer.respond_to?(:latest) &&
+                         @checkpointer.respond_to?(:find) &&
+                         @checkpointer.respond_to?(:history)
+        unless protocol &&
+               (bound_contract || @checkpointer.respond_to?(:bind_graph))
           raise GraphDefinitionError, "checkpointer does not implement the graph checkpoint contract"
         end
         unless @limits.is_a?(Limits)

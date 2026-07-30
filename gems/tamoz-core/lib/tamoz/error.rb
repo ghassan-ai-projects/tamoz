@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 module Tamoz
+  # Marker for failures that invalidate runtime coordination rather than one user task.
+  # Pools preserve these as TaskResult::Fatal so executors cannot turn storage ownership
+  # or corruption failures into ordinary node results.
+  module FatalRuntimeFailure
+  end
+
   class Error < StandardError
     module Metadata
       attr_reader :category, :safe_message
@@ -74,6 +80,8 @@ module Tamoz
   end
 
   class CheckpointError < Error
+    include FatalRuntimeFailure
+
     CATEGORY = "checkpoint"
     SAFE_MESSAGE = "Workflow state could not be read or written."
   end
@@ -95,6 +103,8 @@ module Tamoz
   end
 
   class LeaseLostError < Error
+    include FatalRuntimeFailure
+
     CATEGORY = "lease_lost"
     RETRYABLE = true
     SAFE_MESSAGE = "Workflow ownership was lost."
@@ -106,9 +116,23 @@ module Tamoz
   end
 
   class StoreError < Error
+    include FatalRuntimeFailure
+
     CATEGORY = "store"
     RETRYABLE = true
     SAFE_MESSAGE = "The runtime store is unavailable."
+  end
+
+  class StoreConflictError < StoreError
+    CATEGORY = "store_conflict"
+    RETRYABLE = true
+    SAFE_MESSAGE = "The stored value changed concurrently."
+  end
+
+  class StoreCapabilityError < StoreError
+    CATEGORY = "store_capability"
+    RETRYABLE = false
+    SAFE_MESSAGE = "The requested store capability is unavailable."
   end
 
   class StreamClosedError < Error

@@ -8,5 +8,8 @@ TamozGemspec.build(
   version: Tamoz::SQLite::VERSION,
   summary: "SQLite persistence for Tamoz",
   description: "SQLite checkpoints, request inbox, effects, leases, and application storage.",
-  dependencies: [["tamoz-graph", "= #{Tamoz::SQLite::VERSION}"]]
+  dependencies: [
+    ["tamoz-graph", "= #{Tamoz::SQLite::VERSION}"],
+    ["sqlite3", "~> 2.9"]
+  ]
 )

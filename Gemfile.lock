@@ -26,17 +26,22 @@ PATH
   remote: gems/tamoz-sqlite
   specs:
     tamoz-sqlite (0.1.0.alpha.1)
+      sqlite3 (~> 2.9)
       tamoz-graph (= 0.1.0.alpha.1)
 
 GEM
   remote: https://rubygems.org/
   specs:
     drb (2.2.3)
+    mini_portile2 (2.8.9)
     minitest (6.0.6)
       drb (~> 2.0)
       prism (~> 1.5)
     prism (1.9.0)
     rake (13.4.2)
+    sqlite3 (2.9.5)
+      mini_portile2 (~> 2.8.0)
+    sqlite3 (2.9.5-arm64-darwin)
     zeitwerk (2.8.2)
 
 PLATFORMS
@@ -55,16 +60,19 @@ DEPENDENCIES
 
 CHECKSUMS
   bundler (4.0.12) sha256=7f8b757d28dfb636e7b24fba2344ac6dd13b5b24f4b46d62573d483f211825ac
-  drb (2.2.3)
-  minitest (6.0.6)
-  prism (1.9.0)
-  rake (13.4.2)
+  drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
+  mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
+  minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
+  prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
+  rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  sqlite3 (2.9.5) sha256=04572973a3f943ad50a8adfffc8dd752a5f06e4c3db2026f71838fed8a982606
+  sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
-  zeitwerk (2.8.2)
+  zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
 
 RUBY VERSION
   ruby 3.3.11

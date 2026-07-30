@@ -3,6 +3,7 @@
 module Tamoz
   module Graph
     class MemoryCheckpointer
+      CHECKPOINT_PROTOCOL_VERSION = 1
       DEFAULT_MAX_THREADS = 10_000
       MAX_THREADS = 100_000
       DEFAULT_MAX_CHECKPOINTS_PER_NAMESPACE = 100_000
@@ -32,13 +33,37 @@ module Tamoz
         @locks = {}
       end
 
-      def synchronize(thread_id:, namespace:)
+      def checkpoint_protocol_version = CHECKPOINT_PROTOCOL_VERSION
+      def durable? = false
+
+      def open_writer(thread_id:, namespace:, owner_id:, ttl:)
         address = normalize_address(thread_id, namespace)
+        SafeText.normalize(
+          owner_id,
+          name: "writer owner id",
+          max_bytes: MAX_RUNTIME_ID_BYTES,
+          error_class: ConfigurationError
+        )
+        unless ttl.is_a?(Numeric) && ttl.finite? && ttl.positive?
+          raise ConfigurationError, "writer ttl must be a positive finite number"
+        end
+
         lock = @mutex.synchronize do
           ensure_address_capacity!(address)
           @locks[address] ||= Mutex.new
         end
-        lock.synchronize { yield }
+        lock.synchronize { yield Writer.new(self, address) }
+      end
+
+      def synchronize(thread_id:, namespace:)
+        open_writer(
+          thread_id:,
+          namespace:,
+          owner_id: "memory.compatibility",
+          ttl: 1
+        ) do
+          yield
+        end
       end
 
       def latest(thread_id:, namespace: [])
@@ -109,6 +134,76 @@ module Tamoz
       end
 
       private
+
+      class Writer
+        attr_reader :fence
+
+        def initialize(checkpointer, address)
+          @checkpointer = checkpointer
+          @thread_id, @namespace = address
+          @fence = nil
+          freeze
+        end
+
+        def check! = true
+
+        def latest
+          @checkpointer.latest(thread_id: @thread_id, namespace: @namespace)
+        end
+
+        def find(checkpoint_id:)
+          @checkpointer.find(
+            thread_id: @thread_id,
+            namespace: @namespace,
+            checkpoint_id:
+          )
+        end
+
+        def history(limit:, before_sequence: nil)
+          entries = @checkpointer.history(
+            thread_id: @thread_id,
+            namespace: @namespace,
+            limit:
+          )
+          return entries unless before_sequence
+
+          entries.select { |checkpoint| checkpoint.sequence < before_sequence }.first(limit).freeze
+        end
+
+        def append_writes(task:, outcome:)
+          unless task.id == outcome.task_id &&
+                 task.attempt_id == outcome.attempt_id &&
+                 task.base_checkpoint_id == outcome.base_checkpoint_id
+            raise CheckpointConflictError, "task outcome identity is stale or mismatched"
+          end
+
+          :ephemeral
+        end
+
+        def append_checkpoint(
+          expected_base_id:,
+          mode:,
+          attributes:,
+          consumed_task_ids: [],
+          request_transition: nil
+        )
+          unless consumed_task_ids.is_a?(Array)
+            raise ConfigurationError, "consumed_task_ids must be an Array"
+          end
+          if request_transition
+            raise ConfigurationError,
+                  "memory checkpointer does not implement durable request transitions"
+          end
+
+          @checkpointer.append(
+            thread_id: @thread_id,
+            namespace: @namespace,
+            expected_base_id:,
+            mode:,
+            attributes:
+          )
+        end
+      end
 
       def normalize_address(thread_id, namespace)
         thread_value = SafeText.normalize(
@@ -217,7 +312,7 @@ module Tamoz
       private_constant :DEFAULT_MAX_THREADS, :MAX_THREADS,
                        :DEFAULT_MAX_CHECKPOINTS_PER_NAMESPACE,
                        :MAX_CHECKPOINTS_PER_NAMESPACE,
-                       :MAX_RUNTIME_ID_BYTES, :MAX_NAMESPACE_PARTS
+                       :MAX_RUNTIME_ID_BYTES, :MAX_NAMESPACE_PARTS, :Writer
     end
   end
 end

@@ -5,7 +5,10 @@ require "securerandom"
 module Tamoz
   module Graph
     class Compiled
-      attr_reader :definition, :definition_digest, :codec, :checkpointer, :limits
+      DEFAULT_WRITER_TTL = 30.0
+
+      attr_reader :definition, :definition_digest, :codec, :checkpointer, :limits,
+                  :checkpoint_codec
 
       def initialize(
         definition:,
@@ -18,9 +21,18 @@ module Tamoz
         @definition = definition
         @definition_digest = String(definition_digest).dup.freeze
         @codec = codec
-        @checkpointer = checkpointer
         @limits = limits
         @state_manager = StateManager.new(channels: definition.channels, codec:)
+        @checkpoint_codec = CheckpointCodec.new(
+          definition:,
+          definition_digest: @definition_digest,
+          state_codec: codec
+        )
+        @checkpointer = if checkpointer.respond_to?(:bind_graph)
+                          checkpointer.bind_graph(checkpoint_codec: @checkpoint_codec)
+                        else
+                          checkpointer
+                        end
         @planner = Planner.new(definition_digest:)
         @route_planner = RoutePlanner.new(definition:)
         @pools = pools || {
@@ -44,6 +56,7 @@ module Tamoz
         new_execution: false,
         context: nil
       )
+        ensure_ephemeral_public!
         unless new_execution == true || new_execution == false
           raise ConfigurationError, "new_execution must be true or false"
         end
@@ -159,6 +172,7 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
+        ensure_ephemeral_public!
         resume_at(
           answers,
           thread:,
@@ -175,6 +189,7 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
+        ensure_ephemeral_public!
         retry_failed_at(
           thread:,
           namespace: [],
@@ -190,6 +205,7 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
+        ensure_ephemeral_public!
         continue_at(
           thread:,
           namespace: [],
@@ -239,19 +255,20 @@ module Tamoz
         end.freeze
       end
 
+      def durable_runner
+        DurableRunner.new(self)
+      end
+
       def update_state(
         update,
         thread:,
         checkpoint_id: nil,
         execution_id: SecureRandom.uuid
       )
-        checkpointer.synchronize(thread_id: thread, namespace: []) do
-          latest = compatible_latest!(thread)
-          source = checkpoint_id ? checkpointer.find(
-            thread_id: thread,
-            checkpoint_id:,
-            namespace: []
-          ) : latest
+        ensure_ephemeral_public!
+        open_writer(thread, []) do |writer|
+          latest = compatible_latest!(thread, writer:)
+          source = checkpoint_id ? writer.find(checkpoint_id:) : latest
           raise CheckpointConflictError, "checkpoint not found" unless source
 
           compatible!(source)
@@ -276,6 +293,7 @@ module Tamoz
             historical ? entry.with(activation_checkpoint_id: nil) : entry
           end.freeze
           checkpoint = append_checkpoint(
+            writer:,
             thread:,
             namespace: [],
             expected_base_id: source.id,
@@ -296,7 +314,7 @@ module Tamoz
         end
       end
 
-      def append_checkpoint(**attributes)
+      def append_checkpoint(writer:, **attributes)
         state = attributes.fetch(:state)
         attributes[:execution_id] = SafeText.normalize(
           attributes.fetch(:execution_id),
@@ -304,9 +322,11 @@ module Tamoz
           max_bytes: 256,
           error_class: ConfigurationError
         )
-        checkpointer.append(
-          thread_id: attributes.delete(:thread),
-          namespace: attributes.delete(:namespace),
+        attributes.delete(:thread)
+        attributes.delete(:namespace)
+        consumed_task_ids = attributes.delete(:consumed_task_ids) || []
+        request_transition = attributes.delete(:request_transition)
+        writer.append_checkpoint(
           expected_base_id: attributes.delete(:expected_base_id),
           mode: attributes.delete(:mode),
           attributes: {
@@ -315,7 +335,9 @@ module Tamoz
             definition_digest:,
             state_bytes: @state_manager.state_bytes(state),
             **attributes
-          }
+          },
+          consumed_task_ids:,
+          request_transition:
         )
       end
 
@@ -372,95 +394,471 @@ module Tamoz
           cancellation: context&.cancellation || CancellationToken.new,
           emitter: context&.emitter || Emitter::Null::INSTANCE
         )
-        checkpointer.synchronize(thread_id: thread, namespace:) do
-          latest = checkpointer.latest(thread_id: thread, namespace:)
-          if latest && !new_execution
-            raise CheckpointConflictError,
-                  "thread already exists; use resume, retry_failed, or new_execution: true"
-          end
-          mode = latest ? :turn : :start
-          state = prepared_state ||
-                  @state_manager.initial(input || {}, remaining_steps: limits.max_steps)
-          frontier = prepared_frontier || @route_planner.initial_frontier
-          checkpoint = append_checkpoint(
+        open_writer(thread, namespace) do |writer|
+          invoke_with_writer(
+            input,
             thread:,
             namespace:,
-            expected_base_id: latest&.id,
-            mode:,
+            request_id:,
             execution_id:,
-            state:,
-            status: :running,
-            logical_step: 0,
-            frontier:,
-            pending: {},
-            interrupts: [],
-            resume_values: {},
-            attempts: {},
-            failure: nil,
-            total_tasks: 0
+            concurrency:,
+            new_execution:,
+            run_context:,
+            writer:,
+            prepared_state:,
+            prepared_frontier:
           )
-          Executor.new(self).run(checkpoint, context: run_context, concurrency:)
         end
       end
 
       def resume_at(answers, thread:, namespace:, request_id:, concurrency:, context:)
-        checkpointer.synchronize(thread_id: thread, namespace:) do
-          checkpoint = compatible_latest!(thread, namespace:)
-          unless checkpoint.status == :paused
-            raise CheckpointConflictError, "latest checkpoint is not paused"
-          end
-          resume_values = merge_resume_values(checkpoint, answers)
-          run_context = build_context(
-            context,
+        open_writer(thread, namespace) do |writer|
+          resume_with_writer(
+            answers,
             thread:,
+            namespace:,
             request_id:,
-            execution_id: checkpoint.execution_id,
-            cancellation: context&.cancellation || CancellationToken.new,
-            emitter: context&.emitter || Emitter::Null::INSTANCE
-          )
-          Executor.new(self).run(
-            checkpoint,
-            context: run_context,
             concurrency:,
-            resume_values:
+            context:,
+            writer:
           )
         end
       end
 
       def retry_failed_at(thread:, namespace:, request_id:, concurrency:, context:)
-        checkpointer.synchronize(thread_id: thread, namespace:) do
-          checkpoint = compatible_latest!(thread, namespace:)
-          unless checkpoint.status == :failed
-            raise CheckpointConflictError, "latest checkpoint is not failed"
-          end
-          run_context = build_context(
-            context,
+        open_writer(thread, namespace) do |writer|
+          retry_failed_with_writer(
             thread:,
+            namespace:,
             request_id:,
-            execution_id: checkpoint.execution_id,
-            cancellation: context&.cancellation || CancellationToken.new,
-            emitter: context&.emitter || Emitter::Null::INSTANCE
+            concurrency:,
+            context:,
+            writer:
           )
-          Executor.new(self).run(checkpoint, context: run_context, concurrency:)
         end
       end
 
       def continue_at(thread:, namespace:, request_id:, concurrency:, context:)
-        checkpointer.synchronize(thread_id: thread, namespace:) do
-          checkpoint = compatible_latest!(thread, namespace:)
-          unless checkpoint.status == :running
-            raise CheckpointConflictError, "latest checkpoint has no runnable frontier"
-          end
-          run_context = build_context(
-            context,
+        open_writer(thread, namespace) do |writer|
+          continue_with_writer(
             thread:,
+            namespace:,
             request_id:,
-            execution_id: checkpoint.execution_id,
-            cancellation: context&.cancellation || CancellationToken.new,
-            emitter: context&.emitter || Emitter::Null::INSTANCE
+            concurrency:,
+            context:,
+            writer:
           )
-          Executor.new(self).run(checkpoint, context: run_context, concurrency:)
         end
+      end
+
+      def invoke_with_writer(
+        input,
+        thread:,
+        namespace:,
+        request_id:,
+        execution_id:,
+        concurrency:,
+        new_execution:,
+        run_context:,
+        writer:,
+        prepared_state: nil,
+        prepared_frontier: nil,
+        durable_request_id: nil
+      )
+        latest = writer.latest
+        if latest && !new_execution
+          raise CheckpointConflictError,
+                "thread already exists; use resume, retry_failed, or new_execution: true"
+        end
+        mode = latest ? :turn : :start
+        state = prepared_state ||
+                @state_manager.initial(input || {}, remaining_steps: limits.max_steps)
+        frontier = prepared_frontier || @route_planner.initial_frontier
+        request_transition = if durable_request_id
+                               writer.request_transition(
+                                 request_id: durable_request_id,
+                                 execution_id:,
+                                 action: :running,
+                                 graph_status: :running
+                               )
+                             end
+        checkpoint = append_checkpoint(
+          writer:,
+          thread:,
+          namespace:,
+          expected_base_id: latest&.id,
+          mode:,
+          execution_id:,
+          state:,
+          status: :running,
+          logical_step: 0,
+          frontier:,
+          pending: {},
+          interrupts: [],
+          resume_values: {},
+          attempts: {},
+          failure: nil,
+          total_tasks: 0,
+          request_transition:
+        )
+        run_context = bind_writer_context(run_context, writer)
+        Executor.new(self).run(
+          checkpoint,
+          writer:,
+          context: run_context,
+          concurrency:,
+          durable_request_id:
+        )
+      end
+
+      def resume_with_writer(
+        answers,
+        thread:,
+        namespace:,
+        request_id:,
+        concurrency:,
+        context:,
+        writer:,
+        durable_request_id: nil,
+        mark_request_running: true
+      )
+        checkpoint = compatible_latest!(thread, namespace:, writer:)
+        unless checkpoint.status == :paused
+          raise CheckpointConflictError, "latest checkpoint is not paused"
+        end
+        resume_values = merge_resume_values(checkpoint, answers)
+        if durable_request_id && mark_request_running
+          writer.mark_request_running(
+            request_id: durable_request_id,
+            execution_id: checkpoint.execution_id
+          )
+        end
+        run_context = build_context(
+          context,
+          thread:,
+          request_id:,
+          execution_id: checkpoint.execution_id,
+          cancellation: context&.cancellation || CancellationToken.new,
+          emitter: context&.emitter || Emitter::Null::INSTANCE
+        )
+        run_context = bind_writer_context(run_context, writer)
+        Executor.new(self).run(
+          checkpoint,
+          writer:,
+          context: run_context,
+          concurrency:,
+          resume_values:,
+          durable_request_id:
+        )
+      end
+
+      def retry_failed_with_writer(
+        thread:,
+        namespace:,
+        request_id:,
+        concurrency:,
+        context:,
+        writer:,
+        durable_request_id: nil,
+        mark_request_running: true
+      )
+        checkpoint = compatible_latest!(thread, namespace:, writer:)
+        unless checkpoint.status == :failed
+          raise CheckpointConflictError, "latest checkpoint is not failed"
+        end
+        if durable_request_id && mark_request_running
+          writer.mark_request_running(
+            request_id: durable_request_id,
+            execution_id: checkpoint.execution_id
+          )
+        end
+        run_context = build_context(
+          context,
+          thread:,
+          request_id:,
+          execution_id: checkpoint.execution_id,
+          cancellation: context&.cancellation || CancellationToken.new,
+          emitter: context&.emitter || Emitter::Null::INSTANCE
+        )
+        run_context = bind_writer_context(run_context, writer)
+        Executor.new(self).run(
+          checkpoint,
+          writer:,
+          context: run_context,
+          concurrency:,
+          durable_request_id:
+        )
+      end
+
+      def continue_with_writer(
+        thread:,
+        namespace:,
+        request_id:,
+        concurrency:,
+        context:,
+        writer:,
+        durable_request_id: nil,
+        mark_request_running: true
+      )
+        checkpoint = compatible_latest!(thread, namespace:, writer:)
+        unless checkpoint.status == :running
+          raise CheckpointConflictError, "latest checkpoint has no runnable frontier"
+        end
+        if durable_request_id && mark_request_running
+          writer.mark_request_running(
+            request_id: durable_request_id,
+            execution_id: checkpoint.execution_id
+          )
+        end
+        run_context = build_context(
+          context,
+          thread:,
+          request_id:,
+          execution_id: checkpoint.execution_id,
+          cancellation: context&.cancellation || CancellationToken.new,
+          emitter: context&.emitter || Emitter::Null::INSTANCE
+        )
+        run_context = bind_writer_context(run_context, writer)
+        Executor.new(self).run(
+          checkpoint,
+          writer:,
+          context: run_context,
+          concurrency:,
+          durable_request_id:
+        )
+      end
+
+      def execute_durable_request(
+        request,
+        writer:,
+        concurrency:,
+        context: nil
+      )
+        unless request.is_a?(RequestRecord) &&
+               request.thread_id &&
+               request.execution_id &&
+               %i[claimed running redirecting].include?(request.status)
+          raise ConfigurationError, "durable request is not executable"
+        end
+        validate_concurrency!(concurrency)
+        case request.operation
+        when :turn
+          if request.status == :claimed
+            run_context = build_context(
+              context,
+              thread: request.thread_id,
+              request_id: request.request_id,
+              execution_id: request.execution_id,
+              cancellation: context&.cancellation || CancellationToken.new,
+              emitter: context&.emitter || Emitter::Null::INSTANCE
+            )
+            invoke_with_writer(
+              request.payload,
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              execution_id: request.execution_id,
+              concurrency:,
+              new_execution: true,
+              run_context:,
+              writer:,
+              durable_request_id: request.request_id
+            )
+          else
+            continue_with_writer(
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              concurrency:,
+              context:,
+              writer:,
+              durable_request_id: request.request_id,
+              mark_request_running: false
+            )
+          end
+        when :resume
+          resume_with_writer(
+            request.payload,
+            thread: request.thread_id,
+            namespace: request.namespace,
+            request_id: request.request_id,
+            concurrency:,
+            context:,
+            writer:,
+            durable_request_id: request.request_id,
+            mark_request_running: request.status == :claimed
+          )
+        when :retry
+          retry_failed_with_writer(
+            thread: request.thread_id,
+            namespace: request.namespace,
+            request_id: request.request_id,
+            concurrency:,
+            context:,
+            writer:,
+            durable_request_id: request.request_id,
+            mark_request_running: request.status == :claimed
+          )
+        when :continue
+          continue_with_writer(
+            thread: request.thread_id,
+            namespace: request.namespace,
+            request_id: request.request_id,
+            concurrency:,
+            context:,
+            writer:,
+            durable_request_id: request.request_id,
+            mark_request_running: request.status == :claimed
+          )
+        when :fork
+          fork_with_writer(
+            request,
+            writer:,
+            concurrency:,
+            context:
+          )
+        when :redirect
+          unless request.target_execution_id &&
+                 request.cancellation_generation &&
+                 writer.redirect_ready?(
+                   target_execution_id: request.target_execution_id
+                 )
+            raise CheckpointConflictError,
+                  "redirect is waiting for target effects to become terminal"
+          end
+          if request.status == :running
+            continue_with_writer(
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              concurrency:,
+              context:,
+              writer:,
+              durable_request_id: request.request_id,
+              mark_request_running: false
+            )
+          else
+            run_context = build_context(
+              context,
+              thread: request.thread_id,
+              request_id: request.request_id,
+              execution_id: request.execution_id,
+              cancellation: context&.cancellation || CancellationToken.new,
+              emitter: context&.emitter || Emitter::Null::INSTANCE
+            )
+            invoke_with_writer(
+              request.payload,
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              execution_id: request.execution_id,
+              concurrency:,
+              new_execution: true,
+              run_context:,
+              writer:,
+              durable_request_id: request.request_id
+            )
+          end
+        else
+          raise ConfigurationError,
+                "durable request operation #{request.operation.inspect} is not executable yet"
+        end
+      end
+
+      def fork_with_writer(request, writer:, concurrency:, context:)
+        if request.status == :running
+          return continue_with_writer(
+            thread: request.thread_id,
+            namespace: request.namespace,
+            request_id: request.request_id,
+            concurrency:,
+            context:,
+            writer:,
+            durable_request_id: request.request_id,
+            mark_request_running: false
+          )
+        end
+        unless request.payload.is_a?(Hash)
+          raise InvalidUpdateError, "fork payload must be a Hash"
+        end
+        checkpoint_id = request.payload["checkpoint_id"] ||
+                        request.payload[:checkpoint_id]
+        update = if request.payload.key?("update")
+                   request.payload["update"]
+                 elsif request.payload.key?(:update)
+                   request.payload[:update]
+                 else
+                   {}
+                 end
+        source = checkpoint_id ? writer.find(checkpoint_id:) : writer.latest
+        raise CheckpointConflictError, "fork source checkpoint does not exist" unless source
+
+        compatible!(source)
+        state = source.state
+        unless update.empty?
+          normalized = @state_manager.normalize_update(update)
+          manual = Outcome.new(
+            task_id: "fork.update",
+            attempt_id: "fork.attempt",
+            base_checkpoint_id: source.id,
+            node: definition.nodes.keys.first,
+            path: %w[fork update],
+            update: normalized,
+            goto: nil
+          )
+          state = @state_manager.apply_outcomes(
+            source.state,
+            [manual],
+            remaining_steps: [limits.max_steps - source.logical_step, 0].max
+          )
+        end
+        frontier = source.frontier.map do |entry|
+          entry.with(activation_checkpoint_id: nil)
+        end.freeze
+        terminal_at_fork = frontier.empty?
+        transition = writer.request_transition(
+          request_id: request.request_id,
+          execution_id: request.execution_id,
+          action: terminal_at_fork ? :completed : :running,
+          graph_status: terminal_at_fork ? :completed : :running
+        )
+        checkpoint = append_checkpoint(
+          writer:,
+          thread: request.thread_id,
+          namespace: request.namespace,
+          expected_base_id: source.id,
+          mode: :fork,
+          execution_id: request.execution_id,
+          state:,
+          status: terminal_at_fork ? :completed : :running,
+          logical_step: source.logical_step,
+          frontier:,
+          pending: {},
+          interrupts: [],
+          resume_values: {},
+          attempts: {},
+          failure: nil,
+          total_tasks: 0,
+          request_transition: transition
+        )
+        return snapshot(checkpoint) if terminal_at_fork
+
+        run_context = build_context(
+          context,
+          thread: request.thread_id,
+          request_id: request.request_id,
+          execution_id: request.execution_id,
+          cancellation: context&.cancellation || CancellationToken.new,
+          emitter: context&.emitter || Emitter::Null::INSTANCE
+        )
+        run_context = bind_writer_context(run_context, writer)
+        Executor.new(self).run(
+          checkpoint,
+          writer:,
+          context: run_context,
+          concurrency:,
+          durable_request_id: request.request_id
+        )
       end
 
       def with_checkpointer(value)
@@ -476,8 +874,12 @@ module Tamoz
         )
       end
 
-      def compatible_latest!(thread, namespace: [])
-        checkpoint = checkpointer.latest(thread_id: thread, namespace:)
+      def compatible_latest!(thread, namespace: [], writer: nil)
+        checkpoint = if writer
+                       writer.latest
+                     else
+                       checkpointer.latest(thread_id: thread, namespace:)
+                     end
         raise CheckpointConflictError, "thread does not exist" unless checkpoint
 
         compatible!(checkpoint)
@@ -551,6 +953,48 @@ module Tamoz
         )
       end
 
+      def bind_writer_context(context, writer)
+        return context unless writer.respond_to?(:effects)
+        if context.effects &&
+           (!writer.respond_to?(:accepts_effects?) ||
+            !writer.accepts_effects?(context.effects))
+          raise ConfigurationError,
+                "durable execution rejects an unbound effect journal"
+        end
+
+        if context.store &&
+           (!writer.respond_to?(:accepts_store?) ||
+            !writer.accepts_store?(context.store))
+          raise ConfigurationError,
+                "durable execution rejects an unbound Store"
+        end
+
+        context.with(effects: writer.effects, store: writer.store)
+      end
+
+      def open_writer(thread, namespace, owner_id: SecureRandom.uuid, ttl: nil, &block)
+        actual_ttl = ttl ||
+                     if checkpointer.respond_to?(:writer_ttl)
+                       checkpointer.writer_ttl
+                     else
+                       DEFAULT_WRITER_TTL
+                     end
+        checkpointer.open_writer(
+          thread_id: thread,
+          namespace:,
+          owner_id:,
+          ttl: actual_ttl,
+          &block
+        )
+      end
+
+      def ensure_ephemeral_public!
+        return unless checkpointer.durable?
+
+        raise ConfigurationError,
+              "durable graph mutations require Tamoz::Graph::DurableRunner"
+      end
+
       def stream_error_data(error)
         {
           "graph" => name,
@@ -570,6 +1014,8 @@ module Tamoz
 
         raise ConfigurationError, "concurrency must be inline or threads"
       end
+
+      private_constant :DEFAULT_WRITER_TTL
     end
   end
 end
