@@ -30,6 +30,7 @@ class PackagingTest < Minitest::Test
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
           assert_equal 4, contents.grep(%r{\Asuites/m1/core/.+\.case\.json\z}).length
+          assert_equal 6, contents.grep(%r{\Asuites/m2/graph/.+\.case\.json\z}).length
           assert_includes contents, "baselines/m0/baseline.result.json"
           assert_includes contents, "baselines/m0/evidence/baseline-summary.json"
           assert_equal(
@@ -179,6 +180,87 @@ class PackagingTest < Minitest::Test
       assert_equal "inspect", result.fetch("result")
       assert_equal "ok", result.fetch("stream")
       assert_equal false, result.fetch("graph_loaded")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_graph_runs_m2_without_repository_load_paths
+    core_root = GEM_ROOTS.fetch("tamoz-core")
+    graph_root = GEM_ROOTS.fetch("tamoz-graph")
+
+    Dir.mktmpdir("tamoz-installed-graph") do |directory|
+      install_root = File.join(directory, "install")
+      core_package = File.join(directory, "tamoz-core.gem")
+      graph_package = File.join(directory, "tamoz-graph.gem")
+      core_spec = Gem::Specification.load(core_root.join("tamoz-core.gemspec").to_s)
+      graph_spec = Gem::Specification.load(graph_root.join("tamoz-graph.gemspec").to_s)
+      Dir.chdir(core_root) { Gem::Package.build(core_spec, false, true, core_package) }
+      Dir.chdir(graph_root) { Gem::Package.build(graph_spec, false, true, graph_package) }
+      clean_environment = ENV.each_key
+                             .grep(/\A(?:BUNDLE|BUNDLER)/)
+                             .to_h { |key| [key, nil] }
+                             .merge(
+                               "GEM_HOME" => install_root,
+                               "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+                               "RUBYLIB" => nil,
+                               "RUBYOPT" => nil
+                             )
+      [core_package, graph_package].each do |package|
+        _stdout, stderr, status = Open3.capture3(
+          clean_environment,
+          RbConfig.ruby,
+          "-S",
+          "gem",
+          "install",
+          "--no-document",
+          "--ignore-dependencies",
+          "--install-dir",
+          install_root,
+          package
+        )
+        assert status.success?, stderr
+      end
+
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/graph"
+        app = Tamoz.graph(name: "installed", version: "1") do
+          state :events, reduce: :append, default: []
+          node(
+            :step,
+            implementation_name: "installed.step",
+            version: "1"
+          ) { |_state, _context| {events: ["ok"]} }
+          edge Tamoz::START, :step
+          edge :step, Tamoz::END
+        end.compile
+        result = app.invoke(
+          {},
+          thread: "thread.1",
+          request_id: "request.1",
+          execution_id: "execution.1",
+          concurrency: :threads
+        )
+        feature = $LOADED_FEATURES.find { |path| path.end_with?("/tamoz/graph.rb") }
+        puts JSON.generate(
+          "feature" => feature,
+          "state" => result.state.transform_keys(&:to_s),
+          "status" => result.status.to_s
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(
+        clean_environment,
+        RbConfig.ruby,
+        "-e",
+        script
+      )
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+      assert Pathname.new(result.fetch("feature")).realpath.to_s.start_with?(
+        "#{Pathname.new(install_root).realpath}#{File::SEPARATOR}"
+      )
+      assert_equal({"events" => ["ok"]}, result.fetch("state"))
+      assert_equal "completed", result.fetch("status")
       assert_empty stderr
     end
   end

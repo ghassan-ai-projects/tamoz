@@ -38,6 +38,7 @@ namespace :fixtures do
   task :refresh do
     ruby "script/generate_m0_fixtures"
     ruby "script/generate_m1_fixtures"
+    ruby "script/generate_m2_fixtures"
   end
 end
 

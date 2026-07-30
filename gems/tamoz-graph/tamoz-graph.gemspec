@@ -6,7 +6,10 @@ require_relative "lib/tamoz/graph/version"
 TamozGemspec.build(
   name: "tamoz-graph",
   version: Tamoz::Graph::VERSION,
-  summary: "Deterministic durable graph runtime for Tamoz",
-  description: "Checkpointed graph execution with explicit interrupt and effect semantics.",
-  dependencies: [["tamoz-core", "= #{Tamoz::Graph::VERSION}"]]
+  summary: "Deterministic checkpointed graph runtime for Tamoz",
+  description: "Bulk-synchronous in-memory graph execution with explicit interrupts and streaming.",
+  dependencies: [
+    ["tamoz-core", "= #{Tamoz::Graph::VERSION}"],
+    ["zeitwerk", "~> 2.6"]
+  ]
 )

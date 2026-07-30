@@ -1,0 +1,409 @@
+# frozen_string_literal: true
+
+module Tamoz
+  module Graph
+    class Executor
+      attr_reader :compiled, :limits
+
+      def initialize(compiled)
+        @compiled = compiled
+        @limits = compiled.limits
+      end
+
+      def run(checkpoint, context:, concurrency:, resume_values: checkpoint.resume_values)
+        current = checkpoint
+        loop do
+          context.check!
+          return completed(current) if current.frontier.empty?
+
+          logical_step = current.frontier.map(&:logical_step).max
+          if logical_step > limits.max_steps
+            raise RecursionLimitError,
+                  "graph #{compiled.name} exceeds #{limits.max_steps} super-steps"
+          end
+
+          tasks = compiled.planner.tasks(current)
+          expected = tasks.to_h { |task| [task.id, task] }
+          pending = current.pending.select { |task_id, _outcome| expected.key?(task_id) }
+          to_execute = tasks.reject { |task| pending.key?(task.id) }
+          enforce_task_limits!(current, tasks, to_execute)
+          results = execute_tasks(
+            to_execute,
+            current,
+            context:,
+            concurrency:,
+            resume_values:
+          )
+          attempts = current.attempts.merge(
+            to_execute.to_h { |task| [task.id, task.attempt] }
+          ).freeze
+          successes, interruptions, errors, cancelled = classify(
+            to_execute,
+            results,
+            current
+          )
+          return cancelled(current) if cancelled || context.cancelled?
+
+          all_successes = pending.merge(successes).freeze
+          enforce_pending_limit!(all_successes)
+          total_tasks = current.total_tasks + to_execute.length
+
+          unless errors.empty?
+            current = append_noncommitting(
+              current,
+              status: :failed,
+              pending: all_successes,
+              interrupts: interruptions,
+              attempts:,
+              resume_values:,
+              total_tasks:,
+              failure: failure_descriptors(errors)
+            )
+            emit_errors(context, errors)
+            emit_checkpoint(context, current)
+            return RunResult.new(
+              status: :failed,
+              snapshot: compiled.snapshot(current),
+              interrupts: current.interrupts,
+              errors: errors.freeze
+            )
+          end
+
+          unless interruptions.empty?
+            current = append_noncommitting(
+              current,
+              status: :paused,
+              pending: all_successes,
+              interrupts: interruptions,
+              attempts:,
+              resume_values:,
+              total_tasks:,
+              failure: nil
+            )
+            emit_interrupts(context, interruptions)
+            emit_checkpoint(context, current)
+            return RunResult.new(
+              status: :paused,
+              snapshot: compiled.snapshot(current),
+              interrupts: interruptions,
+              errors: [].freeze
+            )
+          end
+
+          ordered = tasks.sort_by(&:path).map do |task|
+            outcome = all_successes.fetch(task.id)
+            validate_outcome!(task, outcome, current, pending: pending.key?(task.id))
+            outcome
+          end
+          remaining = [limits.max_steps - logical_step, 0].max
+          candidate = compiled.state_manager.apply_outcomes(
+            current.state,
+            ordered,
+            remaining_steps: remaining
+          )
+          frontier = compiled.route_planner.next_frontier(
+            ordered,
+            candidate,
+            logical_step: logical_step + 1
+          )
+          context.check!
+          current = compiled.append_checkpoint(
+            thread: current.thread_id,
+            namespace: current.namespace,
+            expected_base_id: current.id,
+            mode: :advance,
+            execution_id: current.execution_id,
+            state: candidate,
+            status: frontier.empty? ? :completed : :running,
+            logical_step:,
+            frontier:,
+            pending: {}.freeze,
+            interrupts: [].freeze,
+            resume_values:,
+            attempts:,
+            failure: nil,
+            total_tasks:
+          )
+          ordered.each { |outcome| emit_update(context, outcome) }
+          emit_checkpoint(context, current)
+        end
+      rescue CancelledError, TimeoutError
+        cancelled(current)
+      end
+
+      private
+
+      def execute_tasks(tasks, checkpoint, context:, concurrency:, resume_values:)
+        return [] if tasks.empty?
+
+        pool = compiled.pool_for(concurrency)
+        pool.map(tasks, cancellation: context.cancellation) do |task|
+          execute_task(
+            task,
+            checkpoint,
+            context:,
+            concurrency:,
+            resume_values: resume_values.fetch(task.id, {}.freeze)
+          )
+        end
+      end
+
+      def execute_task(task, checkpoint, context:, concurrency:, resume_values:)
+        cursor = InterruptCursor.new(task_id: task.id, resume_values:)
+        task_context = context.with(
+          run_id: task.id,
+          parent_run_id: context.run_id,
+          namespace: [*context.namespace, *task.path],
+          task_id: task.id,
+          interrupts: cursor,
+          graph_runtime: SubgraphRuntime.new(
+            parent: compiled,
+            checkpoint:,
+            task:,
+            concurrency:
+          )
+        )
+        task_context.emit(
+          :task_start,
+          {
+            "graph" => compiled.name,
+            "node" => task.node.to_s,
+            "attempt" => task.attempt
+          }
+        )
+        input = task.input ? compiled.state_manager.task_input(task.input) : checkpoint.state
+        returned = compiled.nodes.fetch(task.node).call(input, task_context)
+        update, routes = normalize_return(returned)
+        outcome = Outcome.new(
+          task_id: task.id,
+          attempt_id: task.attempt_id,
+          base_checkpoint_id: task.base_checkpoint_id,
+          node: task.node,
+          path: task.path,
+          update:,
+          goto: routes
+        )
+        task_context.emit(
+          :task_end,
+          {
+            "graph" => compiled.name,
+            "node" => task.node.to_s,
+            "status" => "succeeded"
+          }
+        )
+        outcome
+      end
+
+      def normalize_return(value)
+        case value
+        when nil
+          [{}.freeze, nil]
+        when Hash
+          [compiled.state_manager.normalize_update(value), nil]
+        when Command
+          if value.resume || value.graph
+            raise InvalidUpdateError,
+                  "node Command may contain only update and goto in M2"
+          end
+          [compiled.state_manager.normalize_update(value.update), value.goto]
+        else
+          raise InvalidUpdateError,
+                "node must return nil, Hash, or Tamoz::Command; got #{value.class}"
+        end
+      end
+
+      def classify(tasks, results, checkpoint)
+        successes = {}
+        interruptions = []
+        errors = []
+        cancelled = false
+        results.each_with_index do |result, index|
+          task = tasks.fetch(index)
+          case result
+          when TaskResult::Succeeded
+            successes[task.id] = result.value
+          when TaskResult::Interrupted
+            descriptor = result.descriptor
+            unless descriptor.fetch("task_id") == task.id
+              raise CheckpointConflictError, "interrupt task identity is stale or mismatched"
+            end
+            interruptions << Interrupt.new(
+              task_id: descriptor.fetch("task_id"),
+              call_index: descriptor.fetch("call_index"),
+              descriptor: descriptor.fetch("descriptor")
+            )
+          when TaskResult::Failed
+            errors << node_error(task, result.error)
+          when TaskResult::Cancelled, TaskResult::Stuck
+            cancelled = true
+          else
+            raise PoolWorkerError, "unknown pool result #{result.class}"
+          end
+        end
+        [successes.freeze, interruptions.sort_by(&:key).freeze, errors.freeze, cancelled]
+      end
+
+      def node_error(task, original)
+        NodeError.new(
+          "graph #{compiled.name} node #{task.node} failed with #{original.class}",
+          graph_name: compiled.name,
+          node: task.node,
+          task_id: task.id,
+          attempt_id: task.attempt_id,
+          original:
+        )
+      end
+
+      def validate_outcome!(task, outcome, checkpoint, pending:)
+        return if pending && outcome.task_id == task.id
+        return if !pending &&
+                  outcome.task_id == task.id &&
+                  outcome.attempt_id == task.attempt_id &&
+                  outcome.base_checkpoint_id == checkpoint.id
+
+        raise CheckpointConflictError,
+              "stale or mismatched result for logical task #{task.id}"
+      end
+
+      def append_noncommitting(
+        checkpoint,
+        status:,
+        pending:,
+        interrupts:,
+        attempts:,
+        resume_values:,
+        total_tasks:,
+        failure:
+      )
+        compiled.append_checkpoint(
+          thread: checkpoint.thread_id,
+          namespace: checkpoint.namespace,
+          expected_base_id: checkpoint.id,
+          mode: :advance,
+          execution_id: checkpoint.execution_id,
+          state: checkpoint.state,
+          status:,
+          logical_step: checkpoint.logical_step,
+          frontier: checkpoint.frontier,
+          pending:,
+          interrupts:,
+          resume_values:,
+          attempts:,
+          failure:,
+          total_tasks:
+        )
+      end
+
+      def enforce_task_limits!(checkpoint, tasks, to_execute)
+        if tasks.length > limits.max_tasks_per_step
+          raise RecursionLimitError,
+                "graph step has #{tasks.length} tasks; limit is #{limits.max_tasks_per_step}"
+        end
+        if checkpoint.total_tasks + to_execute.length > limits.max_total_tasks
+          raise RecursionLimitError,
+                "graph scheduled tasks exceed #{limits.max_total_tasks}"
+        end
+      end
+
+      def enforce_pending_limit!(pending)
+        bytes = Canonical.json(
+          pending.keys.sort.map { |task_id| pending.fetch(task_id).descriptor }
+        ).bytesize
+        return if bytes <= limits.max_pending_bytes
+
+        raise StateLimitError,
+              "pending outcomes use #{bytes} bytes; limit is #{limits.max_pending_bytes}"
+      end
+
+      def failure_descriptors(errors)
+        errors.map do |error|
+          {
+            "graph" => error.graph_name,
+            "node" => error.node,
+            "task_id" => error.task_id,
+            "attempt_id" => error.attempt_id,
+            "error_class" => stable_error_class(error.original),
+            "safe_message" => error.safe_message
+          }.freeze
+        end.freeze
+      end
+
+      def completed(checkpoint)
+        RunResult.new(
+          status: :completed,
+          snapshot: compiled.snapshot(checkpoint),
+          interrupts: [].freeze,
+          errors: [].freeze
+        )
+      end
+
+      def cancelled(checkpoint)
+        RunResult.new(
+          status: :cancelled,
+          snapshot: compiled.snapshot(checkpoint),
+          interrupts: checkpoint.interrupts,
+          errors: [].freeze
+        )
+      end
+
+      def emit_update(context, outcome)
+        context.emit(
+          :node_update,
+          {
+            "graph" => compiled.name,
+            "node" => outcome.node.to_s,
+            "channels" => outcome.update.keys.map(&:to_s).sort
+          }
+        )
+      end
+
+      def emit_interrupts(context, interrupts)
+        interrupts.each do |interrupt|
+          context.emit(
+            :interrupt,
+            {
+              "graph" => compiled.name,
+              "task_id" => interrupt.task_id,
+              "call_index" => interrupt.call_index
+            }
+          )
+        end
+      end
+
+      def emit_checkpoint(context, checkpoint)
+        context.emit(
+          :checkpoint,
+          {
+            "graph" => compiled.name,
+            "checkpoint_id" => checkpoint.id,
+            "sequence" => checkpoint.sequence,
+            "status" => checkpoint.status.to_s
+          }
+        )
+      end
+
+      def emit_errors(context, errors)
+        errors.each do |error|
+          context.emit(
+            :error,
+            {
+              "graph" => compiled.name,
+              "node" => error.node,
+              "task_id" => error.task_id,
+              "error_class" => stable_error_class(error.original),
+              "category" => error.category,
+              "safe_message" => error.safe_message
+            }
+          )
+        end
+      end
+
+      def stable_error_class(error)
+        name = error.class.name.to_s
+        name.empty? ? "AnonymousError" : name
+      end
+    end
+
+    private_constant :Executor
+  end
+end

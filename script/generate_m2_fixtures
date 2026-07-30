@@ -1,0 +1,181 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+require "tamoz/evals"
+
+root = ENV.fetch(
+  "TAMOZ_FIXTURE_ROOT",
+  File.expand_path("../gems/tamoz-evals", __dir__)
+)
+case_root = File.join(root, "suites", "m2", "graph")
+FileUtils.mkdir_p(case_root)
+
+def write_artifact(path, document)
+  document["content_digest"] = Tamoz::Evals::CanonicalJSON.content_digest(
+    document,
+    domain: "eval.case"
+  )
+  File.write(
+    path,
+    "#{Tamoz::Evals::CanonicalJSON.dump(document)}\n",
+    encoding: Encoding::UTF_8
+  )
+end
+
+def m2_case(index:, id:, title:, purpose:, risk:, test_files:, done:)
+  {
+    "artifact_type" => "case",
+    "format_version" => 1,
+    "digest_version" => 1,
+    "content_digest" => "pending",
+    "case_id" => id,
+    "case_version" => 1,
+    "suite_id" => "tamoz.m2.graph",
+    "split" => "conformance",
+    "title" => title,
+    "purpose" => purpose,
+    "tags" => ["conformance", "graph", format("m2-%02d", index)],
+    "risk_class" => risk,
+    "input" => {
+      "kind" => "ruby-test-selection",
+      "payload" => {
+        "test_file" => test_files.join(","),
+        "test_pattern" => "/./"
+      }
+    },
+    "environment" => {
+      "profile" => "pr",
+      "isolation" => "sandbox",
+      "network" => "denied"
+    },
+    "capabilities" => {
+      "allowed" => ["test.execute"],
+      "prohibited" => ["network.write", "state.external-effect"]
+    },
+    "definition_of_done" => done,
+    "evidence" => {
+      "required" => [
+        {
+          "id" => format("m2.evidence.%02d", index),
+          "kind" => "test",
+          "oracle" => "The fixed M2 runner exits successfully and retains its complete output."
+        }
+      ],
+      "optional" => []
+    },
+    "scorers" => [
+      {
+        "id" => "tamoz.m2.fixed-test",
+        "kind" => "deterministic",
+        "version" => "v1"
+      }
+    ],
+    "budgets" => {
+      "turns" => 1,
+      "steps" => 1,
+      "tool_calls" => 0,
+      "tokens" => 0,
+      "cost_microusd" => 0,
+      "time_ms" => 30_000
+    },
+    "repetitions" => {
+      "count" => 1,
+      "comparison_method" => "exact"
+    },
+    "content_policy" => {
+      "classification" => "public",
+      "capture" => "metadata"
+    },
+    "references" => []
+  }
+end
+
+specifications = [
+  {
+    id: "m2.definition-boundary",
+    title: "Graph definitions are explicit, canonical, and fail closed",
+    purpose: "Prevent unstable behavior from sharing one graph identity.",
+    risk: "critical",
+    test_files: ["test/graph_definition_test.rb"],
+    done: [
+      "Equivalent declarations compile to one canonical definition and behavior.",
+      "Unknown targets, unstable identities, invalid defaults, and mismatched routing fail."
+    ]
+  },
+  {
+    id: "m2.barrier-determinism",
+    title: "Barrier execution is independent of worker completion timing",
+    purpose: "Prove one frozen snapshot and ordered whole-batch reduction.",
+    risk: "critical",
+    test_files: [
+      "test/graph_execution_test.rb",
+      "test/graph_state_manager_test.rb",
+      "test/graph_determinism_property_test.rb"
+    ],
+    done: [
+      "The runtime matches an independent barrier reference model.",
+      "At least 100 varied threaded schedules produce byte-identical inline histories."
+    ]
+  },
+  {
+    id: "m2.interrupt-identity",
+    title: "Interrupt, retry, and attempt identities preserve logical work",
+    purpose: "Prevent stale-result commits and repeated successful siblings.",
+    risk: "critical",
+    test_files: [
+      "test/graph_identity_test.rb",
+      "test/graph_interrupt_test.rb"
+    ],
+    done: [
+      "Activation identity survives pause and retry while attempt identity changes.",
+      "Resume is positional, restarts from line one, and rejects stale or malformed answers."
+    ]
+  },
+  {
+    id: "m2.history-fork",
+    title: "History, state edits, limits, and forks remain append-only",
+    purpose: "Prevent historical mutation and unbounded in-memory retention.",
+    risk: "high",
+    test_files: ["test/graph_history_test.rb"],
+    done: [
+      "Reducer-mediated historical edits append a new execution without mutating the source.",
+      "Sequences, history reads, steps, namespaces, and retained checkpoints are bounded."
+    ]
+  },
+  {
+    id: "m2.subgraph-inheritance",
+    title: "Nested graphs inherit one backend and isolate invocation namespaces",
+    purpose: "Prevent private child persistence and cross-activation state reuse.",
+    risk: "critical",
+    test_files: ["test/graph_subgraph_test.rb"],
+    done: [
+      "Parallel and sequential child calls use deterministic isolated namespaces.",
+      "Child interrupts bubble through the parent and resume without partial parent state."
+    ]
+  },
+  {
+    id: "m2.stream-cancellation",
+    title: "Graph streaming is bounded, observational, and cancellation-safe",
+    purpose: "Prevent event consumers from altering or outliving graph execution.",
+    risk: "critical",
+    test_files: ["test/graph_stream_test.rb"],
+    done: [
+      "Event modes only project the same execution and safe error metadata.",
+      "Stopping at every event boundary commits no late state and retains no coordinator."
+    ]
+  }
+]
+
+specifications.each_with_index do |specification, offset|
+  index = offset + 1
+  document = m2_case(index:, **specification)
+  filename = format(
+    "%02d_%s.case.json",
+    index,
+    specification.fetch(:id).delete_prefix("m2.").tr(".", "_")
+  )
+  write_artifact(File.join(case_root, filename), document)
+end

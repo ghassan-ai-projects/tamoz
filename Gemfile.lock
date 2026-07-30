@@ -20,6 +20,7 @@ PATH
   specs:
     tamoz-graph (0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
+      zeitwerk (~> 2.6)
 
 PATH
   remote: gems/tamoz-sqlite

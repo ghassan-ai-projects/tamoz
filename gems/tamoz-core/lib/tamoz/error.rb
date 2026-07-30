@@ -52,6 +52,25 @@ module Tamoz
   class NodeError < Error
     CATEGORY = "node"
     SAFE_MESSAGE = "A workflow step failed."
+
+    attr_reader :graph_name, :node, :task_id, :attempt_id, :original
+
+    def initialize(
+      message = nil,
+      graph_name: nil,
+      node: nil,
+      task_id: nil,
+      attempt_id: nil,
+      original: nil
+    )
+      @graph_name = graph_name&.to_s&.dup&.freeze
+      @node = node&.to_s&.dup&.freeze
+      @task_id = task_id&.to_s&.dup&.freeze
+      @attempt_id = attempt_id&.to_s&.dup&.freeze
+      @original = original
+      super(message)
+      set_backtrace(original.backtrace) if original&.backtrace
+    end
   end
 
   class CheckpointError < Error

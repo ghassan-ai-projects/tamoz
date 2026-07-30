@@ -57,7 +57,33 @@
       "Tamoz::Evals.verify"
     ],
     "tamoz-graph": [
-      "Tamoz::Graph::VERSION"
+      "Tamoz.graph",
+      "Tamoz.interrupt",
+      "Tamoz.send_to",
+      "Tamoz::Command",
+      "Tamoz::END",
+      "Tamoz::Graph::Branch",
+      "Tamoz::Graph::Channel",
+      "Tamoz::Graph::Checkpoint",
+      "Tamoz::Graph::Compiled",
+      "Tamoz::Graph::Definition",
+      "Tamoz::Graph::Interrupt",
+      "Tamoz::Graph::Limits",
+      "Tamoz::Graph::MemoryCheckpointer",
+      "Tamoz::Graph::NodeSpec",
+      "Tamoz::Graph::RunResult",
+      "Tamoz::Graph::Snapshot",
+      "Tamoz::Graph::Task",
+      "Tamoz::Graph::VERSION",
+      "Tamoz::Managed::RemainingSteps",
+      "Tamoz::Reducers.append",
+      "Tamoz::Reducers.max",
+      "Tamoz::Reducers.merge",
+      "Tamoz::Reducers.min",
+      "Tamoz::Reducers.union",
+      "Tamoz::Reducers::Reducer",
+      "Tamoz::START",
+      "Tamoz::Send"
     ],
     "tamoz-sqlite": [
       "Tamoz::SQLite::VERSION"

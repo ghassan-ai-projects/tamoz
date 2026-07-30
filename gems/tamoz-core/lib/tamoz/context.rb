@@ -11,7 +11,7 @@ module Tamoz
 
     ATTRIBUTES = %i[
       run_id parent_run_id execution_id request_id thread_id namespace task_id tags metadata
-      deadline cancellation clock notifier emitter store effects
+      deadline cancellation clock notifier emitter store effects interrupts graph_runtime
     ].freeze
 
     attr_reader(*ATTRIBUTES)
@@ -32,7 +32,9 @@ module Tamoz
       notifier: Tamoz.configuration.notifier,
       emitter: Emitter::Null::INSTANCE,
       store: nil,
-      effects: nil
+      effects: nil,
+      interrupts: nil,
+      graph_runtime: nil
     )
       @run_id = identity!(run_id, :run_id)
       @parent_run_id = optional_identity!(parent_run_id, :parent_run_id)
@@ -54,6 +56,12 @@ module Tamoz
         raise ConfigurationError, "notifier must respond to instrument"
       end
       raise ConfigurationError, "emitter must respond to emit" unless emitter.respond_to?(:emit)
+      if interrupts && !interrupts.respond_to?(:call)
+        raise ConfigurationError, "interrupts must respond to call"
+      end
+      if graph_runtime && !graph_runtime.respond_to?(:call)
+        raise ConfigurationError, "graph_runtime must respond to call"
+      end
 
       @cancellation = cancellation
       @clock = clock
@@ -61,6 +69,8 @@ module Tamoz
       @emitter = emitter
       @store = store
       @effects = effects
+      @interrupts = interrupts
+      @graph_runtime = graph_runtime
       freeze
     end
 

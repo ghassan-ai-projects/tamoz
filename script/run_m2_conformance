@@ -1,0 +1,388 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+require "json"
+require "open3"
+require "rbconfig"
+require "time"
+
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-graph/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+require "tamoz/graph"
+require "tamoz/evals"
+
+ROOT = File.expand_path("..", __dir__).freeze
+CASE_ROOT = File.join(ROOT, "gems", "tamoz-evals", "suites", "m2", "graph").freeze
+SELECTIONS = {
+  "m2.definition-boundary" => ["test/graph_definition_test.rb"],
+  "m2.barrier-determinism" => [
+    "test/graph_execution_test.rb",
+    "test/graph_state_manager_test.rb",
+    "test/graph_determinism_property_test.rb"
+  ],
+  "m2.interrupt-identity" => [
+    "test/graph_identity_test.rb",
+    "test/graph_interrupt_test.rb"
+  ],
+  "m2.history-fork" => ["test/graph_history_test.rb"],
+  "m2.subgraph-inheritance" => ["test/graph_subgraph_test.rb"],
+  "m2.stream-cancellation" => ["test/graph_stream_test.rb"]
+}.freeze
+NETWORK_SANDBOX_PROFILE = "(version 1)(allow default)(deny network*)".freeze
+
+def git(*arguments)
+  stdout, stderr, status = Open3.capture3("git", *arguments, chdir: ROOT)
+  abort("git #{arguments.join(" ")} failed: #{stderr}") unless status.success?
+
+  stdout.strip
+end
+
+def digest(document, domain:)
+  Tamoz::Evals::CanonicalJSON.content_digest(document, domain:)
+end
+
+def write_json(path, document, domain: nil)
+  document["content_digest"] = digest(document, domain:) if domain
+  File.write(
+    path,
+    "#{Tamoz::Evals::CanonicalJSON.dump(document)}\n",
+    encoding: Encoding::UTF_8
+  )
+end
+
+def sandboxed(command)
+  if RUBY_PLATFORM.include?("darwin") && File.executable?("/usr/bin/sandbox-exec")
+    return [
+      ["/usr/bin/sandbox-exec", "-p", NETWORK_SANDBOX_PROFILE, *command],
+      "macos-seatbelt"
+    ]
+  end
+
+  abort("M2 conformance requires an OS-enforced network sandbox on this platform")
+end
+
+def child_environment
+  ENV.each_key.grep(/\ABUNDLE_/).to_h { |key| [key, nil] }.merge(
+    "BUNDLE_GEMFILE" => File.join(ROOT, "Gemfile"),
+    "BUNDLE_IGNORE_CONFIG" => "1",
+    "MT_CPU" => "1",
+    "RUBYLIB" => nil,
+    "RUBYOPT" => nil
+  )
+end
+
+def capture_sandboxed(command, timeout_ms:)
+  sandboxed_command, sandbox_name = sandboxed(command)
+  stdout_text = nil
+  stderr_text = nil
+  status = nil
+  timed_out = false
+
+  Open3.popen3(
+    child_environment,
+    *sandboxed_command,
+    chdir: ROOT,
+    pgroup: true
+  ) do |stdin, stdout, stderr, wait_thread|
+    stdin.close
+    stdout_reader = Thread.new { stdout.read }
+    stderr_reader = Thread.new { stderr.read }
+
+    unless wait_thread.join(timeout_ms.fdiv(1000))
+      timed_out = true
+      begin
+        Process.kill("TERM", -wait_thread.pid)
+      rescue Errno::ESRCH
+        nil
+      end
+      unless wait_thread.join(1)
+        begin
+          Process.kill("KILL", -wait_thread.pid)
+        rescue Errno::ESRCH
+          nil
+        end
+      end
+    end
+
+    status = wait_thread.value
+    stdout_text = stdout_reader.value
+    stderr_text = stderr_reader.value
+  end
+
+  [stdout_text, stderr_text, status, timed_out, sandbox_name]
+end
+
+def verify_execution_isolation!
+  network_probe = <<~'RUBY'
+    require "socket"
+    begin
+      Socket.tcp("127.0.0.1", 9, connect_timeout: 0.1)
+      exit 70
+    rescue Errno::EPERM, Errno::EACCES
+      exit 0
+    rescue StandardError => error
+      warn "#{error.class}: #{error.message}"
+      exit 71
+    end
+  RUBY
+  _stdout, stderr, status, timed_out, sandbox_name = capture_sandboxed(
+    [RbConfig.ruby, "-e", network_probe],
+    timeout_ms: 1_000
+  )
+  abort("network sandbox self-test failed: #{stderr}") unless status.success? && !timed_out
+
+  _stdout, _stderr, _status, deadline_enforced, = capture_sandboxed(
+    [RbConfig.ruby, "-e", "sleep 60"],
+    timeout_ms: 10
+  )
+  abort("evidence deadline self-test failed") unless deadline_enforced
+
+  sandbox_name
+end
+
+unless ARGV.length == 1
+  warn "Usage: run_m2_conformance OUTPUT_DIRECTORY"
+  exit 64
+end
+
+dirty = !git("status", "--porcelain", "--untracked-files=normal").empty?
+unless !dirty || ENV["TAMOZ_ALLOW_DIRTY_EVIDENCE"] == "1"
+  warn "M2 release evidence requires a clean Git revision"
+  exit 64
+end
+verified_sandbox = verify_execution_isolation!
+
+output_root = File.expand_path(ARGV.fetch(0))
+if Dir.exist?(output_root) && !Dir.empty?(output_root)
+  warn "output directory must not exist or must be empty: #{output_root}"
+  exit 64
+end
+evidence_root = File.join(output_root, "evidence")
+FileUtils.mkdir_p(evidence_root)
+
+revision = git("rev-parse", "HEAD")
+tree = git("rev-parse", "HEAD^{tree}")
+behavior_version = dirty ? "m2.graph.dirty-test" : "m2.graph"
+case_paths = Dir[File.join(CASE_ROOT, "*.case.json")].sort
+cases = case_paths.to_h do |path|
+  artifact = Tamoz::Evals::Case.load(path)
+  [artifact["case_id"], artifact]
+end
+unless cases.keys.sort == SELECTIONS.keys.sort
+  abort("fixed M2 selections do not match canonical cases")
+end
+
+suite_digest = digest(
+  {
+    "suite_id" => "tamoz.m2.graph",
+    "case_digests" => cases.keys.sort.map { |case_id| cases.fetch(case_id).digest }
+  },
+  domain: "eval.suite"
+)
+subject_digest = digest(
+  {
+    "id" => "tamoz-graph",
+    "version" => Tamoz::Graph::VERSION,
+    "git_revision" => revision,
+    "git_tree" => tree,
+    "dirty" => dirty
+  },
+  domain: "eval.subject"
+)
+component_digests = {
+  "evaluator" => digest(
+    {"id" => "tamoz-evals", "version" => Tamoz::Evals::VERSION},
+    domain: "eval.component"
+  ),
+  "scorer" => digest(
+    {"id" => "tamoz.m2.fixed-test", "version" => "v1"},
+    domain: "eval.component"
+  ),
+  "gate" => digest(
+    {"id" => "tamoz.m2.gate", "version" => "v1"},
+    domain: "eval.component"
+  )
+}.freeze
+source_snapshot_digest = digest(
+  {"git_revision" => revision, "git_tree" => tree, "dirty" => dirty},
+  domain: "eval.snapshot"
+)
+
+failures = []
+result_paths = []
+SELECTIONS.each_with_index do |(case_id, test_files), offset|
+  eval_case = cases.fetch(case_id)
+  started_at = Time.at((Time.now.to_r * 1000).floor / 1000r).utc
+  started_monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  command = [
+    RbConfig.ruby,
+    "-rbundler/setup",
+    "-Itest",
+    "-e",
+    "#{test_files.inspect}.each { |path| require File.expand_path(path) }",
+    "--",
+    "--seed",
+    "0"
+  ]
+  timeout_ms = eval_case["budgets"].fetch("time_ms")
+  stdout, stderr, status, timed_out, sandbox_name = capture_sandboxed(
+    command,
+    timeout_ms:
+  )
+  duration_ms = (
+    (Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_monotonic) * 1000
+  ).round
+  finished_at = started_at + Rational(duration_ms, 1000)
+  passed = status.success? && !timed_out
+  failures << case_id unless passed
+
+  evidence_id = format("m2.run.%02d", offset + 1)
+  evidence_path = File.join(evidence_root, "#{case_id}.json")
+  write_json(
+    evidence_path,
+    {
+      "format_version" => 1,
+      "case_id" => case_id,
+      "test_files" => test_files,
+      "sandbox" => sandbox_name,
+      "timeout_ms" => timeout_ms,
+      "timed_out" => timed_out,
+      "exit_status" => status.exitstatus,
+      "stdout" => stdout,
+      "stderr" => stderr
+    }
+  )
+
+  result = {
+    "artifact_type" => "result",
+    "format_version" => 1,
+    "digest_version" => 1,
+    "content_digest" => "pending",
+    "result_id" => "#{case_id}.#{revision[0, 12]}",
+    "case_ref" => {
+      "id" => case_id,
+      "version" => eval_case["case_version"],
+      "digest" => eval_case.digest
+    },
+    "suite_ref" => {
+      "id" => "tamoz.m2.graph",
+      "version" => 1,
+      "digest" => suite_digest
+    },
+    "subject" => {
+      "id" => "tamoz-graph",
+      "version" => Tamoz::Graph::VERSION,
+      "git_revision" => revision,
+      "behavior_version" => behavior_version,
+      "digest" => subject_digest
+    },
+    "environment" => {
+      "profile" => "pr",
+      "ruby_version" => RUBY_VERSION,
+      "platform" => RUBY_PLATFORM,
+      "isolation" => "sandbox",
+      "network" => "denied"
+    },
+    "provenance" => {
+      "components" => [
+        {
+          "role" => "evaluator",
+          "id" => "tamoz-evals",
+          "version" => Tamoz::Evals::VERSION,
+          "digest" => component_digests.fetch("evaluator")
+        },
+        {
+          "role" => "scorer",
+          "id" => "tamoz.m2.fixed-test",
+          "version" => "v1",
+          "digest" => component_digests.fetch("scorer")
+        },
+        {
+          "role" => "gate",
+          "id" => "tamoz.m2.gate",
+          "version" => "v1",
+          "digest" => component_digests.fetch("gate")
+        }
+      ],
+      "snapshots" => [
+        {
+          "kind" => "source-tree",
+          "digest" => source_snapshot_digest
+        }
+      ],
+      "fixtures" => [],
+      "seed" => 0,
+      "repetition" => {"index" => 1, "count" => 1},
+      "attempts" => [
+        {
+          "id" => "attempt.1",
+          "index" => 1,
+          "status" => passed ? "passed" : "failed",
+          "reference_ids" => [evidence_id]
+        }
+      ]
+    },
+    "references" => [
+      {
+        "id" => evidence_id,
+        "kind" => "test-output",
+        "path" => File.join("evidence", File.basename(evidence_path)),
+        "digest" => Tamoz::Evals::CanonicalJSON.file_digest(evidence_path),
+        "size_bytes" => File.size(evidence_path),
+        "classification" => "internal"
+      }
+    ],
+    "scores" => [
+      {
+        "id" => "fixed-test",
+        "status" => passed ? "pass" : "fail",
+        "value_basis_points" => passed ? 10_000 : 0
+      }
+    ],
+    "hard_gates" => [
+      {
+        "id" => "fixed-test-pass",
+        "status" => passed ? "pass" : "fail",
+        "evidence_ids" => [evidence_id]
+      }
+    ],
+    "invalid_evidence" => [],
+    "evidence_gaps" => [],
+    "infrastructure_errors" => [],
+    "cost" => {
+      "input_tokens" => 0,
+      "output_tokens" => 0,
+      "total_microusd" => 0
+    },
+    "timing" => {
+      "started_at" => started_at.iso8601(3),
+      "finished_at" => finished_at.iso8601(3),
+      "duration_ms" => duration_ms
+    },
+    "baseline_ref" => nil,
+    "comparison_method" => "exact",
+    "status" => passed ? "passed" : "failed",
+    "decision" => passed ? "pass" : "fail",
+    "decision_authority" => {
+      "id" => "tamoz.m2.gate",
+      "kind" => "deterministic_gate",
+      "version" => "v1",
+      "digest" => component_digests.fetch("gate")
+    }
+  }
+  result_path = File.join(output_root, "#{case_id}.result.json")
+  write_json(result_path, result, domain: "eval.result")
+  Tamoz::Evals.verify(result_path)
+  result_paths << result_path
+end
+
+puts JSON.generate(
+  "revision" => revision,
+  "dirty" => dirty,
+  "sandbox" => verified_sandbox,
+  "results" => result_paths,
+  "failures" => failures
+)
+exit(failures.empty? ? 0 : 1)
