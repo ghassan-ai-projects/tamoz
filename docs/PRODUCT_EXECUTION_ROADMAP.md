@@ -115,6 +115,8 @@ for fresh approvals, and retry. It never edits the prior plan or silently repeat
 
 ### P3 — coding behavior scorecard
 
+Accepted implementation plan: [`P3_AGENT_SCORECARD_PLAN.md`](P3_AGENT_SCORECARD_PLAN.md).
+
 Build a small deterministic corpus, not release sharding infrastructure. Start with 12
 repositories/tasks covering read-only explanation, one-pass repair, two-pass repair,
 multi-location edit need, new-file need, stale digest, denied approval, failed check, timeout,
