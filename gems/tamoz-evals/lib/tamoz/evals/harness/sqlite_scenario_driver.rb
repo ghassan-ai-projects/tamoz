@@ -17,6 +17,8 @@ module Tamoz
             "background_threads" => "prohibited",
             "running_recovery_fixture" =>
               "atomic-start-checkpoint-and-request-transition",
+            "pending_outcome_routing" =>
+              "static-edge-without-dynamic-goto",
             "fixture_graph" => {
               "name" => "tamoz-eval-sqlite-phase2",
               "version" => "1",

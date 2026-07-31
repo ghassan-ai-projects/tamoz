@@ -16,6 +16,9 @@ in
 The original gate evidence below remains the evidence for commit `50b30d8`, not for the
 corrected driver.
 
+The later pending-write fixture correction is accepted in
+[M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md](M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md).
+
 This decision accepts Phase 2E only. It does not classify killed databases, run public
 recovery convergence, execute every crash selector, produce release evidence envelopes,
 or claim Phase 2 or M3.1 completion.

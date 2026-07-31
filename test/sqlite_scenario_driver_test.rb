@@ -6,7 +6,7 @@ class SQLiteScenarioDriverTest < Minitest::Test
   REGISTRY_DIGEST =
     "sha256:e30afb2490ae9a5907d87ebeba7f442c70bd27e320442d7e0c2a2fe2ef05c23f"
   DRIVER_DIGEST =
-    "sha256:69b4c24372261e423823f7090c500551d83204144244be1a7cee7bf0d332ea26"
+    "sha256:25afc66329481cfa7abaff6aec9d32ebaf8b621eec1cb2f7ebf82dfe9d0bac5d"
 
   def test_all_fixed_scenarios_trace_one_operation_and_exact_required_union
     manifests = []
@@ -52,6 +52,10 @@ class SQLiteScenarioDriverTest < Minitest::Test
     assert_equal(
       "atomic-start-checkpoint-and-request-transition",
       driver_class.definition.fetch("running_recovery_fixture")
+    )
+    assert_equal(
+      "static-edge-without-dynamic-goto",
+      driver_class.definition.fetch("pending_outcome_routing")
     )
     assert_deeply_frozen(driver_class.definition)
 
@@ -275,6 +279,39 @@ class SQLiteScenarioDriverTest < Minitest::Test
 
       assert_equal :completed, recovered.status
       assert_equal execution_id, recovered.execution_id
+      assert_equal 2, app.history(thread: "thread.phase2").length
+      assert_equal 1, app.state(thread: "thread.phase2").state.fetch(:value)
+      assert adapter.integrity_check.fetch("ok")
+    ensure
+      adapter&.close
+    end
+  end
+
+  def test_pending_write_fixture_continues_without_reexecuting_the_node
+    Dir.mktmpdir("tamoz-sqlite-scenario-pending-recovery") do |directory|
+      path = File.join(directory, "pending.db")
+      driver.trace(
+        scenario_id: "checkpoint.writes-new",
+        path:,
+        subject:
+      )
+      expire_active_lease(path)
+
+      adapter = Tamoz::SQLite::Adapter.new(path:)
+      app = pending_recovery_definition.compile(checkpointer: adapter)
+      runner = app.durable_runner
+      runner.submit(
+        {},
+        thread: "thread.phase2",
+        request_id: "request.phase2.convergence",
+        operation: :continue
+      )
+      recovered = runner.run_next(
+        thread: "thread.phase2",
+        owner_id: "owner.phase2.convergence"
+      )
+
+      assert_equal :completed, recovered.status
       assert_equal 2, app.history(thread: "thread.phase2").length
       assert_equal 1, app.state(thread: "thread.phase2").state.fetch(:value)
       assert adapter.integrity_check.fetch("ok")
@@ -642,6 +679,20 @@ class SQLiteScenarioDriverTest < Minitest::Test
         implementation_name: "tamoz.eval.sqlite.work",
         version: "1"
       ) { |_state, _context| {value: 1} }
+      edge Tamoz::START, :work
+      edge :work, Tamoz::END
+    end
+  end
+
+  def pending_recovery_definition
+    Tamoz.graph(name: "tamoz-eval-sqlite-phase2", version: "1") do
+      state :value, default: 0
+      state :events, reduce: :append, default: []
+      node(
+        :work,
+        implementation_name: "tamoz.eval.sqlite.work",
+        version: "1"
+      ) { raise "pending task was reexecuted" }
       edge Tamoz::START, :work
       edge :work, Tamoz::END
     end

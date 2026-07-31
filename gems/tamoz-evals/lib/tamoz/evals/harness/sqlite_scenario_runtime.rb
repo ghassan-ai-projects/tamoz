@@ -631,7 +631,7 @@ module Tamoz
             node: task.node,
             path: task.path,
             update:,
-            goto: [Tamoz::END]
+            goto: nil
           )
           [task, outcome].freeze
         end

@@ -311,8 +311,8 @@ new-state or stable contract, convergence step, and registry coverage declaratio
 | request | `request.mark-running` | claimed becomes running atomically |
 | request | `request.mark-redirect-running` | redirecting follows its separately valid running branch |
 | request | `request.redirect-ready` | unresolved-effect query is read-only |
-| checkpoint | `checkpoint.writes-new` | activation and two ordered writes appear together |
-| checkpoint | `checkpoint.writes-duplicate` | exact replay adds no rows |
+| checkpoint | `checkpoint.writes-new` | recoverable static-route activation and two ordered writes appear together |
+| checkpoint | `checkpoint.writes-duplicate` | exact recoverable replay adds no rows |
 | checkpoint | `checkpoint.commit-start` | first running checkpoint becomes head/sequence 0 |
 | checkpoint | `checkpoint.commit-advance` | pending activation consumption and head advance are atomic |
 | checkpoint | `checkpoint.commit-turn` | new execution and terminal request transition share one commit |
@@ -444,6 +444,8 @@ Phase 2E is accepted in
 [M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md).
 Its running-recovery fixture correction is accepted in
 [M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md](reviews/M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md).
+Its pending-write routing correction is accepted in
+[M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md](reviews/M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
