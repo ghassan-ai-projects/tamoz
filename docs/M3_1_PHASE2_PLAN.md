@@ -373,7 +373,8 @@ convergence:
 - proves registry/source/trace coverage;
 - performs a real kill for `before_begin`, first required statement `after_sql`,
   `before_commit`, and `after_commit` for every scenario;
-- retains one evidence envelope per scenario plus a summary.
+- retains one leaf evidence envelope per executed selector, one bounded summary per
+  scenario, and one profile summary.
 
 ### Release profile
 
@@ -388,6 +389,18 @@ convergence:
 Selector order is canonical digest order, never filesystem or hash iteration order. A
 release dry run can list selectors without execution. The merge result names missing
 selector digests without leaking paths.
+
+Leaf evidence uses the existing evidence-v1 singular `selection` field, so every
+intentional kill is bound to exactly one selector. Scenario and profile summaries are
+evidence-v1 `summary` envelopes referencing bounded canonical manifests. Release shard
+manifests may list up to the 4,096-selector ceiling and are separate canonical artifacts;
+this avoids exceeding evidence-v1's 256-reference ceiling. A merged summary references
+the verified merge manifest, not thousands of leaf files directly.
+
+Phase 2G adds one internal, non-scorecard
+`m3.phase2.sqlite-crash-evidence` case artifact as the leaf and summary `case_ref`.
+The six public `m3.persistence` evaluation cases remain Phase 7 work and consume this
+lower-level evidence rather than being introduced early.
 
 Hard ceilings:
 
@@ -448,6 +461,9 @@ Its pending-write routing correction is accepted in
 [M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md](reviews/M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md).
 Phase 2F is accepted in
 [M3_1_PHASE2F_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2F_IMPLEMENTATION_REVIEW.md).
+The evidence-envelope and case-reference correction discovered before Phase 2G
+implementation is accepted in
+[M3_1_PHASE2G_PLAN_CORRECTION.md](reviews/M3_1_PHASE2G_PLAN_CORRECTION.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
