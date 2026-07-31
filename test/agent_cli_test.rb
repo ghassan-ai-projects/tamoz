@@ -33,4 +33,19 @@ class AgentCLITest < Minitest::Test
     assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
     assert_match(/TAMOZ_MODEL/, err.string)
   end
+
+  def test_check_configuration_requires_explicit_change_mode
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(
+      ["--check", "test=ruby -c example.rb", "inspect"],
+      out:,
+      err:,
+      env: {"TAMOZ_MODEL" => "model", "OPENAI_API_KEY" => "key"}
+    )
+
+    assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
+    assert_match(/requires --allow-changes/, err.string)
+  end
 end

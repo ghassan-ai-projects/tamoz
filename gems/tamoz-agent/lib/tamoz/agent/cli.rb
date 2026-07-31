@@ -2,19 +2,21 @@
 
 require "json"
 require "optparse"
+require "shellwords"
 
 module Tamoz
   module Agent
     class CLI
       USAGE_ERROR = 64
 
-      def self.run(argv = ARGV, out: $stdout, err: $stderr, env: ENV)
-        new(out:, err:, env:).run(argv)
+      def self.run(argv = ARGV, out: $stdout, err: $stderr, input: $stdin, env: ENV)
+        new(out:, err:, input:, env:).run(argv)
       end
 
-      def initialize(out:, err:, env:)
+      def initialize(out:, err:, input:, env:)
         @out = out
         @err = err
+        @input = input
         @env = env
       end
 
@@ -24,6 +26,9 @@ module Tamoz
 
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "TASK" if task.empty?
+        if !options[:allow_changes] && !options[:checks].empty?
+          raise OptionParser::InvalidArgument, "--check requires --allow-changes"
+        end
         model_name = options[:model] || @env["TAMOZ_MODEL"]
         raise OptionParser::MissingArgument, "--model or TAMOZ_MODEL" if model_name.to_s.empty?
 
@@ -38,7 +43,13 @@ module Tamoz
           api_base:,
           assume_model_exists: options[:assume_model_exists]
         )
-        runtime = Tamoz::Agent.build(model:, root: options[:root])
+        runtime = Tamoz::Agent.build(
+          model:,
+          root: options[:root],
+          allow_changes: options[:allow_changes],
+          checks: options[:checks],
+          approval: method(:approve)
+        )
         result = runtime.run(task) { |event| render(event, json: options[:json]) }
         unless options[:json]
           @out.puts
@@ -58,15 +69,37 @@ module Tamoz
       private
 
       def parse(argv)
-        options = {root: Dir.pwd, json: false, assume_model_exists: false}
+        options = {
+          root: Dir.pwd,
+          json: false,
+          assume_model_exists: false,
+          allow_changes: false,
+          checks: {}
+        }
         parser = OptionParser.new do |value|
           value.banner = "Usage: tamoz [options] TASK"
           value.on("--model MODEL", "RubyLLM model identifier") { |entry| options[:model] = entry }
           value.on("--provider PROVIDER", "RubyLLM provider (default: openai)") do |entry|
             options[:provider] = entry
           end
-          value.on("--root PATH", "Read-only workspace root (default: current directory)") do |entry|
+          value.on("--root PATH", "Workspace root (default: current directory)") do |entry|
             options[:root] = entry
+          end
+          value.on("--allow-changes", "Enable reviewed and approved workspace changes") do
+            options[:allow_changes] = true
+          end
+          value.on("--check NAME=COMMAND", "Configure a named verification command") do |entry|
+            name, command = entry.split("=", 2)
+            if name.to_s.empty? || command.to_s.empty?
+              raise OptionParser::InvalidArgument, "check must be NAME=COMMAND"
+            end
+            argv = Shellwords.split(command)
+            raise OptionParser::InvalidArgument, "check command must not be empty" if argv.empty?
+            if options[:checks].key?(name)
+              raise OptionParser::InvalidArgument, "duplicate check #{name.inspect}"
+            end
+
+            options[:checks][name] = argv
           end
           value.on("--assume-model-exists", "Allow an unlisted model at a custom endpoint") do
             options[:assume_model_exists] = true
@@ -93,7 +126,7 @@ module Tamoz
 
         case event.type
         when :plan_drafted
-          @out.puts "Plan #{event.data.fetch("attempt")}:"
+          @out.puts "Plan #{event.data.fetch("attempt")} (#{event.data.fetch("phase")}):"
           event.data.fetch("plan").fetch("steps").each do |step|
             tool = step.fetch("tool") ? " [#{step.fetch("tool")}]" : ""
             @out.puts "  - #{step.fetch("purpose")}#{tool}"
@@ -102,7 +135,17 @@ module Tamoz
           @out.puts "Review (#{event.data.fetch("layer")}): #{event.data.fetch("decision")}"
         when :tool_started
           @out.puts "Running #{event.data.fetch("tool")}..."
+        when :approval_requested
+          @out.puts "Approval required for #{event.data.fetch("tool")}:"
+          @out.puts event.data.fetch("preview")
         end
+      end
+
+      def approve(tool:, arguments:, preview:)
+        @err.print "Approve #{tool}? [y/N] "
+        @err.flush
+        answer = @input.gets
+        answer && %w[y yes].include?(answer.strip.downcase)
       end
     end
   end

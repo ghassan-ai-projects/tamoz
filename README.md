@@ -20,19 +20,25 @@ precedes persistence, and persistence precedes model integration.
 ## Current status
 
 The framework has implemented core, graph, and SQLite durability foundations. Tamoz Agent
-now also has a deliberately narrow working product slice: real RubyLLM model calls,
-plan-before-action, deterministic and semantic plan review, three workspace-confined
-read-only tools, and final evidence-bound verification.
+now also has a deliberately narrow working product: real RubyLLM model calls,
+plan-before-action, deterministic and semantic plan review, workspace-confined tools,
+human-approved atomic patches, configured verification commands, and final evidence-bound
+verification.
 
 ```sh
 export OPENAI_API_KEY="..."
 export TAMOZ_MODEL="gpt-5-mini"
 rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+
+# Opt in to changes. The model can select "test" but cannot alter its argv.
+rbenv exec bundle exec tamoz --root . --allow-changes \
+  --check 'test=rbenv exec bundle exec rake test' \
+  "Fix the failing test"
 ```
 
-This first CLI is not yet crash-durable and cannot mutate the workspace. See
-[`docs/WORKING_SLICE_1.md`](docs/WORKING_SLICE_1.md) for its exact scope and the next product
-slice.
+Read-only mode remains the default. Change mode uses separate reviewed discovery and action
+plans, displays the exact diff/command, and asks before every effect. It is not yet
+crash-durable. See [`docs/WORKING_SLICE_2.md`](docs/WORKING_SLICE_2.md) for the exact scope.
 
 The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
 The evaluation artifact contract is documented in

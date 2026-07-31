@@ -13,8 +13,17 @@ module Tamoz
   module Agent
     ROOT = File.expand_path("../../..", __dir__).freeze
 
-    def self.build(model:, root: Dir.pwd, max_plan_attempts: 3)
-      Runtime.new(model:, toolbox: Toolbox.new(root:), max_plan_attempts:)
+    def self.build(
+      model:,
+      root: Dir.pwd,
+      max_plan_attempts: 3,
+      allow_changes: false,
+      checks: {},
+      check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
+      approval: nil
+    )
+      toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:)
+      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:)
     end
   end
 end

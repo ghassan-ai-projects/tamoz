@@ -36,7 +36,8 @@ class AgentRuntimeTest < Minitest::Test
 
       assert result.satisfied
       assert_equal "Tamoz is awake.", result.answer
-      assert_equal "Tamoz is awake.\n", result.observations.first.fetch("output")
+      assert_includes result.observations.first.fetch("output"), "Tamoz is awake."
+      assert_includes result.observations.first.fetch("output"), "sha256:"
       assert_operator event_index(events, :plan_accepted), :<, event_index(events, :tool_started)
       assert_equal %i[plan review verify], model.calls.map { |call| call.fetch(:stage) }
       assert_includes model.calls.last.fetch(:prompt), "Tamoz is awake."
