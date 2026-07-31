@@ -75,6 +75,16 @@ The verifier returns distinct exit codes:
 | 4 | insufficient evidence |
 | 64 | command usage error |
 
+Run the deterministic Tamoz Agent development scorecard:
+
+```sh
+rbenv exec bundle exec tamoz-eval scorecard agent-smoke
+```
+
+Its 12 public cases report task success, safety, plan/repair attempts, approvals, calls,
+bounded byte proxies, unnecessary mutation, and repeated-action stops. See
+[`docs/P3_AGENT_SCORECARD.md`](docs/P3_AGENT_SCORECARD.md) for the honest baseline and limits.
+
 ## Security and guarantees
 
 Tamoz does not claim arbitrary effects execute exactly once. Replay-safe effects require

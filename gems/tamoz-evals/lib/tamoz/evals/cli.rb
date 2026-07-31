@@ -28,13 +28,19 @@ module Tamoz
         SUCCESS
       ].freeze
 
-      def self.run(argv, out: $stdout, err: $stderr)
-        new(out:, err:).run(argv)
+      def self.run(
+        argv,
+        out: $stdout,
+        err: $stderr,
+        scorecard_factory: -> { Harness::AgentSmokeScorecard.new }
+      )
+        new(out:, err:, scorecard_factory:).run(argv)
       end
 
-      def initialize(out:, err:)
+      def initialize(out:, err:, scorecard_factory:)
         @out = out
         @err = err
+        @scorecard_factory = scorecard_factory
       end
 
       def run(argv)
@@ -42,6 +48,7 @@ module Tamoz
         return version if argv == ["--version"]
 
         command, *paths = argv
+        return scorecard(paths) if command == "scorecard"
         return usage("expected: tamoz-eval verify ARTIFACT...") unless command == "verify" && !paths.empty?
 
         codes = paths.map { |path| verify_path(path) }
@@ -49,6 +56,20 @@ module Tamoz
       end
 
       private
+
+      def scorecard(arguments)
+        return usage("expected: tamoz-eval scorecard agent-smoke") unless arguments == ["agent-smoke"]
+
+        report = @scorecard_factory.call.run
+        @out.puts(report.to_json)
+        report.passed? ? SUCCESS : GATE_FAILURE
+      rescue InvalidArtifactError => error
+        @err.puts("agent-smoke: invalid evidence: #{error.message}")
+        INVALID_EVIDENCE
+      rescue ExecutionError => error
+        @err.puts("agent-smoke: infrastructure failure: #{error.message}")
+        INFRASTRUCTURE_FAILURE
+      end
 
       def verify_path(path)
         verification = Verifier.new.verify(path)
@@ -71,6 +92,7 @@ module Tamoz
 
       def help
         @out.puts("Usage: tamoz-eval verify ARTIFACT...")
+        @out.puts("       tamoz-eval scorecard agent-smoke")
         @out.puts("       tamoz-eval --version")
         SUCCESS
       end

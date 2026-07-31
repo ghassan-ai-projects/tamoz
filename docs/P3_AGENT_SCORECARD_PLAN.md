@@ -120,6 +120,7 @@ paths are excluded so two equivalent runs produce identical bytes.
 |---|---:|
 | complete report; all hard gates pass | `0` |
 | complete report; a hard gate fails | `1` |
+| canonical case evidence is invalid | `2` |
 | subject/corpus/runner infrastructure failure | `3` |
 | invalid command or arguments | `64` |
 

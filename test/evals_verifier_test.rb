@@ -6,6 +6,7 @@ class EvalsVerifierTest < Minitest::Test
   GOLDEN_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "m0", "golden")
   M1_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "m1", "core")
   M2_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "m2", "graph")
+  AGENT_SMOKE_ROOT = GEM_ROOTS.fetch("tamoz-evals").join("suites", "agent", "smoke")
   BASELINE = GEM_ROOTS.fetch("tamoz-evals").join(
     "baselines", "m0", "baseline.result.json"
   )
@@ -40,6 +41,12 @@ class EvalsVerifierTest < Minitest::Test
         {"TAMOZ_FIXTURE_ROOT" => directory},
         RbConfig.ruby,
         ROOT.join("script", "generate_m1_fixtures").to_s
+      )
+      assert status.success?, stderr
+      _stdout, stderr, status = Open3.capture3(
+        {"TAMOZ_FIXTURE_ROOT" => directory},
+        RbConfig.ruby,
+        ROOT.join("script", "generate_agent_smoke_fixtures").to_s
       )
       assert status.success?, stderr
 
@@ -81,6 +88,22 @@ class EvalsVerifierTest < Minitest::Test
       assert_equal "conformance", artifact["split"]
       assert_equal "public", artifact["content_policy"].fetch("classification")
       assert_equal "ruby-test-selection", artifact["input"].fetch("kind")
+    end
+  end
+
+  def test_all_twelve_agent_smoke_cases_are_public_verified_and_digest_pinned
+    cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
+
+    assert_equal 12, cases.length
+    assert_equal 12, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    cases.each do |path|
+      artifact = Tamoz::Evals::Case.load(path)
+      assert_equal "tamoz.agent.smoke", artifact["suite_id"]
+      assert_equal "development", artifact["split"]
+      assert_equal "public", artifact["content_policy"].fetch("classification")
+      assert_equal "tamoz-agent-smoke", artifact["input"].fetch("kind")
+      assert_equal "in_process", artifact["environment"].fetch("isolation")
+      assert_equal "recorded", artifact["environment"].fetch("network")
     end
   end
 
