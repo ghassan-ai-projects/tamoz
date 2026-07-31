@@ -23,6 +23,12 @@ Process amendment on 2026-07-30: the user replaced the original atomic phase-com
 with independently reviewed slice commits. Each slice must pass full CI and record its own
 review before the next begins; Phase 2 still ends with a cross-slice review.
 
+Post-acceptance correction on 2026-07-31: source inventory before Phase 2E found that the
+fixed matrix had no witness for `request.claim.active_execution`. Phase 2E stopped before
+code changes. The Five Whys, added `request.claim-resume` scenario, and strengthened
+statement-to-scenario witness gate are recorded in
+[M3_1_PHASE2E_PLAN_CORRECTION.md](M3_1_PHASE2E_PLAN_CORRECTION.md).
+
 ## Findings resolved
 
 | Severity | Finding | Root cause | Resolution |

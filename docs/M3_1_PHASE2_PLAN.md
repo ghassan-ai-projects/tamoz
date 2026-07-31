@@ -303,6 +303,7 @@ new-state or stable contract, convergence step, and registry coverage declaratio
 | request | `request.enqueue-new` | one row, transition 0, FIFO counter +1 |
 | request | `request.enqueue-duplicate` | identical binding remains one row/transition |
 | request | `request.claim-turn` | queued turn binds one new execution and fence |
+| request | `request.claim-resume` | queued resume binds the current active execution and fence |
 | request | `request.claim-redirect` | target execution and cancellation generation pin |
 | request | `request.recover-claimed` | same execution, new fence, recovery transition |
 | request | `request.recover-running` | running state/execution survive takeover |
@@ -437,6 +438,8 @@ Phase 2C is accepted in
 [M3_1_PHASE2C_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2C_IMPLEMENTATION_REVIEW.md).
 Phase 2D is accepted in
 [M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md).
+The fixed scenario matrix correction discovered before Phase 2E implementation is accepted in
+[M3_1_PHASE2E_PLAN_CORRECTION.md](reviews/M3_1_PHASE2E_PLAN_CORRECTION.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
