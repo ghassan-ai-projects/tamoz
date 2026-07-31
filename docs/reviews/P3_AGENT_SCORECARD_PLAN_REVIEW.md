@@ -21,6 +21,7 @@ authority or turning `tamoz-evals` into an unconditional production dependency.
 | Medium | Unsupported P4/P5 tasks could be mislabeled as harness failures or removed to raise the score. | They remain honest task failures with complete safe evidence and pinned case identities. |
 | Medium | Expected approval denial and tool rejection could be confused with infrastructure errors. | Cases declare allowed terminal classes; unexpected exceptions fail evidence completeness with safe error codes. |
 | Medium | Unnecessary action is broader than unnecessary mutation. | P3 reports mutation precisely and retains tool/approval counts; a later scorer may add unnecessary read/check judgment without changing this lineage. |
+| Medium | Making “no mutation” part of the explanation task oracle would convert the intended quality dimension into a hard false-completion gate. | Grounded task success and mutation necessity are independent fields; unnecessary mutation remains visible without corrupting completion truth. |
 
 ## Residual risks
 

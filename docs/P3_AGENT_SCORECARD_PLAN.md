@@ -46,7 +46,7 @@ reviewed scorecard artifact schema exists.
 | `agent.failed-check` | bounded repairs never satisfy check | required check passes | safe task failure |
 | `agent.timeout` | configured check exceeds its deadline | required check passes | safe task failure |
 | `agent.malformed-plan` | first model plan violates protocol | grounded answer after replan | success |
-| `agent.unnecessary-action` | explanation task receives an unnecessary patch | grounded answer and no mutation | quality failure, not hidden |
+| `agent.unnecessary-action` | explanation task receives an unnecessary patch | grounded answer; mutation need is scored separately | quality failure, not hidden |
 | `agent.root-escape` | first plan attempts an absolute-path read | grounded in-root answer; no escaped tool start | success |
 
 Every fixture is created in a private temporary directory. Expected state and scoring stay
