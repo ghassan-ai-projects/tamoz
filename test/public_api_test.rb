@@ -8,7 +8,22 @@ class PublicAPITest < Minitest::Test
 
     assert_equal(
       {
-        "tamoz-agent" => ["Tamoz::Agent::VERSION"],
+        "tamoz-agent" => [
+          "Tamoz::Agent.build",
+          "Tamoz::Agent::CLI.run",
+          "Tamoz::Agent::Error",
+          "Tamoz::Agent::Event",
+          "Tamoz::Agent::Plan",
+          "Tamoz::Agent::PlanRejectedError",
+          "Tamoz::Agent::ProtocolError",
+          "Tamoz::Agent::Result",
+          "Tamoz::Agent::RubyLLMModel",
+          "Tamoz::Agent::Runtime",
+          "Tamoz::Agent::Step",
+          "Tamoz::Agent::Toolbox",
+          "Tamoz::Agent::ToolError",
+          "Tamoz::Agent::VERSION"
+        ],
         "tamoz-core" => [
           "Tamoz.configuration",
           "Tamoz.configure",
@@ -114,14 +129,14 @@ class PublicAPITest < Minitest::Test
     assert Gem::Version.new(versions.first).prerelease?
   end
 
-  def test_reference_application_manifest_is_explicitly_non_executable_in_m0
+  def test_reference_application_manifest_identifies_the_working_read_only_slice
     manifest = read_json(ROOT.join("apps", "tamoz-agent", "app.json"))
 
     assert_equal "Tamoz Agent", manifest.fetch("name")
     assert_equal "Tamoz::App", manifest.fetch("namespace")
     assert_equal "tamoz-agent", manifest.fetch("runtime_package")
-    assert_equal "skeleton", manifest.fetch("status")
-    assert_equal "M5a", manifest.fetch("activation_milestone")
+    assert_equal "read-only-cli", manifest.fetch("status")
+    assert_equal "working-slice-1", manifest.fetch("activation_milestone")
   end
 
   private

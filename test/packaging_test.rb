@@ -26,6 +26,11 @@ class PackagingTest < Minitest::Test
           assert(contents.any? { |path| path.start_with?("lib/") }, name)
           refute(contents.any? { |path| path.match?(%r{\A(?:test|spec|tmp|vendor|\.git)/}) }, name)
 
+          if name == "tamoz-agent"
+            assert_equal ["tamoz"], spec.executables
+            assert_includes contents, "exe/tamoz"
+          end
+
           next unless name == "tamoz-evals"
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length

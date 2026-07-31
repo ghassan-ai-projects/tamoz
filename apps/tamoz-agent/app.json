@@ -1,8 +1,8 @@
 {
-  "activation_milestone": "M5a",
+  "activation_milestone": "working-slice-1",
   "format_version": 1,
   "name": "Tamoz Agent",
   "namespace": "Tamoz::App",
   "runtime_package": "tamoz-agent",
-  "status": "skeleton"
+  "status": "read-only-cli"
 }

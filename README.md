@@ -19,11 +19,20 @@ precedes persistence, and persistence precedes model integration.
 
 ## Current status
 
-M1 adds the dependency-light `tamoz-core` runtime: immutable state encoding, explicit
-Context propagation, cooperative cancellation, safe instrumentation, bounded streaming,
-and ordered inline/thread execution. It intentionally contains no graph, persistence,
-provider, model, or agent behavior. See [`docs/M1.md`](docs/M1.md) for exact evidence and
-[`docs/reviews/M1_DEEP_REVIEW.md`](docs/reviews/M1_DEEP_REVIEW.md) for the phase review.
+The framework has implemented core, graph, and SQLite durability foundations. Tamoz Agent
+now also has a deliberately narrow working product slice: real RubyLLM model calls,
+plan-before-action, deterministic and semantic plan review, three workspace-confined
+read-only tools, and final evidence-bound verification.
+
+```sh
+export OPENAI_API_KEY="..."
+export TAMOZ_MODEL="gpt-5-mini"
+rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+```
+
+This first CLI is not yet crash-durable and cannot mutate the workspace. See
+[`docs/WORKING_SLICE_1.md`](docs/WORKING_SLICE_1.md) for its exact scope and the next product
+slice.
 
 The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
 The evaluation artifact contract is documented in

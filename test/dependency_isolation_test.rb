@@ -26,12 +26,14 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  def test_agent_does_not_load_evals_sqlite_or_rubyllm_in_m0
+  def test_agent_defers_provider_loading_and_does_not_load_evals_or_sqlite
     features = loaded_features_after("tamoz/agent")
 
     assert_includes features, "tamoz/agent.rb"
     refute(
-      features.any? { |path| path.match?(%r{ruby_llm|tamoz/evals|tamoz/sqlite}) },
+      features.any? do |path|
+        path.match?(%r{\Aruby/gems/.+ruby_llm|tamoz/evals|tamoz/sqlite})
+      end,
       features.inspect
     )
   end

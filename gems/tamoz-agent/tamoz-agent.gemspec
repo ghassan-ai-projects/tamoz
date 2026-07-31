@@ -8,5 +8,9 @@ TamozGemspec.build(
   version: Tamoz::Agent::VERSION,
   summary: "Deliberative agent runtime for Tamoz",
   description: "Plan, review, execute, verify, remember, and improve over Tamoz graphs.",
-  dependencies: [["tamoz-graph", "= #{Tamoz::Agent::VERSION}"]]
+  dependencies: [
+    ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
+    ["ruby_llm", "~> 1.16.0"]
+  ],
+  executable: "tamoz"
 )

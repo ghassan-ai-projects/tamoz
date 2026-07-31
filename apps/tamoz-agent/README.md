@@ -1,7 +1,13 @@
 # Tamoz Agent
 
-Tamoz Agent is the demanding reference application for the framework. Its CLI is activated
-in M5a after evaluation, deterministic execution, durability, and RubyLLM integration pass
-their preceding gates.
+Tamoz Agent now has a working read-only CLI slice:
 
-This directory intentionally contains no fake agent loop in M0.
+```sh
+OPENAI_API_KEY="..." TAMOZ_MODEL="gpt-5-mini" \
+  bundle exec tamoz --root . "Summarize this project"
+```
+
+Every run drafts and reviews a plan before any workspace tool executes. This first slice
+proves the product loop with real model calls and confined read-only tools. Durable sessions,
+mutation, memory, recovery, skills, MCP, scheduling, and physical-world streams follow as
+separate vertical slices.
