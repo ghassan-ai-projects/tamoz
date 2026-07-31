@@ -8,6 +8,14 @@ Base revision: `f7829e8`.
 Decision: accepted for commit on 2026-07-31. No unresolved correctness, security,
 reliability, or maintainability finding remains in this slice.
 
+Post-acceptance correction: the original `request.recover-running` setup created a
+running inbox row without the running checkpoint required by public recovery. The
+corrected fixture, regression, Five Whys analysis, and new driver identity are accepted
+in
+[M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md](M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md).
+The original gate evidence below remains the evidence for commit `50b30d8`, not for the
+corrected driver.
+
 This decision accepts Phase 2E only. It does not classify killed databases, run public
 recovery convergence, execute every crash selector, produce release evidence envelopes,
 or claim Phase 2 or M3.1 completion.

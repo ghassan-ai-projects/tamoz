@@ -306,7 +306,7 @@ new-state or stable contract, convergence step, and registry coverage declaratio
 | request | `request.claim-resume` | queued resume binds the current active execution and fence |
 | request | `request.claim-redirect` | target execution and cancellation generation pin |
 | request | `request.recover-claimed` | same execution, new fence, recovery transition |
-| request | `request.recover-running` | running state/execution survive takeover |
+| request | `request.recover-running` | atomically bound running checkpoint/state/execution survive takeover |
 | request | `request.recover-redirecting` | redirect target/generation survive takeover |
 | request | `request.mark-running` | claimed becomes running atomically |
 | request | `request.mark-redirect-running` | redirecting follows its separately valid running branch |
@@ -442,6 +442,8 @@ The fixed scenario matrix correction discovered before Phase 2E implementation i
 [M3_1_PHASE2E_PLAN_CORRECTION.md](reviews/M3_1_PHASE2E_PLAN_CORRECTION.md).
 Phase 2E is accepted in
 [M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md).
+Its running-recovery fixture correction is accepted in
+[M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md](reviews/M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice

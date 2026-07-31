@@ -15,6 +15,8 @@ module Tamoz
             "bootstrap_policy" => "fault-gate-disarmed",
             "arming_policy" => "immediately-before-one-direct-operation",
             "background_threads" => "prohibited",
+            "running_recovery_fixture" =>
+              "atomic-start-checkpoint-and-request-transition",
             "fixture_graph" => {
               "name" => "tamoz-eval-sqlite-phase2",
               "version" => "1",

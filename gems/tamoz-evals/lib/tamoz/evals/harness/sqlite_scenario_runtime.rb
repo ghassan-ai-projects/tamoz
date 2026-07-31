@@ -189,10 +189,18 @@ module Tamoz
 
         def prepare_request_recover_running
           lease, request = claimed_request(:turn)
-          @store.mark_request_running(
-            lease:,
+          transition = @store.request_transition(
             request_id: request.request_id,
-            execution_id: request.execution_id
+            execution_id: request.execution_id,
+            action: :running,
+            graph_status: :running
+          )
+          append_checkpoint(
+            lease:,
+            expected_base_id: nil,
+            mode: :start,
+            attributes: start_attributes(request.execution_id),
+            request_transition: transition
           )
           current = takeover_lease(lease)
           @action = lambda do

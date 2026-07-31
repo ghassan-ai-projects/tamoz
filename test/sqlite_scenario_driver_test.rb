@@ -6,7 +6,7 @@ class SQLiteScenarioDriverTest < Minitest::Test
   REGISTRY_DIGEST =
     "sha256:e30afb2490ae9a5907d87ebeba7f442c70bd27e320442d7e0c2a2fe2ef05c23f"
   DRIVER_DIGEST =
-    "sha256:6a23d729cb155343b3361a9aaf37dc21466fb694a6f7d180ebfdeb15233f42a3"
+    "sha256:69b4c24372261e423823f7090c500551d83204144244be1a7cee7bf0d332ea26"
 
   def test_all_fixed_scenarios_trace_one_operation_and_exact_required_union
     manifests = []
@@ -48,6 +48,10 @@ class SQLiteScenarioDriverTest < Minitest::Test
     assert_equal(
       "immediately-before-one-direct-operation",
       driver_class.definition.fetch("arming_policy")
+    )
+    assert_equal(
+      "atomic-start-checkpoint-and-request-transition",
+      driver_class.definition.fetch("running_recovery_fixture")
     )
     assert_deeply_frozen(driver_class.definition)
 
@@ -209,6 +213,18 @@ class SQLiteScenarioDriverTest < Minitest::Test
           path,
           "SELECT COUNT(*) FROM tamoz_request_transitions"
         )
+        next unless status == "running"
+
+        relation = raw_row(
+          path,
+          <<~SQL
+            SELECT r.status, c.status, r.execution_id, c.execution_id
+            FROM tamoz_requests r
+            JOIN tamoz_checkpoints c ON c.id = r.checkpoint_id
+          SQL
+        )
+        assert_equal %w[running running], relation.first(2)
+        assert_equal relation.fetch(2), relation.fetch(3)
       end
 
       fork_path = File.join(directory, "fork.db")
@@ -232,6 +248,38 @@ class SQLiteScenarioDriverTest < Minitest::Test
           SQL
         )
       )
+    end
+  end
+
+  def test_running_recovery_fixture_converges_through_the_public_runner
+    Dir.mktmpdir("tamoz-sqlite-scenario-recovery") do |directory|
+      path = File.join(directory, "running.db")
+      driver.trace(
+        scenario_id: "request.recover-running",
+        path:,
+        subject:
+      )
+      execution_id = raw_scalar(
+        path,
+        "SELECT execution_id FROM tamoz_requests"
+      )
+      expire_active_lease(path)
+
+      adapter = Tamoz::SQLite::Adapter.new(path:)
+      app = scenario_definition.compile(checkpointer: adapter)
+      recovered = app.durable_runner.recover(
+        thread: "thread.phase2",
+        request_id: "request.phase2",
+        owner_id: "owner.phase2.convergence"
+      )
+
+      assert_equal :completed, recovered.status
+      assert_equal execution_id, recovered.execution_id
+      assert_equal 2, app.history(thread: "thread.phase2").length
+      assert_equal 1, app.state(thread: "thread.phase2").state.fetch(:value)
+      assert adapter.integrity_check.fetch("ok")
+    ensure
+      adapter&.close
     end
   end
 
@@ -573,6 +621,30 @@ class SQLiteScenarioDriverTest < Minitest::Test
     end
   ensure
     database&.close
+  end
+
+  def expire_active_lease(path)
+    database = SQLite3::Database.new(path, strict: true)
+    database.execute(
+      "UPDATE tamoz_namespaces SET lease_expires_at_ms = 0"
+    )
+    assert_equal 1, database.changes
+  ensure
+    database&.close
+  end
+
+  def scenario_definition
+    Tamoz.graph(name: "tamoz-eval-sqlite-phase2", version: "1") do
+      state :value, default: 0
+      state :events, reduce: :append, default: []
+      node(
+        :work,
+        implementation_name: "tamoz.eval.sqlite.work",
+        version: "1"
+      ) { |_state, _context| {value: 1} }
+      edge Tamoz::START, :work
+      edge :work, Tamoz::END
+    end
   end
 
   def mutable_copy(value)
