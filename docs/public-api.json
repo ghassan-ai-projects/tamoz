@@ -5,6 +5,7 @@
       "Tamoz::Agent.build",
       "Tamoz::Agent::ApprovalDeniedError",
       "Tamoz::Agent::CLI.run",
+      "Tamoz::Agent::CheckReceipt",
       "Tamoz::Agent::Error",
       "Tamoz::Agent::Event",
       "Tamoz::Agent::Plan",

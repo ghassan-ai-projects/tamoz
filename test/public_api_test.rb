@@ -12,6 +12,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent.build",
           "Tamoz::Agent::ApprovalDeniedError",
           "Tamoz::Agent::CLI.run",
+          "Tamoz::Agent::CheckReceipt",
           "Tamoz::Agent::Error",
           "Tamoz::Agent::Event",
           "Tamoz::Agent::Plan",
@@ -130,14 +131,14 @@ class PublicAPITest < Minitest::Test
     assert Gem::Version.new(versions.first).prerelease?
   end
 
-  def test_reference_application_manifest_identifies_the_reviewed_change_slice
+  def test_reference_application_manifest_identifies_the_bounded_repair_slice
     manifest = read_json(ROOT.join("apps", "tamoz-agent", "app.json"))
 
     assert_equal "Tamoz Agent", manifest.fetch("name")
     assert_equal "Tamoz::App", manifest.fetch("namespace")
     assert_equal "tamoz-agent", manifest.fetch("runtime_package")
-    assert_equal "reviewed-change-cli", manifest.fetch("status")
-    assert_equal "working-slice-2", manifest.fetch("activation_milestone")
+    assert_equal "bounded-repair-cli", manifest.fetch("status")
+    assert_equal "working-slice-3", manifest.fetch("activation_milestone")
   end
 
   private

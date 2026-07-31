@@ -1,9 +1,9 @@
 # Tamoz product execution roadmap
 
 Status: active  
-Current phase: P2 — bounded repair loop  
-Last completed product commit: `d25e66e` (`P1`)  
-Canonical next action: implement P2 exactly as specified below
+Current phase: P3 — coding behavior scorecard
+Last completed product checkpoint: P2 — working slice 3
+Canonical next action: design and implement the smallest deterministic P3 scorecard
 
 This file is the durable execution plan for turning the accepted v0.1 design into a useful,
 released Tamoz product. It complements the risk-first framework milestones in
@@ -38,8 +38,8 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 |---|---|---:|---:|---|---|
 | P0 | Reviewed read-only agent | high | low | complete `9919639` | real model → reviewed plan → confined reads → verified answer |
 | P1 | Reviewed coding change loop | very high | medium | complete `d25e66e` | discovery → reviewed digest-bound patch → configured check → verification |
-| P2 | Bounded repair loop | very high | low–medium | **active** | failed check becomes evidence; reviewed retry succeeds or stops safely |
-| P3 | Coding behavior scorecard | very high | low | pending | fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies |
+| P2 | Bounded repair loop | very high | low–medium | complete (working slice 3) | failed check becomes evidence; reviewed retry succeeds or stops safely |
+| P3 | Coding behavior scorecard | very high | low | **active** | fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies |
 | P4 | Compound existing-file edits | high | medium | pending | one digest binds several ordered exact replacements in one atomic file update |
 | P5 | Reviewed file creation | high | medium | pending | create one new bounded file with parent/root policy, exact preview, approval, atomic commit |
 | P6 | Durable session/effect recovery | very high | medium–high | pending | SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing |
@@ -57,7 +57,7 @@ P2–P8 are the usable v0.1 product path. P9–P14 are promoted only after the p
 path is reliable and their design promotion evidence exists. P15 closes the release; it does
 not replace each phase's tests and review.
 
-## 3. Active phase P2 — bounded repair loop
+## 3. Completed phase P2 — bounded repair loop
 
 ### Outcome
 

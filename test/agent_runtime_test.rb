@@ -42,6 +42,9 @@ class AgentRuntimeTest < Minitest::Test
       assert_equal %i[plan review verify], model.calls.map { |call| call.fetch(:stage) }
       assert_includes model.calls.last.fetch(:prompt), "Tamoz is awake."
       refute_includes model.calls.first.fetch(:prompt), root
+      refute_includes model.calls.fetch(0).fetch(:prompt), "planning_context"
+      refute_includes model.calls.fetch(1).fetch(:prompt), "planning_context"
+      refute_includes model.calls.fetch(2).fetch(:prompt), "verification_context"
     end
   end
 

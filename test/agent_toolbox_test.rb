@@ -123,8 +123,11 @@ class AgentToolboxTest < Minitest::Test
 
       assert_includes toolbox.preview("run_check", "name" => "syntax"), RbConfig.ruby
       result = toolbox.execute("run_check", "name" => "syntax")
-      assert_includes result, "Check syntax: exit_0"
-      assert_includes result, "Syntax OK"
+      assert_instance_of Tamoz::Agent::CheckReceipt, result
+      assert result.passed?
+      assert_nil result.failure_signature
+      assert_includes result.to_s, "Check syntax: exit_0"
+      assert_includes result.to_s, "Syntax OK"
       assert_raises(Tamoz::Agent::ToolError) do
         toolbox.validate("run_check", "name" => "syntax", "command" => "rm -rf .")
       end
@@ -144,7 +147,9 @@ class AgentToolboxTest < Minitest::Test
       result = toolbox.execute("run_check", "name" => "hang")
 
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
-      assert_includes result, "Check hang: timed_out"
+      assert result.failed?
+      refute_nil result.failure_signature
+      assert_includes result.to_s, "Check hang: timed_out"
       assert_operator elapsed, :<, 3.0
     end
   end

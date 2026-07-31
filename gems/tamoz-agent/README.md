@@ -19,7 +19,9 @@ Use `--provider`, `--model`, and `--json` to select another RubyLLM provider/mod
 machine-readable events. Read tools resolve symlinks but remain confined to `--root`.
 `apply_patch` rejects symlinks, stale digests, missing text, and ambiguous replacements.
 `run_check` can select only a user-configured name; it never accepts command text from the
-model. Both tools require interactive approval.
+model. Both tools require interactive approval. A failed check may drive at most two newly
+reviewed repair plans. Every repair effect requires fresh approval, while repeated actions,
+repeated failures, and exhausted attempts stop with an unsatisfied result.
 
 This is deliberately a walking skeleton, not the completed v0.1 runtime. It does not expose
 an arbitrary shell, create files, checkpoint sessions, resume after crashes, or activate

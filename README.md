@@ -23,7 +23,8 @@ The framework has implemented core, graph, and SQLite durability foundations. Ta
 now also has a deliberately narrow working product: real RubyLLM model calls,
 plan-before-action, deterministic and semantic plan review, workspace-confined tools,
 human-approved atomic patches, configured verification commands, and final evidence-bound
-verification.
+verification. Failed checks can drive up to two newly reviewed repairs with fresh approvals;
+repeated actions or failures stop safely.
 
 ```sh
 export OPENAI_API_KEY="..."
@@ -36,9 +37,10 @@ rbenv exec bundle exec tamoz --root . --allow-changes \
   "Fix the failing test"
 ```
 
-Read-only mode remains the default. Change mode uses separate reviewed discovery and action
-plans, displays the exact diff/command, and asks before every effect. It is not yet
-crash-durable. See [`docs/WORKING_SLICE_2.md`](docs/WORKING_SLICE_2.md) for the exact scope.
+Read-only mode remains the default. Change mode uses separate reviewed discovery, action,
+and bounded repair plans, displays the exact diff/command, and asks before every effect. It
+is not yet crash-durable. See [`docs/WORKING_SLICE_3.md`](docs/WORKING_SLICE_3.md) for the
+exact scope.
 
 The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
 The value-first product build order and active phase are recorded in

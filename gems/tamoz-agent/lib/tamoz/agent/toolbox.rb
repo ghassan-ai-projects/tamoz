@@ -2,6 +2,7 @@
 
 require "find"
 require "digest"
+require "json"
 require "open3"
 require "pathname"
 require "tempfile"
@@ -9,6 +10,55 @@ require "timeout"
 
 module Tamoz
   module Agent
+    CheckReceipt = Data.define(:name, :outcome, :stdout, :stderr) do
+      def initialize(name:, outcome:, stdout:, stderr:)
+        super(
+          name: String(name).dup.freeze,
+          outcome: String(outcome).dup.freeze,
+          stdout: String(stdout).dup.freeze,
+          stderr: String(stderr).dup.freeze
+        )
+      end
+
+      def passed? = outcome == "exit_0"
+      def failed? = !passed?
+
+      def failure_signature
+        return nil if passed?
+
+        Digest::SHA256.hexdigest(
+          JSON.generate(
+            "name" => name,
+            "outcome" => outcome,
+            "stdout" => normalized_output(stdout),
+            "stderr" => normalized_output(stderr)
+          )
+        )
+      end
+
+      def to_s
+        <<~TEXT.chomp
+          Check #{name}: #{outcome}
+          stdout:
+          #{stdout}
+          stderr:
+          #{stderr}
+        TEXT
+      end
+
+      private
+
+      def normalized_output(value)
+        value
+          .gsub(/\e\[[0-?]*[ -\/]?[@-~]/, "")
+          .gsub("\r\n", "\n")
+          .lines
+          .map(&:rstrip)
+          .join("\n")
+          .strip
+      end
+    end
+
     class Toolbox
       MAX_FILE_BYTES = 64 * 1024
       MAX_DIRECTORY_ENTRIES = 200
@@ -333,13 +383,12 @@ module Tamoz
                   else
                     "exit_#{status.exitstatus}"
                   end
-        <<~TEXT.chomp
-          Check #{name}: #{outcome}
-          stdout:
-          #{stdout_text}
-          stderr:
-          #{stderr_text}
-        TEXT
+        CheckReceipt.new(
+          name:,
+          outcome:,
+          stdout: stdout_text,
+          stderr: stderr_text
+        )
       rescue SystemCallError => error
         raise ToolError, "check #{name.inspect} could not start: #{error.class}"
       end
