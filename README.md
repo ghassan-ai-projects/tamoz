@@ -41,6 +41,8 @@ plans, displays the exact diff/command, and asks before every effect. It is not 
 crash-durable. See [`docs/WORKING_SLICE_2.md`](docs/WORKING_SLICE_2.md) for the exact scope.
 
 The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
+The value-first product build order and active phase are recorded in
+[`docs/PRODUCT_EXECUTION_ROADMAP.md`](docs/PRODUCT_EXECUTION_ROADMAP.md).
 The evaluation artifact contract is documented in
 [`docs/evaluation-artifacts-v1.md`](docs/evaluation-artifacts-v1.md).
 
