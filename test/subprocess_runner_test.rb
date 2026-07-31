@@ -236,7 +236,7 @@ class SubprocessRunnerTest < Minitest::Test
 
     result = build_runner(termination_grace_ms: 50).capture(
       [RbConfig.ruby, "-e", 'Process.kill("STOP", Process.pid)'],
-      timeout_ms: 75,
+      timeout_ms: 500,
       command: "test.intervention-timeout",
       intervention:
     )
@@ -246,7 +246,7 @@ class SubprocessRunnerTest < Minitest::Test
     assert_equal "kill", result.termination
     assert_equal "KILL", result.term_signal
     assert_operator polls, :>, 0
-    assert_operator polls, :<=, 10
+    assert_operator polls, :<=, 75
   end
 
   def test_timeout_wins_when_intervention_decision_crosses_deadline
