@@ -440,6 +440,8 @@ Phase 2D is accepted in
 [M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2D_IMPLEMENTATION_REVIEW.md).
 The fixed scenario matrix correction discovered before Phase 2E implementation is accepted in
 [M3_1_PHASE2E_PLAN_CORRECTION.md](reviews/M3_1_PHASE2E_PLAN_CORRECTION.md).
+Phase 2E is accepted in
+[M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2E_IMPLEMENTATION_REVIEW.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice
