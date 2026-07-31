@@ -446,6 +446,8 @@ Its running-recovery fixture correction is accepted in
 [M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md](reviews/M3_1_PHASE2E_RUNNING_RECOVERY_CORRECTION.md).
 Its pending-write routing correction is accepted in
 [M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md](reviews/M3_1_PHASE2E_PENDING_WRITE_CORRECTION.md).
+Phase 2F is accepted in
+[M3_1_PHASE2F_IMPLEMENTATION_REVIEW.md](reviews/M3_1_PHASE2F_IMPLEMENTATION_REVIEW.md).
 
 Every slice follows the same gate: bounded implementation, adversarial self-review,
 focused tests, full CI, a recorded review decision, and one slice commit. No later slice

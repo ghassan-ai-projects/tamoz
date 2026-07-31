@@ -1,0 +1,2039 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "digest"
+require "json"
+require "sqlite3"
+require "tmpdir"
+
+module TamozSQLiteOracle
+  VERSION = 1
+  APPLICATION_ID = 1_413_565_786
+  SCHEMA_VERSION = 1
+  MIGRATION_CHECKSUM =
+    "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
+  MAX_PATH_BYTES = 4_096
+  MAX_DATABASE_BYTES = 256 * 1024 * 1024
+  MAX_ROWS = 256
+  MAX_BLOB_BYTES = 64 * 1024 * 1024
+  MAX_JSON_DEPTH = 256
+  MAX_JSON_ITEMS = 1_000_000
+  MAX_STRING_BYTES = 16 * 1024 * 1024
+  DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
+  THREAD_ID = "thread.phase2"
+  REQUEST_ID = "request.phase2"
+  EXECUTION_A = "execution.phase2.a"
+  EXECUTION_B = "execution.phase2.b"
+  OWNER_A = "owner.phase2.a"
+  OWNER_B = "owner.phase2.b"
+  NAMESPACE = "[]"
+  GRAPH_NAME = "tamoz-eval-sqlite-phase2"
+  GRAPH_VERSION = "1"
+  SCENARIOS = %w[
+    checkpoint.commit-advance
+    checkpoint.commit-failed
+    checkpoint.commit-fork
+    checkpoint.commit-paused
+    checkpoint.commit-start
+    checkpoint.commit-turn
+    checkpoint.writes-duplicate
+    checkpoint.writes-new
+    lease.acquire-new
+    lease.acquire-takeover
+    lease.release
+    lease.renew
+    lease.validate
+    request.claim-redirect
+    request.claim-resume
+    request.claim-turn
+    request.enqueue-duplicate
+    request.enqueue-new
+    request.mark-redirect-running
+    request.mark-running
+    request.recover-claimed
+    request.recover-redirecting
+    request.recover-running
+    request.redirect-ready
+  ].freeze
+  STABLE_SCENARIOS = %w[
+    checkpoint.writes-duplicate
+    request.enqueue-duplicate
+    request.redirect-ready
+  ].freeze
+  CLASSIFICATIONS = %w[old new stable partial invalid].freeze
+  REASON_CODES = %w[
+    database_invalid
+    database_too_large
+    digest_invalid
+    foreign_key_invalid
+    integrity_invalid
+    internal_error
+    json_invalid
+    path_invalid
+    relation_invalid
+    schema_invalid
+    state_ambiguous
+    state_mismatch
+  ].freeze
+  REPORT_FIELDS = %w[
+    oracle_version oracle_digest scenario classification reason_codes
+    integrity foreign_keys projection_digest content_digest
+  ].freeze
+  def self.deep_freeze(value)
+    case value
+    when Hash
+      value.each do |key, entry|
+        deep_freeze(key)
+        deep_freeze(entry)
+      end
+    when Array
+      value.each { |entry| deep_freeze(entry) }
+    end
+    value.freeze
+  end
+
+  DEFINITION = deep_freeze(
+    {
+      "id" => "tamoz.sqlite.raw_oracle",
+      "version" => VERSION,
+      "inputs" => %w[fixed_scenario_id absolute_database_path],
+      "scenarios" => SCENARIOS,
+      "stable_scenarios" => STABLE_SCENARIOS,
+      "classifications" => CLASSIFICATIONS,
+      "reason_codes" => REASON_CODES,
+      "report_fields" => REPORT_FIELDS,
+      "contract_model" => "hand-authored-relational-v1",
+      "read_policy" => "sqlite-readonly-query-only-fixed-projections",
+      "integrity_policy" => "integrity-check-one-and-foreign-key-check-one",
+      "digest_policy" =>
+        "independent-domain-separated-checkpoint-request-response-error-" \
+        "pending-outcome-and-write",
+      "identity_policy" => "generated-values-replaced-by-logical-roles",
+      "output_policy" =>
+        "one-canonical-json-line-no-path-payload-owner-or-raw-id",
+      "limits" => {
+        "database_bytes" => MAX_DATABASE_BYTES,
+        "rows_per_table" => MAX_ROWS,
+        "blob_bytes" => MAX_BLOB_BYTES,
+        "json_depth" => MAX_JSON_DEPTH,
+        "json_items" => MAX_JSON_ITEMS,
+        "string_bytes" => MAX_STRING_BYTES
+      }
+    }
+  )
+
+  class OracleError < StandardError
+    attr_reader :reason
+
+    def initialize(reason)
+      @reason = reason
+      super(reason)
+    end
+  end
+
+  module_function
+
+  def canonicalize(value, depth = 0)
+    raise OracleError, "json_invalid" if depth > MAX_JSON_DEPTH
+
+    case value
+    when Hash
+      keys = value.keys
+      unless keys.all? { |key| key.is_a?(String) } &&
+             keys.uniq.length == keys.length
+        raise OracleError, "json_invalid"
+      end
+      keys.sort.to_h do |key|
+        [canonical_string(key), canonicalize(value.fetch(key), depth + 1)]
+      end
+    when Array
+      value.map { |entry| canonicalize(entry, depth + 1) }
+    when String
+      canonical_string(value)
+    when Integer, TrueClass, FalseClass, NilClass
+      value
+    else
+      raise OracleError, "json_invalid"
+    end
+  end
+
+  def canonical_string(value)
+    text = value.encode(Encoding::UTF_8)
+    unless text.valid_encoding? && text.bytesize <= MAX_STRING_BYTES
+      raise OracleError, "json_invalid"
+    end
+    text.unicode_normalize(:nfc)
+  rescue EncodingError
+    raise OracleError, "json_invalid"
+  end
+
+  def canonical_json(value)
+    JSON.generate(canonicalize(value))
+  rescue JSON::GeneratorError
+    raise OracleError, "json_invalid"
+  end
+
+  def content_digest(document, domain:)
+    body = document.reject { |key, _value| key == "content_digest" }
+    payload = [
+      "tamoz-evals".b,
+      domain,
+      "v1",
+      canonical_json(body)
+    ].join("\0")
+    "sha256:#{Digest::SHA256.hexdigest(payload)}"
+  end
+
+  def wire_digest(bytes, domain:)
+    unless bytes.is_a?(String) && bytes.bytesize <= MAX_BLOB_BYTES
+      raise OracleError, "digest_invalid"
+    end
+    prefix = "#{domain}\0v1\0".b
+    "sha256:#{Digest::SHA256.hexdigest(prefix + bytes.b)}"
+  end
+
+  ORACLE_DIGEST = content_digest(
+    DEFINITION,
+    domain: "eval.sqlite_raw_oracle_definition"
+  ).freeze
+
+  def parse_json(bytes)
+    unless bytes.is_a?(String) && bytes.bytesize <= MAX_BLOB_BYTES
+      raise OracleError, "json_invalid"
+    end
+    text = bytes.dup.force_encoding(Encoding::UTF_8)
+    raise OracleError, "json_invalid" unless text.valid_encoding?
+
+    value = JSON.parse(
+      text,
+      create_additions: false,
+      max_nesting: MAX_JSON_DEPTH
+    )
+    unless JSON.generate(value) == text
+      raise OracleError, "json_invalid"
+    end
+    bounded_json!(value)
+    value
+  rescue JSON::ParserError, JSON::NestingError
+    raise OracleError, "json_invalid"
+  end
+
+  def bounded_json!(value, depth = 0, state = {items: 0})
+    raise OracleError, "json_invalid" if depth > MAX_JSON_DEPTH
+
+    case value
+    when Hash
+      state[:items] += value.length
+      raise OracleError, "json_invalid" if state.fetch(:items) > MAX_JSON_ITEMS
+      value.each do |key, entry|
+        unless canonical_string(key) == key
+          raise OracleError, "json_invalid"
+        end
+        bounded_json!(entry, depth + 1, state)
+      end
+    when Array
+      state[:items] += value.length
+      raise OracleError, "json_invalid" if state.fetch(:items) > MAX_JSON_ITEMS
+      value.each { |entry| bounded_json!(entry, depth + 1, state) }
+    when String
+      raise OracleError, "json_invalid" unless canonical_string(value) == value
+    when Integer, TrueClass, FalseClass, NilClass
+      nil
+    when Float
+      raise OracleError, "json_invalid" unless value.finite?
+    else
+      raise OracleError, "json_invalid"
+    end
+    true
+  end
+
+  def validate_state_bytes!(bytes)
+    wire = parse_json(bytes)
+    unless wire.is_a?(Array) &&
+           wire.length == 3 &&
+           wire.fetch(0) == "tamoz.state" &&
+           wire.fetch(1) == 1
+      raise OracleError, "json_invalid"
+    end
+    validate_state_node!(wire.fetch(2))
+    wire
+  end
+
+  def validate_state_node!(node, depth = 0, state = {items: 0})
+    if depth > MAX_JSON_DEPTH ||
+       !node.is_a?(Array) ||
+       !node.first.is_a?(String)
+      raise OracleError, "json_invalid"
+    end
+    case node.fetch(0)
+    when "nil"
+      raise OracleError, "json_invalid" unless node.length == 1
+    when "boolean"
+      unless node.length == 2 && [true, false].include?(node.fetch(1))
+        raise OracleError, "json_invalid"
+      end
+    when "integer"
+      unless node.length == 2 && node.fetch(1).is_a?(Integer)
+        raise OracleError, "json_invalid"
+      end
+    when "float"
+      value = node.fetch(1, nil)
+      unless node.length == 2 && value.is_a?(Float) && value.finite?
+        raise OracleError, "json_invalid"
+      end
+    when "string"
+      unless node.length == 2 && node.fetch(1).is_a?(String)
+        raise OracleError, "json_invalid"
+      end
+      unless canonical_string(node.fetch(1)) == node.fetch(1)
+        raise OracleError, "json_invalid"
+      end
+    when "array"
+      entries = node.fetch(1, nil)
+      unless node.length == 2 && entries.is_a?(Array)
+        raise OracleError, "json_invalid"
+      end
+      state[:items] += entries.length
+      raise OracleError, "json_invalid" if state.fetch(:items) > MAX_JSON_ITEMS
+      entries.each { |entry| validate_state_node!(entry, depth + 1, state) }
+    when "object"
+      entries = node.fetch(1, nil)
+      unless node.length == 2 && entries.is_a?(Array)
+        raise OracleError, "json_invalid"
+      end
+      state[:items] += entries.length
+      raise OracleError, "json_invalid" if state.fetch(:items) > MAX_JSON_ITEMS
+      keys = entries.map do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 2 &&
+               entry.fetch(0).is_a?(String)
+          raise OracleError, "json_invalid"
+        end
+        key = canonical_string(entry.fetch(0))
+        raise OracleError, "json_invalid" unless key == entry.fetch(0)
+        validate_state_node!(entry.fetch(1), depth + 1, state)
+        key
+      end
+      unless keys == keys.sort && keys.uniq.length == keys.length
+        raise OracleError, "json_invalid"
+      end
+    else
+      raise OracleError, "json_invalid"
+    end
+    true
+  end
+
+  class Projection
+    TABLES = {
+      "threads" => [
+        %w[thread_id tombstone_id created_at_ms updated_at_ms],
+        <<~SQL
+          SELECT thread_id, tombstone_id, created_at_ms, updated_at_ms
+          FROM tamoz_threads ORDER BY thread_id
+        SQL
+      ],
+      "namespaces" => [
+        %w[
+          thread_id namespace active_checkpoint_id next_checkpoint_sequence
+          next_request_sequence lease_owner_id lease_fence lease_expires_at_ms
+          greatest_backend_time_ms created_at_ms updated_at_ms
+        ],
+        <<~SQL
+          SELECT thread_id, namespace, active_checkpoint_id,
+                 next_checkpoint_sequence, next_request_sequence,
+                 lease_owner_id, lease_fence, lease_expires_at_ms,
+                 greatest_backend_time_ms, created_at_ms, updated_at_ms
+          FROM tamoz_namespaces ORDER BY thread_id, namespace
+        SQL
+      ],
+      "checkpoints" => [
+        %w[
+          id thread_id namespace execution_id sequence parent_id format_version
+          graph_name graph_version digest_version definition_digest fence status
+          payload payload_digest created_at_ms
+        ],
+        <<~SQL
+          SELECT id, thread_id, namespace, execution_id, sequence, parent_id,
+                 format_version, graph_name, graph_version, digest_version,
+                 definition_digest, fence, status, payload, payload_digest,
+                 created_at_ms
+          FROM tamoz_checkpoints
+          ORDER BY thread_id, namespace, sequence
+        SQL
+      ],
+      "activations" => [
+        %w[
+          thread_id namespace execution_id task_id attempt_id base_checkpoint_id
+          node path outcome_digest consumed_by created_at_ms
+        ],
+        <<~SQL
+          SELECT thread_id, namespace, execution_id, task_id, attempt_id,
+                 base_checkpoint_id, node, path, outcome_digest, consumed_by,
+                 created_at_ms
+          FROM tamoz_pending_activations
+          ORDER BY thread_id, namespace, execution_id, task_id
+        SQL
+      ],
+      "writes" => [
+        %w[
+          thread_id namespace execution_id task_id write_index kind channel
+          payload payload_digest
+        ],
+        <<~SQL
+          SELECT thread_id, namespace, execution_id, task_id, write_index,
+                 kind, channel, payload, payload_digest
+          FROM tamoz_pending_writes
+          ORDER BY thread_id, namespace, execution_id, task_id, write_index
+        SQL
+      ],
+      "requests" => [
+        %w[
+          thread_id namespace request_id enqueue_sequence input_digest operation
+          delivery_mode status payload payload_digest execution_id
+          target_execution_id cancellation_generation owner_fence checkpoint_id
+          response response_digest terminal_error terminal_error_digest retryable
+          created_at_ms updated_at_ms
+        ],
+        <<~SQL
+          SELECT thread_id, namespace, request_id, enqueue_sequence,
+                 input_digest, operation, delivery_mode, status, payload,
+                 payload_digest, execution_id, target_execution_id,
+                 cancellation_generation, owner_fence, checkpoint_id,
+                 response, response_digest, terminal_error,
+                 terminal_error_digest, retryable, created_at_ms, updated_at_ms
+          FROM tamoz_requests
+          ORDER BY thread_id, namespace, enqueue_sequence
+        SQL
+      ],
+      "request_transitions" => [
+        %w[
+          thread_id namespace request_id transition_index from_status to_status
+          fence evidence created_at_ms
+        ],
+        <<~SQL
+          SELECT thread_id, namespace, request_id, transition_index,
+                 from_status, to_status, fence, evidence, created_at_ms
+          FROM tamoz_request_transitions
+          ORDER BY thread_id, namespace, request_id, transition_index
+        SQL
+      ]
+    }.freeze
+    EMPTY_TABLES = %w[
+      tamoz_effects
+      tamoz_effect_attempts
+      tamoz_effect_transitions
+      tamoz_store_heads
+      tamoz_store_versions
+      tamoz_thread_tombstones
+      tamoz_deletion_receipts
+    ].freeze
+
+    attr_reader :rows, :integrity, :foreign_keys
+
+    def initialize(path)
+      @path = path
+      @rows = {}
+      @integrity = "not_checked"
+      @foreign_keys = "not_checked"
+    end
+
+    def load!
+      validate_path!
+      prepare_snapshot!
+      @database = SQLite3::Database.new(
+        @snapshot_path,
+        readonly: true,
+        strict: true,
+        results_as_hash: false
+      )
+      @database.execute("PRAGMA query_only = ON")
+      validate_schema!
+      validate_integrity!
+      TABLES.each do |name, (columns, sql)|
+        @rows[name] = select_rows(columns, sql).freeze
+      end
+      EMPTY_TABLES.each do |table|
+        count = scalar("SELECT COUNT(*) FROM #{table}")
+        raise OracleError, "relation_invalid" unless count == 0
+      end
+      validate_relations!
+      @rows.freeze
+      self
+    rescue SQLite3::Exception
+      raise OracleError, "database_invalid"
+    ensure
+      active_error = $!
+      secondary_failure = false
+      begin
+        @database&.close unless @database&.closed?
+      rescue SQLite3::Exception
+        secondary_failure = true
+      end
+      begin
+        cleanup_snapshot!
+      rescue SystemCallError
+        secondary_failure = true
+      end
+      raise OracleError, "internal_error" if secondary_failure && !active_error
+    end
+
+    def [](name)
+      @rows.fetch(name)
+    end
+
+    def logical_fingerprint(scenario)
+      checkpoints = self["checkpoints"]
+      checkpoint_sequences = checkpoints.to_h do |row|
+        [row.fetch("id"), row.fetch("sequence")]
+      end
+      execution_roles = {}
+      role_for = lambda do |execution_id|
+        next nil unless execution_id
+        execution_roles[execution_id] ||= "execution.#{execution_roles.length}"
+      end
+      checkpoints.each { |row| role_for.call(row.fetch("execution_id")) }
+      self["requests"].each do |row|
+        role_for.call(row.fetch("execution_id"))
+        role_for.call(row.fetch("target_execution_id"))
+      end
+
+      fingerprint = {
+        "counts" => @rows.transform_values(&:length),
+        "namespaces" => self["namespaces"].map do |row|
+          {
+            "head_sequence" =>
+              checkpoint_sequences[row.fetch("active_checkpoint_id")],
+            "next_checkpoint_sequence" =>
+              row.fetch("next_checkpoint_sequence"),
+            "next_request_sequence" => row.fetch("next_request_sequence"),
+            "owner_present" => !row.fetch("lease_owner_id").nil?,
+            "lease_fence" => row.fetch("lease_fence"),
+            "expiry_present" => !row.fetch("lease_expires_at_ms").nil?,
+            "renewal_expiry_delta_ms" =>
+              if scenario == "lease.renew" &&
+                 row.fetch("lease_expires_at_ms")
+                row.fetch("lease_expires_at_ms") -
+                  row.fetch("updated_at_ms")
+              end,
+            "clock_zero" => row.fetch("greatest_backend_time_ms").zero?
+          }
+        end,
+        "checkpoints" => checkpoints.map do |row|
+          {
+            "sequence" => row.fetch("sequence"),
+            "parent_sequence" => checkpoint_sequences[row.fetch("parent_id")],
+            "execution" => role_for.call(row.fetch("execution_id")),
+            "fence" => row.fetch("fence"),
+            "status" => row.fetch("status")
+          }
+        end,
+        "requests" => self["requests"].map do |row|
+          {
+            "sequence" => row.fetch("enqueue_sequence"),
+            "operation" => row.fetch("operation"),
+            "delivery" => row.fetch("delivery_mode"),
+            "status" => row.fetch("status"),
+            "execution" => role_for.call(row.fetch("execution_id")),
+            "target" => role_for.call(row.fetch("target_execution_id")),
+            "generation" => row.fetch("cancellation_generation"),
+            "fence" => row.fetch("owner_fence"),
+            "checkpoint_sequence" =>
+              checkpoint_sequences[row.fetch("checkpoint_id")],
+            "response" => !row.fetch("response").nil?,
+            "error" => !row.fetch("terminal_error").nil?,
+            "retryable" => row.fetch("retryable")
+          }
+        end,
+        "transitions" => self["request_transitions"].map do |row|
+          {
+            "index" => row.fetch("transition_index"),
+            "from" => row.fetch("from_status"),
+            "to" => row.fetch("to_status"),
+            "fence" => row.fetch("fence")
+          }
+        end,
+        "activations" => self["activations"].map do |row|
+          {
+            "execution" => role_for.call(row.fetch("execution_id")),
+            "base_sequence" =>
+              checkpoint_sequences[row.fetch("base_checkpoint_id")],
+            "consumed_sequence" =>
+              checkpoint_sequences[row.fetch("consumed_by")]
+          }
+        end,
+        "writes" => self["writes"].map do |row|
+          {
+            "index" => row.fetch("write_index"),
+            "kind" => row.fetch("kind"),
+            "channel_present" => !row.fetch("channel").nil?
+          }
+        end
+      }
+      TamozSQLiteOracle.canonicalize(fingerprint)
+    end
+
+    private
+
+    def validate_path!
+      unless @path.is_a?(String) &&
+             @path.valid_encoding? &&
+             !@path.empty? &&
+             @path.bytesize <= MAX_PATH_BYTES &&
+             File.absolute_path(@path) == @path
+        raise OracleError, "path_invalid"
+      end
+      stat = File.lstat(@path)
+      if stat.size > MAX_DATABASE_BYTES
+        raise OracleError, "database_too_large"
+      end
+      unless stat.file? &&
+             stat.uid == Process.euid &&
+             stat.nlink == 1 &&
+             (stat.mode & 0o077).zero?
+        raise OracleError, "path_invalid"
+      end
+      parent = File.lstat(File.dirname(@path))
+      unless parent.directory? &&
+             parent.uid == Process.euid &&
+             (parent.mode & 0o077).zero?
+        raise OracleError, "path_invalid"
+      end
+    rescue Errno::ENOENT, Errno::ELOOP
+      raise OracleError, "path_invalid"
+    end
+
+    def prepare_snapshot!
+      @snapshot_directory = Dir.mktmpdir("tamoz-sqlite-oracle")
+      File.chmod(0o700, @snapshot_directory)
+      @snapshot_path = File.join(@snapshot_directory, "database.db")
+      @source_fingerprints = {}
+      total_bytes = 0
+      ["", "-wal", "-shm"].each do |suffix|
+        source = "#{@path}#{suffix}"
+        next unless File.exist?(source) || File.symlink?(source)
+
+        source_stat = File.lstat(source)
+        validate_source_file!(source_stat)
+        total_bytes += source_stat.size
+        if total_bytes > MAX_DATABASE_BYTES
+          raise OracleError, "database_too_large"
+        end
+        destination = "#{@snapshot_path}#{suffix}"
+        @source_fingerprints[source] = copy_source_file!(
+          source,
+          destination
+        )
+      end
+      raise OracleError, "path_invalid" unless File.exist?(@snapshot_path)
+
+      @source_fingerprints.each do |source, expected|
+        stat = File.lstat(source)
+        unless source_fingerprint(stat) == expected
+          raise OracleError, "database_invalid"
+        end
+      end
+    rescue OracleError
+      raise
+    rescue SystemCallError, IOError
+      raise OracleError, "database_invalid"
+    end
+
+    def copy_source_file!(source, destination)
+      path_stat = File.lstat(source)
+      validate_source_file!(path_stat)
+      source_flags = File::RDONLY
+      source_flags |= File::NOFOLLOW if File.const_defined?(:NOFOLLOW)
+      destination_flags = File::WRONLY | File::CREAT | File::EXCL
+
+      File.open(source, source_flags) do |input|
+        opened_before = input.stat
+        validate_source_file!(opened_before)
+        unless same_file?(path_stat, opened_before)
+          raise OracleError, "database_invalid"
+        end
+        File.open(destination, destination_flags, 0o600) do |output|
+          output.chmod(0o600)
+          IO.copy_stream(input, output)
+          output.flush
+        end
+        opened_after = input.stat
+        unless source_fingerprint(opened_before) ==
+               source_fingerprint(opened_after)
+          raise OracleError, "database_invalid"
+        end
+      end
+
+      after = File.lstat(source)
+      unless source_fingerprint(path_stat) == source_fingerprint(after)
+        raise OracleError, "database_invalid"
+      end
+      source_fingerprint(after)
+    rescue Errno::ELOOP, Errno::ENOENT
+      raise OracleError, "database_invalid"
+    end
+
+    def validate_source_file!(stat)
+      unless stat.file? &&
+             stat.uid == Process.euid &&
+             stat.nlink == 1 &&
+             (stat.mode & 0o077).zero?
+        raise OracleError, "path_invalid"
+      end
+      if stat.size > MAX_DATABASE_BYTES
+        raise OracleError, "database_too_large"
+      end
+    end
+
+    def source_fingerprint(stat)
+      [
+        stat.dev,
+        stat.ino,
+        stat.uid,
+        stat.mode,
+        stat.nlink,
+        stat.size,
+        stat.mtime.to_i,
+        stat.mtime.nsec,
+        stat.ctime.to_i,
+        stat.ctime.nsec
+      ].freeze
+    end
+
+    def same_file?(left, right)
+      left.dev == right.dev && left.ino == right.ino
+    end
+
+    def cleanup_snapshot!
+      return unless @snapshot_directory
+
+      Dir.each_child(@snapshot_directory) do |name|
+        path = File.join(@snapshot_directory, name)
+        stat = File.lstat(path)
+        File.delete(path) if stat.file?
+      end
+      Dir.rmdir(@snapshot_directory)
+    ensure
+      @snapshot_directory = nil
+      @snapshot_path = nil
+    end
+
+    def validate_schema!
+      unless scalar("PRAGMA application_id") == APPLICATION_ID &&
+             scalar("PRAGMA user_version") == SCHEMA_VERSION
+        raise OracleError, "schema_invalid"
+      end
+      checksum = scalar(
+        "SELECT checksum FROM tamoz_schema_migrations WHERE version = 1"
+      )
+      raise OracleError, "schema_invalid" unless checksum == MIGRATION_CHECKSUM
+    rescue SQLite3::SQLException
+      raise OracleError, "schema_invalid"
+    end
+
+    def validate_integrity!
+      result = scalar("PRAGMA integrity_check(1)")
+      unless result == "ok"
+        @integrity = "failed"
+        raise OracleError, "integrity_invalid"
+      end
+      @integrity = "ok"
+      violation = @database.get_first_row(
+        "SELECT * FROM pragma_foreign_key_check LIMIT 1"
+      )
+      if violation
+        @foreign_keys = "failed"
+        raise OracleError, "foreign_key_invalid"
+      end
+      @foreign_keys = "ok"
+    end
+
+    def select_rows(columns, sql)
+      count = scalar("SELECT COUNT(*) FROM (#{sql})")
+      unless count.is_a?(Integer) && count.between?(0, MAX_ROWS)
+        raise OracleError, "relation_invalid"
+      end
+      @database.execute(sql).map do |values|
+        unless values.length == columns.length
+          raise OracleError, "relation_invalid"
+        end
+        columns.zip(values).to_h.freeze
+      end
+    end
+
+    def scalar(sql)
+      @database.get_first_value(sql)
+    end
+
+    def validate_relations!
+      validate_addresses!
+      validate_checkpoints!
+      validate_requests!
+      validate_activations!
+    end
+
+    def validate_addresses!
+      self["threads"].each do |row|
+        bounded_id!(row.fetch("thread_id"))
+        nonnegative_integer!(row.fetch("created_at_ms"))
+        nonnegative_integer!(row.fetch("updated_at_ms"))
+      end
+      self["namespaces"].each do |row|
+        bounded_id!(row.fetch("thread_id"))
+        namespace = TamozSQLiteOracle.parse_json(row.fetch("namespace"))
+        unless namespace.is_a?(Array) &&
+               namespace.all? { |part| part.is_a?(String) }
+          raise OracleError, "relation_invalid"
+        end
+        nonnegative_integer!(row.fetch("next_checkpoint_sequence"))
+        nonnegative_integer!(row.fetch("next_request_sequence"))
+        nonnegative_integer!(row.fetch("lease_fence"))
+        nonnegative_integer!(row.fetch("greatest_backend_time_ms"))
+        nonnegative_integer!(row.fetch("created_at_ms"))
+        nonnegative_integer!(row.fetch("updated_at_ms"))
+        expiry = row.fetch("lease_expires_at_ms")
+        owner = row.fetch("lease_owner_id")
+        unless owner.nil? == expiry.nil?
+          raise OracleError, "relation_invalid"
+        end
+        bounded_id!(owner) if owner
+        nonnegative_integer!(expiry) if expiry
+      end
+    end
+
+    def validate_checkpoints!
+      grouped = self["checkpoints"].group_by do |row|
+        [row.fetch("thread_id"), row.fetch("namespace")]
+      end
+      grouped.each_value do |rows|
+        sequences = rows.map { |row| row.fetch("sequence") }
+        unless sequences == (0...rows.length).to_a
+          raise OracleError, "relation_invalid"
+        end
+      end
+      by_id = self["checkpoints"].to_h { |row| [row.fetch("id"), row] }
+      self["checkpoints"].each do |row|
+        %w[id thread_id execution_id graph_name graph_version definition_digest].each do |key|
+          bounded_id!(row.fetch(key))
+        end
+        unless row.fetch("namespace") == NAMESPACE &&
+               row.fetch("format_version") == 1 &&
+               row.fetch("digest_version") == 1 &&
+               %w[running paused failed completed].include?(row.fetch("status"))
+          raise OracleError, "relation_invalid"
+        end
+        nonnegative_integer!(row.fetch("sequence"))
+        positive_integer!(row.fetch("fence"))
+        nonnegative_integer!(row.fetch("created_at_ms"))
+        parent = row.fetch("parent_id")
+        if row.fetch("sequence").zero? != parent.nil?
+          raise OracleError, "relation_invalid"
+        end
+        if parent
+          bounded_id!(parent)
+          parent_row = by_id[parent]
+          unless parent_row &&
+                 parent_row.fetch("sequence") < row.fetch("sequence")
+            raise OracleError, "relation_invalid"
+          end
+        end
+        verify_digest!(
+          row.fetch("payload"),
+          row.fetch("payload_digest"),
+          "tamoz.sqlite.checkpoint_payload"
+        )
+        validate_checkpoint_payload!(row)
+      end
+
+      self["namespaces"].each do |namespace|
+        address = [
+          namespace.fetch("thread_id"),
+          namespace.fetch("namespace")
+        ]
+        rows = grouped.fetch(address, [])
+        unless namespace.fetch("next_checkpoint_sequence") == rows.length
+          raise OracleError, "relation_invalid"
+        end
+        active = namespace.fetch("active_checkpoint_id")
+        unless (rows.empty? && active.nil?) ||
+               (!rows.empty? && active == rows.last.fetch("id"))
+          raise OracleError, "relation_invalid"
+        end
+      end
+    end
+
+    def validate_checkpoint_payload!(row)
+      wire = TamozSQLiteOracle.parse_json(row.fetch("payload"))
+      unless wire.is_a?(Array) &&
+             wire.length == 16 &&
+             wire.fetch(0) == "tamoz.graph.checkpoint" &&
+             wire.fetch(1) == 1 &&
+             wire.fetch(2) == row.fetch("graph_name") &&
+             wire.fetch(3) == row.fetch("graph_version") &&
+             wire.fetch(4) == row.fetch("definition_digest") &&
+             wire.fetch(5) == row.fetch("execution_id") &&
+             wire.fetch(6) == row.fetch("status") &&
+             wire.fetch(7).is_a?(Integer) &&
+             wire.fetch(7) >= 0 &&
+             wire.fetch(15).is_a?(Integer) &&
+             wire.fetch(15) >= 0
+        raise OracleError, "relation_invalid"
+      end
+      TamozSQLiteOracle.validate_state_bytes!(wire.fetch(8))
+      state_wire = TamozSQLiteOracle.parse_json(wire.fetch(8))
+      state_node = state_wire.fetch(2)
+      unless state_node.fetch(0, nil) == "object" &&
+             state_node.fetch(1).map(&:first) == %w[events value]
+        raise OracleError, "relation_invalid"
+      end
+      validate_frontier!(wire.fetch(9))
+      validate_pending!(wire.fetch(10))
+      validate_interrupts!(wire.fetch(11))
+      validate_resume_values!(wire.fetch(12))
+      validate_attempts!(wire.fetch(13))
+      validate_optional_state_value!(wire.fetch(14))
+    end
+
+    def validate_frontier!(entries)
+      raise OracleError, "relation_invalid" unless entries.is_a?(Array)
+      entries.each do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 6 &&
+               entry.fetch(0).is_a?(String) &&
+               %w[pull push].include?(entry.fetch(1)) &&
+               string_array?(entry.fetch(2)) &&
+               (entry.fetch(3).nil? || state_bytes?(entry.fetch(3))) &&
+               (entry.fetch(4).nil? || entry.fetch(4).is_a?(String)) &&
+               entry.fetch(5).is_a?(Integer) &&
+               entry.fetch(5).positive?
+          raise OracleError, "relation_invalid"
+        end
+      end
+    end
+
+    def validate_pending!(entries)
+      raise OracleError, "relation_invalid" unless entries.is_a?(Array)
+      ids = entries.map do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 7 &&
+               entry.fetch(0, nil).is_a?(String) &&
+               entry.fetch(1, nil).is_a?(String) &&
+               entry.fetch(2, nil).is_a?(String) &&
+               entry.fetch(3, nil).is_a?(String) &&
+               string_array?(entry.fetch(4, nil)) &&
+               state_bytes?(entry.fetch(5, nil))
+          raise OracleError, "relation_invalid"
+        end
+        validate_routes!(entry.fetch(6))
+        entry.fetch(0)
+      end
+      unless ids == ids.sort && ids.uniq.length == ids.length
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_interrupts!(entries)
+      raise OracleError, "relation_invalid" unless entries.is_a?(Array)
+      keys = entries.map do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 3 &&
+               entry.fetch(0).is_a?(String) &&
+               entry.fetch(1).is_a?(Integer) &&
+               entry.fetch(1) >= 0 &&
+               state_bytes?(entry.fetch(2))
+          raise OracleError, "relation_invalid"
+        end
+        [entry.fetch(0), entry.fetch(1)]
+      end
+      unless keys == keys.sort && keys.uniq.length == keys.length
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_resume_values!(entries)
+      raise OracleError, "relation_invalid" unless entries.is_a?(Array)
+      ids = entries.map do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 2 &&
+               entry.fetch(0).is_a?(String) &&
+               entry.fetch(1).is_a?(Array)
+          raise OracleError, "relation_invalid"
+        end
+        indices = entry.fetch(1).map do |pair|
+          unless pair.is_a?(Array) &&
+                 pair.length == 2 &&
+                 pair.fetch(0).is_a?(Integer) &&
+                 pair.fetch(0) >= 0 &&
+                 state_bytes?(pair.fetch(1))
+            raise OracleError, "relation_invalid"
+          end
+          pair.fetch(0)
+        end
+        unless indices == indices.sort && indices.uniq.length == indices.length
+          raise OracleError, "relation_invalid"
+        end
+        entry.fetch(0)
+      end
+      unless ids == ids.sort && ids.uniq.length == ids.length
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_attempts!(entries)
+      raise OracleError, "relation_invalid" unless entries.is_a?(Array)
+      ids = entries.map do |entry|
+        unless entry.is_a?(Array) &&
+               entry.length == 2 &&
+               entry.fetch(0).is_a?(String) &&
+               entry.fetch(1).is_a?(Integer) &&
+               entry.fetch(1) >= 0
+          raise OracleError, "relation_invalid"
+        end
+        entry.fetch(0)
+      end
+      unless ids == ids.sort && ids.uniq.length == ids.length
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_optional_state_value!(value)
+      state_bytes?(value) unless value.nil?
+    end
+
+    def state_bytes?(value)
+      TamozSQLiteOracle.validate_state_bytes!(value)
+      true
+    end
+
+    def string_array?(value)
+      value.is_a?(Array) && value.all? { |entry| entry.is_a?(String) }
+    end
+
+    def validate_routes!(routes)
+      return true if routes.nil?
+      raise OracleError, "relation_invalid" unless routes.is_a?(Array)
+      routes.each do |route|
+        unless route.is_a?(Array) && %w[end pull send].include?(route.fetch(0, nil))
+          raise OracleError, "relation_invalid"
+        end
+        case route.fetch(0)
+        when "end"
+          raise OracleError, "relation_invalid" unless route.length == 1
+        when "pull"
+          unless route.length == 2 && route.fetch(1).is_a?(String)
+            raise OracleError, "relation_invalid"
+          end
+        when "send"
+          unless route.length == 4 &&
+                 route.fetch(1).is_a?(String) &&
+                 state_bytes?(route.fetch(2)) &&
+                 (route.fetch(3).nil? || route.fetch(3).is_a?(String))
+            raise OracleError, "relation_invalid"
+          end
+        end
+      end
+      true
+    end
+
+    def validate_requests!
+      grouped = self["requests"].group_by do |row|
+        [row.fetch("thread_id"), row.fetch("namespace")]
+      end
+      grouped.each_value do |rows|
+        sequences = rows.map { |row| row.fetch("enqueue_sequence") }
+        unless sequences == (0...rows.length).to_a
+          raise OracleError, "relation_invalid"
+        end
+      end
+      checkpoints = self["checkpoints"].to_h { |row| [row.fetch("id"), row] }
+      self["requests"].each do |row|
+        %w[thread_id request_id input_digest payload_digest].each do |key|
+          bounded_id!(row.fetch(key))
+        end
+        unless row.fetch("namespace") == NAMESPACE &&
+               %w[turn resume retry continue fork redirect].include?(
+                 row.fetch("operation")
+               ) &&
+               %w[queue redirect].include?(row.fetch("delivery_mode")) &&
+               %w[
+                 queued claimed running redirecting completed failed
+               ].include?(row.fetch("status"))
+          raise OracleError, "relation_invalid"
+        end
+        verify_digest!(
+          row.fetch("payload"),
+          row.fetch("payload_digest"),
+          "tamoz.sqlite.request_payload"
+        )
+        validate_request_payload!(row)
+        input_bytes = JSON.generate(
+          [
+            row.fetch("operation"),
+            row.fetch("delivery_mode"),
+            row.fetch("payload")
+          ]
+        )
+        unless TamozSQLiteOracle.wire_digest(
+          input_bytes,
+          domain: "tamoz.sqlite.request"
+        ) == row.fetch("input_digest")
+          raise OracleError, "digest_invalid"
+        end
+        validate_optional_digest!(
+          row.fetch("response"),
+          row.fetch("response_digest"),
+          "tamoz.sqlite.request_response"
+        )
+        validate_optional_digest!(
+          row.fetch("terminal_error"),
+          row.fetch("terminal_error_digest"),
+          "tamoz.sqlite.request_error"
+        )
+        TamozSQLiteOracle.validate_state_bytes!(row.fetch("response")) if row.fetch("response")
+        TamozSQLiteOracle.validate_state_bytes!(
+          row.fetch("terminal_error")
+        ) if row.fetch("terminal_error")
+        checkpoint_id = row.fetch("checkpoint_id")
+        if checkpoint_id
+          checkpoint = checkpoints[checkpoint_id]
+          unless checkpoint &&
+                 checkpoint.fetch("execution_id") == row.fetch("execution_id")
+            raise OracleError, "relation_invalid"
+          end
+        end
+        nonnegative_integer!(row.fetch("enqueue_sequence"))
+        nonnegative_integer!(row.fetch("created_at_ms"))
+        nonnegative_integer!(row.fetch("updated_at_ms"))
+      end
+      self["namespaces"].each do |namespace|
+        rows = grouped.fetch(
+          [namespace.fetch("thread_id"), namespace.fetch("namespace")],
+          []
+        )
+        unless namespace.fetch("next_request_sequence") == rows.length
+          raise OracleError, "relation_invalid"
+        end
+      end
+      validate_request_transitions!
+    end
+
+    def validate_request_payload!(row)
+      if row.fetch("operation") == "resume"
+        wire = TamozSQLiteOracle.parse_json(row.fetch("payload"))
+        unless wire.is_a?(Array) &&
+               wire.length == 4 &&
+               wire.fetch(0) == "tamoz.graph.request" &&
+               wire.fetch(1) == 1 &&
+               wire.fetch(2) == "resume"
+          raise OracleError, "relation_invalid"
+        end
+        validate_resume_values!(wire.fetch(3))
+      else
+        TamozSQLiteOracle.validate_state_bytes!(row.fetch("payload"))
+      end
+    end
+
+    def validate_request_transitions!
+      requests = self["requests"].to_h do |row|
+        [
+          [row.fetch("thread_id"), row.fetch("namespace"), row.fetch("request_id")],
+          row
+        ]
+      end
+      groups = self["request_transitions"].group_by do |row|
+        [row.fetch("thread_id"), row.fetch("namespace"), row.fetch("request_id")]
+      end
+      groups.each do |key, rows|
+        raise OracleError, "relation_invalid" unless requests.key?(key)
+        indices = rows.map { |row| row.fetch("transition_index") }
+        unless indices == (0...rows.length).to_a
+          raise OracleError, "relation_invalid"
+        end
+        previous = nil
+        rows.each do |row|
+          unless row.fetch("from_status") == previous &&
+                 row.fetch("to_status").is_a?(String)
+            raise OracleError, "relation_invalid"
+          end
+          evidence = TamozSQLiteOracle.parse_json(row.fetch("evidence"))
+          unless evidence.is_a?(Hash) &&
+                 evidence.fetch("kind", nil).is_a?(String)
+            raise OracleError, "relation_invalid"
+          end
+          validate_transition_evidence!(
+            row,
+            evidence,
+            requests.fetch(key)
+          )
+          previous = row.fetch("to_status")
+          nonnegative_integer!(row.fetch("created_at_ms"))
+        end
+        unless previous == requests.fetch(key).fetch("status")
+          raise OracleError, "relation_invalid"
+        end
+      end
+      unless requests.keys.sort == groups.keys.sort
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_transition_evidence!(row, evidence, request)
+      kind = evidence.fetch("kind")
+      case kind
+      when "enqueue"
+        valid = evidence.keys == ["kind"] &&
+                row.fetch("from_status").nil? &&
+                row.fetch("to_status") == "queued"
+      when "claim"
+        valid = evidence.keys.sort ==
+                %w[cancellation_generation kind target_execution_id] &&
+                row.fetch("from_status") == "queued" &&
+                %w[claimed redirecting].include?(row.fetch("to_status")) &&
+                evidence.fetch("target_execution_id") ==
+                  request.fetch("target_execution_id") &&
+                evidence.fetch("cancellation_generation") ==
+                  request.fetch("cancellation_generation")
+      when "recovery"
+        valid = evidence.keys == ["kind"] &&
+                row.fetch("from_status") == row.fetch("to_status")
+      when "running", "completed", "failed"
+        valid = evidence.keys.sort == %w[checkpoint_id kind] &&
+                evidence.fetch("checkpoint_id") ==
+                  request.fetch("checkpoint_id") &&
+                row.fetch("to_status") == kind
+      else
+        valid = false
+      end
+      raise OracleError, "relation_invalid" unless valid
+    end
+
+    def validate_activations!
+      checkpoints = self["checkpoints"].to_h { |row| [row.fetch("id"), row] }
+      write_groups = self["writes"].group_by do |row|
+        [
+          row.fetch("thread_id"),
+          row.fetch("namespace"),
+          row.fetch("execution_id"),
+          row.fetch("task_id")
+        ]
+      end
+      activation_keys = []
+      self["activations"].each do |activation|
+        key = [
+          activation.fetch("thread_id"),
+          activation.fetch("namespace"),
+          activation.fetch("execution_id"),
+          activation.fetch("task_id")
+        ]
+        activation_keys << key
+        base = checkpoints[activation.fetch("base_checkpoint_id")]
+        consumed = checkpoints[activation.fetch("consumed_by")]
+        unless base &&
+               base.fetch("execution_id") == activation.fetch("execution_id") &&
+               (!activation.fetch("consumed_by") ||
+                (consumed &&
+                 consumed.fetch("execution_id") ==
+                   activation.fetch("execution_id")))
+          raise OracleError, "relation_invalid"
+        end
+        path = TamozSQLiteOracle.parse_json(activation.fetch("path"))
+        unless path.is_a?(Array) &&
+               path.all? { |part| part.is_a?(String) }
+          raise OracleError, "relation_invalid"
+        end
+        writes = write_groups.fetch(key, [])
+        validate_writes!(writes)
+        verify_outcome_digest!(activation, path, writes)
+      end
+      unless activation_keys.sort == write_groups.keys.sort
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def validate_writes!(writes)
+      indices = writes.map { |row| row.fetch("write_index") }
+      unless indices == (0...writes.length).to_a && writes.any?
+        raise OracleError, "relation_invalid"
+      end
+      routes_seen = false
+      channels = []
+      writes.each do |row|
+        verify_digest!(
+          row.fetch("payload"),
+          row.fetch("payload_digest"),
+          "tamoz.sqlite.pending_write"
+        )
+        case row.fetch("kind")
+        when "channel"
+          if routes_seen || !row.fetch("channel").is_a?(String)
+            raise OracleError, "relation_invalid"
+          end
+          channels << row.fetch("channel")
+          TamozSQLiteOracle.validate_state_bytes!(row.fetch("payload"))
+        when "routes"
+          if routes_seen || !row.fetch("channel").nil?
+            raise OracleError, "relation_invalid"
+          end
+          route_wire = TamozSQLiteOracle.parse_json(row.fetch("payload"))
+          unless route_wire.is_a?(Array) &&
+                 route_wire.length == 3 &&
+                 route_wire.fetch(0) == "tamoz.graph.routes" &&
+                 route_wire.fetch(1) == 1
+            raise OracleError, "relation_invalid"
+          end
+          validate_routes!(route_wire.fetch(2))
+          routes_seen = true
+        else
+          raise OracleError, "relation_invalid"
+        end
+      end
+      unless routes_seen &&
+             writes.last.fetch("kind") == "routes" &&
+             channels == channels.sort &&
+             channels.uniq.length == channels.length
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def verify_outcome_digest!(activation, path, writes)
+      channel_entries = writes.filter_map do |write|
+        next unless write.fetch("kind") == "channel"
+        state_wire = TamozSQLiteOracle.parse_json(write.fetch("payload"))
+        [write.fetch("channel"), state_wire.fetch(2)]
+      end
+      update_bytes = JSON.generate(
+        ["tamoz.state", 1, ["object", channel_entries]]
+      )
+      routes = TamozSQLiteOracle.parse_json(writes.last.fetch("payload")).fetch(2)
+      outcome = JSON.generate(
+        [
+          "tamoz.graph.outcome",
+          1,
+          activation.fetch("task_id"),
+          activation.fetch("attempt_id"),
+          activation.fetch("base_checkpoint_id"),
+          activation.fetch("node"),
+          path,
+          update_bytes,
+          routes
+        ]
+      )
+      unless TamozSQLiteOracle.wire_digest(
+        outcome,
+        domain: "tamoz.sqlite.pending_outcome"
+      ) == activation.fetch("outcome_digest")
+        raise OracleError, "digest_invalid"
+      end
+    end
+
+    def verify_digest!(bytes, expected, domain)
+      unless expected.is_a?(String) &&
+             expected.match?(DIGEST_PATTERN) &&
+             TamozSQLiteOracle.wire_digest(bytes, domain:) == expected
+        raise OracleError, "digest_invalid"
+      end
+    end
+
+    def validate_optional_digest!(bytes, expected, domain)
+      unless bytes.nil? == expected.nil?
+        raise OracleError, "digest_invalid"
+      end
+      verify_digest!(bytes, expected, domain) if bytes
+    end
+
+    def bounded_id!(value)
+      unless value.is_a?(String) &&
+             value.valid_encoding? &&
+             value.bytesize.between?(1, 256)
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def nonnegative_integer!(value)
+      unless value.is_a?(Integer) && value >= 0
+        raise OracleError, "relation_invalid"
+      end
+    end
+
+    def positive_integer!(value)
+      unless value.is_a?(Integer) && value.positive?
+        raise OracleError, "relation_invalid"
+      end
+    end
+  end
+
+  class Classifier
+    def initialize(scenario, projection)
+      @scenario = scenario
+      @projection = projection
+    end
+
+    def classify
+      if STABLE_SCENARIOS.include?(@scenario)
+        return ["stable", []] if contract?(:stable)
+        return ["partial", ["state_mismatch"]]
+      end
+
+      old = contract?(:old)
+      new = contract?(:new)
+      return ["invalid", ["state_ambiguous"]] if old && new
+      return ["old", []] if old
+      return ["new", []] if new
+
+      ["partial", ["state_mismatch"]]
+    end
+
+    private
+
+    def contract?(state)
+      send("contract_#{@scenario.tr(".-", "_")}", state)
+    end
+
+    def contract_lease_acquire_new(state)
+      state == :old ? empty? : bare_lease?(owner: OWNER_A, fence: 1)
+    end
+
+    def contract_lease_acquire_takeover(state)
+      namespace = only_namespace
+      return false unless bare_shape? && namespace
+      if state == :old
+        lease?(namespace, owner: OWNER_A, fence: 1, expiry: 0)
+      else
+        lease?(namespace, owner: OWNER_B, fence: 2, expiry: :positive)
+      end
+    end
+
+    def contract_lease_validate(state)
+      namespace = only_namespace
+      return false unless bare_shape? && namespace
+      return false unless lease?(namespace, owner: OWNER_A, fence: 1, expiry: :positive)
+      state == :old ? namespace.fetch("greatest_backend_time_ms").zero? :
+        namespace.fetch("greatest_backend_time_ms").positive?
+    end
+
+    def contract_lease_renew(state)
+      namespace = only_namespace
+      return false unless bare_shape? && namespace
+      return false unless lease?(namespace, owner: OWNER_A, fence: 1, expiry: :positive)
+      delta = namespace.fetch("lease_expires_at_ms") -
+              namespace.fetch("updated_at_ms")
+      state == :old ? delta == 29_999 : delta == 30_000
+    end
+
+    def contract_lease_release(state)
+      namespace = only_namespace
+      return false unless bare_shape? && namespace
+      if state == :old
+        lease?(namespace, owner: OWNER_A, fence: 1, expiry: :positive)
+      else
+        lease?(namespace, owner: nil, fence: 1, expiry: nil)
+      end
+    end
+
+    def contract_request_enqueue_new(state)
+      state == :old ? empty? : queued_request_shape?
+    end
+
+    def contract_request_enqueue_duplicate(_state)
+      queued_request_shape?
+    end
+
+    def contract_request_claim_turn(state)
+      request_claim_contract(
+        state,
+        operation: "turn",
+        new_status: "claimed",
+        execution: :generated
+      )
+    end
+
+    def contract_request_claim_resume(state)
+      request_claim_contract(
+        state,
+        operation: "resume",
+        new_status: "claimed",
+        execution: EXECUTION_A,
+        checkpoint: true
+      )
+    end
+
+    def contract_request_claim_redirect(state)
+      request_claim_contract(
+        state,
+        operation: "redirect",
+        delivery: "redirect",
+        new_status: "redirecting",
+        execution: :generated,
+        checkpoint: true,
+        redirect: true
+      )
+    end
+
+    def contract_request_recover_claimed(state)
+      recovery_contract(state, status: "claimed", transitions: 2)
+    end
+
+    def contract_request_recover_running(state)
+      recovery_contract(
+        state,
+        status: "running",
+        transitions: 3,
+        checkpoint: true,
+        request_checkpoint: true
+      )
+    end
+
+    def contract_request_recover_redirecting(state)
+      recovery_contract(
+        state,
+        status: "redirecting",
+        transitions: 2,
+        redirect: true,
+        checkpoint: true
+      )
+    end
+
+    def contract_request_mark_running(state)
+      transition_contract(state, redirect: false)
+    end
+
+    def contract_request_mark_redirect_running(state)
+      transition_contract(state, redirect: true)
+    end
+
+    def contract_request_redirect_ready(_state)
+      checkpoint_shape?(count: 1, statuses: ["running"]) &&
+        no_requests_or_pending? &&
+        lease_namespace?(owner: OWNER_A, fence: 1, next_checkpoint: 1)
+    end
+
+    def contract_checkpoint_writes_new(state)
+      writes_contract(state, present: state == :new)
+    end
+
+    def contract_checkpoint_writes_duplicate(_state)
+      writes_contract(:stable, present: true)
+    end
+
+    def contract_checkpoint_commit_start(state)
+      if state == :old
+        bare_lease?(owner: OWNER_A, fence: 1)
+      else
+        checkpoint_shape?(count: 1, statuses: ["running"]) &&
+          no_requests_or_pending? &&
+          lease_namespace?(owner: OWNER_A, fence: 1, next_checkpoint: 1)
+      end
+    end
+
+    def contract_checkpoint_commit_advance(state)
+      if state == :old
+        writes_contract(:old, present: true, consumed: false)
+      else
+        checkpoint_shape?(count: 2, statuses: %w[running completed]) &&
+          activation_shape?(consumed_sequence: 1) &&
+          two_writes? &&
+          no_requests? &&
+          lease_namespace?(owner: OWNER_A, fence: 1, next_checkpoint: 2)
+      end
+    end
+
+    def contract_checkpoint_commit_turn(state)
+      checkpoint_request_commit_contract(state, failed: false)
+    end
+
+    def contract_checkpoint_commit_fork(state)
+      checkpoints = @projection["checkpoints"]
+      return false unless no_requests_or_pending? &&
+                          lease_namespace?(
+                            owner: OWNER_A,
+                            fence: 1,
+                            next_checkpoint: state == :old ? 2 : 3
+                          )
+      if state == :old
+        checkpoint_shape?(count: 2, statuses: %w[running completed]) &&
+          checkpoints.all? { |row| row.fetch("execution_id") == EXECUTION_A } &&
+          checkpoints.fetch(1).fetch("parent_id") == checkpoints.fetch(0).fetch("id")
+      else
+        checkpoint_shape?(
+          count: 3,
+          statuses: %w[running completed completed]
+        ) &&
+          checkpoints.fetch(0).fetch("execution_id") == EXECUTION_A &&
+          checkpoints.fetch(1).fetch("execution_id") == EXECUTION_A &&
+          checkpoints.fetch(2).fetch("execution_id") == EXECUTION_B &&
+          checkpoints.fetch(2).fetch("parent_id") == checkpoints.fetch(0).fetch("id")
+      end
+    end
+
+    def contract_checkpoint_commit_paused(state)
+      statuses = state == :old ? ["running"] : %w[running paused]
+      checkpoint_shape?(count: statuses.length, statuses:) &&
+        no_requests_or_pending? &&
+        lease_namespace?(
+          owner: OWNER_A,
+          fence: 1,
+          next_checkpoint: statuses.length
+        )
+    end
+
+    def contract_checkpoint_commit_failed(state)
+      checkpoint_request_commit_contract(state, failed: true)
+    end
+
+    def empty?
+      @projection.rows.values.all?(&:empty?)
+    end
+
+    def bare_shape?
+      one_address? && no_requests_or_checkpoints_or_pending?
+    end
+
+    def bare_lease?(owner:, fence:)
+      namespace = only_namespace
+      bare_shape? &&
+        namespace &&
+        lease?(namespace, owner:, fence:, expiry: :positive)
+    end
+
+    def lease?(namespace, owner:, fence:, expiry:)
+      actual_expiry = namespace.fetch("lease_expires_at_ms")
+      expiry_match = case expiry
+                     when :positive
+                       actual_expiry.is_a?(Integer) && actual_expiry.positive?
+                     else
+                       actual_expiry == expiry
+                     end
+      namespace.fetch("lease_owner_id") == owner &&
+        namespace.fetch("lease_fence") == fence &&
+        expiry_match
+    end
+
+    def one_address?
+      threads = @projection["threads"]
+      namespaces = @projection["namespaces"]
+      threads.length == 1 &&
+        namespaces.length == 1 &&
+        threads.first.fetch("thread_id") == THREAD_ID &&
+        namespaces.first.fetch("thread_id") == THREAD_ID &&
+        namespaces.first.fetch("namespace") == NAMESPACE
+    end
+
+    def only_namespace
+      @projection["namespaces"].first if one_address?
+    end
+
+    def no_requests_or_checkpoints_or_pending?
+      @projection["checkpoints"].empty? &&
+        no_requests_or_pending?
+    end
+
+    def no_requests_or_pending?
+      no_requests? &&
+        @projection["request_transitions"].empty? &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty?
+    end
+
+    def no_requests?
+      @projection["requests"].empty? &&
+        @projection["request_transitions"].empty?
+    end
+
+    def queued_request_shape?(
+      operation: "turn",
+      delivery: "queue",
+      checkpoint: false,
+      leased: false
+    )
+      request = only_request
+      one_address? &&
+        request &&
+        request.fetch("operation") == operation &&
+        request.fetch("delivery_mode") == delivery &&
+        request.fetch("status") == "queued" &&
+        request.fetch("execution_id").nil? &&
+        request.fetch("target_execution_id").nil? &&
+        request.fetch("cancellation_generation").nil? &&
+        request.fetch("owner_fence").nil? &&
+        transitions_match?([[nil, "queued", nil]]) &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty? &&
+        (checkpoint ?
+           checkpoint_shape?(count: 1, statuses: ["running"]) :
+           @projection["checkpoints"].empty?) &&
+        lease_namespace?(
+          owner: (checkpoint || leased) ? OWNER_A : nil,
+          fence: (checkpoint || leased) ? 1 : 0,
+          next_checkpoint: checkpoint ? 1 : 0,
+          next_request: 1
+        )
+    end
+
+    def request_claim_contract(
+      state,
+      operation:,
+      new_status:,
+      execution:,
+      delivery: "queue",
+      checkpoint: false,
+      redirect: false
+    )
+      if state == :old
+        return queued_request_shape?(
+          operation:,
+          delivery:,
+          checkpoint:,
+          leased: true
+        )
+      end
+
+      request = only_request
+      return false unless request &&
+                          request.fetch("operation") == operation &&
+                          request.fetch("delivery_mode") == delivery &&
+                          request.fetch("status") == new_status &&
+                          request.fetch("owner_fence") == 1
+      execution_ok = if execution == :generated
+                       request.fetch("execution_id").is_a?(String) &&
+                         request.fetch("execution_id") != EXECUTION_A
+                     else
+                       request.fetch("execution_id") == execution
+                     end
+      redirect_ok = if redirect
+                      request.fetch("target_execution_id") == EXECUTION_A &&
+                        request.fetch("cancellation_generation") == 1
+                    else
+                      request.fetch("target_execution_id").nil? &&
+                        request.fetch("cancellation_generation").nil?
+                    end
+      execution_ok &&
+        redirect_ok &&
+        transitions_match?([[nil, "queued", nil], ["queued", new_status, 1]]) &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty? &&
+        (checkpoint ?
+           checkpoint_shape?(count: 1, statuses: ["running"]) :
+           @projection["checkpoints"].empty?) &&
+        lease_namespace?(
+          owner: OWNER_A,
+          fence: 1,
+          next_checkpoint: checkpoint ? 1 : 0,
+          next_request: 1
+        )
+    end
+
+    def recovery_contract(
+      state,
+      status:,
+      transitions:,
+      redirect: false,
+      checkpoint: false,
+      request_checkpoint: false
+    )
+      request = only_request
+      return false unless request &&
+                          request.fetch("status") == status &&
+                          request.fetch("execution_id").is_a?(String) &&
+                          request.fetch("owner_fence") == (state == :old ? 1 : 2)
+      if redirect
+        return false unless request.fetch("target_execution_id") == EXECUTION_A &&
+                            request.fetch("cancellation_generation") == 1
+      end
+      expected = case status
+                 when "claimed"
+                   [[nil, "queued", nil], ["queued", "claimed", 1]]
+                 when "running"
+                   [
+                     [nil, "queued", nil],
+                     ["queued", "claimed", 1],
+                     ["claimed", "running", 1]
+                   ]
+                 when "redirecting"
+                   [[nil, "queued", nil], ["queued", "redirecting", 1]]
+                 end
+      if state == :new
+        expected = expected + [[status, status, 2]]
+      end
+      expected_length = state == :old ? transitions : transitions + 1
+      checkpoint_row = @projection["checkpoints"].first
+      request_checkpoint_ok = if request_checkpoint
+                                checkpoint_row &&
+                                  request.fetch("checkpoint_id") ==
+                                    checkpoint_row.fetch("id") &&
+                                  request.fetch("execution_id") ==
+                                    checkpoint_row.fetch("execution_id")
+                              else
+                                request.fetch("checkpoint_id").nil?
+                              end
+      expected.length == expected_length &&
+        request_checkpoint_ok &&
+        transitions_match?(expected) &&
+        lease_namespace?(
+          owner: OWNER_B,
+          fence: 2,
+          next_checkpoint: checkpoint ? 1 : 0,
+          next_request: 1
+        ) &&
+        (checkpoint ?
+           checkpoint_shape?(count: 1, statuses: ["running"]) :
+           @projection["checkpoints"].empty?) &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty?
+    end
+
+    def transition_contract(state, redirect:)
+      request = only_request
+      old_status = redirect ? "redirecting" : "claimed"
+      return false unless request &&
+                          request.fetch("status") ==
+                            (state == :old ? old_status : "running") &&
+                          request.fetch("owner_fence") == 1
+      if redirect
+        return false unless request.fetch("target_execution_id") == EXECUTION_A &&
+                            request.fetch("cancellation_generation") == 1
+      end
+      expected = [[nil, "queued", nil], ["queued", old_status, 1]]
+      expected << [old_status, "running", 1] if state == :new
+      transitions_match?(expected) &&
+        lease_namespace?(
+          owner: OWNER_A,
+          fence: 1,
+          next_checkpoint: redirect ? 1 : 0,
+          next_request: 1
+        ) &&
+        (redirect ?
+           checkpoint_shape?(count: 1, statuses: ["running"]) :
+           @projection["checkpoints"].empty?) &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty?
+    end
+
+    def writes_contract(_state, present:, consumed: false)
+      checkpoint_shape?(count: 1, statuses: ["running"]) &&
+        no_requests? &&
+        lease_namespace?(owner: OWNER_A, fence: 1, next_checkpoint: 1) &&
+        if present
+          activation_shape?(consumed_sequence: consumed ? 1 : nil) &&
+            two_writes?
+        else
+          @projection["activations"].empty? &&
+            @projection["writes"].empty?
+        end
+    end
+
+    def checkpoint_request_commit_contract(state, failed:)
+      checkpoints = @projection["checkpoints"]
+      request = only_request
+      return false unless request && @projection["activations"].empty? &&
+                          @projection["writes"].empty?
+      expected_operation = failed ? "resume" : "turn"
+      return false unless request.fetch("operation") == expected_operation &&
+                          request.fetch("delivery_mode") == "queue"
+      if state == :old
+        execution_ok = failed ?
+                         request.fetch("execution_id") == EXECUTION_A :
+                         request.fetch("execution_id").is_a?(String) &&
+                           request.fetch("execution_id") != EXECUTION_A
+        execution_ok &&
+          checkpoint_shape?(count: 1, statuses: ["running"]) &&
+          checkpoints.first.fetch("execution_id") == EXECUTION_A &&
+          request.fetch("status") == "claimed" &&
+          request.fetch("checkpoint_id").nil? &&
+          request.fetch("response").nil? &&
+          request.fetch("terminal_error").nil? &&
+          transitions_match?([[nil, "queued", nil], ["queued", "claimed", 1]]) &&
+          lease_namespace?(
+            owner: OWNER_A,
+            fence: 1,
+            next_checkpoint: 1,
+            next_request: 1
+          )
+      else
+        final_status = failed ? "failed" : "completed"
+        checkpoint_shape?(
+          count: 2,
+          statuses: ["running", final_status]
+        ) &&
+          checkpoints.first.fetch("execution_id") == EXECUTION_A &&
+          (failed ?
+             checkpoints.fetch(1).fetch("execution_id") == EXECUTION_A :
+             checkpoints.fetch(1).fetch("execution_id") != EXECUTION_A) &&
+          request.fetch("status") == final_status &&
+          request.fetch("checkpoint_id") == checkpoints.fetch(1).fetch("id") &&
+          request.fetch("execution_id") == checkpoints.fetch(1).fetch("execution_id") &&
+          (failed ?
+             request.fetch("terminal_error").is_a?(String) &&
+               request.fetch("response").nil? &&
+               request.fetch("retryable") == 0 :
+             request.fetch("response").is_a?(String) &&
+               request.fetch("terminal_error").nil?) &&
+          transitions_match?(
+            [
+              [nil, "queued", nil],
+              ["queued", "claimed", 1],
+              ["claimed", final_status, 1]
+            ]
+          ) &&
+          lease_namespace?(
+            owner: OWNER_A,
+            fence: 1,
+            next_checkpoint: 2,
+            next_request: 1
+          )
+      end
+    end
+
+    def checkpoint_shape?(count:, statuses:)
+      checkpoints = @projection["checkpoints"]
+      checkpoints.length == count &&
+        checkpoints.map { |row| row.fetch("sequence") } == (0...count).to_a &&
+        checkpoints.map { |row| row.fetch("status") } == statuses &&
+        checkpoints.all? do |row|
+          row.fetch("thread_id") == THREAD_ID &&
+            row.fetch("namespace") == NAMESPACE &&
+            row.fetch("graph_name") == GRAPH_NAME &&
+            row.fetch("graph_version") == GRAPH_VERSION
+        end
+    end
+
+    def lease_namespace?(
+      owner:,
+      fence:,
+      next_checkpoint:,
+      next_request: 0
+    )
+      namespace = only_namespace
+      namespace &&
+        namespace.fetch("lease_owner_id") == owner &&
+        namespace.fetch("lease_fence") == fence &&
+        (owner.nil? ?
+           namespace.fetch("lease_expires_at_ms").nil? :
+           namespace.fetch("lease_expires_at_ms").is_a?(Integer)) &&
+        namespace.fetch("next_checkpoint_sequence") == next_checkpoint &&
+        namespace.fetch("next_request_sequence") == next_request
+    end
+
+    def activation_shape?(consumed_sequence:)
+      activation = @projection["activations"].first
+      checkpoints = @projection["checkpoints"]
+      return false unless @projection["activations"].length == 1 && activation
+      consumed = activation.fetch("consumed_by")
+      actual_sequence = consumed &&
+                        checkpoints.find do |row|
+                          row.fetch("id") == consumed
+                        end&.fetch("sequence")
+      activation.fetch("base_checkpoint_id") == checkpoints.first.fetch("id") &&
+        actual_sequence == consumed_sequence
+    end
+
+    def two_writes?
+      @projection["writes"].map do |row|
+        [row.fetch("write_index"), row.fetch("kind"), row.fetch("channel")]
+      end == [[0, "channel", "value"], [1, "routes", nil]]
+    end
+
+    def only_request
+      request = @projection["requests"].first
+      return nil unless @projection["requests"].length == 1 &&
+                        request.fetch("thread_id") == THREAD_ID &&
+                        request.fetch("namespace") == NAMESPACE &&
+                        request.fetch("request_id") == REQUEST_ID
+      request
+    end
+
+    def transitions_match?(expected)
+      @projection["request_transitions"].map do |row|
+        [
+          row.fetch("from_status"),
+          row.fetch("to_status"),
+          row.fetch("fence")
+        ]
+      end == expected
+    end
+  end
+
+  def report(
+    scenario:,
+    classification:,
+    reasons:,
+    integrity:,
+    foreign_keys:,
+    projection_digest:
+  )
+    unless CLASSIFICATIONS.include?(classification) &&
+           reasons.is_a?(Array) &&
+           reasons.length <= 8 &&
+           reasons.all? { |reason| REASON_CODES.include?(reason) }
+      raise OracleError, "internal_error"
+    end
+    body = {
+      "oracle_version" => VERSION,
+      "oracle_digest" => ORACLE_DIGEST,
+      "scenario" => scenario,
+      "classification" => classification,
+      "reason_codes" => reasons.sort.uniq,
+      "integrity" => integrity,
+      "foreign_keys" => foreign_keys,
+      "projection_digest" => projection_digest,
+      "content_digest" => "pending"
+    }
+    body["content_digest"] = content_digest(
+      body,
+      domain: "eval.sqlite_raw_oracle_report"
+    )
+    canonicalize(body).freeze
+  end
+
+  def run(scenario, path)
+    projection = Projection.new(path)
+    projection.load!
+    classification, reasons = Classifier.new(scenario, projection).classify
+    fingerprint = projection.logical_fingerprint(scenario)
+    projection_digest = content_digest(
+      {"projection" => fingerprint},
+      domain: "eval.sqlite_raw_projection"
+    )
+    result = report(
+      scenario:,
+      classification:,
+      reasons:,
+      integrity: projection.integrity,
+      foreign_keys: projection.foreign_keys,
+      projection_digest:
+    )
+    [result, classification == "partial" ? 2 : 0]
+  rescue OracleError => error
+    reason = REASON_CODES.include?(error.reason) ? error.reason : "internal_error"
+    result = report(
+      scenario:,
+      classification: "invalid",
+      reasons: [reason],
+      integrity: projection&.integrity || "not_checked",
+      foreign_keys: projection&.foreign_keys || "not_checked",
+      projection_digest: nil
+    )
+    [result, 3]
+  rescue StandardError
+    result = report(
+      scenario:,
+      classification: "invalid",
+      reasons: ["internal_error"],
+      integrity: projection&.integrity || "not_checked",
+      foreign_keys: projection&.foreign_keys || "not_checked",
+      projection_digest: nil
+    )
+    [result, 3]
+  end
+
+  def main(arguments)
+    unless arguments.length == 2 &&
+           SCENARIOS.include?(arguments.fetch(0))
+      warn "invalid arguments"
+      return 64
+    end
+    result, status = run(arguments.fetch(0), arguments.fetch(1))
+    $stdout.write("#{canonical_json(result)}\n")
+    status
+  end
+end
+
+exit TamozSQLiteOracle.main(ARGV)
