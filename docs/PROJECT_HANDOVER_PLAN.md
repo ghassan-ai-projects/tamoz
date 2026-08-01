@@ -3,7 +3,8 @@
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
 Current phase: `P8` — trusted project profiles
-Next action: implement P8 per `docs/P8_TRUSTED_PROFILES_PLAN.md`; P7 is closed
+Next action: implement P8-E (adversarial/fuzz proofs + scorecard case) per
+`docs/P8_TRUSTED_PROFILES_PLAN.md`; P8-A/B/C landed at `a019167`; P7 is closed
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -59,7 +60,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
-| P8 | **implementing** — design accepted | trusted project profiles | `cab974f` | — |
+| P8 | **implementing** — A/B/C landed, P8-E remaining | trusted project profiles | `cab974f` | `a019167` |
 | P9 | pending | evaluated skills | — | — |
 | P10 | pending | governed MCP client/host | — | — |
 | P11 | pending | three-layer memory | — | — |
@@ -270,14 +271,19 @@ approval defaults, and adoption rules by digest.
 
 Work packages:
 
-- [ ] **P8-D** Define schema/version, storage/search order, ownership/permission rules,
+- [x] **P8-D** Define schema/version, storage/search order, ownership/permission rules,
   canonical digest, secret references, and migration.
-- [ ] **P8-A** Implement strict load/validate/normalize with no code, interpolation, shell,
-  aliases, implicit host timezone, or embedded credentials.
-- [ ] **P8-B** Bind profiles to session/checkpoint/cache epochs; changes create candidate
-  transitions and never mutate in-flight authority.
-- [ ] **P8-C** Add `--profile`, exact preview/import of repository suggestions, and
-  operator-confirmed activation. Suggestions never become authority automatically.
+  (Design `docs/P8_TRUSTED_PROFILES_PLAN.md`, accepted at `cab974f`.)
+- [x] **P8-A** Implement strict load/validate/normalize with no code, interpolation, shell,
+  aliases, implicit host timezone, or embedded credentials. (`a019167`)
+- [~] **P8-B** Bind profiles to session/checkpoint/cache epochs; changes create candidate
+  transitions and never mutate in-flight authority. (`a019167`: session records pin
+  `profile_id`/`profile_digest` with legacy sentinels, constructor-time catalog-digest
+  binding fails before model I/O, and a changed digest blocks mutation fail-closed.
+  `ProfileTransition` candidate records and old-digest toolbox reconstruction are deferred;
+  resume under a changed digest currently fails closed with the §5.5 advisory.)
+- [x] **P8-C** Add `--profile`, exact preview/import of repository suggestions, and
+  operator-confirmed activation. Suggestions never become authority automatically. (`a019167`)
 - [ ] **P8-E** Fuzz permissions, symlinks, duplicate keys, unknown fields, root swaps,
   command injection, environment leakage, revoked grants, and resume under changed profiles.
 

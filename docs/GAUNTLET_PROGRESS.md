@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `7469fa2` (P7 closed; P8 starting)
+Last verified: 2026-08-01 at commit `a019167` (P8-A/B/C landed; P8-E next)
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -394,6 +394,76 @@ Two design plans were produced in parallel and reviewed by separate critics with
 
 Design checkpoint committed at `cab974f`.
 
+### Round 8 — P8 trusted project profiles: A/B/C landed
+
+Subagent quota never returned, so the coordinator implemented P8 directly in the main
+worktree with harsh self-review between slices. One commit: `a019167` (P8-A/B/C).
+
+Independent coordinator verification at `a019167`:
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 509 runs, 28,163 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 509 runs, 28,160 assertions, 0 failures/errors/skips |
+| `tamoz-eval scorecard agent-smoke` | pass — **9/13** successes, all four hard gates pass |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive 0, incomplete evidence 0 |
+
+What landed, per `docs/P8_TRUSTED_PROFILES_PLAN.md`:
+
+- **P8-A** — `Tamoz::Agent::Profile`: fail-closed YAML loading (parser-pass rejection of
+  non-yaml.org tags, >32 aliases, duplicate keys; safe_load with no classes), interpolation
+  and embedded-secret scanning with path/digest exemptions, strict schema allowlist,
+  owner-only permissions (file exactly 0600, chain not group/other writable, immediate
+  parent not other-readable — see deviation note below), canonical digest over the
+  normalized data model with the adoption block stripped, and the mode-0600 operator
+  adoption registry. 28 unit tests (plan §8.1).
+- **P8-B** — Toolbox `allowed_tools:`/`approval_required:` allowlists with the six-element
+  §2.4 catalog digest; session records pin optional `profile_id`/`profile_digest` with
+  `legacy`/`legacy:none` sentinels filled at load (RECORD_VERSION unchanged); `Session`
+  verifies the profile binding (catalog digest + canonical root) at construction, before
+  any model I/O. No pinned digest values existed in tests, so the digest change is
+  covered by relational assertions only.
+- **P8-C** — `--profile` for ask/resume/continue/follow-up/redirect (rejected elsewhere
+  and rejected in combination with `--allow-changes`/`--check`); `tamoz profile
+  preview/list/show/import`; operator adoption prompting (persisted, per-digest);
+  §5.5 resume guards — legacy sessions reject `--profile`, profile-id mismatch and
+  changed digest block mutation with the plan's advisory message; primary model-role
+  resolution with credential_ref env lookup; `TAMOZ_CONFIG_HOME` config-tree override
+  (test seam and sandboxed runs). 6 CLI integration tests including the full
+  suggestion → preview → import → activated-ask flow.
+
+**Defects found and fixed in this round (all verified before commit):**
+
+- **Evals CLI-subprocess harness broke on the new `build_model` signature.** The P7-E
+  harness prepends a one-argument `build_model` override; adding the `profile:` keyword
+  killed every `resume_after_kill` subprocess before the approval prompt ("agent smoke
+  CLI never reached the approval prompt"). Two C-locale CI failures were initially
+  misdiagnosed as mid-edit races; the frozen-tree UTF-8 failure exposed the real cause.
+  Harness override now accepts `profile: nil`.
+- **`canonical_root` identity vs macOS `/var` symlink.** `Toolbox#root` is a realpath but
+  the profile stored `expand_path`, so every profile rooted under a symlinked ancestor
+  (all macOS temp dirs) would fail the §5.2 bind. Profiles now canonicalize with
+  `File.realpath`.
+
+**Disclosed deviations and deferrals:**
+
+- **Permission rule refinement (§3.4).** The plan's literal "parent directories must not
+  be readable by other" makes the default profile location (`~/Library/Application
+  Support/tamoz`) and any standard home directory unusable. Enforced instead: the whole
+  owned ancestor chain must not be group/other *writable* (the tampering vector, sticky
+  bit tolerated); the *immediate* parent must not be other-readable; the file itself must
+  be exactly 0600. File confidentiality on multi-user systems is preserved by 0600 +
+  private immediate directory.
+- **P8-B is partial**: `ProfileTransition` candidate records (§5.4) and resume with an
+  activated old digest (§5.5 rule 3, which needs the original toolbox surface
+  reconstructed) are deferred. Resume under a changed digest fails closed with the §5.5.5
+  message; in-flight authority is never mutated. Tracked in Current gaps.
+- **Model-role checkpoint recording** (§5.3 "checkpoint records role + resolved
+  provider/model") and **budget intersection** (§5.3) are not yet wired; the CLI resolves
+  the primary role but the session record does not carry it yet. Tracked in Current gaps.
+- **P8-E is not done**: the §8.3 adversarial corpus and the `profile_trusted_boundary`
+  scorecard case (14th) remain. The 9/13 scorecard figure does not cover P8.
+
 ### Round 7 — P7 interactive CLI implementation and close
 
 The P7 builder (`agent-25`) landed P7-A/P7-B (`1f2c56a`, `9500acb`) before the subagent
@@ -531,7 +601,7 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
 | P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, scorecard 9/13, safety zero |
-| P8 trusted project profiles | implementing — design accepted | **not started** — builder died on quota; stale worktree `.worktrees/p8` to be removed |
+| P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) — loader, toolbox bind, CLI surface; P8-E adversarial proofs + scorecard case remaining |
 | P9–P15 | pending | not started |
 
 ---
@@ -563,19 +633,30 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
    Diagnose before P15 evidence pinning.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
    after a kill, and the `:retry` request-recovery latent defect.
-8. P8–P15 remain unimplemented.
+8. **P8-E is not done** — the §8.3 adversarial corpus (permissions, symlinks, duplicate
+   keys, unknown fields, root swaps, command injection, environment leakage, revoked
+   grants, resume under changed profiles) and the 14th scorecard case
+   `profile_trusted_boundary` remain. The 9/13 scorecard does not cover P8.
+9. **P8-B deferred machinery** — `ProfileTransition` candidate records (§5.4) and
+   old-digest resume with reconstructed toolbox (§5.5 rule 3); changed-digest resume
+   currently fails closed. Model-role checkpoint recording and budget intersection
+   (§5.3) are also unwired.
+10. P9–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Implement **P8 trusted project profiles** per `docs/P8_TRUSTED_PROFILES_PLAN.md` (design
-accepted at `cab974f`). The P7 CLI surface is now stable, so the profile core and the
-`tamoz profile` CLI subcommands can land together in the main worktree. Remove the stale
-`.worktrees/p8` worktree first. When subagent quota returns, run the deferred independent
-critic passes over P6 and P7, and schedule the D-6 stale-resume framework fix as its own
-reviewed round.
+Implement **P8-E** per `docs/P8_TRUSTED_PROFILES_PLAN.md` §8.2/§8.3: adversarial profile
+tests plus the 14th scorecard case `profile_trusted_boundary` (drive a malicious
+`.tamoz/suggested-profile.yaml` that tries to add tools/checks/credentials; prove it can
+neither become authority nor change the activated profile's checks; update the 13→14
+identity pins and regenerate fixtures with `script/generate_agent_smoke_fixtures`).
+Then decide whether the deferred §5.3/§5.4 machinery (model-role checkpoint recording,
+budget intersection, ProfileTransition) folds into P8-E or gets its own design round.
+When subagent quota returns, run the deferred independent critic passes over P6, P7, and
+P8, and schedule the D-6 stale-resume framework fix as its own reviewed round.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
 publish, release, or connect real physical actuators. The committed design checkpoint is
-`cab974f`; the last product checkpoint is `7469fa2`.
+`cab974f`; the last product checkpoint is `a019167`.
