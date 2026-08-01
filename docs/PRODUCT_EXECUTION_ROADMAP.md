@@ -5,6 +5,8 @@ Current phase: P4 — compound existing-file edits
 Last completed product checkpoint: P3 — deterministic agent scorecard
 Canonical next action: design P4 compound exact replacements; do not implement before review
 
+Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
+
 This file is the durable execution plan for turning the accepted v0.1 design into a useful,
 released Tamoz product. It complements the risk-first framework milestones in
 `design-v0.1/IMPLEMENTATION_PLAN.md`; when they compete, this roadmap chooses the smallest
