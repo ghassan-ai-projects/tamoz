@@ -219,6 +219,9 @@ input, so every committed fixture, baseline, scorecard case, and corpus digest i
   multi-byte editing belongs with P4, where the compound-edit corpus is authored.
 - Locale independence is now a property of the code, not an asserted invariant. Nothing
   fails if a future read is written as bare `File.read` again.
+- The `rake ci` assertion total is not reproducible run to run, at the base and after. A
+  gate is easier to trust when its own totals are stable; that variance is worth locating
+  before P15-F pins evaluation artifacts.
 
 ## Gate evidence
 
@@ -232,7 +235,12 @@ Executed under rbenv Ruby 3.3.11:
   documents, 55 invariants, 40 ADRs; 356 tests, 27,286 assertions, 0 failures, 0 errors,
   0 skips;
 - corrected tree: `rake ci` under `LC_ALL=C` — identical design validation output; 356
-  tests, 27,286 assertions, 0 failures, 0 errors, 0 skips;
+  tests, 27,286 and 27,292 assertions across two runs, 0 failures, 0 errors, 0 skips;
+- the test count is stable; the assertion total varies by single digits between runs. This
+  predates the correction: the unchanged base produced 27,221, 27,225, and a previously
+  recorded 27,230 across runs of the same 351 tests. The source was not identified and is
+  not in scope here, but a gate that cannot state a reproducible assertion count is a
+  weaker gate than it looks;
 - `tamoz-eval scorecard agent-smoke` under both locales: `"decision":"pass"`, all four hard
   gates pass, `content_digest sha256:57a2ac8fea4cc03f51676f0b009add6ae09fac9d0ae7985942e044737ff1e699`
   in all three of the pre-correction run, the corrected UTF-8 run, and the corrected `C`
