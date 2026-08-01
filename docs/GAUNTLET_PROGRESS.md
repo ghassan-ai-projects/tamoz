@@ -165,6 +165,7 @@ rejects **and leaves the file byte-identical**. No fix may weaken any of these.
 | 0 | judging substrate + baseline audit | main | — | substrate validated; 4 defects found | — |
 | 1 | D-1 locale gate + D-2 multibyte corruption (+D-3 found by builder) | done | done | **pass against baseline; D-4/D-5 split out** | `2df0063`, `fe1d26e`, `b5f7fb9`, `39a8679` |
 | 2 | D-4/D-5 UTF-8 contract correction | done | done | **pass against baseline; invariant-17 matrix added** | `b213b4a`, `a88f403` |
+| 5 | P6 durable session and effect recovery | done | in flight | **coordinator gate PASS; independent critic still running** | `8c977dc`, `2d94908`, `b69701c`, `752363f` |
 
 ### Round 1 — builder result
 
@@ -373,6 +374,72 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 
 ---
 
+### Round 5 — P6 durable session and effect recovery
+
+Four commits: `8c977dc` (plan + harsh self-review, documentation only), `2d94908` (P6-A/B),
+`b69701c` (P6-C/D2/E), `752363f` (P6-F partial + tracker close).
+
+**Verified independently by the coordinator**, by running rather than by reading the report:
+
+| Check | Result |
+|---|---|
+| `rake ci` under `LC_ALL=en_US.UTF-8` | 453 runs, 27,825 assertions, 0 failures |
+| `rake ci` under `LC_ALL=C` | 453 runs, 27,822 assertions, 0 failures |
+| scorecard | 8/12, `decision: pass`, 4/4 hard gates |
+| hard-zero safety counters | unsafe 0, false-positive 0, incomplete evidence 0 |
+| corpus / content digest | `d24bb33f…` / `3851d176…` — byte-identical to baseline |
+| `migrator.rb`, `checkpoint.rb` | untouched — no second checkpoint model, no schema change |
+| held-out floor p01/p02/p04/p05 | all hold |
+
+Test count rose 356 → 453 (97 new tests, 1,895 new test lines across five files).
+
+**No second engine.** The automatic-fail condition was "creating a second checkpoint or effect
+model instead of adapting the existing one." `Migrator` and `checkpoint.rb` are byte-unchanged
+and no table, column, or index was added; the durable session rides on the existing
+`DurableRunner`, `EffectJournal`, lease/fence, and request inbox. This is structural evidence,
+not a claim.
+
+**A suspicion that resolved in the builder's favour, recorded because it cuts both ways.**
+The "16/16 kill matrix" looked inflated: Minitest reports only **5 runs**. It is honest —
+`SEAMS` is a 13-entry table iterated by one test method, plus K9 and two `create_file`
+variants. Minitest counts test methods, not seams. The claim was checked and stands.
+
+**Disclosure quality is the strongest signal in this round.** The builder volunteered, without
+being asked, several things that a less careful builder would have buried:
+
+- **P6-F is partial**, with the gaps named exactly: disk-full injection, lock saturation under
+  load, the unresolved-effect deletion guard exercised *through a session*, thread-leak
+  measurement, soak.
+- **An orphaned private `.tamoz-*` temp file** survives a kill between publication and unlink.
+  It declined to auto-reclaim it, because reclaiming needs an unlink capability that P4 and P5
+  deliberately withheld. Refusing to widen its own authority to tidy up after itself is the
+  correct instinct. No public partial file and no overwrite still hold, and both are asserted.
+- **`:retry` request recovery carries the same latent defect `:resume` had.** Left unfixed on
+  purpose: "P6 does not exercise it and I will not ship an unproven fix."
+- **`model_call_safety: :idempotent` is the one automatic repeat in the system.** Defended
+  architecturally (the provider never executes tools), counted in a durable
+  `provider_ambiguity` channel, and opt-out.
+- **No P6 scorecard case exists**, so the durable session is *not* covered by the scorecard's
+  safety counters. The 8/12 figure must not be read as covering P6. Stated plainly rather than
+  left to imply coverage it does not have.
+
+**Design conflict handled through the §2 procedure.** `:reconcilable` is two-valued in
+`PERSISTENCE_DESIGN` §4 but three-valued in the handover plan. Resolved to three values with a
+five-whys record; pinned `design-v0.1/` was **not** edited and a v0.2 ADR is recorded as owed.
+`:not_applied` grants one further fenced attempt because the *pre-state was proven* — never
+because of a safety class or an approval — bounded by `MAX_ATTEMPTS = 3`.
+
+**Status: P6 is closed in the trackers, with independent critic verification still in flight.**
+The handover plan's close protocol is satisfied — behavioural scorecard rerun, ledger/roadmap
+updated, `P6-F` honestly marked `[~]`, clean worktree, active marker moved to P7. The
+coordinator's own gate is PASS. What is *not* yet established is the adversarial pass: whether
+the kills land where the seam names claim, whether `:unknown` can ever be driven to
+`:not_applied` from an unproven pre-state, and whether the `Deliberation` extraction was
+genuinely verbatim. Those are open until the critic reports, and P6 should be read as
+**gate-verified but not yet adversarially verified**.
+
+---
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -380,31 +447,58 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 | P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
-| P6 durable session/effect recovery | pending — next | not started |
-| P7–P15 | pending | not started |
+| P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
+| P7 interactive/resumable CLI | pending — next | not started |
+| P8–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **P6 durable session/effect recovery** — this is the highest-risk remaining phase. Read
-   `PERSISTENCE_DESIGN.md`, `GRAPH_DESIGN.md`, `AGENT_DESIGN.md` §§1–8, invariants 9, 18–27,
-   52–55, and the existing SQLite/graph durability APIs; then create and review
-   `docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md` before any implementation.
-2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
-   assertions between identical runs; diagnose before P15 evidence pinning.
-3. P7–P15 remain unimplemented.
+1. **P6 is not adversarially verified.** The coordinator's deterministic gate passes, but the
+   independent critic pass is still in flight. Open questions it is attacking: do the kills
+   land where the seam names claim (a kill firing slightly early or late proves nothing while
+   still looking green); can `:unknown` be driven to `:not_applied` from an unproven pre-state
+   via crash, stale fence, lease loss, or race; can `MAX_ATTEMPTS = 3` be exceeded or reset;
+   was the `Deliberation` extraction genuinely verbatim, given that the identical scorecard
+   digest is being used as the proof it changed nothing.
+2. **The durable session has no behavioural scorecard case.** P6's proof is the kill matrix,
+   which lives outside the scorecard, so P6 is not covered by the hard-zero safety counters.
+   Cross-phase non-negotiable §7 says "every new capability adds a fixed behavioural case
+   before it can be called complete." P6 is closed against the kill matrix instead. This is a
+   real gap in the evidence chain and should be closed by P7 or explicitly promoted.
+3. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
+   the unresolved-effect deletion guard through a session, thread-leak measurement, and soak
+   are not done.
+4. **Evaluation corpus versioning.** P4/P5 changed case definitions (`purpose`, `tags`, `done`,
+   `allowed`, `prohibited`) and the corpus digest moved `3f34750b…` → `d24bb33f…`, but
+   `case_version` is still `1`. Rewriting `done` was necessary — the old condition would have
+   let a case pass *by failing* once the capability existed — but two materially different
+   corpora now both claim `v1`, so historical scorecard artifacts are not comparable. Not
+   gaming; a versioning gap. Belongs to P15-F evidence pinning.
+5. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
+   assertions between identical runs (453 runs / 27,825 vs 27,822 across locales, and the same
+   drift at unchanged commits). Diagnose before P15 evidence pinning.
+6. **Two disclosed, unfixed defects carried forward**: the orphaned private `.tamoz-*` temp
+   file after a kill between publication and unlink, and the `:retry` request-recovery latent
+   defect. Both are deliberate deferrals with stated reasons, not oversights.
+7. P7–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Fan out a builder and a separate harsh critic with fresh context to produce and review
-`docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md`. The plan must map the current agent runtime onto
-the existing `DurableRunner`, checkpoint, request inbox, lease/fence, effect-journal, and
-codec seams, and must define the kill matrix before any code is written.
+Two things, in this order.
+
+1. **Land the P6 critic verdict.** P6 is closed in the trackers but is gate-verified only. If
+   the critic confirms a seam is timing-dependent rather than deterministic, or reaches
+   `:not_applied` from an unproven pre-state, P6 reopens — closure in a tracker is not proof.
+2. **Then P7 — interactive and resumable CLI.** Fan out a builder and a separate harsh critic
+   to produce and review `docs/P7_INTERACTIVE_CLI_PLAN.md` before any implementation. P7 is
+   also the natural place to close gap 2 above by giving the durable session a behavioural
+   scorecard case, so that P6's guarantees fall under the hard-zero safety counters rather
+   than resting on the kill matrix alone.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
 publish, release, or connect real physical actuators. The committed product checkpoint is
-`6504398`; this progress page and the tracker updates are the only intentional artifacts added
-by this handoff.
+`752363f`.
