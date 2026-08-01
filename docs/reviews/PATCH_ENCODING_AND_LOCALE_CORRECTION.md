@@ -200,6 +200,18 @@ input, so every committed fixture, baseline, scorecard case, and corpus digest i
 
 ## Residual risk
 
+- **Not fixed, and reported for a separate decision.** A file that is not valid UTF-8 is a
+  fail-closed but untyped rejection. `read_file` and `prepare_patch` both end in
+  `rescue Encoding::CompatibilityError, Encoding::InvalidByteSequenceError,
+  Encoding::UndefinedConversionError` raising `ToolError, "file is not valid UTF-8 text"`,
+  but `Pathname#read(encoding: Encoding::UTF_8)` tags bytes rather than transcoding them,
+  so none of those three is ever raised and that branch is dead. `read_file` therefore
+  returns invalid UTF-8 in its output, and `apply_patch` raises an untyped
+  `ArgumentError: invalid byte sequence in UTF-8` out of `content.scan(before)`, which
+  invariant 17 does not permit for a recoverable tool failure. Reproduced identically at
+  `0abb42a` and after this correction; the target file is left byte-identical in both. The
+  minimal fix is an explicit `content.valid_encoding?` gate after the read. Left outside
+  this correction's authorized scope.
 - **Not fixed, and reported for a separate decision.** `Toolbox#validate_patch_text!` states
   "`after` must be valid UTF-8" but tests `value.valid_encoding?`, which asks only whether a
   string is valid *in its own encoding*. A String tagged `ASCII-8BIT` containing `\xFF`
