@@ -52,7 +52,5 @@ module Tamoz
 
       private_constant :ALWAYS, :PROJECTIONS
     end
-
-    private_constant :StreamEmitter
   end
 end

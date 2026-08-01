@@ -169,36 +169,42 @@ module Tamoz
         end
       end
 
-      def start(task, thread:, request_id:, owner_id: nil)
+      def start(task, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
+        run_context = build_run_context(context:, emitter:)
         @runner.deliver(
           {"task" => String(task)},
           thread:,
           request_id:,
-          owner_id: owner_id || SecureRandom.uuid
+          owner_id: owner_id || SecureRandom.uuid,
+          context: run_context
         )
         outcome(thread:, request_id:)
       end
 
-      def resume(answers, thread:, request_id:, owner_id: nil)
+      def resume(answers, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
+        run_context = build_run_context(context:, emitter:)
         @runner.deliver(
           answers,
           thread:,
           request_id:,
           operation: :resume,
-          owner_id: owner_id || SecureRandom.uuid
+          owner_id: owner_id || SecureRandom.uuid,
+          context: run_context
         )
         outcome(thread:, request_id:)
       end
 
-      def continue(thread:, request_id:, owner_id: nil)
+      def continue(thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
+        run_context = build_run_context(context:, emitter:)
         @runner.deliver(
           {},
           thread:,
           request_id:,
           operation: :continue,
-          owner_id: owner_id || SecureRandom.uuid
+          owner_id: owner_id || SecureRandom.uuid,
+          context: run_context
         )
         outcome(thread:, request_id:)
       end
@@ -268,6 +274,20 @@ module Tamoz
       end
 
       private
+
+      def build_run_context(context:, emitter:)
+        cancellation = context&.cancellation || Tamoz::CancellationToken.new
+        actual_emitter = emitter || context&.emitter || Tamoz::Emitter::Null::INSTANCE
+        return context.with(cancellation:, emitter: actual_emitter) if context
+
+        Tamoz::Context.new(
+          run_id: SecureRandom.uuid,
+          execution_id: SecureRandom.uuid,
+          request_id: SecureRandom.uuid,
+          cancellation:,
+          emitter: actual_emitter
+        )
+      end
 
       # Invariant 18: an unsupported newer record version must fail before any node
       # runs. This is the boundary where that happens for a resumed session.
