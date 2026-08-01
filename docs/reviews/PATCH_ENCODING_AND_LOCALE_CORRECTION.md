@@ -168,6 +168,29 @@ Every read site was inspected and classified.
 | `search_text` with a multi-byte query, any locale | matches by character content |
 | design document that is not valid UTF-8 | `validate_design.rb` raises rather than passing silently, under every locale |
 
+## Regression proof
+
+Four new deterministic tests fail against `0abb42a` and pass against the correction. One
+further test records the rejection floor, which the correction must not move.
+
+| Test | Property |
+|---|---|
+| `AgentToolboxTest#test_patch_replaces_exactly_one_multibyte_occurrence` | five cases (1-byte overhead, a wide script, a combined emoji, multi-byte outside the match, multi-byte only in the replacement); the bytes on disk equal the single-occurrence replacement, the file's byte length equals `original - before + after`, the preview equals the applied edit, and `after_sha256` equals the digest of the correct content |
+| `AgentToolboxTest#test_patch_preview_locates_an_occurrence_following_multibyte_text` | the hunk header names line 3 when two multi-byte lines precede the match |
+| `AgentToolboxTest#test_search_text_matches_a_multibyte_query_without_a_utf8_locale` | a subprocess under `LC_ALL=C` returns the matching line instead of raising |
+| `DocumentationTest#test_design_validation_passes_without_a_utf8_locale` | the real gate script exits 0 under `LC_ALL=C` |
+| `AgentToolboxTest#test_every_patch_rejection_leaves_the_target_byte_identical` | ten rejections over multi-byte content (stale digest, uppercase digest, zero match, ambiguous match, empty `before`, invalid-UTF-8 `after`, absolute path, root escape, null-byte path, symlink target) each raise `ToolError` from both `preview` and `execute` and leave the file byte-identical |
+
+Observed against `0abb42a` with the corrected tests in place:
+
+| Test | Pre-correction result |
+|---|---|
+| `test_patch_replaces_exactly_one_multibyte_occurrence` | fail: applied `NAME = "world"NEXT = 1\n`, expected `NAME = "world"\nNEXT = 1\n` |
+| `test_patch_preview_locates_an_occurrence_following_multibyte_text` | fail: `@@ -2,1 +2,1 @@`, expected `@@ -3,1 +3,1 @@` |
+| `test_search_text_matches_a_multibyte_query_without_a_utf8_locale` | fail: `Encoding::CompatibilityError: incompatible character encodings: US-ASCII and UTF-8` |
+| `test_design_validation_passes_without_a_utf8_locale` | fail: `ArgumentError: invalid byte sequence in US-ASCII` |
+| `test_every_patch_rejection_leaves_the_target_byte_identical` | pass, as required of a floor |
+
 ## Compatibility
 
 No public API changed: no tool name, argument name, receipt line, error class, event, or
@@ -199,4 +222,24 @@ input, so every committed fixture, baseline, scorecard case, and corpus digest i
 
 ## Gate evidence
 
-Recorded with the implementation commit, not with this document.
+Executed under rbenv Ruby 3.3.11:
+
+- reviewed base `0abb42a`: `rake ci` under `LC_ALL=en_US.UTF-8` passed with 351 tests and
+  27,221 assertions; under `LC_ALL=C` `design:validate` aborted with
+  `invalid byte sequence in US-ASCII`, and running the suite alone still errored in
+  `DocumentationTest#test_design_source_and_contract_counts_are_pinned`;
+- corrected tree: `rake ci` under `LC_ALL=en_US.UTF-8` — design validation over 22
+  documents, 55 invariants, 40 ADRs; 356 tests, 27,286 assertions, 0 failures, 0 errors,
+  0 skips;
+- corrected tree: `rake ci` under `LC_ALL=C` — identical design validation output; 356
+  tests, 27,286 assertions, 0 failures, 0 errors, 0 skips;
+- `tamoz-eval scorecard agent-smoke` under both locales: `"decision":"pass"`, all four hard
+  gates pass, `content_digest sha256:57a2ac8fea4cc03f51676f0b009add6ae09fac9d0ae7985942e044737ff1e699`
+  in all three of the pre-correction run, the corrected UTF-8 run, and the corrected `C`
+  run, with aggregates byte-identical to the pre-correction baseline: 6 task successes, 6
+  verified completions, 0 unsafe or bypassed actions, 0 false-positive completions, 0
+  incomplete case evidence, 1 unnecessary mutation, 1 repeated-action stop;
+- `ruby -wc` clean on every changed file; `git diff --check` clean.
+
+The 351 -> 356 test delta is the five tests added by this correction. No expected value was
+adjusted to make anything green.

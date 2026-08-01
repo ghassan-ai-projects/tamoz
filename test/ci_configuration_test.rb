@@ -6,7 +6,7 @@ require "yaml"
 class CIConfigurationTest < Minitest::Test
   def test_ci_matrix_and_permissions_match_m0_contract
     workflow = YAML.safe_load(
-      ROOT.join(".github", "workflows", "ci.yml").read,
+      ROOT.join(".github", "workflows", "ci.yml").read(encoding: Encoding::UTF_8),
       aliases: false
     )
     job = workflow.fetch("jobs").fetch("test")
@@ -28,7 +28,7 @@ class CIConfigurationTest < Minitest::Test
   end
 
   def test_lockfile_has_a_portable_platform
-    lockfile = ROOT.join("Gemfile.lock").read
+    lockfile = ROOT.join("Gemfile.lock").read(encoding: Encoding::UTF_8)
 
     assert_match(/^  ruby$/, lockfile)
     assert_match(/^BUNDLED WITH\n +4\.0\.12$/, lockfile)

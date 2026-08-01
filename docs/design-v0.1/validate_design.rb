@@ -37,7 +37,7 @@ required_files.each do |name|
 end
 
 markdown_files.each do |path|
-  text = File.read(path)
+  text = File.read(path, encoding: Encoding::UTF_8)
   fence_count = text.lines.count { |line| line.start_with?("```") }
   failures << "#{File.basename(path)}: unbalanced fenced code blocks" unless fence_count.even?
 
@@ -63,7 +63,7 @@ markdown_files.each do |path|
   end
 end
 
-invariants = File.read(File.join(root, "INVARIANTS.md"))
+invariants = File.read(File.join(root, "INVARIANTS.md"), encoding: Encoding::UTF_8)
 numbers = invariants.scan(/^\| (\d+) \| \*\*/).flatten.map(&:to_i)
 expected_numbers = (1..55).to_a
 failures << "invariants must be numbered 1..55; found #{numbers.inspect}" unless numbers == expected_numbers
@@ -80,7 +80,9 @@ unless missing_coverage.empty? && extra_coverage.empty?
               "extra #{extra_coverage.inspect}"
 end
 
-all_text = markdown_files.map { |path| [File.basename(path), File.read(path)] }
+all_text = markdown_files.map do |path|
+  [File.basename(path), File.read(path, encoding: Encoding::UTF_8)]
+end
 forbidden = {
   "All 18 invariants" => "stale invariant count",
   "The 18 invariants" => "stale invariant count",
@@ -114,18 +116,18 @@ all_text.each do |name, text|
   end
 end
 
-readme = File.read(File.join(root, "README.md"))
+readme = File.read(File.join(root, "README.md"), encoding: Encoding::UTF_8)
 failures << "README.md: canonical framework title is missing" unless readme.start_with?("# Tamoz ")
 required_files.reject { |name| name == "README.md" }.each do |name|
   failures << "README.md does not reference #{name}" unless readme.include?("(#{name})")
 end
 
-agent_design = File.read(File.join(root, "TAMOZ_AGENT_DESIGN.md"))
+agent_design = File.read(File.join(root, "TAMOZ_AGENT_DESIGN.md"), encoding: Encoding::UTF_8)
 unless agent_design.start_with?("# Tamoz Agent ")
   failures << "TAMOZ_AGENT_DESIGN.md: canonical reference-agent title is missing"
 end
 
-decisions = File.read(File.join(root, "DECISIONS.md"))
+decisions = File.read(File.join(root, "DECISIONS.md"), encoding: Encoding::UTF_8)
 adr_numbers = decisions.scan(/^### ADR-(\d{3}) /).flatten.map(&:to_i)
 expected_adrs = (1..40).to_a
 failures << "ADRs must be numbered 001..040; found #{adr_numbers.inspect}" unless adr_numbers == expected_adrs
@@ -153,7 +155,7 @@ required_terms = {
 }.freeze
 
 required_terms.each do |name, terms|
-  text = File.read(File.join(root, name))
+  text = File.read(File.join(root, name), encoding: Encoding::UTF_8)
   terms.each do |term|
     failures << "#{name}: missing required contract term #{term.inspect}" unless text.include?(term)
   end

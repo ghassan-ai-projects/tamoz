@@ -256,7 +256,7 @@ module Tamoz
           break if results.length >= MAX_SEARCH_RESULTS
           next if path.size > MAX_FILE_BYTES
 
-          path.each_line.with_index(1) do |line, number|
+          path.each_line(encoding: Encoding::UTF_8).with_index(1) do |line, number|
             next unless line.include?(query)
 
             relative = path.relative_path_from(root)
@@ -297,7 +297,7 @@ module Tamoz
 
         index = content.index(before)
         after_content = content.dup
-        after_content[index, before.bytesize] = arguments.fetch("after")
+        after_content[index, before.length] = arguments.fetch("after")
         if after_content.bytesize > MAX_FILE_BYTES
           raise ToolError, "patched file exceeds #{MAX_FILE_BYTES} bytes"
         end
@@ -307,7 +307,7 @@ module Tamoz
           before_text: before,
           after_text: arguments.fetch("after"),
           after_content:,
-          line: content.byteslice(0, index).count("\n") + 1
+          line: content[0, index].count("\n") + 1
         }.freeze
       rescue Encoding::CompatibilityError, Encoding::InvalidByteSequenceError,
              Encoding::UndefinedConversionError

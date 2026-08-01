@@ -4,6 +4,14 @@ require_relative "test_helper"
 require "digest"
 
 class AgentToolboxTest < Minitest::Test
+  MULTIBYTE_PATCH_CASES = [
+    ["one byte of overhead", %(NAME = "héllo"\nNEXT = 1\n), %(NAME = "héllo"), %(NAME = "world")],
+    ["a wide script", %(LABEL = "日本語テキスト"\nNEXT = 1\nTAIL = 2\n), %(LABEL = "日本語テキスト"), %(LABEL = "x")],
+    ["a combined emoji", %(ICON = "👩‍💻"\nNEXT = 1\nTAIL = 2\n), %(ICON = "👩‍💻"), %(ICON = "x")],
+    ["multi-byte outside the match", %(NAME = "hello"\nOTHER = "héllo"\n), %(NAME = "hello"), %(NAME = "world")],
+    ["multi-byte only in the replacement", %(NAME = "hello"\nNEXT = 1\n), %(NAME = "hello"), %(NAME = "héllo")]
+  ].freeze
+
   def test_lists_and_searches_workspace_without_entering_ignored_directories
     Dir.mktmpdir("tamoz-toolbox") do |root|
       Dir.mkdir(File.join(root, "lib"))
@@ -109,6 +117,127 @@ class AgentToolboxTest < Minitest::Test
         toolbox.preview("apply_patch", base.merge("path" => "link.txt", "before" => "same same"))
       end
       assert_equal "same same\n", File.read(File.join(root, "repeated.txt"))
+    end
+  end
+
+  def test_patch_replaces_exactly_one_multibyte_occurrence
+    MULTIBYTE_PATCH_CASES.each do |label, original, before, after|
+      Dir.mktmpdir("tamoz-toolbox") do |root|
+        path = File.join(root, "values.rb")
+        File.write(path, original, encoding: Encoding::UTF_8)
+        toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+        arguments = {
+          "path" => "values.rb",
+          "expected_sha256" => Digest::SHA256.hexdigest(original),
+          "before" => before,
+          "after" => after
+        }
+        expected = original.sub(before) { after }
+
+        assert_equal(
+          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-#{before}\n+#{after}",
+          toolbox.preview("apply_patch", arguments),
+          label
+        )
+        receipt = toolbox.execute("apply_patch", arguments)
+
+        assert_equal expected, File.read(path, encoding: Encoding::UTF_8), label
+        assert_equal original.bytesize - before.bytesize + after.bytesize, File.size(path), label
+        assert_includes receipt, "after_sha256: #{Digest::SHA256.hexdigest(expected)}", label
+      end
+    end
+  end
+
+  def test_patch_preview_locates_an_occurrence_following_multibyte_text
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "# héllo wörld ünicode\n# second line\nTARGET = 1\nTAIL = 2\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "before" => "TARGET = 1",
+        "after" => "TARGET = 2"
+      }
+
+      assert_equal(
+        "--- a/values.rb\n+++ b/values.rb\n@@ -3,1 +3,1 @@\n-TARGET = 1\n+TARGET = 2",
+        toolbox.preview("apply_patch", arguments)
+      )
+      toolbox.execute("apply_patch", arguments)
+
+      assert_equal(
+        original.sub("TARGET = 1") { "TARGET = 2" },
+        File.read(path, encoding: Encoding::UTF_8)
+      )
+    end
+  end
+
+  def test_every_patch_rejection_leaves_the_target_byte_identical
+    Dir.mktmpdir("tamoz-toolbox") do |outside|
+      root = File.join(outside, "workspace")
+      Dir.mkdir(root)
+      File.write(File.join(outside, "escape.rb"), "outside\n", encoding: Encoding::UTF_8)
+      path = File.join(root, "values.rb")
+      original = %(LABEL = "日本語"\nSAME = 1\nSAME = 1\n)
+      File.write(path, original, encoding: Encoding::UTF_8)
+      File.symlink("values.rb", File.join(root, "link.rb"))
+      digest = Digest::SHA256.hexdigest(original)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      base = {
+        "path" => "values.rb",
+        "expected_sha256" => digest,
+        "before" => %(LABEL = "日本語"),
+        "after" => %(LABEL = "x")
+      }
+      rejections = {
+        "stale digest" => base.merge("expected_sha256" => "0" * 64),
+        "uppercase digest" => base.merge("expected_sha256" => digest.upcase),
+        "zero match" => base.merge("before" => %(LABEL = "français")),
+        "ambiguous match" => base.merge("before" => "SAME = 1"),
+        "empty before" => base.merge("before" => ""),
+        "invalid utf-8 after" => base.merge("after" => "\xFF"),
+        "absolute path" => base.merge("path" => path),
+        "root escape" => base.merge("path" => "../escape.rb"),
+        "null byte path" => base.merge("path" => "values\0.rb"),
+        "symlink target" => base.merge("path" => "link.rb")
+      }
+
+      rejections.each do |label, arguments|
+        assert_raises(Tamoz::Agent::ToolError, label) { toolbox.preview("apply_patch", arguments) }
+        assert_raises(Tamoz::Agent::ToolError, label) { toolbox.execute("apply_patch", arguments) }
+        assert_equal original.b, File.binread(path), label
+      end
+    end
+  end
+
+  def test_search_text_matches_a_multibyte_query_without_a_utf8_locale
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      File.write(
+        File.join(root, "notes.txt"),
+        "# héllo wörld\nTARGET = 1\n",
+        encoding: Encoding::UTF_8
+      )
+      script = <<~RUBY
+        require "tamoz/agent"
+        toolbox = Tamoz::Agent::Toolbox.new(root: ARGV.fetch(0))
+        print toolbox.execute("search_text", "query" => "h\\u00E9llo w\\u00F6rld", "path" => ".")
+      RUBY
+
+      stdout, stderr, status = Open3.capture3(
+        {"LC_ALL" => "C", "LANG" => "C"},
+        RbConfig.ruby,
+        "-I#{GEM_ROOTS.fetch("tamoz-core").join("lib")}",
+        "-I#{GEM_ROOTS.fetch("tamoz-graph").join("lib")}",
+        "-I#{GEM_ROOTS.fetch("tamoz-agent").join("lib")}",
+        "-e",
+        script,
+        root
+      )
+
+      assert status.success?, "#{stdout}\n#{stderr}"
+      assert_equal "notes.txt:1:# héllo wörld", stdout.force_encoding(Encoding::UTF_8)
     end
   end
 

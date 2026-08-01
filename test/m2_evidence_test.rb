@@ -42,7 +42,7 @@ class M2EvidenceTest < Minitest::Test
   end
 
   def test_runner_uses_only_fixed_source_controlled_selections
-    source = ROOT.join("script", "run_m2_conformance").read
+    source = ROOT.join("script", "run_m2_conformance").read(encoding: Encoding::UTF_8)
 
     assert_includes source, "SELECTIONS = {"
     assert_includes source, "(deny network*)"
