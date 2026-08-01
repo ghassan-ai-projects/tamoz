@@ -3,7 +3,7 @@
 Status: active  
 Current phase: P7 — interactive and resumable CLI
 Last completed product checkpoint: P6 — durable session/effect recovery (P6-F partial)
-Canonical next action: design P7 interactive/resumable CLI over the P6 durable session; do not implement before review
+Canonical next action: implement P7 interactive/resumable CLI; P8 trusted profiles design accepted and may begin in parallel
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 

@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `6504398`
+Last verified: 2026-08-01 at commit `cab974f`
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -374,6 +374,25 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 
 ---
 
+### Round 6 — P7/P7 interactive CLI and P8 trusted profiles planning
+
+Two design plans were produced in parallel and reviewed by separate critics with fresh context.
+
+- **P7** — `docs/P7_INTERACTIVE_CLI_PLAN.md` defines a subcommand-based CLI (`ask`, `resume`,
+  `continue`, `list`, `show`, `follow-up`, `redirect`, `cancel`, `resolve`) over the existing
+  `Tamoz::Agent::Session`, adds a stream/emitter contract, kill-resume scorecard case, and
+  clarification/approval interrupts. The initial critic rejected the draft over the missing
+  stream contract, unsound cancel semantics, bare-invocation ambiguity, and effect-journal
+  vocabulary; all were amended and the plan is now **accepted**.
+- **P8** — `docs/P8_TRUSTED_PROFILES_PLAN.md` defines operator-owned YAML profiles outside the
+  repository, strict load/validate/normalize, canonical digest excluding the adoption registry,
+  session-epoch binding with legacy compatibility, and `--profile` CLI integration. The critic
+  rejected the draft over adoption circularity, arbitrary network/credential exposure in
+  `model_roles`, and session-record compatibility; all were amended and the plan is now
+  **accepted**.
+
+Design checkpoint committed at `cab974f`.
+
 ### Round 5 — P6 durable session and effect recovery
 
 Four commits: `8c977dc` (plan + harsh self-review, documentation only), `2d94908` (P6-A/B),
@@ -448,8 +467,9 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
-| P7 interactive/resumable CLI | pending — next | not started |
-| P8–P15 | pending | not started |
+| P7 interactive/resumable CLI | designing | **design accepted** — plan + critic review committed |
+| P8 trusted project profiles | pending — design accepted | **design accepted** — plan + critic review committed |
+| P9–P15 | pending | not started |
 
 ---
 
@@ -457,48 +477,41 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 1. **P6 is not adversarially verified.** The coordinator's deterministic gate passes, but the
    independent critic pass is still in flight. Open questions it is attacking: do the kills
-   land where the seam names claim (a kill firing slightly early or late proves nothing while
-   still looking green); can `:unknown` be driven to `:not_applied` from an unproven pre-state
-   via crash, stale fence, lease loss, or race; can `MAX_ATTEMPTS = 3` be exceeded or reset;
-   was the `Deliberation` extraction genuinely verbatim, given that the identical scorecard
-   digest is being used as the proof it changed nothing.
-2. **The durable session has no behavioural scorecard case.** P6's proof is the kill matrix,
-   which lives outside the scorecard, so P6 is not covered by the hard-zero safety counters.
-   Cross-phase non-negotiable §7 says "every new capability adds a fixed behavioural case
-   before it can be called complete." P6 is closed against the kill matrix instead. This is a
-   real gap in the evidence chain and should be closed by P7 or explicitly promoted.
-3. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
+   land where the seam names claim; can `:unknown` be driven to `:not_applied` from an unproven
+   pre-state; can `MAX_ATTEMPTS = 3` be exceeded or reset; was the `Deliberation` extraction
+   genuinely verbatim.
+2. **P7 implementation.** The design is accepted; the CLI needs to be built, reviewed, and
+   proven with the `resume_after_kill` scorecard case. This will also close gap 3 below by
+   giving the durable session hard-zero safety-counter coverage.
+3. **The durable session has no behavioural scorecard case.** P6's proof is the kill matrix,
+   which lives outside the scorecard. P7's `resume_after_kill` case is designed to cover the
+   durable session under the hard-zero safety counters.
+4. **P8 implementation.** The design is accepted; profiles need to be built, reviewed, and
+   fuzzed.
+5. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
    the unresolved-effect deletion guard through a session, thread-leak measurement, and soak
    are not done.
-4. **Evaluation corpus versioning.** P4/P5 changed case definitions (`purpose`, `tags`, `done`,
-   `allowed`, `prohibited`) and the corpus digest moved `3f34750b…` → `d24bb33f…`, but
-   `case_version` is still `1`. Rewriting `done` was necessary — the old condition would have
-   let a case pass *by failing* once the capability existed — but two materially different
-   corpora now both claim `v1`, so historical scorecard artifacts are not comparable. Not
-   gaming; a versioning gap. Belongs to P15-F evidence pinning.
-5. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
-   assertions between identical runs (453 runs / 27,825 vs 27,822 across locales, and the same
-   drift at unchanged commits). Diagnose before P15 evidence pinning.
-6. **Two disclosed, unfixed defects carried forward**: the orphaned private `.tamoz-*` temp
-   file after a kill between publication and unlink, and the `:retry` request-recovery latent
-   defect. Both are deliberate deferrals with stated reasons, not oversights.
-7. P7–P15 remain unimplemented.
+6. **Evaluation corpus versioning.** P4/P5 changed case definitions while `case_version` stayed
+   `1`, so historical scorecard artifacts are not comparable. Belongs to P15-F evidence pinning.
+7. **Gate assertion variance** — assertion count varies by a few between identical runs.
+   Diagnose before P15 evidence pinning.
+8. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
+   after a kill, and the `:retry` request-recovery latent defect.
+9. P9–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Two things, in this order.
+Begin P7 implementation. Fan out a builder and a separate harsh critic with fresh context to
+implement the accepted `docs/P7_INTERACTIVE_CLI_PLAN.md`, including the stream/emitter contract,
+subcommands, interrupt rendering, redirect/cancel/follow-up, the `resume_after_kill` scorecard
+case, and the full P7-E test matrix. Commit in work-package chunks (P7-A, P7-B, P7-C, P7-E)
+following the phase protocol.
 
-1. **Land the P6 critic verdict.** P6 is closed in the trackers but is gate-verified only. If
-   the critic confirms a seam is timing-dependent rather than deterministic, or reaches
-   `:not_applied` from an unproven pre-state, P6 reopens — closure in a tracker is not proof.
-2. **Then P7 — interactive and resumable CLI.** Fan out a builder and a separate harsh critic
-   to produce and review `docs/P7_INTERACTIVE_CLI_PLAN.md` before any implementation. P7 is
-   also the natural place to close gap 2 above by giving the durable session a behavioural
-   scorecard case, so that P6's guarantees fall under the hard-zero safety counters rather
-   than resting on the kill matrix alone.
+P8 can begin implementation in parallel once a builder/critic pair is available, but P7 is the
+active phase and must pass its behavioral proofs first.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or connect real physical actuators. The committed product checkpoint is
-`752363f`.
+publish, release, or connect real physical actuators. The committed design checkpoint is
+`cab974f`; the last product checkpoint is `752363f`.

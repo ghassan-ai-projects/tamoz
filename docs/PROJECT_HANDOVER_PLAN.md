@@ -58,8 +58,8 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P4 | complete | compound one-file edit | `a941f25` | `def7908`, `67f72d7` |
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
-| P7 | **pending — next** | interactive/resumable CLI | — | — |
-| P8 | pending | trusted project profiles | — | — |
+| P7 | **designing** | interactive/resumable CLI | `cab974f` | — |
+| P8 | pending — design accepted | trusted project profiles | `cab974f` | — |
 | P9 | pending | evaluated skills | — | — |
 | P10 | pending | governed MCP client/host | — | — |
 | P11 | pending | three-layer memory | — | — |
