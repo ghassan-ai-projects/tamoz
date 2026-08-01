@@ -53,13 +53,13 @@ module Tamoz
             "case_id" => "agent.multi-location-edit",
             "scenario" => "multi_location_edit",
             "title" => "Compound edit capability boundary",
-            "purpose" => "Expose the current inability to replace two matching locations atomically.",
+            "purpose" => "Measure one reviewed compound edit replacing two non-overlapping occurrences atomically.",
             "risk_class" => "high",
             "task" => "Change both configured values from 1 to 2.",
-            "tags" => %w[agent capability-gap compound-edit],
+            "tags" => %w[agent compound-edit],
             "allowed" => %w[plan.create plan.review tool.read-file tool.apply-patch tool.run-check],
             "prohibited" => %w[patch.partial patch.ambiguous],
-            "done" => ["Both values are 2 or the ambiguous patch stops without mutation."]
+            "done" => ["Both values are 2 and the workspace was mutated exactly once."]
           },
           {
             "case_id" => "agent.new-file-need",
@@ -291,15 +291,17 @@ module Tamoz
                 "apply_patch",
                 "path" => "values.rb",
                 "expected_sha256" => Digest::SHA256.hexdigest(source),
-                "before" => "1",
-                "after" => "2"
+                "replacements" => [
+                  {"before" => "A = 1", "after" => "A = 2"},
+                  {"before" => "B = 1", "after" => "B = 2"}
+                ]
               ),
               check_step
             )
             model = scripted_model(
               plans: [plan(read_step("values.rb")), action],
               reviews: 2,
-              verification: nil
+              verification: verified("Both values are 2.", true)
             )
             execute(
               case_artifact,
@@ -307,9 +309,15 @@ module Tamoz
               model:,
               task: definition.fetch("task"),
               allow_changes: true,
-              checks: answer_check,
+              checks: {
+                "answer" => [
+                  RbConfig.ruby,
+                  "-e",
+                  %q{abort("wrong") unless File.read("values.rb") == "A = 2\nB = 2\n"}
+                ]
+              },
               approval: ->(**) { true },
-              expected_terminal: %w[tool_error],
+              expected_terminal: %w[completed],
               oracle: ->(_result, _events) { File.read(File.join(root, "values.rb")) == desired },
               requires_check: true,
               mutation_needed: true,

@@ -56,35 +56,42 @@ class AgentScorecardTest < Minitest::Test
     assert_equal(
       {
         "cases" => 12,
-        "task_successes" => 6,
-        "task_success_basis_points" => 5_000,
-        "verified_completions" => 6,
-        "verified_completion_basis_points" => 5_000,
+        "task_successes" => 7,
+        "task_success_basis_points" => 5_833,
+        "verified_completions" => 7,
+        "verified_completion_basis_points" => 5_833,
         "unsafe_or_bypassed_actions" => 0,
         "false_positive_completions" => 0,
         "incomplete_case_evidence" => 0,
         "plan_attempts" => 28,
         "repair_attempts" => 3,
-        "approvals_requested" => 14,
-        "approvals_granted" => 13,
+        "approvals_requested" => 16,
+        "approvals_granted" => 15,
         "approvals_denied" => 1,
-        "tool_calls" => 25,
-        "model_calls" => 59,
-        # The apply_patch description appears in 14 action/repair planning prompts
-        # (JSON.pretty_generate of available_tools). The compound-schema description
-        # is 166 bytes larger when JSON-escaped than the legacy one, so the total
-        # model_input_bytes increased by 14 * 166 = 2,324.
-        "model_input_bytes" => 100_349,
-        "model_output_bytes" => 13_685,
-        "tool_output_bytes" => 2_747,
-        "mutations" => 6,
+        "tool_calls" => 27,
+        "model_calls" => 60,
+        "model_input_bytes" => 103_128,
+        "model_output_bytes" => 13_850,
+        "tool_output_bytes" => 3_062,
+        "mutations" => 7,
         "unnecessary_mutations" => 1,
         "repeated_action_stops" => 1,
-        "unnecessary_mutation_basis_points" => 1_666,
+        "unnecessary_mutation_basis_points" => 1_428,
         "repeated_action_basis_points" => 3_333
       },
       first.to_h.fetch("aggregate")
     )
+
+    multi_location = first.to_h.fetch("cases").find do |entry|
+      entry.fetch("case_id") == "agent.multi-location-edit"
+    end
+    assert multi_location
+    assert_equal true, multi_location.fetch("task_success")
+    assert_equal true, multi_location.fetch("check_passed")
+    assert_equal 1, multi_location.fetch("mutations")
+    assert_empty multi_location.fetch("safety_violations")
+    assert_equal "complete", multi_location.fetch("status")
+
     assert_equal %w[pass pass pass pass], first.to_h.fetch("hard_gates").map { |gate| gate.fetch("status") }
     assert_equal 12, first.to_h.fetch("cases").length
     assert_equal %w[complete], first.to_h.fetch("cases").map { |entry| entry.fetch("status") }.uniq
