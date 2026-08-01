@@ -1,0 +1,752 @@
+# frozen_string_literal: true
+
+require "digest"
+require "json"
+
+module Tamoz
+  module Agent
+    # The node bodies of the durable session graph. Each public method is one graph
+    # node: it reads the frozen committed snapshot, may call the model or a tool
+    # through the effect journal, and returns a partial state update that the barrier
+    # commits.
+    #
+    # Every node must be safe to re-enter from its first line (invariant 4): after a
+    # crash the engine restarts the node, and correctness comes from the effect journal
+    # returning recorded receipts, not from the node remembering anything.
+    #
+    # Routing is explicit through the `next_node` channel rather than inferred from
+    # state, so a resumed run takes the same edge the crashed run would have taken.
+    class SessionNodes
+      MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
+      MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
+      GRAPH_VERSION = "1"
+      BEHAVIOR_VERSION = "tamoz.agent.session/1"
+
+      attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety
+
+      def initialize(
+        model:,
+        toolbox:,
+        max_plan_attempts:,
+        max_repair_attempts:,
+        model_call_safety:
+      )
+        @model = model
+        @toolbox = toolbox
+        @max_plan_attempts = max_plan_attempts
+        @max_repair_attempts = max_repair_attempts
+        @model_call_safety = model_call_safety
+        freeze
+      end
+
+      # --- nodes ---------------------------------------------------------------
+
+      def intake(state, context)
+        task = String(state.fetch(:task)).strip
+        raise ArgumentError, "task must not be empty" if task.empty?
+        if task.bytesize > MAX_TASK_BYTES
+          raise ArgumentError, "task exceeds #{MAX_TASK_BYTES} bytes"
+        end
+
+        {
+          task:,
+          phase: toolbox.action_capable? ? "discovery" : "read_only",
+          repair_attempt: 0,
+          step_cursor: 0,
+          next_node: "deliberate",
+          session: SessionRecords.build(
+            "session",
+            session_id: String(context.thread_id),
+            task:,
+            task_digest: Digest::SHA256.hexdigest(task),
+            root: toolbox.root.to_s,
+            graph_version: GRAPH_VERSION,
+            behavior_version: BEHAVIOR_VERSION,
+            tool_catalog_digest: toolbox.catalog_digest,
+            created_at_ms: 0
+          )
+        }
+      end
+
+      def deliberate(state, context)
+        phase = state.fetch(:phase).to_sym
+        repair_attempt = state.fetch(:repair_attempt)
+        task = state.fetch(:task)
+        evidence = state.fetch(:observations).map { |record| observation_payload(record) }
+        allowed_tools = phase == :discovery ? toolbox.read_only_names : toolbox.names
+        planning_context = planning_context_for(state, phase)
+        ambiguity = state.fetch(:provider_ambiguity)
+        plans = []
+        reviews = []
+        feedback = []
+
+        max_plan_attempts.times do |offset|
+          attempt = offset + 1
+          plan_id = "#{phase}.#{repair_attempt}.#{attempt}"
+          call = model_call(
+            context,
+            stage: :plan,
+            system: Deliberation::PLAN_SYSTEM,
+            prompt: Deliberation.planning_prompt(
+              task,
+              phase,
+              allowed_tools,
+              evidence,
+              feedback,
+              planning_context,
+              toolbox:
+            ),
+            call_index: attempt * 2
+          )
+          return blocked_update(call, "model call outcome is unknown") unless call.status == :succeeded
+
+          ambiguity += 1 if call.attempt_number > 1
+          plan = nil
+          begin
+            plan = Plan.parse(call.value)
+          rescue ProtocolError => error
+            feedback = [error.message]
+            reviews << SessionRecords.build(
+              "review",
+              review_id: "#{plan_id}.protocol",
+              plan_id:,
+              plan_digest: Digest::SHA256.hexdigest(String(call.value)),
+              layer: "protocol",
+              decision: "revise",
+              issues: feedback,
+              rationale: "the planner did not return a usable plan document"
+            )
+          end
+          next unless plan
+
+          plan_hash = Deliberation.canonical(plan.to_h)
+          plan_digest = SessionRecords.digest(plan_hash)
+          plans << SessionRecords.build(
+            "plan",
+            plan_id:,
+            phase: phase.to_s,
+            attempt:,
+            plan: plan_hash,
+            plan_digest:
+          )
+
+          structural = Deliberation.structural_issues(
+            plan,
+            phase:,
+            allowed_tools:,
+            toolbox:
+          )
+          reviews << SessionRecords.build(
+            "review",
+            review_id: "#{plan_id}.structural",
+            plan_id:,
+            plan_digest:,
+            layer: "structural",
+            decision: structural.empty? ? "accept" : "revise",
+            issues: structural,
+            rationale: "deterministic structural review"
+          )
+          unless structural.empty?
+            feedback = structural
+            next
+          end
+
+          review_call = model_call(
+            context,
+            stage: :review,
+            system: Deliberation::REVIEW_SYSTEM,
+            prompt: Deliberation.review_prompt(
+              task,
+              plan,
+              phase:,
+              evidence:,
+              planning_context:
+            ),
+            call_index: (attempt * 2) + 1
+          )
+          unless review_call.status == :succeeded
+            return blocked_update(review_call, "model call outcome is unknown")
+          end
+
+          ambiguity += 1 if review_call.attempt_number > 1
+          review = nil
+          begin
+            review = Deliberation.parse_review(review_call.value)
+          rescue ProtocolError => error
+            feedback = [error.message]
+            reviews << SessionRecords.build(
+              "review",
+              review_id: "#{plan_id}.semantic",
+              plan_id:,
+              plan_digest:,
+              layer: "protocol",
+              decision: "revise",
+              issues: feedback,
+              rationale: "the reviewer did not return a usable review document"
+            )
+          end
+          next unless review
+
+          reviews << SessionRecords.build(
+            "review",
+            review_id: "#{plan_id}.semantic",
+            plan_id:,
+            plan_digest:,
+            layer: "semantic",
+            decision: review.fetch("decision"),
+            issues: review.fetch("issues"),
+            rationale: review.fetch("rationale")
+          )
+          if review.fetch("decision") == "accept"
+            return accept_plan(
+              state,
+              plan:,
+              plan_id:,
+              plan_digest:,
+              plan_hash:,
+              phase:,
+              plans:,
+              reviews:,
+              ambiguity:
+            )
+          end
+
+          feedback = review.fetch("issues")
+        end
+
+        plan_rejected(state, plans:, reviews:, ambiguity:, phase:, repair_attempt:)
+      end
+
+      def step_gate(state, context)
+        accepted = state.fetch(:accepted_plan)
+        steps = accepted.fetch("plan").fetch("steps")
+        cursor = state.fetch(:step_cursor)
+        return {next_node: "evaluate"} if cursor >= steps.length
+
+        step = steps.fetch(cursor)
+        tool = step["tool"]
+        return {next_node: "step_execute"} if tool.nil?
+
+        intent = build_intent(step, accepted)
+        unless toolbox.approval_required?(tool)
+          return {next_node: "step_execute", effect_intents: [intent]}
+        end
+
+        budget = toolbox.maximum_effect_output_bytes(tool)
+        if observation_bytes(state) + budget > MAX_OBSERVATION_BYTES
+          raise ToolError, "insufficient observation budget for #{tool}"
+        end
+
+        preview = toolbox.preview(tool, step.fetch("arguments"))
+        preview_digest = Digest::SHA256.hexdigest(preview)
+        descriptor = {
+          "kind" => "approve_tool",
+          "session_id" => state.fetch(:session).fetch("session_id"),
+          "plan_id" => accepted.fetch("plan_id"),
+          "plan_digest" => accepted.fetch("plan_digest"),
+          "step_id" => step.fetch("id"),
+          "tool" => tool,
+          "arguments" => step.fetch("arguments"),
+          "preview" => preview,
+          "arguments_digest" => intent.fetch("arguments_digest"),
+          "preview_digest" => preview_digest
+        }
+        answer = Tamoz.interrupt(descriptor, context)
+        granted = answer == true || answer == "approve" || answer == "approved"
+        approval = SessionRecords.build(
+          "approval",
+          approval_id: "#{accepted.fetch("plan_id")}.#{step.fetch("id")}",
+          plan_id: accepted.fetch("plan_id"),
+          plan_digest: accepted.fetch("plan_digest"),
+          step_id: step.fetch("id"),
+          tool:,
+          arguments_digest: intent.fetch("arguments_digest"),
+          preview_digest:,
+          decision: granted ? "approve" : "deny"
+        )
+        unless granted
+          return {
+            approvals: [approval],
+            next_node: "terminal",
+            terminal_reason: "approval_denied"
+          }
+        end
+
+        {
+          approvals: [approval],
+          effect_intents: [intent],
+          next_node: "step_execute"
+        }
+      end
+
+      def step_execute(state, context)
+        accepted = state.fetch(:accepted_plan)
+        steps = accepted.fetch("plan").fetch("steps")
+        cursor = state.fetch(:step_cursor)
+        step = steps.fetch(cursor)
+        phase = state.fetch(:phase)
+        tool = step["tool"]
+
+        if tool.nil?
+          return {
+            step_cursor: cursor + 1,
+            next_node: "evaluate",
+            observations: [
+              SessionRecords.build(
+                "observation",
+                phase:,
+                repair_attempt: state.fetch(:repair_attempt),
+                step_id: step.fetch("id"),
+                output: "No tool required."
+              )
+            ]
+          }
+        end
+
+        intent = find_intent(state, accepted, step)
+        outcome = dispatch(context, intent, step)
+        case outcome.status
+        when :unknown
+          return blocked_update(
+            outcome,
+            "effect outcome is unknown",
+            step_id: step.fetch("id"),
+            operation: intent.fetch("operation")
+          )
+        when :wait
+          raise LeaseLostError,
+                "another owner still holds effect #{outcome.effect_key}"
+        when :failed
+          raise ToolError, tool_error_message(outcome)
+        end
+
+        output = String(outcome.value.fetch("output"))
+        if observation_bytes(state) + output.bytesize > MAX_OBSERVATION_BYTES
+          raise ToolError, "tool observations exceed #{MAX_OBSERVATION_BYTES} bytes"
+        end
+
+        observation_fields = {
+          phase:,
+          repair_attempt: state.fetch(:repair_attempt),
+          step_id: step.fetch("id"),
+          output:,
+          tool:
+        }
+        observation_fields[:check] = outcome.value.fetch("check") if outcome.value.key?("check")
+        update = {
+          step_cursor: cursor + 1,
+          next_node: "evaluate",
+          observations: [SessionRecords.build("observation", **observation_fields)],
+          effect_receipts: [
+            SessionRecords.build(
+              "effect_receipt",
+              effect_key: outcome.effect_key,
+              step_id: step.fetch("id"),
+              operation: intent.fetch("operation"),
+              safety: intent.fetch("safety"),
+              status: "succeeded",
+              attempt_number: outcome.attempt_number,
+              reconciliation: outcome.reconciliation
+            )
+          ]
+        }
+        if outcome.value.key?("check")
+          update[:check_passed] = outcome.value.fetch("check").fetch("passed")
+        end
+        update
+      end
+
+      def evaluate(state, _context)
+        accepted = state.fetch(:accepted_plan)
+        steps = accepted.fetch("plan").fetch("steps")
+        cursor = state.fetch(:step_cursor)
+        check = current_pass_check(state)
+
+        if check
+          return {next_node: "verify", terminal_reason: "check_passed"} if check.fetch("passed")
+
+          return failed_check(state, check)
+        end
+        return {next_node: "step_gate"} if cursor < steps.length
+
+        case state.fetch(:phase)
+        when "discovery"
+          {next_node: "deliberate", phase: "action", step_cursor: 0}
+        when "read_only"
+          {next_node: "verify", terminal_reason: "completed"}
+        else
+          {next_node: "verify", terminal_reason: "completed_without_check"}
+        end
+      end
+
+      def verify(state, context)
+        accepted = state.fetch(:accepted_plan)
+        plan = Plan.parse(accepted.fetch("plan"))
+        review = last_semantic_review(state, accepted)
+        observations = state.fetch(:observations).map { |record| observation_payload(record) }
+        terminal_reason = state.fetch(:terminal_reason)
+        verification_context =
+          if toolbox.action_capable?
+            {
+              "configured_check_passed" => state.fetch(:check_passed),
+              "terminal_reason" => terminal_reason
+            }
+          else
+            {}
+          end
+
+        call = model_call(
+          context,
+          stage: :verify,
+          system: Deliberation::VERIFY_SYSTEM,
+          prompt: Deliberation.verification_prompt(
+            state.fetch(:task),
+            plan,
+            review,
+            observations,
+            verification_context:
+          ),
+          call_index: 0
+        )
+        return blocked_update(call, "model call outcome is unknown") unless call.status == :succeeded
+
+        document = Deliberation.parse_verification(call.value)
+        satisfied = document.fetch("satisfied")
+        evidence = document.fetch("evidence")
+        if toolbox.action_capable? && !toolbox.checks.empty? &&
+           state.fetch(:check_passed) != true
+          satisfied = false
+          evidence += ["framework: no configured check passed (#{terminal_reason})"]
+        end
+
+        {
+          next_node: "terminal",
+          provider_ambiguity: state.fetch(:provider_ambiguity) + (call.attempt_number > 1 ? 1 : 0),
+          verification: SessionRecords.build(
+            "verification",
+            answer: document.fetch("answer"),
+            satisfied:,
+            evidence:,
+            configured_check_passed: state.fetch(:check_passed) == true,
+            terminal_reason:
+          )
+        }
+      end
+
+      def terminal(state, _context)
+        verification = state[:verification]
+        {
+          phase: "terminal",
+          terminal: SessionRecords.build(
+            "terminal",
+            reason: state.fetch(:terminal_reason),
+            satisfied: verification ? verification.fetch("satisfied") : false,
+            blocked: state[:blocked]
+          )
+        }
+      end
+
+      # --- helpers -------------------------------------------------------------
+
+      private
+
+      def model_call(context, stage:, system:, prompt:, call_index:)
+        EffectDispatcher.run(
+          context:,
+          operation: "model.generate.#{stage}",
+          safety: model_call_safety,
+          call_index:,
+          request: {"stage" => stage.to_s, "system" => system, "prompt" => prompt},
+          actor: "tamoz.agent.session"
+        ) { {"output" => String(@model.generate(stage:, system:, prompt:))} }
+          .then { |outcome| unwrap_model(outcome) }
+      end
+
+      def unwrap_model(outcome)
+        return outcome unless outcome.status == :succeeded
+
+        value = outcome.value
+        text = value.is_a?(Hash) ? value.fetch("output") : String(value)
+        outcome.with(value: text)
+      end
+
+      def dispatch(context, intent, step)
+        tool = intent.fetch("tool")
+        arguments = step.fetch("arguments")
+        safety = intent.fetch("safety").to_sym
+        reconciler =
+          if safety == :reconcilable
+            lambda do
+              EffectDispatcher.reconcile_filesystem(
+                toolbox:,
+                intent:,
+                receipt: {"output" => reconciled_receipt(intent)}
+              )
+            end
+          end
+
+        EffectDispatcher.run(
+          context:,
+          operation: intent.fetch("operation"),
+          safety:,
+          call_index: 0,
+          request: {
+            "tool" => tool,
+            "arguments" => Deliberation.canonical(arguments),
+            "plan_digest" => intent.fetch("plan_digest")
+          },
+          actor: "tamoz.agent.session",
+          reconcile: reconciler
+        ) do
+          verify_intent_before_state!(intent)
+          result = toolbox.execute(tool, arguments)
+          if result.is_a?(CheckReceipt)
+            {
+              "output" => result.to_s,
+              "check" => {
+                "name" => result.name,
+                "outcome" => result.outcome,
+                "passed" => result.passed?,
+                "failure_signature" => result.failure_signature
+              }
+            }
+          else
+            {"output" => String(result)}
+          end
+        end
+      end
+
+      # The committed intent, not the live workspace, is the authority. If the observed
+      # before-state no longer matches what the operator approved, fail closed rather
+      # than execute against bytes nobody reviewed.
+      def verify_intent_before_state!(intent)
+        return unless intent.key?("before_state")
+
+        observed = EffectDispatcher.observe(toolbox.root.join(intent.fetch("path")))
+        return if observed.fetch("state") == intent.fetch("before_state")
+
+        raise ToolError,
+              "workspace no longer matches the approved before state for " \
+              "#{intent.fetch("path")}"
+      end
+
+      def reconciled_receipt(intent)
+        case intent.fetch("tool")
+        when "apply_patch"
+          <<~TEXT.chomp
+            Applied #{intent.fetch("path")}
+            before_sha256: #{intent.fetch("before_state")}
+            after_sha256: #{intent.fetch("after_digest")}
+            reconciled: after state proven on disk
+          TEXT
+        else
+          <<~TEXT.chomp
+            Created #{intent.fetch("path")}
+            mode: #{format("%04o", intent.fetch("after_mode"))}
+            sha256: #{intent.fetch("after_digest")}
+            reconciled: after state proven on disk
+          TEXT
+        end
+      end
+
+      def build_intent(step, accepted)
+        tool = step.fetch("tool")
+        arguments = step.fetch("arguments")
+        fields = {
+          step_id: step.fetch("id"),
+          plan_id: accepted.fetch("plan_id"),
+          plan_digest: accepted.fetch("plan_digest"),
+          tool:,
+          operation: "tool.#{tool}",
+          safety: tool_safety(tool, arguments).to_s,
+          arguments_digest: SessionRecords.digest(Deliberation.canonical(arguments))
+        }
+        toolbox.effect_intent(tool, arguments).each do |key, value|
+          fields[key.to_sym] = value
+        end
+        fields[:check_name] = arguments.fetch("name") if tool == "run_check"
+        SessionRecords.build("effect_intent", **fields)
+      end
+
+      def tool_safety(tool, arguments)
+        case tool
+        when "apply_patch", "create_file" then :reconcilable
+        when "run_check" then toolbox.check_safety(arguments.fetch("name"))
+        else :read_only
+        end
+      end
+
+      def find_intent(state, accepted, step)
+        intent = state.fetch(:effect_intents).reverse.find do |record|
+          record.fetch("plan_id") == accepted.fetch("plan_id") &&
+            record.fetch("step_id") == step.fetch("id")
+        end
+        raise ToolError, "no committed effect intent for step #{step.fetch("id")}" unless intent
+
+        intent
+      end
+
+      def observation_payload(record)
+        payload = {
+          "phase" => record.fetch("phase"),
+          "repair_attempt" => record.fetch("repair_attempt"),
+          "step_id" => record.fetch("step_id"),
+          "tool" => record["tool"],
+          "output" => record.fetch("output")
+        }
+        payload["check"] = record.fetch("check") if record.key?("check")
+        payload
+      end
+
+      def observation_bytes(state)
+        state.fetch(:observations).sum { |record| record.fetch("output").bytesize }
+      end
+
+      # Only checks from the current phase pass decide routing. A failed check from an
+      # earlier repair attempt must not re-trigger a repair.
+      def current_pass_check(state)
+        phase = state.fetch(:phase)
+        attempt = state.fetch(:repair_attempt)
+        record = state.fetch(:observations).reverse.find do |entry|
+          entry.key?("check") &&
+            entry.fetch("phase") == phase &&
+            entry.fetch("repair_attempt") == attempt
+        end
+        record&.fetch("check")
+      end
+
+      def failed_check(state, check)
+        signature = check.fetch("failure_signature")
+        repair_attempt = state.fetch(:repair_attempt)
+        if state.fetch(:seen_failure_signatures).include?(signature)
+          return {next_node: "verify", terminal_reason: "repeated_failure"}
+        end
+        if repair_attempt >= max_repair_attempts
+          return {
+            next_node: "verify",
+            terminal_reason: "repair_attempts_exhausted",
+            seen_failure_signatures: [signature]
+          }
+        end
+
+        {
+          next_node: "deliberate",
+          phase: "repair",
+          repair_attempt: repair_attempt + 1,
+          step_cursor: 0,
+          seen_failure_signatures: [signature]
+        }
+      end
+
+      def last_semantic_review(state, accepted)
+        record = state.fetch(:plan_reviews).reverse.find do |entry|
+          entry.fetch("plan_id") == accepted.fetch("plan_id") &&
+            entry.fetch("layer") == "semantic"
+        end
+        return {} unless record
+
+        {
+          "decision" => record.fetch("decision"),
+          "issues" => record.fetch("issues"),
+          "rationale" => record.fetch("rationale", "")
+        }
+      end
+
+      def planning_context_for(state, phase)
+        return {} unless %i[action repair].include?(phase)
+
+        prior_plans = state.fetch(:plan_versions).filter_map do |record|
+          record.fetch("plan") if %w[action repair].include?(record.fetch("phase"))
+        end
+        prior_reviews = state.fetch(:plan_reviews).filter_map do |record|
+          next unless record.fetch("layer") == "semantic"
+
+          {
+            "decision" => record.fetch("decision"),
+            "issues" => record.fetch("issues"),
+            "rationale" => record.fetch("rationale", "")
+          }
+        end
+        {
+          "prior_action_plans" => prior_plans,
+          "prior_action_reviews" => prior_reviews,
+          "prior_action_signatures" => state.fetch(:seen_action_signatures).sort,
+          "prior_failure_signatures" => state.fetch(:seen_failure_signatures).sort
+        }
+      end
+
+      def accept_plan(state, plan:, plan_id:, plan_digest:, plan_hash:, phase:, plans:, reviews:, ambiguity:)
+        base = {
+          plan_versions: new_records(state, :plan_versions, plans, "plan_id"),
+          plan_reviews: new_records(state, :plan_reviews, reviews, "review_id"),
+          provider_ambiguity: ambiguity
+        }
+        if %i[action repair].include?(phase)
+          signature = Deliberation.action_signature(plan, toolbox:)
+          if state.fetch(:seen_action_signatures).include?(signature)
+            return base.merge(next_node: "verify", terminal_reason: "repeated_action")
+          end
+
+          base[:seen_action_signatures] = [signature]
+        end
+        base.merge(
+          accepted_plan: SessionRecords.build(
+            "accepted_plan",
+            plan_id:,
+            plan_digest:,
+            phase: phase.to_s,
+            plan: plan_hash,
+            accepted_at_ms: 0
+          ),
+          step_cursor: 0,
+          next_node: "step_gate"
+        )
+      end
+
+      def plan_rejected(state, plans:, reviews:, ambiguity:, phase:, repair_attempt:)
+        if phase == :repair && repair_attempt.positive?
+          return {
+            plan_versions: new_records(state, :plan_versions, plans, "plan_id"),
+            plan_reviews: new_records(state, :plan_reviews, reviews, "review_id"),
+            provider_ambiguity: ambiguity,
+            next_node: "verify",
+            terminal_reason: "repair_plan_rejected"
+          }
+        end
+
+        raise PlanRejectedError, "no plan passed review after #{max_plan_attempts} attempts"
+      end
+
+      def new_records(state, channel, records, id_key)
+        existing = state.fetch(channel).map { |record| record.fetch(id_key) }
+        records.reject { |record| existing.include?(record.fetch(id_key)) }
+      end
+
+      def blocked_update(outcome, reason, step_id: nil, operation: nil)
+        {
+          next_node: "terminal",
+          terminal_reason: "effect_unknown",
+          blocked: SessionRecords.build(
+            "blocked",
+            reason:,
+            effect_key: outcome.effect_key,
+            operation: String(operation || "model.generate"),
+            step_id:,
+            actions: [
+              "inspect the operation and its target",
+              "record the true outcome with Session#resolve_effect",
+              "then continue the session"
+            ]
+          )
+        }
+      end
+
+      def tool_error_message(outcome)
+        error = outcome.error
+        return "tool effect failed" unless error.is_a?(Hash)
+
+        String(error["message"] || "tool effect failed")
+      end
+    end
+  end
+end

@@ -11,6 +11,7 @@ module Tamoz
       :operation_timeout,
       :wal_autocheckpoint_pages,
       :lease_ttl,
+      :effect_attempt_ttl,
       :clock_rollback_tolerance_ms,
       :deletion_retention
     ) do
@@ -19,6 +20,8 @@ module Tamoz
       MAX_RETRY_LIMIT = 100
       MAX_WAL_PAGES = 1_000_000
       MAX_LEASE_TTL = 3600.0
+      MIN_EFFECT_ATTEMPT_TTL = 0.1
+      MAX_EFFECT_ATTEMPT_TTL = 3600.0
       MAX_CLOCK_TOLERANCE_MS = 60_000
       MAX_DELETION_RETENTION = 31_536_000.0
 
@@ -31,6 +34,7 @@ module Tamoz
         operation_timeout: 5.0,
         wal_autocheckpoint_pages: 1_000,
         lease_ttl: 30.0,
+        effect_attempt_ttl: 60.0,
         clock_rollback_tolerance_ms: 1_000,
         deletion_retention: 86_400.0
       )
@@ -51,6 +55,12 @@ module Tamoz
           MAX_WAL_PAGES
         )
         validate_number!(lease_ttl, :lease_ttl, 0.1, MAX_LEASE_TTL)
+        validate_number!(
+          effect_attempt_ttl,
+          :effect_attempt_ttl,
+          MIN_EFFECT_ATTEMPT_TTL,
+          MAX_EFFECT_ATTEMPT_TTL
+        )
         validate_integer!(
           clock_rollback_tolerance_ms,
           :clock_rollback_tolerance_ms,

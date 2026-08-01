@@ -478,6 +478,155 @@ module Tamoz
         fetch(effect_key)
       end
 
+      # Resolve an effect whose head is `reconcile` using evidence observed at the
+      # target. Three dispositions, exactly matching the three things a reconciler can
+      # honestly conclude:
+      #
+      #   :completed   the target proves the after-state; the effect happened. Head
+      #                becomes succeeded and the recorded receipt is returned.
+      #   :not_applied the target proves the *before*-state; the effect never happened.
+      #                One further attempt is granted under the same stable effect key,
+      #                fenced by the current lease. This retry is authorised by observed
+      #                evidence, never by a safety class and never by an approval.
+      #   :unknown     the target proves neither. Head becomes unknown and only a human
+      #                resolution can move it on.
+      #
+      # `:not_applied` validates the lease inside the transaction because it grants
+      # execution authority. `:completed` and `:unknown` do not, for the same reason
+      # `complete` does not: a truthful outcome must be recordable after lease loss.
+      def reconcile(key:, disposition:, actor:, evidence:)
+        effect_key = Wire.identity(key, name: "effect key")
+        disposition_text = enum_text!(
+          disposition,
+          %w[completed not_applied unknown],
+          "effect reconciliation disposition"
+        )
+        actor_text = Wire.identity(actor, name: "effect reconciliation actor")
+        evidence_bytes = store.checkpoint_codec.state_codec.dump(evidence)
+        evidence_digest = Wire.digest(
+          evidence_bytes,
+          domain: "tamoz.sqlite.effect_reconciliation"
+        )
+        candidate_token = SecureRandom.uuid.freeze
+        action = nil
+        granted_token = nil
+
+        store.adapter.__send__(:transaction, operation: "effect.reconcile") do |tx|
+          now = store.adapter.__send__(:backend_time, tx, "effect.reconcile.time")
+          row = effect_row(tx, effect_key, "effect.reconcile.row")
+          raise CheckpointConflictError, "effect does not exist" unless row
+          unless row.fetch(8) == "reconcile"
+            raise CheckpointConflictError,
+                  "effect status #{row.fetch(8)} cannot be reconciled"
+          end
+
+          case disposition_text
+          when "completed"
+            tx.execute(
+              "effect.reconcile.completed_attempt",
+              <<~SQL,
+                UPDATE tamoz_effect_attempts
+                SET status = 'succeeded', completed_at_ms = ?
+                WHERE effect_key = ? AND attempt_number = ?
+                  AND status IN ('prepared', 'running', 'unknown')
+              SQL
+              [now, effect_key, row.fetch(10)]
+            )
+            tx.execute(
+              "effect.reconcile.completed_head",
+              <<~SQL,
+                UPDATE tamoz_effects
+                SET status = 'succeeded', requires_reconciliation = 0, updated_at_ms = ?
+                WHERE effect_key = ? AND status = 'reconcile'
+              SQL
+              [now, effect_key]
+            )
+            raise CheckpointConflictError, "effect reconciliation lost" unless tx.changes == 1
+
+            action = :return
+          when "not_applied"
+            store.adapter.__send__(
+              :validate_lease_in_transaction!,
+              tx,
+              guard.lease,
+              now:,
+              label: "effect.reconcile.lease"
+            )
+            tx.execute(
+              "effect.reconcile.not_applied_attempt",
+              <<~SQL,
+                UPDATE tamoz_effect_attempts
+                SET status = 'abandoned', completed_at_ms = ?
+                WHERE effect_key = ? AND attempt_number = ?
+                  AND status IN ('prepared', 'running', 'unknown')
+              SQL
+              [now, effect_key, row.fetch(10)]
+            )
+            grant_next_attempt!(
+              tx,
+              row:,
+              effect_key:,
+              token: candidate_token,
+              fence: guard.lease.fence,
+              now:
+            )
+            tx.execute(
+              "effect.reconcile.not_applied_head",
+              <<~SQL,
+                UPDATE tamoz_effects
+                SET requires_reconciliation = 0, updated_at_ms = ?
+                WHERE effect_key = ?
+              SQL
+              [now, effect_key]
+            )
+            action = :execute
+            granted_token = candidate_token
+          else
+            tx.execute(
+              "effect.reconcile.unknown_attempt",
+              <<~SQL,
+                UPDATE tamoz_effect_attempts
+                SET status = 'unknown', completed_at_ms = ?
+                WHERE effect_key = ? AND attempt_number = ?
+                  AND status IN ('prepared', 'running')
+              SQL
+              [now, effect_key, row.fetch(10)]
+            )
+            tx.execute(
+              "effect.reconcile.unknown_head",
+              <<~SQL,
+                UPDATE tamoz_effects
+                SET status = 'unknown', requires_reconciliation = 1, updated_at_ms = ?
+                WHERE effect_key = ? AND status = 'reconcile'
+              SQL
+              [now, effect_key]
+            )
+            raise CheckpointConflictError, "effect reconciliation lost" unless tx.changes == 1
+
+            action = :unknown
+          end
+
+          append_transition!(
+            tx,
+            effect_key:,
+            transition: "reconcile.#{disposition_text}",
+            attempt_number: row.fetch(10),
+            actor: actor_text,
+            evidence: {
+              "payload" => evidence_bytes,
+              "payload_digest" => evidence_digest
+            },
+            now:
+          )
+        end
+
+        Tamoz::Graph::EffectDecision.new(
+          action:,
+          record: fetch(effect_key),
+          attempt_token: granted_token
+        )
+      end
+
       def resolve(key:, status:, actor:, evidence:)
         effect_key = Wire.identity(key, name: "effect key")
         status_text = enum_text!(

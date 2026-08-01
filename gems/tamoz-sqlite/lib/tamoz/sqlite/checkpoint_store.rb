@@ -891,7 +891,11 @@ module Tamoz
         def initialize(store:, guard:)
           @store = store
           @guard = guard
-          @effects = EffectJournal.new(store:, guard:)
+          @effects = EffectJournal.new(
+            store:,
+            guard:,
+            attempt_ttl: store.adapter.limits.effect_attempt_ttl
+          )
           @application_store = store.adapter.store
           freeze
         end

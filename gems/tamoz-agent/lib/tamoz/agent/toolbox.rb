@@ -80,9 +80,18 @@ module Tamoz
         "create_file" => "Create a new regular file with exact bytes and mode. Overwrite is never allowed. Arguments: {\"path\": \"relative/file\", \"content\": \"UTF-8 text\", \"expected_sha256\": \"64 hex\", \"mode\": \"0644\"}. mode is optional and defaults to 0644."
       }.freeze
 
-      attr_reader :root, :checks, :check_timeout
+      CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
+      DEFAULT_CHECK_SAFETY = :unsafe
 
-      def initialize(root:, allow_changes: false, checks: {}, check_timeout: DEFAULT_CHECK_TIMEOUT)
+      attr_reader :root, :checks, :check_timeout, :check_safeties
+
+      def initialize(
+        root:,
+        allow_changes: false,
+        checks: {},
+        check_timeout: DEFAULT_CHECK_TIMEOUT,
+        check_safeties: {}
+      )
         @root = Pathname.new(root).expand_path.realpath.freeze
         raise ToolError, "workspace root is not a directory" unless @root.directory?
         unless allow_changes == true || allow_changes == false
@@ -94,6 +103,7 @@ module Tamoz
 
         @allow_changes = allow_changes
         @checks = normalize_checks(checks)
+        @check_safeties = normalize_check_safeties(check_safeties)
         @check_timeout = check_timeout.to_f
         @descriptions = READ_DESCRIPTIONS.dup
         if @allow_changes
@@ -105,6 +115,16 @@ module Tamoz
           end
         end
         @descriptions.freeze
+        @catalog_digest = "sha256:#{Digest::SHA256.hexdigest(
+          JSON.generate(
+            [
+              @descriptions.keys.sort,
+              @descriptions.sort.to_h,
+              @checks.keys.sort,
+              @checks.keys.sort.map { |name| [name, check_safety(name).to_s] }
+            ]
+          )
+        )}".freeze
       rescue SystemCallError
         raise ToolError, "workspace root is unavailable"
       end
@@ -114,6 +134,20 @@ module Tamoz
       def read_only_names = READ_DESCRIPTIONS.keys
       def action_capable? = @allow_changes
       def approval_required?(name) = %w[apply_patch run_check create_file].include?(String(name))
+
+      # Declared effect safety for one configured check. A configured check is an
+      # operator-supplied argv, so nothing about it is provably safe: the default is
+      # :unsafe, which means an ambiguous crash pauses for reconciliation and the
+      # command is never automatically repeated. Only the operator, through the
+      # constructor, may declare otherwise; plan text and model output never can.
+      def check_safety(name)
+        @check_safeties.fetch(String(name), DEFAULT_CHECK_SAFETY)
+      end
+
+      # Stable identity of the capability catalog this toolbox exposes. Used to pin a
+      # durable session to the exact tool surface it was planned against. Computed once
+      # in the constructor so concurrent tasks never race on lazy memoisation.
+      attr_reader :catalog_digest
 
       def maximum_effect_output_bytes(name)
         case String(name)
@@ -239,6 +273,35 @@ module Tamoz
         end
       end
 
+      # Deterministic, side-effect-free description of what a mutation tool would do,
+      # in the exact terms a crash reconciler needs: the digest the workspace must have
+      # before the effect and the digest it must have after it. Uses the same preflight
+      # that renders the approval preview, so preview, intent, and execution can never
+      # describe different bytes.
+      def effect_intent(name, arguments)
+        normalized_name = String(name)
+        normalized_arguments = validate(normalized_name, arguments)
+
+        case normalized_name
+        when "apply_patch"
+          patch = prepare_patch(normalized_arguments)
+          {
+            "path" => normalized_arguments.fetch("path"),
+            "before_state" => patch.fetch(:before_digest),
+            "after_digest" => Digest::SHA256.hexdigest(patch.fetch(:after_content))
+          }.freeze
+        when "create_file"
+          {
+            "path" => normalized_arguments.fetch("path"),
+            "before_state" => "absent",
+            "after_digest" => normalized_arguments.fetch("expected_sha256"),
+            "after_mode" => normalized_arguments.fetch("mode").to_i(8)
+          }.freeze
+        else
+          {}.freeze
+        end
+      end
+
       def preview(name, arguments)
         normalized_name = String(name)
         normalized_arguments = validate(normalized_name, arguments)
@@ -278,6 +341,25 @@ module Tamoz
           end
 
           [name.freeze, raw_argv.map { |entry| entry.dup.freeze }.freeze]
+        end.freeze
+      end
+
+      def normalize_check_safeties(value)
+        raise ArgumentError, "check_safeties must be a Hash" unless value.is_a?(Hash)
+
+        value.to_h do |raw_name, raw_safety|
+          name = String(raw_name)
+          unless @checks.key?(name)
+            raise ArgumentError, "check_safeties names unconfigured check #{name.inspect}"
+          end
+
+          safety = raw_safety.to_sym
+          unless CHECK_SAFETIES.include?(safety)
+            raise ArgumentError,
+                  "check #{name.inspect} safety must be one of #{CHECK_SAFETIES.join(", ")}"
+          end
+
+          [name.freeze, safety]
         end.freeze
       end
 
