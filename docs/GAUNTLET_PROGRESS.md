@@ -1,8 +1,8 @@
 # Tamoz Gauntlet Loop — live progress
 
-Status: **paused — verified handoff**
+Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `39a8679`
+Last verified: 2026-08-01 at commit `a88f403`
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -129,33 +129,25 @@ Status: **closed in `fe1d26e`; independently reverified under `LC_ALL=C`.**
 ### D-4 — `read_file` returns invalid UTF-8 instead of the documented error (severity: medium)
 
 `Toolbox#read_file` opens with `encoding: Encoding::UTF_8` but never checks
-`valid_encoding?`. `Pathname#read(encoding:)` tags bytes without validating them, so the
-`rescue Encoding::...` clause guards against exceptions that can never fire on that path.
-A file containing `\xC3\x28` is returned to the model as content, with
-`valid_encoding? == false`, instead of raising the documented
-`file is not valid UTF-8 text`.
+`valid_encoding?`. `Pathname#read(encoding:)` tags bytes without validating them, so a file
+containing `\xC3\x28` was returned to the model as content with `valid_encoding? == false`,
+instead of raising the documented `file is not valid UTF-8 text`. The same gap existed in
+`prepare_patch`, where an invalid-UTF-8 target raised an untyped `ArgumentError` from
+`content.scan(before)` rather than a typed `ToolError`.
 
-Measured in **both** locales, so this is a contract gap rather than a locale defect.
-
-Why it matters: the tool advertises "Read UTF-8 text with its SHA-256 digest." The agent
-receives mojibake as evidence and cannot faithfully quote it back, so any `before` text
-derived from that read will not round-trip into `apply_patch`. P4 and P5 both need a correct
-text/binary classification at this boundary.
-
-Status: **open.** Commit `39a8679` corrected the review record but intentionally did not
-change runtime behavior. This remains an invariant-17 gap and should be corrected before
-P4 expands the patch surface.
+Status: **closed in `a88f403`; both `read_file` and `apply_patch`/`preview` now raise typed
+`ToolError` and leave the target byte-identical. Verified under `LC_ALL=en_US.UTF-8` and
+`LC_ALL=C`.**
 
 ### D-5 — patch text accepts non-UTF-8 binary strings (severity: high)
 
-`validate_patch_text!` checks `valid_encoding?` in the string's current encoding rather
-than requiring UTF-8. An `ASCII-8BIT` string containing bytes invalid in UTF-8 can therefore
-pass validation and be written by the public Ruby API. The CLI is not currently affected
-because `JSON.parse` supplies UTF-8 strings, but the framework contract is broader than the
-CLI.
+`validate_patch_text!` checked `valid_encoding?` in the string's current encoding rather than
+requiring UTF-8. An `ASCII-8BIT` string containing bytes invalid in UTF-8 could pass
+validation and be written by the public Ruby API.
 
-Status: **open.** It was discovered during Round 1 and recorded in the accepted correction
-review. Correct it with D-4 under a separately reviewed, fail-closed contract correction.
+Status: **closed in `a88f403`; `validate_patch_text!` now rejects null bytes, non-UTF-8
+encoding tags, and invalid UTF-8 byte sequences with accurate per-cause messages. Verified
+under both locales.**
 
 ### Regression floor established
 
@@ -172,6 +164,7 @@ rejects **and leaves the file byte-identical**. No fix may weaken any of these.
 |---|---|---|---|---|---|
 | 0 | judging substrate + baseline audit | main | — | substrate validated; 4 defects found | — |
 | 1 | D-1 locale gate + D-2 multibyte corruption (+D-3 found by builder) | done | done | **pass against baseline; D-4/D-5 split out** | `2df0063`, `fe1d26e`, `b5f7fb9`, `39a8679` |
+| 2 | D-4/D-5 UTF-8 contract correction | done | done | **pass against baseline; invariant-17 matrix added** | `b213b4a`, `a88f403` |
 
 ### Round 1 — builder result
 
@@ -237,13 +230,13 @@ residual-risk section asserted `read_file` would reject invalid UTF-8. It does n
 builder reached the same conclusion independently and committed `39a8679` recording it, and
 went further than the coordinator's D-4: the `rescue Encoding::...` clause in both
 `read_file` and `prepare_patch` is **dead code**, because `Pathname#read(encoding:)` tags
-bytes without transcoding. Consequently `apply_patch` against a non-UTF-8 target raises an
+bytes without transcoding. Consequently `apply_patch` against a non-UTF-8 target raised an
 untyped `ArgumentError` out of `content.scan(before)` rather than a `ToolError` — a second
 invariant-17 gap. Fail-closed (file byte-identical) and unchanged by this round.
 
-**Disputed claim sent to the critic (superseded).** The correction document's residual-risk section
-asserts that `apply_patch` writing raw bytes yields "a file that `read_file` will
-subsequently reject as 'not valid UTF-8'." Measured behaviour contradicts this at both
+**Disputed claim sent to the critic (superseded).** The correction document's residual-risk
+section asserted that `apply_patch` writing raw bytes yields "a file that `read_file` will
+subsequently reject as 'not valid UTF-8'." Measured behaviour contradicted this at both
 baseline and HEAD. A review document asserting unverified behaviour is precisely the failure
 mode an evidence-based process exists to prevent, so it is being adjudicated against running
 code rather than prose.
@@ -252,7 +245,7 @@ code rather than prose.
 
 Round 1 is complete. The critic accepted the authorized correction after the builder and
 critic corrected two inaccurate review claims in `b5f7fb9` and `39a8679`. The resulting
-behavior wins against `0abb42a` on the changed properties without weakening the fixed agent
+behaviour wins against `0abb42a` on the changed properties without weakening the fixed agent
 scorecard or any hard safety gate.
 
 Independent coordinator verification at `39a8679`:
@@ -269,38 +262,68 @@ Independent coordinator verification at `39a8679`:
 The assertion-count variance is pre-existing and honestly retained as residual gate debt;
 test count and outcomes are stable. P4 capability work did not begin.
 
+### Round 2 — D-4/D-5 UTF-8 contract correction
+
+The builder produced `docs/D4_D5_UTF8_CONTRACT_PLAN.md`; the critic accepted it with
+corrections (null-byte rejection, accurate error messages, dead-rescue removal, `search_text`
+scope, invariant-17 matrix). The design checkpoint was committed at `b213b4a`.
+
+The builder then implemented the plan in `gems/tamoz-agent/lib/tamoz/agent/toolbox.rb` and
+`test/agent_toolbox_test.rb`, and added `test/agent_toolbox_invariant17_test.rb` after the
+critic noted the missing matrix artifact. The critic accepted the implementation with the
+matrix addition.
+
+Independent coordinator verification at `a88f403`:
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 370 runs, 27,342 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 370 runs, 27,339 assertions, 0 failures/errors/skips |
+| design validation | pass — 22 documents, 55 invariants, 40 ADRs |
+| gem packaging | pass — all five gems |
+| `tamoz-eval scorecard agent-smoke` | pass — fixed digest, 6/12 successes, all four hard gates pass |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive completion 0, incomplete evidence 0 |
+
+Blind A/B against `019ea40` (the pre-correction baseline):
+
+| Probe | Baseline `019ea40` | New `a88f403` |
+|---|---|---|
+| `read_file` invalid-UTF-8 target | returns invalid content silently | `ToolError: file is not valid UTF-8 text` |
+| `apply_patch` invalid-UTF-8 target | `ArgumentError: invalid byte sequence in UTF-8` | `ToolError: file is not valid UTF-8 text` |
+| `search_text` invalid-UTF-8 target | silently skipped | `ToolError: <path>: file is not valid UTF-8 text` |
+| `validate` ASCII-8BIT `before` | accepted | `ToolError: before must be UTF-8 encoded` |
+| `validate` invalid-UTF-8 search query | accepted | `ToolError: query must be valid UTF-8` |
+
+All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
+
 ---
 
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
 |---|---|---|
-| P0–P3 | complete | baseline audited — D-1/D-2/D-3 corrected; D-4/D-5 open |
-| P4 compound edit | pending — next | not started; blocked on the D-4/D-5 contract correction |
+| P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
+| P4 compound edit | pending — next | **starting**; create and review `docs/P4_COMPOUND_EDIT_PLAN.md` |
 | P5–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **D-4 invalid target bytes** — `read_file` returns invalid UTF-8 and `apply_patch`
-   surfaces an untyped `ArgumentError`; both violate the documented recoverable-error
-   boundary.
-2. **D-5 binary patch arguments** — the public Ruby API can accept bytes that are not
-   valid UTF-8 despite its stated contract.
-3. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a
-   few assertions between identical runs; diagnose before P15 evidence pinning.
-4. P4–P15 remain unimplemented.
+1. **P4 compound existing-file edits** — no plan or implementation yet. This is the active
+   work package.
+2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
+   assertions between identical runs; diagnose before P15 evidence pinning.
+3. P5–P15 remain unimplemented.
+
+---
 
 ## 6. Next action
 
-Create and review a narrow correction plan for D-4 and D-5. Prove that reads, previews, and
-execution reject invalid UTF-8 as typed `ToolError` values while leaving files byte-identical;
-prove valid UTF-8 and all Round 1 probes remain unchanged. Commit the design correction,
-implement it, run a fresh builder/critic loop and both locale gates, then commit the reviewed
-implementation. Only after that correction closes should the next agent create and review
-`docs/P4_COMPOUND_EDIT_PLAN.md`.
+Create and review `docs/P4_COMPOUND_EDIT_PLAN.md` per `docs/PROJECT_HANDOVER_PLAN.md` §6 P4.
+Fan out a builder and critic with fresh context. Do not begin P4 implementation before the
+plan/review checkpoint is committed.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or begin P5. The committed product checkpoint is `39a8679`; this progress
+publish, release, or begin P5. The committed product checkpoint is `a88f403`; this progress
 page is the only intentional product artifact added by this handoff.
