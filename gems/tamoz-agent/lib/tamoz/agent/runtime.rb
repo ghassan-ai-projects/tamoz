@@ -308,10 +308,12 @@ module Tamoz
         end
         if %i[action repair].include?(phase) && !toolbox.checks.empty?
           check_indexes = plan.steps.each_index.select { |index| plan.steps[index].tool == "run_check" }
-          patch_indexes = plan.steps.each_index.select { |index| plan.steps[index].tool == "apply_patch" }
+          mutation_indexes = plan.steps.each_index.select do |index|
+            %w[apply_patch create_file].include?(plan.steps[index].tool)
+          end
           issues << "action plan must run a configured check" if check_indexes.empty?
-          if !patch_indexes.empty? && !check_indexes.empty? && patch_indexes.max > check_indexes.max
-            issues << "action plan must not patch after its final configured check"
+          if !mutation_indexes.empty? && !check_indexes.empty? && mutation_indexes.max > check_indexes.max
+            issues << "action plan must not mutate after its final configured check"
           end
         end
         issues.freeze

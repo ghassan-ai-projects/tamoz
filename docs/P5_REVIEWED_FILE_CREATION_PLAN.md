@@ -112,7 +112,7 @@ Validation runs in exactly this order so that structural problems are reported b
 
 - `mode` is an optional string of four octal digits beginning with `0` (e.g. `"0644"`, `"0600"`).
 - Default is `"0644"`.
-- Special bits (setuid, setgid, sticky) are rejected.
+- The regex `/\A0[0-7]{3}\z/` permits only regular permission bits (`0000`–`0777`); special bits are syntactically impossible.
 - The implementation converts the string to an Integer with `mode_string.to_i(8)` before applying it.
 - The value is applied to the temporary file before publication, so the published inode inherits it atomically via the hard link.
 
@@ -215,7 +215,7 @@ All validation, preflight, and environment failures become typed `ToolError` val
 | Path is empty, root, or directory-like | `validate` | `ToolError` | No |
 | Content too large / binary / invalid UTF-8 / null byte | `validate` | `ToolError` | No |
 | `expected_sha256` malformed or mismatched | `validate` | `ToolError` | No |
-| `mode` malformed or has special bits | `validate` | `ToolError` | No |
+| `mode` malformed | `validate` | `ToolError` | No |
 | Target already exists | `validate_create_path!` / `execute` | `ToolError` | No |
 | Parent does not exist | `validate_create_path!` | `ToolError` | No |
 | Parent is not a directory | `validate_create_path!` | `ToolError` | No |

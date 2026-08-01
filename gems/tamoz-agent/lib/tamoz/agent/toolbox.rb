@@ -76,7 +76,8 @@ module Tamoz
       }.freeze
       ACTION_DESCRIPTIONS = {
         "apply_patch" => "Replace exact text occurrences atomically. expected_sha256 must come from current read_file evidence. Single replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"before\": \"exact existing text\", \"after\": \"replacement text\"}. Compound replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"replacements\": [{\"before\": \"...\", \"after\": \"...\"}]}.",
-        "run_check" => "Run one user-configured command by name without a shell. Arguments: {\"name\": \"configured check name\"}."
+        "run_check" => "Run one user-configured command by name without a shell. Arguments: {\"name\": \"configured check name\"}.",
+        "create_file" => "Create a new regular file with exact bytes and mode. Overwrite is never allowed. Arguments: {\"path\": \"relative/file\", \"content\": \"UTF-8 text\", \"expected_sha256\": \"64 hex\", \"mode\": \"0644\"}. mode is optional and defaults to 0644."
       }.freeze
 
       attr_reader :root, :checks, :check_timeout
@@ -97,6 +98,7 @@ module Tamoz
         @descriptions = READ_DESCRIPTIONS.dup
         if @allow_changes
           @descriptions["apply_patch"] = ACTION_DESCRIPTIONS.fetch("apply_patch")
+          @descriptions["create_file"] = ACTION_DESCRIPTIONS.fetch("create_file")
           unless @checks.empty?
             names = @checks.keys.sort.join(", ")
             @descriptions["run_check"] = "#{ACTION_DESCRIPTIONS.fetch("run_check")} Configured names: #{names}."
@@ -111,11 +113,12 @@ module Tamoz
       def names = descriptions.keys
       def read_only_names = READ_DESCRIPTIONS.keys
       def action_capable? = @allow_changes
-      def approval_required?(name) = %w[apply_patch run_check].include?(String(name))
+      def approval_required?(name) = %w[apply_patch run_check create_file].include?(String(name))
 
       def maximum_effect_output_bytes(name)
         case String(name)
         when "apply_patch" then 6 * 1024
+        when "create_file" then 6 * 1024
         when "run_check" then MAX_CHECK_OUTPUT_BYTES + 1024
         else 0
         end
@@ -192,6 +195,22 @@ module Tamoz
           check_name = normalized_arguments.fetch("name")
           raise ToolError, "check name must be a string" unless check_name.is_a?(String)
           raise ToolError, "unknown configured check #{check_name.inspect}" unless checks.key?(check_name)
+        when "create_file"
+          reject_unknown!(normalized_arguments, %w[path content expected_sha256 mode])
+          validate_path_argument!(normalized_arguments.fetch("path"))
+          validate_file_text!(normalized_arguments.fetch("content"))
+          expected = normalized_arguments.fetch("expected_sha256")
+          unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
+            raise ToolError, "expected_sha256 must be 64 lowercase hex characters"
+          end
+          actual = Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
+          raise ToolError, "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
+          mode = normalized_arguments.fetch("mode", "0644")
+          validate_mode!(mode)
+          validate_create_path!(normalized_arguments.fetch("path"))
+          unless normalized_arguments.key?("mode")
+            normalized_arguments = normalized_arguments.merge("mode" => mode)
+          end
         end
         normalized_arguments.freeze
       rescue KeyError => error
@@ -213,6 +232,8 @@ module Tamoz
           apply_patch(normalized_arguments)
         when "run_check"
           run_check(normalized_arguments)
+        when "create_file"
+          create_file(normalized_arguments)
         else
           raise ToolError, "unknown tool #{normalized_name.inspect}"
         end
@@ -229,6 +250,13 @@ module Tamoz
         when "run_check"
           argv = checks.fetch(normalized_arguments.fetch("name"))
           "$ #{argv.map { |entry| shell_display(entry) }.join(" ")}"
+        when "create_file"
+          render_create_preview(
+            normalized_arguments.fetch("path"),
+            normalized_arguments.fetch("content"),
+            normalized_arguments.fetch("mode"),
+            normalized_arguments.fetch("expected_sha256")
+          )
         else
           raise ToolError, "tool #{normalized_name.inspect} does not require approval"
         end
@@ -397,6 +425,123 @@ module Tamoz
           ].join("\n")
         end
         hunks.join("\n\n")
+      end
+
+      def create_file(arguments)
+        prepared = prepare_create_file(arguments)
+        atomic_create(prepared.fetch(:path), prepared.fetch(:content), prepared.fetch(:mode))
+        render_create_receipt(arguments.fetch("path"), prepared)
+      end
+
+      def prepare_create_file(arguments)
+        target_path = validate_create_path!(arguments.fetch("path"))
+        content = arguments.fetch("content")
+        mode = arguments.fetch("mode", "0644").to_i(8)
+        expected = arguments.fetch("expected_sha256")
+        {
+          path: target_path,
+          content: content,
+          mode: mode,
+          expected: expected
+        }.freeze
+      end
+
+      def atomic_create(target_path, content, mode)
+        parent = target_path.dirname
+        temp = nil
+        published = false
+
+        begin
+          temp = Tempfile.new([".tamoz-create-", ".tmp"], parent.to_s, binmode: true)
+          temp.write(content.b)
+          temp.flush
+          temp.fsync
+          temp.chmod(mode)
+          temp.fsync
+          temp.close
+
+          revalidate_parent!(parent)
+
+          File.link(temp.path, target_path.to_s)
+          published = true
+        rescue Errno::EEXIST
+          raise ToolError, "file already exists"
+        rescue SystemCallError => error
+          raise ToolError, "atomic create failed: #{error.class}"
+        ensure
+          begin
+            temp&.close!
+          rescue SystemCallError
+            nil
+          end
+          fsync_directory(parent) if published
+        end
+      end
+
+      def revalidate_parent!(parent)
+        raise ToolError, "parent directory does not exist" unless parent.exist?
+        raise ToolError, "parent is not a directory" unless parent.directory?
+        raise ToolError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
+      end
+
+      def render_create_receipt(display_path, prepared)
+        path = prepared.fetch(:path)
+        content = path.read(encoding: Encoding::UTF_8)
+        actual = Digest::SHA256.hexdigest(content)
+        expected = prepared.fetch(:expected)
+        raise ToolError, "created file did not verify" unless actual == expected
+
+        mode = path.stat.mode & 0o777
+        <<~TEXT.chomp
+          Created #{display_path}
+          mode: #{format("%04o", mode)}
+          size: #{content.bytesize}
+          sha256: #{actual}
+        TEXT
+      end
+
+      def render_create_preview(path, content, mode, digest)
+        header = "--- create: #{path}\nmode: #{mode}\nsize: #{content.bytesize}\nsha256: #{digest}\ncontent:\n"
+        budget = maximum_effect_output_bytes("create_file")
+        remaining = budget - header.bytesize
+        if remaining <= 0 || content.bytesize <= remaining
+          "#{header}#{content}"
+        else
+          "#{header}#{content.byteslice(0, remaining)}"
+        end
+      end
+
+      def validate_create_path!(raw_path)
+        text = String(raw_path)
+        raise ToolError, "path must name a file" if text.empty? || text == "." || text.end_with?("/")
+
+        lexical = @root.join(text).cleanpath
+        raise ToolError, "path must name a file" if lexical == @root
+        prefix = "#{@root}#{File::SEPARATOR}"
+        raise ToolError, "path escapes the workspace root" unless lexical.to_s.start_with?(prefix)
+        raise ToolError, "file already exists" if File.exist?(lexical)
+
+        parent = lexical.dirname
+        raise ToolError, "parent directory does not exist" unless parent.exist?
+        raise ToolError, "parent is not a directory" unless parent.directory?
+        raise ToolError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
+
+        lexical
+      rescue SystemCallError
+        raise ToolError, "path is unavailable"
+      end
+
+      def validate_file_text!(value)
+        raise ToolError, "content must be a string" unless value.is_a?(String)
+        raise ToolError, "content exceeds #{MAX_FILE_BYTES} bytes" if value.bytesize > MAX_FILE_BYTES
+        raise ToolError, "content must not contain a null byte" if value.include?("\0")
+        raise ToolError, "content must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
+        raise ToolError, "content must be valid UTF-8" unless value.valid_encoding?
+      end
+
+      def validate_mode!(value)
+        raise ToolError, "mode must be a string" unless value.is_a?(String)
+        raise ToolError, "mode must be an octal permission string (e.g. \"0644\")" unless value.match?(/\A0[0-7]{3}\z/)
       end
 
       def build_compound_replacements(content, replacements)

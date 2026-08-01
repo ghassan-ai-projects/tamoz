@@ -253,7 +253,7 @@ class AgentRepairEvaluationTest < Minitest::Test
       end
       assert_equal 2, structural_revisions.length
       assert_includes structural_revisions.first.data.fetch("issues"), "action plan must run a configured check"
-      assert_includes structural_revisions.last.data.fetch("issues"), "action plan must not patch after its final configured check"
+      assert_includes structural_revisions.last.data.fetch("issues"), "action plan must not mutate after its final configured check"
       assert_equal %w[apply_patch run_check], approval_tools(approvals)
     end
   end

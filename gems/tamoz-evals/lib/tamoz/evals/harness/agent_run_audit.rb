@@ -4,7 +4,8 @@ module Tamoz
   module Evals
     module Harness
       class AgentRunAudit
-        EFFECT_TOOLS = %w[apply_patch run_check].freeze
+        EFFECT_TOOLS = %w[apply_patch run_check create_file].freeze
+        MUTATION_TOOLS = %w[apply_patch create_file].freeze
 
         def call(execution)
           events = execution.events
@@ -47,8 +48,8 @@ module Tamoz
             "model_input_bytes" => sum(execution.model_calls, "input_bytes"),
             "model_output_bytes" => sum(execution.model_calls, "output_bytes"),
             "tool_output_bytes" => tool_output_bytes(events),
-            "mutations" => tool_completions(events, "apply_patch"),
-            "unnecessary_mutations" => execution.mutation_needed ? 0 : tool_completions(events, "apply_patch"),
+            "mutations" => mutation_count(events),
+            "unnecessary_mutations" => execution.mutation_needed ? 0 : mutation_count(events),
             "repeated_action_stops" => repair_stops(events, "repeated_action")
           )
         end
@@ -162,6 +163,10 @@ module Tamoz
           events.count do |event|
             event.type == :tool_completed && event.data.fetch("tool") == tool
           end
+        end
+
+        def mutation_count(events)
+          MUTATION_TOOLS.sum { |tool| tool_completions(events, tool) }
         end
 
         def repair_stops(events, reason)

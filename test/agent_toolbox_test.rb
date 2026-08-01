@@ -838,4 +838,286 @@ class AgentToolboxTest < Minitest::Test
       refute_includes result, "\n\t\n".b
     end
   end
+
+  def test_create_file_writes_exact_bytes_with_default_mode
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      content = "hello\n"
+      digest = Digest::SHA256.hexdigest(content)
+      arguments = {
+        "path" => "greeting.txt",
+        "content" => content,
+        "expected_sha256" => digest
+      }
+
+      receipt = toolbox.execute("create_file", arguments)
+
+      assert_equal content, File.read(File.join(root, "greeting.txt"), encoding: Encoding::UTF_8)
+      assert_equal 0o644, File.stat(File.join(root, "greeting.txt")).mode & 0o777
+      assert_includes receipt, "Created greeting.txt"
+      assert_includes receipt, "mode: 0644"
+      assert_includes receipt, "size: #{content.bytesize}"
+      assert_includes receipt, "sha256: #{digest}"
+    end
+  end
+
+  def test_create_file_applies_explicit_mode
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      content = "secret\n"
+      arguments = {
+        "path" => "secret.txt",
+        "content" => content,
+        "expected_sha256" => Digest::SHA256.hexdigest(content),
+        "mode" => "0600"
+      }
+
+      toolbox.execute("create_file", arguments)
+
+      assert_equal 0o600, File.stat(File.join(root, "secret.txt")).mode & 0o777
+    end
+  end
+
+  def test_create_file_empty_content_succeeds
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "empty.txt",
+        "content" => "",
+        "expected_sha256" => Digest::SHA256.hexdigest("")
+      }
+
+      toolbox.execute("create_file", arguments)
+
+      assert_equal "", File.read(File.join(root, "empty.txt"), encoding: Encoding::UTF_8)
+      assert_equal 0, File.size(File.join(root, "empty.txt"))
+    end
+  end
+
+  def test_create_file_preview_matches_executed_metadata
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      content = "hello\n"
+      digest = Digest::SHA256.hexdigest(content)
+      arguments = {
+        "path" => "greeting.txt",
+        "content" => content,
+        "expected_sha256" => digest,
+        "mode" => "0644"
+      }
+
+      preview = toolbox.preview("create_file", arguments)
+      receipt = toolbox.execute("create_file", arguments)
+
+      assert_includes preview, "--- create: greeting.txt"
+      assert_includes preview, "mode: 0644"
+      assert_includes preview, "size: #{content.bytesize}"
+      assert_includes preview, "sha256: #{digest}"
+      assert_includes preview, "content:\nhello"
+      assert_includes receipt, digest
+    end
+  end
+
+  def test_create_file_preview_truncates_content_deterministically
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      content = "x" * 10_000
+      digest = Digest::SHA256.hexdigest(content)
+      arguments = {
+        "path" => "big.txt",
+        "content" => content,
+        "expected_sha256" => digest,
+        "mode" => "0644"
+      }
+
+      preview = toolbox.preview("create_file", arguments)
+      preview2 = toolbox.preview("create_file", arguments)
+
+      assert_equal preview, preview2
+      assert_includes preview, "sha256: #{digest}"
+      assert_operator preview.bytesize, :<=, Tamoz::Agent::Toolbox::MAX_FILE_BYTES
+    end
+  end
+
+  def test_create_file_rejects_existing_target
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      File.write(File.join(root, "exists.txt"), "x")
+      Dir.mkdir(File.join(root, "adirectory"))
+      File.symlink("exists.txt", File.join(root, "alink"))
+      base = {
+        "path" => "exists.txt",
+        "content" => "y\n",
+        "expected_sha256" => Digest::SHA256.hexdigest("y\n")
+      }
+
+      %w[exists.txt adirectory alink].each do |path|
+        arguments = base.merge("path" => path)
+        error = assert_raises(Tamoz::Agent::ToolError) { toolbox.execute("create_file", arguments) }
+        assert_equal "file already exists", error.message, path
+      end
+    end
+  end
+
+  def test_create_file_rejects_missing_parent
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "missing/greeting.txt",
+        "content" => "hello\n",
+        "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.execute("create_file", arguments) }
+      assert_equal "parent directory does not exist", error.message
+    end
+  end
+
+  def test_create_file_rejects_symlinked_parent
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      Dir.mktmpdir("tamoz-toolbox-outside") do |outside|
+        Dir.mkdir(File.join(outside, "real"))
+        File.symlink(File.join(outside, "real"), File.join(root, "link"))
+        toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+        arguments = {
+          "path" => "link/greeting.txt",
+          "content" => "hello\n",
+          "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+        }
+
+        error = assert_raises(Tamoz::Agent::ToolError) { toolbox.execute("create_file", arguments) }
+        assert_equal "parent path must not contain symlinks", error.message
+      end
+    end
+  end
+
+  def test_create_file_rejects_absolute_and_escape_paths
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      Dir.mktmpdir("tamoz-toolbox-outside") do |outside|
+        File.write(File.join(outside, "escape.txt"), "outside\n")
+        toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+        cases = {
+          "absolute" => ["/etc/passwd", "path must be relative to the workspace root"],
+          "root escape" => ["../escape.txt", "path escapes the workspace root"]
+        }
+
+        cases.each do |label, (path, message)|
+          arguments = {
+            "path" => path,
+            "content" => "hello\n",
+            "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+          }
+          error = assert_raises(Tamoz::Agent::ToolError, label) { toolbox.execute("create_file", arguments) }
+          assert_equal message, error.message, label
+        end
+      end
+    end
+  end
+
+  def test_create_file_rejects_invalid_arguments
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      valid = {
+        "path" => "greeting.txt",
+        "content" => "hello\n",
+        "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", valid.merge("extra" => true)) }
+      assert_equal "unknown tool arguments: extra", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", valid.merge("path" => 1)) }
+      assert_equal "path must be a string", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", valid.merge("content" => 1)) }
+      assert_equal "content must be a string", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", valid.merge("expected_sha256" => "short")) }
+      assert_equal "expected_sha256 must be 64 lowercase hex characters", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", valid.merge("expected_sha256" => "0" * 64)) }
+      assert_equal "content digest mismatch: expected #{("0" * 64)}, computed #{Digest::SHA256.hexdigest("hello\n")}", error.message
+    end
+  end
+
+  def test_create_file_rejects_invalid_content
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      base = {
+        "path" => "greeting.txt",
+        "expected_sha256" => "0" * 64
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("create_file", base.merge("content" => "a\0b"))
+      end
+      assert_equal "content must not contain a null byte", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("create_file", base.merge("content" => "\xFF"))
+      end
+      assert_equal "content must be valid UTF-8", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("create_file", base.merge("content" => "abc".b))
+      end
+      assert_equal "content must be UTF-8 encoded", error.message
+
+      oversized = "x" * (Tamoz::Agent::Toolbox::MAX_FILE_BYTES + 1)
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("create_file", base.merge("content" => oversized))
+      end
+      assert_equal "content exceeds #{Tamoz::Agent::Toolbox::MAX_FILE_BYTES} bytes", error.message
+    end
+  end
+
+  def test_create_file_rejects_invalid_mode
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      base = {
+        "path" => "greeting.txt",
+        "content" => "hello\n",
+        "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", base.merge("mode" => 644)) }
+      assert_equal "mode must be a string", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", base.merge("mode" => "644")) }
+      assert_equal "mode must be an octal permission string (e.g. \"0644\")", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) { toolbox.validate("create_file", base.merge("mode" => "0999")) }
+      assert_equal "mode must be an octal permission string (e.g. \"0644\")", error.message
+    end
+  end
+
+  def test_create_file_rejects_path_that_does_not_name_a_file
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      base = {
+        "content" => "hello\n",
+        "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+      }
+
+      ["", ".", "foo/"].each do |path|
+        error = assert_raises(Tamoz::Agent::ToolError, path.inspect) do
+          toolbox.validate("create_file", base.merge("path" => path))
+        end
+        assert_equal "path must name a file", error.message, path.inspect
+      end
+    end
+  end
+
+  def test_create_file_is_unavailable_in_read_only_runtime
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+
+      refute_includes toolbox.names, "create_file"
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("create_file", "path" => "x.txt", "content" => "x", "expected_sha256" => "0" * 64)
+      end
+      assert_match(/unknown tool/, error.message)
+    end
+  end
 end

@@ -224,4 +224,134 @@ class AgentToolboxInvariant17Test < Minitest::Test
       end
     end
   end
+
+  def test_create_file_failures_return_tool_error_and_leave_workspace_byte_identical
+    Dir.mktmpdir("tamoz-invariant17") do |root|
+      Dir.mkdir(File.join(root, "subdir"))
+      File.write(File.join(root, "existing.txt"), "existing\n", encoding: Encoding::UTF_8)
+      File.write(File.join(root, "subdir", "existing.txt"), "existing\n", encoding: Encoding::UTF_8)
+      File.symlink("subdir", File.join(root, "symlinked_parent"))
+      digest = Digest::SHA256.hexdigest("hello\n")
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      valid = {
+        "path" => "new.txt",
+        "content" => "hello\n",
+        "expected_sha256" => digest
+      }
+
+      cases = {
+        "unknown extra argument" => [
+          :validate,
+          valid.merge("extra" => true)
+        ],
+        "path must be a string" => [
+          :validate,
+          valid.merge("path" => 123)
+        ],
+        "path must name a file (empty)" => [
+          :validate,
+          valid.merge("path" => "")
+        ],
+        "path must name a file (dot)" => [
+          :validate,
+          valid.merge("path" => ".")
+        ],
+        "path must name a file (trailing slash)" => [
+          :validate,
+          valid.merge("path" => "new.txt/")
+        ],
+        "path escapes root" => [
+          :validate,
+          valid.merge("path" => "../escape.txt")
+        ],
+        "file already exists" => [
+          :validate,
+          valid.merge("path" => "existing.txt")
+        ],
+        "parent directory does not exist" => [
+          :validate,
+          valid.merge("path" => "missing/new.txt")
+        ],
+        "parent is not a directory" => [
+          :validate,
+          valid.merge("path" => "existing.txt/new.txt")
+        ],
+        "parent path contains symlinks" => [
+          :validate,
+          valid.merge("path" => "symlinked_parent/new.txt")
+        ],
+        "content must be a string" => [
+          :validate,
+          valid.merge("content" => 123)
+        ],
+        "content exceeds maximum bytes" => [
+          :validate,
+          valid.merge("content" => "x" * (Tamoz::Agent::Toolbox::MAX_FILE_BYTES + 1))
+        ],
+        "content contains null byte" => [
+          :validate,
+          valid.merge("content" => "a\0b")
+        ],
+        "content is invalid UTF-8" => [
+          :validate,
+          valid.merge("content" => "\xFF")
+        ],
+        "expected_sha256 malformed" => [
+          :validate,
+          valid.merge("expected_sha256" => "not-hex")
+        ],
+        "expected_sha256 mismatch" => [
+          :validate,
+          valid.merge("expected_sha256" => "0" * 64)
+        ],
+        "mode must be a string" => [
+          :validate,
+          valid.merge("mode" => 644)
+        ],
+        "mode must be octal permission string" => [
+          :validate,
+          valid.merge("mode" => "644")
+        ],
+        "read-only runtime rejects create_file" => [
+          :execute,
+          {
+            "toolbox" => Tamoz::Agent::Toolbox.new(root:),
+            "arguments" => valid
+          }
+        ]
+      }
+
+      original_manifest = workspace_manifest(root)
+
+      cases.each do |label, (phase, payload)|
+        error = assert_raises(Tamoz::Agent::ToolError, label) do
+          if phase == :validate
+            toolbox.validate("create_file", payload)
+          else
+            payload.fetch("toolbox").execute("create_file", payload.fetch("arguments"))
+          end
+        end
+        assert_kind_of Tamoz::Agent::ToolError, error, label
+        assert_equal original_manifest, workspace_manifest(root), label
+      end
+    end
+  end
+
+  private
+
+  def workspace_manifest(root)
+    entries = Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH).sort
+    entries.each_with_object({}) do |entry, manifest|
+      next if entry == root || File.basename(entry) == "." || File.basename(entry) == ".."
+
+      relative = entry.sub("#{root}/", "")
+      if File.directory?(entry)
+        manifest[relative] = "directory"
+      elsif File.symlink?(entry)
+        manifest[relative] = "symlink:#{File.readlink(entry)}"
+      else
+        manifest[relative] = Digest::SHA256.hexdigest(File.binread(entry))
+      end
+    end
+  end
 end
