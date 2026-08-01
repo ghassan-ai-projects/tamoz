@@ -400,10 +400,11 @@ Implementation started in parallel:
 - **P7 builder** (`agent-25`): extending `Session` with the stream/emitter contract,
   implementing clarification/cancel graph changes, adding the interactive CLI subcommands,
   and adding the `resume_after_kill` scorecard case and P7-E test matrix.
-- **P8 builder** (`agent-26`): implementing the profile loader/validator/canonical digest,
-  toolbox/session-record integration, model-role resolution, and P8-E fuzz matrix.
-  The P8 builder is intentionally not touching `cli.rb` or `exe/tamoz` while P7 owns the
-  CLI surface; CLI integration will follow once P7 lands.
+- **P8 builder** (`agent-27`): implementing the profile loader/validator/canonical digest,
+  toolbox/session-record integration, model-role resolution, and P8-E fuzz matrix in an
+  isolated git worktree (`.worktrees/p8`). The P8 builder is intentionally not touching
+  `cli.rb` or `exe/tamoz` while P7 owns the CLI surface; CLI integration will follow once
+  P7 lands.
 
 Both builders are running with the stop/redesign criteria from their respective plans and
 must report `rake ci` results under both `LC_ALL=en_US.UTF-8` and `LC_ALL=C`.
@@ -483,7 +484,7 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
 | P7 interactive/resumable CLI | designing | **implementation in progress** — builder `agent-25` active |
-| P8 trusted project profiles | pending — design accepted | **implementation in progress (core only)** — builder `agent-26` active; CLI integration waiting for P7 |
+| P8 trusted project profiles | pending — design accepted | **implementation in progress (core only)** — builder `agent-27` active in `.worktrees/p8`; CLI integration waiting for P7 |
 | P9–P15 | pending | not started |
 
 ---
