@@ -24,6 +24,7 @@ module Tamoz
 
     SessionView = Data.define(
       :thread_id,
+      :checkpoint_id,
       :sequence,
       :execution_id,
       :status,
@@ -217,6 +218,7 @@ module Tamoz
         state = SessionRecords.load_state!(snapshot.state)
         SessionView.new(
           thread_id: snapshot.thread_id,
+          checkpoint_id: snapshot.checkpoint_id,
           sequence: snapshot.sequence,
           execution_id: snapshot.execution_id,
           status: snapshot.status,

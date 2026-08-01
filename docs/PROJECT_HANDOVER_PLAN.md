@@ -2,8 +2,8 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P6` — durable session/effect recovery
-Next action: write and review `docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md`; do not implement first
+Current phase: `P7` — interactive and resumable CLI
+Next action: write and review `docs/P7_INTERACTIVE_CLI_PLAN.md`; do not implement first
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -57,8 +57,8 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P3 | complete | deterministic agent scorecard | `68224b3`, `8de7ac1` | `c72f2b3` |
 | P4 | complete | compound one-file edit | `a941f25` | `def7908`, `67f72d7` |
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
-| P6 | **pending — next** | durable session/effect recovery | — | — |
-| P7 | pending | interactive/resumable CLI | — | — |
+| P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
+| P7 | **pending — next** | interactive/resumable CLI | — | — |
 | P8 | pending | trusted project profiles | — | — |
 | P9 | pending | evaluated skills | — | — |
 | P10 | pending | governed MCP client/host | — | — |
@@ -204,24 +204,27 @@ process resumes or stops on ambiguity without guessing.
 
 This is the highest-risk remaining phase. Split it into separately reviewed commits:
 
-- [ ] **P6-D** Map the current runtime onto existing `DurableRunner`, checkpoint, request
+- [x] **P6-D** Map the current runtime onto existing `DurableRunner`, checkpoint, request
   inbox, lease/fence, effect-journal, and codec seams. Prefer adapting the lifecycle over
   creating a second workflow engine.
-- [ ] **P6-A — durable session state:** versioned allowlisted records, session/thread/request
+- [x] **P6-A — durable session state:** versioned allowlisted records, session/thread/request
   identity, exact plan/review digests, event projection, sensitive-data rejection, migration.
-- [ ] **P6-B — durable turns:** graph nodes/barriers for plan, review, discovery, action,
+- [x] **P6-B — durable turns:** graph nodes/barriers for plan, review, discovery, action,
   verification, repair, approval interrupts, and stable activation/attempt identities.
-- [ ] **P6-C — filesystem effect recovery:** journal prepare/dispatch/receipt; reconcile a
+- [x] **P6-C — filesystem effect recovery:** journal prepare/dispatch/receipt; reconcile a
   patch/create effect using before/after digests. Execute only from proven-before state,
   complete from proven-after state, otherwise mark unknown.
-- [ ] **P6-D2 — check/model ambiguity:** persist request/call identity and receipts. Never
+- [x] **P6-D2 — check/model ambiguity:** persist request/call identity and receipts. Never
   automatically repeat a check or provider call whose dispatch outcome is unknown unless
   its declared safety contract proves retry or reconciliation.
-- [ ] **P6-E — kill matrix:** subprocess kill before/after plan acceptance, checkpoint,
+- [x] **P6-E — kill matrix:** subprocess kill before/after plan acceptance, checkpoint,
   approval, effect prepare, filesystem publication, check completion, receipt, verification,
   lease loss, and terminal commit.
-- [ ] **P6-F — operational durability:** migration, backup/restore, corruption, disk-full,
-  busy/lock, stale fence, late receipt, deletion, retention, and FD/thread leak tests.
+- [~] **P6-F — operational durability:** backup/restore, corruption, retention, deletion,
+  stale fence, late receipt, concurrent owners, and FD leak are proved. Disk-full, lock
+  saturation, the unresolved-effect deletion guard through a session, thread-leak
+  measurement, and a soak remain **not done**; see
+  `docs/reviews/P6_IMPLEMENTATION_REVIEW.md` §10.
 
 Required product proof: a real repository repair survives `kill -9` at every declared seam,
 resumes the same accepted exact plan, never applies a filesystem effect twice, and pauses a
@@ -542,12 +545,12 @@ rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 Then:
 
 1. confirm the worktree is clean and no user changes overlap;
-2. confirm P4 is the only active phase;
-3. read P4's authoritative sections and current `Toolbox`, `Runtime`, P3 corpus/tests;
-4. create the P4 plan and plan review;
+2. confirm P7 is the only active phase;
+3. read P7's authoritative sections and current `Session`, `Runtime`, `CLI`, P3 corpus/tests;
+4. create the P7 plan and plan review;
 5. commit those documents before implementation;
-6. implement only P4; deep-review, run full CI, commit, update trackers;
-7. stop and report the checkpoint before beginning P5 unless the owner explicitly asks to
+6. implement only P7; deep-review, run full CI, commit, update trackers;
+7. stop and report the checkpoint before beginning P8 unless the owner explicitly asks to
    continue.
 
 If the scorecard or CI is already red at the unchanged baseline, diagnose the regression
@@ -562,7 +565,7 @@ before adding capability. Do not update expected numbers merely to make it green
 | smart bounded action | P2 repair policy + P3 metrics | P4–P5 capability, P11–P12 adaptation, P15 value comparison |
 | evaluation as a core gem | `tamoz-evals`, canonical artifacts, P3 scorecard | extend each phase; signed evidence P15 |
 | useful coding agent | existing exact edit/check/repair | P4–P8 |
-| crash-durable agent | graph/SQLite foundations exist, agent not integrated | P6–P7 |
+| crash-durable agent | `Tamoz::Agent::Session` over the existing durable contracts; sixteen real `kill -9` seams | P7 resumable CLI; P6-F remainder |
 | trusted configuration | design only | P8 |
 | skills | accepted design only | P9 |
 | MCP-native support | accepted design only | P10 |

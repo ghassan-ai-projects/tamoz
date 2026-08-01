@@ -1,9 +1,9 @@
 # Tamoz product execution roadmap
 
 Status: active  
-Current phase: P6 — durable session/effect recovery
-Last completed product checkpoint: P5 — reviewed file creation
-Canonical next action: design P6 durable session/effect recovery; do not implement before review
+Current phase: P7 — interactive and resumable CLI
+Last completed product checkpoint: P6 — durable session/effect recovery (P6-F partial)
+Canonical next action: design P7 interactive/resumable CLI over the P6 durable session; do not implement before review
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -44,7 +44,7 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P3 | Coding behavior scorecard | very high | low | complete | fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies |
 | P4 | Compound existing-file edits | high | medium | complete `67f72d7` | one digest binds several ordered exact replacements in one atomic file update |
 | P5 | Reviewed file creation | high | medium | complete `6504398` | create one new bounded file with parent/root policy, exact preview, approval, atomic commit |
-| P6 | Durable session/effect recovery | very high | medium–high | **active** | SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing |
+| P6 | Durable session/effect recovery | very high | medium–high | complete `b69701c` (P6-F partial) | SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing |
 | P7 | Interactive multi-turn CLI | high | medium | pending | clarify, redirect, continue, and resume one durable session |
 | P8 | Trusted project profiles | medium–high | medium | pending | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
 | P9 | Skills | medium–high | medium | pending | one evaluated content-addressed skill improves a task without granting authority |

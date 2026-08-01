@@ -157,8 +157,8 @@ approvals; one `tool.apply_patch` and one `tool.run_check` receipt;
 
 | Check | Result |
 |---|---|
-| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 447 runs, 27,786 assertions, 0 failures/errors/skips |
-| `rake ci`, `LC_ALL=C` | pass — 447 runs, 27,771 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 453 runs, 27,813 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 453 runs, 27,795 assertions, 0 failures/errors/skips |
 | design validation | pass — 22 documents, 55 invariants, 40 ADRs |
 | gem packaging | pass — all five gems |
 | `tamoz-eval scorecard agent-smoke` | pass — 8/12, corpus `sha256:d24bb33f…`, content `sha256:3851d176…` |
@@ -176,4 +176,23 @@ Accept. The phase's required product proof holds: a real repository repair survi
 applies a filesystem effect twice, and pauses a truly unknown check for reconciliation.
 Read-only and ephemeral construction remain available through the unchanged `Runtime`.
 
-P6-F (operational durability) is **not** complete; see the phase tracker.
+## 10. P6-F — what was and was not proved
+
+Proved by `test/agent_session_operations_test.rb`, all against a real SQLite file and a
+real paused session:
+
+| Item | Result |
+|---|---|
+| backup of a paused session, restore, resume from the copy to completion | pass |
+| corrupted checkpoint payload is reported (`CheckpointCorruptionError`), never silently skipped | pass |
+| retention `prune(keep: 1)` never removes the active tip; the pruned session still resumes | pass |
+| deletion is compare-protected on the current tip and then blocks further work | pass |
+| two concurrent owners cannot both advance one namespace | pass |
+| no file-descriptor growth across eight full session cycles | pass |
+| stale fence and lease loss | pass — every kill-matrix row recovers under a new owner id |
+| late receipt after lease loss | pass — `agent_session_effect_test.rb` |
+
+**Not done**, and not claimed: disk-full injection, SQLite busy/lock saturation under
+load, the unresolved-effect deletion guard exercised *through a session* (the guard
+itself is covered by `test/sqlite_deletion_test.rb`), thread-count leak measurement, and
+a long soak. P6-F is therefore **partial**.
