@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `67f72d7`
+Last verified: 2026-08-01 at commit `6504398`
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -299,6 +299,44 @@ Blind A/B against `def7908` (pre-scorecard-flip baseline) on identical sandboxed
 
 P4 is closed. The active phase moves to P5.
 
+### Round 4 — P5 reviewed file creation
+
+The builder produced `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`; the critic rejected the
+initial draft because the directory-symlink TOCTOU race was overstated and `AgentRunAudit`
+did not count `create_file` as a mutation. The builder amended the plan to scope the race
+honestly, add pre-link parent revalidation, and extend the audit mutation counters. The
+amended plan was accepted.
+
+The builder then implemented P5-A/B/C/E: a new `create_file` tool with path/parent/root/
+symlink validation, UTF-8 content policy, digest/mode binding, and atomic no-clobber
+publication via `Tempfile` + `File.link`; `Runtime` structural checks treat `create_file` as
+a mutation step; `AgentRunAudit` counts it as a mutation and requires approval. The critic
+found two required corrections: race-time `EEXIST` had to surface as `file already exists`
+(plan-documented), and the special-bits mode check was unreachable dead code. Both were
+fixed and re-verified.
+
+Independent coordinator verification at `6504398`:
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 408 runs, 27,596 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 408 runs, 27,596 assertions, 0 failures/errors/skips |
+| design validation | pass — 22 documents, 55 invariants, 40 ADRs |
+| gem packaging | pass — all five gems |
+| `tamoz-eval scorecard agent-smoke` | pass — fixed digest, 8/12 successes, all four hard gates pass |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive completion 0, incomplete evidence 0 |
+
+Blind A/B against `4dcb9c1` (pre-P5 baseline) on identical sandboxed tasks:
+
+| Probe | Baseline `4dcb9c1` | New `6504398` |
+|---|---|---|
+| `agent.new-file-need` | `plan_rejected` — no creation capability | **succeeded** with one reviewed `create_file` + check |
+| `agent.one-pass-repair` | unchanged success | unchanged success |
+| `agent.multi-location-edit` | unchanged success | unchanged success |
+| safety counters | 0 | 0 |
+
+P5 is closed. The active phase moves to P6.
+
 ### Round 2 — D-4/D-5 UTF-8 contract correction
 
 The builder produced `docs/D4_D5_UTF8_CONTRACT_PLAN.md`; the critic accepted it with
@@ -341,30 +379,32 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 |---|---|---|
 | P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
-| P5 reviewed file creation | pending — next | not started |
-| P6–P15 | pending | not started |
+| P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
+| P6 durable session/effect recovery | pending — next | not started |
+| P7–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **P5 reviewed file creation** — design `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`, review it,
-   then implement P5-D/A/B/C/E to turn `agent.new-file-need` into success while preserving all
-   prior scorecard cases and safety gates. This is the active work package.
+1. **P6 durable session/effect recovery** — this is the highest-risk remaining phase. Read
+   `PERSISTENCE_DESIGN.md`, `GRAPH_DESIGN.md`, `AGENT_DESIGN.md` §§1–8, invariants 9, 18–27,
+   52–55, and the existing SQLite/graph durability APIs; then create and review
+   `docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md` before any implementation.
 2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
    assertions between identical runs; diagnose before P15 evidence pinning.
-3. P6–P15 remain unimplemented.
+3. P7–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Read P5 authoritative inputs (`AGENT_DESIGN.md` §§3–5, persistence effect rules, invariants
-17, 21, 24–27, and the P3 `agent.new-file-need` case), then fan out a builder and separate
-harsh critic with fresh context to create and review `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`.
-Commit the accepted design before any implementation.
+Fan out a builder and a separate harsh critic with fresh context to produce and review
+`docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md`. The plan must map the current agent runtime onto
+the existing `DurableRunner`, checkpoint, request inbox, lease/fence, effect-journal, and
+codec seams, and must define the kill matrix before any code is written.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
 publish, release, or connect real physical actuators. The committed product checkpoint is
-`67f72d7`; this progress page and the tracker updates are the only intentional artifacts added
+`6504398`; this progress page and the tracker updates are the only intentional artifacts added
 by this handoff.

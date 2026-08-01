@@ -2,8 +2,8 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P5` — reviewed file creation
-Next action: write and review `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`; do not implement first
+Current phase: `P6` — durable session/effect recovery
+Next action: write and review `docs/P6_DURABLE_SESSION_RECOVERY_PLAN.md`; do not implement first
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -56,8 +56,8 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P2 | complete | bounded reviewed repair | roadmap | `00bcaa4` |
 | P3 | complete | deterministic agent scorecard | `68224b3`, `8de7ac1` | `c72f2b3` |
 | P4 | complete | compound one-file edit | `a941f25` | `def7908`, `67f72d7` |
-| P5 | **pending — next** | reviewed file creation | — | — |
-| P6 | pending | durable session/effect recovery | — | — |
+| P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
+| P6 | **pending — next** | durable session/effect recovery | — | — |
 | P7 | pending | interactive/resumable CLI | — | — |
 | P8 | pending | trusted project profiles | — | — |
 | P9 | pending | evaluated skills | — | — |
@@ -177,14 +177,14 @@ exact bytes/mode/digest, overwrite false, one preview, and one approval.
 
 Work packages:
 
-- [ ] **P5-D** Specify portable atomic no-clobber publication. Do not assume `File.rename`
+- [x] **P5-D** Specify portable atomic no-clobber publication. Do not assume `File.rename`
   is safe because it overwrites existing targets.
-- [ ] **P5-A** Add path/parent/root/symlink, UTF-8/binary policy, byte, mode, and digest
+- [x] **P5-A** Add path/parent/root/symlink, UTF-8/binary policy, byte, mode, and digest
   validation with immutable arguments.
-- [ ] **P5-B** Implement private temporary write, flush/fsync, no-clobber publication,
+- [x] **P5-B** Implement private temporary write, flush/fsync, no-clobber publication,
   directory fsync, cleanup, and truthful receipt.
-- [ ] **P5-C** Integrate planning, approval, repair signatures, CLI/docs/API, and evaluation.
-- [ ] **P5-E** Turn `agent.new-file-need` into success while preserving every prior case.
+- [x] **P5-C** Integrate planning, approval, repair signatures, CLI/docs/API, and evaluation.
+- [x] **P5-E** Turn `agent.new-file-need` into success while preserving every prior case.
 
 Required proof includes concurrent creators, target appearing between preview and commit,
 missing/changed parent, symlink parent, path collision/case behavior, mode preservation,
