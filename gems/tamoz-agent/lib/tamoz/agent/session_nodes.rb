@@ -22,20 +22,22 @@ module Tamoz
       GRAPH_VERSION = "1"
       BEHAVIOR_VERSION = "tamoz.agent.session/1"
 
-      attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety
+      attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety, :profile
 
       def initialize(
         model:,
         toolbox:,
         max_plan_attempts:,
         max_repair_attempts:,
-        model_call_safety:
+        model_call_safety:,
+        profile: nil
       )
         @model = model
         @toolbox = toolbox
         @max_plan_attempts = max_plan_attempts
         @max_repair_attempts = max_repair_attempts
         @model_call_safety = model_call_safety
+        @profile = profile
         freeze
       end
 
@@ -71,9 +73,19 @@ module Tamoz
             graph_version: GRAPH_VERSION,
             behavior_version: BEHAVIOR_VERSION,
             tool_catalog_digest: toolbox.catalog_digest,
-            created_at_ms: 0
+            created_at_ms: 0,
+            **profile_binding
           )
         }
+      end
+
+      # P8: a profile-bound session pins its authority in the session record. The
+      # constructor has already verified the toolbox matches the profile surface
+      # (§5.2), so intake only records the identity.
+      def profile_binding
+        return {} unless profile
+
+        {profile_id: profile.profile_id, profile_digest: profile.canonical_digest}
       end
 
       def deliberate(state, context)

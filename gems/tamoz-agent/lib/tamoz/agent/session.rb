@@ -58,7 +58,8 @@ module Tamoz
         checkpointer:,
         max_plan_attempts: 3,
         max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
-        model_call_safety: :idempotent
+        model_call_safety: :idempotent,
+        profile: nil
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
@@ -78,18 +79,39 @@ module Tamoz
         end
 
         @toolbox = toolbox
+        verify_profile_binding!(profile)
         @nodes = SessionNodes.new(
           model:,
           toolbox:,
           max_plan_attempts:,
           max_repair_attempts:,
-          model_call_safety:
+          model_call_safety:,
+          profile:
         )
         @definition = Session.build_definition(@nodes)
         @app = @definition.compile(checkpointer:)
         @runner = @app.durable_runner
         freeze
       end
+
+      # P8 §5.2: the toolbox must expose exactly the capability surface the
+      # profile pins; a mismatch fails here, before any model I/O.
+      def verify_profile_binding!(profile)
+        return unless profile
+
+        expected = profile.policy.fetch("tool_catalog_digest")
+        unless toolbox.catalog_digest == expected
+          raise Profile::ValidationError,
+                "toolbox catalog digest #{toolbox.catalog_digest} does not match " \
+                "profile #{profile.profile_id.inspect} policy.tool_catalog_digest #{expected}"
+        end
+        unless toolbox.root.to_s == File.expand_path(profile.canonical_root)
+          raise Profile::ValidationError,
+                "toolbox root #{toolbox.root} does not match profile canonical_root " \
+                "#{profile.canonical_root.inspect}"
+        end
+      end
+      private :verify_profile_binding!
 
       def self.build_definition(nodes)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do

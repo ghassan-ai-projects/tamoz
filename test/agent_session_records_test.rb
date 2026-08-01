@@ -142,4 +142,43 @@ class AgentSessionRecordsTest < Minitest::Test
 
     assert_equal state, Records.load_state!(state)
   end
+
+  def test_pre_p8_session_record_loads_with_legacy_profile_sentinels
+    record = Records.load!(
+      {
+        "record" => "session",
+        "record_version" => 1,
+        "session_id" => "s1",
+        "task" => "t",
+        "task_digest" => "a" * 64,
+        "root" => "/tmp",
+        "graph_version" => "1",
+        "behavior_version" => "tamoz.agent.session/1",
+        "tool_catalog_digest" => "sha256:#{"b" * 64}",
+        "created_at_ms" => 0
+      }
+    )
+
+    assert_equal "legacy", record.fetch("profile_id")
+    assert_equal "legacy:none", record.fetch("profile_digest")
+  end
+
+  def test_session_record_accepts_explicit_profile_identity
+    record = Records.build(
+      "session",
+      session_id: "s1",
+      task: "t",
+      task_digest: "a" * 64,
+      root: "/tmp",
+      graph_version: "1",
+      behavior_version: "tamoz.agent.session/1",
+      tool_catalog_digest: "sha256:#{"b" * 64}",
+      created_at_ms: 0,
+      profile_id: "work",
+      profile_digest: "sha256:#{"c" * 64}"
+    )
+
+    assert_equal "work", record.fetch("profile_id")
+    assert_equal "sha256:#{"c" * 64}", record.fetch("profile_digest")
+  end
 end

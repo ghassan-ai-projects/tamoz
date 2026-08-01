@@ -284,7 +284,7 @@ module Tamoz
             end
 
             Tamoz::Agent::CLI.prepend(Module.new do
-              def build_model(_options)
+              def build_model(_options, profile: nil)
                 TamozScriptedCliModel.new
               end
             end)

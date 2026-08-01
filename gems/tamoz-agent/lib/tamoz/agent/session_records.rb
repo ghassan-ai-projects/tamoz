@@ -15,6 +15,8 @@ module Tamoz
     module SessionRecords
       RECORD_VERSION = 1
       DIGEST_DOMAIN = "tamoz.agent.session_record"
+      LEGACY_PROFILE_ID = "legacy"
+      LEGACY_PROFILE_DIGEST = "legacy:none"
 
       STRING = :string
       INTEGER = :integer
@@ -36,7 +38,10 @@ module Tamoz
             "tool_catalog_digest" => STRING,
             "created_at_ms" => INTEGER
           },
-          optional: {}
+          optional: {
+            "profile_id" => STRING,
+            "profile_digest" => STRING
+          }
         },
         "plan" => {
           required: {
@@ -222,6 +227,15 @@ module Tamoz
           end
 
           migrated = Plan.deep_freeze(migration.call(migrated))
+        end
+
+        # Pre-P8 session records carry no profile identity; they load with the
+        # legacy sentinels so resume can distinguish them from profiled sessions.
+        if stored_kind == "session"
+          defaults = {}
+          defaults["profile_id"] = LEGACY_PROFILE_ID unless migrated.key?("profile_id")
+          defaults["profile_digest"] = LEGACY_PROFILE_DIGEST unless migrated.key?("profile_digest")
+          migrated = Plan.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
         end
 
         validate_fields!(migrated, stored_kind)

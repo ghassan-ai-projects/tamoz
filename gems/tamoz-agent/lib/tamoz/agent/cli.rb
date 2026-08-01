@@ -16,7 +16,7 @@ module Tamoz
 
       SUBCOMMANDS = %w[
         ask resume continue list show follow-up follow_up followup
-        redirect cancel resolve
+        redirect cancel resolve profile
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
@@ -71,8 +71,11 @@ module Tamoz
             Usage: tamoz [global-options] [subcommand] [options] [ARGS]
                    tamoz [options] TASK
 
-            Subcommands: ask, resume, continue, list, show, follow-up, redirect, cancel, resolve
+            Subcommands: ask, resume, continue, list, show, follow-up, redirect, cancel, resolve, profile
           BANNER
+          value.on("--profile PROFILE", "Trusted profile path or id (durable sessions)") do |entry|
+            options[:profile] = entry
+          end
           value.on("--model MODEL", "RubyLLM model identifier") { |entry| options[:model] = entry }
           value.on("--provider PROVIDER", "RubyLLM provider (default: openai)") do |entry|
             options[:provider] = entry
@@ -124,6 +127,7 @@ module Tamoz
 
       def dispatch_subcommand(subcommand, options, argv)
         validate_check_config!(options)
+        validate_profile_usage!(options, subcommand)
 
         case subcommand
         when "ask" then cmd_ask(options, argv)
@@ -135,17 +139,37 @@ module Tamoz
         when "redirect" then cmd_redirect(options, argv)
         when "cancel" then cmd_cancel(options, argv)
         when "resolve" then cmd_resolve(options, argv)
+        when "profile" then cmd_profile(options, argv)
         else
           raise OptionParser::InvalidArgument, "unknown subcommand: #{subcommand}"
         end
       end
 
+      # A profile is session authority: it only makes sense on the durable,
+      # profile-aware commands, and it replaces the flag-driven capability
+      # surface, so combining it with --allow-changes/--check is an error.
+      def validate_profile_usage!(options, subcommand)
+        return unless options[:profile]
+
+        unless %w[ask resume continue follow-up follow_up followup redirect].include?(subcommand)
+          raise OptionParser::InvalidArgument,
+                "--profile is not supported for #{subcommand}"
+        end
+        if options[:allow_changes] || !options[:checks].empty?
+          raise OptionParser::InvalidArgument,
+                "--profile sets the capability surface; do not combine it with " \
+                "--allow-changes or --check"
+        end
+      end
+
       def run_one_shot(options, argv)
         if options[:session]
+          validate_profile_usage!(options, "ask")
           options[:explicit_session] = options[:session]
           return cmd_ask(options, argv)
         end
 
+        validate_profile_usage!(options, "one-shot")
         validate_check_config!(options)
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "TASK" if task.empty?
@@ -174,8 +198,9 @@ module Tamoz
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "TASK" if task.empty?
 
+        profile = load_operator_profile(options)
         thread_id = resolve_thread_id(options)
-        run_durable(options, thread_id) do |session, request_id, owner_id|
+        run_durable(options, thread_id, profile:) do |session, request_id, owner_id|
           drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
         end
       end
@@ -183,14 +208,18 @@ module Tamoz
       def cmd_resume(options, argv)
         resume_options = parse_resume_options(argv)
         thread_id = extract_thread!(argv)
-        run_durable(options, thread_id, read_only: false) do |session, request_id, owner_id|
+        profile = load_operator_profile(options)
+        run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
+          guard_profile_resume!(session, thread_id, profile)
           drive_resume(session, thread_id:, request_id:, owner_id:, options:, resume_options:)
         end
       end
 
       def cmd_continue(options, argv)
         thread_id = extract_thread!(argv)
-        run_durable(options, thread_id, read_only: false) do |session, request_id, owner_id|
+        profile = load_operator_profile(options)
+        run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
+          guard_profile_resume!(session, thread_id, profile)
           drive_continue(session, thread_id:, request_id:, owner_id:, options:)
         end
       end
@@ -247,7 +276,9 @@ module Tamoz
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "TASK" if task.empty?
 
-        run_durable(options, thread_id, read_only: false) do |session, request_id, owner_id|
+        profile = load_operator_profile(options)
+        run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
+          guard_profile_resume!(session, thread_id, profile)
           request = session.app.durable_runner.submit(
             {"task" => task},
             thread: thread_id,
@@ -269,7 +300,9 @@ module Tamoz
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "new task" if task.empty?
 
-        run_durable(options, thread_id, read_only: false) do |session, request_id, owner_id|
+        profile = load_operator_profile(options)
+        run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
+          guard_profile_resume!(session, thread_id, profile)
           session.app.durable_runner.submit(
             {"task" => task},
             thread: thread_id,
@@ -779,7 +812,7 @@ module Tamoz
         Tamoz::Agent::Session.new(model: dummy_model, toolbox:, checkpointer: adapter)
       end
 
-      def run_durable(options, thread_id, read_only: false)
+      def run_durable(options, thread_id, read_only: false, profile: nil)
         # Deferred: tamoz/agent must not load the adapter package at require time
         # (dependency isolation), only when a durable subcommand actually runs.
         require "tamoz/sqlite"
@@ -791,18 +824,14 @@ module Tamoz
           raise ArgumentError, "session directory #{session_dir} is accessible to group or others"
         end
 
-        model = build_model(options)
-        toolbox = Tamoz::Agent::Toolbox.new(
-          root: options[:root],
-          allow_changes: options[:allow_changes],
-          checks: options[:checks]
-        )
+        model = build_model(options, profile:)
+        toolbox = build_toolbox(options, profile:)
         adapter = Tamoz::SQLite::Adapter.new(
           path: File.join(session_dir, "#{thread_id}.sqlite3"),
           limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
         )
         begin
-          session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
+          session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, profile:)
           install_signal_handlers do
             yield session, SecureRandom.uuid, SecureRandom.uuid
           end
@@ -810,6 +839,201 @@ module Tamoz
           adapter.close unless read_only
         end
       end
+
+      def build_toolbox(options, profile: nil)
+        return build_profile_toolbox(profile) if profile
+
+        Tamoz::Agent::Toolbox.new(
+          root: options[:root],
+          allow_changes: options[:allow_changes],
+          checks: options[:checks]
+        )
+      end
+
+      # §5.2: the profile is the capability authority; the toolbox is derived
+      # from it wholesale so its catalog digest matches the pinned value.
+      def build_profile_toolbox(profile)
+        Tamoz::Agent::Toolbox.new(
+          root: profile.canonical_root,
+          allow_changes: profile.allow_changes?,
+          checks: profile.checks.transform_values { |check| check.fetch("argv") },
+          check_safeties: profile.checks.transform_values { |check| check.fetch("safety").to_sym },
+          allowed_tools: profile.tools_allowed,
+          approval_required: profile.tools_approval_required
+        )
+      end
+
+      def load_operator_profile(options)
+        return nil unless options[:profile]
+
+        path = Profile.resolve_path(profile: options[:profile], env: @env)
+        Profile.load(path, env: @env, confirm_adoption: adoption_confirmation(options))
+      end
+
+      def adoption_confirmation(options)
+        lambda do |document|
+          if options[:non_interactive]
+            raise Profile::AdoptionError,
+                  "profile #{document.profile_id} digest #{document.canonical_digest} requires " \
+                  "operator adoption; run 'tamoz profile import' or activate it interactively"
+          end
+
+          @err.puts "Profile #{document.profile_id} is not activated."
+          @err.puts "  digest: #{document.canonical_digest}"
+          @err.puts "  canonical_root: #{document.canonical_root}"
+          @err.print "Activate this exact profile digest? [y/N] "
+          @err.flush
+          answer = @input.gets
+          !!(answer && %w[y yes].include?(answer.strip.downcase))
+        end
+      end
+
+      # §5.5: resume under a profile must never silently rebind authority. A
+      # legacy session predates profiles; a different profile id or a changed
+      # digest blocks mutation until an explicit transition exists.
+      def guard_profile_resume!(session, thread_id, profile)
+        return unless profile
+
+        view = begin
+          session.view(thread: thread_id)
+        rescue Tamoz::Agent::Error
+          return
+        end
+        record = view.state && view.state[:session]
+        return unless record
+
+        stored_id = record.fetch("profile_id")
+        if stored_id == SessionRecords::LEGACY_PROFILE_ID
+          raise Profile::AdoptionError,
+                "session #{thread_id} predates trusted profiles; resume it without --profile"
+        end
+        unless stored_id == profile.profile_id
+          raise Profile::AdoptionError,
+                "session #{thread_id} belongs to profile #{stored_id.inspect}, not " \
+                "#{profile.profile_id.inspect}; inspect it with 'tamoz show' instead"
+        end
+
+        stored_digest = record.fetch("profile_digest")
+        return if stored_digest == profile.canonical_digest
+
+        raise Profile::AdoptionError,
+              "Session was created with profile #{stored_id} digest #{stored_digest}; " \
+              "current profile digest is #{profile.canonical_digest}. Run 'tamoz profile " \
+              "activate --thread #{thread_id} --digest #{stored_digest}' or resume with --read-only."
+      end
+
+      def cmd_profile(options, argv)
+        action = argv.shift
+        case action
+        when "preview" then profile_preview(argv)
+        when "list" then profile_list(options)
+        when "show" then profile_show(argv)
+        when "import" then profile_import(options, argv)
+        else
+          raise OptionParser::InvalidArgument, "unknown profile action: #{action.inspect}"
+        end
+      end
+
+      def profile_preview(argv)
+        path = argv.shift
+        raise OptionParser::MissingArgument, "PATH" if path.to_s.empty?
+
+        expanded = File.expand_path(File.path(path))
+        document = Profile.preview(expanded, suggestion: Profile.suggestion_path?(expanded))
+        render_profile(document)
+        document.suggestion ? 3 : 0
+      end
+
+      def profile_list(options)
+        directory = Profile.profiles_dir(env: @env)
+        entries = Dir.glob(File.join(directory, "*.yaml")).sort.filter_map do |path|
+          document = Profile.preview(path)
+          [File.basename(path, ".yaml"), document]
+        rescue Profile::ProfileError
+          nil
+        end
+        if options[:json]
+          @out.puts JSON.generate(
+            entries.map do |name, document|
+              {"file" => name, "profile_id" => document.profile_id,
+               "profile_version" => document.profile_version,
+               "canonical_digest" => document.canonical_digest}
+            end
+          )
+        else
+          entries.each do |name, document|
+            @out.puts "#{name}: #{document.profile_id} #{document.profile_version} #{document.canonical_digest}"
+          end
+        end
+        0
+      end
+
+      def profile_show(argv)
+        id = argv.shift
+        raise OptionParser::MissingArgument, "PROFILE_ID" if id.to_s.empty?
+
+        path = Profile.resolve_path(profile: id, env: @env)
+        render_profile(Profile.preview(path))
+        0
+      end
+
+      def profile_import(options, argv)
+        force = false
+        OptionParser.new do |value|
+          value.on("--force", "Overwrite an existing profile with the same id") { force = true }
+        end.parse!(argv)
+        source = argv.shift
+        raise OptionParser::MissingArgument, "PATH" if source.to_s.empty?
+
+        expanded = File.expand_path(File.path(source))
+        document = Profile.preview(expanded, suggestion: Profile.suggestion_path?(expanded))
+        directory = Profile.profiles_dir(env: @env)
+        target = File.join(directory, "#{document.profile_id}.yaml")
+        if File.exist?(target) && !force
+          raise Profile::AdoptionError,
+                "#{target} already exists; use --force and confirm to replace it"
+        end
+        unless force
+          if options[:non_interactive]
+            raise Profile::AdoptionError,
+                  "import requires operator confirmation; re-run interactively or pass --force"
+          end
+
+          @err.puts "Import #{document.profile_id} digest #{document.canonical_digest}"
+          @err.puts "  from: #{expanded}"
+          @err.puts "  to:   #{target}"
+          @err.print "Install and activate this exact profile? [y/N] "
+          @err.flush
+          answer = @input.gets
+          unless answer && %w[y yes].include?(answer.strip.downcase)
+            raise Profile::AdoptionError, "import not confirmed"
+          end
+        end
+
+        FileUtils.mkdir_p(directory, mode: 0o700)
+        File.chmod(0o700, directory)
+        bytes = File.binread(expanded)
+        File.write(target, bytes)
+        File.chmod(0o600, target)
+        Profile::AdoptionRegistry.new(env: @env).activate(
+          document.profile_id, document.canonical_digest
+        )
+        @out.puts "Imported #{document.profile_id} (#{document.canonical_digest})"
+        0
+      end
+
+      def render_profile(document)
+        @out.puts "profile_id: #{document.profile_id}"
+        @out.puts "profile_version: #{document.profile_version}"
+        @out.puts "canonical_root: #{document.canonical_root}"
+        @out.puts "canonical_digest: #{document.canonical_digest}"
+        @out.puts "allow_changes: #{document.allow_changes?}"
+        @out.puts "tools.allowed: #{document.tools_allowed.join(", ")}"
+        @out.puts "tools.approval_required: #{document.tools_approval_required.join(", ")}"
+        @out.puts "high_risk: #{document.high_risk?}"
+        @out.puts "suggestion: #{document.suggestion}"
+      end
+
 
       def install_signal_handlers
         @cancellation = Tamoz::CancellationToken.new
@@ -900,15 +1124,32 @@ module Tamoz
         end
       end
 
-      def build_model(options)
+      def build_model(options, profile: nil)
         return @model_factory.call(options) if @model_factory
 
         model_name = options[:model] || @env["TAMOZ_MODEL"]
+        provider = options[:provider] || @env["TAMOZ_PROVIDER"]
+        api_key = nil
+        role = profile && profile.model_roles["primary"]
+        if role
+          # §5.3: the symbolic :primary role resolves through the profile when
+          # the operator has not pinned a model on the command line.
+          model_name ||= role.fetch("model")
+          provider ||= role.fetch("provider")
+          ref = role["credential_ref"]
+          api_key = @env[ref.fetch("name")] if ref
+        end
         raise OptionParser::MissingArgument, "--model or TAMOZ_MODEL" if model_name.to_s.empty?
 
-        provider = options[:provider] || @env.fetch("TAMOZ_PROVIDER", "openai")
+        provider = provider.to_s.empty? ? "openai" : provider
+        if provider == "assume_model_exists"
+          # §5.3: custom endpoints are out of scope for P8 v1.
+          raise Profile::ValidationError,
+                "profile model role provider \"assume_model_exists\" requires a custom " \
+                "endpoint, which P8 v1 does not support"
+        end
         provider_key = RubyLLMModel::ENV_KEYS[provider.downcase.to_sym]
-        api_key = provider_key && @env[provider_key]
+        api_key ||= provider_key && @env[provider_key]
         api_base = @env["#{provider.upcase}_API_BASE"]
         RubyLLMModel.new(
           model: model_name,

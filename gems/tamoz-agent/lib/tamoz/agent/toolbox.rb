@@ -82,15 +82,18 @@ module Tamoz
 
       CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
       DEFAULT_CHECK_SAFETY = :unsafe
+      DEFAULT_APPROVAL_REQUIRED = ACTION_DESCRIPTIONS.keys.freeze
 
-      attr_reader :root, :checks, :check_timeout, :check_safeties
+      attr_reader :root, :checks, :check_timeout, :check_safeties, :allowed_tools, :approval_required
 
       def initialize(
         root:,
         allow_changes: false,
         checks: {},
         check_timeout: DEFAULT_CHECK_TIMEOUT,
-        check_safeties: {}
+        check_safeties: {},
+        allowed_tools: nil,
+        approval_required: nil
       )
         @root = Pathname.new(root).expand_path.realpath.freeze
         raise ToolError, "workspace root is not a directory" unless @root.directory?
@@ -105,6 +108,13 @@ module Tamoz
         @checks = normalize_checks(checks)
         @check_safeties = normalize_check_safeties(check_safeties)
         @check_timeout = check_timeout.to_f
+        available = READ_DESCRIPTIONS.keys.dup
+        if @allow_changes
+          available << "apply_patch" << "create_file"
+          available << "run_check" unless @checks.empty?
+        end
+        @allowed_tools = normalize_allowed_tools(allowed_tools, available)
+        @approval_required = normalize_approval_required(approval_required, @allowed_tools)
         @descriptions = READ_DESCRIPTIONS.dup
         if @allow_changes
           @descriptions["apply_patch"] = ACTION_DESCRIPTIONS.fetch("apply_patch")
@@ -114,10 +124,13 @@ module Tamoz
             @descriptions["run_check"] = "#{ACTION_DESCRIPTIONS.fetch("run_check")} Configured names: #{names}."
           end
         end
+        @descriptions.keep_if { |name, _| @allowed_tools.include?(name) }
         @descriptions.freeze
         @catalog_digest = "sha256:#{Digest::SHA256.hexdigest(
           JSON.generate(
             [
+              @allowed_tools.sort,
+              @approval_required.sort,
               @descriptions.keys.sort,
               @descriptions.sort.to_h,
               @checks.keys.sort,
@@ -133,7 +146,7 @@ module Tamoz
       def names = descriptions.keys
       def read_only_names = READ_DESCRIPTIONS.keys
       def action_capable? = @allow_changes
-      def approval_required?(name) = %w[apply_patch run_check create_file].include?(String(name))
+      def approval_required?(name) = @approval_required.include?(String(name))
 
       # Declared effect safety for one configured check. A configured check is an
       # operator-supplied argv, so nothing about it is provably safe: the default is
@@ -361,6 +374,39 @@ module Tamoz
 
           [name.freeze, safety]
         end.freeze
+      end
+
+      def normalize_allowed_tools(value, available)
+        return available.freeze if value.nil?
+        unless value.is_a?(Array) && !value.empty? &&
+               value.all? { |name| name.is_a?(String) } && value.uniq == value
+          raise ArgumentError, "allowed_tools must be a non-empty Array of distinct tool names"
+        end
+
+        unknown = value - available
+        unless unknown.empty?
+          raise ArgumentError,
+                "allowed_tools names unavailable tools: #{unknown.sort.join(", ")} " \
+                "(available: #{available.sort.join(", ")})"
+        end
+
+        value.map { |name| name.dup.freeze }.freeze
+      end
+
+      def normalize_approval_required(value, allowed)
+        return DEFAULT_APPROVAL_REQUIRED if value.nil?
+        unless value.is_a?(Array) &&
+               value.all? { |name| name.is_a?(String) } && value.uniq == value
+          raise ArgumentError, "approval_required must be an Array of distinct tool names"
+        end
+
+        unknown = value - allowed
+        unless unknown.empty?
+          raise ArgumentError,
+                "approval_required must be a subset of allowed_tools: #{unknown.sort.join(", ")}"
+        end
+
+        value.map { |name| name.dup.freeze }.freeze
       end
 
       def read_file(arguments)

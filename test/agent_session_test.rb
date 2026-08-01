@@ -70,6 +70,40 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
+  def test_profile_bound_session_records_profile_identity
+    with_workspace do |root, adapter|
+      File.write(File.join(root, "note.txt"), "Tamoz is awake.\n")
+      model = ScriptedModel.new(
+        plan: [plan_for("read_file", {"path" => "note.txt"})],
+        review: [accepted_review],
+        verify: [{"answer" => "Tamoz is awake.", "satisfied" => true, "evidence" => ["note.txt"]}]
+      )
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+      profile = build_profile(root:, catalog_digest: toolbox.catalog_digest)
+      session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, profile:)
+
+      outcome = session.start("What does note.txt say?", thread: "session.profile", request_id: "request.1")
+
+      assert_equal :completed, outcome.status
+      record = session.view(thread: "session.profile").state.fetch(:session)
+      assert_equal "test-profile", record.fetch("profile_id")
+      assert_equal profile.canonical_digest, record.fetch("profile_digest")
+    end
+  end
+
+  def test_profile_catalog_mismatch_fails_before_model_io
+    with_workspace do |root, adapter|
+      model = ScriptedModel.new(plan: [], review: [], verify: [])
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+      profile = build_profile(root:, catalog_digest: "sha256:#{"0" * 64}")
+      error = assert_raises(Tamoz::Agent::Profile::ValidationError) do
+        Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, profile:)
+      end
+      assert_match(/tool_catalog_digest/, error.message)
+      assert_empty model.calls
+    end
+  end
+
   def test_duplicate_request_id_does_not_start_a_second_turn
     with_workspace do |root, adapter|
       File.write(File.join(root, "note.txt"), "one\n")
@@ -374,4 +408,28 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
+  def build_profile(root:, catalog_digest:, digest: "sha256:#{"d" * 64}")
+    Tamoz::Agent::Profile.new(
+      Tamoz::Agent::Profile::Fields.new(
+        profile_id: "test-profile",
+        profile_version: "1.0",
+        canonical_root: File.expand_path(root),
+        description: nil,
+        model_roles: {},
+        budgets: {},
+        checks: {},
+        tools_allowed: %w[read_file list_directory search_text],
+        tools_approval_required: [],
+        policy: {
+          "allow_changes" => false,
+          "default_check_safety" => "unsafe",
+          "graph_version" => "1",
+          "behavior_version" => "1.0",
+          "tool_catalog_digest" => catalog_digest
+        },
+        canonical_digest: digest,
+        suggestion: false
+      )
+    )
+  end
 end

@@ -1120,4 +1120,98 @@ class AgentToolboxTest < Minitest::Test
       assert_match(/unknown tool/, error.message)
     end
   end
+
+  def test_allowed_tools_restricts_the_exposed_catalog
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(
+        root:,
+        allow_changes: true,
+        checks: {"tests" => ["true"]},
+        allowed_tools: %w[read_file apply_patch]
+      )
+
+      assert_equal %w[apply_patch read_file], toolbox.names.sort
+      assert_equal %w[read_file apply_patch], toolbox.allowed_tools
+      assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("list_directory", {})
+      end
+      assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("run_check", "name" => "tests")
+      end
+    end
+  end
+
+  def test_allowed_tools_rejects_unavailable_unknown_and_duplicate_names
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(root:, allowed_tools: %w[read_file apply_patch])
+      end
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(root:, allowed_tools: %w[read_file not_a_tool])
+      end
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(root:, allowed_tools: %w[read_file read_file])
+      end
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(root:, allowed_tools: [])
+      end
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(
+          root:,
+          allow_changes: true,
+          allowed_tools: %w[read_file run_check]
+        )
+      end
+    end
+  end
+
+  def test_approval_required_defaults_to_action_tools_and_can_be_restricted
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      default = Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: {"tests" => ["true"]})
+      assert default.approval_required?("apply_patch")
+      assert default.approval_required?("run_check")
+      refute default.approval_required?("read_file")
+
+      restricted = Tamoz::Agent::Toolbox.new(
+        root:,
+        allow_changes: true,
+        checks: {"tests" => ["true"]},
+        approval_required: %w[run_check]
+      )
+      refute restricted.approval_required?("apply_patch")
+      assert restricted.approval_required?("run_check")
+
+      assert_raises(ArgumentError) do
+        Tamoz::Agent::Toolbox.new(
+          root:,
+          allow_changes: true,
+          allowed_tools: %w[read_file apply_patch],
+          approval_required: %w[run_check]
+        )
+      end
+    end
+  end
+
+  def test_catalog_digest_tracks_the_allowed_surface_and_approval_policy
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      base = Tamoz::Agent::Toolbox.new(
+        root:, allow_changes: true, checks: {"tests" => ["true"]}
+      )
+      narrower = Tamoz::Agent::Toolbox.new(
+        root:, allow_changes: true, checks: {"tests" => ["true"]},
+        allowed_tools: %w[read_file list_directory search_text apply_patch create_file]
+      )
+      approvals = Tamoz::Agent::Toolbox.new(
+        root:, allow_changes: true, checks: {"tests" => ["true"]},
+        approval_required: %w[apply_patch]
+      )
+      same = Tamoz::Agent::Toolbox.new(
+        root:, allow_changes: true, checks: {"tests" => ["true"]}
+      )
+
+      refute_equal base.catalog_digest, narrower.catalog_digest
+      refute_equal base.catalog_digest, approvals.catalog_digest
+      assert_equal base.catalog_digest, same.catalog_digest
+    end
+  end
 end

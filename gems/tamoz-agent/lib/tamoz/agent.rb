@@ -12,6 +12,7 @@ require_relative "agent/session_records"
 require_relative "agent/effect_dispatcher"
 require_relative "agent/session_nodes"
 require_relative "agent/session"
+require_relative "agent/profile"
 require_relative "agent/cli"
 
 module Tamoz
