@@ -77,6 +77,11 @@ module Tamoz
       end
 
       def deliberate(state, context)
+        # A cancel sentinel routed by intake must reach terminal without any model I/O.
+        if state.fetch(:next_node) == "terminal" && state.fetch(:terminal_reason) == "cancelled_by_user"
+          return {}
+        end
+
         phase = state.fetch(:phase).to_sym
         repair_attempt = state.fetch(:repair_attempt)
         task = state.fetch(:task)
