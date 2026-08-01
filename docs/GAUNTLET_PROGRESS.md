@@ -303,33 +303,29 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 | Phase | Handover status | Gauntlet status |
 |---|---|---|
 | P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
-| P4 compound edit | pending — next | **design accepted**; implement P4-A/B core validation/preflight/atomic replace |
+| P4 compound edit | pending — next | **A/B/C implemented and reviewed**; P4-E scorecard case flip in progress |
 | P5–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **P4-A/B compound edit core** — validation, set-level matching, preflight, atomic
-   publication, and diff rendering for the new `replacements` array. This is the active work
-   package.
-2. **P4-C signature/integration** — action-signature canonicalization, repair evidence,
-   output budgets, CLI rendering, public API/docs.
-3. **P4-E scorecard case flip** — turn `agent.multi-location-edit` into success and raise
-   the scorecard to at least 7/12 with safety gates still zero.
-4. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
+1. **P4-E scorecard case flip** — update the scripted model response for
+   `agent.multi-location-edit` to emit a compound `apply_patch` and raise the scorecard to at
+   least 7/12 with safety gates still zero. This is the active work package.
+2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
    assertions between identical runs; diagnose before P15 evidence pinning.
-5. P5–P15 remain unimplemented.
+3. P5–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Implement P4-A/B: extend `Tamoz::Agent::Toolbox#apply_patch` to accept a `replacements` array,
-perform set-level matching, render one compound diff, and publish one atomic replacement.
-Add unit and adversarial tests. Run a builder/critic loop, then commit the reviewed
-implementation checkpoint. Do not begin P4-C until P4-A/B passes its focused proof.
+Implement P4-E: find the smoke harness scripted response for `agent.multi-location-edit`,
+change it to emit one `apply_patch` step with a `replacements` array covering both locations,
+run the scorecard, and verify it rises to at least 7/12 with all hard gates still zero. Fan out
+a builder and critic with fresh context.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or begin P5. The committed product checkpoint is `a941f25`; this progress
+publish, release, or begin P5. The committed product checkpoint is `def7908`; this progress
 page is the only intentional product artifact added by this handoff.
