@@ -2,8 +2,8 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P4` — compound existing-file edits
-Next action: write and review `docs/P4_COMPOUND_EDIT_PLAN.md`; do not implement first
+Current phase: `P5` — reviewed file creation
+Next action: write and review `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`; do not implement first
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -55,8 +55,8 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P1 | complete | reviewed exact patch + check | historical | `d25e66e` |
 | P2 | complete | bounded reviewed repair | roadmap | `00bcaa4` |
 | P3 | complete | deterministic agent scorecard | `68224b3`, `8de7ac1` | `c72f2b3` |
-| P4 | **pending — next** | compound one-file edit | — | — |
-| P5 | pending | reviewed file creation | — | — |
+| P4 | complete | compound one-file edit | `a941f25` | `def7908`, `67f72d7` |
+| P5 | **pending — next** | reviewed file creation | — | — |
 | P6 | pending | durable session/effect recovery | — | — |
 | P7 | pending | interactive/resumable CLI | — | — |
 | P8 | pending | trusted project profiles | — | — |
@@ -142,15 +142,15 @@ non-overlapping replacements to one existing UTF-8 file under one before digest.
 
 Work packages:
 
-- [ ] **P4-D** Specify backward-compatible tool arguments, canonical replacement ordering,
+- [x] **P4-D** Specify backward-compatible tool arguments, canonical replacement ordering,
   overlap/ambiguity rules, unified diff rules, receipt, and failure taxonomy.
-- [ ] **P4-A** Add immutable replacement values and structural validation: bounded count and
+- [x] **P4-A** Add immutable replacement values and structural validation: bounded count and
   bytes, exact original-source matching, no overlap, no partial applicability.
-- [ ] **P4-B** Preflight all replacements against one digest, render one exact preview,
+- [x] **P4-B** Preflight all replacements against one digest, render one exact preview,
   request one approval, and perform one existing atomic replace.
-- [ ] **P4-C** Integrate action signatures, repair evidence, output budgets, CLI rendering,
+- [x] **P4-C** Integrate action signatures, repair evidence, output budgets, CLI rendering,
   public API/docs, and packaging.
-- [ ] **P4-E** Turn `agent.multi-location-edit` into success without changing its case
+- [x] **P4-E** Turn `agent.multi-location-edit` into success without changing its case
   identity or weakening any P3 hard gate.
 
 Required proof:

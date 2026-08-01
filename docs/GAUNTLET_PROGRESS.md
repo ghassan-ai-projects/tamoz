@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `a88f403`
+Last verified: 2026-08-01 at commit `67f72d7`
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -262,6 +262,43 @@ Independent coordinator verification at `39a8679`:
 The assertion-count variance is pre-existing and honestly retained as residual gate debt;
 test count and outcomes are stable. P4 capability work did not begin.
 
+### Round 3 — P4 compound existing-file edits
+
+The builder produced `docs/P4_COMPOUND_EDIT_PLAN.md`; the critic accepted it with a
+single required correction (must prove signature stability and replacement-order
+independence). The design checkpoint was committed at `a941f25`.
+
+The builder then implemented P4-A/B/C in `gems/tamoz-agent/lib/tamoz/agent/toolbox.rb`,
+adding structural validation, set-level matching, atomic replacement, and signature
+stability for compound replacements. The critic accepted the implementation after verifying
+safety invariants, blind A/B against the baseline, and a new integration test.
+
+The builder then implemented P4-E by flipping the `agent.multi-location-edit` scorecard
+case to emit one compound `apply_patch` with a `replacements` array covering both locations.
+The critic verified the scorecard rose from 6/12 to 7/12 with all hard gates still zero.
+
+Independent coordinator verification at `67f72d7`:
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 393 runs, 27,456 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 393 runs, 27,438 assertions, 0 failures/errors/skips |
+| design validation | pass — 22 documents, 55 invariants, 40 ADRs |
+| gem packaging | pass — all five gems |
+| `tamoz-eval scorecard agent-smoke` | pass — fixed digest, 7/12 successes, all four hard gates pass |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive completion 0, incomplete evidence 0 |
+
+Blind A/B against `def7908` (pre-scorecard-flip baseline) on identical sandboxed tasks:
+
+| Probe | Baseline `def7908` | New `67f72d7` |
+|---|---|---|
+| `agent.multi-location-edit` | failed — two separate single-replacement attempts | **succeeded** with one compound `apply_patch` |
+| `agent.exact-edit-and-check` | unchanged success | unchanged success |
+| `agent.stale-digest` | unchanged rejection | unchanged rejection |
+| safety counters | 0 | 0 |
+
+P4 is closed. The active phase moves to P5.
+
 ### Round 2 — D-4/D-5 UTF-8 contract correction
 
 The builder produced `docs/D4_D5_UTF8_CONTRACT_PLAN.md`; the critic accepted it with
@@ -303,29 +340,31 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 | Phase | Handover status | Gauntlet status |
 |---|---|---|
 | P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
-| P4 compound edit | pending — next | **A/B/C implemented and reviewed**; P4-E scorecard case flip in progress |
-| P5–P15 | pending | not started |
+| P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
+| P5 reviewed file creation | pending — next | not started |
+| P6–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **P4-E scorecard case flip** — update the scripted model response for
-   `agent.multi-location-edit` to emit a compound `apply_patch` and raise the scorecard to at
-   least 7/12 with safety gates still zero. This is the active work package.
+1. **P5 reviewed file creation** — design `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`, review it,
+   then implement P5-D/A/B/C/E to turn `agent.new-file-need` into success while preserving all
+   prior scorecard cases and safety gates. This is the active work package.
 2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
    assertions between identical runs; diagnose before P15 evidence pinning.
-3. P5–P15 remain unimplemented.
+3. P6–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Implement P4-E: find the smoke harness scripted response for `agent.multi-location-edit`,
-change it to emit one `apply_patch` step with a `replacements` array covering both locations,
-run the scorecard, and verify it rises to at least 7/12 with all hard gates still zero. Fan out
-a builder and critic with fresh context.
+Read P5 authoritative inputs (`AGENT_DESIGN.md` §§3–5, persistence effect rules, invariants
+17, 21, 24–27, and the P3 `agent.new-file-need` case), then fan out a builder and separate
+harsh critic with fresh context to create and review `docs/P5_REVIEWED_FILE_CREATION_PLAN.md`.
+Commit the accepted design before any implementation.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or begin P5. The committed product checkpoint is `def7908`; this progress
-page is the only intentional product artifact added by this handoff.
+publish, release, or connect real physical actuators. The committed product checkpoint is
+`67f72d7`; this progress page and the tracker updates are the only intentional artifacts added
+by this handoff.
