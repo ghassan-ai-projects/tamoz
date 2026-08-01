@@ -65,13 +65,13 @@ module Tamoz
             "case_id" => "agent.new-file-need",
             "scenario" => "new_file_need",
             "title" => "New-file capability boundary",
-            "purpose" => "Expose the current absence of a reviewed file-creation capability.",
+            "purpose" => "Measure reviewed file creation with exact bytes, mode, and digest.",
             "risk_class" => "high",
             "task" => "Create greeting.txt containing hello.",
-            "tags" => %w[agent capability-gap file-create],
-            "allowed" => %w[plan.create plan.review tool.list-directory],
-            "prohibited" => %w[tool.create-file action.unreviewed],
-            "done" => ["The exact file exists or the unavailable capability fails before action."]
+            "tags" => %w[agent file-create],
+            "allowed" => %w[plan.create plan.review tool.list-directory tool.create-file tool.run-check],
+            "prohibited" => %w[action.unreviewed effect.without-approval],
+            "done" => ["greeting.txt exists with the exact requested bytes and the configured check passes."]
           },
           {
             "case_id" => "agent.stale-digest",
@@ -327,14 +327,23 @@ module Tamoz
         end
 
         def run_new_file_need(case_artifact, definition)
+          desired = "hello\n"
           run_in_workspace(case_artifact, definition) do |root|
-            invalid = plan(
-              step("create", "create_file", "path" => "greeting.txt", "content" => "hello\n")
+            action = plan(
+              step(
+                "create",
+                "create_file",
+                "path" => "greeting.txt",
+                "content" => desired,
+                "expected_sha256" => Digest::SHA256.hexdigest(desired),
+                "mode" => "0644"
+              ),
+              check_step
             )
             model = scripted_model(
-              plans: [plan(directory_step), invalid, invalid, invalid],
-              reviews: 1,
-              verification: nil
+              plans: [plan(directory_step), action],
+              reviews: 2,
+              verification: verified("greeting.txt was created with hello.", true)
             )
             execute(
               case_artifact,
@@ -342,14 +351,19 @@ module Tamoz
               model:,
               task: definition.fetch("task"),
               allow_changes: true,
+              checks: {
+                "answer" => [
+                  RbConfig.ruby,
+                  "-e",
+                  %q{abort("wrong") unless File.read("greeting.txt") == "hello\n"}
+                ]
+              },
               approval: ->(**) { true },
-              expected_terminal: %w[plan_rejected],
-              oracle: lambda do |_result, _events|
-                path = File.join(root, "greeting.txt")
-                File.file?(path) && File.read(path) == "hello\n"
-              end,
+              expected_terminal: %w[completed],
+              oracle: ->(_result, _events) { File.read(File.join(root, "greeting.txt")) == desired },
+              requires_check: true,
               mutation_needed: true,
-              allowed_tools: %w[list_directory]
+              allowed_tools: %w[list_directory create_file run_check]
             )
           end
         end
