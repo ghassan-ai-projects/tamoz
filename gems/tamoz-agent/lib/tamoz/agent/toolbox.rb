@@ -142,6 +142,9 @@ module Tamoz
           raise ToolError, "query must be a string" unless query.is_a?(String)
           raise ToolError, "query must not be empty" if query.empty?
           raise ToolError, "query exceeds 256 bytes" if query.bytesize > 256
+          raise ToolError, "query must not contain a null byte" if query.include?("\0")
+          raise ToolError, "query must be UTF-8 encoded" unless query.encoding == Encoding::UTF_8
+          raise ToolError, "query must be valid UTF-8" unless query.valid_encoding?
         when "apply_patch"
           reject_unknown!(normalized_arguments, %w[after before expected_sha256 path])
           validate_path_argument!(normalized_arguments.fetch("path"))
@@ -222,6 +225,7 @@ module Tamoz
         raise ToolError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
 
         content = path.read(encoding: Encoding::UTF_8)
+        raise ToolError, "file is not valid UTF-8 text" unless content.valid_encoding?
         raise ToolError, "file is not text" if content.include?("\0")
 
         <<~TEXT.chomp
@@ -230,9 +234,6 @@ module Tamoz
           content:
           #{content}
         TEXT
-      rescue Encoding::CompatibilityError, Encoding::InvalidByteSequenceError,
-             Encoding::UndefinedConversionError
-        raise ToolError, "file is not valid UTF-8 text"
       end
 
       def list_directory(arguments)
@@ -256,14 +257,20 @@ module Tamoz
           break if results.length >= MAX_SEARCH_RESULTS
           next if path.size > MAX_FILE_BYTES
 
-          path.each_line(encoding: Encoding::UTF_8).with_index(1) do |line, number|
+          content = path.read(encoding: Encoding::UTF_8)
+          unless content.valid_encoding?
+            relative = path.relative_path_from(root)
+            raise ToolError, "#{relative}: file is not valid UTF-8 text"
+          end
+
+          content.each_line.with_index(1) do |line, number|
             next unless line.include?(query)
 
             relative = path.relative_path_from(root)
             results << "#{relative}:#{number}:#{line.chomp}"
             break if results.length >= MAX_SEARCH_RESULTS
           end
-        rescue ArgumentError, Encoding::InvalidByteSequenceError, Encoding::UndefinedConversionError
+        rescue SystemCallError, IOError
           next
         end
         results.empty? ? "No matches." : results.join("\n")
@@ -285,6 +292,7 @@ module Tamoz
         raise ToolError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
 
         content = path.read(encoding: Encoding::UTF_8)
+        raise ToolError, "file is not valid UTF-8 text" unless content.valid_encoding?
         raise ToolError, "file is not text" if content.include?("\0")
         expected = arguments.fetch("expected_sha256")
         actual = Digest::SHA256.hexdigest(content)
@@ -309,9 +317,6 @@ module Tamoz
           after_content:,
           line: content[0, index].count("\n") + 1
         }.freeze
-      rescue Encoding::CompatibilityError, Encoding::InvalidByteSequenceError,
-             Encoding::UndefinedConversionError
-        raise ToolError, "file is not valid UTF-8 text"
       end
 
       def render_diff(display_path, patch)
@@ -481,6 +486,8 @@ module Tamoz
         raise ToolError, "#{name} must be a string" unless value.is_a?(String)
         raise ToolError, "#{name} must not be empty" if !empty && value.empty?
         raise ToolError, "#{name} exceeds #{MAX_PATCH_BYTES} bytes" if value.bytesize > MAX_PATCH_BYTES
+        raise ToolError, "#{name} must not contain a null byte" if value.include?("\0")
+        raise ToolError, "#{name} must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
         raise ToolError, "#{name} must be valid UTF-8" unless value.valid_encoding?
       end
 

@@ -197,7 +197,7 @@ class AgentToolboxTest < Minitest::Test
         "zero match" => base.merge("before" => %(LABEL = "français")),
         "ambiguous match" => base.merge("before" => "SAME = 1"),
         "empty before" => base.merge("before" => ""),
-        "invalid utf-8 after" => base.merge("after" => "\xFF"),
+        "invalid utf-8 after argument" => base.merge("after" => "\xFF"),
         "absolute path" => base.merge("path" => path),
         "root escape" => base.merge("path" => "../escape.rb"),
         "null byte path" => base.merge("path" => "values\0.rb"),
@@ -280,6 +280,165 @@ class AgentToolboxTest < Minitest::Test
       refute_nil result.failure_signature
       assert_includes result.to_s, "Check hang: timed_out"
       assert_operator elapsed, :<, 3.0
+    end
+  end
+
+  def test_read_file_rejects_invalid_utf8_target_and_leaves_file_unchanged
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "bad.txt")
+      bytes = "\xC3\x28"
+      File.binwrite(path, bytes)
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("read_file", "path" => "bad.txt")
+      end
+      assert_equal "file is not valid UTF-8 text", error.message
+      assert_equal bytes.b, File.binread(path)
+    end
+  end
+
+  def test_apply_patch_rejects_invalid_utf8_target_and_leaves_file_byte_identical
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "bad.rb")
+      bytes = "\xC3\x28"
+      File.binwrite(path, bytes)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "bad.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(bytes),
+        "before" => "x",
+        "after" => "y"
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_equal "file is not valid UTF-8 text", error.message
+      assert_equal bytes.b, File.binread(path)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("apply_patch", arguments)
+      end
+      assert_equal "file is not valid UTF-8 text", error.message
+      assert_equal bytes.b, File.binread(path)
+    end
+  end
+
+  def test_validate_patch_text_rejects_null_byte
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "a\0b",
+          "after" => "y"
+        })
+      end
+      assert_equal "before must not contain a null byte", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "x",
+          "after" => "a\0b"
+        })
+      end
+      assert_equal "after must not contain a null byte", error.message
+    end
+  end
+
+  def test_validate_patch_text_rejects_ascii_8bit_encoding
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "abc".b,
+          "after" => "y"
+        })
+      end
+      assert_equal "before must be UTF-8 encoded", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "x",
+          "after" => "abc".b
+        })
+      end
+      assert_equal "after must be UTF-8 encoded", error.message
+    end
+  end
+
+  def test_validate_patch_text_rejects_invalid_utf8_bytes
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "\xFF",
+          "after" => "y"
+        })
+      end
+      assert_equal "before must be valid UTF-8", error.message
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", {
+          "path" => "x.rb",
+          "expected_sha256" => "0" * 64,
+          "before" => "x",
+          "after" => "\xFF"
+        })
+      end
+      assert_equal "after must be valid UTF-8", error.message
+    end
+  end
+
+  def test_search_text_rejects_invalid_utf8_query
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+
+      invalid_queries = [
+        ["ASCII-8BIT", "abc".b, "query must be UTF-8 encoded"],
+        ["invalid UTF-8 bytes", "\xFF", "query must be valid UTF-8"],
+        ["null byte", "a\0b", "query must not contain a null byte"]
+      ]
+
+      invalid_queries.each do |label, query, message|
+        error = assert_raises(Tamoz::Agent::ToolError, label) do
+          toolbox.validate("search_text", "query" => query)
+        end
+        assert_equal message, error.message, label
+
+        error = assert_raises(Tamoz::Agent::ToolError, label) do
+          toolbox.execute("search_text", "query" => query)
+        end
+        assert_equal message, error.message, label
+      end
+    end
+  end
+
+  def test_search_text_rejects_invalid_utf8_target_with_path_qualified_message
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      File.binwrite(File.join(root, "bad.txt"), "\xC3\x28")
+      File.write(File.join(root, "good.txt"), "hello world", encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.execute("search_text", "query" => "hello", "path" => ".")
+      end
+      assert_equal "bad.txt: file is not valid UTF-8 text", error.message
+      assert_equal "\xC3\x28".b, File.binread(File.join(root, "bad.txt"))
+      assert_equal "hello world", File.read(File.join(root, "good.txt"), encoding: Encoding::UTF_8)
     end
   end
 end
