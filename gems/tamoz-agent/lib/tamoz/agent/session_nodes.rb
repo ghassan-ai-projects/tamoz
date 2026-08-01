@@ -42,7 +42,15 @@ module Tamoz
       # --- nodes ---------------------------------------------------------------
 
       def intake(state, context)
-        task = String(state.fetch(:task)).strip
+        raw_task = state.fetch(:task)
+        if raw_task.is_a?(Hash) && raw_task["cancel"] == true
+          return {
+            next_node: "terminal",
+            terminal_reason: "cancelled_by_user"
+          }
+        end
+
+        task = String(raw_task).strip
         raise ArgumentError, "task must not be empty" if task.empty?
         if task.bytesize > MAX_TASK_BYTES
           raise ArgumentError, "task exceeds #{MAX_TASK_BYTES} bytes"
@@ -197,7 +205,8 @@ module Tamoz
             issues: review.fetch("issues"),
             rationale: review.fetch("rationale")
           )
-          if review.fetch("decision") == "accept"
+          case review.fetch("decision")
+          when "accept"
             return accept_plan(
               state,
               plan:,
@@ -205,6 +214,19 @@ module Tamoz
               plan_digest:,
               plan_hash:,
               phase:,
+              plans:,
+              reviews:,
+              ambiguity:
+            )
+          when "needs_input"
+            return clarify_update(
+              state,
+              context:,
+              plan_id:,
+              plan_digest:,
+              review:,
+              phase:,
+              repair_attempt:,
               plans:,
               reviews:,
               ambiguity:
@@ -715,6 +737,43 @@ module Tamoz
         end
 
         raise PlanRejectedError, "no plan passed review after #{max_plan_attempts} attempts"
+      end
+
+      def clarify_update(state, context:, plan_id:, plan_digest:, review:, phase:, repair_attempt:, plans:, reviews:, ambiguity:)
+        descriptor = {
+          "kind" => "clarify",
+          "session_id" => state.fetch(:session).fetch("session_id"),
+          "plan_id" => plan_id,
+          "plan_digest" => plan_digest,
+          "question" => review.fetch("issues").join("\n"),
+          "context" => {"phase" => phase.to_s, "repair_attempt" => repair_attempt}
+        }
+        answer = Tamoz.interrupt(descriptor, context)
+        clarify_step_id = "clarify.#{plan_id}"
+        if state.fetch(:observations).any? { |record| record.fetch("step_id") == clarify_step_id }
+          raise Tamoz::InvalidUpdateError,
+                "clarify interrupt for #{plan_id} has already been answered"
+        end
+        unless answer.is_a?(String) && !answer.strip.empty?
+          raise Tamoz::InvalidUpdateError, "clarify answer must be a non-empty string"
+        end
+
+        {
+          plan_versions: new_records(state, :plan_versions, plans, "plan_id"),
+          plan_reviews: new_records(state, :plan_reviews, reviews, "review_id"),
+          provider_ambiguity: ambiguity,
+          observations: [
+            SessionRecords.build(
+              "observation",
+              phase: phase.to_s,
+              repair_attempt:,
+              step_id: clarify_step_id,
+              output: answer.strip,
+              tool: "clarify"
+            )
+          ],
+          next_node: "deliberate"
+        }
       end
 
       def new_records(state, channel, records, id_key)

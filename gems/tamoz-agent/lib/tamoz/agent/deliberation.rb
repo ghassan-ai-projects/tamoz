@@ -131,10 +131,12 @@ module Tamoz
         decision = Plan.string(document.fetch("decision"), name: "review decision")
         issues = Plan.strings(document.fetch("issues"), name: "review issues")
         rationale = Plan.string(document.fetch("rationale"), name: "review rationale")
-        unless %w[accept revise].include?(decision)
-          raise ProtocolError, "review decision must be accept or revise"
+        unless %w[accept revise needs_input].include?(decision)
+          raise ProtocolError, "review decision must be accept, revise, or needs_input"
         end
-        raise ProtocolError, "revised plan review must include issues" if decision == "revise" && issues.empty?
+        if %w[revise needs_input].include?(decision) && issues.empty?
+          raise ProtocolError, "revised or clarification plan review must include issues"
+        end
 
         {"decision" => decision, "issues" => issues, "rationale" => rationale}
       rescue KeyError, TypeError => error
