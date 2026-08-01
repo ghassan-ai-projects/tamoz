@@ -677,17 +677,36 @@ module Tamoz
             )
           end
         when :resume
-          resume_with_writer(
-            request.payload,
-            thread: request.thread_id,
-            namespace: request.namespace,
-            request_id: request.request_id,
-            concurrency:,
-            context:,
-            writer:,
-            durable_request_id: request.request_id,
-            mark_request_running: request.status == :claimed
-          )
+          # A resume request that is already `running` was interrupted after its
+          # answers were merged and at least one barrier committed. Its checkpoint is
+          # no longer paused, so recovery continues the interrupted execution rather
+          # than replaying the resume. A resume killed before its first barrier still
+          # has a paused checkpoint and takes the ordinary path, so no answer is lost.
+          if request.status == :running &&
+             latest_status(request, writer:) == :running
+            continue_with_writer(
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              concurrency:,
+              context:,
+              writer:,
+              durable_request_id: request.request_id,
+              mark_request_running: false
+            )
+          else
+            resume_with_writer(
+              request.payload,
+              thread: request.thread_id,
+              namespace: request.namespace,
+              request_id: request.request_id,
+              concurrency:,
+              context:,
+              writer:,
+              durable_request_id: request.request_id,
+              mark_request_running: request.status == :claimed
+            )
+          end
         when :retry
           retry_failed_with_writer(
             thread: request.thread_id,
@@ -763,6 +782,14 @@ module Tamoz
           raise ConfigurationError,
                 "durable request operation #{request.operation.inspect} is not executable yet"
         end
+      end
+
+      def latest_status(request, writer:)
+        compatible_latest!(
+          request.thread_id,
+          namespace: request.namespace,
+          writer:
+        ).status
       end
 
       def fork_with_writer(request, writer:, concurrency:, context:)

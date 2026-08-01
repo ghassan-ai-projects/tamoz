@@ -642,8 +642,13 @@ Every row asserts, in addition to its specific outcome:
    **child-local** prepend on `File.link`/`File.rename` inside the test child script — the
    same harness technique that triggers K8's kill. No product code writes a marker;
 3. `adapter.integrity_check.fetch("ok")` is true;
-4. no `.tamoz-create-*.tmp` or `.tamoz-*.tmp` file survives in the workspace at the target
-   directory when the effect completed.
+4. no **public** partial or unexpected file survives in the workspace: the only entries
+   are the intended targets plus, possibly, a private `.tamoz-*` temporary orphaned by
+   the kill. `atomic_replace`/`atomic_create` publish by rename/link and unlink the
+   temporary name only afterwards, so a kill in that window leaves a dotfile that is
+   never the target path. Reclaiming it would require an unlink capability the agent
+   deliberately does not have (P4/P5 non-goals), so it is recorded as residual risk
+   rather than silently deleted.
 
 ### Operational durability (P6-F)
 
