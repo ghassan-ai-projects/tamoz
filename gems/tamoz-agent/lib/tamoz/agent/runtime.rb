@@ -475,9 +475,16 @@ module Tamoz
         actions = plan.steps.filter_map do |step|
           next unless step.tool && toolbox.approval_required?(step.tool)
 
-          {"tool" => step.tool, "arguments" => step.arguments}
+          {"tool" => step.tool, "arguments" => canonicalize_apply_patch_arguments(step.arguments)}
         end
         Digest::SHA256.hexdigest(JSON.generate(canonical(actions)))
+      end
+
+      def canonicalize_apply_patch_arguments(arguments)
+        return arguments unless arguments.is_a?(Hash) && arguments["replacements"].is_a?(Array)
+
+        sorted = arguments["replacements"].each_with_index.sort_by { |entry, _index| entry["before"] }.map(&:first)
+        arguments.merge("replacements" => sorted)
       end
 
       def canonical(value)

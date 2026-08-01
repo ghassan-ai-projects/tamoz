@@ -61,6 +61,7 @@ module Tamoz
 
     class Toolbox
       MAX_FILE_BYTES = 64 * 1024
+      MAX_REPLACEMENTS = 32
       MAX_DIRECTORY_ENTRIES = 200
       MAX_SEARCH_FILES = 2_000
       MAX_SEARCH_RESULTS = 100
@@ -74,7 +75,7 @@ module Tamoz
         "search_text" => "Find literal text. Arguments: {\"query\": \"text\", \"path\": \"relative/path\"}; path is optional."
       }.freeze
       ACTION_DESCRIPTIONS = {
-        "apply_patch" => "Replace one exact text occurrence atomically. expected_sha256 must come from current read_file evidence. Arguments: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"before\": \"exact existing text\", \"after\": \"replacement text\"}.",
+        "apply_patch" => "Replace exact text occurrences atomically. expected_sha256 must come from current read_file evidence. Single replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"before\": \"exact existing text\", \"after\": \"replacement text\"}. Compound replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"replacements\": [{\"before\": \"...\", \"after\": \"...\"}]}.",
         "run_check" => "Run one user-configured command by name without a shell. Arguments: {\"name\": \"configured check name\"}."
       }.freeze
 
@@ -146,13 +147,45 @@ module Tamoz
           raise ToolError, "query must be UTF-8 encoded" unless query.encoding == Encoding::UTF_8
           raise ToolError, "query must be valid UTF-8" unless query.valid_encoding?
         when "apply_patch"
-          reject_unknown!(normalized_arguments, %w[after before expected_sha256 path])
           validate_path_argument!(normalized_arguments.fetch("path"))
-          validate_patch_text!(normalized_arguments.fetch("before"), name: "before", empty: false)
-          validate_patch_text!(normalized_arguments.fetch("after"), name: "after", empty: true)
           digest = normalized_arguments.fetch("expected_sha256")
           unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
             raise ToolError, "expected_sha256 must be 64 lowercase hex characters"
+          end
+
+          has_legacy = normalized_arguments.key?("before") || normalized_arguments.key?("after")
+          has_compound = normalized_arguments.key?("replacements")
+          if has_legacy && has_compound
+            raise ToolError, "apply_patch accepts either before/after or replacements, not both"
+          end
+
+          if has_compound
+            reject_unknown!(normalized_arguments, %w[expected_sha256 path replacements])
+            replacements = normalized_arguments.fetch("replacements")
+            unless replacements.is_a?(Array) && !replacements.empty?
+              raise ToolError, "replacements must be a non-empty array"
+            end
+            if replacements.length > MAX_REPLACEMENTS
+              raise ToolError, "replacements exceeds #{MAX_REPLACEMENTS}"
+            end
+            replacements.each_with_index do |entry, index|
+              unless entry.is_a?(Hash)
+                raise ToolError, "replacements[#{index}] must be an object"
+              end
+              unless entry.key?("before") && entry.key?("after")
+                raise ToolError, "replacements[#{index}] must contain before and after keys"
+              end
+              validate_patch_text!(entry.fetch("before"), name: "replacements[#{index}].before", empty: false)
+              validate_patch_text!(entry.fetch("after"), name: "replacements[#{index}].after", empty: true)
+              unknown = entry.keys - %w[before after]
+              unless unknown.empty?
+                raise ToolError, "replacements[#{index}] has unknown keys: #{unknown.sort.join(", ")}"
+              end
+            end
+          else
+            reject_unknown!(normalized_arguments, %w[after before expected_sha256 path])
+            validate_patch_text!(normalized_arguments.fetch("before"), name: "before", empty: false)
+            validate_patch_text!(normalized_arguments.fetch("after"), name: "after", empty: true)
           end
         when "run_check"
           reject_unknown!(normalized_arguments, %w[name])
@@ -280,11 +313,33 @@ module Tamoz
         patch = prepare_patch(arguments)
         atomic_replace(patch.fetch(:path), patch.fetch(:after_content))
         after_digest = Digest::SHA256.hexdigest(patch.fetch(:after_content))
-        <<~TEXT.chomp
-          Applied #{arguments.fetch("path")}
-          before_sha256: #{patch.fetch(:before_digest)}
-          after_sha256: #{after_digest}
-        TEXT
+        if arguments.key?("replacements")
+          replacement_digest = Digest::SHA256.hexdigest(
+            JSON.generate(
+              patch.fetch(:replacements).map do |replacement|
+                {
+                  "byte_start" => replacement.fetch(:byte_start),
+                  "byte_end" => replacement.fetch(:byte_end),
+                  "before" => replacement.fetch(:before_text),
+                  "after" => replacement.fetch(:after_text)
+                }
+              end
+            )
+          )
+          <<~TEXT.chomp
+            Applied #{arguments.fetch("path")}
+            replacements: #{patch.fetch(:replacements).length}
+            replacement_digest: #{replacement_digest}
+            before_sha256: #{patch.fetch(:before_digest)}
+            after_sha256: #{after_digest}
+          TEXT
+        else
+          <<~TEXT.chomp
+            Applied #{arguments.fetch("path")}
+            before_sha256: #{patch.fetch(:before_digest)}
+            after_sha256: #{after_digest}
+          TEXT
+        end
       end
 
       def prepare_patch(arguments)
@@ -298,38 +353,113 @@ module Tamoz
         actual = Digest::SHA256.hexdigest(content)
         raise ToolError, "file changed: expected digest #{expected}, observed #{actual}" unless actual == expected
 
-        before = arguments.fetch("before")
-        occurrences = content.scan(before).length
-        raise ToolError, "patch text was not found" if occurrences.zero?
-        raise ToolError, "patch text is ambiguous: found #{occurrences} occurrences" if occurrences > 1
+        replacements = if arguments.key?("replacements")
+                         build_compound_replacements(content, arguments.fetch("replacements"))
+                       else
+                         [build_legacy_replacement(content, arguments.fetch("before"), arguments.fetch("after"))]
+                       end
+        replacements.sort_by! { |entry| entry.fetch(:byte_start) }
+        replacements.each_cons(2) do |left, right|
+          raise ToolError, "replacements overlap" if left.fetch(:byte_end) > right.fetch(:byte_start)
+        end
 
-        index = content.index(before)
-        after_content = content.dup
-        after_content[index, before.length] = arguments.fetch("after")
+        after_content = apply_replacements(content, replacements)
         if after_content.bytesize > MAX_FILE_BYTES
           raise ToolError, "patched file exceeds #{MAX_FILE_BYTES} bytes"
         end
-        {
+
+        result = {
           path:,
           before_digest: actual,
-          before_text: before,
-          after_text: arguments.fetch("after"),
-          after_content:,
-          line: content[0, index].count("\n") + 1
-        }.freeze
+          replacements: replacements.freeze,
+          after_content:
+        }
+        unless arguments.key?("replacements")
+          result[:before_text] = arguments.fetch("before")
+          result[:after_text] = arguments.fetch("after")
+          result[:line] = replacements.first.fetch(:line)
+        end
+        result.freeze
       end
 
       def render_diff(display_path, patch)
-        before_lines = patch.fetch(:before_text).lines(chomp: true)
-        after_lines = patch.fetch(:after_text).lines(chomp: true)
-        line = patch.fetch(:line)
-        [
-          "--- a/#{display_path}",
-          "+++ b/#{display_path}",
-          "@@ -#{line},#{before_lines.length} +#{line},#{after_lines.length} @@",
-          *before_lines.map { |entry| "-#{entry}" },
-          *after_lines.map { |entry| "+#{entry}" }
-        ].join("\n")
+        replacements = patch[:replacements] || []
+        hunks = replacements.map do |replacement|
+          before_lines = replacement.fetch(:before_text).lines(chomp: true)
+          after_lines = replacement.fetch(:after_text).lines(chomp: true)
+          line = replacement.fetch(:line)
+          [
+            "--- a/#{display_path}",
+            "+++ b/#{display_path}",
+            "@@ -#{line},#{before_lines.length} +#{line},#{after_lines.length} @@",
+            *before_lines.map { |entry| "-#{entry}" },
+            *after_lines.map { |entry| "+#{entry}" }
+          ].join("\n")
+        end
+        hunks.join("\n\n")
+      end
+
+      def build_compound_replacements(content, replacements)
+        content_bytes = content.b
+        canonical = []
+        replacements.group_by { |entry| entry.fetch("before") }.each do |before, group|
+          before_bytes = before.b
+          occurrences = content_bytes.scan(before_bytes).length
+          if occurrences.zero?
+            raise ToolError, "patch text was not found"
+          elsif occurrences < group.length
+            raise ToolError, "patch text requested #{group.length} times but found #{occurrences} occurrences"
+          end
+
+          offset = 0
+          group.each do |entry|
+            byte_start = content_bytes.index(before_bytes, offset)
+            byte_end = byte_start + before_bytes.bytesize
+            canonical << {
+              byte_start:,
+              byte_end:,
+              before_text: before,
+              after_text: entry.fetch("after"),
+              line: content.byteslice(0, byte_start).count("\n") + 1
+            }.freeze
+            offset = byte_end
+          end
+        end
+        canonical
+      end
+
+      def build_legacy_replacement(content, before, after)
+        content_bytes = content.b
+        before_bytes = before.b
+        occurrences = content_bytes.scan(before_bytes).length
+        raise ToolError, "patch text was not found" if occurrences.zero?
+        raise ToolError, "patch text is ambiguous: found #{occurrences} occurrences" if occurrences > 1
+
+        byte_start = content_bytes.index(before_bytes)
+        byte_end = byte_start + before_bytes.bytesize
+        {
+          byte_start:,
+          byte_end:,
+          before_text: before,
+          after_text: after,
+          line: content.byteslice(0, byte_start).count("\n") + 1
+        }.freeze
+      end
+
+      def apply_replacements(content, replacements)
+        content_bytes = content.b
+        result = +"".b
+        cursor = 0
+        replacements.each do |replacement|
+          byte_start = replacement.fetch(:byte_start)
+          byte_end = replacement.fetch(:byte_end)
+          result << content_bytes.byteslice(cursor, byte_start - cursor)
+          result << replacement.fetch(:after_text).b
+          cursor = byte_end
+        end
+        result << content_bytes.byteslice(cursor, content_bytes.bytesize - cursor)
+        result.force_encoding(Encoding::UTF_8)
+        result
       end
 
       def atomic_replace(path, content)

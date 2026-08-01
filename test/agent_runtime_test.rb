@@ -164,7 +164,164 @@ class AgentRuntimeTest < Minitest::Test
     end
   end
 
+  def test_compound_apply_patch_signature_is_stable_across_before_order
+    Dir.mktmpdir("tamoz-agent") do |root|
+      runtime = build_runtime(root)
+      plan_a = Tamoz::Agent::Plan.parse(plan_for("apply_patch",
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => [
+          {"before" => "a", "after" => "1"},
+          {"before" => "b", "after" => "2"}
+        ]
+      ))
+      plan_b = Tamoz::Agent::Plan.parse(plan_for("apply_patch",
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => [
+          {"before" => "b", "after" => "2"},
+          {"before" => "a", "after" => "1"}
+        ]
+      ))
+
+      assert_equal runtime.send(:action_signature, plan_a), runtime.send(:action_signature, plan_b)
+    end
+  end
+
+  def test_compound_apply_patch_signature_changes_when_within_before_order_changes
+    Dir.mktmpdir("tamoz-agent") do |root|
+      original = "X = 1\nX = 2\n"
+      digest = Digest::SHA256.hexdigest(original)
+      args_first = {
+        "path" => "x.rb",
+        "expected_sha256" => digest,
+        "replacements" => [
+          {"before" => "X = 1", "after" => "A"},
+          {"before" => "X = 2", "after" => "B"}
+        ]
+      }
+      args_second = {
+        "path" => "x.rb",
+        "expected_sha256" => digest,
+        "replacements" => [
+          {"before" => "X = 1", "after" => "B"},
+          {"before" => "X = 2", "after" => "A"}
+        ]
+      }
+
+      runtime = build_runtime(root)
+      sig_first = runtime.send(:action_signature, Tamoz::Agent::Plan.parse(plan_for("apply_patch", args_first)))
+      sig_second = runtime.send(:action_signature, Tamoz::Agent::Plan.parse(plan_for("apply_patch", args_second)))
+      refute_equal sig_first, sig_second
+
+      first_result = nil
+      Dir.mktmpdir("tamoz-agent-first") do |first_root|
+        File.write(File.join(first_root, "x.rb"), original)
+        Tamoz::Agent::Toolbox.new(root: first_root, allow_changes: true).execute("apply_patch", args_first)
+        first_result = File.read(File.join(first_root, "x.rb"))
+      end
+      second_result = nil
+      Dir.mktmpdir("tamoz-agent-second") do |second_root|
+        File.write(File.join(second_root, "x.rb"), original)
+        Tamoz::Agent::Toolbox.new(root: second_root, allow_changes: true).execute("apply_patch", args_second)
+        second_result = File.read(File.join(second_root, "x.rb"))
+      end
+      refute_equal first_result, second_result
+    end
+  end
+
+  def test_approval_denial_stops_compound_patch_before_write
+    Dir.mktmpdir("tamoz-agent") do |root|
+      path = File.join(root, "values.rb")
+      original = "A = 1\nB = 2\n"
+      File.write(path, original)
+      digest = Digest::SHA256.hexdigest(original)
+      discovery_plan = plan_for("read_file", "path" => "values.rb")
+      action_plan = plan_for("apply_patch", {
+        "path" => "values.rb",
+        "expected_sha256" => digest,
+        "replacements" => [
+          {"before" => "A = 1", "after" => "A = 2"},
+          {"before" => "B = 2", "after" => "B = 3"}
+        ]
+      })
+      model = ScriptedModel.new(
+        plan: [discovery_plan, action_plan],
+        review: [accepted_review, accepted_review],
+        verify: []
+      )
+      runtime = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { false })
+      events = []
+
+      assert_raises(Tamoz::Agent::ApprovalDeniedError) do
+        runtime.run("Update values") { |event| events << event }
+      end
+      assert events.any? { |event| event.type == :approval_requested }
+      refute events.any? { |event| event.type == :tool_started && event.data.fetch("tool") == "apply_patch" }
+      assert_equal original, File.read(path)
+    end
+  end
+
+  def test_two_compound_patches_in_one_plan_are_separate_approvals
+    Dir.mktmpdir("tamoz-agent") do |root|
+      File.write(File.join(root, "a.rb"), "A = 1\n")
+      File.write(File.join(root, "b.rb"), "B = 1\n")
+      discovery_plan = plan_for("read_file", "path" => "a.rb")
+      action_plan = {
+        "goal" => "Update both files",
+        "done_when" => ["Both files are updated."],
+        "steps" => [
+          {
+            "id" => "patch_a",
+            "purpose" => "Update a.rb.",
+            "tool" => "apply_patch",
+            "arguments" => {
+              "path" => "a.rb",
+              "expected_sha256" => Digest::SHA256.hexdigest("A = 1\n"),
+              "replacements" => [{"before" => "A = 1", "after" => "A = 2"}]
+            },
+            "verification" => "a.rb reads A = 2."
+          },
+          {
+            "id" => "patch_b",
+            "purpose" => "Update b.rb.",
+            "tool" => "apply_patch",
+            "arguments" => {
+              "path" => "b.rb",
+              "expected_sha256" => Digest::SHA256.hexdigest("B = 1\n"),
+              "replacements" => [{"before" => "B = 1", "after" => "B = 2"}]
+            },
+            "verification" => "b.rb reads B = 2."
+          }
+        ]
+      }
+      approvals = []
+      model = ScriptedModel.new(
+        plan: [discovery_plan, action_plan],
+        review: [accepted_review, accepted_review],
+        verify: [{"answer" => "done", "satisfied" => true, "evidence" => ["a.rb", "b.rb"]}]
+      )
+      runtime = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { approvals << true; true })
+
+      runtime.run("Update both files")
+
+      assert_equal 2, approvals.length
+      assert_equal "A = 2\n", File.read(File.join(root, "a.rb"))
+      assert_equal "B = 2\n", File.read(File.join(root, "b.rb"))
+    end
+  end
+
   private
+
+  def build_runtime(root)
+    model = Class.new do
+      def generate(**); end
+    end.new
+    Tamoz::Agent::Runtime.new(
+      model:,
+      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+    )
+  end
 
   def plan_for(tool, arguments = {})
     {

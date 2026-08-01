@@ -70,7 +70,11 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 25,
         "model_calls" => 59,
-        "model_input_bytes" => 98_025,
+        # The apply_patch description appears in 14 action/repair planning prompts
+        # (JSON.pretty_generate of available_tools). The compound-schema description
+        # is 166 bytes larger when JSON-escaped than the legacy one, so the total
+        # model_input_bytes increased by 14 * 166 = 2,324.
+        "model_input_bytes" => 100_349,
         "model_output_bytes" => 13_685,
         "tool_output_bytes" => 2_747,
         "mutations" => 6,

@@ -441,4 +441,401 @@ class AgentToolboxTest < Minitest::Test
       assert_equal "hello world", File.read(File.join(root, "good.txt"), encoding: Encoding::UTF_8)
     end
   end
+
+  def test_compound_patch_applies_two_distinct_replacements
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\nTHREE = 3\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "ONE = 1", "after" => "ONE = 10"},
+          {"before" => "TWO = 2", "after" => "TWO = 20"}
+        ]
+      }
+      expected = "ONE = 10\nTWO = 20\nTHREE = 3\n"
+
+      preview = toolbox.preview("apply_patch", arguments)
+      assert_equal(
+        [
+          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-ONE = 1\n+ONE = 10",
+          "--- a/values.rb\n+++ b/values.rb\n@@ -2,1 +2,1 @@\n-TWO = 2\n+TWO = 20"
+        ].join("\n\n"),
+        preview
+      )
+
+      receipt = toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+      assert_includes receipt, "replacements: 2"
+      assert_includes receipt, "replacement_digest:"
+      assert_includes receipt, "before_sha256: #{Digest::SHA256.hexdigest(original)}"
+      assert_includes receipt, "after_sha256: #{Digest::SHA256.hexdigest(expected)}"
+    end
+  end
+
+  def test_compound_patch_applies_replacements_in_reverse_source_order
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\nTHREE = 3\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "TWO = 2", "after" => "TWO = 20"},
+          {"before" => "ONE = 1", "after" => "ONE = 10"}
+        ]
+      }
+      expected = "ONE = 10\nTWO = 20\nTHREE = 3\n"
+
+      toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+    end
+  end
+
+  def test_compound_patch_applies_two_identical_before_strings_with_different_after
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "VALUE = 1\nVALUE = 1\nVALUE = 1\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "VALUE = 1", "after" => "VALUE = 2"},
+          {"before" => "VALUE = 1", "after" => "VALUE = 3"}
+        ]
+      }
+      expected = "VALUE = 2\nVALUE = 3\nVALUE = 1\n"
+
+      preview = toolbox.preview("apply_patch", arguments)
+      assert_equal(
+        [
+          "--- a/values.rb\n+++ b/values.rb\n@@ -1,1 +1,1 @@\n-VALUE = 1\n+VALUE = 2",
+          "--- a/values.rb\n+++ b/values.rb\n@@ -2,1 +2,1 @@\n-VALUE = 1\n+VALUE = 3"
+        ].join("\n\n"),
+        preview
+      )
+
+      receipt = toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+      assert_includes receipt, "replacements: 2"
+    end
+  end
+
+  def test_compound_patch_rejects_requested_before_more_times_than_occurrences
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "repeated.txt")
+      original = "same same\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "repeated.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "same", "after" => "a"},
+          {"before" => "same", "after" => "b"},
+          {"before" => "same", "after" => "c"}
+        ]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_equal "patch text requested 3 times but found 2 occurrences", error.message
+      assert_equal original.b, File.binread(path)
+    end
+  end
+
+  def test_compound_patch_rejects_overlapping_replacements
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "tight.txt")
+      original = "abcdef"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "tight.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "abc", "after" => "x"},
+          {"before" => "bcd", "after" => "y"}
+        ]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_equal "replacements overlap", error.message
+      assert_equal original.b, File.binread(path)
+    end
+  end
+
+  def test_compound_patch_accepts_adjacent_non_overlapping_replacements
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "adjacent.txt")
+      original = "ab\ncd\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "adjacent.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "ab\n", "after" => "x\n"},
+          {"before" => "cd\n", "after" => "y\n"}
+        ]
+      }
+      expected = "x\ny\n"
+
+      toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+    end
+  end
+
+  def test_compound_patch_rejects_mixed_legacy_and_replacements_schema
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "before" => "a",
+        "after" => "b",
+        "replacements" => [{"before" => "a", "after" => "b"}]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", arguments)
+      end
+      assert_equal "apply_patch accepts either before/after or replacements, not both", error.message
+    end
+  end
+
+  def test_compound_patch_rejects_empty_replacements
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => []
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", arguments)
+      end
+      assert_equal "replacements must be a non-empty array", error.message
+    end
+  end
+
+  def test_compound_patch_rejects_malformed_replacement_element
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      missing_after = {
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => [{"before" => "a"}]
+      }
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", missing_after)
+      end
+      assert_equal "replacements[0] must contain before and after keys", error.message
+
+      not_hash = {
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => ["not a hash"]
+      }
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", not_hash)
+      end
+      assert_equal "replacements[0] must be an object", error.message
+    end
+  end
+
+  def test_compound_patch_rejects_excessive_replacements_count
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "x.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => Array.new(Tamoz::Agent::Toolbox::MAX_REPLACEMENTS + 1) do
+          {"before" => "a", "after" => "b"}
+        end
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("apply_patch", arguments)
+      end
+      assert_equal "replacements exceeds #{Tamoz::Agent::Toolbox::MAX_REPLACEMENTS}", error.message
+    end
+  end
+
+  def test_compound_patch_rejects_result_size_exceeded
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "big.txt")
+      limit = Tamoz::Agent::Toolbox::MAX_FILE_BYTES
+      original = "x" * (limit - 10)
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "big.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [{"before" => "x", "after" => "x" * 20}]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_equal "patched file exceeds #{limit} bytes", error.message
+      assert_equal original.b, File.binread(path)
+    end
+  end
+
+  def test_compound_patch_applies_multibyte_replacements
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "NAME = \"héllo\"\nLABEL = \"日本語\"\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "NAME = \"héllo\"", "after" => "NAME = \"world\""},
+          {"before" => "LABEL = \"日本語\"", "after" => "LABEL = \"x\""}
+        ]
+      }
+      expected = "NAME = \"world\"\nLABEL = \"x\"\n"
+
+      toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+      assert_equal expected.bytesize, File.size(path)
+    end
+  end
+
+  def test_compound_patch_after_may_contain_another_before_without_redirection
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "A = 1\nB = 2\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "A = 1", "after" => "B = 2"},
+          {"before" => "B = 2", "after" => "C = 3"}
+        ]
+      }
+      expected = "B = 2\nC = 3\n"
+
+      toolbox.execute("apply_patch", arguments)
+      assert_equal expected, File.read(path, encoding: Encoding::UTF_8)
+    end
+  end
+
+  def test_compound_patch_rejects_stale_digest_and_leaves_file_unchanged
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => "0" * 64,
+        "replacements" => [{"before" => "ONE = 1", "after" => "ONE = 10"}]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_match(/file changed: expected digest/, error.message)
+      assert_equal original.b, File.binread(path)
+    end
+  end
+
+  def test_compound_patch_rejects_zero_match_and_leaves_file_unchanged
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [{"before" => "MISSING", "after" => "x"}]
+      }
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.preview("apply_patch", arguments)
+      end
+      assert_equal "patch text was not found", error.message
+      assert_equal original.b, File.binread(path)
+    end
+  end
+
+  def test_compound_patch_preview_matches_executed_result
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "values.rb",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [
+          {"before" => "ONE = 1", "after" => "ONE = 10"},
+          {"before" => "TWO = 2", "after" => "TWO = 20"}
+        ]
+      }
+
+      patch = toolbox.send(:prepare_patch, arguments)
+      preview = toolbox.preview("apply_patch", arguments)
+      toolbox.execute("apply_patch", arguments)
+
+      assert_equal patch.fetch(:after_content), File.read(path, encoding: Encoding::UTF_8)
+      assert_equal preview, toolbox.send(:render_diff, arguments.fetch("path"), patch)
+    end
+  end
+
+  def test_compound_patch_succeeds_when_result_equals_max_file_bytes
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "full.txt")
+      limit = Tamoz::Agent::Toolbox::MAX_FILE_BYTES
+      original = "x" * (limit - 1)
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "full.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [{"before" => "x", "after" => "xx"}]
+      }
+
+      toolbox.execute("apply_patch", arguments)
+      assert_equal limit, File.size(path)
+      assert_equal limit, File.binread(path).bytesize
+    end
+  end
+
+  def test_compound_patch_writes_backslash_literals_verbatim
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "escapes.txt")
+      original = "PLACEHOLDER\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      arguments = {
+        "path" => "escapes.txt",
+        "expected_sha256" => Digest::SHA256.hexdigest(original),
+        "replacements" => [{"before" => "PLACEHOLDER", "after" => "\\n\\t"}]
+      }
+
+      toolbox.execute("apply_patch", arguments)
+      result = File.binread(path)
+      assert_equal "\\n\\t\n".b, result
+      refute_includes result, "\n\t\n".b
+    end
+  end
 end

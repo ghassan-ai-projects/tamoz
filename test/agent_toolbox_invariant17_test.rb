@@ -132,4 +132,96 @@ class AgentToolboxInvariant17Test < Minitest::Test
       assert_kind_of Tamoz::Agent::ToolError, error
     end
   end
+
+  def test_compound_edit_failures_return_tool_error_and_leave_file_unchanged
+    Dir.mktmpdir("tamoz-invariant17") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\nSAME = 3\nSAME = 3\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      digest = Digest::SHA256.hexdigest(original)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      base = {
+        "path" => "values.rb",
+        "expected_sha256" => digest,
+        "replacements" => [
+          {"before" => "ONE = 1", "after" => "ONE = 10"},
+          {"before" => "TWO = 2", "after" => "TWO = 20"}
+        ]
+      }
+
+      cases = {
+        "mixed legacy and replacements schema" => [
+          :validate,
+          base.merge("before" => "ONE = 1", "after" => "ONE = 10")
+        ],
+        "empty replacements array" => [
+          :validate,
+          base.merge("replacements" => [])
+        ],
+        "replacements count exceeds maximum" => [
+          :validate,
+          base.merge("replacements" => Array.new(Tamoz::Agent::Toolbox::MAX_REPLACEMENTS + 1) { {"before" => "x", "after" => "y"} })
+        ],
+        "malformed replacement element" => [
+          :validate,
+          base.merge("replacements" => [{"before" => "ONE = 1"}])
+        ],
+        "invalid UTF-8 replacement argument" => [
+          :validate,
+          base.merge("replacements" => [{"before" => "\xFF", "after" => "x"}])
+        ],
+        "null byte replacement argument" => [
+          :validate,
+          base.merge("replacements" => [{"before" => "a\0b", "after" => "x"}])
+        ],
+        "non-UTF-8 encoded replacement argument" => [
+          :validate,
+          base.merge("replacements" => [{"before" => "abc".b, "after" => "x"}])
+        ],
+        "stale digest" => [
+          :preview,
+          base.merge("expected_sha256" => "0" * 64)
+        ],
+        "zero match" => [
+          :preview,
+          base.merge("replacements" => [{"before" => "MISSING", "after" => "x"}])
+        ],
+        "requested before more times than occurrences" => [
+          :preview,
+          base.merge("replacements" => [
+            {"before" => "SAME = 3", "after" => "a"},
+            {"before" => "SAME = 3", "after" => "b"},
+            {"before" => "SAME = 3", "after" => "c"}
+          ])
+        ],
+        "overlapping replacements" => [
+          :preview,
+          base.merge("replacements" => [
+            {"before" => "ONE = 1\nTWO = 2", "after" => "x"},
+            {"before" => "TWO = 2\nSAME = 3", "after" => "y"}
+          ])
+        ],
+        "patched file exceeds maximum bytes" => [
+          :preview,
+          {
+            "path" => "values.rb",
+            "expected_sha256" => digest,
+            "replacements" => [{"before" => "ONE = 1", "after" => "x" * Tamoz::Agent::Toolbox::MAX_FILE_BYTES}]
+          }
+        ]
+      }
+
+      cases.each do |label, (phase, arguments)|
+        error = assert_raises(Tamoz::Agent::ToolError, label) do
+          if phase == :validate
+            toolbox.validate("apply_patch", arguments)
+          else
+            toolbox.preview("apply_patch", arguments)
+          end
+        end
+        assert_kind_of Tamoz::Agent::ToolError, error, label
+        assert_equal original.b, File.binread(path), label
+      end
+    end
+  end
 end
