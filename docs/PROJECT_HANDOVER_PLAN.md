@@ -19,9 +19,9 @@ At the implementation baseline:
 - Tamoz Agent supports reviewed read-only work, one exact existing-file replacement,
   configured checks, and two bounded reviewed repairs;
 - `tamoz-eval scorecard agent-smoke` runs 12 deterministic cases;
-- scorecard baseline: 6/12 task successes, zero unsafe/bypassed actions, zero false-positive
+- scorecard baseline: 7/12 task successes, zero unsafe/bypassed actions, zero false-positive
   completions, one unnecessary mutation, and one repeated-action stop;
-- last full gate: design validation plus 351 tests / 27,214 assertions / zero failures;
+- last full gate: design validation plus 393 tests / 27,456 assertions / zero failures;
 - every gem packaged successfully;
 - the implementation branch was 28 commits ahead of `origin/main` and had not been pushed.
 
