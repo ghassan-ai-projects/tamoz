@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `cab974f`
+Last verified: 2026-08-01 at commit `cab974f` (P7/P8 builders active)
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -393,6 +393,21 @@ Two design plans were produced in parallel and reviewed by separate critics with
 
 Design checkpoint committed at `cab974f`.
 
+### Round 7 — P7 interactive CLI and P8 trusted profiles implementation (in progress)
+
+Implementation started in parallel:
+
+- **P7 builder** (`agent-25`): extending `Session` with the stream/emitter contract,
+  implementing clarification/cancel graph changes, adding the interactive CLI subcommands,
+  and adding the `resume_after_kill` scorecard case and P7-E test matrix.
+- **P8 builder** (`agent-26`): implementing the profile loader/validator/canonical digest,
+  toolbox/session-record integration, model-role resolution, and P8-E fuzz matrix.
+  The P8 builder is intentionally not touching `cli.rb` or `exe/tamoz` while P7 owns the
+  CLI surface; CLI integration will follow once P7 lands.
+
+Both builders are running with the stop/redesign criteria from their respective plans and
+must report `rake ci` results under both `LC_ALL=en_US.UTF-8` and `LC_ALL=C`.
+
 ### Round 5 — P6 durable session and effect recovery
 
 Four commits: `8c977dc` (plan + harsh self-review, documentation only), `2d94908` (P6-A/B),
@@ -467,8 +482,8 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
-| P7 interactive/resumable CLI | designing | **design accepted** — plan + critic review committed |
-| P8 trusted project profiles | pending — design accepted | **design accepted** — plan + critic review committed |
+| P7 interactive/resumable CLI | designing | **implementation in progress** — builder `agent-25` active |
+| P8 trusted project profiles | pending — design accepted | **implementation in progress (core only)** — builder `agent-26` active; CLI integration waiting for P7 |
 | P9–P15 | pending | not started |
 
 ---
@@ -480,14 +495,14 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
    land where the seam names claim; can `:unknown` be driven to `:not_applied` from an unproven
    pre-state; can `MAX_ATTEMPTS = 3` be exceeded or reset; was the `Deliberation` extraction
    genuinely verbatim.
-2. **P7 implementation.** The design is accepted; the CLI needs to be built, reviewed, and
-   proven with the `resume_after_kill` scorecard case. This will also close gap 3 below by
-   giving the durable session hard-zero safety-counter coverage.
-3. **The durable session has no behavioural scorecard case.** P6's proof is the kill matrix,
-   which lives outside the scorecard. P7's `resume_after_kill` case is designed to cover the
-   durable session under the hard-zero safety counters.
-4. **P8 implementation.** The design is accepted; profiles need to be built, reviewed, and
-   fuzzed.
+2. **P7 implementation is in progress.** Builder `agent-25` is building the CLI; a separate
+   critic review is pending once the builder reports.
+3. **The durable session has no behavioural scorecard case yet.** P7's `resume_after_kill`
+   case is intended to cover the durable session under the hard-zero safety counters; it is
+   being added by the P7 builder.
+4. **P8 implementation is in progress (core only).** Builder `agent-26` is building the profile
+   loader/validator and toolbox/session integration; CLI integration is waiting for P7 to land
+   to avoid merge conflicts on `cli.rb`.
 5. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
    the unresolved-effect deletion guard through a session, thread-leak measurement, and soak
    are not done.
@@ -503,14 +518,11 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ## 6. Next action
 
-Begin P7 implementation. Fan out a builder and a separate harsh critic with fresh context to
-implement the accepted `docs/P7_INTERACTIVE_CLI_PLAN.md`, including the stream/emitter contract,
-subcommands, interrupt rendering, redirect/cancel/follow-up, the `resume_after_kill` scorecard
-case, and the full P7-E test matrix. Commit in work-package chunks (P7-A, P7-B, P7-C, P7-E)
-following the phase protocol.
-
-P8 can begin implementation in parallel once a builder/critic pair is available, but P7 is the
-active phase and must pass its behavioral proofs first.
+Wait for the P7 and P8 builders to report. Once a builder finishes, spawn a separate harsh
+critic with fresh context to review the real output, run held-out probes, and run `rake ci`
+under both locales plus the relevant scorecard/tests. Loop on the biggest remaining gap until
+the package wins. Coordinate so that P8 CLI integration lands after the P7 CLI surface is
+stable.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
 publish, release, or connect real physical actuators. The committed design checkpoint is
