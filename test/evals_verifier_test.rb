@@ -91,18 +91,18 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
-  def test_all_twelve_agent_smoke_cases_are_public_verified_and_digest_pinned
+  def test_all_thirteen_agent_smoke_cases_are_public_verified_and_digest_pinned
     cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
 
-    assert_equal 12, cases.length
-    assert_equal 12, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    assert_equal 13, cases.length
+    assert_equal 13, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
     cases.each do |path|
       artifact = Tamoz::Evals::Case.load(path)
       assert_equal "tamoz.agent.smoke", artifact["suite_id"]
       assert_equal "development", artifact["split"]
       assert_equal "public", artifact["content_policy"].fetch("classification")
       assert_equal "tamoz-agent-smoke", artifact["input"].fetch("kind")
-      assert_equal "in_process", artifact["environment"].fetch("isolation")
+      assert_includes %w[in_process subprocess], artifact["environment"].fetch("isolation")
       assert_equal "recorded", artifact["environment"].fetch("network")
     end
   end

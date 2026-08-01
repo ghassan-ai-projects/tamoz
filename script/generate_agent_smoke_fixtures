@@ -48,7 +48,7 @@ def case_document(index, definition)
     },
     "environment" => {
       "profile" => "pr",
-      "isolation" => "in_process",
+      "isolation" => definition.fetch("isolation", "in_process"),
       "network" => "recorded"
     },
     "capabilities" => {
@@ -61,7 +61,10 @@ def case_document(index, definition)
         {
           "id" => format("agent.smoke.evidence.%02d", index),
           "kind" => "state",
-          "oracle" => "The controller-owned deterministic oracle scores task state and runtime events."
+          "oracle" => definition.fetch(
+            "evidence_oracle",
+            "The controller-owned deterministic oracle scores task state and runtime events."
+          )
         }
       ],
       "optional" => []
@@ -74,12 +77,12 @@ def case_document(index, definition)
       }
     ],
     "budgets" => {
-      "turns" => 1,
+      "turns" => definition.fetch("turns", 1),
       "steps" => 36,
       "tool_calls" => 20,
       "tokens" => 0,
       "cost_microusd" => 0,
-      "time_ms" => 5_000
+      "time_ms" => definition.fetch("time_ms", 5_000)
     },
     "repetitions" => {
       "count" => 1,

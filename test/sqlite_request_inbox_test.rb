@@ -70,6 +70,30 @@ class SQLiteRequestInboxTest < Minitest::Test
     end
   end
 
+  def test_request_history_returns_ordered_durable_records
+    with_runner do |_adapter, _app, runner|
+      runner.deliver({"input" => "one"}, thread: "thread.history", request_id: "request.1")
+      runner.submit({"input" => "two"}, thread: "thread.history", request_id: "request.2")
+      runner.submit(
+        {"input" => "three"},
+        thread: "thread.history",
+        request_id: "request.3",
+        operation: :redirect,
+        delivery: :redirect
+      )
+
+      history = runner.history(thread: "thread.history")
+      assert history.frozen?
+      assert_equal %w[request.1 request.2 request.3], history.map(&:request_id)
+      assert_equal [0, 1, 2], history.map(&:enqueue_sequence)
+      assert_equal %i[turn turn redirect], history.map(&:operation)
+      assert_equal %i[queue queue redirect], history.map(&:delivery_mode)
+      assert_equal :completed, history.first.status
+      assert_equal :queued, history[1].status
+      assert history.all? { |record| record.is_a?(Tamoz::Graph::RequestRecord) }
+    end
+  end
+
   def test_paused_turn_completes_and_resume_request_preserves_execution
     Dir.mktmpdir("tamoz-request-resume") do |directory|
       path = File.join(directory, "tamoz.db")

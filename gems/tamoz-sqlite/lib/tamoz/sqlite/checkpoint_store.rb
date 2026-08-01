@@ -350,6 +350,25 @@ module Tamoz
         row && materialize_request(row)
       end
 
+      # Ordered, durable request inbox history for one thread namespace. This is
+      # the read path the resumable CLI and the eval harness use to prove exactly
+      # one ordered request history after crash/recovery (invariant 23).
+      def request_history(thread_id:, namespace: [])
+        thread, encoded_namespace = normalize_address(thread_id, namespace)
+        rows = adapter.__send__(:read, operation: "request.history") do |tx|
+          tx.rows(
+            "request.history.select",
+            <<~SQL,
+              #{REQUEST_SELECT}
+              WHERE thread_id = ? AND namespace = ?
+              ORDER BY enqueue_sequence ASC
+            SQL
+            [thread, encoded_namespace]
+          )
+        end
+        rows.map { |row| materialize_request(row) }.freeze
+      end
+
       def claim_next_request(lease:)
         execution_id = SecureRandom.uuid.freeze
         row = nil

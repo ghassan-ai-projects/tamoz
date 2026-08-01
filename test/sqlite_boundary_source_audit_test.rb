@@ -18,8 +18,8 @@ class SQLiteBoundarySourceAuditTest < Minitest::Test
     )
 
     assert result.frozen?
-    assert_equal 18, result.length
-    assert_equal 91, result.values.sum(&:length)
+    assert_equal 19, result.length
+    assert_equal 92, result.values.sum(&:length)
     assert_equal(
       {
         "checkpoint.commit.consume.{index}" => "write",

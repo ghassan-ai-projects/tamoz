@@ -229,6 +229,12 @@ module Tamoz
           "phase" => 2,
           "kill_required" => false,
           "statements" => [READ.call("request.fetch")].freeze
+        },
+        {
+          "operation" => "request.history",
+          "phase" => 2,
+          "kill_required" => false,
+          "statements" => [READ.call("request.history.select")].freeze
         }
       ].map(&:freeze).freeze
 

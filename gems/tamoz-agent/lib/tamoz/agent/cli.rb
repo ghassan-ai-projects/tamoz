@@ -196,6 +196,8 @@ module Tamoz
       end
 
       def cmd_list(options)
+        require "tamoz/sqlite"
+
         session_dir = resolve_session_dir(options)
         pattern = File.join(session_dir, "*.sqlite3")
         files = Dir.glob(pattern).sort
@@ -778,6 +780,10 @@ module Tamoz
       end
 
       def run_durable(options, thread_id, read_only: false)
+        # Deferred: tamoz/agent must not load the adapter package at require time
+        # (dependency isolation), only when a durable subcommand actually runs.
+        require "tamoz/sqlite"
+
         session_dir = resolve_session_dir(options)
         FileUtils.mkdir_p(session_dir, mode: 0o700)
         stat = File.stat(session_dir)
@@ -793,7 +799,7 @@ module Tamoz
         )
         adapter = Tamoz::SQLite::Adapter.new(
           path: File.join(session_dir, "#{thread_id}.sqlite3"),
-          limits: Tamoz::SQLite::Limits.new(lease_ttl: 30.0)
+          limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
         )
         begin
           session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
@@ -867,6 +873,25 @@ module Tamoz
           value.on("--recover", "Force recovery before resuming") { options[:recover] = true }
         end.parse!(argv)
         options
+      end
+
+      # Operator override for the writer lease TTL. Automation that kills and
+      # immediately resumes a session (crash-recovery harnesses) can shorten the
+      # wait for a dead owner's lease to expire; the default stays conservative.
+      def lease_ttl
+        raw = @env["TAMOZ_LEASE_TTL"]
+        return 30.0 if raw.to_s.empty?
+
+        ttl = begin
+          Float(raw)
+        rescue ArgumentError, TypeError
+          raise ArgumentError, "TAMOZ_LEASE_TTL must be a number of seconds within (0, 30]"
+        end
+        unless ttl.positive? && ttl <= 30.0
+          raise ArgumentError, "TAMOZ_LEASE_TTL must be a number of seconds within (0, 30]"
+        end
+
+        ttl
       end
 
       def validate_check_config!(options)

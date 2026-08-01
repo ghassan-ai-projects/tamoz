@@ -4,6 +4,7 @@ PATH
     tamoz-agent (0.1.0.alpha.1)
       ruby_llm (~> 1.16.0)
       tamoz-graph (= 0.1.0.alpha.1)
+      tamoz-sqlite (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-core

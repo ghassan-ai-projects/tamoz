@@ -48,6 +48,11 @@ module Tamoz
         )
       end
 
+      # Ordered durable request history for a thread (invariant 23 proofs).
+      def history(thread:, namespace: [])
+        compiled.checkpointer.request_history(thread_id: thread, namespace:)
+      end
+
       def run_next(
         thread:,
         namespace: [],

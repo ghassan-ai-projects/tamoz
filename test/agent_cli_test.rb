@@ -323,6 +323,92 @@ class AgentCLITest < Minitest::Test
     assert_equal Tamoz::Agent::CLI::EXIT_SIGINT, cli.send(:exit_for_cancellation)
   end
 
+  def test_sigterm_exits_one_forty_three
+    cli = Tamoz::Agent::CLI.new(
+      out: StringIO.new,
+      err: StringIO.new,
+      input: StringIO.new,
+      env: {}
+    )
+    cancellation = Tamoz::CancellationToken.new
+    cli.instance_variable_set(:@cancellation, cancellation)
+    cancellation.cancel!("sigterm")
+
+    assert_equal Tamoz::Agent::CLI::EXIT_SIGTERM, cli.send(:exit_for_cancellation)
+  end
+
+  def test_two_owners_cannot_advance_same_thread
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      digest = Digest::SHA256.hexdigest("value = 1\n")
+      factory = repair_factory(digest)
+      checks = {"answer" => check_argv}
+      status = run_cli(
+        ["ask", "set value to 2"],
+        session: "th", workspace:, session_dir:, input: StringIO.new, factory:, checks:
+      )
+      assert_equal Tamoz::Agent::CLI::EXIT_PAUSED, status
+
+      # A second owner holding the namespace lease must fence out the resume.
+      path = File.join(session_dir, "th.sqlite3")
+      foreign = Tamoz::SQLite::Adapter.new(
+        path:, limits: Tamoz::SQLite::Limits.new(lease_ttl: 30.0)
+      )
+      begin
+        foreign_session = build_session(
+          model: factory.call({}), root: workspace, adapter: foreign,
+          allow_changes: true, checks:
+        )
+        store = foreign_session.app.checkpointer
+        store.open_writer(thread_id: "th", namespace: [], owner_id: "owner.foreign", ttl: 30.0) do
+          err = StringIO.new
+          status = run_cli(
+            ["resume", "th", "--answer", "y"],
+            workspace:, session_dir:, input: StringIO.new("y\n"), err:, factory:, checks:
+          )
+          assert_equal 1, status
+          assert_match(/lease|conflict/i, err.string)
+        end
+      ensure
+        foreign.close
+      end
+    end
+  end
+
+  def test_sensitive_content_is_not_rendered_to_streams_or_transcript
+    with_cli_workspace do |workspace, session_dir|
+      secret = "sk-live-gauntlet-probe-secret"
+      File.write(File.join(workspace, "note.txt"), "payload #{secret}\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+          review: [accepted_review],
+          verify: [{"answer" => "read complete", "satisfied" => true, "evidence" => ["note.txt"]}]
+        )
+      end
+
+      out = StringIO.new
+      err = StringIO.new
+      status = run_cli(
+        ["--json", "ask", "read note.txt"],
+        session: "th", workspace:, session_dir:, out:, err:, factory:
+      )
+      assert_equal 0, status, err.string
+      refute_includes out.string, secret
+      refute_includes err.string, secret
+
+      show_out = StringIO.new
+      show_err = StringIO.new
+      status = run_cli(
+        ["--json", "show", "th"],
+        workspace:, session_dir:, out: show_out, err: show_err, factory:
+      )
+      assert_equal 0, status, show_err.string
+      refute_includes show_out.string, secret
+      refute_includes show_err.string, secret
+    end
+  end
+
   def test_json_event_stream_is_ndjson
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "note.txt"), "hello\n")

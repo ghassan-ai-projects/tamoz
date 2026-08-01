@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 require "digest"
+require "fileutils"
+require "json"
 require "rbconfig"
+require "shellwords"
 require "tmpdir"
 
 module Tamoz
@@ -156,6 +159,27 @@ module Tamoz
             "allowed" => %w[plan.create plan.review tool.read-file],
             "prohibited" => %w[root.escape action.before-review],
             "done" => ["No escaped tool starts and the answer is grounded in safe.txt."]
+          },
+          {
+            "case_id" => "agent.resume-after-kill",
+            "scenario" => "resume_after_kill",
+            "title" => "Durable resume after SIGKILL",
+            "purpose" => "Prove a SIGKILLed CLI at an approval seam resumes to one ordered history.",
+            "risk_class" => "critical",
+            "task" => "Make Broken.answer equal 42.",
+            "tags" => %w[agent durability kill-resume],
+            "allowed" => %w[plan.create plan.review tool.read-file tool.apply-patch tool.run-check],
+            "prohibited" => %w[effect.without-approval effect.duplicate result.false-success],
+            "done" => [
+              "The killed run applies nothing, the resumed run finishes, the file holds 42, " \
+              "and the durable history shows one turn and ordered resumes with one patch effect."
+            ],
+            "turns" => 2,
+            "time_ms" => 30_000,
+            "isolation" => "subprocess",
+            "evidence_oracle" =>
+              "The controller-owned deterministic oracle scores durable request history, " \
+              "effect receipts, and workspace state."
           }
         ].map { |entry| DeepFreeze.call(entry) }.freeze
 
@@ -169,8 +193,13 @@ module Tamoz
           :requires_check,
           :mutation_needed,
           :allowed_tools,
-          :evidence_complete
-        )
+          :evidence_complete,
+          :metrics
+        ) do
+          def initialize(metrics: {}, **members)
+            super(metrics: DeepFreeze.call(metrics), **members)
+          end
+        end
 
         class ScriptedModel
           attr_reader :calls
@@ -199,11 +228,236 @@ module Tamoz
           end
         end
 
+        CliOutcome = Data.define(:satisfied, :answer)
+
+        # Drives the real CLI entry point (`Tamoz::Agent::CLI.run`) in child
+        # processes with a file-backed scripted model, so the kill/resume case
+        # exercises the production binary path without network access.
+        class CliSubprocessHarness
+          REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
+          LOAD_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent].flat_map do |gem|
+            ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
+          end.freeze
+          PROMPT_TIMEOUT = 60.0
+          RESUME_TIMEOUT = 120.0
+
+          CHILD = <<~'RUBY'
+            require "json"
+            require "tamoz/agent"
+
+            class TamozScriptedCliModel
+              def initialize
+                @script = JSON.parse(File.read(ENV.fetch("TAMOZ_MODEL_SCRIPT"))).fetch("responses")
+                @offset_path = ENV.fetch("TAMOZ_MODEL_OFFSET")
+                @log_path = ENV.fetch("TAMOZ_MODEL_LOG")
+              end
+
+              def generate(stage:, system:, prompt:)
+                entry = nil
+                File.open(@offset_path, File::RDWR | File::CREAT, 0o600) do |file|
+                  file.flock(File::LOCK_EX)
+                  offset = file.read.to_i
+                  entry = @script[offset]
+                  raise "agent smoke scripted model queue exhausted" unless entry
+                  unless entry.fetch("stage") == stage.to_s
+                    raise "agent smoke scripted model stage mismatch: " \
+                          "#{entry.fetch("stage")} != #{stage}"
+                  end
+
+                  file.rewind
+                  file.write((offset + 1).to_s)
+                  file.truncate(file.pos)
+                  file.flush
+                end
+                response = entry.fetch("response")
+                rendered = response.is_a?(String) ? response : JSON.generate(response)
+                File.open(@log_path, File::WRONLY | File::APPEND | File::CREAT, 0o600) do |log|
+                  log.flock(File::LOCK_EX)
+                  log.puts JSON.generate(
+                    "stage" => stage.to_s,
+                    "input_bytes" => system.bytesize + prompt.bytesize,
+                    "output_bytes" => rendered.bytesize
+                  )
+                end
+                rendered
+              end
+            end
+
+            Tamoz::Agent::CLI.prepend(Module.new do
+              def build_model(_options)
+                TamozScriptedCliModel.new
+              end
+            end)
+
+            exit Tamoz::Agent::CLI.run
+          RUBY
+
+          def initialize(root:, script:)
+            @root = root
+            @script_path = File.join(root, "model_script.json")
+            @offset_path = File.join(root, "model_offset")
+            @log_path = File.join(root, "model_calls.jsonl")
+            File.write(@script_path, JSON.generate(script))
+            File.write(@offset_path, "0")
+            File.write(@log_path, "")
+          end
+
+          def ask_until_approval(thread_id:, task:)
+            workspace = File.join(@root, "workspace")
+            before = File.read(File.join(workspace, "broken.rb"))
+            env = child_env
+            stdin_r, stdin_w = IO.pipe
+            stdout_r, stdout_w = IO.pipe
+            stderr_r, stderr_w = IO.pipe
+            pid = Process.spawn(
+              env, RbConfig.ruby, *LOAD_PATHS, "-e", CHILD, "--",
+              *global_argv(thread_id:), "ask", task,
+              in: stdin_r, out: stdout_w, err: stderr_w
+            )
+            [stdin_r, stdout_w, stderr_w].each(&:close)
+            drain = Thread.new { stdout_r.read }
+            unless wait_for_prompt(stderr_r, "Approve apply_patch?")
+              Process.kill("KILL", pid)
+              Process.wait2(pid)
+              drain.join
+              raise ExecutionError, "agent smoke CLI never reached the approval prompt"
+            end
+
+            Process.kill("KILL", pid)
+            _pid, status = Process.wait2(pid)
+            stdin_w.close
+            drain.join
+            unless status.signaled? && status.termsig == Signal.list.fetch("KILL")
+              raise ExecutionError, "agent smoke CLI did not die from SIGKILL"
+            end
+
+            File.read(File.join(workspace, "broken.rb")) == before
+          ensure
+            [stdin_w, stdout_r, stderr_r].each { |io| io.close unless io.closed? }
+          end
+
+          def resume(thread_id:, input:)
+            env = child_env
+            stdin_r, stdin_w = IO.pipe
+            stdout_r, stdout_w = IO.pipe
+            stderr_r, stderr_w = IO.pipe
+            pid = Process.spawn(
+              env, RbConfig.ruby, *LOAD_PATHS, "-e", CHILD, "--",
+              *global_argv(thread_id:), "resume", thread_id,
+              in: stdin_r, out: stdout_w, err: stderr_w
+            )
+            [stdin_r, stdout_w, stderr_w].each(&:close)
+            stdin_w.write(input)
+            stdin_w.close
+            out = Thread.new { stdout_r.read }
+            err = Thread.new { stderr_r.read }
+            deadline = monotonic + RESUME_TIMEOUT
+            status = nil
+            loop do
+              finished = Process.wait2(pid, Process::WNOHANG)
+              if finished
+                status = finished[1]
+                break
+              end
+              if monotonic > deadline
+                Process.kill("KILL", pid)
+                Process.wait2(pid)
+                raise ExecutionError, "agent smoke CLI resume timed out"
+              end
+
+              sleep 0.05
+            end
+            out.join
+            err.join
+            status.exitstatus || 1
+          ensure
+            [stdin_w, stdout_r, stderr_r].each { |io| io.close unless io.closed? }
+          end
+
+          def model_calls
+            File.readlines(@log_path, chomp: true).map { |line| JSON.parse(line) }
+          end
+
+          def durable_evidence(thread_id:, workspace:)
+            require "tamoz/sqlite"
+
+            adapter = Tamoz::SQLite::Adapter.new(
+              path: File.join(@root, "sessions", "#{thread_id}.sqlite3")
+            )
+            begin
+              dummy_model = Object.new
+              def dummy_model.generate(**) = "{}"
+              toolbox = Tamoz::Agent::Toolbox.new(root: workspace, allow_changes: true, checks: {})
+              session = Tamoz::Agent::Session.new(model: dummy_model, toolbox:, checkpointer: adapter)
+              view = session.view(thread: thread_id)
+              {
+                history: session.app.durable_runner.history(thread: thread_id),
+                receipts: view.effect_receipts
+              }
+            ensure
+              adapter.close
+            end
+          end
+
+          private
+
+          def child_env
+            {
+              "TAMOZ_MODEL_SCRIPT" => @script_path,
+              "TAMOZ_MODEL_OFFSET" => @offset_path,
+              "TAMOZ_MODEL_LOG" => @log_path,
+              "TAMOZ_LEASE_TTL" => "0.5",
+              "RUBYOPT" => nil
+            }
+          end
+
+          def global_argv(thread_id:)
+            [
+              "--root", File.join(@root, "workspace"),
+              "--session-dir", File.join(@root, "sessions"),
+              "--session", thread_id,
+              "--allow-changes",
+              "--check", "answer=#{Shellwords.join(resume_answer_check)}",
+              "--json"
+            ]
+          end
+
+          def resume_answer_check
+            [
+              RbConfig.ruby,
+              "-I.",
+              "-e",
+              %q{require './broken'; abort("wrong #{Broken.answer}") unless Broken.answer == 42}
+            ]
+          end
+
+          def wait_for_prompt(io, needle)
+            deadline = monotonic + PROMPT_TIMEOUT
+            buffer = +""
+            until buffer.include?(needle)
+              return false if monotonic > deadline
+
+              ready = IO.select([io], nil, nil, 0.5)
+              next unless ready
+
+              chunk = io.read_nonblock(4096, exception: false)
+              return false if chunk.nil? || chunk == :wait_readable
+
+              buffer << chunk
+            end
+            true
+          end
+
+          def monotonic
+            Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          end
+        end
+
         def cases
           artifacts = Dir[File.join(CASE_ROOT, "*.case.json")].sort.map { |path| Case.load(path) }
           expected_ids = CASE_DEFINITIONS.map { |entry| entry.fetch("case_id") }.sort
           actual_ids = artifacts.map { |artifact| artifact["case_id"] }.sort
-          unless artifacts.length == 12 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
+          unless artifacts.length == 13 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
             raise ExecutionError, "agent smoke corpus identity mismatch"
           end
 
@@ -562,6 +816,81 @@ module Tamoz
               allowed_tools: %w[read_file]
             )
           end
+        end
+
+        # Drives the real `tamoz` CLI as subprocesses against a scripted model
+        # served from durable files, kills the first process with SIGKILL at the
+        # apply_patch approval seam, then resumes in a fresh process. Evidence is
+        # reconstructed from the durable store: ordered request history, effect
+        # receipts, final workspace state, and the scripted model call log.
+        def run_resume_after_kill(case_artifact, definition)
+          thread_id = "resume-kill-test"
+          run_in_workspace(case_artifact, definition) do |root|
+            workspace = File.join(root, "workspace")
+            session_dir = File.join(root, "sessions")
+            FileUtils.mkdir_p(workspace)
+            FileUtils.mkdir_p(session_dir, mode: 0o700)
+            write_value(workspace, 40)
+            script = {
+              "responses" => [
+                {"stage" => "plan", "response" => plan(read_step("broken.rb"))},
+                {"stage" => "review", "response" => accepted_review},
+                {"stage" => "plan", "response" => action_plan(from: 40, to: 42)},
+                {"stage" => "review", "response" => accepted_review},
+                {"stage" => "verify", "response" => verified("Broken.answer is 42.", true)}
+              ]
+            }
+            harness = CliSubprocessHarness.new(root:, script:)
+            killed_clean = harness.ask_until_approval(thread_id:, task: definition.fetch("task"))
+            sleep 1.1
+            resume_status = harness.resume(thread_id:, input: "y\ny\n")
+            evidence = harness.durable_evidence(thread_id:, workspace:)
+
+            terminal = resume_status == 0 ? "completed" : "failed"
+            result = CliOutcome.new(satisfied: resume_status == 0, answer: nil)
+            oracle_success = begin
+              resume_after_kill_oracle(
+                result, killed_clean:, workspace:, history: evidence.fetch(:history),
+                receipts: evidence.fetch(:receipts)
+              )
+            rescue StandardError
+              false
+            end
+            Execution.new(
+              case_artifact:,
+              events: DeepFreeze.call([]),
+              model_calls: DeepFreeze.call(harness.model_calls),
+              result:,
+              terminal: terminal.freeze,
+              oracle_success:,
+              requires_check: false,
+              mutation_needed: true,
+              allowed_tools: %w[read_file apply_patch run_check],
+              evidence_complete: %w[completed].include?(terminal),
+              metrics: {
+                "resumes_after_kill" => 1,
+                "kill_recovery_success" => oracle_success && terminal == "completed" ? 1 : 0
+              }
+            ).freeze
+          end
+        end
+
+        def resume_after_kill_oracle(result, killed_clean:, workspace:, history:, receipts:)
+          user_requests = history.reject { |record| record.delivery_mode == :redirect }
+          turns = user_requests.select { |record| record.operation == :turn }
+          resumes = user_requests.select { |record| record.operation == :resume }
+          patches = receipts.count do |receipt|
+            receipt.fetch("operation") == "tool.apply_patch" && receipt.fetch("status") == "succeeded"
+          end
+
+          killed_clean &&
+            load_value(workspace) == 42 &&
+            result&.satisfied == true &&
+            patches == 1 &&
+            turns.length == 1 &&
+            resumes.length >= 1 &&
+            resumes.all? { |record| record.enqueue_sequence > turns.first.enqueue_sequence } &&
+            user_requests.none? { |record| record.status == :failed && record.terminal_error }
         end
 
         def run_value_change(case_artifact, definition, plans:, reviews:, expected_terminal:)

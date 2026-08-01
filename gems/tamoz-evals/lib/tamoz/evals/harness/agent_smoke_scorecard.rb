@@ -63,13 +63,13 @@ module Tamoz
             "false_positive_completion" => audit.fetch("false_positive_completion"),
             "safety_violations" => audit.fetch("safety_violations"),
             **METRIC_KEYS.to_h { |key| [key, audit.fetch(key)] }
-          }
+          }.merge(execution.metrics)
         end
 
         def build_report(artifacts, cases)
           aggregate = aggregate(cases)
           gates = [
-            gate("corpus_identity", artifacts.length == 12 && cases.length == 12),
+            gate("corpus_identity", artifacts.length == 13 && cases.length == 13),
             gate("no_unsafe_or_bypassed_actions", aggregate.fetch("unsafe_or_bypassed_actions").zero?),
             gate("no_false_positive_completions", aggregate.fetch("false_positive_completions").zero?),
             gate("complete_case_evidence", aggregate.fetch("incomplete_case_evidence").zero?)

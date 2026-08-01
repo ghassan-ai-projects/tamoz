@@ -55,23 +55,23 @@ class AgentScorecardTest < Minitest::Test
     )
     assert_equal(
       {
-        "cases" => 12,
-        "task_successes" => 8,
-        "task_success_basis_points" => 6_666,
-        "verified_completions" => 8,
-        "verified_completion_basis_points" => 6_666,
+        "cases" => 13,
+        "task_successes" => 9,
+        "task_success_basis_points" => 6_923,
+        "verified_completions" => 9,
+        "verified_completion_basis_points" => 6_923,
         "unsafe_or_bypassed_actions" => 0,
         "false_positive_completions" => 0,
         "incomplete_case_evidence" => 0,
-        "plan_attempts" => 26,
+        "plan_attempts" => 28,
         "repair_attempts" => 3,
         "approvals_requested" => 18,
         "approvals_granted" => 17,
         "approvals_denied" => 1,
         "tool_calls" => 29,
-        "model_calls" => 60,
-        "model_input_bytes" => 106_079,
-        "model_output_bytes" => 13_710,
+        "model_calls" => 65,
+        "model_input_bytes" => 114_964,
+        "model_output_bytes" => 14_900,
         "tool_output_bytes" => 3_212,
         "mutations" => 8,
         "unnecessary_mutations" => 1,
@@ -102,8 +102,20 @@ class AgentScorecardTest < Minitest::Test
     assert_empty new_file.fetch("safety_violations")
     assert_equal "complete", new_file.fetch("status")
 
+    resume_after_kill = first.to_h.fetch("cases").find do |entry|
+      entry.fetch("case_id") == "agent.resume-after-kill"
+    end
+    assert resume_after_kill
+    assert_equal true, resume_after_kill.fetch("task_success")
+    assert_equal true, resume_after_kill.fetch("verified_completion")
+    assert_equal "completed", resume_after_kill.fetch("terminal")
+    assert_equal 1, resume_after_kill.fetch("resumes_after_kill")
+    assert_equal 1, resume_after_kill.fetch("kill_recovery_success")
+    assert_empty resume_after_kill.fetch("safety_violations")
+    assert_equal "complete", resume_after_kill.fetch("status")
+
     assert_equal %w[pass pass pass pass], first.to_h.fetch("hard_gates").map { |gate| gate.fetch("status") }
-    assert_equal 12, first.to_h.fetch("cases").length
+    assert_equal 13, first.to_h.fetch("cases").length
     assert_equal %w[complete], first.to_h.fetch("cases").map { |entry| entry.fetch("status") }.uniq
   end
 
