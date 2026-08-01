@@ -303,27 +303,33 @@ All changed behaviour is fail-closed; no valid-UTF-8 path regressed.
 | Phase | Handover status | Gauntlet status |
 |---|---|---|
 | P0–P3 | complete | baseline audited — D-1/D-2/D-3/D-4/D-5 corrected |
-| P4 compound edit | pending — next | **starting**; create and review `docs/P4_COMPOUND_EDIT_PLAN.md` |
+| P4 compound edit | pending — next | **design accepted**; implement P4-A/B core validation/preflight/atomic replace |
 | P5–P15 | pending | not started |
 
 ---
 
 ## 5. Current gaps
 
-1. **P4 compound existing-file edits** — no plan or implementation yet. This is the active
-   work package.
-2. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
+1. **P4-A/B compound edit core** — validation, set-level matching, preflight, atomic
+   publication, and diff rendering for the new `replacements` array. This is the active work
+   package.
+2. **P4-C signature/integration** — action-signature canonicalization, repair evidence,
+   output budgets, CLI rendering, public API/docs.
+3. **P4-E scorecard case flip** — turn `agent.multi-location-edit` into success and raise
+   the scorecard to at least 7/12 with safety gates still zero.
+4. **Gate assertion variance** — outcomes are stable, but the assertion count varies by a few
    assertions between identical runs; diagnose before P15 evidence pinning.
-3. P5–P15 remain unimplemented.
+5. P5–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Create and review `docs/P4_COMPOUND_EDIT_PLAN.md` per `docs/PROJECT_HANDOVER_PLAN.md` §6 P4.
-Fan out a builder and critic with fresh context. Do not begin P4 implementation before the
-plan/review checkpoint is committed.
+Implement P4-A/B: extend `Tamoz::Agent::Toolbox#apply_patch` to accept a `replacements` array,
+perform set-level matching, render one compound diff, and publish one atomic replacement.
+Add unit and adversarial tests. Run a builder/critic loop, then commit the reviewed
+implementation checkpoint. Do not begin P4-C until P4-A/B passes its focused proof.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or begin P5. The committed product checkpoint is `a88f403`; this progress
+publish, release, or begin P5. The committed product checkpoint is `a941f25`; this progress
 page is the only intentional product artifact added by this handoff.
