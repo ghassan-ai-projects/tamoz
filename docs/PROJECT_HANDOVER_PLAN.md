@@ -2,8 +2,8 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P7` — interactive and resumable CLI
-Next action: write and review `docs/P7_INTERACTIVE_CLI_PLAN.md`; do not implement first
+Current phase: `P8` — trusted project profiles
+Next action: implement P8 per `docs/P8_TRUSTED_PROFILES_PLAN.md`; P7 is closed
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -58,8 +58,8 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P4 | complete | compound one-file edit | `a941f25` | `def7908`, `67f72d7` |
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
-| P7 | **designing** | interactive/resumable CLI | `cab974f` | — |
-| P8 | pending — design accepted | trusted project profiles | `cab974f` | — |
+| P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
+| P8 | **implementing** — design accepted | trusted project profiles | `cab974f` | — |
 | P9 | pending | evaluated skills | — | — |
 | P10 | pending | governed MCP client/host | — | — |
 | P11 | pending | three-layer memory | — | — |
@@ -244,14 +244,14 @@ cancellation, continuation, and `--resume` over P6.
 
 Work packages:
 
-- [ ] **P7-D** Specify commands, session/request identifiers, EOF/signals, output/event
+- [x] **P7-D** Specify commands, session/request identifiers, EOF/signals, output/event
   schema, redirect semantics, and non-interactive behavior.
-- [ ] **P7-A** Add session create/open/list/resume and durable request enqueue/join.
-- [ ] **P7-B** Render durable clarification/approval interrupts and validate positional
+- [x] **P7-A** Add session create/open/list/resume and durable request enqueue/join.
+- [x] **P7-B** Render durable clarification/approval interrupts and validate positional
   answers without embedding agent policy in the UI.
-- [ ] **P7-C** Add follow-up, queue, redirect, cancellation, terminal summary, and bounded
+- [x] **P7-C** Add follow-up, queue, redirect, cancellation, terminal summary, and bounded
   transcript/compaction projection.
-- [ ] **P7-E** Test duplicate delivery, two CLI processes, redirected in-flight effects,
+- [x] **P7-E** Test duplicate delivery, two CLI processes, redirected in-flight effects,
   EOF, SIGINT/SIGTERM, crash/restart, stale graph/behavior/catalog, and sensitive output.
 
 Product proof: start a coding task, interrupt/approve, kill the process, resume by stable

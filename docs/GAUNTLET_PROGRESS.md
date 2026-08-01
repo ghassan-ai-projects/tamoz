@@ -2,7 +2,7 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `cab974f` (P7/P8 builders active)
+Last verified: 2026-08-01 at commit `7469fa2` (P7 closed; P8 starting)
 Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
 phase passing real behavioural proofs and hard-zero safety gates.
 
@@ -166,6 +166,7 @@ rejects **and leaves the file byte-identical**. No fix may weaken any of these.
 | 1 | D-1 locale gate + D-2 multibyte corruption (+D-3 found by builder) | done | done | **pass against baseline; D-4/D-5 split out** | `2df0063`, `fe1d26e`, `b5f7fb9`, `39a8679` |
 | 2 | D-4/D-5 UTF-8 contract correction | done | done | **pass against baseline; invariant-17 matrix added** | `b213b4a`, `a88f403` |
 | 5 | P6 durable session and effect recovery | done | in flight | **coordinator gate PASS; independent critic still running** | `8c977dc`, `2d94908`, `b69701c`, `752363f` |
+| 7 | P7 interactive/resumable CLI | done (builder + coordinator; quota killed subagents) | pending (quota) | **P7 closed — coordinator gate PASS; scorecard 9/13, safety zero** | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
 
 ### Round 1 — builder result
 
@@ -393,21 +394,67 @@ Two design plans were produced in parallel and reviewed by separate critics with
 
 Design checkpoint committed at `cab974f`.
 
-### Round 7 — P7 interactive CLI and P8 trusted profiles implementation (in progress)
+### Round 7 — P7 interactive CLI implementation and close
 
-Implementation started in parallel:
+The P7 builder (`agent-25`) landed P7-A/P7-B (`1f2c56a`, `9500acb`) before the subagent
+quota (403 billing limit) killed both builders; the coordinator completed P7-C and all of
+P7-E directly in the main worktree. The P8 builder (`agent-27`) produced nothing; P8 core
+is unstarted (see Next action).
 
-- **P7 builder** (`agent-25`): extending `Session` with the stream/emitter contract,
-  implementing clarification/cancel graph changes, adding the interactive CLI subcommands,
-  and adding the `resume_after_kill` scorecard case and P7-E test matrix.
-- **P8 builder** (`agent-27`): implementing the profile loader/validator/canonical digest,
-  toolbox/session-record integration, model-role resolution, and P8-E fuzz matrix in an
-  isolated git worktree (`.worktrees/p8`). The P8 builder is intentionally not touching
-  `cli.rb` or `exe/tamoz` while P7 owns the CLI surface; CLI integration will follow once
-  P7 lands.
+Commits: `1f2c56a` (stream/emitter contract + Session API), `9500acb` (clarify/cancel
+semantics), `1e404d8` (interactive CLI subcommands), `7469fa2` (P7-E scorecard case and
+kill-matrix coverage).
 
-Both builders are running with the stop/redesign criteria from their respective plans and
-must report `rake ci` results under both `LC_ALL=en_US.UTF-8` and `LC_ALL=C`.
+Independent coordinator verification at `7469fa2`:
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — 467 runs, 28,013 assertions, 0 failures/errors/skips |
+| `rake ci`, `LC_ALL=C` | pass — 467 runs, 28,010 assertions, 0 failures/errors/skips |
+| `tamoz-eval scorecard agent-smoke` | pass — **9/13** successes (was 8/12), all four hard gates pass |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive 0, incomplete evidence 0 |
+| packaged scorecard (installed gems only) | pass — 13 cases, decision pass |
+
+The new `resume_after_kill` case drives the **real CLI as subprocesses**: `tamoz ask`
+pauses at the `apply_patch` approval prompt, the harness sends SIGKILL, verifies the
+workspace is untouched, resumes in a fresh process, and the oracle reads the durable
+store — exactly one `turn` request followed by ordered `resume` requests, exactly one
+succeeded `tool.apply_patch` effect, `Broken.answer == 42`. Metrics
+`resumes_after_kill: 1`, `kill_recovery_success: 1` ride the case report.
+
+**Defects found and fixed in this round (all verified before commit):**
+
+- **Durable CLI paths crashed in packaged installs.** `tamoz/agent` never required
+  `tamoz/sqlite` and the gemspec never declared it, so every durable subcommand died with
+  `NameError` outside the dev test process. Fixed with a lazy `require "tamoz/sqlite"` on
+  durable paths (dependency isolation preserved and test-pinned) plus the gemspec
+  dependency.
+- **Immediate resume after `kill -9` always failed for 30 s.** The CLI hardcoded a 30 s
+  lease TTL and acquisition has no wait, so the product proof ("kill the process, resume
+  by stable session") was only true after a half-minute pause. Added `TAMOZ_LEASE_TTL`
+  (bounded to (0, 30]) for crash-recovery automation; default unchanged.
+- **SQL boundary registry drift.** `request_history` is registered (`request.history`,
+  read-only) and the three digest/count pins that caught it were re-pinned after
+  verification.
+
+**D-6 — found, disclosed, deliberately not fixed in this round (severity: high).** A
+resume request enqueued by a process that is then fenced out (lease conflict) stays
+queued; when a later drain claims it, its answers no longer match the outstanding
+interrupts and `Tamoz::InvalidUpdateError` escapes `run_next` — the CLI crashes with an
+unhandled error and the poisoned request is never terminally failed. Reproduced during
+the two-owner fencing test. The correct fix (a stale durable request must fail as a
+terminal request value without taking the thread down) is framework surgery on
+`Compiled#execute_durable_request`/`resume_with_writer` and needs its own planned round
+with design review, like D-2/D-4 before it. Scoped out of P7-E rather than shipping an
+unproven fix; tracked in Current gaps.
+
+P7 is **closed** in the trackers. Definition-of-done evidence: all §10.1 unit tests
+present; §10.2/10.3 covered by the new CLI tests (SIGTERM 143, two-owner fencing,
+sensitive-content non-render), the inbox/lease/session library suites (duplicate
+delivery, stale version guard, stale fence, catalog digest), and the scorecard case
+(kill -9 crash/restart). One honest residual: stale graph/behavior/catalog is proven at
+the library level, not through a CLI subprocess. No TUI, gateway, daemon, or chat
+abstraction was added; no agent policy moved into the CLI.
 
 ### Round 5 — P6 durable session and effect recovery
 
@@ -483,8 +530,8 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
-| P7 interactive/resumable CLI | designing | **implementation in progress** — builder `agent-25` active |
-| P8 trusted project profiles | pending — design accepted | **implementation in progress (core only)** — builder `agent-27` active in `.worktrees/p8`; CLI integration waiting for P7 |
+| P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, scorecard 9/13, safety zero |
+| P8 trusted project profiles | implementing — design accepted | **not started** — builder died on quota; stale worktree `.worktrees/p8` to be removed |
 | P9–P15 | pending | not started |
 
 ---
@@ -496,35 +543,39 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
    land where the seam names claim; can `:unknown` be driven to `:not_applied` from an unproven
    pre-state; can `MAX_ATTEMPTS = 3` be exceeded or reset; was the `Deliberation` extraction
    genuinely verbatim.
-2. **P7 implementation is in progress.** Builder `agent-25` is building the CLI; a separate
-   critic review is pending once the builder reports.
-3. **The durable session has no behavioural scorecard case yet.** P7's `resume_after_kill`
-   case is intended to cover the durable session under the hard-zero safety counters; it is
-   being added by the P7 builder.
-4. **P8 implementation is in progress (core only).** Builder `agent-26` is building the profile
-   loader/validator and toolbox/session integration; CLI integration is waiting for P7 to land
-   to avoid merge conflicts on `cli.rb`.
-5. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
+2. **D-6 — a fenced-out resume poisons its thread (severity: high, found in Round 7).** A
+   resume request enqueued by a process that then loses the lease stays queued; a later drain
+   claims it, its answers no longer match the outstanding interrupts, and
+   `Tamoz::InvalidUpdateError` escapes `run_next` — the CLI crashes with an unhandled error
+   and the request is never terminally failed. Fix belongs to a dedicated, design-reviewed
+   framework round: a stale durable request must fail as a terminal request value without
+   taking the thread down.
+3. **P7 is not adversarially verified.** Coordinator gate and self-review pass; the
+   independent critic pass is quota-blocked. One residual by disclosure: stale
+   graph/behavior/catalog is proven at the library level, not through a CLI subprocess.
+4. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
    the unresolved-effect deletion guard through a session, thread-leak measurement, and soak
    are not done.
-6. **Evaluation corpus versioning.** P4/P5 changed case definitions while `case_version` stayed
-   `1`, so historical scorecard artifacts are not comparable. Belongs to P15-F evidence pinning.
-7. **Gate assertion variance** — assertion count varies by a few between identical runs.
+5. **Evaluation corpus versioning.** P4/P5/P7 changed case definitions while `case_version`
+   stayed `1`, so historical scorecard artifacts are not comparable. Belongs to P15-F evidence
+   pinning.
+6. **Gate assertion variance** — assertion count varies by a few between identical runs.
    Diagnose before P15 evidence pinning.
-8. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
+7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
    after a kill, and the `:retry` request-recovery latent defect.
-9. P9–P15 remain unimplemented.
+8. P8–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Wait for the P7 and P8 builders to report. Once a builder finishes, spawn a separate harsh
-critic with fresh context to review the real output, run held-out probes, and run `rake ci`
-under both locales plus the relevant scorecard/tests. Loop on the biggest remaining gap until
-the package wins. Coordinate so that P8 CLI integration lands after the P7 CLI surface is
-stable.
+Implement **P8 trusted project profiles** per `docs/P8_TRUSTED_PROFILES_PLAN.md` (design
+accepted at `cab974f`). The P7 CLI surface is now stable, so the profile core and the
+`tamoz profile` CLI subcommands can land together in the main worktree. Remove the stale
+`.worktrees/p8` worktree first. When subagent quota returns, run the deferred independent
+critic passes over P6 and P7, and schedule the D-6 stale-resume framework fix as its own
+reviewed round.
 
 Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
 publish, release, or connect real physical actuators. The committed design checkpoint is
-`cab974f`; the last product checkpoint is `752363f`.
+`cab974f`; the last product checkpoint is `7469fa2`.
