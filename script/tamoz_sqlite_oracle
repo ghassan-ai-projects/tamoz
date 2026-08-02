@@ -45,6 +45,7 @@ module TamozSQLiteOracle
     lease.validate
     request.claim-redirect
     request.claim-resume
+    request.claim-stale
     request.claim-turn
     request.enqueue-duplicate
     request.enqueue-new
@@ -53,6 +54,7 @@ module TamozSQLiteOracle
     request.recover-claimed
     request.recover-redirecting
     request.recover-running
+    request.recover-stale
     request.redirect-ready
   ].freeze
   STABLE_SCENARIOS = %w[
@@ -1200,6 +1202,14 @@ module TamozSQLiteOracle
                 evidence.fetch("checkpoint_id") ==
                   request.fetch("checkpoint_id") &&
                 row.fetch("to_status") == kind
+      # DR-4: the claim-time/recover-time staleness terminal-fail evidence. The
+      # request transitions straight to failed with a typed reason; the checkpoint
+      # the validator saw may be absent (nil).
+      when "claim_validation"
+        valid = evidence.keys.sort == %w[checkpoint_id kind operation reason] &&
+                row.fetch("to_status") == "failed" &&
+                request.fetch("status") == "failed" &&
+                !request.fetch("terminal_error").nil?
       else
         valid = false
       end
@@ -1468,6 +1478,41 @@ module TamozSQLiteOracle
       )
     end
 
+    # DR-4: a claim whose staleness validator terminal-fails the queued request
+    # inside the claim transaction (queued -> failed, never observably claimed).
+    def contract_request_claim_stale(state)
+      if state == :old
+        return queued_request_shape?(
+          operation: "resume",
+          delivery: "queue",
+          checkpoint: true,
+          leased: true
+        )
+      end
+
+      request = only_request
+      return false unless request &&
+                          request.fetch("operation") == "resume" &&
+                          request.fetch("delivery_mode") == "queue" &&
+                          request.fetch("status") == "failed" &&
+                          request.fetch("owner_fence") == 1 &&
+                          request.fetch("execution_id").is_a?(String) &&
+                          request.fetch("execution_id") != EXECUTION_A &&
+                          !request.fetch("terminal_error").nil? &&
+                          request.fetch("response").nil? &&
+                          request.fetch("retryable").nil?
+      transitions_match?([[nil, "queued", nil], ["queued", "failed", 1]]) &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty? &&
+        checkpoint_shape?(count: 1, statuses: ["running"]) &&
+        lease_namespace?(
+          owner: OWNER_A,
+          fence: 1,
+          next_checkpoint: 1,
+          next_request: 1
+        )
+    end
+
     def contract_request_recover_claimed(state)
       recovery_contract(state, status: "claimed", transitions: 2)
     end
@@ -1490,6 +1535,51 @@ module TamozSQLiteOracle
         redirect: true,
         checkpoint: true
       )
+    end
+
+    # DR-4: a recover whose staleness validator terminal-fails the claimed request
+    # inside the recover transaction (claimed -> failed under the new fence).
+    def contract_request_recover_stale(state)
+      request = only_request
+      return false unless request &&
+                          request.fetch("operation") == "turn" &&
+                          request.fetch("delivery_mode") == "queue" &&
+                          request.fetch("execution_id").is_a?(String)
+      if state == :old
+        return false unless request.fetch("status") == "claimed" &&
+                            request.fetch("owner_fence") == 1 &&
+                            request.fetch("terminal_error").nil?
+        return transitions_match?([[nil, "queued", nil], ["queued", "claimed", 1]]) &&
+               @projection["checkpoints"].empty? &&
+               @projection["activations"].empty? &&
+               @projection["writes"].empty? &&
+               lease_namespace?(
+                 owner: OWNER_B,
+                 fence: 2,
+                 next_checkpoint: 0,
+                 next_request: 1
+               )
+      end
+
+      request.fetch("status") == "failed" &&
+        request.fetch("owner_fence") == 2 &&
+        !request.fetch("terminal_error").nil? &&
+        request.fetch("response").nil? &&
+        request.fetch("retryable").nil? &&
+        transitions_match?([
+          [nil, "queued", nil],
+          ["queued", "claimed", 1],
+          ["claimed", "failed", 2]
+        ]) &&
+        @projection["checkpoints"].empty? &&
+        @projection["activations"].empty? &&
+        @projection["writes"].empty? &&
+        lease_namespace?(
+          owner: OWNER_B,
+          fence: 2,
+          next_checkpoint: 0,
+          next_request: 1
+        )
     end
 
     def contract_request_mark_running(state)

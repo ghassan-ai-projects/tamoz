@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteConvergenceProbeTest < Minitest::Test
   PROBE_DIGEST =
-    "sha256:cced9b548e63f02c4fe77461cc022540c9e3d31b569b109d45642eab09bdc96e"
+    "sha256:7d016bab925eb8ad88ad2af5cd6d1c8bb519fd435e4761c54f2f00dd57277594"
   REPORT_FIELDS = %w[
     classification content_digest convergence_version definition_digest facts
     probe result scenario

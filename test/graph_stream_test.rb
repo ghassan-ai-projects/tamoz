@@ -140,14 +140,17 @@ class GraphStreamTest < Minitest::Test
     )
     parts = []
 
-    error = assert_raises(Tamoz::CheckpointConflictError) do
+    # The invoke-thread-exists precondition (compiled.rb:470) is a stale-request
+    # condition (DR-4 C2): it raises StaleRequestError, still a CheckpointError with a
+    # safe message that never discloses the caller hint.
+    error = assert_raises(Tamoz::StaleRequestError) do
       stream.each { |part| parts << part }
     end
 
-    assert_equal "checkpoint_conflict", error.category
+    assert_equal "stale_request", error.category
     assert_equal %i[run_start error], parts.map(&:type)
     assert_equal(
-      "Workflow state changed concurrently.",
+      "The durable request is stale.",
       parts.last.data.fetch("safe_message")
     )
     refute parts.last.data.to_s.include?("use resume")

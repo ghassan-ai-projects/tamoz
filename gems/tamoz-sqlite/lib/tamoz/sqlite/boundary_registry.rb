@@ -97,12 +97,14 @@ module Tamoz
             READ.call("request.claim.lease.thread"),
             READ.call("request.claim.lease.row"),
             READ.call("request.claim.next"),
+            READ.call("request.claim.latest_checkpoint"),
             READ.call("request.claim.active_execution"),
             READ.call("request.claim.redirect_target"),
             READ.call("request.claim.cancellation_generation"),
             WRITE.call("request.claim.update"),
             READ.call("request.transition.index"),
             WRITE.call("request.transition.insert"),
+            WRITE.call("request.terminal_fail"),
             READ.call("request.claim.result")
           ].freeze
         },
@@ -116,10 +118,35 @@ module Tamoz
             READ.call("request.recover.lease.row"),
             READ.call("request.recover.row"),
             READ.call("request.recover.earlier"),
+            READ.call("request.recover.latest_checkpoint"),
             WRITE.call("request.recover.update"),
             READ.call("request.transition.index"),
             WRITE.call("request.transition.insert"),
+            WRITE.call("request.terminal_fail"),
             READ.call("request.recover.result")
+          ].freeze
+        },
+        {
+          "operation" => "request.terminal_fail",
+          "phase" => 2,
+          # The post-claim backstop's fenced terminal-fail is a drift-net path, not a
+          # primary crash-recovery seam: it is boundary-audited (its SQL is
+          # capability-listed) but deliberately NOT kill-required, so the scenario
+          # kill matrix (which drives every phase-2 kill-required operation) is not
+          # forced to cover it. The DR-4 kill matrix covers the claim seams; a
+          # future round may promote this operation if the backstop becomes a primary
+          # path.
+          "kill_required" => false,
+          "statements" => [
+            READ.call("request.terminal_fail.time"),
+            READ.call("request.terminal_fail.lease.thread"),
+            READ.call("request.terminal_fail.lease.row"),
+            READ.call("request.terminal_fail.row"),
+            READ.call("request.commit.row"),
+            WRITE.call("request.commit.update"),
+            READ.call("request.transition.index"),
+            WRITE.call("request.transition.insert"),
+            READ.call("request.terminal_fail.result")
           ].freeze
         },
         {

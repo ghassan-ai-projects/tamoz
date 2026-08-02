@@ -70,6 +70,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::RecursionLimitError",
           "Tamoz::Secret",
           "Tamoz::SensitiveValueError",
+          "Tamoz::StaleRequestError",
           "Tamoz::StateCodec",
           "Tamoz::StateCodec::Registration",
           "Tamoz::StateLimitError",

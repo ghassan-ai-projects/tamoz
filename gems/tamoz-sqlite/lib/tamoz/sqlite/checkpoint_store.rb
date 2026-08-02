@@ -369,7 +369,14 @@ module Tamoz
         rows.map { |row| materialize_request(row) }.freeze
       end
 
-      def claim_next_request(lease:)
+      # Claim the oldest queued request under the lease. When a `validator` is
+      # supplied (the graph-owned staleness predicate, DR-4 C1), it is invoked inside
+      # this transaction with the materialized request and the latest decoded
+      # checkpoint; a stale request is terminal-failed queued -> failed in the SAME
+      # transaction (never observably claimed, no kill window), and the failed
+      # request is returned. The validator receives only a RequestRecord and a
+      # Checkpoint (or nil) and returns nil or a bounded typed reason.
+      def claim_next_request(lease:, validator: nil)
         execution_id = SecureRandom.uuid.freeze
         row = nil
         adapter.__send__(:transaction, operation: "request.claim") do |tx|
@@ -394,6 +401,40 @@ module Tamoz
           )
           next unless row
           next unless row.fetch(7) == "queued"
+
+          if validator
+            checkpoint = latest_checkpoint_in_transaction(
+              tx,
+              lease.thread_id,
+              lease.namespace,
+              "request.claim.latest_checkpoint"
+            )
+            reason = invoke_stale_validator!(
+              validator,
+              materialize_request(row),
+              checkpoint
+            )
+            if reason
+              terminal_fail_in_transaction!(
+                tx,
+                lease:,
+                row:,
+                operation: row.fetch(5).to_sym,
+                reason:,
+                execution_id:,
+                checkpoint_id: checkpoint&.id,
+                now:
+              )
+              row = request_row(
+                tx,
+                lease.thread_id,
+                lease.namespace,
+                row.fetch(2),
+                "request.claim.result"
+              )
+              next
+            end
+          end
 
           operation = row.fetch(5)
           bound_execution = if %w[turn fork redirect].include?(operation)
@@ -467,7 +508,12 @@ module Tamoz
         row && materialize_request(row)
       end
 
-      def recover_request(lease:, request_id:)
+      # Recover an interrupted claimed/running/redirecting request under a fresh
+      # lease. When a `validator` is supplied (DR-4 C4), the request is validated
+      # against the latest decoded checkpoint INSIDE this transaction; a stale
+      # request is terminal-failed here (claimed/running -> failed in one atomic
+      # write) and returned, never re-executed.
+      def recover_request(lease:, request_id:, validator: nil)
         id = Wire.identity(
           request_id,
           name: "request id",
@@ -509,6 +555,39 @@ module Tamoz
           if earlier.positive?
             raise CheckpointConflictError,
                   "request recovery would skip an earlier nonterminal request"
+          end
+          if validator
+            checkpoint = latest_checkpoint_in_transaction(
+              tx,
+              lease.thread_id,
+              lease.namespace,
+              "request.recover.latest_checkpoint"
+            )
+            reason = invoke_stale_validator!(
+              validator,
+              materialize_request(row),
+              checkpoint
+            )
+            if reason
+              terminal_fail_in_transaction!(
+                tx,
+                lease:,
+                row:,
+                operation: row.fetch(5).to_sym,
+                reason:,
+                execution_id: row.fetch(10),
+                checkpoint_id: checkpoint&.id,
+                now:
+              )
+              row = request_row(
+                tx,
+                lease.thread_id,
+                lease.namespace,
+                id,
+                "request.recover.result"
+              )
+              next
+            end
           end
           tx.execute(
             "request.recover.update",
@@ -553,6 +632,66 @@ module Tamoz
           execution_id:,
           action: :running
         )
+      end
+
+      # Public fenced terminal-fail reserved for the post-claim execution backstop
+      # (DR-4 D2): opens its own transaction, validates the lease, and fails a
+      # claimed/running request with the same canonical stale payload. Never called
+      # from inside the claim transaction.
+      def terminal_fail(lease:, request_id:, operation:, reason:)
+        id = Wire.identity(
+          request_id,
+          name: "request id",
+          max_bytes: Wire::MAX_REQUEST_ID_BYTES
+        )
+        row = nil
+        adapter.__send__(:transaction, operation: "request.terminal_fail") do |tx|
+          now = adapter.__send__(:backend_time, tx, "request.terminal_fail.time")
+          adapter.__send__(
+            :validate_lease_in_transaction!,
+            tx,
+            lease,
+            now:,
+            label: "request.terminal_fail.lease"
+          )
+          row = request_row(
+            tx,
+            lease.thread_id,
+            lease.namespace,
+            id,
+            "request.terminal_fail.row"
+          )
+          raise CheckpointConflictError, "request does not exist" unless row
+          unless %w[claimed running redirecting].include?(row.fetch(7))
+            raise CheckpointConflictError,
+                  "request status #{row.fetch(7)} is not terminal-failable"
+          end
+          apply_request_transition_in_transaction!(
+            tx,
+            lease:,
+            checkpoint_id: nil,
+            transition: stale_terminal_transition(
+              request_id: id,
+              execution_id: row.fetch(10),
+              operation:,
+              reason:
+            ),
+            now:,
+            evidence_override: stale_transition_evidence(
+              operation:,
+              reason:,
+              checkpoint_id: nil
+            )
+          )
+          row = request_row(
+            tx,
+            lease.thread_id,
+            lease.namespace,
+            id,
+            "request.terminal_fail.result"
+          )
+        end
+        materialize_request(row)
       end
 
       def request_transition(
@@ -975,14 +1114,27 @@ module Tamoz
           )
         end
 
-        def claim_next_request
-          @store.claim_next_request(lease: @guard.lease)
+        def claim_next_request(validator: nil)
+          @store.claim_next_request(lease: @guard.lease, validator:)
         end
 
-        def recover_request(request_id:)
+        def recover_request(request_id:, validator: nil)
           @store.recover_request(
             lease: @guard.lease,
-            request_id:
+            request_id:,
+            validator:
+          )
+        end
+
+        # Public fenced terminal-fail for the post-claim execution backstop (DR-4 D2):
+        # opens its own fenced transaction and fails a claimed/running request with the
+        # canonical stale payload.
+        def terminal_fail(request_id:, operation:, reason:)
+          @store.terminal_fail(
+            lease: @guard.lease,
+            request_id:,
+            operation:,
+            reason:
           )
         end
 
@@ -1195,6 +1347,186 @@ module Tamoz
         execution_id
       end
 
+      # Decoded latest checkpoint read inside an open transaction (the claim/recover
+      # validation path). Read-only on tamoz_checkpoints, no second lease path. The
+      # pending-activation merge is intentionally skipped: the staleness predicate
+      # only reads status/interrupts/resume_values, which live in the payload.
+      def latest_checkpoint_in_transaction(tx, thread_id, namespace, label)
+        row = tx.first(
+          label,
+          <<~SQL,
+            SELECT c.id, c.sequence, c.thread_id, c.namespace, c.parent_id,
+                   c.format_version, c.execution_id, c.graph_name,
+                   c.graph_version, c.definition_digest, c.status,
+                   c.payload, c.payload_digest, n.active_checkpoint_id
+            FROM tamoz_namespaces n
+            LEFT JOIN tamoz_checkpoints c
+              ON c.id = n.active_checkpoint_id
+            WHERE n.thread_id = ? AND n.namespace = ?
+          SQL
+          [thread_id, namespace]
+        )
+        row && row.fetch(0) && decode_checkpoint_row(row)
+      end
+
+      def decode_checkpoint_row(row)
+        payload = row.fetch(11)
+        Wire.verify_digest!(
+          payload,
+          row.fetch(12),
+          domain: "tamoz.sqlite.checkpoint_payload"
+        )
+        attributes = checkpoint_codec.load(payload)
+        unless attributes.fetch(:execution_id) == row.fetch(6) &&
+               attributes.fetch(:graph_name) == row.fetch(7) &&
+               attributes.fetch(:graph_version) == row.fetch(8) &&
+               attributes.fetch(:definition_digest) == row.fetch(9) &&
+               attributes.fetch(:status).to_s == row.fetch(10)
+          raise CheckpointCorruptionError,
+                "checkpoint columns and payload disagree"
+        end
+        Tamoz::Graph::Checkpoint.new(
+          format_version: row.fetch(5),
+          id: Wire.identity(row.fetch(0), name: "stored checkpoint id"),
+          sequence: row.fetch(1),
+          thread_id: Wire.identity(row.fetch(2), name: "stored thread id"),
+          namespace: Wire.decode_namespace(row.fetch(3)),
+          parent_id: row.fetch(4)&.dup&.freeze,
+          **attributes
+        )
+      end
+
+      # Invokes the graph-owned staleness predicate with the materialized request and
+      # the decoded checkpoint, enforcing the validator return contract (DR-4 13):
+      # nil, or a non-empty bounded string without control characters. Any other
+      # return (or a raising validator) fails closed before any write is issued.
+      def invoke_stale_validator!(validator, request, checkpoint)
+        reason = begin
+          validator.call(request, checkpoint)
+        rescue ConfigurationError
+          raise
+        rescue StandardError => error
+          raise ConfigurationError.new(
+            "request staleness validation failed"
+          ), cause: error
+        end
+        validate_stale_reason!(reason)
+      end
+
+      MAX_STALE_REASON_BYTES = 512
+
+      def validate_stale_reason!(reason)
+        return nil if reason.nil?
+
+        unless reason.is_a?(String) &&
+               reason.valid_encoding? &&
+               !reason.empty? &&
+               reason.bytesize <= MAX_STALE_REASON_BYTES &&
+               reason !~ /[[:cntrl:]]/
+          raise ConfigurationError,
+                "request staleness validator returned an invalid reason"
+        end
+        reason
+      end
+
+      def stale_transition_evidence(operation:, reason:, checkpoint_id:)
+        {
+          "kind" => "claim_validation",
+          "operation" => operation.to_s,
+          "reason" => reason,
+          "checkpoint_id" => checkpoint_id
+        }
+      end
+
+      # Canonical terminal-error payload for a stale-fail (DR-4 C5): graph_status
+      # failed plus the typed reason and framework-authored evidence. Shared by the
+      # claim/recover in-transaction path and the runner's post-claim backstop so
+      # both serialize byte-identical payloads for the same cause (DR-4 16).
+      def stale_terminal_payload(operation:, reason:)
+        payload = {
+          "graph_status" => "failed",
+          "reason" => reason,
+          "evidence" => {"kind" => "claim_validation", "operation" => operation.to_s}
+        }
+        checkpoint_codec.state_codec.dump(payload)
+      end
+
+      # Single atomic queued/claimed/running -> failed write INSIDE an open claim or
+      # recover transaction. This is the only writer that can move a request directly
+      # from `queued` to `failed`; the public fenced APIs still reject that edge
+      # (DR-4 14/32). The stale request keeps the claim-time execution binding and is
+      # never observable as `claimed`.
+      def terminal_fail_in_transaction!(
+        tx,
+        lease:,
+        row:,
+        operation:,
+        reason:,
+        execution_id:,
+        checkpoint_id:,
+        now:
+      )
+        payload = stale_terminal_payload(operation:, reason:)
+        tx.execute(
+          "request.terminal_fail",
+          <<~SQL,
+            UPDATE tamoz_requests
+            SET status = 'failed',
+                execution_id = ?,
+                response = NULL, response_digest = NULL,
+                terminal_error = ?, terminal_error_digest = ?,
+                retryable = NULL, owner_fence = ?,
+                updated_at_ms = ?
+            WHERE thread_id = ? AND namespace = ? AND request_id = ?
+              AND status = ?
+          SQL
+          [
+            execution_id,
+            Wire.blob(payload),
+            Wire.digest(payload, domain: "tamoz.sqlite.request_error"),
+            lease.fence, now,
+            lease.thread_id, lease.namespace, row.fetch(2),
+            row.fetch(7)
+          ]
+        )
+        raise CheckpointConflictError, "request terminal fail lost" unless tx.changes == 1
+        append_request_transition!(
+          tx,
+          thread_id: lease.thread_id,
+          namespace: lease.namespace,
+          request_id: row.fetch(2),
+          from_status: row.fetch(7),
+          to_status: "failed",
+          fence: lease.fence,
+          evidence: stale_transition_evidence(
+            operation:,
+            reason:,
+            checkpoint_id:
+          ),
+          now:
+        )
+      end
+
+      # Public fenced terminal-fail reserved for the post-claim execution backstop
+      # (DR-4 D2): opens its own transaction, validates the lease, and fails a
+      # claimed/running request with the same canonical stale payload. Never called
+      # from inside the claim transaction. (Defined in the public section above;
+      # this is the shared payload constructor.)
+      def stale_terminal_transition(request_id:, execution_id:, operation:, reason:)
+        response = stale_terminal_payload(operation:, reason:)
+        {
+          "request_id" => request_id,
+          "execution_id" => execution_id,
+          "action" => "failed",
+          "response" => response,
+          "response_digest" => Wire.digest(
+            response,
+            domain: "tamoz.sqlite.request_response"
+          ),
+          "retryable" => nil
+        }.freeze
+      end
+
       def transition_request_without_checkpoint!(
         lease:,
         request_id:,
@@ -1240,7 +1572,8 @@ module Tamoz
         lease:,
         checkpoint_id:,
         transition:,
-        now:
+        now:,
+        evidence_override: nil
       )
         request_id = transition.fetch("request_id")
         row = request_row(
@@ -1278,6 +1611,10 @@ module Tamoz
            !%w[running claimed].include?(row.fetch(7))
           raise CheckpointConflictError,
                 "only a running request or atomic claimed operation can become terminal"
+        end
+        if evidence_override &&
+           !evidence_override.is_a?(Hash)
+          raise ConfigurationError, "request transition evidence override is invalid"
         end
 
         response = transition.fetch("response")
@@ -1321,7 +1658,7 @@ module Tamoz
           from_status: row.fetch(7),
           to_status:,
           fence: lease.fence,
-          evidence: {
+          evidence: evidence_override || {
             "kind" => action,
             "checkpoint_id" => checkpoint_id
           },

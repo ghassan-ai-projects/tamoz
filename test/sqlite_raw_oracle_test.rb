@@ -5,7 +5,7 @@ require_relative "test_helper"
 class SQLiteRawOracleTest < Minitest::Test
   ORACLE = ROOT.join("script", "tamoz_sqlite_oracle").freeze
   ORACLE_DIGEST =
-    "sha256:072d5bed69eb5d0253aedbddcb4623ab0cffd8c7a637bb242c05a779c5138530"
+    "sha256:1132f9ef361d1faaf6075fe0a465baa1b569fead93eea11db0e1b3713dd4bd87"
   REPORT_FIELDS = %w[
     classification content_digest foreign_keys integrity oracle_digest
     oracle_version projection_digest reason_codes scenario

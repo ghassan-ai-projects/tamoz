@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteScenarioDriverTest < Minitest::Test
   REGISTRY_DIGEST =
-    "sha256:e30afb2490ae9a5907d87ebeba7f442c70bd27e320442d7e0c2a2fe2ef05c23f"
+    "sha256:4e9e83ec3b3eeeb5b6c85217709243e347aef845bcbf000fb4a6090361d00249"
   DRIVER_DIGEST =
     "sha256:25afc66329481cfa7abaff6aec9d32ebaf8b621eec1cb2f7ebf82dfe9d0bac5d"
 
@@ -37,7 +37,7 @@ class SQLiteScenarioDriverTest < Minitest::Test
       manifests,
       boundary_registry:
     )
-    assert_equal 24, verified.length
+    assert_equal 26, verified.length
     assert_deeply_frozen(verified)
   end
 

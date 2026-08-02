@@ -19,6 +19,7 @@ class SQLiteScenarioRegistryTest < Minitest::Test
     lease.validate
     request.claim-redirect
     request.claim-resume
+    request.claim-stale
     request.claim-turn
     request.enqueue-duplicate
     request.enqueue-new
@@ -27,6 +28,7 @@ class SQLiteScenarioRegistryTest < Minitest::Test
     request.recover-claimed
     request.recover-redirecting
     request.recover-running
+    request.recover-stale
     request.redirect-ready
   ].freeze
 
@@ -43,7 +45,7 @@ class SQLiteScenarioRegistryTest < Minitest::Test
       EXPECTED_IDS,
       first.document.fetch("scenarios").map { |scenario| scenario.fetch("id") }
     )
-    assert_equal 24, first.document.fetch("scenarios").length
+    assert_equal 26, first.document.fetch("scenarios").length
     assert_deeply_frozen(first.document)
     assert_deeply_frozen(registry_class.const_get(:SCENARIOS, false))
     assert first.frozen?
