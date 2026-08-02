@@ -40,6 +40,7 @@ namespace :fixtures do
     ruby "script/generate_m1_fixtures"
     ruby "script/generate_m2_fixtures"
     ruby "script/generate_agent_smoke_fixtures"
+    ruby "script/generate_agent_memory_fixtures"
   end
 end
 

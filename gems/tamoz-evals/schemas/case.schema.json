@@ -99,6 +99,9 @@
     },
     "title": {
       "$ref": "#/$defs/nonempty"
+    },
+    "treatments": {
+      "$ref": "#/$defs/treatments"
     }
   },
   "required": [
@@ -423,6 +426,109 @@
         "id",
         "kind",
         "version"
+      ],
+      "type": "object"
+    },
+    "treatments": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_delta": {
+          "anyOf": [
+            {
+              "const": "failure_flip"
+            },
+            {
+              "additionalProperties": false,
+              "properties": {
+                "dimension": {
+                  "enum": [
+                    "model_calls",
+                    "steps"
+                  ],
+                  "type": "string"
+                },
+                "kind": {
+                  "const": "cost_delta"
+                },
+                "max_relative_bp": {
+                  "maximum": 10000,
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "kind",
+                "dimension"
+              ],
+              "type": "object"
+            }
+          ]
+        },
+        "seed": {
+          "additionalProperties": false,
+          "properties": {
+            "fixtures": {
+              "items": {
+                "$ref": "#/$defs/memory_record"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "fixtures"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "expected_delta"
+      ],
+      "type": "object"
+    },
+    "memory_record": {
+      "additionalProperties": false,
+      "properties": {
+        "classification": {
+          "enum": [
+            "public",
+            "restricted"
+          ],
+          "type": "string"
+        },
+        "content": {
+          "type": "object"
+        },
+        "epoch": {
+          "enum": [
+            "experience",
+            "knowledge",
+            "wisdom"
+          ],
+          "type": "string"
+        },
+        "match_keys": {
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "memory_id": {
+          "$ref": "#/$defs/id"
+        },
+        "record_version": {
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "memory_id",
+        "record_version",
+        "epoch",
+        "classification",
+        "match_keys",
+        "content"
       ],
       "type": "object"
     }

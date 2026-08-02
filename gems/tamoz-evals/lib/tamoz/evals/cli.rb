@@ -32,15 +32,17 @@ module Tamoz
         argv,
         out: $stdout,
         err: $stderr,
-        scorecard_factory: -> { Harness::AgentSmokeScorecard.new }
+        scorecard_factory: -> { Harness::AgentSmokeScorecard.new },
+        treatment_factory: nil
       )
-        new(out:, err:, scorecard_factory:).run(argv)
+        new(out:, err:, scorecard_factory:, treatment_factory:).run(argv)
       end
 
-      def initialize(out:, err:, scorecard_factory:)
+      def initialize(out:, err:, scorecard_factory:, treatment_factory: nil)
         @out = out
         @err = err
         @scorecard_factory = scorecard_factory
+        @treatment_factory = treatment_factory
       end
 
       def run(argv)
@@ -49,6 +51,7 @@ module Tamoz
 
         command, *paths = argv
         return scorecard(paths) if command == "scorecard"
+        return treatment(paths) if command == "treatment"
         return usage("expected: tamoz-eval verify ARTIFACT...") unless command == "verify" && !paths.empty?
 
         codes = paths.map { |path| verify_path(path) }
@@ -56,6 +59,29 @@ module Tamoz
       end
 
       private
+
+      # DR-3: the treatment profile evaluator. CI mode is the reproducible gate
+      # (injection correctness). Live mode is an operator-run (`TAMOZ_MEMORY_LIVE`)
+      # with a library-supplied adapter; the CLI refuses to fake it.
+      def treatment(arguments)
+        unless arguments == ["memory"] || arguments == ["memory", "--mode", "ci"]
+          return usage(
+            "expected: tamoz-eval treatment memory (live attribution is an " \
+            "operator-run via MemoryTreatmentProfile with a live_adapter)"
+          )
+        end
+
+        factory = @treatment_factory || -> { Harness::MemoryTreatmentProfile.new(mode: :ci) }
+        report = factory.call.run
+        @out.puts(report.to_json)
+        report.passed? ? SUCCESS : GATE_FAILURE
+      rescue InvalidArtifactError => error
+        @err.puts("treatment memory: invalid evidence: #{error.message}")
+        INVALID_EVIDENCE
+      rescue ExecutionError => error
+        @err.puts("treatment memory: infrastructure failure: #{error.message}")
+        INFRASTRUCTURE_FAILURE
+      end
 
       def scorecard(arguments)
         return usage("expected: tamoz-eval scorecard agent-smoke") unless arguments == ["agent-smoke"]
@@ -93,6 +119,7 @@ module Tamoz
       def help
         @out.puts("Usage: tamoz-eval verify ARTIFACT...")
         @out.puts("       tamoz-eval scorecard agent-smoke")
+        @out.puts("       tamoz-eval treatment memory")
         @out.puts("       tamoz-eval --version")
         SUCCESS
       end
