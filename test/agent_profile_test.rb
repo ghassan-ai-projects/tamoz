@@ -8,10 +8,13 @@ class AgentProfileTest < Minitest::Test
 
   def setup
     @dir = Dir.mktmpdir("tamoz-profile")
+    # Operator profiles live outside the project root (§3.1); fixtures honor that.
+    @profiles_dir = Dir.mktmpdir("tamoz-profile-store")
   end
 
   def teardown
     FileUtils.remove_entry(@dir)
+    FileUtils.remove_entry(@profiles_dir)
   end
 
   def valid_document(overrides = {})
@@ -38,7 +41,7 @@ class AgentProfileTest < Minitest::Test
     doc
   end
 
-  def write_profile(document = valid_document, name: "profile.yaml", mode: 0o600, dir: @dir)
+  def write_profile(document = valid_document, name: "profile.yaml", mode: 0o600, dir: @profiles_dir)
     path = File.join(dir, name)
     File.write(path, Psych.dump(document))
     File.chmod(mode, path)
@@ -364,5 +367,153 @@ class AgentProfileTest < Minitest::Test
     assert_nil Profile.resolve_path(env: {})
     assert_equal File.join(Profile.profiles_dir(env:), "my-profile.yaml"),
                  Profile.resolve_path(profile: "my-profile", env:)
+  end
+
+  # --- P8-E §8.3 adversarial vectors ---------------------------------------------
+
+  def write_raw(content, name: "raw.yaml", dir: @profiles_dir, mode: 0o600)
+    path = File.join(dir, name)
+    File.binwrite(path, content)
+    File.chmod(mode, path)
+    path
+  end
+
+  def test_root_swap_after_adoption_requires_re_adoption
+    registry = Profile::AdoptionRegistry.new(path: File.join(@dir, "adoption.yaml"))
+    confirm = ->(_document) { true }
+    Profile.load(write_profile, adoption_registry: registry, confirm_adoption: confirm)
+
+    other_root = Dir.mktmpdir("tamoz-other-root")
+    swapped = valid_document("profile" => {"canonical_root" => other_root})
+    swapped["roots"] = {"workspace" => other_root}
+    path = write_profile(swapped, name: "swapped.yaml")
+    error = assert_raises(Profile::AdoptionError) do
+      Profile.load(path, adoption_registry: registry)
+    end
+    assert_match(/not activated/, error.message)
+  ensure
+    FileUtils.remove_entry(other_root) if other_root
+  end
+
+  def test_oversized_profile_rejected
+    body = "# padding\n" + ("# " + "x" * 120 + "\n") * 1_100
+    path = write_raw(body + Psych.dump(valid_document))
+    error = assert_raises(Profile::ValidationError) { Profile.preview(path) }
+    assert_match(/exceeds/, error.message)
+  end
+
+  def test_non_utf8_profile_rejected
+    path = write_raw(Psych.dump(valid_document) + "\n# \xFF\xFE invalid\n".b)
+    assert_raises(Profile::ValidationError) { Profile.preview(path) }
+  end
+
+  def test_multiple_documents_rejected
+    path = write_raw(Psych.dump(valid_document) + "---\nevil: true\n")
+    error = assert_raises(Profile::ValidationError) { Profile.preview(path) }
+    assert_match(/exactly one YAML document/, error.message)
+  end
+
+  def test_alias_in_key_position_rejected
+    yaml = <<~YAML
+      anchor: &k policy
+      profile:
+        schema_version: 1
+    YAML
+    # An alias in *key* position resolves to the anchored text, defeating the
+    # literal-key duplicate and merge scans; it is a typed rejection.
+    path = write_raw(yaml + "*k: {allow_changes: true}\n")
+    error = assert_raises(Profile::ValidationError) { Profile.preview(path, suggestion: true) }
+    assert_match(/key position/, error.message)
+  end
+
+  def test_complex_mapping_key_rejected
+    path = write_raw("? [profile, schema_version]\n: 1\n")
+    error = assert_raises(Profile::ValidationError) { Profile.preview(path, suggestion: true) }
+    assert_match(/complex \(collection\) keys/, error.message)
+  end
+
+  def test_fifo_profile_rejected_without_blocking
+    path = File.join(@profiles_dir, "fifo.yaml")
+    system("mkfifo", path) or raise "mkfifo unsupported"
+    # O_NONBLOCK makes the open return immediately; the descriptor is then rejected
+    # as not-a-regular-file instead of hanging the loader on an empty pipe.
+    error = assert_raises(Profile::PermissionError) { Profile.preview(path) }
+    assert_match(/regular file/, error.message)
+  end
+
+  def test_case_folded_suggestion_directory_is_still_evidence_only
+    suggestion_dir = File.join(@dir, ".Tamoz")
+    FileUtils.mkdir_p(suggestion_dir)
+    File.chmod(0o700, suggestion_dir)
+    path = write_profile(valid_document, name: Profile::SUGGESTION_BASENAME, dir: suggestion_dir)
+    assert_raises(Profile::ValidationError) { Profile.preview(path) }
+    assert Profile.preview(path, suggestion: true).suggestion
+  end
+
+  def test_profile_inside_its_own_root_rejected
+    path = write_profile(valid_document, dir: @dir)
+    error = assert_raises(Profile::ValidationError) { Profile.preview(path) }
+    assert_match(/must not live inside its own canonical_root/, error.message)
+  end
+
+  def test_nested_profile_inside_root_rejected
+    nested = File.join(@dir, "deep", "store")
+    FileUtils.mkdir_p(nested)
+    File.chmod(0o700, nested)
+    path = write_profile(valid_document, dir: nested)
+    assert_raises(Profile::ValidationError) { Profile.preview(path) }
+  end
+
+  def check_document(argv)
+    document = valid_document("checks" => {})
+    document["checks"] = {"c1" => {"argv" => argv, "safety" => "read_only"}}
+    document["tools"] = {"allowed" => %w[read_file run_check], "approval_required" => ["run_check"]}
+    document["policy"] = valid_document.fetch("policy").merge("allow_changes" => true)
+    document
+  end
+
+  def test_relative_check_program_rejected
+    ["./bin/check", "bin/check", "tools/../run"].each do |program|
+      error = assert_raises(Profile::ValidationError, program) do
+        preview(check_document([program, "arg"]))
+      end
+      assert_match(/relative path/, error.message, program)
+    end
+    # A bare name resolves through PATH; an absolute path names an operator program.
+    preview(check_document(["make", "test"]))
+    preview(check_document(["/usr/bin/true"]))
+  end
+
+  def test_dot_and_dotdot_program_rejected
+    [".", ".."].each do |program|
+      error = assert_raises(Profile::ValidationError, program) do
+        preview(check_document([program]))
+      end
+      assert_match(/not a program/, error.message, program)
+    end
+  end
+
+  def test_env_profile_id_never_resolves_to_a_cwd_file
+    Dir.mktmpdir("tamoz-cwd") do |cwd|
+      File.write(File.join(cwd, "acme.yaml"), Psych.dump(valid_document))
+      env = {"TAMOZ_PROFILE" => "acme", "TAMOZ_CONFIG_HOME" => File.join(cwd, "config")}
+      Dir.chdir(cwd) do
+        assert_equal File.join(cwd, "config", "profiles", "acme.yaml"),
+                     Profile.resolve_path(env:)
+      end
+    end
+  end
+
+  def test_preview_source_captures_the_validated_bytes
+    path = write_profile
+    captured = Profile.preview_source(path)
+    assert captured.document.canonical_digest.start_with?("sha256:")
+    assert_equal File.binread(path), captured.bytes
+    # After capture, a repository-controlled source can change; the captured bytes
+    # (what the operator confirmed and what import installs) are unaffected.
+    File.binwrite(path, Psych.dump(valid_document("budgets" => {"steps" => 99})))
+    File.chmod(0o600, path)
+    refute_equal File.binread(path), captured.bytes
+    refute_equal captured.document.canonical_digest, Profile.preview(path).canonical_digest
   end
 end

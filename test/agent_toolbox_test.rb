@@ -283,6 +283,52 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
+  # P8-E / invariant 24: a check's output is captured into prompts, streams, and
+  # the durable log, so the child must not inherit credential-shaped variables.
+  def test_run_check_strips_credential_environment_but_keeps_the_rest
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      probe = 'puts [ENV.key?("TAMOZ_TEST_API_KEY"), ENV.key?("PATH")].inspect'
+      toolbox = Tamoz::Agent::Toolbox.new(
+        root:,
+        allow_changes: true,
+        checks: {"env" => [RbConfig.ruby, "-e", probe]}
+      )
+      ENV["TAMOZ_TEST_API_KEY"] = "sk-live-value"
+
+      result = toolbox.execute("run_check", "name" => "env")
+
+      assert result.passed?, result.to_s
+      assert_includes result.to_s, "[false, true]"
+      refute_includes result.to_s, "sk-live-value"
+    ensure
+      ENV.delete("TAMOZ_TEST_API_KEY")
+    end
+  end
+
+  def test_credential_env_classification
+    assert Tamoz::Agent::Toolbox.credential_env?("DEEPSEEK_API_KEY")
+    assert Tamoz::Agent::Toolbox.credential_env?("MY_SECRET_TOKEN")
+    assert Tamoz::Agent::Toolbox.credential_env?("database_password")
+    refute Tamoz::Agent::Toolbox.credential_env?("PATH")
+    refute Tamoz::Agent::Toolbox.credential_env?("TAMOZ_CONFIG_HOME")
+    refute Tamoz::Agent::Toolbox.credential_env?("KEYBOARD_LAYOUT")
+  end
+
+  # P8-E: a check runs with the workspace as its working directory, so a relative
+  # argv[0] carrying a separator would execute repository content.
+  def test_relative_check_program_rejected
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      ["./bin/check", "bin/check"].each do |program|
+        error = assert_raises(ArgumentError, program) do
+          Tamoz::Agent::Toolbox.new(root:, checks: {"x" => [program, "arg"]})
+        end
+        assert_match(/relative path/, error.message, program)
+      end
+      Tamoz::Agent::Toolbox.new(root:, checks: {"x" => ["make", "test"]})
+      Tamoz::Agent::Toolbox.new(root:, checks: {"x" => ["/usr/bin/true"]})
+    end
+  end
+
   def test_read_file_rejects_invalid_utf8_target_and_leaves_file_unchanged
     Dir.mktmpdir("tamoz-toolbox") do |root|
       path = File.join(root, "bad.txt")

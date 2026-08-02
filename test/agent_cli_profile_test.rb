@@ -240,6 +240,31 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
+  # P8-E §8.3: resume checks the profile *identity*, not just the digest — a session
+  # belongs to exactly one profile family, so a second activated profile (even over
+  # the same root and tool surface) cannot take its thread over.
+  def test_resume_with_a_different_profile_id_is_rejected
+    with_profile_env do |workspace, session_dir, config_home|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      path, = write_profile(workspace:, config_home:)
+      status = run_cli(
+        ["--profile", path, "ask", "read note.txt"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
+        factory: read_factory, session: "th"
+      )
+      assert_equal 0, status
+
+      other, = write_profile(workspace:, config_home:, profile_id: "other-profile")
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", other, "resume", "th"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:, factory: read_factory
+      )
+      assert_equal 1, status
+      assert_match(/belongs to profile "test-profile", not "other-profile"/, err.string)
+    end
+  end
+
   def test_profile_flag_conflicts_and_unsupported_subcommands
     with_profile_env do |workspace, session_dir, config_home|
       factory = read_factory
@@ -347,7 +372,7 @@ class AgentCLIProfileTest < Minitest::Test
 
   def write_profile(
     workspace:, config_home:, path: nil, mode: 0o600, activate: true, budgets: {},
-    tools: READ_ONLY_TOOLS
+    tools: READ_ONLY_TOOLS, profile_id: "test-profile"
   )
     digest = Tamoz::Agent::Toolbox.new(
       root: workspace,
@@ -359,7 +384,7 @@ class AgentCLIProfileTest < Minitest::Test
     document = {
       "profile" => {
         "schema_version" => 1,
-        "profile_id" => "test-profile",
+        "profile_id" => profile_id,
         "profile_version" => "1.0",
         "canonical_root" => workspace
       },
@@ -378,7 +403,7 @@ class AgentCLIProfileTest < Minitest::Test
       directory = File.join(config_home, "profiles")
       FileUtils.mkdir_p(directory, mode: 0o700)
       File.chmod(0o700, directory)
-      File.join(directory, "test-profile.yaml")
+      File.join(directory, "#{profile_id}.yaml")
     end
     File.write(path, Psych.dump(document))
     File.chmod(mode, path)
@@ -386,7 +411,7 @@ class AgentCLIProfileTest < Minitest::Test
     digest = Profile.preview(path, suggestion:).canonical_digest
     if activate && !suggestion
       env = {"TAMOZ_CONFIG_HOME" => config_home}
-      Profile::AdoptionRegistry.new(env:).activate("test-profile", digest)
+      Profile::AdoptionRegistry.new(env:).activate(profile_id, digest)
     end
     [path, digest]
   end
