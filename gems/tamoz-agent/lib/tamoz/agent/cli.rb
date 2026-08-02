@@ -32,6 +32,7 @@ module Tamoz
         @env = env
         @cancellation = nil
         @model_factory = model_factory
+        @stream_error = nil
       end
 
       def run(argv)
@@ -504,6 +505,7 @@ module Tamoz
           emitter: emitter
         )
         prompts = []
+        @stream_error = nil
 
         outcome = nil
         worker = Thread.new do
@@ -546,8 +548,21 @@ module Tamoz
         when :interrupt
           prompts << part
         when :error
-          @err.puts "Error: #{part.data["message"]}"
+          @stream_error = error_summary(part.data)
+          @err.puts "Error: #{@stream_error}"
         end
+      end
+
+      # An `:error` stream part carries graph/node/task_id/error_class/category/
+      # safe_message. It has never carried a "message" key, so reading one produced a
+      # blank line. Fall through every key that can name the failure so the operator is
+      # never told only that something went wrong.
+      def error_summary(data)
+        reason = data["safe_message"].to_s.strip
+        reason = data["error_class"].to_s.strip if reason.empty?
+        reason = "the session failed" if reason.empty?
+        node = data["node"].to_s.strip
+        node.empty? ? reason : "#{reason} (node #{node})"
       end
 
       def render_interrupt_prompt(part, session:, thread_id:)
@@ -697,7 +712,7 @@ module Tamoz
               @out.puts("\nVerification: #{verification.fetch("satisfied", false) ? "satisfied" : "not satisfied"}")
             end
           when :failed
-            @err.puts "tamoz: session failed"
+            @err.puts(@stream_error ? "tamoz: session failed: #{@stream_error}" : "tamoz: session failed")
           when :blocked
             @err.puts "tamoz: session is blocked"
           end

@@ -142,7 +142,7 @@ module Tamoz
           prior_plans << plan
           prior_reviews << review
 
-          action_observations, check_receipt = execute(
+          action_observations, check_receipt, tool_failure = execute(
             plan,
             phase:,
             metadata:,
@@ -150,19 +150,26 @@ module Tamoz
           ) { |event| yield event }
           all_observations.concat(action_observations)
 
-          unless check_receipt
+          # A repairable tool rejection short-circuits the plan and enters the same
+          # bounded repair loop a failed configured check uses: one shared
+          # `repair_attempt` counter, one shared failure-signature set.
+          if tool_failure
+            failure_signature = tool_failure.fetch("failure_signature")
+            repeated_reason = "repeated_tool_failure"
+          elsif check_receipt.nil?
             terminal_reason = "completed_without_check"
             break
-          end
-          if check_receipt.passed?
+          elsif check_receipt.passed?
             check_passed = true
             terminal_reason = "check_passed"
             break
+          else
+            failure_signature = check_receipt.failure_signature
+            repeated_reason = "repeated_failure"
           end
 
-          failure_signature = check_receipt.failure_signature
           if seen_failures.key?(failure_signature)
-            terminal_reason = "repeated_failure"
+            terminal_reason = repeated_reason
             emit(
               :repair_stopped,
               metadata.merge("reason" => terminal_reason, "failure_signature" => failure_signature)
@@ -284,6 +291,7 @@ module Tamoz
         observations = []
         total_bytes = initial_bytes
         last_check_receipt = nil
+        tool_failure = nil
         plan.steps.each do |step|
           if step.tool.nil?
             observations << {
@@ -295,41 +303,57 @@ module Tamoz
             next
           end
 
-          if toolbox.approval_required?(step.tool)
-            maximum_output = toolbox.maximum_effect_output_bytes(step.tool)
-            if total_bytes + maximum_output > MAX_OBSERVATION_BYTES
-              raise ToolError, "insufficient observation budget for #{step.tool}"
+          begin
+            if toolbox.approval_required?(step.tool)
+              maximum_output = toolbox.maximum_effect_output_bytes(step.tool)
+              if total_bytes + maximum_output > MAX_OBSERVATION_BYTES
+                raise ToolError, "insufficient observation budget for #{step.tool}"
+              end
+              preview = toolbox.preview(step.tool, step.arguments)
+              request = {
+                **event_context,
+                "step_id" => step.id,
+                "tool" => step.tool,
+                "arguments" => step.arguments,
+                "preview" => preview
+              }
+              emit(:approval_requested, request) { |event| yield event }
+              approved = approval&.call(
+                tool: step.tool,
+                arguments: step.arguments,
+                preview:
+              )
+              unless approved == true
+                emit(:approval_denied, request.except("preview")) { |event| yield event }
+                raise ApprovalDeniedError, "approval denied for #{step.tool}"
+              end
+              emit(:approval_granted, request.except("preview")) { |event| yield event }
             end
-            preview = toolbox.preview(step.tool, step.arguments)
-            request = {
-              **event_context,
-              "step_id" => step.id,
-              "tool" => step.tool,
-              "arguments" => step.arguments,
-              "preview" => preview
-            }
-            emit(:approval_requested, request) { |event| yield event }
-            approved = approval&.call(
-              tool: step.tool,
-              arguments: step.arguments,
-              preview:
-            )
-            unless approved == true
-              emit(:approval_denied, request.except("preview")) { |event| yield event }
-              raise ApprovalDeniedError, "approval denied for #{step.tool}"
-            end
-            emit(:approval_granted, request.except("preview")) { |event| yield event }
+
+            emit(
+              :tool_started,
+              event_context.merge(
+                "step_id" => step.id,
+                "tool" => step.tool,
+                "arguments" => step.arguments
+              )
+            ) { |event| yield event }
+            tool_result = toolbox.execute(step.tool, step.arguments)
+          rescue ToolArgumentError => error
+            # Invariant 17: an invalid-argument rejection is a typed result. Nothing was
+            # mutated, so it becomes evidence rather than ending the run.
+            observation = tool_failure_observation(event_context, step, error)
+            observations << observation
+            emit(:tool_rejected, observation) { |event| yield event }
+            total_bytes += observation.fetch("output").bytesize
+            # Only the action and repair phases own a repair budget. Discovery and
+            # read-only keep the rejection as evidence and continue with the next step.
+            next unless %i[action repair].include?(phase)
+
+            tool_failure = observation.fetch("failure")
+            break
           end
 
-          emit(
-            :tool_started,
-            event_context.merge(
-              "step_id" => step.id,
-              "tool" => step.tool,
-              "arguments" => step.arguments
-            )
-          ) { |event| yield event }
-          tool_result = toolbox.execute(step.tool, step.arguments)
           output = String(tool_result)
           total_bytes += output.bytesize
           if total_bytes > MAX_OBSERVATION_BYTES
@@ -356,7 +380,38 @@ module Tamoz
             break if tool_result.failed?
           end
         end
-        [Plan.deep_freeze(observations), last_check_receipt].freeze
+        [Plan.deep_freeze(observations), last_check_receipt, Plan.deep_freeze(tool_failure)].freeze
+      end
+
+      # Mirrors `SessionNodes#tool_failure_update`: the two drivers must never disagree
+      # about what a rejected tool looks like as evidence.
+      def tool_failure_observation(event_context, step, error)
+        {
+          **event_context,
+          "step_id" => step.id,
+          "tool" => step.tool,
+          "output" => <<~TEXT.chomp,
+            Tool #{step.tool} was rejected: #{error.message}
+            The workspace was not changed. Re-read the target with read_file and use its
+            exact current bytes and digest before proposing a different action.
+          TEXT
+          "failure" => {
+            "kind" => "tool_error",
+            "tool" => step.tool,
+            "error_class" => error.class.name,
+            "reason" => error.message,
+            "failure_signature" => Digest::SHA256.hexdigest(
+              JSON.generate(
+                "kind" => "tool_error",
+                "tool" => step.tool,
+                "reason" => error.message,
+                "arguments_digest" => SessionRecords.digest(
+                  Deliberation.canonical(step.arguments)
+                )
+              )
+            )
+          }
+        }
       end
 
       def observation_bytes(observations)

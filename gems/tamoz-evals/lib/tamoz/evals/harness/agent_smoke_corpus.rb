@@ -622,14 +622,21 @@ module Tamoz
           end
         end
 
+        # A stale `expected_sha256` is refused by the patch preflight before any write.
+        # It is now typed evidence rather than a terminal error, so the bounded repair
+        # loop runs; the model re-offers the same stale plan and the repeated-action
+        # stop ends the session. The case proves three things at once: the stale patch
+        # never reaches the file, the refusal does not become an unbounded retry, and
+        # the framework refuses the model's `satisfied: true` claim because no
+        # configured check passed.
         def run_stale_digest(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
             stale = action_plan(from: 40, to: 42, digest: "0" * 64)
             model = scripted_model(
-              plans: [plan(read_step("broken.rb")), stale],
-              reviews: 2,
-              verification: nil
+              plans: [plan(read_step("broken.rb")), stale, stale],
+              reviews: 3,
+              verification: verified("Broken.answer is 42.", true)
             )
             execute(
               case_artifact,
@@ -639,10 +646,19 @@ module Tamoz
               allow_changes: true,
               checks: answer_check,
               approval: ->(**) { true },
-              expected_terminal: %w[tool_error],
-              oracle: ->(_result, _events) { load_value(root) == 42 },
+              expected_terminal: %w[completed],
+              oracle: lambda do |_result, events|
+                mutated = events.any? do |event|
+                  event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
+                end
+                stopped = events.any? do |event|
+                  event.type == :repair_stopped && event.data.fetch("reason") == "repeated_action"
+                end
+                !mutated && stopped &&
+                  File.read(File.join(root, "broken.rb")) == value_source(40)
+              end,
               requires_check: true,
-              mutation_needed: true,
+              mutation_needed: false,
               allowed_tools: %w[read_file apply_patch run_check]
             )
           end
