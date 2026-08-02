@@ -1145,7 +1145,8 @@ module Tamoz
         raise OptionParser::MissingArgument, "PATH" if source.to_s.empty?
 
         expanded = File.expand_path(File.path(source))
-        document = Profile.preview(expanded, suggestion: Profile.suggestion_path?(expanded))
+        captured = Profile.preview_source(expanded, suggestion: Profile.suggestion_path?(expanded))
+        document = captured.document
         directory = Profile.profiles_dir(env: @env)
         target = File.join(directory, "#{document.profile_id}.yaml")
         if File.exist?(target) && !force
@@ -1171,8 +1172,14 @@ module Tamoz
 
         FileUtils.mkdir_p(directory, mode: 0o700)
         File.chmod(0o700, directory)
-        bytes = File.binread(expanded)
-        File.write(target, bytes)
+        # Install the validated bytes, created 0600 from the first byte written, so
+        # neither a re-read of a repository-controlled source nor a window of loose
+        # permissions can put content into the operator's profile directory that the
+        # operator never saw and never confirmed.
+        File.open(target, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |handle|
+          handle.binmode
+          handle.write(captured.bytes)
+        end
         File.chmod(0o600, target)
         Profile::AdoptionRegistry.new(env: @env).activate(
           document.profile_id, document.canonical_digest
@@ -1181,6 +1188,11 @@ module Tamoz
         0
       end
 
+      # The operator decides adoption from this rendering, so it must show every
+      # part of the profile that *is* authority. Omitting the checks meant an
+      # operator confirmed an argv they had never been shown. Credential references
+      # are rendered by env-var name only; a profile can never hold a secret value
+      # (invariant 24), and this surface never resolves one.
       def render_profile(document)
         @out.puts "profile_id: #{document.profile_id}"
         @out.puts "profile_version: #{document.profile_version}"
@@ -1189,8 +1201,30 @@ module Tamoz
         @out.puts "allow_changes: #{document.allow_changes?}"
         @out.puts "tools.allowed: #{document.tools_allowed.join(", ")}"
         @out.puts "tools.approval_required: #{document.tools_approval_required.join(", ")}"
+        render_profile_checks(document)
+        render_profile_model_roles(document)
+        document.budgets.sort.each { |name, value| @out.puts "budgets.#{name}: #{value}" }
+        @out.puts "policy.default_check_safety: #{document.policy.fetch("default_check_safety")}"
+        @out.puts "policy.behavior_version: #{document.policy.fetch("behavior_version")}"
         @out.puts "high_risk: #{document.high_risk?}"
         @out.puts "suggestion: #{document.suggestion}"
+      end
+
+      def render_profile_checks(document)
+        @out.puts "checks: #{document.checks.empty? ? "(none)" : document.checks.length}"
+        document.checks.sort.each do |name, check|
+          argv = check.fetch("argv").map { |entry| entry.inspect }.join(" ")
+          @out.puts "  check #{name} [#{check.fetch("safety")}]: #{argv}"
+        end
+      end
+
+      def render_profile_model_roles(document)
+        @out.puts "model_roles: #{document.model_roles.empty? ? "(none)" : document.model_roles.length}"
+        document.model_roles.sort.each do |name, role|
+          reference = role["credential_ref"]
+          suffix = reference ? " credential_ref=#{reference.fetch("name")}" : ""
+          @out.puts "  role #{name}: #{role.fetch("provider")}/#{role.fetch("model")}#{suffix}"
+        end
       end
 
 

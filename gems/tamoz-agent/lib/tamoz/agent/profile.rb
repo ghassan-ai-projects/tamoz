@@ -28,6 +28,11 @@ module Tamoz
       # O_NOFOLLOW makes the *open* refuse a symlink, so validation and reading
       # share one file description and a swap between them cannot be observed.
       NOFOLLOW = File::Constants.const_defined?(:NOFOLLOW) ? File::Constants::NOFOLLOW : 0
+      # P8-E: opening a FIFO read-only blocks until a writer appears, so a profile
+      # path pointing at a named pipe would hang the loader forever instead of
+      # failing. O_NONBLOCK makes the open return immediately; the regular-file
+      # check on the resulting descriptor then rejects it with a typed error.
+      NONBLOCK = File::Constants.const_defined?(:NONBLOCK) ? File::Constants::NONBLOCK : 0
       DIGEST_DOMAIN = "tamoz.profile.v1\n"
       DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
       PROFILE_ID_PATTERN = /\A[a-z][a-z0-9_-]{0,63}\z/
@@ -163,6 +168,19 @@ module Tamoz
         load_document(File.expand_path(File.path(path)), suggestion:)
       end
 
+      # The exact bytes that produced a validated document, returned alongside it.
+      # `tamoz profile import` installs these rather than re-reading the source: a
+      # second read of a repository-controlled path can return different bytes than
+      # the ones whose digest the operator just confirmed.
+      Source = Data.define(:document, :bytes)
+
+      def self.preview_source(path, suggestion: false)
+        expanded = File.expand_path(File.path(path))
+        captured = nil
+        document = load_document(expanded, suggestion:) { |bytes| captured = bytes }
+        Source.new(document:, bytes: captured)
+      end
+
       AUTHORITY_KEYS = %w[
         profile_id profile_version canonical_digest canonical_root model_roles checks tools policy
       ].freeze
@@ -216,8 +234,39 @@ module Tamoz
         new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
       end
 
+      # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
+      # same directory entry as `.tamoz/`, so an exact-case component match let a
+      # repository-supplied suggestion be addressed as authority simply by changing
+      # the case of the path. The comparison is case-folded, which over-rejects on a
+      # case-sensitive filesystem and therefore fails closed on every platform.
       def self.suggestion_path?(expanded_path)
-        Pathname.new(expanded_path).each_filename.include?(SUGGESTION_DIRECTORY)
+        Pathname.new(expanded_path).each_filename.any? do |component|
+          component.downcase == SUGGESTION_DIRECTORY
+        end
+      end
+
+      # P8-E: a profile stored inside the very root it grants authority over is
+      # repository-controlled content. Editing the repository would then edit the
+      # authority; the digest check makes that fail closed rather than silently
+      # widen, but §3.1 requires operator-owned storage outside the project, so the
+      # arrangement is refused outright. Suggestions are exempt: being inside the
+      # repository is exactly what makes them evidence.
+      def self.verify_outside_root!(expanded_path, canonical_root, path)
+        directory = File.dirname(expanded_path)
+        loop do
+          if File.identical?(directory, canonical_root)
+            raise ValidationError,
+                  "#{path}: profile must not live inside its own canonical_root " \
+                  "#{canonical_root.inspect}; operator profiles live outside the project"
+          end
+
+          parent = File.dirname(directory)
+          break if parent == directory
+
+          directory = parent
+        end
+      rescue SystemCallError
+        nil
       end
 
       # §3.3 search precedence: explicit flag > TAMOZ_PROFILE (path | id | cwd
@@ -279,6 +328,7 @@ module Tamoz
         bytes = open_verified(expanded_path, permissions: !suggestion) do |handle|
           read_bytes(handle, expanded_path)
         end
+        yield bytes if block_given?
         scan_yaml!(bytes, expanded_path)
         data = safe_parse(bytes, expanded_path)
         unless data.is_a?(Hash)
@@ -289,7 +339,9 @@ module Tamoz
         hash.delete("adoption")
         validate_schema!(hash, expanded_path)
         digest = canonical_digest(hash)
-        new(build_fields(hash, digest:, suggestion:))
+        fields = build_fields(hash, digest:, suggestion:)
+        verify_outside_root!(expanded_path, fields.canonical_root, expanded_path) unless suggestion
+        new(fields)
       end
 
       def self.read_bytes(handle, path)
@@ -316,8 +368,12 @@ module Tamoz
       # permission rules against the *open descriptor* (fstat), not against a
       # path that could be re-pointed afterwards.
       def self.open_verified(path, permissions: true)
-        handle = File.open(path, File::RDONLY | NOFOLLOW)
+        handle = File.open(path, File::RDONLY | NOFOLLOW | NONBLOCK)
         begin
+          unless handle.stat.file?
+            raise PermissionError, "#{path}: profile must be a regular file"
+          end
+
           verify_handle!(handle, path) if permissions
           yield handle
         ensure
@@ -383,12 +439,22 @@ module Tamoz
       # containers and aliases also consume a slot in the enclosing mapping.
       def self.scan_yaml!(text, path)
         aliases = 0
+        documents = 0
         max_aliases = MAX_ALIASES
         stack = [] # [:mapping, seen_keys, expecting_key] or [:sequence]
         check_tag = lambda do |tag|
           if tag && !tag.start_with?("tag:yaml.org,2002:")
             raise ValidationError, "#{path}: YAML tags are not allowed in profiles"
           end
+        end
+        # A collection opened in key position is a YAML complex key. Nothing in the
+        # schema has one, and it defeats the literal-key duplicate scan, so it is a
+        # typed rejection rather than something the key allowlist happens to catch.
+        reject_complex_key = lambda do
+          frame = stack.last
+          next unless frame && frame[0] == :mapping && frame[2]
+
+          raise ValidationError, "#{path}: YAML complex (collection) keys are not allowed"
         end
         note_slot = lambda do |key|
           frame = stack.last
@@ -421,10 +487,29 @@ module Tamoz
             note_slot.call(value)
           end
 
+          define_method(:start_document) do |_version, _tags, _implicit|
+            documents += 1
+            if documents > 1
+              raise ValidationError,
+                    "#{path}: a profile is exactly one YAML document; trailing documents " \
+                    "are silently ignored by the loader and are therefore refused"
+            end
+          end
+
           define_method(:alias) do |_anchor|
             aliases += 1
             if aliases > max_aliases
               raise ValidationError, "#{path}: too many YAML aliases (limit #{max_aliases})"
+            end
+
+            # P8-E: an alias in *key* position resolves to whatever the anchor holds,
+            # so the duplicate-key and merge-key scans below never see the real key.
+            # `policy: {allow_changes: false, *k: true}` with `&k "allow_changes"`
+            # read as a denial but loaded as a grant. A key is a literal scalar.
+            frame = stack.last
+            if frame && frame[0] == :mapping && frame[2]
+              raise ValidationError,
+                    "#{path}: YAML aliases are not allowed in mapping key position"
             end
 
             note_slot.call(nil)
@@ -432,6 +517,7 @@ module Tamoz
 
           define_method(:start_mapping) do |_anchor, tag, _implicit, _style|
             check_tag.call(tag)
+            reject_complex_key.call
             note_slot.call(nil)
             push.call([:mapping, [], true])
           end
@@ -440,6 +526,7 @@ module Tamoz
 
           define_method(:start_sequence) do |_anchor, tag, _implicit, _style|
             check_tag.call(tag)
+            reject_complex_key.call
             note_slot.call(nil)
             push.call([:sequence])
           end
@@ -712,13 +799,37 @@ module Tamoz
           raise ValidationError,
                 "#{path}: check #{name.inspect} argv[0] #{program.inspect} must not be a directory"
         end
+        # P8-E: a configured check runs with the *untrusted workspace* as its working
+        # directory, so a relative argv[0] that contains a separator ("bin/check",
+        # "./tools/run") names a file the repository supplies. That is content
+        # granting itself execution, which invariant 35 forbids. A bare program name
+        # is resolved through PATH (which never contains the workspace) and an
+        # absolute path names an operator-chosen program, so both remain allowed.
+        if separator?(program) && !program.start_with?(File::SEPARATOR)
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a relative path; " \
+                "it would resolve inside the untrusted workspace. Use an absolute path or a " \
+                "bare program name resolved through PATH"
+        end
 
         basename = File.basename(program).downcase.sub(/\.(exe|bat|cmd|com)\z/, "")
+        if [".", ".."].include?(basename)
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is not a program"
+        end
         return unless ARGV0_DENYLIST.include?(basename)
 
         raise ValidationError,
               "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a shell or " \
               "interpreter wrapper; a profile check names a program, not a command string"
+      end
+
+      # True when the value carries a path separator for this platform.
+      def self.separator?(value)
+        return true if value.include?(File::SEPARATOR)
+
+        alternate = File::ALT_SEPARATOR
+        !alternate.nil? && value.include?(alternate)
       end
 
       def self.validate_tools!(hash, path)
