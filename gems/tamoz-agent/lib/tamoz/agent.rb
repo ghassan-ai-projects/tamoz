@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
 require "tamoz/graph"
+require "tamoz/tools"
 require_relative "agent/version"
 require_relative "agent/errors"
 require_relative "agent/plan"
 require_relative "agent/deliberation"
-require_relative "agent/skills"
-require_relative "agent/toolbox"
 require_relative "agent/mcp_capability_source"
 require_relative "agent/ruby_llm_model"
 require_relative "agent/runtime"
@@ -20,6 +19,20 @@ require_relative "agent/cli"
 module Tamoz
   module Agent
     ROOT = File.expand_path("../../..", __dir__).freeze
+
+    # P16: the tool primitives and the skills descriptor surface live in
+    # tamoz-tools. These are constant rebindings — object-identical to the
+    # tools-side constants — never subclass or delegation wrappers, so class
+    # identity, `MAX_*` constants, and attr_readers all survive. The
+    # `Tamoz::Agent::ToolError` family is the same class objects as the
+    # tamoz-core D-7 taxonomy; serializers map the core `.name` back to these
+    # spellings via `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`.
+    Toolbox = Tamoz::Tools::Toolbox
+    CheckReceipt = Tamoz::Tools::CheckReceipt
+    Skills = Tamoz::Tools::Skills
+    ToolError = Tamoz::Tools::ToolError
+    ToolArgumentError = Tamoz::Tools::ToolArgumentError
+    ToolPolicyError = Tamoz::Tools::ToolPolicyError
 
     def self.build(
       model:,

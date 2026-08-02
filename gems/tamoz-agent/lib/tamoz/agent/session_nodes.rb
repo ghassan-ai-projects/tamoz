@@ -388,7 +388,9 @@ module Tamoz
             state,
             step:,
             tool:,
-            error_class: error.class.name,
+            # P16: map the core taxonomy name back to the public
+            # `Tamoz::Agent::Tool*` spelling (see `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`).
+            error_class: Tamoz::Core.serialized_tool_error_name(error.class.name),
             reason: error.message
           )
         end

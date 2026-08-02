@@ -1858,7 +1858,10 @@ module Tamoz
             terminal = "approval_denied"
           rescue Tamoz::Agent::PlanRejectedError
             terminal = "plan_rejected"
-          rescue Tamoz::Agent::ToolError
+          # P16: the D-7 taxonomy lives in tamoz-core. `Tamoz::Agent::ToolError` is a
+          # constant alias of `Tamoz::Core::ToolError`, so naming both spellings here
+          # keeps the terminal classification explicit if the alias ever drifts.
+          rescue Tamoz::Agent::ToolError, Tamoz::Core::ToolError
             terminal = "tool_error"
           rescue Tamoz::Agent::Error
             terminal = "agent_error"

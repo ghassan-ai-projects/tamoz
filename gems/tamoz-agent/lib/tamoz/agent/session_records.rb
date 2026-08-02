@@ -17,10 +17,8 @@ module Tamoz
       DIGEST_DOMAIN = "tamoz.agent.session_record"
       LEGACY_PROFILE_ID = "legacy"
       LEGACY_PROFILE_DIGEST = "legacy:none"
-      # Pre-P9 sessions carry no skill catalog. "none" is the epoch of a session
-      # that had no skills, which is exactly what a skill-free P9 session records
-      # too, so an old session and a new skill-free session resume identically.
-      LEGACY_SKILL_EPOCH = "none"
+      # P16: `LEGACY_SKILL_EPOCH` moved to tamoz-core (`Tamoz::Core::LEGACY_SKILL_EPOCH`),
+      # shared with the moved toolbox's empty-snapshot `skill_epoch`.
       LEGACY_PROMPT_SURFACE_DIGEST = "legacy:none"
 
       STRING = :string
@@ -265,7 +263,7 @@ module Tamoz
           defaults = {}
           defaults["profile_id"] = LEGACY_PROFILE_ID unless migrated.key?("profile_id")
           defaults["profile_digest"] = LEGACY_PROFILE_DIGEST unless migrated.key?("profile_digest")
-          defaults["skill_epoch"] = LEGACY_SKILL_EPOCH unless migrated.key?("skill_epoch")
+          defaults["skill_epoch"] = Tamoz::Core::LEGACY_SKILL_EPOCH unless migrated.key?("skill_epoch")
           unless migrated.key?("prompt_surface_digest")
             defaults["prompt_surface_digest"] = LEGACY_PROMPT_SURFACE_DIGEST
           end

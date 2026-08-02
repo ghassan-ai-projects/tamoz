@@ -5,7 +5,7 @@ require "json"
 require "psych"
 
 module Tamoz
-  module Agent
+  module Tools
     # Agent Skills (P9). A skill is a directory holding `SKILL.md` plus optional
     # `references/`, `assets/`, and `scripts/`. It supplies *instructions and inert
     # resources* and nothing else.
@@ -28,7 +28,9 @@ module Tamoz
     module Skills
       SNAPSHOT_FORMAT_VERSION = 1
 
-      Error = Class.new(Tamoz::Agent::Error)
+      # The base is the core taxonomy, never an agent constant: the whole module
+      # runs in the clean environment with only tamoz-core loaded (P16-05).
+      Error = Class.new(Tamoz::Core::ToolError)
 
       TRUSTS = %w[bundled operator workspace].freeze
       DECLARED_RISKS = %w[elevated guarded read_only].freeze
@@ -154,7 +156,7 @@ module Tamoz
 
       module_function
 
-      def canonical(value) = Deliberation.canonical(value)
+      def canonical(value) = Tamoz::Core.canonical(value)
 
       def digest_of(domain, value)
         "sha256:#{Digest::SHA256.hexdigest(domain + value)}"
@@ -318,7 +320,7 @@ module Tamoz
           end
 
           @sources = sources.sort_by(&:id).freeze
-          @bindings = Plan.deep_freeze(bindings.dup)
+          @bindings = Tamoz::Core.deep_freeze(bindings.dup)
           @limits = limits
         end
 
@@ -446,9 +448,9 @@ module Tamoz
             license: fields["license"],
             compatibility: fields["compatibility"],
             declared_risk: metadata.fetch("tamoz.risk", DEFAULT_DECLARED_RISK),
-            metadata: Plan.deep_freeze(metadata),
-            extra: Plan.deep_freeze(fields.fetch("extra")),
-            requested_capabilities: Plan.deep_freeze(fields.fetch("allowed-tools")),
+            metadata: Tamoz::Core.deep_freeze(metadata),
+            extra: Tamoz::Core.deep_freeze(fields.fetch("extra")),
+            requested_capabilities: Tamoz::Core.deep_freeze(fields.fetch("allowed-tools")),
             body: body.dup.freeze,
             manifest_digest: Skills.digest_of(
               MANIFEST_DIGEST_DOMAIN, JSON.generate(Skills.canonical(fields.fetch("raw")))
@@ -458,7 +460,7 @@ module Tamoz
             ),
             tree_digest: tree_digest(entries),
             # `SkillResource` is a frozen Data with frozen members, so freezing the
-            # map is enough; `Plan.deep_freeze` only accepts JSON-shaped values.
+            # map is enough; `Tamoz::Core.deep_freeze` only accepts JSON-shaped values.
             resource_index: index.freeze
           )
         end

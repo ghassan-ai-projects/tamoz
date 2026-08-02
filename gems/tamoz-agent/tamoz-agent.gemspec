@@ -9,6 +9,7 @@ TamozGemspec.build(
   summary: "Deliberative agent runtime for Tamoz",
   description: "Plan, review, execute, verify, remember, and improve over Tamoz graphs.",
   dependencies: [
+    ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],
     ["ruby_llm", "~> 1.16.0"]

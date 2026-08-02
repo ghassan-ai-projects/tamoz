@@ -185,7 +185,7 @@ module Tamoz
         record = state[:session]
         return unless record
 
-        stored = record.fetch("skill_epoch", SessionRecords::LEGACY_SKILL_EPOCH)
+        stored = record.fetch("skill_epoch", Tamoz::Core::LEGACY_SKILL_EPOCH)
         current = toolbox.skill_epoch
         return if stored == current
 

@@ -672,7 +672,8 @@ class AgentSessionKillMatrixTest < Minitest::Test
   end
 
   def run_child(context, mode:, seam:, environment: {})
-    load_paths = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent].flat_map do |gem|
+    # P16: the child loads tamoz/agent, which now requires tamoz/tools.
+    load_paths = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]
     end
     env = {
