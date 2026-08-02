@@ -1,13 +1,13 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: DR-4 — stale durable-request framework fix
-Last completed product checkpoints: P10 — governed MCP client/host (closed; scorecard 17
-cases, 14 successes, decision pass, 4/4 hard gates, safety 0; D-8 real-model action fix
-also closed — read-only AND action mode proven end to end against a real model); P10-D2/
-H/full-E-conformance deferred with entry conditions
-Canonical next action: merge and verify the DR-4 implementation worktree per
-docs/DR4_STALE_REQUEST_PLAN.md, then DR-5, then P16 (single-active-phase order)
+Current phase: P17 — governed websearch capability
+Last completed product checkpoints: P10 (closed), D-8 (real-model action proven), DR-4
+(stale-request), DR-5 (profile machinery), P16 (tools gem — scorecard byte-identical),
+evals substrate (DR-3 + assertion variance); scorecard 17 cases / 14 successes / pass /
+4/4 hard gates / safety 0
+Canonical next action: implement P17 per docs/P17_WEBSEARCH_PLAN.md, then P11, P12, P13,
+P14, P18, P15 (single-active-phase order)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 

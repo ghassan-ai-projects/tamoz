@@ -1,11 +1,11 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `864aeaf` (P10 closed, D-8 closed; DR-4/DR-5/P16 implementations
-in parallel worktrees awaiting ordered merge)
-Current phase: `DR-4` — stale durable-request framework fix
-Next action: merge and verify the DR-4 implementation under
-`docs/DR4_STALE_REQUEST_PLAN.md`; then DR-5, then P16, per the single-active-phase order.
+Implementation baseline: `7afe1ff` (P10, D-8, DR-4, DR-5, P16, evals substrate all closed;
+scorecard 17/14/pass)
+Current phase: `P17` — governed websearch capability
+Next action: implement P17 per `docs/P17_WEBSEARCH_PLAN.md` (worktree); merge, gate, then
+the 26-probe critic round; then P11 per the single-active-phase order.
 This review does not re-plan or assess the active implementation.
 
 This is the execution document for another agent continuing Tamoz from the current state.
