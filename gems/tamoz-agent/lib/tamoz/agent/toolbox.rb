@@ -207,7 +207,7 @@ module Tamoz
         unless names.include?(normalized_name)
           raise ToolError, "unknown tool #{normalized_name.inspect}"
         end
-        raise ToolError, "tool arguments must be an object" unless arguments.is_a?(Hash)
+        raise ToolArgumentError, "tool arguments must be an object" unless arguments.is_a?(Hash)
 
         normalized_arguments = arguments.transform_keys(&:to_s)
         case normalized_name
@@ -221,46 +221,46 @@ module Tamoz
           reject_unknown!(normalized_arguments, %w[path query])
           validate_path_argument!(normalized_arguments.fetch("path", "."))
           query = normalized_arguments.fetch("query")
-          raise ToolError, "query must be a string" unless query.is_a?(String)
-          raise ToolError, "query must not be empty" if query.empty?
-          raise ToolError, "query exceeds 256 bytes" if query.bytesize > 256
-          raise ToolError, "query must not contain a null byte" if query.include?("\0")
-          raise ToolError, "query must be UTF-8 encoded" unless query.encoding == Encoding::UTF_8
-          raise ToolError, "query must be valid UTF-8" unless query.valid_encoding?
+          raise ToolArgumentError, "query must be a string" unless query.is_a?(String)
+          raise ToolArgumentError, "query must not be empty" if query.empty?
+          raise ToolArgumentError, "query exceeds 256 bytes" if query.bytesize > 256
+          raise ToolPolicyError, "query must not contain a null byte" if query.include?("\0")
+          raise ToolArgumentError, "query must be UTF-8 encoded" unless query.encoding == Encoding::UTF_8
+          raise ToolArgumentError, "query must be valid UTF-8" unless query.valid_encoding?
         when "apply_patch"
           validate_path_argument!(normalized_arguments.fetch("path"))
           digest = normalized_arguments.fetch("expected_sha256")
           unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
-            raise ToolError, "expected_sha256 must be 64 lowercase hex characters"
+            raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
           end
 
           has_legacy = normalized_arguments.key?("before") || normalized_arguments.key?("after")
           has_compound = normalized_arguments.key?("replacements")
           if has_legacy && has_compound
-            raise ToolError, "apply_patch accepts either before/after or replacements, not both"
+            raise ToolArgumentError, "apply_patch accepts either before/after or replacements, not both"
           end
 
           if has_compound
             reject_unknown!(normalized_arguments, %w[expected_sha256 path replacements])
             replacements = normalized_arguments.fetch("replacements")
             unless replacements.is_a?(Array) && !replacements.empty?
-              raise ToolError, "replacements must be a non-empty array"
+              raise ToolArgumentError, "replacements must be a non-empty array"
             end
             if replacements.length > MAX_REPLACEMENTS
-              raise ToolError, "replacements exceeds #{MAX_REPLACEMENTS}"
+              raise ToolArgumentError, "replacements exceeds #{MAX_REPLACEMENTS}"
             end
             replacements.each_with_index do |entry, index|
               unless entry.is_a?(Hash)
-                raise ToolError, "replacements[#{index}] must be an object"
+                raise ToolArgumentError, "replacements[#{index}] must be an object"
               end
               unless entry.key?("before") && entry.key?("after")
-                raise ToolError, "replacements[#{index}] must contain before and after keys"
+                raise ToolArgumentError, "replacements[#{index}] must contain before and after keys"
               end
               validate_patch_text!(entry.fetch("before"), name: "replacements[#{index}].before", empty: false)
               validate_patch_text!(entry.fetch("after"), name: "replacements[#{index}].after", empty: true)
               unknown = entry.keys - %w[before after]
               unless unknown.empty?
-                raise ToolError, "replacements[#{index}] has unknown keys: #{unknown.sort.join(", ")}"
+                raise ToolArgumentError, "replacements[#{index}] has unknown keys: #{unknown.sort.join(", ")}"
               end
             end
           else
@@ -271,18 +271,18 @@ module Tamoz
         when "run_check"
           reject_unknown!(normalized_arguments, %w[name])
           check_name = normalized_arguments.fetch("name")
-          raise ToolError, "check name must be a string" unless check_name.is_a?(String)
-          raise ToolError, "unknown configured check #{check_name.inspect}" unless checks.key?(check_name)
+          raise ToolArgumentError, "check name must be a string" unless check_name.is_a?(String)
+          raise ToolArgumentError, "unknown configured check #{check_name.inspect}" unless checks.key?(check_name)
         when "create_file"
           reject_unknown!(normalized_arguments, %w[path content expected_sha256 mode])
           validate_path_argument!(normalized_arguments.fetch("path"))
           validate_file_text!(normalized_arguments.fetch("content"))
           expected = normalized_arguments.fetch("expected_sha256")
           unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
-            raise ToolError, "expected_sha256 must be 64 lowercase hex characters"
+            raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
           end
           actual = Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
-          raise ToolError, "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
+          raise ToolArgumentError, "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
           mode = normalized_arguments.fetch("mode", "0644")
           validate_mode!(mode)
           validate_create_path!(normalized_arguments.fetch("path"))
@@ -292,7 +292,7 @@ module Tamoz
         end
         normalized_arguments.freeze
       rescue KeyError => error
-        raise ToolError, "missing tool argument #{error.key.inspect}"
+        raise ToolArgumentError, "missing tool argument #{error.key.inspect}"
       end
 
       def execute(name, arguments)
@@ -458,11 +458,11 @@ module Tamoz
 
       def read_file(arguments)
         path = resolve(arguments.fetch("path"), type: :file)
-        raise ToolError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
+        raise ToolArgumentError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
 
         content = path.read(encoding: Encoding::UTF_8)
-        raise ToolError, "file is not valid UTF-8 text" unless content.valid_encoding?
-        raise ToolError, "file is not text" if content.include?("\0")
+        raise ToolArgumentError, "file is not valid UTF-8 text" unless content.valid_encoding?
+        raise ToolArgumentError, "file is not text" if content.include?("\0")
 
         <<~TEXT.chomp
           File: #{arguments.fetch("path")}
@@ -496,7 +496,7 @@ module Tamoz
           content = path.read(encoding: Encoding::UTF_8)
           unless content.valid_encoding?
             relative = path.relative_path_from(root)
-            raise ToolError, "#{relative}: file is not valid UTF-8 text"
+            raise ToolArgumentError, "#{relative}: file is not valid UTF-8 text"
           end
 
           content.each_line.with_index(1) do |line, number|
@@ -547,14 +547,14 @@ module Tamoz
 
       def prepare_patch(arguments)
         path = resolve(arguments.fetch("path"), type: :file, allow_symlinks: false)
-        raise ToolError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
+        raise ToolArgumentError, "file exceeds #{MAX_FILE_BYTES} bytes" if path.size > MAX_FILE_BYTES
 
         content = path.read(encoding: Encoding::UTF_8)
-        raise ToolError, "file is not valid UTF-8 text" unless content.valid_encoding?
-        raise ToolError, "file is not text" if content.include?("\0")
+        raise ToolArgumentError, "file is not valid UTF-8 text" unless content.valid_encoding?
+        raise ToolArgumentError, "file is not text" if content.include?("\0")
         expected = arguments.fetch("expected_sha256")
         actual = Digest::SHA256.hexdigest(content)
-        raise ToolError, "file changed: expected digest #{expected}, observed #{actual}" unless actual == expected
+        raise ToolArgumentError, "file changed: expected digest #{expected}, observed #{actual}" unless actual == expected
 
         replacements = if arguments.key?("replacements")
                          build_compound_replacements(content, arguments.fetch("replacements"))
@@ -563,12 +563,12 @@ module Tamoz
                        end
         replacements.sort_by! { |entry| entry.fetch(:byte_start) }
         replacements.each_cons(2) do |left, right|
-          raise ToolError, "replacements overlap" if left.fetch(:byte_end) > right.fetch(:byte_start)
+          raise ToolArgumentError, "replacements overlap" if left.fetch(:byte_end) > right.fetch(:byte_start)
         end
 
         after_content = apply_replacements(content, replacements)
         if after_content.bytesize > MAX_FILE_BYTES
-          raise ToolError, "patched file exceeds #{MAX_FILE_BYTES} bytes"
+          raise ToolArgumentError, "patched file exceeds #{MAX_FILE_BYTES} bytes"
         end
 
         result = {
@@ -640,7 +640,7 @@ module Tamoz
           File.link(temp.path, target_path.to_s)
           published = true
         rescue Errno::EEXIST
-          raise ToolError, "file already exists"
+          raise ToolArgumentError, "file already exists"
         rescue SystemCallError => error
           raise ToolError, "atomic create failed: #{error.class}"
         ensure
@@ -654,9 +654,9 @@ module Tamoz
       end
 
       def revalidate_parent!(parent)
-        raise ToolError, "parent directory does not exist" unless parent.exist?
-        raise ToolError, "parent is not a directory" unless parent.directory?
-        raise ToolError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
+        raise ToolArgumentError, "parent directory does not exist" unless parent.exist?
+        raise ToolArgumentError, "parent is not a directory" unless parent.directory?
+        raise ToolPolicyError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
       end
 
       def render_create_receipt(display_path, prepared)
@@ -688,18 +688,18 @@ module Tamoz
 
       def validate_create_path!(raw_path)
         text = String(raw_path)
-        raise ToolError, "path must name a file" if text.empty? || text == "." || text.end_with?("/")
+        raise ToolArgumentError, "path must name a file" if text.empty? || text == "." || text.end_with?("/")
 
         lexical = @root.join(text).cleanpath
-        raise ToolError, "path must name a file" if lexical == @root
+        raise ToolArgumentError, "path must name a file" if lexical == @root
         prefix = "#{@root}#{File::SEPARATOR}"
-        raise ToolError, "path escapes the workspace root" unless lexical.to_s.start_with?(prefix)
-        raise ToolError, "file already exists" if File.exist?(lexical)
+        raise ToolPolicyError, "path escapes the workspace root" unless lexical.to_s.start_with?(prefix)
+        raise ToolArgumentError, "file already exists" if File.exist?(lexical)
 
         parent = lexical.dirname
-        raise ToolError, "parent directory does not exist" unless parent.exist?
-        raise ToolError, "parent is not a directory" unless parent.directory?
-        raise ToolError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
+        raise ToolArgumentError, "parent directory does not exist" unless parent.exist?
+        raise ToolArgumentError, "parent is not a directory" unless parent.directory?
+        raise ToolPolicyError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
 
         lexical
       rescue SystemCallError
@@ -707,16 +707,16 @@ module Tamoz
       end
 
       def validate_file_text!(value)
-        raise ToolError, "content must be a string" unless value.is_a?(String)
-        raise ToolError, "content exceeds #{MAX_FILE_BYTES} bytes" if value.bytesize > MAX_FILE_BYTES
-        raise ToolError, "content must not contain a null byte" if value.include?("\0")
-        raise ToolError, "content must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
-        raise ToolError, "content must be valid UTF-8" unless value.valid_encoding?
+        raise ToolArgumentError, "content must be a string" unless value.is_a?(String)
+        raise ToolArgumentError, "content exceeds #{MAX_FILE_BYTES} bytes" if value.bytesize > MAX_FILE_BYTES
+        raise ToolPolicyError, "content must not contain a null byte" if value.include?("\0")
+        raise ToolArgumentError, "content must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
+        raise ToolArgumentError, "content must be valid UTF-8" unless value.valid_encoding?
       end
 
       def validate_mode!(value)
-        raise ToolError, "mode must be a string" unless value.is_a?(String)
-        raise ToolError, "mode must be an octal permission string (e.g. \"0644\")" unless value.match?(/\A0[0-7]{3}\z/)
+        raise ToolArgumentError, "mode must be a string" unless value.is_a?(String)
+        raise ToolArgumentError, "mode must be an octal permission string (e.g. \"0644\")" unless value.match?(/\A0[0-7]{3}\z/)
       end
 
       def build_compound_replacements(content, replacements)
@@ -726,9 +726,9 @@ module Tamoz
           before_bytes = before.b
           occurrences = content_bytes.scan(before_bytes).length
           if occurrences.zero?
-            raise ToolError, "patch text was not found"
+            raise ToolArgumentError, "patch text was not found"
           elsif occurrences < group.length
-            raise ToolError, "patch text requested #{group.length} times but found #{occurrences} occurrences"
+            raise ToolArgumentError, "patch text requested #{group.length} times but found #{occurrences} occurrences"
           end
 
           offset = 0
@@ -752,8 +752,8 @@ module Tamoz
         content_bytes = content.b
         before_bytes = before.b
         occurrences = content_bytes.scan(before_bytes).length
-        raise ToolError, "patch text was not found" if occurrences.zero?
-        raise ToolError, "patch text is ambiguous: found #{occurrences} occurrences" if occurrences > 1
+        raise ToolArgumentError, "patch text was not found" if occurrences.zero?
+        raise ToolArgumentError, "patch text is ambiguous: found #{occurrences} occurrences" if occurrences > 1
 
         byte_start = content_bytes.index(before_bytes)
         byte_end = byte_start + before_bytes.bytesize
@@ -903,49 +903,62 @@ module Tamoz
 
       def resolve(raw_path, type:, allow_symlinks: true)
         text = String(raw_path)
-        raise ToolError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
+        raise ToolPolicyError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
 
         lexical = root.join(text).cleanpath
-        path = lexical.realpath
         prefix = "#{root}#{File::SEPARATOR}"
+        # Lexical containment is checked before the filesystem is touched. `realpath`
+        # raises ENOENT for a missing component, and that rescue classifies the failure
+        # as a repairable argument mistake; without this check an escape attempt at a
+        # path that happens not to exist would be misclassified as recoverable.
+        unless lexical == root || lexical.to_s.start_with?(prefix)
+          raise ToolPolicyError, "path escapes the workspace root"
+        end
+
+        path = lexical.realpath
         unless path == root || path.to_s.start_with?(prefix)
-          raise ToolError, "path escapes the workspace root"
+          raise ToolPolicyError, "path escapes the workspace root"
         end
         if !allow_symlinks && lexical.to_s != path.to_s
-          raise ToolError, "patch path must not contain symlinks"
+          raise ToolPolicyError, "patch path must not contain symlinks"
         end
         if type == :file && !path.file?
-          raise ToolError, "path is not a file"
+          raise ToolArgumentError, "path is not a file"
         elsif type == :directory && !path.directory?
-          raise ToolError, "path is not a directory"
+          raise ToolArgumentError, "path is not a directory"
         end
 
         path
+      rescue Errno::ENOENT, Errno::ENOTDIR
+        # `realpath` reports a missing component before the `path.file?` test can, so a
+        # target the planner simply got wrong arrives here rather than at "path is not a
+        # file". It is an argument mistake, not an environment failure.
+        raise ToolArgumentError, "path does not exist"
       rescue SystemCallError
         raise ToolError, "path is unavailable"
       end
 
       def validate_path_argument!(raw_path)
-        raise ToolError, "path must be a string" unless raw_path.is_a?(String)
+        raise ToolArgumentError, "path must be a string" unless raw_path.is_a?(String)
 
         text = raw_path
-        raise ToolError, "path contains a null byte" if text.include?("\0")
-        raise ToolError, "path exceeds 4096 bytes" if text.bytesize > 4096
-        raise ToolError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
+        raise ToolPolicyError, "path contains a null byte" if text.include?("\0")
+        raise ToolArgumentError, "path exceeds 4096 bytes" if text.bytesize > 4096
+        raise ToolPolicyError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
       end
 
       def validate_patch_text!(value, name:, empty:)
-        raise ToolError, "#{name} must be a string" unless value.is_a?(String)
-        raise ToolError, "#{name} must not be empty" if !empty && value.empty?
-        raise ToolError, "#{name} exceeds #{MAX_PATCH_BYTES} bytes" if value.bytesize > MAX_PATCH_BYTES
-        raise ToolError, "#{name} must not contain a null byte" if value.include?("\0")
-        raise ToolError, "#{name} must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
-        raise ToolError, "#{name} must be valid UTF-8" unless value.valid_encoding?
+        raise ToolArgumentError, "#{name} must be a string" unless value.is_a?(String)
+        raise ToolArgumentError, "#{name} must not be empty" if !empty && value.empty?
+        raise ToolArgumentError, "#{name} exceeds #{MAX_PATCH_BYTES} bytes" if value.bytesize > MAX_PATCH_BYTES
+        raise ToolPolicyError, "#{name} must not contain a null byte" if value.include?("\0")
+        raise ToolArgumentError, "#{name} must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
+        raise ToolArgumentError, "#{name} must be valid UTF-8" unless value.valid_encoding?
       end
 
       def reject_unknown!(arguments, allowed)
         unknown = arguments.keys - allowed
-        raise ToolError, "unknown tool arguments: #{unknown.sort.join(", ")}" unless unknown.empty?
+        raise ToolArgumentError, "unknown tool arguments: #{unknown.sort.join(", ")}" unless unknown.empty?
       end
     end
   end
