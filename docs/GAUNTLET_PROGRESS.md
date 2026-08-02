@@ -1024,6 +1024,32 @@ secret-scrub out of scope. **Slice 3 CLOSED; slice 4 next** (agent glue: McpCapa
 session-record `mcp_catalogs` pinning, resume guard, §10.2 adversarial suite, scorecard case
 16 `agent.mcp-governed-call`).
 
+### Round 17 — P10 slice 4 gate verified (critic pending)
+
+Slice 4 landed `d0e537e` (17 files, +2020/−35): `McpCapabilitySource` (thin, duck-typed,
+no tamoz-mcp dependency — source-qualified `mcp:server/name` ids, descriptor-digest pinning,
+approval policy `:unknown_effects`/`:read_only`, shallow no-I/O validate); session-record
+optional `mcp_catalogs` pin with legacy `{}` sentinel (RECORD_VERSION stays 1);
+`verify_mcp_binding!` hooked into `guard_state!` so resume/continue/recover fail closed;
+5 routing touchpoints in session_nodes/deliberation (inert when `mcp` nil); scorecard case
+16 `agent.mcp-governed-call` with oracle proof (pinned digest carried, epoch stop on churn
+→ `CatalogSnapshotUnavailableError` no-I/O, `needs_input` → durable interrupt + headless
+typed deny, credential env admission rejected, teardown no-process); **advB proven at the
+caller journal** (journaled call + MRTR reissue each produce exactly the expected wire lines
+once; re-driving the identical journal entry returns the receipt with zero new wire
+requests — inv 21 exactly-once).
+
+Coordinator gate verified at `d0e537e`: `rake ci` **751 runs / 0 failures** under BOTH
+locales (29,950 assertions each); scorecard **16 cases / 13 successes / decision pass /
+4/4 hard gates / safety 0**, the 15 existing cases byte-identical, report deterministic
+across seeds and locales; no orphan processes.
+
+Disclosed by the builder: v1 glue cannot durably suspend an MCP `input_required` mid-perform
+(mid-flight effect row at a pause → `:wait`/LeaseLostError on resume) — executor surfaces
+the interrupt as a typed terminal error; elicitation proven at the tamoz-mcp level; within
+the plan's v1 boundary. advC (durable circuit) unchanged — DR-2 owns it. Harsh critic with
+the held-out slice-4 probes is in flight.
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
