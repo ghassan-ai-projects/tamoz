@@ -592,6 +592,198 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ---
 
+### Round 10 — P8-E trusted-profile adversarial proofs (P8 closed)
+
+P8's central claim was asserted, not tested: that a malicious repository profile cannot
+gain tools, credentials, endpoints, or execution. Round 10 attacked it and merged the
+result at `0ed3944`.
+
+Hardening (the WIP checkpoint, finished and verified):
+
+- FIFO/non-regular profile files rejected without blocking (`O_NONBLOCK` + fstat);
+- multi-document YAML, aliases in key position, and complex collection keys are typed
+  rejections *before* `safe_load` — an alias key resolves to its anchor, defeating the
+  literal-key duplicate scan, so it had to be caught in the parser pass;
+- `.tamoz` matched case-folded: macOS/Windows resolve `.Tamoz/` to the same entry, so
+  exact-case matching let a suggestion be addressed as authority by changing case;
+- a profile stored inside its own `canonical_root` is refused outright (§3.1);
+- relative check `argv[0]` carrying a separator refused in the profile *and* in Toolbox —
+  a check spawns with the untrusted workspace as cwd, so `bin/check` executes repository
+  content;
+- credential-shaped env vars stripped from check children (invariant 24: check output
+  feeds prompts, streams, and the durable log);
+- `tamoz profile import` installs the exact previewed bytes at 0600 from the first write;
+- preview renders checks/model roles/budgets/policy — the operator now confirms exactly
+  the authority being granted.
+
+Proofs: ~20 new adversarial tests (root swap re-adoption, oversized/non-UTF-8 input,
+key aliases, complex keys, FIFO, case-folded suggestion dir, inside-root and nested
+profiles, dot/relative argv[0], `TAMOZ_PROFILE` id-vs-cwd-file ambiguity, cross-profile
+resume takeover blocked, captured-byte import, credential env classification). Fixtures
+moved outside the workspace root to honor §3.1.
+
+Scorecard: 14th case `agent.profile-trusted-boundary` — a malicious
+`.tamoz/suggested-profile.yaml` (fake tools, disabled approvals, `api_base`, generic
+credential ref, embedded secret) never activates; the session pins the trusted profile;
+the secret reaches no stream, session record, or durable store. Aggregate 11/14,
+`decision: pass`, 4/4 hard gates, unsafe=0/false-positive=0/incomplete=0.
+Gate: `rake ci` 553 runs / 0 failures under both locales.
+
+Still disclosed, not reopened: §5.3 model-role checkpoint recording + budget
+intersection, §5.4 candidate-transition application, §5.5 rule 3 old-digest toolbox
+reconstruction — changed-digest resume fails closed. Critic pass for P8 still pending
+(quota).
+
+---
+
+### Round 9 — D-7 tool-error surfacing and bounded repair (merged)
+
+Session 2's live-model run exposed that action mode died on the first exact-match miss
+with a blank `Error:` line, and that a `ToolError` terminated the session instead of
+feeding the repair loop — contradicting invariant 17. Session 3 finished the fix and
+merged it at `35c2ffb`.
+
+What landed:
+
+- **Error taxonomy** (`errors.rb`, `error.rb`): `ToolError` now opts in to
+  `Tamoz::DisclosableMessage`; `ToolPolicyError` (containment, symlinks, null bytes,
+  stale before-state) is always terminal; only `ToolArgumentError` (text miss, stale
+  digest, ambiguous match, missing target, shape/encoding) is `repairable?`. Disclosure
+  is normalized through `Error.disclosable_message` — UTF-8 scrubbed, control characters
+  stripped, bounded at 512 bytes, locale-independent.
+- **Bounded repair** (`session_nodes.rb`, `runtime.rb`): a repairable rejection becomes
+  one typed observation (`failure` record with `failure_signature`) and re-enters the
+  *existing* P2 loop — same `repair_attempt` counter, same `seen_failure_signatures`
+  channel, so total repair work is bounded exactly as before. Discovery/read-only phases
+  keep the rejection as evidence and continue. Policy rejections and approval denials
+  still terminate; a regression test proves each.
+- **CLI surfacing** (`cli.rb`): `:error` parts never carried a `"message"` key — the CLI
+  read one and printed blank lines. It now reports `safe_message` plus the failing node.
+  A second real defect found while finishing the WIP: `run_with_stream` reset the captured
+  error on every call, and the drain loop's final empty `run_next` poll erased it before
+  the summary printed. The reset is gone.
+- **Scorecard**: `agent.stale-digest` redefined — a stale digest is now typed evidence;
+  the model re-offers the same stale plan and the repeated-action stop ends the session.
+  Nothing mutates and the model's `satisfied: true` claim is still refused. Aggregate
+  moved 9→10 task successes with all safety counters at 0.
+
+Evidence: `rake ci` 535 runs / 0 failures under both `en_US.UTF-8` and `C` locales on the
+frozen branch; scorecard 13 cases, 10 successes, `decision: pass`, 4/4 hard gates,
+unsafe=0, false-positive=0, incomplete=0. Fixed behavioural case:
+`test/agent_tool_error_recovery_test.rb` (13 runs), design record
+`docs/reviews/AGENT_TOOL_ERROR_RECOVERY_CORRECTION.md`. Critic pass still pending (quota).
+
+---
+
+### Session 2 handoff — stopped at a usage limit
+
+`main` is clean and green at `15f7dd8`: 522 runs / 0 failures, scorecard 13 cases, 9
+successes, `decision: pass`, 4/4 hard gates, safety counters 0. Verified by running, after
+cleanup, not before.
+
+**The headline result of this session: the agent was run against a real model for the first
+time, and it half-works.**
+
+Read-only mode works end to end against DeepSeek (`deepseek-chat`):
+
+```
+$ tamoz --root W --provider deepseek --model deepseek-chat ask "How many Ruby files are here?"
+There are 2 Ruby files: calculator.rb and calculator_test.rb.
+Verification: satisfied
+```
+
+Action mode does not. On a sandbox `Calculator#add` that wrongly computes `a - b`, with
+`--allow-changes` and a real configured check, the node trace was
+`intake → deliberate → step_gate → step_execute → evaluate` twice, then a third
+`step_execute` raising `Tamoz::Agent::ToolError` — and the terminal showed literally
+`Error: ` followed by `tamoz: session failed`. The file was never modified.
+
+**D-7 — the agent is not usable for coding work (severity: critical for the product goal).**
+Three linked defects, all confirmed by running the real agent:
+
+- **D-7a** `cli.rb:549` prints `part.data["message"]`, but the error event carries
+  `safe_message`. The key does not exist, so every failure renders as a blank `Error:` line.
+- **D-7b** `NodeError::SAFE_MESSAGE` is "A workflow step failed." For a coding agent the
+  operator must be told *which* tool failed and *why* — "patch text was not found", "file
+  changed: expected digest …, observed …". That text is generated by Tamoz from the model's
+  own arguments and filesystem metadata; it is not provider content and not credential
+  material, so invariant 24 does not require hiding it. The policy still needs deciding per
+  error class rather than unredacting `NodeError` wholesale.
+- **D-7c, the one that matters.** A `ToolError` during action **terminates the session**
+  instead of feeding the bounded repair loop. Invariant 17 says "Invalid arguments, denial,
+  timeout, and declared external failures become typed tool results". A non-matching `before`
+  string is squarely in that first category. Real models routinely reproduce source text with
+  a one-character slip, so the first such miss ends the run — with a blank message. The fix
+  must NOT turn policy violations (root escape, symlink, null byte) or approval denials into
+  retryable values, and the boundary must be encoded in types rather than string-matching.
+
+**Credential exposure, found and fixed.** A `.env` holding a live DeepSeek API key sat in the
+repository root **not git-ignored**, while several agents were making commits. It was never
+committed and no key-shaped string exists in any tracked file — but the only reason was that
+the dotenv line in `.gitignore` was commented out. Fixed at `cce735e`. Invariant 24 forbids
+secret values in durable records; the repository is a durable record.
+
+**Preserved but NOT on `main`.** Three side branches, each labelled in its own commit message
+so none can be mistaken for a product checkpoint:
+
+| Branch | Head | State |
+|---|---|---|
+| `wip-d7-tool-error-recovery` | (WIP) | ~502 lines addressing D-7a/b/c. Unverified, stopped mid-way through updating test expectations. |
+| `wip-p8e-profile-hardening` | (WIP) | Trusted-profile loader hardening. Unverified, stopped while re-running adversarial probes. |
+| `worktree-agent-a6088313fb93fc259` | `42a6117` | P9-D + P9-A are real reviewed commits; `4c05c74` and `42a6117` are both unverified WIP. |
+
+**Still open, in priority order:**
+
+1. **P8-E remains OPEN.** The adversarial fuzz of the trusted-profile boundary was started but
+   not finished. P8's product claim — "a malicious repository profile can neither change
+   checks nor gain tools/network/credentials" — is still asserted rather than tested, and both
+   P9 and P10 inherit their authority guarantees from it.
+2. **P9 is not merge-ready.** D and A are sound; B/C/D2/E are partial and unverified. Its
+   "zero authority gained from content" gate stays CONDITIONAL on P8-E.
+3. **D-7** — the gap between "passes its phases" and "works when you run it".
+4. **No critic pass has ever completed.** Critics for P6, P7, P8 and P9 were all launched;
+   every one died to a session limit before producing a finding. Every "complete" mark from P6
+   onward rests on the deterministic gate plus the builder's own self-review — weaker evidence
+   than this project's protocol asks for.
+
+---
+
+### Session 1 handoff — paused at a usage limit
+
+This session ended on a usage limit, not on a completed round. Recorded honestly so the next
+session resumes from fact rather than from optimism.
+
+**Landed and gate-verified on `main`:**
+
+| Commit | Content | Gate |
+|---|---|---|
+| `f74a794` | P8-B — profiles bound to session/checkpoint/cache epochs; candidate transitions never mutate in-flight authority | UTF-8 522 runs / 28,273 assertions / 0 failures · C 522 runs / 28,276 / 0 failures · scorecard 13 cases, 9 successes, `pass`, 4/4 hard gates, safety counters 0 |
+
+P8-B was verified under **both** locales and the scorecard **before** it was committed, not
+after. Nothing was committed on the strength of an agent's report.
+
+**Preserved but NOT on `main`** — branch `worktree-agent-a6088313fb93fc259`:
+
+| Commit | Status |
+|---|---|
+| `5f66099` P9-D — evaluated skills plan + adversarial plan review | committed by the builder |
+| `be832a4` P9-A — inert skill compiler, tree digest, catalog epoch | committed by the builder |
+| `4c05c74` WIP P9-B — progressive skill use | **UNVERIFIED, DO NOT MERGE** — preservation checkpoint only |
+
+`4c05c74` is a snapshot taken when the builder was interrupted mid-way through writing the
+P9-B test suite. It has not passed the gate and has not been reviewed. It exists so the work
+is recoverable, and is labelled in its own commit message so it cannot be mistaken for a
+product checkpoint.
+
+**Never ran:** the P6 critic and the P8/P9 critics all died to session limits before doing any
+work. This is why P6 is still recorded as *gate-verified, not adversarially verified*.
+
+**Incidental fix:** `1b7c64d` intended to ignore the embedded worktrees directory but added
+`/.worktrees/` while the real path is `.claude/worktrees/`, so the rule never matched and the
+directory showed as untracked. Corrected here.
+
+---
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -600,9 +792,11 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
-| P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, scorecard 9/13, safety zero |
-| P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) — loader, toolbox bind, CLI surface; P8-E adversarial proofs + scorecard case remaining |
-| P9–P15 | pending | not started |
+| P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, safety zero |
+| D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
+| P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
+| P9 evaluated skills | pending | **D + A landed on side branch `worktree-agent-a6088313fb93fc259`** (`5f66099`, `be832a4`); P9-B is unverified WIP (`4c05c74`). None of it is on `main`. |
+| P10–P15 | pending | not started |
 
 ---
 
@@ -633,30 +827,53 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
    Diagnose before P15 evidence pinning.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
    after a kill, and the `:retry` request-recovery latent defect.
-8. **P8-E is not done** — the §8.3 adversarial corpus (permissions, symlinks, duplicate
-   keys, unknown fields, root swaps, command injection, environment leakage, revoked
-   grants, resume under changed profiles) and the 14th scorecard case
-   `profile_trusted_boundary` remain. The 9/13 scorecard does not cover P8.
-9. **P8-B deferred machinery** — `ProfileTransition` candidate records (§5.4) and
-   old-digest resume with reconstructed toolbox (§5.5 rule 3); changed-digest resume
-   currently fails closed. Model-role checkpoint recording and budget intersection
-   (§5.3) are also unwired.
-10. P9–P15 remain unimplemented.
+8. **P8 deferred machinery** — §5.3 model-role checkpoint recording and budget
+   intersection, §5.4 candidate-transition *application* (the registry records them;
+   only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
+   old-digest resume with reconstructed toolbox; changed-digest resume currently fails
+   closed. Fold into a dedicated design round, not silently into P9.
+9. P9–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Implement **P8-E** per `docs/P8_TRUSTED_PROFILES_PLAN.md` §8.2/§8.3: adversarial profile
-tests plus the 14th scorecard case `profile_trusted_boundary` (drive a malicious
-`.tamoz/suggested-profile.yaml` that tries to add tools/checks/credentials; prove it can
-neither become authority nor change the activated profile's checks; update the 13→14
-identity pins and regenerate fixtures with `script/generate_agent_smoke_fixtures`).
-Then decide whether the deferred §5.3/§5.4 machinery (model-role checkpoint recording,
-budget intersection, ProfileTransition) folds into P8-E or gets its own design round.
-When subagent quota returns, run the deferred independent critic passes over P6, P7, and
-P8, and schedule the D-6 stale-resume framework fix as its own reviewed round.
+Finish **P9** from the side branch `worktree-agent-a6088313fb93fc259`: P9-D (`5f66099`)
+and P9-A (`be832a4`) are landed there; P9-B/C/E are unverified WIP (`4c05c74`). Verify,
+review, gate, and merge per the full protocol — do not fast-forward unverified work.
+Then the deferred §5.3/§5.4 profile machinery as its own design round, the D-6
+stale-resume framework fix, and the deferred independent critic passes over P6, P7,
+P8, and D-7 when subagent quota returns.
 
-Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or connect real physical actuators. The committed design checkpoint is
-`cab974f`; the last product checkpoint is `a019167`.
+### Resume checklist for the next session
+
+Run this first; it is cheap and tells you the truth about where things stand:
+
+```sh
+cd /Users/ghassan/my-projects/tamoz
+git status --short && git log --oneline -5
+git branch -v | grep worktree-agent          # P9 work lives here, not on main
+LC_ALL=en_US.UTF-8 rbenv exec bundle exec rake ci
+LC_ALL=C           rbenv exec bundle exec rake ci
+LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
+```
+
+Expected at `0ed3944`: clean worktree; 553 runs / 0 failures under both locales; scorecard
+14 cases, 11 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
+
+Then, in priority order:
+
+1. **P9 from the side branch** — `5f66099` and `be832a4` are real reviewed commits;
+   `4c05c74` is unverified WIP. None has been through a critic. Do not fast-forward
+   any of it onto `main` without the full protocol.
+2. **The deferred critic passes over P6, P7, P8 and D-7.** Critic agents have repeatedly
+   died to session limits before producing findings. Every "complete" mark for P6–P8
+   currently rests on the deterministic gate plus the builder's own self-review.
+   That is weaker evidence than this project's own protocol asks for.
+
+The judging harness (gate, blind A/B, five held-out probes) lives in the session scratchpad
+and is deliberately uncommitted, so a builder cannot read or edit its own exam. It will need
+recreating in a new session; its design is described in §1.
+
+Do not treat `.claude/worktrees/` as product output. Do not push, publish, release, or
+connect real physical actuators. The last product checkpoint on `main` is **`f74a794`**.

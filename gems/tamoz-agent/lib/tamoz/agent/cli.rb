@@ -32,6 +32,7 @@ module Tamoz
         @env = env
         @cancellation = nil
         @model_factory = model_factory
+        @stream_error = nil
       end
 
       def run(argv)
@@ -151,7 +152,7 @@ module Tamoz
       def validate_profile_usage!(options, subcommand)
         return unless options[:profile]
 
-        unless %w[ask resume continue follow-up follow_up followup redirect].include?(subcommand)
+        unless %w[ask resume continue follow-up follow_up followup redirect profile].include?(subcommand)
           raise OptionParser::InvalidArgument,
                 "--profile is not supported for #{subcommand}"
         end
@@ -200,6 +201,7 @@ module Tamoz
 
         profile = load_operator_profile(options)
         thread_id = resolve_thread_id(options)
+        profile = resolve_session_authority(options, thread_id, profile, boundary: true)
         run_durable(options, thread_id, profile:) do |session, request_id, owner_id|
           drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
         end
@@ -209,8 +211,8 @@ module Tamoz
         resume_options = parse_resume_options(argv)
         thread_id = extract_thread!(argv)
         profile = load_operator_profile(options)
+        profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
-          guard_profile_resume!(session, thread_id, profile)
           session.verify_skill_binding!(thread: thread_id)
           drive_resume(session, thread_id:, request_id:, owner_id:, options:, resume_options:)
         end
@@ -219,8 +221,8 @@ module Tamoz
       def cmd_continue(options, argv)
         thread_id = extract_thread!(argv)
         profile = load_operator_profile(options)
+        profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
-          guard_profile_resume!(session, thread_id, profile)
           session.verify_skill_binding!(thread: thread_id)
           drive_continue(session, thread_id:, request_id:, owner_id:, options:)
         end
@@ -279,8 +281,8 @@ module Tamoz
         raise OptionParser::MissingArgument, "TASK" if task.empty?
 
         profile = load_operator_profile(options)
+        profile = resolve_session_authority(options, thread_id, profile, boundary: true)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
-          guard_profile_resume!(session, thread_id, profile)
           session.verify_skill_binding!(thread: thread_id)
           request = session.app.durable_runner.submit(
             {"task" => task},
@@ -304,8 +306,8 @@ module Tamoz
         raise OptionParser::MissingArgument, "new task" if task.empty?
 
         profile = load_operator_profile(options)
+        profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
-          guard_profile_resume!(session, thread_id, profile)
           session.verify_skill_binding!(thread: thread_id)
           session.app.durable_runner.submit(
             {"task" => task},
@@ -507,6 +509,9 @@ module Tamoz
           emitter: emitter
         )
         prompts = []
+        # `@stream_error` is deliberately not reset here: the drain loop calls
+        # `run_with_stream` once more after the failing run (to confirm nothing is
+        # queued), and that empty poll must not erase the reason the operator just saw.
 
         outcome = nil
         worker = Thread.new do
@@ -549,8 +554,21 @@ module Tamoz
         when :interrupt
           prompts << part
         when :error
-          @err.puts "Error: #{part.data["message"]}"
+          @stream_error = error_summary(part.data)
+          @err.puts "Error: #{@stream_error}"
         end
+      end
+
+      # An `:error` stream part carries graph/node/task_id/error_class/category/
+      # safe_message. It has never carried a "message" key, so reading one produced a
+      # blank line. Fall through every key that can name the failure so the operator is
+      # never told only that something went wrong.
+      def error_summary(data)
+        reason = data["safe_message"].to_s.strip
+        reason = data["error_class"].to_s.strip if reason.empty?
+        reason = "the session failed" if reason.empty?
+        node = data["node"].to_s.strip
+        node.empty? ? reason : "#{reason} (node #{node})"
       end
 
       def render_interrupt_prompt(part, session:, thread_id:)
@@ -700,7 +718,7 @@ module Tamoz
               @out.puts("\nVerification: #{verification.fetch("satisfied", false) ? "satisfied" : "not satisfied"}")
             end
           when :failed
-            @err.puts "tamoz: session failed"
+            @err.puts(@stream_error ? "tamoz: session failed: #{@stream_error}" : "tamoz: session failed")
           when :blocked
             @err.puts "tamoz: session is blocked"
           end
@@ -892,19 +910,17 @@ module Tamoz
         end
       end
 
-      # §5.5: resume under a profile must never silently rebind authority. A
-      # legacy session predates profiles; a different profile id or a changed
-      # digest blocks mutation until an explicit transition exists.
-      def guard_profile_resume!(session, thread_id, profile)
-        return unless profile
+      # §5.4/§5.5: decide, *before* any toolbox or session is built, which profile
+      # is authority for this invocation. A profile edit never reaches an existing
+      # thread by itself: either the thread replays the authority snapshot pinned
+      # in its own checkpoint, or the operator has recorded an explicit candidate
+      # transition that only a turn boundary may consume, or the command fails
+      # closed. Nothing here can widen authority from repository or model content.
+      def resolve_session_authority(options, thread_id, profile, boundary:)
+        return nil unless profile
 
-        view = begin
-          session.view(thread: thread_id)
-        rescue Tamoz::Agent::Error
-          return
-        end
-        record = view.state && view.state[:session]
-        return unless record
+        record = peek_session_record(options, thread_id)
+        return profile unless record
 
         stored_id = record.fetch("profile_id")
         if stored_id == SessionRecords::LEGACY_PROFILE_ID
@@ -914,16 +930,77 @@ module Tamoz
         unless stored_id == profile.profile_id
           raise Profile::AdoptionError,
                 "session #{thread_id} belongs to profile #{stored_id.inspect}, not " \
-                "#{profile.profile_id.inspect}; inspect it with 'tamoz show' instead"
+                "#{profile.profile_id.inspect}; inspect it with 'tamoz show #{thread_id}' instead"
         end
 
         stored_digest = record.fetch("profile_digest")
-        return if stored_digest == profile.canonical_digest
+        return profile if stored_digest == profile.canonical_digest
+
+        if boundary && transition_registry.candidate?(
+          thread_id, profile_id: stored_id, from: stored_digest, to: profile.canonical_digest
+        )
+          @err.puts "Applying operator transition for #{thread_id}: " \
+                    "#{stored_digest} -> #{profile.canonical_digest}."
+          return profile
+        end
+
+        pinned = pinned_authority(record, stored_digest)
+        if pinned && Profile::AdoptionRegistry.new(env: @env).activated?(stored_id, stored_digest)
+          @err.puts "Session #{thread_id} keeps its pinned authority #{stored_digest}; " \
+                    "the edited profile #{profile.canonical_digest} is not applied."
+          return pinned
+        end
 
         raise Profile::AdoptionError,
               "Session was created with profile #{stored_id} digest #{stored_digest}; " \
-              "current profile digest is #{profile.canonical_digest}. Run 'tamoz profile " \
-              "activate --thread #{thread_id} --digest #{stored_digest}' or resume with --read-only."
+              "current profile digest is #{profile.canonical_digest}. Run 'tamoz --profile " \
+              "#{options[:profile]} profile activate --thread #{thread_id} --digest " \
+              "#{stored_digest}' to keep the original authority, or --digest " \
+              "#{profile.canonical_digest} to record a candidate transition; inspect the " \
+              "session read-only with 'tamoz show #{thread_id}'."
+      end
+
+      # The pinned snapshot is replayed through the full profile validator, so a
+      # tampered checkpoint can only narrow the surface or fail closed (§5.4).
+      def pinned_authority(record, stored_digest)
+        snapshot = record["profile_authority"]
+        return nil unless snapshot
+
+        pinned = Profile.from_authority(snapshot)
+        unless pinned.canonical_digest == stored_digest
+          raise Profile::ValidationError,
+                "pinned authority digest #{pinned.canonical_digest} does not match the " \
+                "session record digest #{stored_digest}"
+        end
+
+        pinned
+      end
+
+      # Read-only peek at the durable session record before the real session is
+      # constructed. It never opens a writer and never mutates state.
+      def peek_session_record(options, thread_id)
+        require "tamoz/sqlite"
+
+        path = File.join(resolve_session_dir(options), "#{thread_id}.sqlite3")
+        return nil unless File.file?(path)
+
+        adapter = Tamoz::SQLite::Adapter.new(
+          path:, limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
+        )
+        begin
+          dummy_model = Object.new
+          def dummy_model.generate(**) = "{}"
+          toolbox = Tamoz::Agent::Toolbox.new(root: options[:root])
+          session = Tamoz::Agent::Session.new(model: dummy_model, toolbox:, checkpointer: adapter)
+          state = session.view(thread: thread_id).state
+          state && state[:session]
+        ensure
+          adapter.close
+        end
+      end
+
+      def transition_registry
+        Profile::TransitionRegistry.new(env: @env)
       end
 
       def cmd_profile(options, argv)
@@ -933,8 +1010,90 @@ module Tamoz
         when "list" then profile_list(options)
         when "show" then profile_show(argv)
         when "import" then profile_import(options, argv)
+        when "activate" then profile_activate(options, argv)
         else
           raise OptionParser::InvalidArgument, "unknown profile action: #{action.inspect}"
+        end
+      end
+
+      # §6.5: record an operator-confirmed candidate transition for one thread.
+      # This writes only to operator-owned files; the durable session is never
+      # touched, so in-flight authority cannot change here.
+      def profile_activate(options, argv)
+        thread_id = nil
+        digest = nil
+        OptionParser.new do |value|
+          value.on("--thread THREAD", "Durable thread id") { |entry| thread_id = entry }
+          value.on("--digest DIGEST", "Canonical profile digest to activate") { |entry| digest = entry }
+        end.parse!(argv)
+        raise OptionParser::MissingArgument, "--thread" if thread_id.to_s.empty?
+        raise OptionParser::MissingArgument, "--digest" if digest.to_s.empty?
+        raise OptionParser::MissingArgument, "--profile" if options[:profile].to_s.empty?
+
+        validate_thread_id!(thread_id)
+        unless Profile::DIGEST_PATTERN.match?(digest)
+          raise ArgumentError, "--digest must be a sha256: canonical profile digest"
+        end
+
+        profile = load_operator_profile(options)
+        record = peek_session_record(options, thread_id)
+        raise Profile::AdoptionError, "no durable session #{thread_id}" unless record
+
+        stored_id = record.fetch("profile_id")
+        if stored_id == SessionRecords::LEGACY_PROFILE_ID
+          raise Profile::AdoptionError,
+                "session #{thread_id} predates trusted profiles and has no transition path"
+        end
+        unless stored_id == profile.profile_id
+          raise Profile::AdoptionError,
+                "session #{thread_id} belongs to profile #{stored_id.inspect}, not " \
+                "#{profile.profile_id.inspect}"
+        end
+
+        stored_digest = record.fetch("profile_digest")
+        unless [stored_digest, profile.canonical_digest].include?(digest)
+          raise Profile::AdoptionError,
+                "digest #{digest} is neither the session digest #{stored_digest} nor the " \
+                "loaded profile digest #{profile.canonical_digest}"
+        end
+
+        registry = Profile::AdoptionRegistry.new(env: @env)
+        unless registry.activated?(stored_id, digest)
+          confirm_digest_activation!(options, stored_id, digest)
+          registry.activate(stored_id, digest)
+        end
+
+        if digest == stored_digest
+          @out.puts "Session #{thread_id} keeps profile #{stored_id} digest #{digest}."
+          return 0
+        end
+
+        transition_registry.record(
+          Profile::Transition.new(
+            thread_id:,
+            profile_id: stored_id,
+            from_digest: stored_digest,
+            to_digest: digest,
+            reason: "operator_activate"
+          )
+        )
+        @out.puts "Candidate transition recorded for #{thread_id}: #{stored_digest} -> #{digest}."
+        @out.puts "It takes effect at the next turn boundary; the in-flight session keeps #{stored_digest}."
+        0
+      end
+
+      def confirm_digest_activation!(options, profile_id, digest)
+        if options[:non_interactive]
+          raise Profile::AdoptionError,
+                "digest #{digest} is not activated for #{profile_id}; re-run interactively"
+        end
+
+        @err.puts "Digest #{digest} is not activated for profile #{profile_id}."
+        @err.print "Activate this exact profile digest? [y/N] "
+        @err.flush
+        answer = @input.gets
+        unless answer && %w[y yes].include?(answer.strip.downcase)
+          raise Profile::AdoptionError, "activation not confirmed"
         end
       end
 
@@ -990,7 +1149,8 @@ module Tamoz
         raise OptionParser::MissingArgument, "PATH" if source.to_s.empty?
 
         expanded = File.expand_path(File.path(source))
-        document = Profile.preview(expanded, suggestion: Profile.suggestion_path?(expanded))
+        captured = Profile.preview_source(expanded, suggestion: Profile.suggestion_path?(expanded))
+        document = captured.document
         directory = Profile.profiles_dir(env: @env)
         target = File.join(directory, "#{document.profile_id}.yaml")
         if File.exist?(target) && !force
@@ -1016,8 +1176,14 @@ module Tamoz
 
         FileUtils.mkdir_p(directory, mode: 0o700)
         File.chmod(0o700, directory)
-        bytes = File.binread(expanded)
-        File.write(target, bytes)
+        # Install the validated bytes, created 0600 from the first byte written, so
+        # neither a re-read of a repository-controlled source nor a window of loose
+        # permissions can put content into the operator's profile directory that the
+        # operator never saw and never confirmed.
+        File.open(target, File::WRONLY | File::CREAT | File::TRUNC, 0o600) do |handle|
+          handle.binmode
+          handle.write(captured.bytes)
+        end
         File.chmod(0o600, target)
         Profile::AdoptionRegistry.new(env: @env).activate(
           document.profile_id, document.canonical_digest
@@ -1026,6 +1192,11 @@ module Tamoz
         0
       end
 
+      # The operator decides adoption from this rendering, so it must show every
+      # part of the profile that *is* authority. Omitting the checks meant an
+      # operator confirmed an argv they had never been shown. Credential references
+      # are rendered by env-var name only; a profile can never hold a secret value
+      # (invariant 24), and this surface never resolves one.
       def render_profile(document)
         @out.puts "profile_id: #{document.profile_id}"
         @out.puts "profile_version: #{document.profile_version}"
@@ -1034,8 +1205,30 @@ module Tamoz
         @out.puts "allow_changes: #{document.allow_changes?}"
         @out.puts "tools.allowed: #{document.tools_allowed.join(", ")}"
         @out.puts "tools.approval_required: #{document.tools_approval_required.join(", ")}"
+        render_profile_checks(document)
+        render_profile_model_roles(document)
+        document.budgets.sort.each { |name, value| @out.puts "budgets.#{name}: #{value}" }
+        @out.puts "policy.default_check_safety: #{document.policy.fetch("default_check_safety")}"
+        @out.puts "policy.behavior_version: #{document.policy.fetch("behavior_version")}"
         @out.puts "high_risk: #{document.high_risk?}"
         @out.puts "suggestion: #{document.suggestion}"
+      end
+
+      def render_profile_checks(document)
+        @out.puts "checks: #{document.checks.empty? ? "(none)" : document.checks.length}"
+        document.checks.sort.each do |name, check|
+          argv = check.fetch("argv").map { |entry| entry.inspect }.join(" ")
+          @out.puts "  check #{name} [#{check.fetch("safety")}]: #{argv}"
+        end
+      end
+
+      def render_profile_model_roles(document)
+        @out.puts "model_roles: #{document.model_roles.empty? ? "(none)" : document.model_roles.length}"
+        document.model_roles.sort.each do |name, role|
+          reference = role["credential_ref"]
+          suffix = reference ? " credential_ref=#{reference.fetch("name")}" : ""
+          @out.puts "  role #{name}: #{role.fetch("provider")}/#{role.fetch("model")}#{suffix}"
+        end
       end
 
 

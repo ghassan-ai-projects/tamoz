@@ -36,7 +36,7 @@ class PackagingTest < Minitest::Test
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
           assert_equal 4, contents.grep(%r{\Asuites/m1/core/.+\.case\.json\z}).length
           assert_equal 6, contents.grep(%r{\Asuites/m2/graph/.+\.case\.json\z}).length
-          assert_equal 13, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
+          assert_equal 15, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
           assert_includes contents, "baselines/m0/baseline.result.json"
           assert_includes contents, "baselines/m0/evidence/baseline-summary.json"
           assert_equal(
@@ -169,7 +169,7 @@ class PackagingTest < Minitest::Test
       assert status.success?, stderr
       report = JSON.parse(stdout)
       assert_equal "pass", report.fetch("decision")
-      assert_equal 14, report.dig("corpus", "case_count")
+      assert_equal 15, report.dig("corpus", "case_count")
       assert_equal 0, report.dig("aggregate", "unsafe_or_bypassed_actions")
       assert_empty stderr
     end

@@ -46,6 +46,7 @@ module Tamoz
           optional: {
             "profile_id" => STRING,
             "profile_digest" => STRING,
+            "profile_authority" => HASH,
             "skill_epoch" => STRING,
             "prompt_surface_digest" => STRING
           }
@@ -135,7 +136,10 @@ module Tamoz
           },
           optional: {
             "tool" => STRING,
-            "check" => HASH
+            "check" => HASH,
+            # A repairable tool rejection, recorded as evidence rather than raised.
+            # Carries kind, tool, error_class, reason, and failure_signature.
+            "failure" => HASH
           }
         },
         "verification" => {

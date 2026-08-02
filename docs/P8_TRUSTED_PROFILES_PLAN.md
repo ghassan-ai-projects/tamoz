@@ -274,7 +274,9 @@ A profile load fails closed if any of the following are present:
 |--------------------|-----|-----------|
 | `!ruby/object`, `!ruby/regexp`, tags, or custom YAML constructors | No load-time code execution | YAML safe-load with allowlist |
 | Anchors/aliases | No indirection that hides identity | YAML parser alias expansion with alias count limit |
-| Shell metacharacters in `argv` elements | argv is exact, not shell | Per-element validation; no `$`, `;`, `\|`, `>`, `<`, backticks, `*` |
+| Shell metacharacters in `argv` elements | argv is exact, not shell | Per-element validation; no `$`, `;`, `\|`, `>`, `<`, backticks, `*`, `&` |
+| Control characters in `argv` elements | Newlines and NUL corrupt receipts, logs, and prompts | Per-element scan for `\x00`–`\x1f` and `\x7f`, plus a 4096-byte element cap |
+| Interpreter or wrapper as `argv[0]` | **P8-E correction.** A metacharacter scan alone does not stop command injection: `["bash", "-c", "rm -rf /"]` contains no metacharacter from the list above. argv[0] is the vector that matters, because it decides whether the rest of argv is data or a program. | `argv[0]` basename denylist (`sh`, `bash`, `zsh`, `dash`, `ksh`, `csh`, `fish`, `busybox`, `env`, `eval`, `exec`, `xargs`, `nohup`, `setsid`, `nice`, `stdbuf`, `time`, `timeout`, `script`, `su`, `sudo`, `doas`, `chroot`, `perl`, `python*`, `osascript`, `powershell`, `pwsh`, `cmd`, …); `argv[0]` must not be empty, start with `-`, or end in a path separator |
 | String interpolation syntax (`${...}`, `%{...}`, `{{...}}`, ERB `<%` `%>`) | No templating | Scan each string value |
 | Embedded secrets (high-entropy strings, `BEGIN PRIVATE KEY`, `sk-...`, `AKIA...`) | Credentials stay in credential providers | Heuristic + explicit secret-reference prefix check |
 | `api_key`, `password`, `token`, `secret`, `api_base` keys at any path | Secrets are references, not values; arbitrary endpoints are not allowed in v1 | Schema denylist |
@@ -355,7 +357,27 @@ SessionRecords.build(
 )
 ```
 
-`profile_id` and `profile_digest` are **optional** in the `"session"` record schema so that pre-P8 durable sessions continue to load. The loader supplies deterministic defaults for missing fields:
+Alongside them the record carries an optional `profile_authority` snapshot: the exact
+capability surface the session was started under, in a form that can be replayed without
+re-reading the profile file.
+
+```ruby
+{
+  "profile_id" => ..., "profile_version" => ..., "canonical_digest" => "sha256:...",
+  "canonical_root" => "/abs/path",
+  "model_roles" => {"primary" => {"provider" => ..., "model" => ...}},  # credential_ref stripped
+  "checks" => {"answer" => {"argv" => [...], "safety" => "unsafe"}},
+  "tools" => {"allowed" => [...], "approval_required" => [...]},
+  "policy" => {...}
+}
+```
+
+`credential_ref` is stripped before the snapshot is written, so nothing credential-shaped
+reaches a checkpoint (invariant 24). On replay, `Profile.from_authority` runs the *same*
+validators as a file load, so a corrupted or tampered checkpoint can only narrow the surface
+or fail closed — it can never widen it (invariant 35).
+
+`profile_id`, `profile_digest`, and `profile_authority` are **optional** in the `"session"` record schema so that pre-P8 durable sessions continue to load. The loader supplies deterministic defaults for missing fields:
 
 - `profile_id` defaults to `"legacy"`.
 - `profile_digest` defaults to `"legacy:none"`.
@@ -395,6 +417,29 @@ A profile edit changes its canonical digest. Tamoz never mutates the authority o
 
 This mirrors the behavior-version transition mechanism in AGENT_DESIGN.md §12 and invariant 28.
 
+Candidate transitions live in an operator-side registry beside the adoption registry:
+
+- On Unix: `${XDG_CONFIG_HOME:-~/.config}/tamoz/transitions.yaml`
+- On macOS: `~/Library/Application Support/tamoz/transitions.yaml`
+
+```yaml
+schema_version: 1
+transitions:
+  th_abc:
+    - profile_id: "myproject-prod"
+      from_digest: "sha256:..."
+      to_digest: "sha256:..."
+      reason: "operator_activate"
+```
+
+The registry is mode `0600` and participates in no digest. Recording a candidate writes only
+to this file: the durable session bytes are unchanged, which is how "never mutate in-flight
+authority" is enforced mechanically rather than by convention.
+
+A candidate is consumed only at a **turn boundary** (`ask` on an existing thread,
+`follow-up`). Mid-turn commands (`resume`, `continue`, `redirect`) never consume a candidate;
+they always run under the pinned authority.
+
 ### 5.5 Resume under a changed profile
 
 When resuming a session whose stored `profile_digest` differs from the currently loaded profile:
@@ -402,8 +447,18 @@ When resuming a session whose stored `profile_digest` differs from the currently
 1. Verify the session record `profile_id`. If it is `"legacy"`, the session predates P8; resuming under an explicit `--profile` is rejected, while resume without a profile proceeds in legacy mode.
 2. For P8 sessions, if the stored `profile_id` does not match the currently loaded profile's `profile_id`, the session is loaded read-only for inspection.
 3. If the stored `profile_id` matches and the stored digest is listed in the operator adoption registry for that profile id, resume is allowed and the session keeps its original authority.
-4. If the stored digest is not activated, the session is loaded read-only for inspection; any mutation requires an explicit transition at a turn boundary.
-5. The CLI reports: `Session was created with profile <id> digest X; current profile digest is Y. Run 'tamoz profile activate --thread <id> --digest X' or resume with --read-only.`
+4. If the stored digest is not activated, or the record carries no `profile_authority`
+   snapshot (a pre-P8-B session), the command fails closed. Inspection stays available
+   through `tamoz show <thread>`, which never loads a profile and never mutates.
+5. The CLI reports: `Session was created with profile <id> digest X; current profile digest
+   is Y. Run 'tamoz --profile <p> profile activate --thread <id> --digest X' to keep the
+   original authority, or --digest Y to record a candidate transition; inspect the session
+   read-only with 'tamoz show <id>'.`
+
+Step 4 deviates from the earlier "loads read-only for inspection" wording: a mutation-capable
+command fails closed with a typed `Profile::AdoptionError` instead of degrading to a
+read-only run. Failing closed is strictly stronger, and `tamoz show` already provides the
+read-only surface, so no capability is lost.
 
 `tamoz profile activate` also verifies that the target thread's stored `profile_id` matches the loaded profile before recording a transition.
 
@@ -427,7 +482,7 @@ tamoz profile preview [--from-suggestion PATH] [PROFILE_ID]
 tamoz profile import --from PATH --id ID [--force]
 tamoz profile list
 tamoz profile show ID
-tamoz profile activate --thread THREAD --digest DIGEST
+tamoz --profile PROFILE profile activate --thread THREAD --digest DIGEST
 ```
 
 ### 6.3 `tamoz profile preview`
@@ -457,9 +512,14 @@ tamoz profile activate --thread THREAD --digest DIGEST
 
 ### 6.5 `tamoz profile activate`
 
+- Requires `--profile` so the profile family is explicit and itself adopted.
 - Verifies the digest is in the operator adoption registry for the profile id (or prompts the operator to add it).
 - Verifies the target thread's stored `profile_id` matches the profile id.
-- Records a `ProfileTransition` for the specified thread.
+- Accepts only two digests: the thread's stored digest (re-adopt the original authority, no
+  transition is recorded) or the currently loaded profile's digest (record a candidate
+  transition). Any other digest is rejected.
+- Records a `ProfileTransition` for the specified thread in the operator-side transition
+  registry. The durable session file is not opened for writing and its bytes do not change.
 - Takes effect at the next turn boundary.
 
 ### 6.6 Backward-compatible one-shot mode

@@ -1,10 +1,11 @@
 # Tamoz product execution roadmap
 
 Status: active  
-Current phase: P8 — trusted project profiles
-Last completed product checkpoint: P7 — interactive and resumable CLI
-Canonical next action: implement P8-E adversarial proofs and the profile scorecard case
-per docs/P8_TRUSTED_PROFILES_PLAN.md; P8-A/B/C landed at a019167
+Current phase: P9 — evaluated skills
+Last completed product checkpoint: P8 — trusted project profiles
+Canonical next action: finish P9 from the side branch (P9-B/C/E remain) per
+docs/P9 skills plan; P8 closed at 0ed3944 with scorecard case
+agent.profile-trusted-boundary (14 cases, 11 successes, decision pass)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -47,7 +48,7 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P5 | Reviewed file creation | high | medium | complete `6504398` | create one new bounded file with parent/root policy, exact preview, approval, atomic commit |
 | P6 | Durable session/effect recovery | very high | medium–high | complete `b69701c` (P6-F partial) | SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing |
 | P7 | Interactive multi-turn CLI | high | medium | complete `7469fa2` | clarify, redirect, continue, and resume one durable session |
-| P8 | Trusted project profiles | medium–high | medium | implementing — A/B/C `a019167`, P8-E remaining | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
+| P8 | Trusted project profiles | medium–high | medium | complete `0ed3944` (§5.3/§5.4 machinery deferred, disclosed) | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
 | P9 | Skills | medium–high | medium | pending | one evaluated content-addressed skill improves a task without granting authority |
 | P10 | MCP client/host slice | high | high | pending | one real server, pinned catalog, supervised transport, local policy, durable effects |
 | P11 | Three-layer memory | high | high | pending | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |

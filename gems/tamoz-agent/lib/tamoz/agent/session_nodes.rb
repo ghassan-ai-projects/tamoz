@@ -92,11 +92,17 @@ module Tamoz
 
       # P8: a profile-bound session pins its authority in the session record. The
       # constructor has already verified the toolbox matches the profile surface
-      # (§5.2), so intake only records the identity.
+      # (§5.2), so intake records the identity plus the exact authority snapshot
+      # (§5.4) that a later resume replays instead of re-reading the profile file.
+      # Editing the file afterwards cannot reach this record.
       def profile_binding
         return {} unless profile
 
-        {profile_id: profile.profile_id, profile_digest: profile.canonical_digest}
+        {
+          profile_id: profile.profile_id,
+          profile_digest: profile.canonical_digest,
+          profile_authority: profile.authority_snapshot
+        }
       end
 
       def deliberate(state, context)
@@ -277,17 +283,30 @@ module Tamoz
         tool = step["tool"]
         return {next_node: "step_execute"} if tool.nil?
 
-        intent = build_intent(step, accepted)
-        unless toolbox.approval_required?(tool)
-          return {next_node: "step_execute", effect_intents: [intent]}
-        end
+        # `effect_intent` and `preview` run the filesystem preflight before any
+        # interrupt is raised and before any journal entry exists. A repairable
+        # rejection here has prepared nothing, so it is pure evidence.
+        begin
+          intent = build_intent(step, accepted)
+          unless toolbox.approval_required?(tool)
+            return {next_node: "step_execute", effect_intents: [intent]}
+          end
 
-        budget = toolbox.maximum_effect_output_bytes(tool)
-        if observation_bytes(state) + budget > MAX_OBSERVATION_BYTES
-          raise ToolError, "insufficient observation budget for #{tool}"
-        end
+          budget = toolbox.maximum_effect_output_bytes(tool)
+          if observation_bytes(state) + budget > MAX_OBSERVATION_BYTES
+            raise ToolError, "insufficient observation budget for #{tool}"
+          end
 
-        preview = toolbox.preview(tool, step.fetch("arguments"))
+          preview = toolbox.preview(tool, step.fetch("arguments"))
+        rescue ToolArgumentError => error
+          return tool_failure_update(
+            state,
+            step:,
+            tool:,
+            error_class: error.class.name,
+            reason: error.message
+          )
+        end
         preview_digest = Digest::SHA256.hexdigest(preview)
         descriptor = {
           "kind" => "approve_tool",
@@ -367,7 +386,27 @@ module Tamoz
           raise LeaseLostError,
                 "another owner still holds effect #{outcome.effect_key}"
         when :failed
-          raise ToolError, tool_error_message(outcome)
+          unless repairable_outcome?(outcome)
+            raise ToolError, tool_error_message(outcome)
+          end
+
+          return tool_failure_update(
+            state,
+            step:,
+            tool:,
+            error_class: tool_error_class(outcome),
+            reason: tool_error_message(outcome),
+            effect_receipt: SessionRecords.build(
+              "effect_receipt",
+              effect_key: outcome.effect_key,
+              step_id: step.fetch("id"),
+              operation: intent.fetch("operation"),
+              safety: intent.fetch("safety"),
+              status: "failed",
+              attempt_number: outcome.attempt_number,
+              reconciliation: outcome.reconciliation
+            )
+          )
         end
 
         output = String(outcome.value.fetch("output"))
@@ -411,6 +450,19 @@ module Tamoz
         steps = accepted.fetch("plan").fetch("steps")
         cursor = state.fetch(:step_cursor)
         check = current_pass_check(state)
+
+        # A repairable tool rejection short-circuits the rest of the plan: running the
+        # remaining steps would only produce a configured-check failure that masks the
+        # real reason. Only the action and repair phases have a repair budget, so in
+        # discovery and read-only the failure stays evidence and the plan continues.
+        failure = current_pass_tool_failure(state)
+        if failure
+          return bounded_repair(
+            state,
+            failure.fetch("failure_signature"),
+            repeated_reason: "repeated_tool_failure"
+          )
+        end
 
         if check
           return {next_node: "verify", terminal_reason: "check_passed"} if check.fetch("passed")
@@ -575,7 +627,7 @@ module Tamoz
         observed = EffectDispatcher.observe(toolbox.root.join(intent.fetch("path")))
         return if observed.fetch("state") == intent.fetch("before_state")
 
-        raise ToolError,
+        raise ToolPolicyError,
               "workspace no longer matches the approved before state for " \
               "#{intent.fetch("path")}"
       end
@@ -645,11 +697,101 @@ module Tamoz
           "output" => record.fetch("output")
         }
         payload["check"] = record.fetch("check") if record.key?("check")
+        payload["failure"] = record.fetch("failure") if record.key?("failure")
         payload
       end
 
       def observation_bytes(state)
         state.fetch(:observations).sum { |record| record.fetch("output").bytesize }
+      end
+
+      # Invariant 17: an invalid-argument tool rejection is a typed result, not a
+      # propagating failure. It becomes one observation carrying the exact reason, which
+      # the repair planner reads as evidence, plus a `failure` record the evaluator uses
+      # to enter the bounded repair loop. Nothing was mutated: `apply_patch` and
+      # `create_file` complete their whole preflight before any write.
+      def tool_failure_update(state, step:, tool:, error_class:, reason:, effect_receipt: nil)
+        phase = state.fetch(:phase)
+        failure = {
+          "kind" => "tool_error",
+          "tool" => String(tool),
+          "error_class" => String(error_class),
+          "reason" => String(reason),
+          "failure_signature" => tool_failure_signature(
+            tool:,
+            reason:,
+            arguments: step.fetch("arguments")
+          )
+        }
+        update = {
+          step_cursor: state.fetch(:step_cursor) + 1,
+          next_node: "evaluate",
+          observations: [
+            SessionRecords.build(
+              "observation",
+              phase:,
+              repair_attempt: state.fetch(:repair_attempt),
+              step_id: step.fetch("id"),
+              tool: String(tool),
+              output: tool_failure_output(tool, reason),
+              failure:
+            )
+          ]
+        }
+        update[:effect_receipts] = [effect_receipt] if effect_receipt
+        update
+      end
+
+      def tool_failure_output(tool, reason)
+        <<~TEXT.chomp
+          Tool #{tool} was rejected: #{reason}
+          The workspace was not changed. Re-read the target with read_file and use its
+          exact current bytes and digest before proposing a different action.
+        TEXT
+      end
+
+      # A check's signature digests its rich output, so identical evidence means the
+      # world did not change. A tool rejection's reason is coarse: "patch text was not
+      # found" is byte-identical for two completely different wrong `before` strings.
+      # The faithful analogue of "the evidence I got" therefore includes the arguments
+      # that were rejected. An identical retry still matches here, and is in any case
+      # already refused by the repeated-action-signature stop one layer earlier.
+      def tool_failure_signature(tool:, reason:, arguments:)
+        Digest::SHA256.hexdigest(
+          JSON.generate(
+            "kind" => "tool_error",
+            "tool" => String(tool),
+            "reason" => String(reason),
+            "arguments_digest" => SessionRecords.digest(Deliberation.canonical(arguments))
+          )
+        )
+      end
+
+      def repairable_outcome?(outcome)
+        error = outcome.error
+        error.is_a?(Hash) && error["repairable"] == true
+      end
+
+      def tool_error_class(outcome)
+        error = outcome.error
+        return "Tamoz::Agent::ToolError" unless error.is_a?(Hash)
+
+        String(error["class"] || "Tamoz::Agent::ToolError")
+      end
+
+      # Only the action and repair phases own a repair budget. Discovery and read-only
+      # keep the rejection as evidence and continue with the next planned step.
+      def current_pass_tool_failure(state)
+        phase = state.fetch(:phase)
+        return nil unless %w[action repair].include?(phase)
+
+        attempt = state.fetch(:repair_attempt)
+        record = state.fetch(:observations).reverse.find do |entry|
+          entry.key?("failure") &&
+            entry.fetch("phase") == phase &&
+            entry.fetch("repair_attempt") == attempt
+        end
+        record&.fetch("failure")
       end
 
       # Only checks from the current phase pass decide routing. A failed check from an
@@ -666,10 +808,17 @@ module Tamoz
       end
 
       def failed_check(state, check)
-        signature = check.fetch("failure_signature")
+        bounded_repair(state, check.fetch("failure_signature"), repeated_reason: "repeated_failure")
+      end
+
+      # The single P2 repair loop. Failed configured checks and repairable tool
+      # rejections share one `repair_attempt` counter and one `seen_failure_signatures`
+      # channel, so the total repair work a session may do is bounded exactly as before
+      # this path existed.
+      def bounded_repair(state, signature, repeated_reason:)
         repair_attempt = state.fetch(:repair_attempt)
         if state.fetch(:seen_failure_signatures).include?(signature)
-          return {next_node: "verify", terminal_reason: "repeated_failure"}
+          return {next_node: "verify", terminal_reason: repeated_reason}
         end
         if repair_attempt >= max_repair_attempts
           return {

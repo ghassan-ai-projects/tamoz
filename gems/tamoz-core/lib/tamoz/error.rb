@@ -7,6 +7,22 @@ module Tamoz
   module FatalRuntimeFailure
   end
 
+  # Opt-in marker for exception classes whose `message` is authored entirely by Tamoz.
+  #
+  # `safe_message` is default-deny because an arbitrary `StandardError` reaching a node
+  # boundary may carry a provider response body, a connection string, an environment
+  # value, or a third-party gem's stringified request. A class may include this marker
+  # only when every message it can produce is built exclusively from string literals in
+  # Tamoz source, values Tamoz itself computed (digests, counts, limits), or identifiers
+  # the same operator already sees on an approved surface. It must never interpolate a
+  # provider payload, a third-party exception message, file contents, or a
+  # `Tamoz::Secret`.
+  #
+  # Including the marker does not disclose text verbatim: `NodeError#safe_message`
+  # normalizes it through `Error.disclosable_message` first.
+  module DisclosableMessage
+  end
+
   class Error < StandardError
     module Metadata
       attr_reader :category, :safe_message
@@ -37,8 +53,23 @@ module Tamoz
     RETRYABLE = false
     USER_VISIBLE = false
     SAFE_MESSAGE = "The operation could not be completed."
+    MAX_DISCLOSED_BYTES = 512
+    DISCLOSURE_CONTROL_CHARACTERS = /[[:cntrl:]]+/u.freeze
 
     include Metadata
+
+    # Normalizes a `DisclosableMessage` message for a stream or instrumentation
+    # payload. Locale-independent by construction: the encoding is named explicitly and
+    # never read from the environment. Returns `fallback` when nothing usable remains.
+    def self.disclosable_message(value, fallback:)
+      text = String(value).dup.force_encoding(Encoding::UTF_8)
+      text = text.scrub("?") unless text.valid_encoding?
+      text = text.gsub(DISCLOSURE_CONTROL_CHARACTERS, " ").strip
+      if text.bytesize > MAX_DISCLOSED_BYTES
+        text = "#{text.byteslice(0, MAX_DISCLOSED_BYTES).scrub("").rstrip}..."
+      end
+      text.empty? ? fallback : text.freeze
+    end
   end
 
   class TimeoutError < Error
@@ -76,6 +107,17 @@ module Tamoz
       @original = original
       super(message)
       set_backtrace(original.backtrace) if original&.backtrace
+    end
+
+    # Default-deny stays the rule: an original that has not opted in still reports
+    # `SAFE_MESSAGE`. A class that includes `Tamoz::DisclosableMessage` has declared
+    # that it authors its own text, so the operator gets the actionable reason instead
+    # of "A workflow step failed."
+    def safe_message
+      generic = super
+      return generic unless @original.is_a?(DisclosableMessage)
+
+      Error.disclosable_message(@original.message, fallback: generic)
     end
   end
 

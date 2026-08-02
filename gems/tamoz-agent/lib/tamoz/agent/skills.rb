@@ -172,14 +172,14 @@ module Tamoz
       # a plan review issue rather than a surprise at execution time.
       def read_resource_entry!(record, path, limits: LIMITS)
         entry = record.resource_index[path]
-        raise ToolError, "skill_resource_unknown: #{describe(path)} is not indexed" unless entry
+        raise ToolArgumentError, "skill_resource_unknown: #{describe(path)} is not indexed" unless entry
         unless READABLE_AREAS.include?(entry.area)
-          raise ToolError,
+          raise ToolArgumentError,
                 "skill_resource_not_readable: #{entry.path} is in #{entry.area}/ and is " \
                 "indexed for identity only"
         end
         if entry.bytes > limits.fetch(:max_read_bytes)
-          raise ToolError,
+          raise ToolArgumentError,
                 "skill_resource_too_large: #{entry.path} is #{entry.bytes} bytes, " \
                 "limit #{limits.fetch(:max_read_bytes)}"
         end
@@ -192,7 +192,7 @@ module Tamoz
         absolute = File.join(record.directory, entry.path)
         content = read_verified(absolute, entry)
         unless content.valid_encoding? && !content.include?("\0")
-          raise ToolError, "skill_resource_not_text: #{entry.path} is not UTF-8 text"
+          raise ToolPolicyError, "skill_resource_not_text: #{entry.path} is not UTF-8 text"
         end
 
         content
@@ -201,13 +201,13 @@ module Tamoz
       def read_verified(absolute, entry)
         verify_realpath!(absolute, entry)
         unless defined?(File::NOFOLLOW)
-          raise ToolError, "skill_resource_changed: this platform cannot open without following links"
+          raise ToolPolicyError, "skill_resource_changed: this platform cannot open without following links"
         end
 
         content = File.open(absolute, File::RDONLY | File::NOFOLLOW) do |handle|
           stat = handle.stat
           unless stat.file? && stat.nlink == 1 && stat.size == entry.bytes
-            raise ToolError, "skill_resource_changed: #{entry.path} no longer matches its index"
+            raise ToolPolicyError, "skill_resource_changed: #{entry.path} no longer matches its index"
           end
 
           handle.binmode
@@ -215,22 +215,22 @@ module Tamoz
         end
         unless content.bytesize == entry.bytes &&
                "sha256:#{Digest::SHA256.hexdigest(content)}" == entry.digest
-          raise ToolError, "skill_resource_changed: #{entry.path} digest does not match its index"
+          raise ToolPolicyError, "skill_resource_changed: #{entry.path} digest does not match its index"
         end
 
         # Narrow the intermediate-component window from the far side too.
         verify_realpath!(absolute, entry)
         content.force_encoding(Encoding::UTF_8)
       rescue Errno::ELOOP, Errno::EMLINK
-        raise ToolError, "skill_resource_changed: #{entry.path} became a link"
+        raise ToolPolicyError, "skill_resource_changed: #{entry.path} became a link"
       rescue SystemCallError
-        raise ToolError, "skill_resource_changed: #{entry.path} is unavailable"
+        raise ToolPolicyError, "skill_resource_changed: #{entry.path} is unavailable"
       end
 
       def verify_realpath!(absolute, entry)
         return if File.realpath(absolute) == absolute
 
-        raise ToolError, "skill_resource_changed: #{entry.path} resolves outside its skill tree"
+        raise ToolPolicyError, "skill_resource_changed: #{entry.path} resolves outside its skill tree"
       end
 
       # `describe` keeps caller-supplied text out of an error message unbounded, and
@@ -970,20 +970,20 @@ module Tamoz
           record = @snapshot.records[text]
           return record if record
           if text.include?("/")
-            raise ToolError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
+            raise ToolArgumentError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
           end
 
           candidates = @by_name.fetch(text, [])
           case candidates.length
           when 0
-            raise ToolError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
+            raise ToolArgumentError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
           when 1
             candidates.first
           else
             bound = @bound[text]
             return @snapshot.records.fetch(bound) if bound
 
-            raise ToolError,
+            raise ToolArgumentError,
                   "skill_name_ambiguous: #{Skills.describe(text)} is provided by " \
                   "#{candidates.map(&:id).sort.join(", ")}; load it by source-qualified id"
           end

@@ -145,16 +145,12 @@ module Tamoz
           begin
             value = perform.call
           rescue ToolError => error
-            effects.complete(
-              key:,
-              attempt_token: token,
-              status: :failed,
-              error: {"class" => error.class.name, "message" => error.message}
-            )
+            detail = tool_error_detail(error)
+            effects.complete(key:, attempt_token: token, status: :failed, error: detail)
             return Outcome.new(
               status: :failed,
               value: nil,
-              error: {"class" => error.class.name, "message" => error.message},
+              error: detail,
               effect_key: key,
               attempt_number: decision.record.current_attempt,
               reconciliation:,
@@ -180,6 +176,19 @@ module Tamoz
           raise CheckpointCorruptionError,
                 "unhandled effect decision #{decision.action.inspect}"
         end
+      end
+
+      # Repairability is decided from the exception *type* at the raise site and then
+      # journalled, so a replayed `:failed` decision reaches the same conclusion as the
+      # original attempt without re-deriving anything from message text. A record
+      # written before this field existed has no key, and the reader's `== true` test
+      # therefore treats it as terminal.
+      def tool_error_detail(error)
+        {
+          "class" => error.class.name,
+          "message" => error.message,
+          "repairable" => error.repairable?
+        }.freeze
       end
 
       def terminal_attempt(record)

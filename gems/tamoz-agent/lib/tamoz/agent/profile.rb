@@ -24,6 +24,15 @@ module Tamoz
       SCHEMA_VERSION = 1
       MAX_BYTES = 128 * 1024
       MAX_ALIASES = 32
+      MAX_NESTING = 16
+      # O_NOFOLLOW makes the *open* refuse a symlink, so validation and reading
+      # share one file description and a swap between them cannot be observed.
+      NOFOLLOW = File::Constants.const_defined?(:NOFOLLOW) ? File::Constants::NOFOLLOW : 0
+      # P8-E: opening a FIFO read-only blocks until a writer appears, so a profile
+      # path pointing at a named pipe would hang the loader forever instead of
+      # failing. O_NONBLOCK makes the open return immediately; the regular-file
+      # check on the resulting descriptor then rejects it with a typed error.
+      NONBLOCK = File::Constants.const_defined?(:NONBLOCK) ? File::Constants::NONBLOCK : 0
       DIGEST_DOMAIN = "tamoz.profile.v1\n"
       DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
       PROFILE_ID_PATTERN = /\A[a-z][a-z0-9_-]{0,63}\z/
@@ -46,6 +55,23 @@ module Tamoz
       TOOLS_KEYS = %w[allowed approval_required].freeze
       POLICY_KEYS = %w[
         allow_changes default_check_safety graph_version behavior_version tool_catalog_digest
+      ].freeze
+
+      # A configured check is an exact argv executed without a shell. Metacharacters
+      # are meaningless to `exec`, so rejecting them is defence in depth; the vector
+      # that actually matters is argv[0]. `["bash", "-c", "rm -rf /"]` contains no
+      # metacharacter at all, so a metacharacter scan alone does not stop command
+      # injection. P8-E therefore rejects interpreter and wrapper argv[0] values
+      # outright: a profile names a program, never a shell to interpret a string.
+      SHELL_METACHARACTER_PATTERN = /[$;|><`*&]/
+      # C0 controls plus DEL. Newlines in argv corrupt every downstream log,
+      # prompt, and receipt that renders the command.
+      CONTROL_CHARACTER_PATTERN = /[\x00-\x1f\x7f]/
+      ARGV0_DENYLIST = %w[
+        sh bash zsh dash ksh mksh pdksh csh tcsh fish ash busybox rbash
+        env eval exec source command builtin xargs nohup setsid nice ionice
+        stdbuf time timeout script su sudo doas runuser chroot unshare
+        perl python python2 python3 osascript powershell pwsh cmd
       ].freeze
 
       SECRET_KEY_DENYLIST = %w[api_key password token secret api_base].freeze
@@ -72,10 +98,10 @@ module Tamoz
       Fields = Data.define(
         :profile_id, :profile_version, :canonical_root, :description,
         :model_roles, :budgets, :checks, :tools_allowed, :tools_approval_required,
-        :policy, :canonical_digest, :suggestion
+        :policy, :canonical_digest, :suggestion, :pinned
       ) do
-        def initialize(**members)
-          super(**Profile.deep_freeze(members))
+        def initialize(pinned: false, **members)
+          super(pinned:, **Profile.deep_freeze(members))
         end
 
         def allow_changes? = policy.fetch("allow_changes")
@@ -93,7 +119,30 @@ module Tamoz
                      :profile_id, :profile_version, :canonical_root, :description,
                      :model_roles, :budgets, :checks, :tools_allowed,
                      :tools_approval_required, :policy, :canonical_digest,
-                     :suggestion, :allow_changes?, :high_risk?
+                     :suggestion, :pinned, :allow_changes?, :high_risk?
+
+      # P8-B §5.1/§5.4: the exact capability authority a durable session was
+      # started under, in a form that can be replayed from the checkpoint alone.
+      # Credential references are stripped: a checkpoint never carries anything
+      # credential-shaped (invariant 24), and nothing here can widen authority
+      # because reconstruction re-runs the same validators (invariant 35).
+      def authority_snapshot
+        Profile.deep_freeze(
+          "profile_id" => profile_id,
+          "profile_version" => profile_version,
+          "canonical_digest" => canonical_digest,
+          "canonical_root" => canonical_root,
+          "model_roles" => model_roles.transform_values do |role|
+            role.reject { |key, _| key == "credential_ref" }
+          end,
+          "checks" => checks,
+          "tools" => {
+            "allowed" => tools_allowed,
+            "approval_required" => tools_approval_required
+          },
+          "policy" => policy
+        )
+      end
 
       def self.load(path, env: ENV, adoption_registry: nil, confirm_adoption: nil)
         expanded = File.expand_path(File.path(path))
@@ -119,8 +168,105 @@ module Tamoz
         load_document(File.expand_path(File.path(path)), suggestion:)
       end
 
+      # The exact bytes that produced a validated document, returned alongside it.
+      # `tamoz profile import` installs these rather than re-reading the source: a
+      # second read of a repository-controlled path can return different bytes than
+      # the ones whose digest the operator just confirmed.
+      Source = Data.define(:document, :bytes)
+
+      def self.preview_source(path, suggestion: false)
+        expanded = File.expand_path(File.path(path))
+        captured = nil
+        document = load_document(expanded, suggestion:) { |bytes| captured = bytes }
+        Source.new(document:, bytes: captured)
+      end
+
+      AUTHORITY_KEYS = %w[
+        profile_id profile_version canonical_digest canonical_root model_roles checks tools policy
+      ].freeze
+
+      # P8-B §5.4/§5.5: rebuild the authority a session was pinned to from its
+      # own checkpoint. The snapshot is treated as untrusted input and re-runs
+      # every validator, so a corrupted or tampered checkpoint can only narrow
+      # or fail, never widen. Model roles carry no credential reference, so a
+      # replayed profile can never resolve a credential the operator did not
+      # supply in the currently loaded profile.
+      def self.from_authority(snapshot, source: "<pinned session authority>")
+        unless snapshot.is_a?(Hash)
+          raise ValidationError, "#{source}: pinned profile authority must be a mapping"
+        end
+
+        hash = normalize_keys(snapshot)
+        unknown = hash.keys - AUTHORITY_KEYS
+        unless unknown.empty?
+          raise ValidationError, "#{source}: unknown pinned authority fields #{unknown.sort.inspect}"
+        end
+        missing = AUTHORITY_KEYS - hash.keys - %w[model_roles checks]
+        unless missing.empty?
+          raise ValidationError, "#{source}: pinned authority is missing #{missing.sort.inspect}"
+        end
+
+        digest = hash.fetch("canonical_digest")
+        unless digest.is_a?(String) && DIGEST_PATTERN.match?(digest)
+          raise ValidationError, "#{source}: pinned authority digest is not a sha256: digest"
+        end
+
+        validate_strings!(hash.reject { |key, _| key == "canonical_digest" }, source)
+        synthetic = {
+          "profile" => {
+            "schema_version" => SCHEMA_VERSION,
+            "profile_id" => hash.fetch("profile_id"),
+            "profile_version" => hash.fetch("profile_version"),
+            "canonical_root" => hash.fetch("canonical_root")
+          },
+          "roots" => {"workspace" => hash.fetch("canonical_root")},
+          "model_roles" => hash["model_roles"] || {},
+          "checks" => hash["checks"] || {},
+          "tools" => hash.fetch("tools"),
+          "policy" => hash.fetch("policy")
+        }
+        validate_profile_fields!(synthetic.fetch("profile"), source)
+        validate_roots!(synthetic, synthetic.fetch("profile"), source)
+        validate_model_roles!(synthetic, source)
+        validate_checks!(synthetic, source)
+        tools = validate_tools!(synthetic, source)
+        validate_policy!(synthetic, tools, source)
+        new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
+      end
+
+      # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
+      # same directory entry as `.tamoz/`, so an exact-case component match let a
+      # repository-supplied suggestion be addressed as authority simply by changing
+      # the case of the path. The comparison is case-folded, which over-rejects on a
+      # case-sensitive filesystem and therefore fails closed on every platform.
       def self.suggestion_path?(expanded_path)
-        Pathname.new(expanded_path).each_filename.include?(SUGGESTION_DIRECTORY)
+        Pathname.new(expanded_path).each_filename.any? do |component|
+          component.downcase == SUGGESTION_DIRECTORY
+        end
+      end
+
+      # P8-E: a profile stored inside the very root it grants authority over is
+      # repository-controlled content. Editing the repository would then edit the
+      # authority; the digest check makes that fail closed rather than silently
+      # widen, but §3.1 requires operator-owned storage outside the project, so the
+      # arrangement is refused outright. Suggestions are exempt: being inside the
+      # repository is exactly what makes them evidence.
+      def self.verify_outside_root!(expanded_path, canonical_root, path)
+        directory = File.dirname(expanded_path)
+        loop do
+          if File.identical?(directory, canonical_root)
+            raise ValidationError,
+                  "#{path}: profile must not live inside its own canonical_root " \
+                  "#{canonical_root.inspect}; operator profiles live outside the project"
+          end
+
+          parent = File.dirname(directory)
+          break if parent == directory
+
+          directory = parent
+        end
+      rescue SystemCallError
+        nil
       end
 
       # §3.3 search precedence: explicit flag > TAMOZ_PROFILE (path | id | cwd
@@ -165,6 +311,10 @@ module Tamoz
         File.join(config_dir(env:), "adoption.yaml")
       end
 
+      def self.transitions_path(env: ENV)
+        File.join(config_dir(env:), "transitions.yaml")
+      end
+
       def self.load_document(expanded_path, suggestion:)
         unless suggestion
           if suggestion_path?(expanded_path)
@@ -172,9 +322,13 @@ module Tamoz
                   "#{expanded_path} is inside #{SUGGESTION_DIRECTORY}/ and is evidence " \
                   "only; preview or import it instead of activating it"
           end
-          verify_permissions!(expanded_path)
         end
-        bytes = read_bytes(expanded_path)
+        # P8-E: the same open file description is permission-checked and read, so
+        # replacing the path with a symlink between the two cannot be exploited.
+        bytes = open_verified(expanded_path, permissions: !suggestion) do |handle|
+          read_bytes(handle, expanded_path)
+        end
+        yield bytes if block_given?
         scan_yaml!(bytes, expanded_path)
         data = safe_parse(bytes, expanded_path)
         unless data.is_a?(Hash)
@@ -185,40 +339,77 @@ module Tamoz
         hash.delete("adoption")
         validate_schema!(hash, expanded_path)
         digest = canonical_digest(hash)
-        new(build_fields(hash, digest:, suggestion:))
+        fields = build_fields(hash, digest:, suggestion:)
+        verify_outside_root!(expanded_path, fields.canonical_root, expanded_path) unless suggestion
+        new(fields)
       end
 
-      def self.read_bytes(path)
-        stat = File.stat(path)
+      def self.read_bytes(handle, path)
+        stat = handle.stat
         raise ValidationError, "#{path}: not a regular file" unless stat.file?
         if stat.size > MAX_BYTES
           raise ValidationError, "#{path}: profile exceeds #{MAX_BYTES} bytes"
         end
 
-        bytes = File.binread(path)
+        bytes = handle.read(MAX_BYTES + 1) || +""
+        if bytes.bytesize > MAX_BYTES
+          raise ValidationError, "#{path}: profile exceeds #{MAX_BYTES} bytes"
+        end
+
         text = bytes.dup.force_encoding(Encoding::UTF_8)
         unless text.valid_encoding?
           raise ValidationError, "#{path}: profile is not valid UTF-8"
         end
 
         text
+      end
+
+      # Opens the profile without following a final symlink and verifies the
+      # permission rules against the *open descriptor* (fstat), not against a
+      # path that could be re-pointed afterwards.
+      def self.open_verified(path, permissions: true)
+        handle = File.open(path, File::RDONLY | NOFOLLOW | NONBLOCK)
+        begin
+          unless handle.stat.file?
+            raise PermissionError, "#{path}: profile must be a regular file"
+          end
+
+          verify_handle!(handle, path) if permissions
+          yield handle
+        ensure
+          handle.close
+        end
+      rescue Errno::ELOOP, Errno::EMLINK, Errno::EOPNOTSUPP
+        raise PermissionError, "#{path}: profile must not be a symlink"
       rescue Errno::ENOENT
         raise ValidationError, "#{path}: profile file does not exist"
+      rescue Errno::EISDIR
+        raise ValidationError, "#{path}: profile must be a regular file"
+      rescue Errno::EACCES, Errno::EPERM
+        raise PermissionError, "#{path}: profile is not readable"
       end
 
       def self.verify_permissions!(path)
-        lstat = File.lstat(path)
-        raise PermissionError, "#{path}: profile must not be a symlink" if lstat.symlink?
-        unless lstat.file?
+        open_verified(path) { nil }
+        nil
+      end
+
+      def self.verify_handle!(handle, path)
+        stat = handle.stat
+        unless stat.file?
           raise PermissionError, "#{path}: profile must be a regular file"
         end
-        unless lstat.owned?
+        unless stat.owned?
           raise PermissionError, "#{path}: profile must be owned by the effective user"
         end
-        unless (lstat.mode & 0o777) == 0o600
+        unless (stat.mode & 0o777) == 0o600
           raise PermissionError, "#{path}: profile mode must be exactly 0600"
         end
 
+        verify_parents!(path)
+      end
+
+      def self.verify_parents!(path)
         directory = File.dirname(path)
         immediate = true
         loop do
@@ -248,6 +439,7 @@ module Tamoz
       # containers and aliases also consume a slot in the enclosing mapping.
       def self.scan_yaml!(text, path)
         aliases = 0
+        documents = 0
         max_aliases = MAX_ALIASES
         stack = [] # [:mapping, seen_keys, expecting_key] or [:sequence]
         check_tag = lambda do |tag|
@@ -255,11 +447,25 @@ module Tamoz
             raise ValidationError, "#{path}: YAML tags are not allowed in profiles"
           end
         end
+        # A collection opened in key position is a YAML complex key. Nothing in the
+        # schema has one, and it defeats the literal-key duplicate scan, so it is a
+        # typed rejection rather than something the key allowlist happens to catch.
+        reject_complex_key = lambda do
+          frame = stack.last
+          next unless frame && frame[0] == :mapping && frame[2]
+
+          raise ValidationError, "#{path}: YAML complex (collection) keys are not allowed"
+        end
         note_slot = lambda do |key|
           frame = stack.last
           next unless frame && frame[0] == :mapping
 
           if frame[2]
+            # YAML merge keys splice one mapping into another after parsing, which
+            # would let an anchor introduce keys the duplicate scan never saw.
+            if key == "<<"
+              raise ValidationError, "#{path}: YAML merge keys are not allowed in profiles"
+            end
             if key && frame[1].include?(key)
               raise ValidationError, "#{path}: duplicate key #{key.inspect}"
             end
@@ -268,10 +474,26 @@ module Tamoz
           end
           frame[2] = !frame[2]
         end
+        push = lambda do |frame|
+          if stack.length >= MAX_NESTING
+            raise ValidationError, "#{path}: YAML nesting exceeds #{MAX_NESTING}"
+          end
+
+          stack << frame
+        end
         handler = Class.new(Psych::Handler) do
           define_method(:scalar) do |value, _anchor, tag, _plain, _quoted, _style|
             check_tag.call(tag)
             note_slot.call(value)
+          end
+
+          define_method(:start_document) do |_version, _tags, _implicit|
+            documents += 1
+            if documents > 1
+              raise ValidationError,
+                    "#{path}: a profile is exactly one YAML document; trailing documents " \
+                    "are silently ignored by the loader and are therefore refused"
+            end
           end
 
           define_method(:alias) do |_anchor|
@@ -280,21 +502,33 @@ module Tamoz
               raise ValidationError, "#{path}: too many YAML aliases (limit #{max_aliases})"
             end
 
+            # P8-E: an alias in *key* position resolves to whatever the anchor holds,
+            # so the duplicate-key and merge-key scans below never see the real key.
+            # `policy: {allow_changes: false, *k: true}` with `&k "allow_changes"`
+            # read as a denial but loaded as a grant. A key is a literal scalar.
+            frame = stack.last
+            if frame && frame[0] == :mapping && frame[2]
+              raise ValidationError,
+                    "#{path}: YAML aliases are not allowed in mapping key position"
+            end
+
             note_slot.call(nil)
           end
 
           define_method(:start_mapping) do |_anchor, tag, _implicit, _style|
             check_tag.call(tag)
+            reject_complex_key.call
             note_slot.call(nil)
-            stack << [:mapping, [], true]
+            push.call([:mapping, [], true])
           end
 
           define_method(:end_mapping) { stack.pop }
 
           define_method(:start_sequence) do |_anchor, tag, _implicit, _style|
             check_tag.call(tag)
+            reject_complex_key.call
             note_slot.call(nil)
-            stack << [:sequence]
+            push.call([:sequence])
           end
 
           define_method(:end_sequence) { stack.pop }
@@ -527,16 +761,75 @@ module Tamoz
             if element.include?("\0")
               raise ValidationError, "#{path}: check #{name.inspect} argv contains a NUL byte"
             end
-            if element.match?(/[$;|><`*]/)
+            if CONTROL_CHARACTER_PATTERN.match?(element)
+              raise ValidationError,
+                    "#{path}: check #{name.inspect} argv contains a control character"
+            end
+            if element.bytesize > 4096
+              raise ValidationError,
+                    "#{path}: check #{name.inspect} argv element exceeds 4096 bytes"
+            end
+            if SHELL_METACHARACTER_PATTERN.match?(element)
               raise ValidationError,
                     "#{path}: check #{name.inspect} argv element #{element.inspect} " \
                     "contains shell metacharacters"
             end
           end
+          validate_argv0!(argv.first, name, path)
           unless SAFETIES.include?(check["safety"])
             raise ValidationError, "#{path}: check #{name.inspect} safety must be one of #{SAFETIES.inspect}"
           end
         end
+      end
+
+      # argv[0] names the program that will actually run. A shell, an interpreter
+      # that takes inline source, or a wrapper that re-executes another argv turns
+      # the rest of argv into a program, which is exactly the injection the plan
+      # forbids. Leading dashes are rejected so argv[0] cannot be smuggled as an
+      # option to a downstream launcher.
+      def self.validate_argv0!(program, name, path)
+        unless program.is_a?(String) && !program.empty?
+          raise ValidationError, "#{path}: check #{name.inspect} argv[0] must be a program name"
+        end
+        if program.start_with?("-")
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} must not start with '-'"
+        end
+        if program.end_with?(File::SEPARATOR)
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} must not be a directory"
+        end
+        # P8-E: a configured check runs with the *untrusted workspace* as its working
+        # directory, so a relative argv[0] that contains a separator ("bin/check",
+        # "./tools/run") names a file the repository supplies. That is content
+        # granting itself execution, which invariant 35 forbids. A bare program name
+        # is resolved through PATH (which never contains the workspace) and an
+        # absolute path names an operator-chosen program, so both remain allowed.
+        if separator?(program) && !program.start_with?(File::SEPARATOR)
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a relative path; " \
+                "it would resolve inside the untrusted workspace. Use an absolute path or a " \
+                "bare program name resolved through PATH"
+        end
+
+        basename = File.basename(program).downcase.sub(/\.(exe|bat|cmd|com)\z/, "")
+        if [".", ".."].include?(basename)
+          raise ValidationError,
+                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is not a program"
+        end
+        return unless ARGV0_DENYLIST.include?(basename)
+
+        raise ValidationError,
+              "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a shell or " \
+              "interpreter wrapper; a profile check names a program, not a command string"
+      end
+
+      # True when the value carries a path separator for this platform.
+      def self.separator?(value)
+        return true if value.include?(File::SEPARATOR)
+
+        alternate = File::ALT_SEPARATOR
+        !alternate.nil? && value.include?(alternate)
       end
 
       def self.validate_tools!(hash, path)
@@ -612,7 +905,7 @@ module Tamoz
         value.freeze
       end
 
-      def self.build_fields(hash, digest:, suggestion:)
+      def self.build_fields(hash, digest:, suggestion:, pinned: false)
         profile = hash.fetch("profile")
         tools = hash.fetch("tools")
         checks = (hash["checks"] || {}).transform_values do |check|
@@ -630,7 +923,8 @@ module Tamoz
           tools_approval_required: tools["approval_required"] || [],
           policy: hash.fetch("policy"),
           canonical_digest: digest,
-          suggestion:
+          suggestion:,
+          pinned:
         }
         Fields.new(**new_fields)
       end
@@ -698,6 +992,138 @@ module Tamoz
           Profile.normalize_keys(data)
         rescue Psych::Exception => error
           raise AdoptionError, "#{@path}: adoption registry is unreadable: #{error.message}"
+        end
+      end
+
+      # One operator-recorded candidate profile transition for a thread (§5.4).
+      # A candidate is not authority: it only permits the *next turn boundary*
+      # of that exact thread to move from `from_digest` to `to_digest`.
+      Transition = Data.define(:thread_id, :profile_id, :from_digest, :to_digest, :reason) do
+        def initialize(**members)
+          super(**members.transform_values { |value| String(value).dup.freeze })
+        end
+
+        def to_h_document
+          {
+            "profile_id" => profile_id,
+            "from_digest" => from_digest,
+            "to_digest" => to_digest,
+            "reason" => reason
+          }
+        end
+      end
+
+      # Operator-side candidate transition registry (§5.4/§6.5). Lives beside the
+      # adoption registry, outside any profile file and any repository, mode 0600,
+      # and participates in no digest. Recording a candidate never touches session
+      # state, so in-flight authority cannot be mutated by writing here.
+      class TransitionRegistry
+        REGISTRY_SCHEMA_VERSION = 1
+        REASON_PATTERN = /\A[a-z][a-z0-9_]{0,63}\z/
+        THREAD_PATTERN = /\A[A-Za-z0-9_\-.]{1,64}\z/
+
+        attr_reader :path
+
+        def initialize(path: nil, env: ENV)
+          @path = path || Profile.transitions_path(env:)
+          freeze
+        end
+
+        def candidates(thread_id)
+          document.fetch("transitions").fetch(String(thread_id), []).map do |entry|
+            Transition.new(
+              thread_id: String(thread_id),
+              profile_id: entry.fetch("profile_id"),
+              from_digest: entry.fetch("from_digest"),
+              to_digest: entry.fetch("to_digest"),
+              reason: entry.fetch("reason")
+            )
+          end
+        end
+
+        def candidate?(thread_id, profile_id:, from:, to:)
+          candidates(thread_id).any? do |entry|
+            entry.profile_id == profile_id && entry.from_digest == from && entry.to_digest == to
+          end
+        end
+
+        def record(transition)
+          validate!(transition)
+          Profile.verify_permissions!(@path) if File.exist?(@path)
+          current = File.exist?(@path) ? document : empty_document
+          transitions = current.fetch("transitions")
+          list = transitions.fetch(transition.thread_id, [])
+          entry = transition.to_h_document
+          return transition if list.include?(entry)
+
+          updated = current.merge(
+            "transitions" => transitions.merge(transition.thread_id => list + [entry])
+          )
+          directory = File.dirname(@path)
+          FileUtils.mkdir_p(directory, mode: 0o700)
+          File.chmod(0o700, directory)
+          File.write(@path, Psych.dump(updated))
+          File.chmod(0o600, @path)
+          transition
+        end
+
+        private
+
+        def validate!(transition)
+          unless THREAD_PATTERN.match?(transition.thread_id)
+            raise AdoptionError, "invalid thread id #{transition.thread_id.inspect}"
+          end
+          unless PROFILE_ID_PATTERN.match?(transition.profile_id)
+            raise AdoptionError, "invalid profile id #{transition.profile_id.inspect}"
+          end
+          unless REASON_PATTERN.match?(transition.reason)
+            raise AdoptionError, "invalid transition reason #{transition.reason.inspect}"
+          end
+          [transition.from_digest, transition.to_digest].each do |digest|
+            next if DIGEST_PATTERN.match?(digest)
+
+            raise AdoptionError, "invalid transition digest #{digest.inspect}"
+          end
+        end
+
+        def empty_document
+          {"schema_version" => REGISTRY_SCHEMA_VERSION, "transitions" => {}}
+        end
+
+        def document
+          return empty_document unless File.exist?(@path)
+
+          Profile.verify_permissions!(@path)
+          data = Psych.safe_load(
+            File.binread(@path), permitted_classes: [], permitted_symbols: [], aliases: false
+          )
+          unless valid_document?(data)
+            raise AdoptionError, "#{@path}: transition registry is invalid"
+          end
+
+          Profile.normalize_keys(data)
+        rescue Psych::Exception => error
+          raise AdoptionError, "#{@path}: transition registry is unreadable: #{error.message}"
+        end
+
+        def valid_document?(data)
+          return false unless data.is_a?(Hash)
+          return false unless data["schema_version"] == REGISTRY_SCHEMA_VERSION
+          return false unless data["transitions"].is_a?(Hash)
+
+          data["transitions"].all? do |thread_id, entries|
+            thread_id.is_a?(String) && THREAD_PATTERN.match?(thread_id) &&
+              entries.is_a?(Array) && entries.all? { |entry| valid_entry?(entry) }
+          end
+        end
+
+        def valid_entry?(entry)
+          entry.is_a?(Hash) &&
+            (entry.keys.sort == %w[from_digest profile_id reason to_digest]) &&
+            PROFILE_ID_PATTERN.match?(entry["profile_id"].to_s) &&
+            REASON_PATTERN.match?(entry["reason"].to_s) &&
+            DIGEST_PATTERN.match?(entry["from_digest"].to_s) &&
+            DIGEST_PATTERN.match?(entry["to_digest"].to_s)
         end
       end
     end

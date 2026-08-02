@@ -91,11 +91,11 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
-  def test_all_fourteen_agent_smoke_cases_are_public_verified_and_digest_pinned
+  def test_all_fifteen_agent_smoke_cases_are_public_verified_and_digest_pinned
     cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
 
-    assert_equal 14, cases.length
-    assert_equal 14, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    assert_equal 15, cases.length
+    assert_equal 15, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
     cases.each do |path|
       artifact = Tamoz::Evals::Case.load(path)
       assert_equal "tamoz.agent.smoke", artifact["suite_id"]
