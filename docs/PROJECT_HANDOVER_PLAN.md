@@ -2,9 +2,9 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P8` — trusted project profiles
-Next action: implement P8-E (adversarial/fuzz proofs + scorecard case) per
-`docs/P8_TRUSTED_PROFILES_PLAN.md`; P8-A/B/C landed at `a019167`; P7 is closed
+Current phase: `P9` — evaluated skills
+Next action: finish P9 from the side branch (`worktree-agent-a6088313fb93fc259`):
+P9-D/A are landed there, P9-B/C/E remain; P8 is closed at `0ed3944`
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -60,7 +60,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
-| P8 | **implementing** — A/B/C landed, P8-E remaining | trusted project profiles | `cab974f` | `a019167` |
+| P8 | complete (§5.3/§5.4 machinery deferred, disclosed) | trusted project profiles | `cab974f` | `a019167`, `0ed3944` |
 | P9 | pending | evaluated skills | — | — |
 | P10 | pending | governed MCP client/host | — | — |
 | P11 | pending | three-layer memory | — | — |
@@ -286,8 +286,15 @@ Work packages:
   without opening the durable session for writing.)
 - [x] **P8-C** Add `--profile`, exact preview/import of repository suggestions, and
   operator-confirmed activation. Suggestions never become authority automatically. (`a019167`)
-- [ ] **P8-E** Fuzz permissions, symlinks, duplicate keys, unknown fields, root swaps,
+- [x] **P8-E** Fuzz permissions, symlinks, duplicate keys, unknown fields, root swaps,
   command injection, environment leakage, revoked grants, and resume under changed profiles.
+  (`0ed3944`: FIFO/multi-document/alias-key/complex-key rejection, case-folded `.tamoz`,
+  profile-inside-root refusal, relative check argv[0] refusal in profile and Toolbox,
+  credential-env scrubbing for check children, captured-byte import; scorecard case
+  `agent.profile-trusted-boundary` proves a malicious `.tamoz/` suggestion never becomes
+  authority and leaks no secret. Deferred per disclosure: §5.3 model-role checkpoint
+  recording + budget intersection, §5.4 candidate-transition *application*, §5.5 rule 3
+  old-digest toolbox reconstruction — changed-digest resume fails closed.)
 
 Product proof: the same repository task runs reproducibly from one trusted profile; a
 malicious repository profile can neither change checks nor gain tools/network/credentials.

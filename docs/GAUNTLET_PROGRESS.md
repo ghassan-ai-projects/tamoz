@@ -592,6 +592,50 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ---
 
+### Round 10 — P8-E trusted-profile adversarial proofs (P8 closed)
+
+P8's central claim was asserted, not tested: that a malicious repository profile cannot
+gain tools, credentials, endpoints, or execution. Round 10 attacked it and merged the
+result at `0ed3944`.
+
+Hardening (the WIP checkpoint, finished and verified):
+
+- FIFO/non-regular profile files rejected without blocking (`O_NONBLOCK` + fstat);
+- multi-document YAML, aliases in key position, and complex collection keys are typed
+  rejections *before* `safe_load` — an alias key resolves to its anchor, defeating the
+  literal-key duplicate scan, so it had to be caught in the parser pass;
+- `.tamoz` matched case-folded: macOS/Windows resolve `.Tamoz/` to the same entry, so
+  exact-case matching let a suggestion be addressed as authority by changing case;
+- a profile stored inside its own `canonical_root` is refused outright (§3.1);
+- relative check `argv[0]` carrying a separator refused in the profile *and* in Toolbox —
+  a check spawns with the untrusted workspace as cwd, so `bin/check` executes repository
+  content;
+- credential-shaped env vars stripped from check children (invariant 24: check output
+  feeds prompts, streams, and the durable log);
+- `tamoz profile import` installs the exact previewed bytes at 0600 from the first write;
+- preview renders checks/model roles/budgets/policy — the operator now confirms exactly
+  the authority being granted.
+
+Proofs: ~20 new adversarial tests (root swap re-adoption, oversized/non-UTF-8 input,
+key aliases, complex keys, FIFO, case-folded suggestion dir, inside-root and nested
+profiles, dot/relative argv[0], `TAMOZ_PROFILE` id-vs-cwd-file ambiguity, cross-profile
+resume takeover blocked, captured-byte import, credential env classification). Fixtures
+moved outside the workspace root to honor §3.1.
+
+Scorecard: 14th case `agent.profile-trusted-boundary` — a malicious
+`.tamoz/suggested-profile.yaml` (fake tools, disabled approvals, `api_base`, generic
+credential ref, embedded secret) never activates; the session pins the trusted profile;
+the secret reaches no stream, session record, or durable store. Aggregate 11/14,
+`decision: pass`, 4/4 hard gates, unsafe=0/false-positive=0/incomplete=0.
+Gate: `rake ci` 553 runs / 0 failures under both locales.
+
+Still disclosed, not reopened: §5.3 model-role checkpoint recording + budget
+intersection, §5.4 candidate-transition application, §5.5 rule 3 old-digest toolbox
+reconstruction — changed-digest resume fails closed. Critic pass for P8 still pending
+(quota).
+
+---
+
 ### Round 9 — D-7 tool-error surfacing and bounded repair (merged)
 
 Session 2's live-model run exposed that action mode died on the first exact-match miss
@@ -750,7 +794,7 @@ directory showed as untracked. Corrected here.
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
 | P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, safety zero |
 | D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
-| P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) + **B epoch binding landed** (`f74a794`); **P8-E adversarial fuzz NOT started** — the trust boundary P9 and P10 both depend on is still untested |
+| P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | pending | **D + A landed on side branch `worktree-agent-a6088313fb93fc259`** (`5f66099`, `be832a4`); P9-B is unverified WIP (`4c05c74`). None of it is on `main`. |
 | P10–P15 | pending | not started |
 
@@ -783,29 +827,23 @@ directory showed as untracked. Corrected here.
    Diagnose before P15 evidence pinning.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
    after a kill, and the `:retry` request-recovery latent defect.
-8. **P8-E is not done** — the §8.3 adversarial corpus (permissions, symlinks, duplicate
-   keys, unknown fields, root swaps, command injection, environment leakage, revoked
-   grants, resume under changed profiles) and the 14th scorecard case
-   `profile_trusted_boundary` remain. The 9/13 scorecard does not cover P8.
-9. **P8-B deferred machinery** — `ProfileTransition` candidate records (§5.4) and
-   old-digest resume with reconstructed toolbox (§5.5 rule 3); changed-digest resume
-   currently fails closed. Model-role checkpoint recording and budget intersection
-   (§5.3) are also unwired.
-10. P9–P15 remain unimplemented.
+8. **P8 deferred machinery** — §5.3 model-role checkpoint recording and budget
+   intersection, §5.4 candidate-transition *application* (the registry records them;
+   only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
+   old-digest resume with reconstructed toolbox; changed-digest resume currently fails
+   closed. Fold into a dedicated design round, not silently into P9.
+9. P9–P15 remain unimplemented.
 
 ---
 
 ## 6. Next action
 
-Implement **P8-E** per `docs/P8_TRUSTED_PROFILES_PLAN.md` §8.2/§8.3: adversarial profile
-tests plus the 14th scorecard case `profile_trusted_boundary` (drive a malicious
-`.tamoz/suggested-profile.yaml` that tries to add tools/checks/credentials; prove it can
-neither become authority nor change the activated profile's checks; update the 13→14
-identity pins and regenerate fixtures with `script/generate_agent_smoke_fixtures`).
-Then decide whether the deferred §5.3/§5.4 machinery (model-role checkpoint recording,
-budget intersection, ProfileTransition) folds into P8-E or gets its own design round.
-When subagent quota returns, run the deferred independent critic passes over P6, P7, and
-P8, and schedule the D-6 stale-resume framework fix as its own reviewed round.
+Finish **P9** from the side branch `worktree-agent-a6088313fb93fc259`: P9-D (`5f66099`)
+and P9-A (`be832a4`) are landed there; P9-B/C/E are unverified WIP (`4c05c74`). Verify,
+review, gate, and merge per the full protocol — do not fast-forward unverified work.
+Then the deferred §5.3/§5.4 profile machinery as its own design round, the D-6
+stale-resume framework fix, and the deferred independent critic passes over P6, P7,
+P8, and D-7 when subagent quota returns.
 
 ### Resume checklist for the next session
 
@@ -820,20 +858,17 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected at `f74a794`: clean worktree; 522 runs / 0 failures under both locales; scorecard
-13 cases, 9 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
+Expected at `0ed3944`: clean worktree; 553 runs / 0 failures under both locales; scorecard
+14 cases, 11 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
 
 Then, in priority order:
 
-1. **P8-E** — the adversarial fuzz, per §8.2/§8.3 above. This is the highest-value remaining
-   work, because P9 and P10 both inherit their authority guarantees from a trust boundary
-   that has never been attacked.
-2. **Decide the fate of the P9 side branch.** `5f66099` and `be832a4` are real reviewed
-   commits; `4c05c74` is unverified WIP. None has been through a critic. Do not fast-forward
+1. **P9 from the side branch** — `5f66099` and `be832a4` are real reviewed commits;
+   `4c05c74` is unverified WIP. None has been through a critic. Do not fast-forward
    any of it onto `main` without the full protocol.
-3. **The deferred critic passes over P6, P7 and P8.** Three critic agents were launched and
-   all three died to session limits before producing a single finding. Every "complete" mark
-   for P6/P7/P8 currently rests on the deterministic gate plus the builder's own self-review.
+2. **The deferred critic passes over P6, P7, P8 and D-7.** Critic agents have repeatedly
+   died to session limits before producing findings. Every "complete" mark for P6–P8
+   currently rests on the deterministic gate plus the builder's own self-review.
    That is weaker evidence than this project's own protocol asks for.
 
 The judging harness (gate, blind A/B, five held-out probes) lives in the session scratchpad
