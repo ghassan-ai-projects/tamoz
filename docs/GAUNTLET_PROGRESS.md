@@ -1097,6 +1097,43 @@ corpus under all four treatments (P11-ED follow-on; the null-control mechanism i
 the memory corpus), live layer operator-gated (no live-provider code in repo), the real
 memory store (P11-D/P11-B) — P11-E points the same harness API at it. Critic in flight.
 
+### Round 20 — DR-4, DR-5, P16 merged in order and gated (critics in flight)
+
+The three parallel worktrees merged into main in the pinned order; each merge re-gated by
+the coordinator (both locales + scorecard), conflicts resolved:
+
+- **DR-4** (`5c16bed` via merge, 22 files, +2023/−50): `Tamoz::StaleRequestError <
+  CheckpointError` (RETRYABLE=false); claim-time validator INSIDE the transaction —
+  stale ⇒ `queued→failed` in ONE tx (never observably claimed; the kill-window wedge is
+  impossible by construction, invariant 53); fenced `request.terminal_fail` backstop for
+  the claim→execute race; `drain_to_terminal` renders the typed reason once per request
+  id (incl. deliver-consumed failures); FIFO-wedge test proves R1/R2 stale fail in order
+  and R3 executes. Gate: 814/0 both locales.
+- **DR-5** (`1c6efa1` via merge, 8 files, +1533/−65): `profile_roles` post-override
+  resolution (RC5); TransitionRegistry codec v2 with ONE flocked `consume_if_candidate!`
+  RMW both writers enter (loser falls to pinned replay, never a typed terminal error);
+  `profile_id == "legacy"` refused at load (RC3); credential-ref NAME in the authority
+  snapshot so replay resolves the identical env key (RC4); `ProfileRoleUnavailableError`
+  typed wrap. Gate: 837/0 both locales.
+- **P16** (`8f6b893` via `38d2e94`, 24 files): `tamoz-tools` gem (Toolbox wholesale +
+  Skills whole module, taxonomy → `tamoz-core`, `LEGACY_SKILL_EPOCH`/`canonical`/
+  `TOOL_ERROR_CLASS_NAMES` in core), six object-identical constant aliases, class-name
+  serialization mapping at the 3 sites, explicit rescue sites (never widened), public-api
+  pinned-HASH format with `deprecated: true` aliases, T2 clean-env RUNTIME harness (both
+  skill_epoch branches, run_check, preview, effect_intent, mutations — zero
+  `Tamoz::Agent::*` at runtime), T6 packaged-gem install-in-isolation. **Scorecard
+  BYTE-IDENTICAL to the P16-start baseline (17/14/pass, model_input_bytes 195882)** —
+  behavior-neutral extraction proven on the merged tree. Merge conflicts (public-api.json
+  + test) resolved by taking the pinned-hash format and re-adding DR-4's
+  `StaleRequestError` entry. Gate: 854/0 both locales.
+- Flake class confirmed repeatedly: full-suite runs intermittently fail at one point then
+  re-run green with IDENTICAL totals (kill-matrix/subprocess timing) — P15 evidence
+  pinning owns the root fix; no merged phase regressed.
+- Alias caveat recorded: three STRING-LITERAL error messages in tamoz-tools contain
+  `Tamoz::Agent::` text (truthful via aliases — T1 byte-identity pins; the T2 harness
+  executes every raising path; zero runtime constant references).
+- Critic rounds for DR-4 (38 probes), DR-5 (23 probes), P16 (28 probes) in flight.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
