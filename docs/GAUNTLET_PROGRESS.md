@@ -608,9 +608,20 @@ conformance.
   (256 entries / 4096 description bytes / 64 KiB output). `:stdio` only; `:http` raises
   `ValidationError`. 31 tests / 296 assertions green under both locales; public-api and
   dependency-isolation tests updated.
-- Remaining slices: catalog compiler + supervisor + SDK-built test server; invocation +
-  elicitation + session-record `mcp_catalogs` pinning + resume guard; adversarial suite +
-  16th scorecard case `agent.mcp-governed-call` + full gate.
+- Remaining slices: invocation + elicitation + circuit + session-record `mcp_catalogs`
+  pinning + resume guard; adversarial suite + 16th scorecard case
+  `agent.mcp-governed-call` + full gate.
+
+Slice 2 landed at `534a502`: `Catalog.compile` (protocol-range handshake fail-closed,
+entry budget, duplicate rejection, bounded/stripped descriptions, domain-separated
+digests over canonical NFC JSON, deep-frozen snapshots) and `Supervisor` (exact argv,
+no shell, `unsetenv_others` env restricted to allowlist + resolved credential refs,
+pgroup spawn, group teardown SIGTERM→2s→SIGKILL with grandchild proof, bounded scrubbed
+stderr ring), plus `script/mcp_test_server` built with the official SDK (five tools +
+seven env-flag misbehavior modes). Verified by the coordinator: 45 runs green under
+both locales, no orphaned processes. Disclosed deviations: §5 quarantine simplified to
+fail-whole-snapshot (stricter; SDK bounds `$ref` to same-document); circuit/restart
+backoff and `degraded`/`open` states move to the invocation slice.
 
 ---
 
