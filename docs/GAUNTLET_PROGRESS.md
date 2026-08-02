@@ -592,6 +592,28 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ---
 
+### Round 12 — P10 governed MCP (in progress)
+
+Plan and plan review committed at `1d14a22` (`docs/P10_MCP_PLAN.md`,
+`docs/reviews/P10_MCP_PLAN_REVIEW.md`). v1 scope: P10-D server admission, P10-A catalog
+compiler/snapshot/epoch, P10-B invocation through the caller's EffectDispatcher, P10-C
+slices (elicitation → durable interrupt; timeouts, circuit, process-group teardown).
+Deferred with entry conditions: P10-D2 (HTTP/OAuth), P10-H (host mode), full P10-E
+conformance.
+
+- **P10-D landed** at `54f675a`: new `tamoz-mcp` gem over the official `mcp` SDK (~> 1.1).
+  `ServerConfig` is an immutable, fail-closed admission record — absolute non-symlink
+  executable outside the agent workspace, argv metacharacter/control scan, credential-shaped
+  env names rejected from the allowlist, explicit `TAMOZ_*` credential refs, capped budgets
+  (256 entries / 4096 description bytes / 64 KiB output). `:stdio` only; `:http` raises
+  `ValidationError`. 31 tests / 296 assertions green under both locales; public-api and
+  dependency-isolation tests updated.
+- Remaining slices: catalog compiler + supervisor + SDK-built test server; invocation +
+  elicitation + session-record `mcp_catalogs` pinning + resume guard; adversarial suite +
+  16th scorecard case `agent.mcp-governed-call` + full gate.
+
+---
+
 ### Round 11 — P9 evaluated skills merged (P9 closed to plan scope)
 
 The P9 side branch (D/A reviewed commits plus unaudited B/E WIP) was merged onto the
@@ -828,7 +850,8 @@ directory showed as untracked. Corrected here.
 | D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
 | P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | complete | **complete** (`8b095ab`) — D/A/B landed, adversarial suite 37 tests, `skill-no-authority` scorecard case (15 cases, 12 successes, safety zero); P9-C/D2/E/B2 deferred per accepted plan; critic pending |
-| P10–P15 | pending | not started |
+| P10 governed MCP | pending | **in progress** — plan+review `1d14a22`; P10-D admission `54f675a` (31 tests green both locales); catalog/invocation/adversarial slices next |
+| P11–P15 | pending | not started |
 
 ---
 
@@ -864,7 +887,7 @@ directory showed as untracked. Corrected here.
    only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
    old-digest resume with reconstructed toolbox; changed-digest resume currently fails
    closed. Fold into a dedicated design round, not silently into P9.
-9. P10–P15 remain unimplemented.
+9. P11–P15 remain unimplemented.
 
 ---
 
@@ -889,14 +912,17 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected at `8b095ab`: clean worktree; 627 runs / 0 failures under both locales; scorecard
-15 cases, 12 successes, `decision: pass`, 4/4 hard gates, safety counters 0. No product
-work remains on any side branch.
+Expected at `54f675a`: clean worktree; last full gate was 627 runs / 0 failures under both
+locales at the P9 merge `8b095ab` (P10-D added gem/test files only and ran its own targeted
+tests, 31 runs green both locales — the full gate runs at the next P10 slice merge);
+scorecard 15 cases, 12 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
+No product work remains on any side branch.
 
 Then, in priority order:
 
-1. **P10** — governed MCP client/host, starting with the phase plan and plan review
-   committed before implementation, per the handover protocol.
+1. **P10** — governed MCP client/host, mid-implementation per `docs/P10_MCP_PLAN.md`:
+   catalog compiler + supervisor + `script/mcp_test_server`, then invocation/elicitation/
+   session pinning, then the adversarial suite and 16th scorecard case, then the full gate.
 2. **The deferred critic passes over P6, P7, P8, D-7 and P9.** Critic agents have
    repeatedly died to session limits before producing findings. Every "complete" mark
    for P6–P9 currently rests on the deterministic gate plus the builder's own
@@ -908,4 +934,4 @@ and is deliberately uncommitted, so a builder cannot read or edit its own exam. 
 recreating in a new session; its design is described in §1.
 
 Do not treat `.claude/worktrees/` as product output. Do not push, publish, release, or
-connect real physical actuators. The last product checkpoint on `main` is **`f74a794`**.
+connect real physical actuators. The last product checkpoint on `main` is **`54f675a`**.
