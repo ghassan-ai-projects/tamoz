@@ -27,6 +27,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::SessionOutcome",
           "Tamoz::Agent::SessionRecords",
           "Tamoz::Agent::SessionView",
+          "Tamoz::Agent::Skills",
           "Tamoz::Agent::Step",
           "Tamoz::Agent::Toolbox",
           "Tamoz::Agent::ToolError",
