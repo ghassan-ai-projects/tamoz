@@ -1151,6 +1151,32 @@ the coordinator (both locales + scorecard), conflicts resolved:
   executes every raising path; zero runtime constant references).
 - Critic rounds for DR-4 (38 probes), DR-5 (23 probes), P16 (28 probes) in flight.
 
+**P16 critic: PASS-WITH-GAPS — fast-follow landed.** All 28 probes pass against the true
+P16-start baseline (b71d388 = DR-4+DR-5 merged, extracted via `git archive`): clean-env
+full-surface executes with zero runtime `Tamoz::Agent::*` (26 checks, `defined?` nil);
+`Skills::Error < Tamoz::Core::ToolError`; six aliases object-identical; class-name mapping
+byte-identical at all three sites (journal/session-record/runtime payload; dedup signatures
+unchanged); rescue sites correct (StoreError NOT widened — probe 15); T1 64-cell digest
+matrix byte-identical; **T4 scorecard byte-identical (11,294 bytes: 17/14/pass, safety 0,
+model_input_bytes 195882)**; T6 packaged gem (core+tools only); the three `Tamoz::Agent::`
+string-literal error messages honestly adjudicated (strings, not references; every raising
+path executes clean-env). One gap fixed (`be84e8e`+): `CliSubprocessHarness::LOAD_PATHS`
+omitted `tamoz-tools` — the resume-after-kill child (RUBYOPT stripped) LoadError'd on a
+clean checkout with tamoz-tools uninstalled; one-line addition, re-gated 856/0 both
+locales, resume-after-kill true/1/1. **P16 CLOSED.**
+
+**DR-5 critic: FAIL → fixes landed, re-adjudication in flight.** The critic reproduced a
+shipped-binary crash: `consume_if_candidate!` (profile.rb:1151) calls `Time#iso8601` but
+nothing in the agent load chain required `"time"` — clean `exe/tamoz` died with untyped
+`NoMethodError` on the FIRST consuming ask (in-process gates missed it: transitive
+requires + bundler). Fix (`be84e8e`): `require "time"` in profile.rb + a typed
+`ProfileRoleUnavailableError` when a ref'd role's named key is unset even with the generic
+key set (the DR5-05 corner — the silent generic fallback is the same divergence class RC-4
+fixes at replay). Two regression tests (clean-subprocess load chain via the harness `-I`
+paths; generic-key-set corner). Gates: 856/0 both locales, scorecard 17/14/pass. 22/23
+probes passed pre-fix (DR5-17 harness deferral honest); the critic re-runs its blocker
+repro + corner for the final verdict.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
