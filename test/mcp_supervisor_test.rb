@@ -162,6 +162,34 @@ class McpSupervisorTest < Minitest::Test
     assert_operator supervisor.stderr_tail.bytesize, :>, 0
   end
 
+  # F2 (progress review, inv 24): a hostile/faulty child that prints its exact
+  # credential value to stderr must not leak it into diagnostic metadata —
+  # stderr_tail redacts resolved credential_refs values.
+  def test_stderr_tail_redacts_resolved_credential_values
+    ENV["TAMOZ_MCP_TEST_CREDENTIAL"] = "super-secret-value-12345"
+    leaky_script = File.join(@dir, "leaky_child.rb")
+    File.write(leaky_script, "STDERR.write(ENV.fetch('TAMOZ_MCP_TEST_CREDENTIAL')); sleep 30\n")
+    leaky = ServerConfig.new(
+      server_id: "test-server",
+      transport: :stdio,
+      command: RbConfig.ruby,
+      arguments: [leaky_script],
+      working_directory: @dir,
+      env_allowlist: %w[PATH],
+      credential_refs: %w[TAMOZ_MCP_TEST_CREDENTIAL]
+    )
+    supervisor = Supervisor.new(leaky)
+    supervisor.start
+    sleep 0.3
+    supervisor.close
+
+    tail = supervisor.stderr_tail
+    refute_includes tail, "super-secret-value-12345"
+    assert_includes tail, "[REDACTED]"
+  ensure
+    ENV.delete("TAMOZ_MCP_TEST_CREDENTIAL")
+  end
+
   # --- §8 circuit ----------------------------------------------------------
 
   def test_health_states_and_circuit_transitions

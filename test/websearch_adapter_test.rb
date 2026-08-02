@@ -105,6 +105,32 @@ class WebsearchAdapterTest < Minitest::Test
     assert_empty dials
   end
 
+  # P17 critic finding 1 (fail-closed): dotted-short / leading-zero / hex-octet
+  # forms cannot be canonically classified by IPAddr, and the OS resolver
+  # interprets them as loopback/private/link-local ("127.1" -> 127.0.0.1,
+  # "10.1"/"192.168.1" -> RFC1918, "169.254.1" -> 169.254.0.1). They must be
+  # REFUSED — "unclassifiable" must never mean "public".
+  def test_unclassifiable_ip_spellings_are_refused_fail_closed
+    dials = []
+    ["127.1", "10.1", "127.000.000.001", "127.0.1", "127.0.0.01", "0x7f.0.0.1",
+     "169.254.1", "192.168.1"].each do |spelling|
+      resolver = ->(_host) { [spelling] }
+      refused = client_with(egress, resolver: resolver, dials: dials)
+      assert_raises(Tamoz::Mcp::Websearch::EgressPolicyError) do
+        refused.fetch("https://api.search.example/search")
+      end
+    end
+    assert_empty dials, "no unclassifiable spelling may reach the dialer"
+
+    # Positive control: a canonical public address still dials — the
+    # fail-closed rule must not over-refuse legitimate resolutions.
+    public_dials = []
+    public_client = client_with(egress, resolver: ->(_host) { ["93.184.216.34"] },
+                                        dials: public_dials)
+    public_client.fetch("https://api.search.example/search")
+    assert_equal [["93.184.216.34", "api.search.example", {}]], public_dials
+  end
+
   # W3 / P17-08: an off-allowlist target is refused before any resolution or
   # dial.
   def test_off_allowlist_target_is_refused_with_zero_dials

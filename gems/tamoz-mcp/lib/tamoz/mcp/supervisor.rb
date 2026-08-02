@@ -171,6 +171,10 @@ module Tamoz
         @pid = nil
         @stderr_buffer = +""
         @stderr_mutex = Mutex.new
+        # Resolved credential values the child environment carries; `stderr_tail`
+        # redacts these (F2 — a hostile/faulty child must not be able to print a
+        # credential value into diagnostic metadata → durable records, inv 24).
+        @redaction_values = [].freeze
         @circuit_threshold = circuit_threshold
         @retry_budget = retry_budget
         @base_backoff = base_backoff.to_f
@@ -300,13 +304,19 @@ module Tamoz
         @sent_mutex.synchronize { @request_sent }
       end
 
-      # Bounded, scrubbed tail of the child's stderr. Untrusted server content:
-      # surfaced only as typed error metadata by callers, never into prompts.
+      # Bounded, scrubbed, credential-redacted tail of the child's stderr.
+      # Untrusted server content: surfaced only as typed error metadata by
+      # callers, never into prompts. Values the child env resolved for
+      # `credential_refs` are redacted by exact match (length >= 8 to avoid
+      # mangling short innocuous values) before the tail leaves the supervisor
+      # (F2, inv 24).
       def stderr_tail
         text = @stderr_mutex.synchronize { @stderr_buffer.dup }
         text.force_encoding(Encoding::UTF_8)
         text = text.scrub("?") unless text.valid_encoding?
-        text.gsub(CONTROL_CHARACTER_PATTERN, " ").strip.freeze
+        text = text.gsub(CONTROL_CHARACTER_PATTERN, " ")
+        @redaction_values.each { |value| text.gsub!(value, "[REDACTED]") }
+        text.strip.freeze
       end
 
       # Spawns the child in its own process group with the restricted
@@ -316,6 +326,14 @@ module Tamoz
         raise ProtocolError, "MCP supervisor already started" if @started
 
         child_env = child_environment
+        # F2: redact exactly the values resolved for declared credential refs —
+        # the allowlist values are operator-chosen and not credentials by
+        # definition. Short values (< 8 bytes) are skipped to avoid mangling
+        # common innocuous substrings.
+        @redaction_values = @config.credential_refs.filter_map do |name|
+          value = @environ[name]
+          value if value.is_a?(String) && value.bytesize >= 8
+        end.freeze
         stdin_r, stdin_w = IO.pipe
         stdout_r, stdout_w = IO.pipe
         stderr_r, stderr_w = IO.pipe

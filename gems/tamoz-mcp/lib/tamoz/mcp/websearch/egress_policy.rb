@@ -100,9 +100,21 @@ module Tamoz
         # literals are normalized (IPv4-mapped, decimal/hex/octal) BEFORE
         # classification so an exotic spelling cannot slip past an IPv4-only
         # classifier (P17-A1).
+        #
+        # Fail-closed (P17 critic finding 1): an address string that cannot be
+        # canonically classified — dotted-short "127.1", leading-zero
+        # "127.000.000.001", hex-octet "0x7f.0.0.1" — is REFUSED when
+        # deny_private_ranges is set. The OS resolver interprets those
+        # spellings as loopback/private forms (verified: "127.1" dials
+        # 127.0.0.1, "10.1"/"192.168.1" dial RFC1918, "169.254.1" dials
+        # link-local), so "unclassifiable" must never mean "public". Legitimate
+        # DNS resolutions always yield canonical forms, so this never refuses a
+        # real allowlisted flow.
         def private_range?(address)
+          return false unless @deny_private_ranges
+
           ip = classify_address(address)
-          return false if ip.nil?
+          return true if ip.nil?
 
           refused = ip.loopback? || ip.private? || ip.link_local?
           if ip.ipv4?
@@ -122,7 +134,7 @@ module Tamoz
             # predicates for either, so the leading hextet is checked directly.
             refused ||= ip.to_s.start_with?("ff") || ip.to_s == "::"
           end
-          !@deny_private_ranges ? false : refused
+          refused
         end
 
         # Neutralizes exotic spellings of an address string to a canonical
