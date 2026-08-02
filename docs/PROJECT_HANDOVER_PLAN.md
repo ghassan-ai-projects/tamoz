@@ -527,6 +527,50 @@ Completion is prohibited while any explicit requirement lacks direct evidence, a
 conditional invariant is untested, the worktree is dirty, or release reproduction depends
 on the original development checkout.
 
+## 6.5 P16–P18 — capability-surface phases (added by design rounds, 2026-08-02)
+
+Cross-cutting machinery for P10–P15 is designed in dedicated rounds registered in
+`docs/DESIGN_ROUNDS.md` (DR-1 BehaviorTransition/epoch, DR-2 durable circuit,
+DR-3 memory eval substrate, DR-4 stale-request framework fix, DR-5 P8 §5.3/§5.4).
+Three new phases extend the capability surface; each follows the §4 protocol and
+activates only after its dependencies close. None begins before P10 closes.
+
+### P16 — tools gem extraction
+
+Outcome: `tamoz-tools` (depends on tamoz-core only) holds the tool primitives and
+atomic-IO/validation core; the D-7 error taxonomy moves to `tamoz-core`;
+`tamoz-agent`'s Toolbox becomes a thin composition over capability sources. Behavior,
+invariants, and scorecard byte-identical. Plan `docs/P16_TOOLS_GEM_PLAN.md`.
+
+Hard gates: dependency isolation; packaged-gem install with only tamoz-core; full
+`rake ci` under both locales and the 16-case scorecard unchanged; safety counters 0;
+no invariant (24–27, 35) weakened.
+
+### P17 — websearch capability and egress policy
+
+Outcome: ONE governed read-only websearch capability (MCP-server shape preferred)
+through the P10 surface; a new `egress:` section in the P8 profile
+(allowlisted hosts, https-only, deny-private-ranges, credential refs, budgets); DR-2
+egress circuit; results are untrusted bounded `:reported` evidence; NO raw URL fetch.
+Scorecard gains `agent.websearch-governed` (17 cases). Plan
+`docs/P17_WEBSEARCH_PLAN.md`.
+
+Hard gates: SSRF/redirect/credential-param/oversize/injection matrix; no exfiltration
+path; `network_enforcement` claimed-and-tested or honestly unclaimed; safety 0.
+
+### P18 — capability host unification and graph surface audit
+
+Outcome: one `CapabilitySource`/`CapabilityDescriptor` contract under which local
+tools, skills, MCP, and websearch register, with invariant-35 authority intersection
+and "content never grants" enforced in ONE gate; toolbox special-casing removed; a
+measured `docs/GRAPH_SURFACE_AUDIT.md` documents the graph gem's product-loaded vs
+tested-only surface (the graph IS the agent runtime; measurement, not rewrite). Plan
+`docs/P18_CAPABILITY_HOST_PLAN.md`.
+
+Hard gates: P9/P10/P17 adversarial cases pass unchanged; model-visible surface
+byte-identical; no plugin API/marketplace/auto-install (invariant 42 non-goal); scorecard
+unchanged at 17 cases, safety 0.
+
 ## 7. Cross-phase non-negotiables
 
 - Plan and both review layers precede every task action, including scheduled, delegated,

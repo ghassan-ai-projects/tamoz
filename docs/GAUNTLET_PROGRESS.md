@@ -849,6 +849,71 @@ directory showed as untracked. Corrected here.
 
 ---
 
+### Round 13 — design rounds for P11–P18 (no implementation)
+
+All planning for the remaining phases was produced and adversarially reviewed. Each
+plan/design round went through a fresh-context critic; rejects (DR-1, DR-5, P16) and
+accepts-with-corrections were revised until the reviewers' code-verified findings were
+integrated. No implementation started anywhere in this round — it is design only.
+
+Baseline first (round-open gate): found and fixed a **red gate at HEAD** — P10-D's
+bundle regeneration had dropped the portable `ruby` platform from `Gemfile.lock`
+(would fail Linux CI); `bundle lock --add-platform ruby` restored it (`281056b`).
+Full gate green under both locales (673 runs / 0 failures); scorecard 15 cases / 12
+successes / decision pass / 4/4 hard gates / safety 0.
+
+Accepted artifacts (committed as the design checkpoint, see the commit that adds
+this section):
+
+| Doc | Revision | Review verdict |
+|---|---|---|
+| `P11_MEMORY_PLAN.md` | rev2 | accept-with-corrections (C1–C9) |
+| `P12_SELF_HEALING_PLAN.md` | rev2 | accept-with-corrections (C1–C12) |
+| `P13_SCHEDULER_PLAN.md` | rev2 | accept-with-corrections (C1–C9) |
+| `P14_STREAM_PLAN.md` | rev2 | accept-with-corrections (C1–C10) |
+| `P15_RELEASE_PLAN.md` | rev2 | accept-with-corrections (1–9) |
+| `P16_TOOLS_GEM_PLAN.md` | rev3 | REJECT rev1 → accept-with-corrections on rev2 (C1–C6) |
+| `P17_WEBSEARCH_PLAN.md` | rev2 | accept-with-corrections (1–8) |
+| `P18_CAPABILITY_HOST_PLAN.md` | rev2 | accept-with-corrections (C1–C8) |
+| `DR1_BEHAVIOR_TRANSITION_PLAN.md` | rev3 | REJECT rev1 → accept-with-corrections on rev2 (C1–C8) |
+| `DR2_DURABLE_CIRCUIT_PLAN.md` | rev2 | accept-with-corrections (C1–C10) |
+| `DR3_MEMORY_EVAL_PLAN.md` | rev2 | accept-with-corrections (C1–C9) |
+| `DR4_STALE_REQUEST_PLAN.md` | rev2 | accept-with-corrections (C1–C6) |
+| `DR5_PROFILE_MACHINERY_PLAN.md` | rev3 | REJECT rev1 → accept-with-corrections on rev2 (RC1–RC9) |
+
+Key findings the reviewers verified against code (and that changed the designs):
+
+- **DR-1 (promotion machinery):** no multi-key Store transaction exists; the session
+  record commits via the graph checkpoint; `prompt_surface_digest` covers catalog+
+  skills only. Result: two-phase claim→apply→finalize activation, durable behavior
+  snapshot, version allocation by CAS, intake-only consumption.
+- **DR-2 (circuit):** no durable circuit exists anywhere; P10's landed supervisor
+  circuit is in-memory. Result: one record type, per-owner scopes, atomic CAS
+  predicate, `reset(evidence:)` — guidance sent to the in-flight slice-3 builder.
+- **DR-3 (memory eval):** CI "attributable reuse" would have been a scripted
+  tautology (`ScriptedModel` ignores prompts). Result: decisive metric split (CI =
+  injection correctness; live = attribution), per-cell stores, mandatory
+  `expected_delta`.
+- **DR-5 (profile):** P8 §5.4 consumption ALREADY SHIPPED (ledger note was stale);
+  §5.5 rule 3 ALREADY SHIPPED. Result: re-scoped to the genuine deltas + a shipped
+  credential-divergence bug found (ref-named keys lost on resume) + the `legacy`
+  profile-id collision.
+- **P16 (tools gem):** the skills seam is a runtime agent dependency (toolbox
+  constructor + type check); class-name serialization and rescue ancestry break
+  byte-identity. Result: whole-module skills move, canonical to core, constant
+  aliases, full-surface clean-env harness.
+- **P17 (websearch):** "runtime egress audited at invocation" is unimplementable
+  (supervisor sees stdio only); the real adapter must ship implemented (operator-
+  gated), not documented; per-hop SSRF; `network_enforcement` needs a named mechanism.
+- **P18 (capability host):** the shared descriptor must restore MCP_DESIGN §4 fields;
+  the graph audit must use stdlib Coverage (not grep); the gate's authority input is
+  an admission set (never a second reader of profile policy); the registry is a
+  closed set of four sources.
+
+P10 remains the active implementation phase. P11–P18 plans are accepted and wait for
+their activation order: P11 → P12 → P13 → P14 → P15, with P16/P17/P18 after P10 close
+(P16 → P17 → P18), and DR-1/DR-2/DR-4/DR-5 consumed by the phases they serve.
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
