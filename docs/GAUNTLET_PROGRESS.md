@@ -1105,6 +1105,25 @@ plans in the T6 run still carried `PLACEHOLDER_FROM_SEARCH` paths (no `<`/`>`, n
 reference phrase — slipped the heuristic; recovered via the repairable-failure path) —
 assess whether the heuristic needs the "PLACEHOLDER_" shape or prompt reinforcement.
 
+**D-8 CLOSED — critic PASS-WITH-GAPS, hardening landed.** All 10 held-out probes pass on the
+real code; T6 re-verified from recorded artifacts (plan prompt carried NO `expected_sha256`;
+journal shows exactly one succeeded apply_patch + one run_check; request rows completed);
+P10 planning-surface fix verified (no-MCP prompt byte-identical; MCP session renders
+source-qualified names, control chars stripped); scorecard reproduced at exact pins
+(17/14/pass, 4/4 gates, safety 0, deterministic digest); CI 774/0 both locales; kill-matrix
+flake confirmed pre-existing (K12, pre-P7 seam, untouched by D-8). Flag adjudications: (1)
+iterated prompt wording — sound/bounded/invariant-safe (no literal pinned; the only pin,
+`model_input_bytes`, re-measured to 195_882; `catalog_digest` untouched); (2) Fix-B
+reference-phrase fix — correct; (3) `PLACEHOLDER_FROM_SEARCH` slip — NO heuristic change
+needed (whack-a-mole; bounded by repairable-failure recovery; the T6 run recovered
+end-to-end). Hardening landed `89eabf8`: the reference-phrase check is scoped to
+path/digest args only (the critic's probe confirmed `from step 1` → `from step 2` patch text
+was falsely rejected — the exact failure class D-8 exists to fix); negative test pins
+legitimate phrases in before/after/query pass structural review; case-17 purpose reworded
+(no "exactly once" overclaim — single-resolution is T2-unit-proven). Gate: 775/0 both
+locales; scorecard 17/14/pass. **D-8 closed; the real-model action path is proven end to
+end (read-only AND action mode, real DeepSeek).**
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
