@@ -1061,6 +1061,14 @@ self-`$ref` schema bombs accepted at admission but bounded+typed at call time (7
 once-only guard absent at the invocation layer (agent-unreachable — an `:interrupt` is a
 terminal `ToolError`, never auto-reissued; tracked in the caller-journal contract).
 
+**Slice-4 planning-surface fix CLOSED** (`9d1d3ec`): `planning_prompt` now merges the
+source-qualified MCP surface into `available_tools` via `merge_tool_surfaces` +
+`mcp_planning_surface` (catalog descriptions, control-stripped at render) — the exact
+critic gap (real models blind to MCP tools; case 16 passed only because scripted). Gate:
+774 runs / 0 failures both locales; scorecard 17/14/pass unchanged (honest-baseline pin
+re-measured 195,800 → 195,882 — case 16's plan prompt now carries the MCP surface).
+P10 is gate-complete pending the D-8 critic round.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
