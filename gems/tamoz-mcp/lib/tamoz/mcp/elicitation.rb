@@ -118,13 +118,37 @@ module Tamoz
             raise ToolPolicyError,
                   "an MCP server returned an elicitation request without a requested schema"
           end
+          # Schema content is server-controlled text that rides into the durable
+          # interrupt: every string in it (property names, descriptions, enum
+          # values, defaults, ...) gets the same control-strip + byte-bound
+          # treatment as `message`, so the interrupt can never carry raw control
+          # characters or unbounded server content.
+          schema = sanitize_schema(schema)
           validate_field_schema!(schema)
 
           {
-            "id" => id,
+            "id" => bounded_message(id.to_s),
             "message" => bounded_message(request["message"]),
             "schema" => deep_freeze(CanonicalJSON.normalize(schema))
           }.freeze
+        end
+
+        # Deep control-strip + byte-bound over every string in the requested
+        # schema (keys included — a property name may not smuggle control
+        # characters either).
+        def sanitize_schema(node)
+          case node
+          when Hash
+            node.each_with_object({}) do |(key, value), out|
+              out[bounded_message(key.to_s)] = sanitize_schema(value)
+            end
+          when Array
+            node.map { |entry| sanitize_schema(entry) }
+          when String
+            bounded_message(node)
+          else
+            node
+          end
         end
 
         # The schema is validated with the SDK's JSON Schema 2020-12 validator,

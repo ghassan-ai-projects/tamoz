@@ -221,6 +221,37 @@ class McpElicitationTest < Minitest::Test
     refute_match(/[\x00-\x1f\x7f]/, message)
   end
 
+  # advD d1: the field SCHEMA is server content too — property names and
+  # descriptions get the same control-strip + byte-bound treatment as message.
+  def test_field_schema_is_control_stripped_and_byte_bounded
+    noisy = {
+      "elicit-1" => {
+        "method" => "elicitation/create",
+        "params" => {
+          "message" => "ok",
+          "requestedSchema" => {
+            "type" => "object",
+            "properties" => {
+              "v\x00alue" => { "type" => "string", "description" => "#{"PAD" * 5000}" }
+            }
+          }
+        }
+      }
+    }
+
+    interrupt = Elicitation.build(descriptor: descriptor, effect_key: "k", input_requests: noisy, request_state: "s")
+
+    schema = interrupt["fields"].first["schema"]
+    property = schema["properties"].keys.first
+    description = schema["properties"][property]["description"]
+
+    assert_equal "v alue", property
+    assert_predicate property, :valid_encoding?
+    refute property.include?("\x00")
+    assert_operator description.bytesize, :<=, Elicitation::MAX_MESSAGE_BYTES
+    refute_match(/[\x00-\x1f\x7f]/, description)
+  end
+
   # --- schema-validated answer merge --------------------------------------------
 
   def test_answer_is_schema_validated_and_merged_per_mrtr

@@ -300,10 +300,28 @@ module Tamoz
               client.connect(client_info: CLIENT_INFO, protocol_version: max)
             end
           rescue ::Timeout::Error, MCP::Client::RequestHandlerError,
-                 MCP::Client::ServerError, MCP::Client::ValidationError
+                 MCP::Client::ServerError, MCP::Client::ValidationError => error
+            # §6's corruption row applies to the handshake too: a server that
+            # answers initialize with malformed frames broke the protocol
+            # contract and must never become a retryable value the planner can
+            # iterate on. The corruption is detectable here exactly as in
+            # `raise_classified_transport` (RequestHandlerError wrapping a
+            # JSON::ParserError); the classification is the fix.
+            if corruption?(error)
+              supervisor.record_failure(kind: :corruption)
+              raise ToolPolicyError.new(
+                "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
+                "malformed frames during the protocol handshake; the protocol " \
+                "contract was broken",
+                **stderr_metadata(supervisor)
+              )
+            end
+
             supervisor.record_failure(kind: :connect)
-            raise UnavailableError,
-                  "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed to connect"
+            raise UnavailableError.new(
+              "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed to connect",
+              **stderr_metadata(supervisor)
+            )
           end
           nil
         end
@@ -396,29 +414,43 @@ module Tamoz
             error.original_error.is_a?(JSON::ParserError)
         end
 
+        # §8: stderr is untrusted server content; the supervisor's ring bounds
+        # and control-scrubs it, and it surfaces only as typed error metadata.
+        def stderr_metadata(supervisor)
+          { stderr_tail: supervisor.stderr_tail }
+        end
+
         # The exact §6 taxonomy rows for transport outcomes.
         def raise_classified_transport(descriptor, supervisor, error, sent:)
           if corruption?(error)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-                  "malformed frames for #{descriptor.id}; the protocol contract was broken"
+            raise ToolPolicyError.new(
+              "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
+              "malformed frames for #{descriptor.id}; the protocol contract was broken",
+              **stderr_metadata(supervisor)
+            )
           end
           if sent
             if descriptor.read_only?
-              raise UnavailableError,
-                    "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
-                    "after the request to #{descriptor.id} was sent; the call is read-only " \
-                    "and may be retried by the caller"
+              raise UnavailableError.new(
+                "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
+                "after the request to #{descriptor.id} was sent; the call is read-only " \
+                "and may be retried by the caller",
+                **stderr_metadata(supervisor)
+              )
             end
 
-            raise AmbiguousOutcomeError,
-                  "the MCP server #{descriptor.source_id} failed after the request to " \
-                  "#{descriptor.id} was sent; the effect is unknown and must not be guessed"
+            raise AmbiguousOutcomeError.new(
+              "the MCP server #{descriptor.source_id} failed after the request to " \
+              "#{descriptor.id} was sent; the effect is unknown and must not be guessed",
+              **stderr_metadata(supervisor)
+            )
           end
 
-          raise ToolArgumentError,
-                "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
-                "before the request to #{descriptor.id} was sent; no effect occurred"
+          raise ToolArgumentError.new(
+            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
+            "before the request to #{descriptor.id} was sent; no effect occurred",
+            **stderr_metadata(supervisor)
+          )
         end
 
         def remote_tool_error(descriptor, code)
@@ -521,7 +553,7 @@ module Tamoz
           budget = supervisor.config.budgets.max_output_bytes
           blocks, blocks_truncated = attribute_blocks(result["content"], descriptor.source_id, budget)
           structured, structured_truncated = sanitize_structured(result["structuredContent"], budget)
-          text = blocks.filter_map { |block| block["text"] if block["type"] == "text" }.join("\n")
+          text = attributed_text(blocks, descriptor.source_id)
 
           Observation.new(
             server_id: descriptor.source_id,
@@ -530,6 +562,20 @@ module Tamoz
             structured_content: structured,
             truncated: blocks_truncated || structured_truncated
           )
+        end
+
+        # Caller-facing convenience join over the attributed blocks. A single
+        # text block is self-attributing (the observation's `content_blocks`
+        # carry the provenance), so its content stays bare; a multi-block join
+        # would lose which block came from where, so every block in it is
+        # prefixed with the same attribution line the blocks carry.
+        def attributed_text(blocks, source_id)
+          texts = blocks.filter_map { |block| block["text"] if block["type"] == "text" }
+          return "" if texts.empty?
+          return texts.first if texts.length == 1
+
+          attribution = format(ATTRIBUTION_TEMPLATE, source_id)
+          texts.map { |text| "#{attribution}: #{text}" }.join("\n")
         end
 
         def attribute_blocks(content, source_id, budget)

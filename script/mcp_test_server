@@ -8,7 +8,12 @@
 #
 # Tools: echo_constant, set_answer, needs_input, churn, sleep_ms.
 # Environment flags (all opt-in, all read from the operator-controlled env):
-#   MCP_TEST_SERVER_MALFORMED_FRAMES=1  emit a non-JSON line before serving
+#   MCP_TEST_SERVER_MALFORMED_FRAMES=1  emit a non-JSON line before every
+#                                       initialize response (persistent
+#                                       connect-phase corruption)
+#   MCP_TEST_SERVER_MALFORMED_MID_CALL=1 emit a non-JSON line before every
+#                                       echo_constant result (mid-session
+#                                       corruption, §10.2 row on the real wire)
 #   MCP_TEST_SERVER_EXIT_MID_CALL=1     exit!(3) inside sleep_ms
 #   MCP_TEST_SERVER_OVERSIZE_OUTPUT=1   echo_constant returns ~8 MiB
 #   MCP_TEST_SERVER_EXTRA_TOOLS=N       add N filler tools (catalog budget proof)
@@ -36,6 +41,10 @@ EchoConstant = MCP::Tool.define(
     required: ["value"]
   }
 ) do |value: nil, **|
+  if ENV["MCP_TEST_SERVER_MALFORMED_MID_CALL"] == "1"
+    $stdout.write("this is not a json-rpc frame (mid-call)\n")
+    $stdout.flush
+  end
   body = ENV["MCP_TEST_SERVER_OVERSIZE_OUTPUT"] == "1" ? "x" * (8 * 1024 * 1024) : value.to_s
   text_response(body)
 end
@@ -152,9 +161,18 @@ if ENV["MCP_TEST_SERVER_GRANDCHILD"] == "1"
   Process.spawn(RbConfig.ruby, "-e", "sleep 600")
 end
 
+# Persistent connect-phase corruption: emit a non-JSON frame before EVERY
+# initialize response, not once at startup. A one-shot startup frame is
+# consumed by the first handshake, so a second connect would succeed — this
+# mode must prove that a corrupt server is terminal on every attempt.
 if ENV["MCP_TEST_SERVER_MALFORMED_FRAMES"] == "1"
-  $stdout.print("this is not a json-rpc frame\n")
-  $stdout.flush
+  class MalformedInitializeServer < MCP::Server
+    def init(params, session: nil)
+      $stdout.write("this is not a json-rpc frame\n")
+      $stdout.flush
+      super
+    end
+  end
 end
 
 configuration = MCP::Configuration.new
@@ -162,7 +180,9 @@ if (version = ENV["MCP_TEST_SERVER_PROTOCOL_VERSION"])
   configuration.protocol_version = version
 end
 
-server = MCP::Server.new(
+server_class = ENV["MCP_TEST_SERVER_MALFORMED_FRAMES"] == "1" ? MalformedInitializeServer : MCP::Server
+
+server = server_class.new(
   name: "tamoz-mcp-test-server",
   version: "0.1.0",
   tools: tools,

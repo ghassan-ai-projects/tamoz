@@ -16,7 +16,8 @@ class McpInvocationTest < Minitest::Test
     PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
   ].freeze
   FLAG_NAMES = %w[
-    MCP_TEST_SERVER_MALFORMED_FRAMES MCP_TEST_SERVER_EXIT_MID_CALL
+    MCP_TEST_SERVER_MALFORMED_FRAMES MCP_TEST_SERVER_MALFORMED_MID_CALL
+    MCP_TEST_SERVER_EXIT_MID_CALL
     MCP_TEST_SERVER_OVERSIZE_OUTPUT MCP_TEST_SERVER_EXTRA_TOOLS
     MCP_TEST_SERVER_LONG_DESCRIPTION MCP_TEST_SERVER_PROTOCOL_VERSION
     MCP_TEST_SERVER_GRANDCHILD
@@ -177,6 +178,29 @@ class McpInvocationTest < Minitest::Test
     refute_match(/[\x00-\x1f\x7f]/, outcome.observation.text)
     assert_equal "a b c", outcome.observation.text
     assert_predicate outcome.observation.text, :valid_encoding?
+  ensure
+    supervisor&.close
+  end
+
+  # A single text block is self-attributing (its content stays bare, pinned by
+  # the held-out probes); a multi-block text join would lose which block came
+  # from where, so every block in it is prefixed with the attribution line.
+  def test_multi_block_text_join_carries_per_block_attribution
+    _config, snapshot, supervisor = setup_environment
+    descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+    fake = FakeMrtrClient.new(responses: [
+      { "result" => { "content" => [
+        { "type" => "text", "text" => "first" },
+        { "type" => "text", "text" => "second" }
+      ] } }
+    ])
+
+    outcome = Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor,
+                              client_factory: ->(_sup) { fake })
+
+    attribution = "remote content from server test-server"
+    assert_equal "#{attribution}: first\n#{attribution}: second", outcome.observation.text
+    assert outcome.observation.attributed?
   ensure
     supervisor&.close
   end
@@ -429,6 +453,115 @@ class McpInvocationTest < Minitest::Test
 
     assert_equal "mcp_protocol", error.category
     assert_equal false, error.repairable?
+    assert_equal 1, supervisor.consecutive_failures
+  ensure
+    supervisor&.close
+  end
+
+  # Row: connect-phase corruption (malformed frame during the initialize
+  # handshake) → terminal ToolPolicyError on the REAL wire. The flag's frame is
+  # now emitted before every initialize, so a follow-up call is terminal too: a
+  # corrupt server can never become a retryable value the planner iterates on.
+  def test_connect_phase_wire_corruption_is_terminal_on_the_real_wire_and_cannot_be_iterated
+    config = build_config
+    snapshot = Catalog.compile(config)
+    ENV["MCP_TEST_SERVER_MALFORMED_FRAMES"] = "1"
+    supervisor = Supervisor.new(config)
+    descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+
+    error = assert_raises(Tamoz::Mcp::ToolPolicyError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+
+    assert_match(/\Amcp_wire:/, error.message)
+    assert_equal "mcp_protocol", error.category
+    assert_equal false, error.repairable?
+    assert_equal 1, supervisor.consecutive_failures, "the circuit still counts the failure"
+    assert_equal :corruption, supervisor.last_failure_kind
+
+    # A follow-up call is also terminal: the planner cannot iterate on this server.
+    second = assert_raises(Tamoz::Mcp::ToolPolicyError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+    assert_match(/\Amcp_wire:/, second.message)
+    assert_equal false, second.repairable?
+    assert_equal 2, supervisor.consecutive_failures
+    refute supervisor.open?, "two failures stay below the default threshold of three"
+
+    # Three corrupt handshakes open the circuit; the fourth call is still typed
+    # unavailable — never a retryable iteration on the corrupt server.
+    assert_raises(Tamoz::Mcp::ToolPolicyError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+    assert supervisor.open?
+    open_error = assert_raises(Tamoz::Mcp::UnavailableError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+    assert_match(/circuit is open/, open_error.message)
+  ensure
+    supervisor&.close
+  end
+
+  # Row: mid-session corruption → ToolPolicyError on the REAL wire. The test
+  # server's mid-call mode emits a non-JSON frame before every echo_constant
+  # result, so the client meets it while reading the tools/call response.
+  def test_mid_call_wire_corruption_is_terminal_on_the_real_wire
+    config = build_config
+    snapshot = Catalog.compile(config)
+    ENV["MCP_TEST_SERVER_MALFORMED_MID_CALL"] = "1"
+    supervisor = Supervisor.new(config)
+    descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+
+    error = assert_raises(Tamoz::Mcp::ToolPolicyError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+
+    assert_match(/\Amcp_wire:/, error.message)
+    assert_equal "mcp_protocol", error.category
+    assert_equal false, error.repairable?
+    assert_equal 1, supervisor.consecutive_failures
+    assert_equal :corruption, supervisor.last_failure_kind
+
+    # The corruption is persistent: a follow-up call is also terminal.
+    second = assert_raises(Tamoz::Mcp::ToolPolicyError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+    assert_match(/\Amcp_wire:/, second.message)
+    assert_equal 2, supervisor.consecutive_failures
+  ensure
+    supervisor&.close
+  end
+
+  # §8: stderr is untrusted server content, surfaced only as typed error
+  # metadata — bounded and control-scrubbed with the supervisor ring's bounds.
+  def test_transport_failures_surface_bounded_scrubbed_stderr_as_typed_metadata
+    # Compile against the healthy server so the pinned snapshot matches the
+    # descriptor; the CALL runs against a child that only writes stderr.
+    healthy = build_config
+    snapshot = Catalog.compile(healthy)
+
+    noisy = File.join(@dir, "noisy.rb")
+    File.write(noisy, "STDERR.write(\"boom\\x00\\x07 secret-token-xyz\")\nSTDERR.flush\nsleep 5\n")
+    noisy_config = ServerConfig.new(
+      server_id: "test-server",
+      transport: :stdio,
+      command: RbConfig.ruby,
+      arguments: [noisy],
+      working_directory: @dir,
+      env_allowlist: BASE_ENV_ALLOWLIST,
+      budgets: Budgets.new(stderr_bytes: 64, connect_timeout: 1.0)
+    )
+    supervisor = Supervisor.new(noisy_config)
+    descriptor = descriptor_for(snapshot, "echo_constant", effect_class: :read_only)
+
+    error = assert_raises(Tamoz::Mcp::UnavailableError) do
+      Invocation.call(descriptor, { "value" => "x" }, snapshot: snapshot, supervisor: supervisor)
+    end
+
+    refute_nil error.stderr_tail, "the typed error must carry the stderr metadata"
+    assert_operator error.stderr_tail.bytesize, :<=, 64
+    refute_match(/[\x00-\x1f\x7f]/, error.stderr_tail)
+    assert_includes error.stderr_tail, "boom"
     assert_equal 1, supervisor.consecutive_failures
   ensure
     supervisor&.close

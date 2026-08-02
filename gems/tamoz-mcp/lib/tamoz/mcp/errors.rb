@@ -6,6 +6,17 @@ module Tamoz
     class Error < Tamoz::Error
       CATEGORY = "mcp"
       SAFE_MESSAGE = "An MCP server interaction failed."
+
+      # Bounded, control-scrubbed tail of the server's stderr (P10 §8). Stderr
+      # is untrusted server content and surfaces only as typed error metadata
+      # on transport-failure errors — never into prompts. `nil` when the
+      # failing path never touched a server (argument/schema/remote rows).
+      attr_reader :stderr_tail
+
+      def initialize(message = nil, stderr_tail: nil)
+        @stderr_tail = stderr_tail.nil? ? nil : stderr_tail.dup.freeze
+        super(message)
+      end
     end
 
     # A server admission configuration was rejected. Validation is fail-closed:
