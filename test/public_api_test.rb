@@ -119,6 +119,15 @@ class PublicAPITest < Minitest::Test
           "Tamoz::START",
           "Tamoz::Send"
         ],
+        "tamoz-mcp" => [
+          "Tamoz::Mcp::CatalogSnapshotUnavailableError",
+          "Tamoz::Mcp::Error",
+          "Tamoz::Mcp::ProtocolError",
+          "Tamoz::Mcp::ServerConfig",
+          "Tamoz::Mcp::ServerConfig::Budgets",
+          "Tamoz::Mcp::ValidationError",
+          "Tamoz::Mcp::VERSION"
+        ],
         "tamoz-sqlite" => ["Tamoz::SQLite::VERSION"]
       },
       inventory
@@ -135,7 +144,8 @@ class PublicAPITest < Minitest::Test
       Tamoz::Graph::VERSION,
       Tamoz::SQLite::VERSION,
       Tamoz::Agent::VERSION,
-      Tamoz::Evals::VERSION
+      Tamoz::Evals::VERSION,
+      Tamoz::Mcp::VERSION
     ]
 
     assert_equal 1, versions.uniq.length

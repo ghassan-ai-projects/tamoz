@@ -48,6 +48,17 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  def test_mcp_loads_only_core_and_the_official_sdk
+    features = loaded_features_after("tamoz/mcp")
+
+    assert_includes features, "tamoz/core.rb"
+    assert_includes features, "tamoz/mcp.rb"
+    refute(
+      features.any? { |path| path.match?(%r{ruby_llm|tamoz/(?:graph|sqlite|agent|evals)}) },
+      features.inspect
+    )
+  end
+
   def test_no_production_gemspec_depends_on_evals
     production = GEM_ROOTS.except("tamoz-evals")
 

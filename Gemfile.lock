@@ -25,6 +25,13 @@ PATH
       zeitwerk (~> 2.6)
 
 PATH
+  remote: gems/tamoz-mcp
+  specs:
+    tamoz-mcp (0.1.0.alpha.1)
+      mcp (~> 1.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-sqlite
   specs:
     tamoz-sqlite (0.1.0.alpha.1)
@@ -35,6 +42,7 @@ GEM
   remote: https://rubygems.org/
   specs:
     base64 (0.3.0)
+    bigdecimal (4.1.2)
     drb (2.2.3)
     event_stream_parser (1.0.0)
     faraday (2.14.3)
@@ -47,10 +55,17 @@ GEM
       net-http (~> 0.5)
     faraday-retry (2.4.0)
       faraday (~> 2.0)
+    hana (1.3.7)
     json (2.21.2)
+    json_schemer (2.5.0)
+      bigdecimal
+      hana (~> 1.3)
+      regexp_parser (~> 2.0)
+      simpleidn (~> 0.2)
     logger (1.7.0)
     marcel (1.2.1)
-    mini_portile2 (2.8.9)
+    mcp (1.1.0)
+      json_schemer (>= 2.4)
     minitest (6.0.6)
       drb (~> 2.0)
       prism (~> 1.5)
@@ -59,6 +74,7 @@ GEM
       uri (>= 0.11.1)
     prism (1.9.0)
     rake (13.4.2)
+    regexp_parser (2.12.0)
     ruby_llm (1.16.0)
       base64
       event_stream_parser (~> 1)
@@ -70,28 +86,29 @@ GEM
       ruby_llm-schema (~> 0)
       zeitwerk (~> 2)
     ruby_llm-schema (0.4.0)
-    sqlite3 (2.9.5)
-      mini_portile2 (~> 2.8.0)
+    simpleidn (0.2.3)
     sqlite3 (2.9.5-arm64-darwin)
     uri (1.1.1)
     zeitwerk (2.8.2)
 
 PLATFORMS
   arm64-darwin-25
-  ruby
 
 DEPENDENCIES
+  mcp (~> 1.1)
   minitest (~> 6.0)
   rake (~> 13.2)
   tamoz-agent!
   tamoz-core!
   tamoz-evals!
   tamoz-graph!
+  tamoz-mcp!
   tamoz-sqlite!
   zeitwerk (~> 2.6)
 
 CHECKSUMS
   base64 (0.3.0) sha256=27337aeabad6ffae05c265c450490628ef3ebd4b67be58257393227588f5a97b
+  bigdecimal (4.1.2) sha256=53d217666027eab4280346fba98e7d5b66baaae1b9c3c1c0ffe89d48188a3fbd
   bundler (4.0.12) sha256=7f8b757d28dfb636e7b24fba2344ac6dd13b5b24f4b46d62573d483f211825ac
   drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
   event_stream_parser (1.0.0) sha256=a2683bab70126286f8184dc88f7968ffc4028f813161fb073ec90d171f7de3c8
@@ -99,23 +116,27 @@ CHECKSUMS
   faraday-multipart (1.2.0) sha256=7d89a949693714176f612323ca13746a2ded204031a6ba528adee788694ef757
   faraday-net_http (3.4.4) sha256=0e78af151747ed1b00f33e25973b4bc220d7f16c00c39676817c8b12331eb588
   faraday-retry (2.4.0) sha256=7b79c48fb7e56526faf247b12d94a680071ff40c9fda7cf1ec1549439ad11ebe
+  hana (1.3.7) sha256=5425db42d651fea08859811c29d20446f16af196308162894db208cac5ce9b0d
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
+  json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   marcel (1.2.1) sha256=1678e9360e32f9eafa917c80029e2f6d10b2715c66a4b87b6d0da9b9cd1f859f
-  mini_portile2 (2.8.9) sha256=0cd7c7f824e010c072e33f68bc02d85a00aeb6fce05bb4819c03dfd3c140c289
+  mcp (1.1.0) sha256=930dafc0a8f34941d210ad907dd70bf93c1763fa60b98cb9162c77263e5dac32
   minitest (6.0.6) sha256=153ea36d1d987a62942382b61075745042a2b3123b1cd48f4c3675af9cc7d6f1
   multipart-post (2.4.1) sha256=9872d03a8e552020ca096adadbf5e3cb1cd1cdd6acd3c161136b8a5737cdb4a8
   net-http (0.9.1) sha256=25ba0b67c63e89df626ed8fac771d0ad24ad151a858af2cc8e6a716ca4336996
   prism (1.9.0) sha256=7b530c6a9f92c24300014919c9dcbc055bf4cdf51ec30aed099b06cd6674ef85
   rake (13.4.2) sha256=cb825b2bd5f1f8e91ca37bddb4b9aaf345551b4731da62949be002fa89283701
+  regexp_parser (2.12.0) sha256=35a916a1d63190ab5c9009457136ae5f3c0c7512d60291d0d1378ba18ce08ebb
   ruby_llm (1.16.0) sha256=26bd5310cf2ce55f74a60f8aae0b0d0327b586ff4532c84828103c3b2b905a18
   ruby_llm-schema (0.4.0) sha256=e930f5a5316f9301bff3fb7fe572e44727d05bb8e50621001bbb49a47d63b8da
-  sqlite3 (2.9.5) sha256=04572973a3f943ad50a8adfffc8dd752a5f06e4c3db2026f71838fed8a982606
+  simpleidn (0.2.3) sha256=08ce96f03fa1605286be22651ba0fc9c0b2d6272c9b27a260bc88be05b0d2c29
   sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
+  tamoz-mcp (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
