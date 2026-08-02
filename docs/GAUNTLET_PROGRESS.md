@@ -592,6 +592,45 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ---
 
+### Round 9 — D-7 tool-error surfacing and bounded repair (merged)
+
+Session 2's live-model run exposed that action mode died on the first exact-match miss
+with a blank `Error:` line, and that a `ToolError` terminated the session instead of
+feeding the repair loop — contradicting invariant 17. Session 3 finished the fix and
+merged it at `35c2ffb`.
+
+What landed:
+
+- **Error taxonomy** (`errors.rb`, `error.rb`): `ToolError` now opts in to
+  `Tamoz::DisclosableMessage`; `ToolPolicyError` (containment, symlinks, null bytes,
+  stale before-state) is always terminal; only `ToolArgumentError` (text miss, stale
+  digest, ambiguous match, missing target, shape/encoding) is `repairable?`. Disclosure
+  is normalized through `Error.disclosable_message` — UTF-8 scrubbed, control characters
+  stripped, bounded at 512 bytes, locale-independent.
+- **Bounded repair** (`session_nodes.rb`, `runtime.rb`): a repairable rejection becomes
+  one typed observation (`failure` record with `failure_signature`) and re-enters the
+  *existing* P2 loop — same `repair_attempt` counter, same `seen_failure_signatures`
+  channel, so total repair work is bounded exactly as before. Discovery/read-only phases
+  keep the rejection as evidence and continue. Policy rejections and approval denials
+  still terminate; a regression test proves each.
+- **CLI surfacing** (`cli.rb`): `:error` parts never carried a `"message"` key — the CLI
+  read one and printed blank lines. It now reports `safe_message` plus the failing node.
+  A second real defect found while finishing the WIP: `run_with_stream` reset the captured
+  error on every call, and the drain loop's final empty `run_next` poll erased it before
+  the summary printed. The reset is gone.
+- **Scorecard**: `agent.stale-digest` redefined — a stale digest is now typed evidence;
+  the model re-offers the same stale plan and the repeated-action stop ends the session.
+  Nothing mutates and the model's `satisfied: true` claim is still refused. Aggregate
+  moved 9→10 task successes with all safety counters at 0.
+
+Evidence: `rake ci` 535 runs / 0 failures under both `en_US.UTF-8` and `C` locales on the
+frozen branch; scorecard 13 cases, 10 successes, `decision: pass`, 4/4 hard gates,
+unsafe=0, false-positive=0, incomplete=0. Fixed behavioural case:
+`test/agent_tool_error_recovery_test.rb` (13 runs), design record
+`docs/reviews/AGENT_TOOL_ERROR_RECOVERY_CORRECTION.md`. Critic pass still pending (quota).
+
+---
+
 ### Session 2 handoff — stopped at a usage limit
 
 `main` is clean and green at `15f7dd8`: 522 runs / 0 failures, scorecard 13 cases, 9
@@ -709,7 +748,8 @@ directory showed as untracked. Corrected here.
 | P4 compound edit | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 7/12, safety zero |
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
-| P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, scorecard 9/13, safety zero |
+| P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, safety zero |
+| D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
 | P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) + **B epoch binding landed** (`f74a794`); **P8-E adversarial fuzz NOT started** — the trust boundary P9 and P10 both depend on is still untested |
 | P9 evaluated skills | pending | **D + A landed on side branch `worktree-agent-a6088313fb93fc259`** (`5f66099`, `be832a4`); P9-B is unverified WIP (`4c05c74`). None of it is on `main`. |
 | P10–P15 | pending | not started |
