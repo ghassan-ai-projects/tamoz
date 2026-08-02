@@ -925,6 +925,45 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
+  # DR-4 critic hardening: in the durable claim->execute window the checkpoint can
+  # change between claim and merge (lease expiry + an owner-B write), so an
+  # answer/index mismatch at the DURABLE merge must surface as StaleRequestError
+  # (the runner's backstop then terminal-fails it) — never as an escaping
+  # InvalidUpdateError, the D-6 signature. The EPHEMERAL path keeps
+  # InvalidUpdateError for direct caller bugs (pinned by graph_interrupt_test).
+  def test_durable_resume_merge_mismatch_is_stale_request_error
+    with_runner(multi_interrupt_definition) do |store, app, runner|
+      thread = "thread.drift-window"
+      runner.deliver({}, thread:, request_id: "request.start")
+      tid = task_id_for(app, thread)
+      runner.submit(
+        {tid => {0 => "a"}},
+        thread:,
+        request_id: "request.pause",
+        operation: :resume
+      )
+      runner.run_next(thread:, owner_id: "owner.a") # pause with an interrupt set
+
+      store.open_writer(thread_id: thread, namespace: [], owner_id: "owner.b", ttl: 30) do |writer|
+        error = assert_raises(Tamoz::StaleRequestError) do
+          app.send(
+            :resume_with_writer,
+            {"unknown-task" => {0 => "x"}},
+            thread:,
+            namespace: [],
+            request_id: "request.drift",
+            concurrency: :inline,
+            context: nil,
+            writer:,
+            durable_request_id: "request.drift"
+          )
+        end
+        assert_match(/does not match an outstanding task\/call index/, error.message)
+        refute_includes error.class.ancestors, Tamoz::InvalidUpdateError
+      end
+    end
+  end
+
   private
 
   View = Struct.new(

@@ -570,7 +570,21 @@ module Tamoz
         unless checkpoint.status == :paused
           raise StaleRequestError, "latest checkpoint is not paused"
         end
-        resume_values = merge_resume_values(checkpoint, answers)
+        resume_values = begin
+          merge_resume_values(checkpoint, answers)
+        rescue InvalidUpdateError => error
+          # DR-4 critic hardening: in the DURABLE claim→execute window the
+          # checkpoint can change between claim and merge (lease expiry + an
+          # owner-B write), so an answer/index mismatch here is a STALE request —
+          # the same class the claim-time validator catches. Surface it as
+          # StaleRequestError so the runner's backstop terminal-fails it, never
+          # an escaping InvalidUpdateError (the D-6 signature). The EPHEMERAL
+          # path (durable_request_id nil) keeps InvalidUpdateError for direct
+          # caller bugs (pinned by graph_interrupt_test).
+          raise StaleRequestError, error.message if durable_request_id
+
+          raise
+        end
         if durable_request_id && mark_request_running
           writer.mark_request_running(
             request_id: durable_request_id,
