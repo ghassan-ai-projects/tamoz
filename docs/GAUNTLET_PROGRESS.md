@@ -927,6 +927,87 @@ name transaction-owning repository/adapter seams; migration ordinals are monoton
 P18 resolves closed-registry vs fifth-source contradiction; P17 pins the validated IP to
 the actual dial; P15 restores direct-evidence and high/critical security release gates.
 
+### Round 15 — live-model smoke: action mode fails against a real model (D-8 opened)
+
+The D-7 repeat, run at HEAD (`999b5c9`) against the real DeepSeek API on a sandboxed
+workspace in `/tmp/tamoz-smoke` (session/config dirs sandboxed, no repo writes, no
+secrets logged):
+
+| Smoke | Task | Result |
+|---|---|---|
+| A — read-only | `ask "How many Ruby files…"` | **PASS** — `2`, `Verification: satisfied`, exit 0 |
+| B — action | fix `Calculator#add` (a−b → a+b) with `--allow-changes` + real `--check` | **FAIL** — `A workflow step failed. (node deliberate)`, exit 1; file untouched |
+
+**Verified root cause** (session store + wrapped model-call log, not inference):
+`Tamoz::Agent::PlanRejectedError: no plan passed review after 3 attempts`
+(`session_nodes.rb:916`) — the model made 3 plan attempts, every one rejected by
+structural review because the patch step's `expected_sha256` was a placeholder
+(`<SHA-256 from read_file>`), and the validator requires 64 hex. Three linked findings:
+
+- **F1 (blocking, framework):** a patch's `expected_sha256` is only knowable after a read
+  executes, but structural review rejects the whole plan when it is missing/placeholder —
+  so the plan's own read step never runs. Real models cannot plan "read then patch" in one
+  plan. The scripted corpus never exercises this: `agent_smoke_corpus.rb:650/695/883/1454`
+  hardcode `Digest::SHA256.hexdigest(...)` at authoring time, so the gate is green while
+  every real-model action task with a digest-dependent patch fails.
+- **F2 (robustness):** models emit template placeholders (`<path from search result>`) for
+  arguments expected from earlier steps; structural review accepts placeholder paths
+  (free-form) but rejects placeholder digests (format check) — inconsistent, and the path
+  case burned the discovery reads (both `read_file` steps failed `path does not exist`), so
+  no digest ever entered evidence.
+- **F3 (operator messaging, invariant-24-safe):** `PlanRejectedError` does not disclose —
+  the CLI shows `A workflow step failed.` with zero actionable reason, though the rejection
+  issues are Tamoz-generated validation text. Round 9 fixed this for tool errors
+  (`cli.rb:567 error_summary`); the plan-rejection path still hides it.
+
+Fix round **D-8** opened (`docs/D8_ACTION_PLAN_DIGEST_PLAN.md`): step-gate digest
+resolution from observation (absent digest resolved at step time — digest never trusted to
+the model), placeholder rejection with actionable feedback, and per-class rejection
+disclosure. D-8 slots immediately after P10 close, ahead of DR-4: it blocks every real
+action task, DR-4 is a rarer fenced-resume edge. **Design review: ACCEPT-WITH-REQUIRED-
+CORRECTIONS** (RC-1..RC-9 integrated into rev 2, `docs/reviews/D8_ACTION_PLAN_DIGEST_PLAN_
+REVIEW.md`) — the critic found the `Runtime` driver omitted from Fix A's caller enumeration
+(no `verify_intent_before_state!`; absent-digest resolution inside `prepare_patch` would have
+silently patched unapproved bytes on the scorecard's own driver — RC-1), corrected F3 to
+structural-layer-only disclosure (semantic issues are model-authored, protocol issues quote
+provider JSON — RC-3), and scoped the placeholder heuristic to path/digest args (RC-4).
+Implementation starts after P10 close, gated by the 10 held-out probes in the review record
+and the real-model smoke re-run (T6).
+
+### Round 16 — P10 slice-3 critic verdict: FAIL (one critical probe)
+
+Fresh-context harsh critic ran the 19 held-out probes + 5 adversarial probes against the
+REAL output (`a88572b`+`999b5c9`) through the real SDK client and real test server as a
+child (wire-tap tee recording every client→server line). Repo untouched; harness at
+`/tmp/tamoz-gauntlet/slice3/` (`REPORT.md`, `RESULTS.json`, `run_probes.rb`).
+
+**18/19 PASS; probe 4 FAIL (critical) — O1:** with the server's own
+`MCP_TEST_SERVER_MALFORMED_FRAMES=1`, the non-JSON frame is consumed during the initialize
+handshake; `Invocation#ensure_connected!` records kind=:connect and raises retryable
+`UnavailableError` instead of §6's terminal `ToolPolicyError`. The corruption is detectable
+at that rescue (`error.original_error.is_a?(JSON::ParserError)`), so the fix is provable:
+classification, not detection. Fix must prove: `ToolPolicyError` (`mcp_wire:`),
+`repairable? == false`, the circuit still counts it, and a caller cannot iterate on a
+corrupt server. Secondary: the mid-call corruption row was only provable against a fake
+client — the shipped test server cannot emit a mid-session malformed frame.
+
+Adversarial findings: **advB (medium, caller-side)** `reissue` has no once-only guard —
+exactly-once is the caller journal's job (inv 21); disposition: verify at slice 4 (the
+caller glue does not exist yet). **advC** circuit restart resets state and re-spawns
+instead of typed-unavailable-fast — already disclosed/deferred to DR-2. **advD (medium)
+— O2:** the elicitation field schema is server content that is not control-stripped nor
+byte-bounded (only `message` is); `Observation#text` is unattributed (O3). **O4 (low):**
+§8's "stderr surfaced in typed error metadata" is unimplemented in lib (`stderr_tail` is
+scrubbed/bounded but never surfaces).
+
+DR-2 re-home contract confirmed by the critic as disclosed deviation: circuit is durable
+only in-process in v1; DR-2 owns the durable record (`MemoryCircuitStore` default,
+caller-owned durable store).
+
+Fix round OPEN (slice-3 fix): O1 critical + O2 medium + O4 low in scope; O5/advB deferred
+to slice-4 caller glue; advC stays DR-2's. Gate after fix: full `rake ci` both locales,
+scorecard, and the critic's own probe harness re-run (probe 4 must flip to PASS).
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
