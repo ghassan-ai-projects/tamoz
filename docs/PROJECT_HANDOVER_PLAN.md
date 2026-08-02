@@ -1,11 +1,12 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `a88572b` (P10 invocation/elicitation slice; design checkpoint
-`6ff0d40` is documentation-only)
-Current phase: `P10` — governed MCP client/host
-Next action: continue P10 from `a88572b` under `docs/P10_MCP_PLAN.md`; this review does
-not re-plan or assess the active implementation.
+Implementation baseline: `864aeaf` (P10 closed, D-8 closed; DR-4/DR-5/P16 implementations
+in parallel worktrees awaiting ordered merge)
+Current phase: `DR-4` — stale durable-request framework fix
+Next action: merge and verify the DR-4 implementation under
+`docs/DR4_STALE_REQUEST_PLAN.md`; then DR-5, then P16, per the single-active-phase order.
+This review does not re-plan or assess the active implementation.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -63,7 +64,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
 | P8 | complete (§5.3/§5.4 machinery deferred, disclosed) | trusted project profiles | `cab974f` | `a019167`, `0ed3944` |
 | P9 | complete (P9-C/D2/E/B2 deferred, disclosed) | evaluated skills | `5f66099` | `8b095ab` |
-| P10 | implementing | governed MCP client/host | `1d14a22` | `54f675a`, `534a502`, `a88572b` |
+| P10 | complete (P10-D2/H/full-E-conformance deferred with entry conditions, disclosed) | governed MCP client/host | `1d14a22` | `54f675a`, `534a502`, `a88572b`, `a69971d`, `d0e537e`, `9d1d3ec` |
 | P11 | pending | three-layer memory | — | — |
 | P12 | pending | bounded healing and improvement | — | — |
 | P13 | pending | durable scheduling | — | — |
@@ -333,21 +334,22 @@ effects, survive transport failure, and preserve elicitation/ambiguity.
 
 Work packages:
 
-- [ ] **P10-D** Pin SDK/version/protocol profiles and dependency boundary; define server
+- [x] **P10-D** Pin SDK/version/protocol profiles and dependency boundary; define server
   config, credential references, source-qualified descriptors, local effect classification.
-- [ ] **P10-A — admission/discovery:** stdio first, exact command/env/root preview, schema
+- [x] **P10-A — admission/discovery:** stdio first, exact command/env/root preview, schema
   validation, bounded metadata, immutable catalog digest/epoch, reconnect/list-change rules.
-- [ ] **P10-B — execution:** accepted plan binds capability and definition digests;
+- [x] **P10-B — execution:** accepted plan binds capability and definition digests;
   validate arguments/results, bound/redact/attribute output, journal effect identity, stop
   unknown non-idempotent outcomes.
-- [ ] **P10-C — supervision/elicitation:** deadlines, concurrency, process-tree teardown,
+- [x] **P10-C — supervision/elicitation:** deadlines, concurrency, process-tree teardown,
   backoff/circuit, durable originating-call interrupt, headless deny/escalate.
-- [ ] **P10-D2 — HTTP/security:** only after stdio proof; SSRF, redirect, OAuth audience,
-  PKCE/state, token isolation/rotation/revocation, no credentials in state/content/logs.
-- [ ] **P10-H — host/server profile:** expose only an explicit authenticated export
-  manifest; no raw agent, checkpoints, approvals, credentials, private memory, or registry.
-- [ ] **P10-E** Official conformance plus malicious metadata/schema/content, churn, hang,
-  crash, disconnect, ambiguous effect, teardown, and behavioral value tests.
+- [ ] **P10-D2 — HTTP/security:** deferred with entry conditions (stdio proof shipped;
+  SSRF, redirect, OAuth audience, PKCE/state, token isolation/rotation/revocation).
+- [ ] **P10-H — host/server profile:** deferred with entry conditions (explicit
+  authenticated export manifest only).
+- [ ] **P10-E** Official conformance deferred; the §10.2 adversarial suite shipped
+  (malicious metadata/schema/content, churn, hang, crash, disconnect, ambiguous effect,
+  teardown, behavioral value tests — all wired and critic-verified).
 
 Do not reimplement JSON-RPC, use remote annotations as policy, silently adopt new schemas,
 or claim native support before failure paths are durable.

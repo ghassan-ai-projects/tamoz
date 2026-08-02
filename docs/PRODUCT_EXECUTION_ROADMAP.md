@@ -1,11 +1,13 @@
 # Tamoz product execution roadmap
 
-Status: active  
-Current phase: P10 — governed MCP client/host
-Last completed product checkpoint: P9 — evaluated skills
-Canonical next action: plan P10 per docs/design-v0.1/MCP_DESIGN.md; P9 closed
-at 8b095ab with scorecard case agent.skill-no-authority (15 cases, 12
-successes, decision pass); P9-C/D2/E/B2 deferred per the accepted plan
+Status: active
+Current phase: DR-4 — stale durable-request framework fix
+Last completed product checkpoints: P10 — governed MCP client/host (closed; scorecard 17
+cases, 14 successes, decision pass, 4/4 hard gates, safety 0; D-8 real-model action fix
+also closed — read-only AND action mode proven end to end against a real model); P10-D2/
+H/full-E-conformance deferred with entry conditions
+Canonical next action: merge and verify the DR-4 implementation worktree per
+docs/DR4_STALE_REQUEST_PLAN.md, then DR-5, then P16 (single-active-phase order)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -50,7 +52,7 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P7 | Interactive multi-turn CLI | high | medium | complete `7469fa2` | clarify, redirect, continue, and resume one durable session |
 | P8 | Trusted project profiles | medium–high | medium | complete `0ed3944` (§5.3/§5.4 machinery deferred, disclosed) | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
 | P9 | Skills | medium–high | medium | complete `8b095ab` (P9-C/D2/E/B2 deferred, disclosed) | one evaluated content-addressed skill improves a task without granting authority |
-| P10 | MCP client/host slice | high | high | pending | one real server, pinned catalog, supervised transport, local policy, durable effects |
+| P10 | MCP client/host slice | high | high | complete (D2/H/E-conformance deferred) | one real server, pinned catalog, supervised transport, local policy, durable effects |
 | P11 | Three-layer memory | high | high | pending | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
 | P12 | Bounded self-healing and improvement | high | high | pending | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates |
 | P13 | Durable scheduler | medium | high | pending | one recurring task enters the ordinary request/review/effect path exactly once |

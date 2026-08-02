@@ -1136,7 +1136,7 @@ end (read-only AND action mode, real DeepSeek).**
 | D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
 | P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | complete | **complete** (`8b095ab`) — D/A/B landed, adversarial suite 37 tests, `skill-no-authority` scorecard case (15 cases, 12 successes, safety zero); P9-C/D2/E/B2 deferred per accepted plan; critic pending |
-| P10 governed MCP | implementing | **in progress** — latest implementation checkpoint `a88572b`; remaining proof follows the active P10 plan and is outside this design review |
+| P10 governed MCP | complete | **closed** — slices 1–4 + planning-surface fix (`a69971d`, `d0e537e`, `9d1d3ec`); slice-3 critic FAIL (O1) fixed; slice-4 critic PASS-WITH-GAPS (planning-surface gap fixed); scorecard 17/14/pass, safety 0; D2/H/full-E-conformance deferred per plan scope |
 | DR-4/DR-5, P11–P18 | pending | not started; ordered by the checkpoint deep review |
 
 ---
