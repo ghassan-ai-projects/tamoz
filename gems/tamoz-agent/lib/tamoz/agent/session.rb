@@ -113,6 +113,49 @@ module Tamoz
       end
       private :verify_profile_binding!
 
+      # P9 §7, invariant 41: a resumed session must bind the exact skill tree it was
+      # planned against. Any epoch difference stops; there is no degraded read-only
+      # continuation, because a changed skill body is changed *instructions* and
+      # continuing an accepted plan under different instructions is the failure the
+      # invariant names. Legacy and skill-free sessions share the "none" epoch, so
+      # pre-P9 sessions resume untouched.
+      #
+      # This is the public entry point for operations that reuse an existing thread
+      # without going through `guard_state!` (the CLI's follow-up and redirect).
+      # `resume`, `continue`, and `recover` enforce the same rule through
+      # `guard_state!`, so no programmatic caller can bypass it by not calling this.
+      def verify_skill_binding!(thread:)
+        stored = stored_state(thread)
+        enforce_skill_binding!(thread, stored) if stored
+        nil
+      end
+
+      # A thread with no checkpoint has nothing to protect: intake will write the
+      # current epoch. Every other failure — corruption, an unsupported record
+      # version — propagates, because a guard that swallows an unreadable record
+      # fails *open*, which is the opposite of what invariant 41 asks for.
+      def stored_state(thread)
+        snapshot = @app.checkpointer.latest(thread_id: thread, namespace: [])
+        return nil unless snapshot
+
+        SessionRecords.load_state!(@app.snapshot(snapshot).state)
+      end
+      private :stored_state
+
+      def enforce_skill_binding!(thread, state)
+        record = state[:session]
+        return unless record
+
+        stored = record.fetch("skill_epoch", SessionRecords::LEGACY_SKILL_EPOCH)
+        current = toolbox.skill_epoch
+        return if stored == current
+
+        raise SkillSnapshotUnavailableError,
+              "session #{thread} was planned against skill epoch #{stored}; the current " \
+              "catalog is #{current}. Restore the exact skill trees or start a new session."
+      end
+      private :enforce_skill_binding!
+
       def self.build_definition(nodes)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
           state :task, default: ""
@@ -313,11 +356,15 @@ module Tamoz
 
       # Invariant 18: an unsupported newer record version must fail before any node
       # runs. This is the boundary where that happens for a resumed session.
+      # Every durable continuation funnels through here, so the P9 exact-digest
+      # replay rule is enforced by the code path rather than by each caller
+      # remembering to ask for it.
       def guard_state!(thread)
-        snapshot = @app.checkpointer.latest(thread_id: thread, namespace: [])
-        return unless snapshot
+        state = stored_state(thread)
+        return unless state
 
-        SessionRecords.load_state!(@app.snapshot(snapshot).state)
+        enforce_skill_binding!(thread, state)
+        state
       end
 
       def outcome(thread:, request_id:)

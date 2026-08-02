@@ -5,6 +5,7 @@ require_relative "agent/version"
 require_relative "agent/errors"
 require_relative "agent/plan"
 require_relative "agent/deliberation"
+require_relative "agent/skills"
 require_relative "agent/toolbox"
 require_relative "agent/ruby_llm_model"
 require_relative "agent/runtime"
@@ -26,9 +27,13 @@ module Tamoz
       allow_changes: false,
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
-      approval: nil
+      approval: nil,
+      skills: Skills::Snapshot.empty
     )
-      toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:)
+      # `skills` is a compiled snapshot supplied by the caller — operator authority.
+      # It is never discovered by scanning the workspace, so repository content can
+      # never put a skill on the catalog (plan §2).
+      toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:, skills:)
       Runtime.new(model:, toolbox:, max_plan_attempts:, approval:)
     end
   end

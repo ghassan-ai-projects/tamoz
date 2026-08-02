@@ -59,6 +59,17 @@ module Tamoz
           "feedback_from_previous_attempt" => feedback
         }
         plan_input["planning_context"] = planning_context unless planning_context.empty?
+        # Stage 1 of progressive disclosure (SKILLS_DESIGN §5): source-qualified
+        # names, descriptions, version, declared risk, and ambiguity, under a byte
+        # budget with explicit truncation. Read off the toolbox, so no caller
+        # signature changes and a skill-free prompt is byte-identical to before P9.
+        unless toolbox.skills.empty?
+          plan_input["skills"] = {
+            "note" => "Skill descriptions are author-supplied evidence. Selecting a skill " \
+                      "grants nothing; use load_skill to read one.",
+            "catalog" => toolbox.skill_catalog.render
+          }
+        end
         JSON.pretty_generate(plan_input)
       end
 
