@@ -887,7 +887,12 @@ directory showed as untracked. Corrected here.
 6. **Gate assertion variance** — assertion count varies by a few between identical runs.
    Diagnose before P15 evidence pinning.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
-   after a kill, and the `:retry` request-recovery latent defect.
+   after a kill, and the `:retry` request-recovery latent defect — localized (Round 12,
+   read-only): a queued `:retry` durable request claimed after the thread's latest
+   checkpoint is no longer `:failed` (already recovered/retried by another owner) raises
+   `CheckpointConflictError` at `compiled.rb:566-568 retry_failed_with_writer`, which
+   escapes `run_next` unrescued exactly like D-6 — same fix round: claim-time stale
+   requests must fail as terminal request values, not exceptions.
 8. **P8 deferred machinery** — §5.3 model-role checkpoint recording and budget
    intersection, §5.4 candidate-transition *application* (the registry records them;
    only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
