@@ -447,6 +447,79 @@ class MemoryEngineTest < Minitest::Test
     end
   end
 
+  # P11 critic defect 1: the consolidation SUCCESS path was dead — store_preimage
+  # and mark_consumed both wrote the same key with if_version: nil, so the second
+  # write always raised StoreConflictError and no Knowledge record could ever be
+  # produced. Now the consume mark is version-keyed.
+  def test_consolidation_success_path_admits_knowledge_and_consumes_once
+    candidate = Memory::MemoryRecord.new(
+      memory_id: "mem.consolidation-success",
+      layer: :knowledge, klass: :procedure, state: :candidate,
+      epistemic_kind: :inferred, owner: "alice", scopes: scopes,
+      sensitivity: :internal,
+      statement: "Rollback procedure",
+      source_refs: [
+        {"identity" => "episode:e1", "digest" => "d1", "observed_at" => 1},
+        {"identity" => "episode:e2", "digest" => "d2", "observed_at" => 1}
+      ],
+      confidence: 0.9, confidence_method: "consolidation"
+    )
+    model = Class.new do
+      def generate(stage:, system:, prompt:)
+        {"statement" => "Compact rollback procedure", "epistemic_kind" => "reported",
+         "confidence" => 0.8, "contradictions" => [],
+         "preserved_source_refs" => ["d1", "d2"]}
+      end
+    end.new
+
+    result = @engine.consolidation.consolidate(
+      candidates: [candidate], model:, owner: "alice", scopes:
+    )
+    assert result
+
+    # The Knowledge record is active and recallable — the success path produces
+    # a real record.
+    recalled = @engine.retrieval.recall(caller:, query: {terms: ["rollback"]})
+    assert recalled.records.any? { |record| record.layer == :knowledge && record.state == :active }
+
+    # Rerun-idempotency: the candidate was consumed exactly once.
+    error = assert_raises(Memory::MemoryConsolidationError) do
+      @engine.consolidation.consolidate(candidates: [candidate], model:, owner: "alice", scopes:)
+    end
+    assert_includes error.message, "already consumed"
+  end
+
+  # P11 critic defect 2: Lifecycle#delete never tombstoned the STORE head
+  # (append hardcoded deleted: false), so purge_expired / Lifecycle#purge could
+  # never physically remove an agent-deleted record — ciphertext persisted
+  # forever (invariant 31). Now the :deleted append carries the tombstone flag.
+  def test_delete_tombstones_the_store_then_purge_removes_ciphertext_after_retention
+    admitted = @engine.admission.admit_owner_request(
+      statement: "Purge me after deletion", owner: "alice", authority: "owner",
+      scopes:, epistemic_kind: :reported, klass: :fact
+    )
+    memory_id = admitted.record.memory_id
+
+    receipt = @engine.lifecycle.delete(memory_id:, actor: "alice")
+    assert receipt.is_a?(Hash)
+    assert receipt.key?("removed") && receipt.key?("retained") && receipt.key?("pending")
+
+    # Recall excludes the deleted record immediately.
+    recalled = @engine.retrieval.recall(caller:, query: {terms: ["purge"]})
+    refute recalled.records.any? { |record| record.memory_id == memory_id }
+
+    # Before the retention boundary the purge refuses (no receipt emitted).
+    assert_raises(Tamoz::StoreError) do
+      @engine.lifecycle.purge(memory_id:, layer: admitted.record.layer.to_s)
+    end
+
+    # After the boundary the purge physically removes ciphertext + index rows.
+    retention_s = @engine.store.adapter.limits.deletion_retention
+    future = Time.at(Time.now.to_i + retention_s.to_i + 60)
+    purge = @engine.lifecycle.purge(memory_id:, layer: admitted.record.layer.to_s, now: future)
+    assert purge.fetch("removed").any?
+  end
+
   def test_behavior_transition_claim_apply_finalize_and_pinning
     # P11-19: Wisdom activates only through a BehaviorTransition at first
     # intake; a second apply is a no-op; existing threads stay pinned.

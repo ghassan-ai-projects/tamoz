@@ -48,10 +48,10 @@ module Tamoz
           end
 
           candidate = unconsumed.first.candidate
-          preimage = store_preimage(candidate)
+          preimage, preimage_version = store_preimage(candidate)
           proposal = bounded_model_call(model, candidate, accepted)
           validate_proposal!(proposal, candidate, accepted, preimage)
-          mark_consumed(candidate)
+          mark_consumed(candidate, preimage_version:)
 
           proposed = build_proposed_record(proposal, candidate, owner:, scopes:)
           result = @engine.admission.admit_consolidation_candidate(
@@ -126,6 +126,10 @@ module Tamoz
 
         # The preimage: a durable record of the candidate's canonical bytes
         # BEFORE the rewrite, keyed by candidate identity (rerun-idempotency).
+        # Returns [payload, version] — the version is the CAS base the consume
+        # mark MUST use, otherwise the same key's second write raises
+        # StoreConflictError (P11 critic defect 1: the consolidation success
+        # path was dead).
         def store_preimage(candidate)
           payload = {
             "candidate_identity" => candidate.digest,
@@ -134,16 +138,16 @@ module Tamoz
             "preimage_digest" => candidate.digest,
             "recorded_at_ms" => @engine.now_ms
           }
-          @engine.store.put(preimage_namespace, checkpoint_key(candidate), payload, if_version: nil)
-          payload
+          entry = @engine.store.put(preimage_namespace, checkpoint_key(candidate), payload, if_version: nil)
+          [payload, entry.version]
         end
 
-        def mark_consumed(candidate)
+        def mark_consumed(candidate, preimage_version:)
           payload = {
             "candidate_identity" => candidate.digest,
             "consumed_at_ms" => @engine.now_ms
           }
-          @engine.store.put(preimage_namespace, checkpoint_key(candidate), payload, if_version: nil)
+          @engine.store.put(preimage_namespace, checkpoint_key(candidate), payload, if_version: preimage_version)
         end
 
         def checkpoint_key(candidate)

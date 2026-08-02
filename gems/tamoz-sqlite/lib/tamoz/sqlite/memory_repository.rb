@@ -348,13 +348,21 @@ module Tamoz
                 ON v.namespace = h.namespace
                AND v.key = h.key
                AND v.version = h.current_version
+              LEFT JOIN tamoz_memory_index i
+                ON i.store_namespace = h.namespace
+               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
+               AND i.record_version = h.current_version
               WHERE h.namespace LIKE ?
-                AND h.deleted = 1
+                AND (h.deleted = 1 OR i.state = 'deleted')
               ORDER BY h.namespace, h.key
             SQL
             ["#{MEMORY_NAMESPACE_PREFIX}%"]
           )
         end
+        # P11 critic defect 2: matches BOTH store-tombstoned heads (h.deleted = 1,
+        # the manual Store#delete path) AND agent-deleted records (index state
+        # 'deleted' at the head version — the Lifecycle#delete path), so an
+        # agent-deleted record's ciphertext can actually be purged (inv 31).
         rows.filter_map do |row|
           next unless row.fetch(2) && now_ms >= row.fetch(2) + retention_ms
 
@@ -386,7 +394,12 @@ module Tamoz
                 ON v.namespace = h.namespace
                AND v.key = h.key
                AND v.version = h.current_version
-              WHERE h.namespace = ? AND h.key = ? AND h.deleted = 1
+              LEFT JOIN tamoz_memory_index i
+                ON i.store_namespace = h.namespace
+               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
+               AND i.record_version = h.current_version
+              WHERE h.namespace = ? AND h.key = ?
+                AND (h.deleted = 1 OR i.state = 'deleted')
             SQL
             [store_namespace, key]
           )
@@ -469,8 +482,12 @@ module Tamoz
                 ON v.namespace = h.namespace
                AND v.key = h.key
                AND v.version = h.current_version
+              LEFT JOIN tamoz_memory_index i
+                ON i.store_namespace = h.namespace
+               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
+               AND i.record_version = h.current_version
               WHERE h.namespace LIKE ?
-                AND h.deleted = 1
+                AND (h.deleted = 1 OR i.state = 'deleted')
               ORDER BY h.namespace, h.key
             SQL
             ["#{MEMORY_NAMESPACE_PREFIX}%"]
