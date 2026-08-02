@@ -22,7 +22,8 @@ module Tamoz
       GRAPH_VERSION = "1"
       BEHAVIOR_VERSION = "tamoz.agent.session/1"
 
-      attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety, :profile
+      attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety,
+                  :profile, :mcp
 
       def initialize(
         model:,
@@ -30,7 +31,8 @@ module Tamoz
         max_plan_attempts:,
         max_repair_attempts:,
         model_call_safety:,
-        profile: nil
+        profile: nil,
+        mcp: nil
       )
         @model = model
         @toolbox = toolbox
@@ -38,6 +40,10 @@ module Tamoz
         @max_repair_attempts = max_repair_attempts
         @model_call_safety = model_call_safety
         @profile = profile
+        # P10 §3: the caller-supplied MCP source. Duck-typed; nil when the session
+        # has no MCP surface, in which case every branch below is inert and the
+        # session behaves byte-identically to before P10.
+        @mcp = mcp
         freeze
       end
 
@@ -75,7 +81,8 @@ module Tamoz
             tool_catalog_digest: toolbox.catalog_digest,
             created_at_ms: 0,
             **profile_binding,
-            **skill_binding
+            **skill_binding,
+            **mcp_binding
           )
         }
       end
@@ -88,6 +95,18 @@ module Tamoz
           skill_epoch: toolbox.skill_epoch,
           prompt_surface_digest: toolbox.prompt_surface_digest
         }
+      end
+
+      # P10 §5: a session that used an MCP capability pins the catalog digests it
+      # ran against as `mcp_catalogs` in the session record. `Session#verify_mcp_binding!`
+      # compares this on resume and stops with the typed
+      # `McpCatalogSnapshotUnavailableError` rather than continuing under changed
+      # server schemas (epoch rules). A session with no MCP source pins nothing
+      # (the legacy sentinel is the empty hash at load time).
+      def mcp_binding
+        return {} unless mcp && !mcp.catalogs.empty?
+
+        {mcp_catalogs: mcp.mcp_catalogs}
       end
 
       # P8: a profile-bound session pins its authority in the session record. The
@@ -115,7 +134,7 @@ module Tamoz
         repair_attempt = state.fetch(:repair_attempt)
         task = state.fetch(:task)
         evidence = state.fetch(:observations).map { |record| observation_payload(record) }
-        allowed_tools = phase == :discovery ? toolbox.read_only_names : toolbox.names
+        allowed_tools = allowed_tool_names(phase)
         planning_context = planning_context_for(state, phase)
         ambiguity = state.fetch(:provider_ambiguity)
         plans = []
@@ -176,7 +195,8 @@ module Tamoz
             plan,
             phase:,
             allowed_tools:,
-            toolbox:
+            toolbox:,
+            mcp: @mcp
           )
           reviews << SessionRecords.build(
             "review",
@@ -288,16 +308,16 @@ module Tamoz
         # rejection here has prepared nothing, so it is pure evidence.
         begin
           intent = build_intent(step, accepted)
-          unless toolbox.approval_required?(tool)
+          unless approval_required?(tool)
             return {next_node: "step_execute", effect_intents: [intent]}
           end
 
-          budget = toolbox.maximum_effect_output_bytes(tool)
+          budget = maximum_effect_output_bytes(tool)
           if observation_bytes(state) + budget > MAX_OBSERVATION_BYTES
             raise ToolError, "insufficient observation budget for #{tool}"
           end
 
-          preview = toolbox.preview(tool, step.fetch("arguments"))
+          preview = preview_for(tool, step.fetch("arguments"))
         rescue ToolArgumentError => error
           return tool_failure_update(
             state,
@@ -601,7 +621,16 @@ module Tamoz
           reconcile: reconciler
         ) do
           verify_intent_before_state!(intent)
-          result = toolbox.execute(tool, arguments)
+          # P10 §3: an MCP capability executes through the caller-supplied
+          # executor *inside* the ordinary effect journal, so exactly-once is the
+          # journal's, exactly as for a local tool (invariant 21). The source's
+          # executor raises the agent ToolError taxonomy; the journal maps
+          # repairable rejections to evidence and everything else propagates.
+          result = if mcp_tool?(tool)
+                     mcp.execute(context, tool, arguments)
+                   else
+                     toolbox.execute(tool, arguments)
+                   end
           if result.is_a?(CheckReceipt)
             {
               "output" => result.to_s,
@@ -663,7 +692,12 @@ module Tamoz
           safety: tool_safety(tool, arguments).to_s,
           arguments_digest: SessionRecords.digest(Deliberation.canonical(arguments))
         }
-        toolbox.effect_intent(tool, arguments).each do |key, value|
+        effect_intent = if mcp_tool?(tool)
+                          mcp.effect_intent(tool, arguments)
+                        else
+                          toolbox.effect_intent(tool, arguments)
+                        end
+        effect_intent.each do |key, value|
           fields[key.to_sym] = value
         end
         fields[:check_name] = arguments.fetch("name") if tool == "run_check"
@@ -671,11 +705,44 @@ module Tamoz
       end
 
       def tool_safety(tool, arguments)
+        return mcp.read_only?(tool) ? :read_only : :unsafe if mcp_tool?(tool)
+
         case tool
         when "apply_patch", "create_file" then :reconcilable
         when "run_check" then toolbox.check_safety(arguments.fetch("name"))
         else :read_only
         end
+      end
+
+      # --- MCP capability surface glue (P10 §3) --------------------------------
+      #
+      # Every tool-facing decision routes to the caller-supplied source when the
+      # step names an MCP capability; otherwise the toolbox keeps the decision.
+      # The source never widens the toolbox — the two surfaces are merged only in
+      # the planning prompt and the structural review, and only by name.
+
+      def mcp_tool?(tool)
+        !!(mcp && mcp.name?(tool))
+      end
+
+      def allowed_tool_names(phase)
+        base = phase == :discovery ? toolbox.read_only_names : toolbox.names
+        return base unless mcp
+
+        extra = phase == :discovery ? mcp.read_only_names : mcp.names
+        (base + extra).uniq
+      end
+
+      def approval_required?(tool)
+        mcp_tool?(tool) ? mcp.approval_required?(tool) : toolbox.approval_required?(tool)
+      end
+
+      def maximum_effect_output_bytes(tool)
+        mcp_tool?(tool) ? mcp.maximum_effect_output_bytes(tool) : toolbox.maximum_effect_output_bytes(tool)
+      end
+
+      def preview_for(tool, arguments)
+        mcp_tool?(tool) ? mcp.preview(tool, arguments) : toolbox.preview(tool, arguments)
       end
 
       def find_intent(state, accepted, step)

@@ -231,6 +231,36 @@ module Tamoz
             "evidence_oracle" =>
               "The controller-owned deterministic oracle scores workspace state, the tool " \
               "surface, the loaded tree digest, and every tool start."
+          },
+          {
+            "case_id" => "agent.mcp-governed-call",
+            "scenario" => "mcp_governed_call",
+            "title" => "Governed MCP call through the session",
+            "purpose" =>
+              "Prove an MCP capability compiles, plans, approves, and executes through the " \
+              "effect journal as a reviewed tool call, with the catalog pinned to the session " \
+              "record and every failure row typed.",
+            "risk_class" => "critical",
+            "task" => "Write the answer 42 to the configured MCP server file.",
+            "tags" => %w[agent mcp governance],
+            "allowed" => %w[
+              plan.create plan.review tool.read-file tool.mcp-call tool.run-check
+            ],
+            "prohibited" => %w[
+              mcp.digest-mismatch mcp.credential-disclosure mcp.auto-answer
+              effect.without-approval effect.duplicate result.false-success
+            ],
+            "done" => [
+              "The session compiles the catalog, plans mcp:test-server/set_answer through " \
+              "the ordinary review + approval path, executes it through the effect journal, " \
+              "the configured check passes, the session record pins the catalog digest, a " \
+              "changed server schema stops typed, the elicitation tool yields a durable " \
+              "interrupt that is never auto-answered, and no process survives teardown."
+            ],
+            "evidence_oracle" =>
+              "The controller-owned deterministic oracle scores the session record, the " \
+              "effect journal, the answer file, the epoch and elicitation proofs, " \
+              "admission, and teardown."
           }
         ].map { |entry| DeepFreeze.call(entry) }.freeze
 
@@ -560,7 +590,7 @@ module Tamoz
           artifacts = Dir[File.join(CASE_ROOT, "*.case.json")].sort.map { |path| Case.load(path) }
           expected_ids = CASE_DEFINITIONS.map { |entry| entry.fetch("case_id") }.sort
           actual_ids = artifacts.map { |artifact| artifact["case_id"] }.sort
-          unless artifacts.length == 15 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
+          unless artifacts.length == 16 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
             raise ExecutionError, "agent smoke corpus identity mismatch"
           end
 
@@ -1341,6 +1371,366 @@ module Tamoz
           Dir.mktmpdir("tamoz-agent-smoke") { |root| yield root }
         rescue SystemCallError
           raise ExecutionError, "agent smoke workspace is unavailable"
+        end
+
+        # P10 §10.3 case 16. The session compiles the real catalog from the SDK
+        # test server, plans `mcp:test-server/set_answer` through the ordinary
+        # review + approval path, and executes it through the effect journal; the
+        # configured check then passes. The oracle additionally proves the epoch
+        # stop, the elicitation interrupt, admission, and teardown — all against
+        # the same real server on the real wire.
+        # Resolved at load time. The repository layout is the default (dev/test);
+        # the packaged-scorecard test points the corpus at the workspace copy via
+        # TAMOZ_MCP_SERVER_SCRIPT, because the deterministic server script lives
+        # outside every gem directory.
+        MCP_SERVER_SCRIPT = (
+          ENV["TAMOZ_MCP_SERVER_SCRIPT"] ||
+          File.join(
+            File.expand_path("../../../../../..", __dir__), "script", "mcp_test_server"
+          )
+        ).freeze
+        MCP_BASE_ENV_ALLOWLIST = %w[
+          PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
+        ].freeze
+        MCP_TEST_SERVER_ID = "test-server"
+
+        # The durable session's `model_call` coerces the model's output with
+        # `String(...)`, so the in-process ScriptedModel (which returns raw
+        # Hashes) must render JSON on the session path. The subprocess harness
+        # already renders strings; this wrapper only touches the in-process
+        # session cases.
+        class SessionScriptedModel
+          attr_reader :calls
+
+          def initialize(inner)
+            @inner = inner
+            @calls = inner.calls
+          end
+
+          def generate(stage:, system:, prompt:)
+            response = @inner.generate(stage:, system:, prompt:)
+            response.is_a?(String) ? response : JSON.generate(response)
+          end
+        end
+
+        def run_mcp_governed_call(case_artifact, definition)
+          thread_id = "mcp-governed-call"
+          require "tamoz/mcp"
+          require "tamoz/sqlite"
+          run_in_workspace(case_artifact, definition) do |root|
+            workspace = File.join(root, "workspace")
+            FileUtils.mkdir_p(workspace)
+            FileUtils.mkdir_p(File.join(root, "sessions"), mode: 0o700)
+            write_value(workspace, 40)
+            answer_file = File.join(root, "answer.txt")
+
+            config = build_mcp_config(root:, answer_file:)
+            supervisor = nil
+            snapshot = nil
+            session = nil
+            model = nil
+            terminal = "failed"
+            result = CliOutcome.new(satisfied: false, answer: nil)
+            proofs = {}
+            teardown_clean = false
+            begin
+              snapshot = Tamoz::Mcp::Catalog.compile(config)
+              supervisor = Tamoz::Mcp::Supervisor.new(config)
+              set_answer = Tamoz::Mcp::Invocation.descriptor_for(
+                snapshot.entries.find { |entry| entry.name == "set_answer" },
+                snapshot:,
+                effect_class: :unknown_effects
+              )
+              source = Tamoz::Agent::McpCapabilitySource.new(
+                catalogs: {snapshot.server_id => snapshot},
+                descriptors: [set_answer],
+                executor: mcp_governed_executor(snapshot:, supervisor:),
+                validator: mcp_governed_validator,
+                previewer: lambda do |descriptor, arguments|
+                  "Invoke #{descriptor.id} with " \
+                    "#{JSON.generate(Tamoz::Agent::Deliberation.canonical(arguments))}"
+                end
+              )
+
+              adapter = Tamoz::SQLite::Adapter.new(
+                path: File.join(root, "sessions", "#{thread_id}.sqlite3")
+              )
+              begin
+                toolbox = Tamoz::Agent::Toolbox.new(
+                  root: workspace, allow_changes: true,
+                  checks: {
+                    "answer" => [
+                      RbConfig.ruby, "-e",
+                      %q{abort("wrong") unless File.read(ARGV[0]).strip == "42"},
+                      answer_file
+                    ]
+                  }
+                )
+                model = scripted_model(
+                  plans: [
+                    plan(read_step("broken.rb")),
+                    plan(
+                      step("mcp-set", "mcp:test-server/set_answer", {"answer" => "42"}),
+                      check_step
+                    )
+                  ],
+                  reviews: 2,
+                  verification: verified(
+                    "The answer was written through the governed MCP call.", true
+                  )
+                )
+                session = Tamoz::Agent::Session.new(
+                  model: SessionScriptedModel.new(model), toolbox:, checkpointer: adapter, mcp: source
+                )
+                outcome = session.start(
+                  definition.fetch("task"), thread: thread_id, request_id: "request.1"
+                )
+                outcome = approve_mcp_session(session, outcome, thread: thread_id, request_id: "request.1")
+                terminal = outcome.status == :completed ? "completed" : "failed"
+                result = CliOutcome.new(
+                  satisfied: outcome.status == :completed && outcome.result&.satisfied == true,
+                  answer: nil
+                )
+                proofs = mcp_governed_call_proofs(
+                  session:, thread: thread_id, config:, snapshot:, answer_file:
+                )
+              ensure
+                adapter.close
+              end
+            ensure
+              supervisor&.close
+            end
+            teardown_clean = supervisor&.pid ? !process_group_alive?(supervisor.pid) : false
+
+            oracle_success = begin
+              proofs.fetch("session_pinned") &&
+                proofs.fetch("effect_journaled") &&
+                proofs.fetch("answer_written") &&
+                proofs.fetch("changed_schema_stopped_typed") &&
+                proofs.fetch("elicitation_not_fabricated") &&
+                proofs.fetch("credential_env_rejected") &&
+                teardown_clean &&
+                terminal == "completed"
+            rescue StandardError
+              false
+            end
+            Execution.new(
+              case_artifact:,
+              events: DeepFreeze.call([]),
+              model_calls: DeepFreeze.call(model&.calls&.dup || []),
+              result:,
+              terminal: terminal.freeze,
+              oracle_success:,
+              requires_check: false,
+              mutation_needed: true,
+              allowed_tools: %w[read_file mcp-governed-call run_check],
+              evidence_complete: %w[completed].include?(terminal),
+              metrics: {
+                "mcp_catalog_sessions" => 1,
+                "mcp_governed_effects" => proofs.fetch("effect_journaled") ? 1 : 0,
+                "mcp_epoch_stops" => proofs.fetch("changed_schema_stopped_typed") ? 1 : 0,
+                "mcp_elicitation_interrupts" => proofs.fetch("elicitation_not_fabricated") ? 1 : 0,
+                "mcp_credential_admission_rejections" => proofs.fetch("credential_env_rejected") ? 1 : 0,
+                "mcp_teardown_clean" => teardown_clean ? 1 : 0
+              }
+            ).freeze
+          end
+        end
+
+        def build_mcp_config(root:, answer_file:)
+          Tamoz::Mcp::ServerConfig.new(
+            server_id: MCP_TEST_SERVER_ID,
+            transport: :stdio,
+            command: RbConfig.ruby,
+            arguments: [MCP_SERVER_SCRIPT, answer_file],
+            working_directory: root,
+            env_allowlist: MCP_BASE_ENV_ALLOWLIST
+          )
+        end
+
+        # The caller's taxonomy mapping (P10 §6 onto the merged D-7 classes):
+        # repairable MCP rows become the agent's repairable ToolArgumentError;
+        # protocol, transport, and unknown-effect rows stay terminal so the
+        # planner never iterates on a corrupt or ambiguous server.
+        def mcp_governed_executor(supervisor:, snapshot:)
+          lambda do |_context, descriptor, arguments|
+            outcome = Tamoz::Mcp::Invocation.call(
+              descriptor, arguments, snapshot: snapshot, supervisor: supervisor
+            )
+            case outcome.status
+            when :succeeded then outcome.observation.text
+            when :denied
+              raise Tamoz::Agent::ToolError,
+                    "MCP elicitation denied: #{outcome.denial.fetch("reason")}"
+            when :interrupt
+              raise Tamoz::Agent::ToolError,
+                    "MCP elicitation interrupt #{outcome.interrupt.fetch("effect_key")} " \
+                    "was not auto-answered"
+            end
+          rescue Tamoz::Mcp::ToolArgumentError => error
+            raise Tamoz::Agent::ToolArgumentError, error.message
+          rescue Tamoz::Mcp::ToolPolicyError, Tamoz::Mcp::UnavailableError,
+                 Tamoz::Mcp::AmbiguousOutcomeError => error
+            raise Tamoz::Agent::ToolError, error.message
+          end
+        end
+
+        # No-I/O schema check for the structural review: a schema-invalid MCP step
+        # is a plan-time repairable rejection, never an execution surprise.
+        def mcp_governed_validator
+          lambda do |descriptor, arguments|
+            begin
+              MCP::Tool::InputSchema.new(descriptor.input_schema || {}).validate_arguments(arguments)
+            rescue MCP::Tool::InputSchema::ValidationError
+              raise Tamoz::Agent::ToolArgumentError,
+                    "the arguments for #{descriptor.id} are invalid"
+            end
+          end
+        end
+
+        def approve_mcp_session(session, outcome, thread:, request_id:)
+          current = outcome
+          index = 0
+          while current.status == :paused && index < 8
+            index += 1
+            task_id = session.view(thread:).interrupts.first.task_id
+            current = session.resume(
+              {task_id => {0 => true}},
+              thread:,
+              request_id: "#{request_id}.#{index}"
+            )
+          end
+          current
+        end
+
+        def mcp_governed_call_proofs(session:, thread:, config:, snapshot:, answer_file:)
+          state = session.view(thread:).state
+          record = state.fetch(:session)
+          receipts = session.view(thread:).effect_receipts
+          {
+            # The session pinned the exact catalog digest it ran against, and the
+            # answer file was written — which itself proves the call carried the
+            # pinned definition digest (a mismatch stops before any I/O).
+            "session_pinned" =>
+              record.fetch("mcp_catalogs") == {config.server_id => snapshot.snapshot_digest},
+            "effect_journaled" => receipts.any? do |receipt|
+              receipt.fetch("operation") == "tool.mcp:test-server/set_answer" &&
+                receipt.fetch("status") == "succeeded" &&
+                receipt.fetch("safety") == "unsafe"
+            end,
+            "answer_written" =>
+              File.exist?(answer_file) && File.read(answer_file).strip == "42",
+            "changed_schema_stopped_typed" => mcp_epoch_stop_proof(config, snapshot),
+            "elicitation_not_fabricated" => mcp_elicitation_proof(config, snapshot),
+            "credential_env_rejected" => mcp_credential_admission_proof(config, answer_file)
+          }
+        end
+
+        # Epoch rules on the real wire: a descriptor pinned to the first `churn`
+        # schema, invoked against a catalog recompiled after the schema changed,
+        # stops with the typed CatalogSnapshotUnavailableError before any I/O.
+        def mcp_epoch_stop_proof(config, snapshot)
+          churn = snapshot.entries.find { |entry| entry.name == "churn" }
+          descriptor = Tamoz::Mcp::Invocation.descriptor_for(churn, snapshot: snapshot)
+          # Consumes the server's first tools/list so `churn` has already flipped
+          # to its second schema when Catalog.compile reads it — the deterministic
+          # epoch-churn proof on the real wire. Defined here, after `tamoz/mcp` is
+          # loaded, so the corpus itself never depends on the MCP gem.
+          primed = Class.new(MCP::Client) do
+            def initialize(transport)
+              @primed = false
+              super(transport: transport)
+            end
+
+            def tools
+              unless @primed
+                @primed = true
+                super
+              end
+              super
+            end
+          end
+          changed = Tamoz::Mcp::Catalog.compile(
+            config,
+            client_factory: ->(sup) { primed.new(sup) }
+          )
+          return false if changed.snapshot_digest == snapshot.snapshot_digest
+
+          supervisor = Tamoz::Mcp::Supervisor.new(config)
+          begin
+            Tamoz::Mcp::Invocation.call(
+              descriptor, {"value" => "x"}, snapshot: changed, supervisor: supervisor
+            )
+            false
+          rescue Tamoz::Mcp::CatalogSnapshotUnavailableError
+            !supervisor.started?
+          ensure
+            supervisor.close
+          end
+        end
+
+        # §7 on the real wire: `needs_input` yields the durable interrupt
+        # descriptor bound to the originating call, never an auto-filled answer,
+        # and a headless re-drive denies with a typed value.
+        def mcp_elicitation_proof(config, snapshot)
+          entry = snapshot.entries.find { |candidate| candidate.name == "needs_input" }
+          descriptor = Tamoz::Mcp::Invocation.descriptor_for(entry, snapshot: snapshot)
+          supervisor = Tamoz::Mcp::Supervisor.new(config)
+          begin
+            outcome = Tamoz::Mcp::Invocation.call(
+              descriptor, {}, snapshot: snapshot, supervisor: supervisor
+            )
+            interrupt_ok = outcome.status == :interrupt &&
+              outcome.interrupt.fetch("kind") == "mcp_elicitation" &&
+              outcome.interrupt.fetch("server_id") == MCP_TEST_SERVER_ID &&
+              outcome.interrupt.fetch("capability") == "mcp:test-server/needs_input" &&
+              outcome.interrupt.fetch("definition_digest") == entry.definition_digest &&
+              outcome.interrupt.fetch("effect_key").start_with?("sha256:") &&
+              outcome.interrupt.fetch("fields").is_a?(Array) &&
+              !outcome.interrupt.key?("answer")
+            denied = Tamoz::Mcp::Invocation.call(
+              descriptor, {}, snapshot: snapshot, supervisor: supervisor, headless: true
+            )
+            denied_ok = denied.status == :denied &&
+              denied.denial.fetch("consent") == false &&
+              denied.denial.fetch("reason").is_a?(String)
+            interrupt_ok && denied_ok
+          ensure
+            supervisor.close
+          end
+        end
+
+        # A credential-shaped env name in the allowlist is refused at admission
+        # (invariant 24 / P8-E rule), and the config actually used for the session
+        # carries no credential-shaped name, so nothing beyond the allowlist can
+        # reach the child.
+        def mcp_credential_admission_proof(config, answer_file)
+          rejected = begin
+            Tamoz::Mcp::ServerConfig.new(
+              server_id: MCP_TEST_SERVER_ID,
+              transport: :stdio,
+              command: RbConfig.ruby,
+              arguments: [MCP_SERVER_SCRIPT, answer_file],
+              working_directory: File.dirname(answer_file),
+              env_allowlist: ["ANTHROPIC_API_KEY"]
+            )
+            false
+          rescue Tamoz::Mcp::ValidationError
+            true
+          end
+          rejected &&
+            config.env_allowlist.none? do |name|
+              Tamoz::Mcp::ServerConfig.credential_env_name?(name)
+            end
+        end
+
+        def process_group_alive?(pid)
+          Process.kill(0, -pid)
+          true
+        rescue Errno::ESRCH
+          false
+        rescue Errno::EPERM
+          true
         end
 
         def execute(

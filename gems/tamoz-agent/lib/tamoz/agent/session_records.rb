@@ -48,7 +48,11 @@ module Tamoz
             "profile_digest" => STRING,
             "profile_authority" => HASH,
             "skill_epoch" => STRING,
-            "prompt_surface_digest" => STRING
+            "prompt_surface_digest" => STRING,
+            # P10 §5 epoch rules: a session that used an MCP capability pins the
+            # catalog digests it ran against as {server_id => snapshot_digest}.
+            # Optional HASH, legacy sentinel {}, RECORD_VERSION stays 1.
+            "mcp_catalogs" => HASH
           }
         },
         "plan" => {
@@ -252,6 +256,10 @@ module Tamoz
           unless migrated.key?("prompt_surface_digest")
             defaults["prompt_surface_digest"] = LEGACY_PROMPT_SURFACE_DIGEST
           end
+          # P10 §5: no MCP catalogs is one state, however it arose — a pre-P10
+          # session and a P10 session built without an MCP source both resume
+          # against "no catalogs". "{}" is the legacy sentinel.
+          defaults["mcp_catalogs"] = {} unless migrated.key?("mcp_catalogs")
           migrated = Plan.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
         end
 

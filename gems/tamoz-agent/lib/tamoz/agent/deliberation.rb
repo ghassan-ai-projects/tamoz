@@ -97,7 +97,7 @@ module Tamoz
         JSON.pretty_generate(verification_input)
       end
 
-      def structural_issues(plan, phase:, allowed_tools:, toolbox:)
+      def structural_issues(plan, phase:, allowed_tools:, toolbox:, mcp: nil)
         issues = []
         issues << "goal must not be empty" if plan.goal.strip.empty?
         issues << "done_when must contain at least one condition" if plan.done_when.empty?
@@ -118,7 +118,17 @@ module Tamoz
             issues << "#{prefix} has arguments without a tool"
           elsif step.tool
             begin
-              toolbox.validate(step.tool, step.arguments)
+              # P10 §3: an MCP capability is validated by the caller-supplied
+              # source (no I/O), so a schema-invalid MCP step is a plan-time
+              # repairable rejection exactly like a bad local argument. A bare,
+              # non-source-qualified name never reaches this branch: it is not in
+              # `allowed_tools`, so the "unavailable tool" issue above already
+              # rejected it (P10 §10.2 malicious-tool-name row).
+              if mcp && mcp.name?(step.tool)
+                mcp.validate(step.tool, step.arguments)
+              else
+                toolbox.validate(step.tool, step.arguments)
+              end
             rescue ToolError => error
               issues << "#{prefix} is invalid: #{error.message}"
             end

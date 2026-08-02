@@ -48,5 +48,15 @@ module Tamoz
     # against. This is a stop, not a recoverable tool result: continuing would run
     # an accepted plan under instructions that have since changed (invariant 41).
     class SkillSnapshotUnavailableError < Error; end
+
+    # P10 §5: a resumed session cannot bind the exact MCP catalog snapshots it was
+    # planned against. This is a stop, not a recoverable tool result: continuing
+    # would run an accepted plan against server-declared schemas that have since
+    # changed (epoch rules — no silent schema substitution). `tamoz-mcp` raises its
+    # own `Tamoz::Mcp::CatalogSnapshotUnavailableError` for the invocation-level
+    # digest gate; this is the agent-surface twin, raised by
+    # `Session#verify_mcp_binding!` when the pinned `mcp_catalogs` no longer match
+    # the caller's current source.
+    class McpCatalogSnapshotUnavailableError < Error; end
   end
 end

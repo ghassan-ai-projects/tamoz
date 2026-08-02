@@ -17,6 +17,8 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::EffectDispatcher",
           "Tamoz::Agent::Error",
           "Tamoz::Agent::Event",
+          "Tamoz::Agent::McpCapabilitySource",
+          "Tamoz::Agent::McpCatalogSnapshotUnavailableError",
           "Tamoz::Agent::Plan",
           "Tamoz::Agent::PlanRejectedError",
           "Tamoz::Agent::ProtocolError",

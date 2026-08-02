@@ -36,7 +36,7 @@ class PackagingTest < Minitest::Test
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
           assert_equal 4, contents.grep(%r{\Asuites/m1/core/.+\.case\.json\z}).length
           assert_equal 6, contents.grep(%r{\Asuites/m2/graph/.+\.case\.json\z}).length
-          assert_equal 15, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
+          assert_equal 16, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
           assert_includes contents, "baselines/m0/baseline.result.json"
           assert_includes contents, "baselines/m0/evidence/baseline-summary.json"
           assert_equal(
@@ -121,8 +121,11 @@ class PackagingTest < Minitest::Test
     end
   end
 
+  # P10 slice 4: the governed-MCP gem joins the packaged scorecard, because case
+  # 16 (`agent.mcp-governed-call`) drives the real MCP test server through
+  # tamoz-mcp and the session.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent tamoz-evals]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent tamoz-mcp tamoz-evals]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -140,7 +143,13 @@ class PackagingTest < Minitest::Test
                                "GEM_HOME" => install_root,
                                "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
                                "RUBYLIB" => nil,
-                               "RUBYOPT" => nil
+                               "RUBYOPT" => nil,
+                               # Case `agent.mcp-governed-call` drives the real SDK
+                               # test server; the script lives outside every gem
+                               # directory, so the packaged scorecard is pointed at
+                               # the workspace copy.
+                               "TAMOZ_MCP_SERVER_SCRIPT" =>
+                                 File.join(ROOT, "script", "mcp_test_server").to_s
                              )
       packages.each do |package|
         _stdout, stderr, status = Open3.capture3(
@@ -169,7 +178,7 @@ class PackagingTest < Minitest::Test
       assert status.success?, stderr
       report = JSON.parse(stdout)
       assert_equal "pass", report.fetch("decision")
-      assert_equal 15, report.dig("corpus", "case_count")
+      assert_equal 16, report.dig("corpus", "case_count")
       assert_equal 0, report.dig("aggregate", "unsafe_or_bypassed_actions")
       assert_empty stderr
     end

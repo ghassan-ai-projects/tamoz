@@ -59,7 +59,8 @@ module Tamoz
         max_plan_attempts: 3,
         max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
         model_call_safety: :idempotent,
-        profile: nil
+        profile: nil,
+        mcp: nil
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
@@ -78,7 +79,9 @@ module Tamoz
                 "Tamoz::Agent::Runtime for ephemeral work"
         end
 
+        verify_mcp_source!(mcp)
         @toolbox = toolbox
+        @mcp = mcp
         verify_profile_binding!(profile)
         @nodes = SessionNodes.new(
           model:,
@@ -86,13 +89,32 @@ module Tamoz
           max_plan_attempts:,
           max_repair_attempts:,
           model_call_safety:,
-          profile:
+          profile:,
+          mcp:
         )
         @definition = Session.build_definition(@nodes)
         @app = @definition.compile(checkpointer:)
         @runner = @app.durable_runner
         freeze
       end
+
+      # P10 §3 boundary: the agent never depends on tamoz-mcp; the caller-supplied
+      # source is duck-typed, and every MCP-specific behaviour is its own method.
+      def verify_mcp_source!(mcp)
+        return unless mcp
+
+        required = %i[
+          mcp_catalogs catalogs names read_only_names name? read_only?
+          approval_required? maximum_effect_output_bytes validate effect_intent
+          preview execute
+        ]
+        missing = required.reject { |method| mcp.respond_to?(method) }
+        unless missing.empty?
+          raise ArgumentError,
+                "mcp source must respond to #{missing.join(", ")}"
+        end
+      end
+      private :verify_mcp_source!
 
       # P8 §5.2: the toolbox must expose exactly the capability surface the
       # profile pins; a mismatch fails here, before any model I/O.
@@ -130,6 +152,19 @@ module Tamoz
         nil
       end
 
+      # P10 §5 epoch rules: a resumed session must bind the exact MCP catalog
+      # digests it was planned against. A digest mismatch stops with the typed
+      # `McpCatalogSnapshotUnavailableError` — no silent schema substitution. The
+      # same guard shape as `verify_skill_binding!`: legacy sessions (no
+      # `mcp_catalogs` → `{}`) and MCP-free sessions share the empty pin, so a
+      # pre-P10 session and a session built without an MCP source resume
+      # identically, and every mismatch fails closed.
+      def verify_mcp_binding!(thread:)
+        stored = stored_state(thread)
+        enforce_mcp_binding!(thread, stored) if stored
+        nil
+      end
+
       # A thread with no checkpoint has nothing to protect: intake will write the
       # current epoch. Every other failure — corruption, an unsupported record
       # version — propagates, because a guard that swallows an unreadable record
@@ -155,6 +190,21 @@ module Tamoz
               "catalog is #{current}. Restore the exact skill trees or start a new session."
       end
       private :enforce_skill_binding!
+
+      def enforce_mcp_binding!(thread, state)
+        record = state[:session]
+        return unless record
+
+        stored = record.fetch("mcp_catalogs", {})
+        current = @mcp ? @mcp.mcp_catalogs : {}
+        return if stored == current
+
+        raise McpCatalogSnapshotUnavailableError,
+              "session #{thread} was planned against MCP catalog digests #{stored.inspect}; " \
+              "the current source exposes #{current.inspect}. Restore the exact catalog " \
+              "snapshots or start a new session."
+      end
+      private :enforce_mcp_binding!
 
       def self.build_definition(nodes)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
@@ -364,6 +414,7 @@ module Tamoz
         return unless state
 
         enforce_skill_binding!(thread, state)
+        enforce_mcp_binding!(thread, state)
         state
       end
 
