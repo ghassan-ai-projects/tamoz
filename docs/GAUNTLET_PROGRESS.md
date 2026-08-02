@@ -1069,6 +1069,34 @@ critic gap (real models blind to MCP tools; case 16 passed only because scripted
 re-measured 195,800 → 195,882 — case 16's plan prompt now carries the MCP surface).
 P10 is gate-complete pending the D-8 critic round.
 
+### Round 19 — evals gem substrate merged (DR-3 + assertion variance)
+
+Evals-gem improvement worktree merged `b6c379c` (24 files, +2088/−11; clean merge, no
+conflicts). **DR-3 treatment harness** (`Tamoz::Evals::Harness`): `MemoryTreatmentProfile`
+(mode :ci/:live; CI report declares `decisive_metric: "injection_correctness"`,
+`attribution_claimed: false`, `delta_measurement.ci_claim: "none"`, 5 hard gates,
+digest-stable with declared `exempt_fields: ["duration_ms"]`, `reproducible_surface` for
+P15-F), `MemoryCell` (per-(case,treatment) isolated store, pre/post seed-digest, outcomes
+pass/fail/insufficient/attribution_incomplete, mandatory `expected_delta`), `AgentMemoryCorpus`
+(5 scenarios: recall_requirement, sensitive_guard, prompt_injection_defense,
+no_flip_under_scripted, holdout_isolation; digest-pinned `suites/agent/memory/` fixtures
+wired into `rake fixtures:refresh`), `MemoryStore`/`MemoryRetrieval` (epoch ladder
+none|experience|knowledge|wisdom)/`MemoryEnvelope`/`MemoryHoldout` (0o700 partition),
+Verifier rejects memory cases without non-null `expected_delta`, CLI `tamoz-eval treatment
+memory` (live refused as operator-run), AgentRunAudit gains memory counters (scorecard
+output unchanged). **Metric-split proof**: CI report carries no attribution keys anywhere;
+`scripted_control_identical` gate asserts all four treatments of every case are identical
+(scripted model ignores prompts — no attribution signal); a real-fail baseline cell still
+shows no flip and `delta_observed: false`; a corpus that strips `:memory_recalled` events →
+`attribution_incomplete`, never credited. **Assertion variance fixed**: subprocess_runner_test
+moved from assert-inside-poll-callback to observe-and-assert-once-on-aggregate — 128
+assertions on all 5 consecutive runs (was 227 vs 230 back-to-back). Gates: 789 runs / 0
+failures under BOTH locales (30,210 assertions each, identical totals; one transient C-locale
+flake re-ran green); scorecard unchanged 17/14/pass, 4/4 gates, safety 0. Deferrals: smoke
+corpus under all four treatments (P11-ED follow-on; the null-control mechanism is proven on
+the memory corpus), live layer operator-gated (no live-provider code in repo), the real
+memory store (P11-D/P11-B) — P11-E points the same harness API at it. Critic in flight.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
