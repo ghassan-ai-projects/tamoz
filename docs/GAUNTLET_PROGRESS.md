@@ -1287,6 +1287,30 @@ injection — never mark alone); 18 prior cases byte-identical (regeneration rep
 (vector search, Situation coupling, cross-user learning, separate memory gem — entry
 conditions recorded). 30-probe critic in flight.
 
+**P11 CLOSED — critic PASS-WITH-GAPS, both must-fix defects landed.** The relaunched
+fresh-context critic executed the 30-probe exam at HEAD: every safety-critical claim
+verified TRUE on the real code (decryption boundary P11-07 — zero decrypts on scans;
+admission determinism; SQL authorization-before-ranking; hard-zero sweep; DR-1
+BehaviorTransition rev4; MIGRATION_2; DR-3 store_factory honesty; case-19
+non-tautology). Two must-fix defects found in shipped work packages with zero test
+coverage (the suite was green only because the broken success paths were untested):
+**(1) consolidation success path dead** — `store_preimage`/`mark_consumed` both wrote the
+same key with `if_version: nil`, so the second write always raised StoreConflictError and
+the phase's only model call could never produce a Knowledge record; fixed with a
+version-keyed consume mark + success-path test (Knowledge admitted, active, recallable,
+consumed exactly once). **(2) lifecycle delete→purge chain broken (inv 31)** — the
+`:deleted` record append never tombstoned the store head, so purge_expired/purge (both
+keyed on `h.deleted = 1`) could never physically remove an agent-deleted record; fixed
+by matching agent-deleted records via the memory index state ('deleted' at the head
+version) in all three purge finders — the store tombstone path (manual Store#delete)
+still matches — plus an end-to-end delete→purge test (refusal pre-retention, removal
+post). Non-blocking findings recorded (admission never-an-exception branches
+unreachable; matched_restricted not user-scoped — metadata-level oracle, hard-zero
+intact; one-candidate v1 interpretation; minor mark_recalled/fetch_transition_row/
+dead-counter notes). Gate after fixes: **942/34,010/0 BOTH locales**, design:validate 55
+invariants, scorecard 19/16/pass, safety 0. **P11 CLOSED — memory ships (three layers,
+SQL-authorization-before-decryption, DR-1 promotion machinery, purge-with-proof).**
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
