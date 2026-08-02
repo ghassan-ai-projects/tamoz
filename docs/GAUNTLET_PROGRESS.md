@@ -885,7 +885,13 @@ directory showed as untracked. Corrected here.
    stayed `1`, so historical scorecard artifacts are not comparable. Belongs to P15-F evidence
    pinning.
 6. **Gate assertion variance** — assertion count varies by a few between identical runs.
-   Diagnose before P15 evidence pinning.
+   Diagnosed (Round 12): `test/subprocess_runner_test.rb` asserts *inside* intervention
+   poll callbacks whose poll count is timing-dependent — e.g.
+   `test_nil_intervention_decision_remains_bounded_by_process_timeout` (line 226)
+   asserts twice per poll and only bounds `polls` (0 < polls <= 75), so identical code
+   produces different totals (227 vs 230 observed back-to-back). Fix for P15 evidence
+   pinning: accumulate observations and assert once on the aggregate, never inside a
+   timing-dependent callback.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
    after a kill — localized (Round 12, read-only): `atomic_create`
    (`gems/tamoz-agent/lib/tamoz/agent/toolbox.rb:717`) and `atomic_replace`
