@@ -505,7 +505,9 @@ module Tamoz
           emitter: emitter
         )
         prompts = []
-        @stream_error = nil
+        # `@stream_error` is deliberately not reset here: the drain loop calls
+        # `run_with_stream` once more after the failing run (to confirm nothing is
+        # queued), and that empty poll must not erase the reason the operator just saw.
 
         outcome = nil
         worker = Thread.new do

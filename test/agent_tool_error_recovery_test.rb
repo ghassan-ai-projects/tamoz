@@ -263,7 +263,9 @@ class AgentToolErrorRecoveryTest < Minitest::Test
           runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
         end
 
-        assert_match(/symlink/, error.message)
+        # The symlink's realpath lands outside the workspace, so containment fires
+        # before the symlink-specific check; either way the rejection is policy.
+        assert_match(/escapes the workspace root/, error.message)
         refute error.repairable?
         assert_equal 0, events.count { |event| event.type == :tool_rejected }
         assert_equal 0, events.count { |event| event.type == :repair_started }
@@ -366,7 +368,9 @@ class AgentToolErrorRecoveryTest < Minitest::Test
       view = session.view(thread: "t.bound")
       assert_equal "repair_attempts_exhausted", view.terminal.fetch("reason")
       assert_equal 3, view.state.fetch(:observations).count { |record| record.key?("failure") }
-      assert_equal 2, view.state.fetch(:seen_failure_signatures).length
+      # The exhausting rejection's signature is recorded too (legacy `failed_check`
+      # behavior): it is evidence, and only two repair attempts actually ran.
+      assert_equal 3, view.state.fetch(:seen_failure_signatures).length
       assert_empty view.effect_receipts.select { |record| record.fetch("operation") == "tool.apply_patch" }
       assert adapter.integrity_check.fetch("ok")
     end
@@ -439,6 +443,7 @@ class AgentToolErrorRecoveryTest < Minitest::Test
             "--session-dir", File.join(directory, "sessions"),
             "--root", workspace,
             "--allow-changes",
+            "--check", "answer=#{Shellwords.join(answer_check.fetch("answer"))}",
             "--session", "cli-error",
             "ask", "Make Broken.answer equal 42"
           ],
@@ -451,9 +456,11 @@ class AgentToolErrorRecoveryTest < Minitest::Test
 
         assert_equal 1, status
         refute_match(/^Error: *$/, err.string)
-        assert_match(/^Error: .*symlink/, err.string)
+        # The symlink's realpath lands outside the workspace, so the disclosed reason
+        # is the containment violation, and the failing node is named.
+        assert_match(/^Error: .*escapes the workspace root/, err.string)
         assert_match(/node step_/, err.string)
-        assert_match(/tamoz: session failed: .*symlink/, err.string)
+        assert_match(/tamoz: session failed: .*escapes the workspace root/, err.string)
       end
     end
   end
