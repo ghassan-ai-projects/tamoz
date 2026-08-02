@@ -28,8 +28,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::SessionRecords",
           "Tamoz::Agent::SessionView",
           "Tamoz::Agent::Step",
+          "Tamoz::Agent::ToolArgumentError",
           "Tamoz::Agent::Toolbox",
           "Tamoz::Agent::ToolError",
+          "Tamoz::Agent::ToolPolicyError",
           "Tamoz::Agent::VERSION"
         ],
         "tamoz-core" => [
@@ -49,6 +51,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::ConfigurationError",
           "Tamoz::Context",
           "Tamoz::Core::VERSION",
+          "Tamoz::DisclosableMessage",
           "Tamoz::EffectUnknownError",
           "Tamoz::Emitter::Null",
           "Tamoz::Error",

@@ -129,7 +129,10 @@ module Tamoz
           },
           optional: {
             "tool" => STRING,
-            "check" => HASH
+            "check" => HASH,
+            # A repairable tool rejection, recorded as evidence rather than raised.
+            # Carries kind, tool, error_class, reason, and failure_signature.
+            "failure" => HASH
           }
         },
         "verification" => {
