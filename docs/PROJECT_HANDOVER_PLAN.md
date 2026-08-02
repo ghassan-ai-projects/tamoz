@@ -1,12 +1,12 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `16e91b0` (P10, D-8, DR-3, DR-4, DR-5, P16, evals substrate
-closed; P17 implemented in critic round; scorecard 18/15/pass)
-Current phase: `P17` — governed websearch (critic round in flight)
-Next action: close the P17 critic round, then P11 (implementing DR-1 before Wisdom
-activation), P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18, P15
-per the single-active-phase order.
+Implementation baseline: `e5f831d` (P10, D-8, DR-4, DR-5, P16, evals substrate, P17 all
+closed; scorecard 18/15/pass)
+Current phase: `P11` — three-layer memory
+Next action: implement P11 per `docs/P11_MEMORY_PLAN.md` (worktree: MIGRATION_2,
+MemoryRepository, Tamoz::Agent::Memory, DR-1 BehaviorTransition before Wisdom, DR-3
+harness integration); merge, gate, then the 30-probe critic round; then P12.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics

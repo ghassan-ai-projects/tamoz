@@ -1,13 +1,12 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P17 — governed websearch (critic round in flight)
-Last completed product checkpoints: P10 (closed), D-8 (real-model action proven), DR-4
-(stale-request), DR-5 (profile machinery), P16 (tools gem — scorecard byte-identical),
-evals substrate (DR-3 + assertion variance), P17 (implemented — governed websearch);
-scorecard 18 cases / 15 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: close the P17 critic round, then P11 (DR-1 before Wisdom
-activation), P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18, P15.
+Current phase: P11 — three-layer memory
+Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals substrate, P17 all
+closed; scorecard 18 cases / 15 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: implement P11 per docs/P11_MEMORY_PLAN.md (DR-1 before Wisdom
+activation), then P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18,
+P15 (single-active-phase order)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
