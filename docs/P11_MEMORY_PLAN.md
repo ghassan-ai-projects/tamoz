@@ -1,15 +1,16 @@
 # P11 — three-layer memory: implementation plan
 
-Status: accepted for implementation (revision 2 — plan-critic corrections C1–C9
-integrated; see `docs/reviews/P11_MEMORY_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review transaction
+and proof-baseline corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Authoritative inputs: `docs/design-v0.1/MEMORY_DESIGN.md` (source of truth for semantics),
 `AGENT_DESIGN.md` §14, invariants 24–31, 16–18, the P11 card in
 `docs/PROJECT_HANDOVER_PLAN.md`, and the existing Store/record machinery in
 `tamoz-sqlite` + `tamoz-agent`.
 
 Phase activation rule: this plan is committed as a design artifact while P10 is still the
-active implementation phase. The handover ledger's P11 row stays `pending` until P10
-closes; no P11 code lands before that.
+active implementation phase. Under the single-active-phase order, P11 waits for DR-4,
+DR-5, P16, and P17 to close; no P11 code lands before that.
 
 ## 1. Scope commitment and phase outcome
 
@@ -43,6 +44,20 @@ No `tamoz-memory` gem ships in v0.1 (design §2). Ownership:
   `gems/tamoz-agent/lib/tamoz/agent/memory/`.
 - `tamoz-evals` — the P11-ED treatment harness and P11-E comparison; never a production
   dependency (lazy-load rule, invariant 54-adjacent).
+
+**Atomic storage seam (DC-3):** public `Store#put` owns its transaction, so it cannot
+be called inside a second transaction that also updates the lexical index. P11 adds a
+`tamoz-sqlite`-owned internal `MemoryRepository` implementation. It uses one shared
+private Store append primitive that accepts the caller's existing transaction; public
+`Store#put` delegates to the same primitive and its public surface is unchanged.
+`MemoryRepository#append(record, expected_version:)` owns ONE transaction for Store
+version/head + index row/history. `tamoz-agent` owns record and authorization semantics
+and depends on the structural repository contract. No `send` into Adapter, nested
+transaction, or best-effort two-write sequence is conforming.
+
+P11 consumes the next checksummed SQLite migration available at activation (expected
+`MIGRATION_2` on the current baseline). The test asserts monotonic migration ordering so
+later phases cannot reuse the same ordinal.
 
 Dependency rule (checked by the existing dependency-isolation test): `tamoz-agent` may use
 `tamoz-sqlite` (already does) and `tamoz-core`; the record/admission/retrieval path loads
@@ -162,11 +177,12 @@ marked-and-excluded test; retention bound.
 ### P11-B — retrieval: authorization before ranking
 
 **Lexical index (C1, explicit work item):** P11-B adds one `tamoz-sqlite` table
-`tamoz_memory_index` (columns: `memory_id`, `record_version`, `layer`, `class`, `state`,
+`tamoz_memory_index` (identity/primary key:
+`(store_namespace, memory_id, record_version)`; columns: `memory_id`, `record_version`, `layer`, `class`, `state`,
 `scopes_tenant`, `scopes_user`, `scopes_project`, `sensitivity`, `valid_until`,
 `compatibility_graph`, `compatibility_behavior`, `statement_search` (only for
-non-sensitive records), `searchable? = true`). Rows are written in the same transaction
-as the memory record's Store append. **Deletion/update propagation to the index is
+non-sensitive records), `searchable? = true`). Rows are written through
+`MemoryRepository` in the same transaction as the Store append. **Deletion/update propagation to the index is
 proven before the read path uses it (P11-D2's index-propagation test runs before
 P11-B's retrieval is wired)** — the work order is D2-index-propagation → B.
 
@@ -240,9 +256,10 @@ rerun-idempotency test (candidate identity prevents re-reinforcement).
   54 shape: what removed/retained/pending, counts, purged_at) is emitted for both
   tombstone-delete and hard-purge.
 - **Purge owner (C6):** hard-delete after the retention boundary is a
-  `tamoz-agent`-owned maintenance pass over the Store's version rows (mirroring the
+  `tamoz-agent`-orchestrated `MemoryRepository#purge` pass over the Store's version rows (mirroring the
   existing thread-purge machinery in `adapter.rb purge_thread` + `limits.rb
-  deletion_retention`): it selects `deleted` Store keys whose retention window expired,
+  deletion_retention`). The sqlite repository, not agent code reaching into tables,
+  selects `deleted` Store keys whose retention window expired,
   physically removes the version rows (and index rows), and emits the purge receipt.
   Backups fall under their own retention rules; the receipt names what is pending there.
 - Forgetting: lower priority / require reverification / supersede / quarantine /
@@ -265,8 +282,9 @@ changes require human approval.
 
 **BehaviorTransition (C3, specified; owned by DR-1):** a promoted Wisdom record is activated only
 through a `BehaviorTransition` record consumed at the FIRST INTAKE OF A THREAD — the
-two-phase claim→apply→finalize model (registry CAS gates before any checkpoint write;
-finalize idempotent keyed by `transition_id`; version allocated by CAS at record time).
+revision-4 serialized control record + claim→apply→finalize model (one pending id,
+allocator distinct from active version, registry CAS before any checkpoint write,
+finalize idempotent keyed by `transition_id`).
 Existing threads are pinned: resume/continue/redirect are `boundary: false` and never
 rewrite the session record. The record shape, snapshot bounds, cache-epoch contract,
 and acceptance tests are defined in `docs/DR1_BEHAVIOR_TRANSITION_PLAN.md` (revision
@@ -411,8 +429,8 @@ snapshot), and asserted by the token-budget bound test.
 - [ ] P11-ED treatment harness (deterministic CI runs + env-gated live run); P11-E
       four-treatment comparison on the identical corpus; decisive metric reported;
       sensitive/unauthorized recall hard-zero.
-- [ ] `rake ci` green under both locales; scorecard (existing 16 cases) unchanged with
-      safety counters zero; a new `agent.memory-...` case only if it proves a layer's
+- [ ] `rake ci` green under both locales; every scorecard case present at P11 start is
+      byte/decision-compatible with safety counters zero; a new `agent.memory-...` case only if it proves a layer's
       attributable value without weakening any hard gate.
 - [ ] Trackers updated: handover ledger P11 row, roadmap, `docs/GAUNTLET_PROGRESS.md`.
 - [ ] Deferrals in §5 recorded in the handover plan and progress ledger.

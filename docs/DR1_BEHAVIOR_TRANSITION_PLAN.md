@@ -1,7 +1,7 @@
 # DR-1 — BehaviorTransition and behavior/cache epochs: shared promotion machinery
 
-Status: design round — revision 3 (re-review ACCEPT-WITH-REQUIRED-CORRECTIONS on
-revision 2; C1–C8 integrated; see `docs/reviews/DR1_BEHAVIOR_TRANSITION_PLAN_REVIEW.md`)
+Status: design round — revision 4 (checkpoint deep-review corrections integrated;
+see `docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Origin: P11 plan review C3; P12 plan review C4/C5; DR-1 deep review (rejected rev1 —
 verified: no multi-key Store transaction; `prompt_surface_digest` covers catalog+skills
 only; `behavior_version` frozen at intake); DR-1 re-review (rev2 core verified sound:
@@ -35,7 +35,7 @@ BehaviorTransition = Data.define(
   :kind,                   # :wisdom_promotion | :heuristic_promotion
   :candidate_id, :candidate_digest,
   :behavior_version_before,:behavior_version_after,
-  :behavior_snapshot,      # the durable system-content delta (bounded inline bytes, C4)
+  :behavior_snapshot_digest, # immutable snapshot stored before transition recording
   :rollback_target,        # {behavior_version:, snapshot_digest:}
   :activation_scope,       # v1: :first_intake_of_thread (per-thread scoping dropped)
   :promotion_evidence_digest, :human_gate_evidence,
@@ -47,32 +47,51 @@ BehaviorTransition = Data.define(
 )
 ```
 
-**Version allocation (C3):** `behavior_version_after` is assigned AT RECORD TIME by
-CAS on a single current-version row (Store `tamoz.agent.behavior.current`, value =
-current version). A record-time CAS conflict (two pipelines recording `after=v2` from
-`before=v1`) requires re-record of the loser — the monotonic version space is ENFORCED,
-not aspirational. T5 covers two transitions targeting the same version.
+**Control record and version allocation (checkpoint correction DC-1):** allocation and
+activation are different facts and MUST NOT share one scalar "current version" value.
+One CAS-protected control record stores:
+
+```ruby
+{
+  "next_version" => Integer,
+  "active_version" => String,
+  "active_snapshot_digest" => String,
+  "active_transition_id" => nil | String,
+  "pending_transition_id" => nil | String
+}
+```
+
+Recording first persists the bounded immutable snapshot under its digest, then CASes the
+control record only when `pending_transition_id` is nil and the candidate's `before`
+matches `active_version`. The CAS reserves `next_version + 1` and installs exactly one
+pending transition. A second pipeline must re-evaluate against the eventual active
+version; it cannot reserve an out-of-order transition from the same baseline. This is a
+deliberately serialized v1 promotion queue, not a throughput mechanism.
 
 **Where each artifact lives:**
 
 | Artifact | Storage | Why |
 |---|---|---|
 | transition registry row | Store namespace `tamoz.agent.transitions`, keyed `kind/candidate_digest` | per-key CAS (get-then-CAS on the version number, with status re-check from the get — C8) |
-| behavior snapshot (content bytes) | session record (`behavior_snapshot`, BOUNDED inline, C4) | resume must replay EXACT content; mirrors `Profile.from_authority` replay |
+| immutable behavior snapshot | Store namespace `tamoz.agent.behavior.snapshots`, keyed by digest; copied inline into each adopting session record | later sessions need an authoritative active snapshot and resume must replay exact content |
 | behavior_version + extended prompt-surface digest + epoch reason | session record, committed in the graph checkpoint | atomic with all intake state (invariant 19) |
-| current-version row | Store `tamoz.agent.behavior.current` | version allocation CAS (C3) |
+| behavior control record | Store `tamoz.agent.behavior.control` | separates monotonic allocation, active state, and the singleton pending transition |
 | promotion/human-gate evidence | Store namespace `tamoz.agent.eval_evidence` (written by tamoz-evals) | referenced by digest |
 
 ## 3. Two-phase activation (claim → apply → finalize)
 
-1. **Claim (Store CAS):** `:recorded → :claimed` via get-then-CAS, carrying
-   `claimant {owner, attempt}`. Exactly one consumer wins per transition_id; the loser
-   never builds a `/2` session.
+1. **Claim (Store CAS):** the first intake reads the exact
+   `pending_transition_id`, then changes that transition `:recorded → :claimed` via
+   get-then-CAS, carrying `claimant {owner, attempt}`. Exactly one consumer wins; no
+   unordered registry scan chooses a transition.
 2. **Apply (checkpoint commit):** intake commits the new session record carrying
    `behavior_version_after`, the snapshot, the extended digest, and `epoch_reason =
    transition_id`. Atomic with all intake state (invariant 19).
-3. **Finalize (Store CAS):** `:claimed → :activated` with `consumed_by`, keyed by
-   `transition_id`.
+3. **Finalize (Store CAS):** first CAS the control record, requiring the same pending id
+   and `active_version == behavior_version_before`, to install the new active
+   version/snapshot/transition id and clear pending. Then idempotently mark the transition
+   `:claimed → :activated` with `consumed_by`. Future first intakes read the active
+   version/snapshot from the control record; they do not depend on the canary session.
 
 **Crash rules (C1/C2 — release ordered against finalize):**
 
@@ -81,14 +100,13 @@ not aspirational. T5 covers two transitions targeting the same version.
   **same-owner re-claim is allowed** (take-over) when no committed session references
   the transition (C2) — a user retry on the crashed thread proceeds; a DIFFERENT owner
   is refused until release.
-- crash between 2 and 3: committed `/2` session (its `epoch_reason` names the
-  transition) + `:claimed` row. **Release of a `:claimed` row is permitted ONLY after
-  proving no committed session record references `transition_id` via `epoch_reason`
-  (or `behavior_version_after`); if such a session exists, the release path runs
-  FINALIZE instead** (C1). Release is owner-review-only with a defined sweep (mirroring
-  the sqlite lease machinery), or the lease holder identity + TTL is specified — one
-  mechanism, pinned: owner-review sweep with a lease holder identity, TTL bounded, and
-  the finalize-first check.
+- crash between 2 and 3: committed canary session (its `epoch_reason` names the
+  transition) + `:claimed` row + control record still pending. **Release is permitted
+  ONLY after proving neither a committed session nor the control record's active fields
+  reference the transition. If either does, recovery finalizes the remaining record
+  instead.** The owner-review sweep has a lease
+  identity and bounded TTL. A new intake observing a claimed pending transition uses the
+  still-active old snapshot and never skips ahead.
 
 **Consumption surface (v1): first intake of a thread.** Existing threads cannot
 consume (record frozen at intake; resume/continue/redirect `boundary: false`); they
@@ -136,10 +154,11 @@ scoped to the system-content axis only.
   `Profile.from_authority`); `verify_behavior_binding!` (template:
   `verify_skill_binding!`) compares the SERVED injection region against the pinned
   snapshot (content comparison, not record values).
-- Rollback: restores `behavior_version_before` + the before snapshot; guarded by
-  `if_version` CAS on status `:activated` AND a check that the current version equals
-  `behavior_version_after`; mismatch → fresh rollback transition. Byte-identical
-  restore possible (content stored, delimited region).
+- Rollback is a fresh serialized transition from the current active version to the
+  prior snapshot digest. It reserves a new monotonic version; it does not move the
+  allocator backward. The served injection region is byte-identical to the prior
+  snapshot even though behavior-version metadata advances. An active-version mismatch
+  requires re-evaluation and a fresh rollback transition.
 
 ## 8. Failure model
 
@@ -151,7 +170,7 @@ scoped to the system-content axis only.
 | resume cannot rebuild the pinned snapshot | `BehaviorSnapshotUnavailableError` (terminal) | resume stops typed |
 | promotion/human-gate evidence missing or unresolvable | `UnverifiedTransitionError` (terminal) | candidate never claims; `:rejected` |
 | rollback version mismatch | `BehaviorVersionConflictError` | fresh rollback transition required |
-| two pipelines race version allocation | record-time CAS conflict | loser re-records (C3) |
+| two pipelines record from one baseline | control-record CAS conflict / pending occupied | loser waits, then re-evaluates against the active result; no out-of-order reservation |
 | secret-shaped snapshot content | policy rejection | refused at record/claim (C4) |
 
 All under `Tamoz::Agent::Error`; claim conflicts are typed values, missing evidence and
@@ -164,20 +183,26 @@ snapshot unavailability are terminal.
   records `epoch_reason` = transition_id; no-op activation rejected at claim.
 - T3 resume replay: a pinned-thread session resumed after activation is served the
   pinned snapshot (region content comparison).
-- T4 rollback byte-identical; guarded by the version check.
-- T5 version allocation: two transitions targeting the same version → one records, the
-  other re-records (CAS); two consumers on one claim → one wins.
+- T4 rollback restores byte-identical injection content under a newly allocated version;
+  guarded by the active-version check.
+- T5 ordering/allocation: two pipelines recording from one baseline → one pending;
+  the loser cannot reserve or activate until it re-evaluates after finalize. A later
+  intake after finalize resolves the active snapshot without reading the canary session.
 - T6 evidence-backed: missing/unresolvable evidence → `:rejected` before claim.
 - T7 crash injection: kill between claim/apply/finalize in both orders → exactly-once
   activation; **lease-expiry-interleaving** (expiry fires while the `/2` session
   exists → finalize, never release); **same-owner retry** after crash-between-claim-
   and-apply proceeds via take-over.
+- T8 pending-selection: registry enumeration order cannot affect which transition is
+  claimed; the control record names exactly one pending id. Intake during an unresolved
+  claimed transition remains on the prior active version.
 
 ## 10. Consuming phases (C6 — plans corrected to match)
 
 - P11-W implements the record + claim/apply/finalize + intake wiring + resume binding;
-  the P11 plan §4 BehaviorTransition paragraph is REWRITTEN to revision 3 semantics
-  (intake-only, two-phase, snapshot-in-record, this field list).
+  the P11 plan §4 BehaviorTransition paragraph is REWRITTEN to revision 4 semantics
+  (intake-only, serialized pending id, snapshot-by-digest plus inline session copy,
+  two-phase finalize, this field list).
 - P12-I consumes the seam (`kind: :heuristic_promotion`); the P12 plan §7 turn-boundary
   text is updated to first-intake-only.
 - P15-B verifies old-session resume across a behavior-version change (DR-4 prerequisite).
@@ -185,13 +210,14 @@ snapshot unavailability are terminal.
 
 ## 11. Review checklist (re-review)
 
-1. Is release-ordered-against-finalize (C1) implementable with a single Store read of
-   the session record's `epoch_reason`?
-2. Does the record-time version allocation (C3) close the two-pipeline race with one
-   extra Store key?
+1. Does release check both the session `epoch_reason` and control-record active/pending
+   ids before it can free a claim?
+2. Does the control record keep allocation, active state, and pending state distinct and
+   serialize two pipelines from the same baseline?
 3. Is the delimited injection region (C5) compatible with how the prompt is composed
    (Deliberation::*_SYSTEM constants + toolbox-derived body)?
 4. Does the bounded-snapshot policy (C4) hold without breaking the checkpoint size
    contract?
-5. Do T1–T7 catch the three re-review probes (lease-expiry with committed session,
-   retry after crash-between-claim-and-apply, two pipelines racing version allocation)?
+5. Do T1–T8 catch lease expiry with a committed session, retry after
+   crash-between-claim-and-apply, out-of-order recording, intake during pending, and
+   active-snapshot lookup after the canary session is gone?

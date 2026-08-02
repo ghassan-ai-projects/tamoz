@@ -1,7 +1,8 @@
 # P13 — durable scheduling: implementation plan
 
-Status: accepted for implementation (revision 2 — plan-critic corrections C1–C9
-integrated; see `docs/reviews/P13_SCHEDULER_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review transaction,
+migration, and proof-baseline corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Authoritative inputs: `docs/design-v0.1/SCHEDULER_DESIGN.md` (source of truth for
 semantics), `AGENT_DESIGN.md` §15, invariants 38–40 plus 23, 25–27, 35, the P13 card in
 `docs/PROJECT_HANDOVER_PLAN.md`. `fugit` behavior/version is re-checked at
@@ -19,7 +20,7 @@ inbox exactly once per logical occurrence."
 | Outcome clause | Work package | Proof (test, not claim) |
 |---|---|---|
 | package/store contract, values, revisions | P13-D | `Schedule`/`Occurrence` values per design §3/§5; immutable content-addressed revisions with CAS; strict `at`/interval/cron; IANA timezone + DST with the §8 edge cases as named tests; deterministic jitter from occurrence id |
-| SQLite store, CAS/fence, due scan, atomic identity | P13-A | adapter per design §11; `claim_due` atomic under fence; occurrence + request id created in ONE transaction (seam committed below); dedup lives in `CheckpointStore#enqueue_request`; payload byte-deterministic from occurrence identity + payload_ref |
+| SQLite store, CAS/fence, due scan, atomic identity | P13-A | adapter per design §11 capabilities; `materialize_due` atomically claims + creates occurrence + enqueues request under one fence/transaction; dedup uses the CheckpointStore enqueue primitive; payload byte-deterministic from occurrence identity + payload_ref |
 | bounded misfire/overlap/concurrency/backlog, reclaim, pause/disable/delete/cancel, separate statuses | P13-B | design §6/§7/§10 semantics as named tests: each misfire policy, each overlap policy, bounded backlog, reclaim with higher fence, tombstone delete, separate delivery/execution statuses |
 | grants intersect current policy; plan/review every occurrence; headless approval denies/escalates; narrow self-management | P13-C | enforcement point pinned (claim-time AND execution-time intersection, below); every occurrence drafts + reviews a plan (asserted); headless deny/escalate; in-flight revocation semantics pinned + tested |
 | one safe product consumer | P13-P | the recurring READ-ONLY scorecard-summary consumer with pinned tool surface, risk class, approval/delivery policy; kill-at-seam proof with zero duplicate logical turns |
@@ -47,7 +48,7 @@ actions, retry arbitrary effects, deliver results, or keep correctness in proces
   `CheckpointStore#enqueue_request`, `LeaseOperations`); the P8 profile policy for grant
   intersection; the P9 skill snapshot digests for payload references; the durable
   circuit record from DR-2 (`docs/DR2_DURABLE_CIRCUIT_PLAN.md`, scheduler scope) for
-  consecutive-failure circuits (one record type, three scopes). The occurrence
+  consecutive-failure circuits (one record type, four scopes). The occurrence
   lease/fence is the EXISTING lease/fence pattern applied to the new scheduler tables,
   not a new mechanism.
 - **No second engine clauses, extended:** no second workflow engine, no second lease
@@ -80,17 +81,27 @@ changes `not_before` only); CLI preview test.
 
 ## 4. Store, atomic identity, and the crash seam (P13-A)
 
-The adapter implements the design §11 contract verbatim:
-`put_schedule(..., expected_revision:)`, `disable_schedule`, `claim_due(now:, owner:,
-lease_for:, limit:)`, `renew_occurrence_lease`, `enqueue_occurrence(id, fence:,
-request:)`, `complete_occurrence(id, execution_id:, status:, evidence:)`,
-`list_occurrences(schedule_id:, cursor:, limit:)`.
+The adapter preserves the design-§11 capabilities but corrects the call boundary needed
+for invariant 38: `put_schedule(..., expected_revision:)`, `disable_schedule`,
+`materialize_due(now:, owner:, lease_for:, limit:, request_template:)`,
+`renew_occurrence_lease`, `complete_occurrence(id, execution_id:, status:, evidence:)`,
+`list_occurrences(schedule_id:, cursor:, limit:)`. `materialize_due` is the sole public
+claim/create/enqueue operation and returns occurrences whose durable requests already
+committed. Separate public `claim_due` then `enqueue_occurrence` calls cannot promise one
+transaction and are not conforming. The request template is prevalidated, bounded, and
+provider-free; its only substitutions are deterministic occurrence identity fields.
 
-**Seam committed (C1):** v1 uses ONE SQLite transaction for `claim_due` → create
+**Seam committed (C1/DC-4):** v1 uses ONE SQLite transaction inside `materialize_due`
+for claim → create
 occurrence → claim its stable request id → enqueue into the request inbox (all tables in
-the same SQLite store). No either/or. A crash at any point leaves old-or-complete-new
-state; a repeated delivery re-runs the same transaction, and dedup lives in
-`CheckpointStore#enqueue_request`: the row key is `(thread_id, namespace, request_id)`,
+the same SQLite store). Public `CheckpointStore#enqueue_request` owns a transaction and
+MUST NOT be called from this transaction. The `tamoz-sqlite` implementation extracts one
+private `enqueue_request_in_transaction!(tx, ...)` primitive; the public enqueue method
+and the scheduler adapter both delegate to it. `tamoz-scheduler` never reaches into the
+adapter; its `ScheduleStore#materialize_due` contract is implemented wholly inside
+`tamoz-sqlite`. No nested transaction or two-commit substitute conforms. A crash at any
+point leaves old-or-complete-new state; a repeated delivery re-runs the same transaction,
+and dedup lives in the shared enqueue primitive: the row key is `(thread_id, namespace, request_id)`,
 and a duplicate id is accepted only when input_digest, operation, delivery mode, and
 payload digest all match; any byte difference raises `CheckpointConflictError`.
 
@@ -105,8 +116,9 @@ reported as a successful task (no false green — hard zero). Adapters without a
 durable occurrence uniqueness do not conform.
 
 Proof: claim-winner test (two processes → one wins the fence, loser sees claimed, one
-request row); kill-between-claim-and-enqueue test (claim survives via lease expiry →
-reclaim with higher fence; enqueue completes exactly once; no lost occurrence); payload
+request row); kill at every statement between claim and enqueue (transaction rolls back
+to fully unclaimed, or commits occurrence + request together; no intermediate claim
+survives); retry with a higher fence completes exactly once; payload
 determinism test; enqueue-conflict test (byte-different duplicate → `CheckpointConflictError`).
 
 ## 5. Misfire, overlap, backpressure (P13-B)
@@ -226,8 +238,10 @@ widening, zero fabricated approval, a complete durable reason for every due occu
 
 ## 10. Migration and compatibility (C4)
 
-New tables via the existing `Migrator` (checksummed `MIGRATION_2`, `PRAGMA user_version`
-bump, `application_id`, `tamoz_schema_migrations`): `tamoz_schedules`,
+New tables use the next checksummed migration after the activation baseline (expected
+`MIGRATION_3` after P11's expected `MIGRATION_2`; never hard-code/reuse an occupied
+ordinal), with `PRAGMA user_version` bump, `application_id`, and
+`tamoz_schema_migrations`: `tamoz_schedules`,
 `tamoz_occurrences` (with occurrence-transition history), and the scheduler's portion of
 the durable circuit record. Safety argument: existing tables
 (`tamoz_threads/namespaces/requests/checkpoints/effects/...`) are untouched; occurrences
@@ -287,10 +301,10 @@ failure, not a poller crash.
 - [ ] P13-E fake-clock suite green incl. the two DST named tests; release gates: zero
       duplicate logical turns, zero authority widening, zero fabricated approval,
       complete per-occurrence reason.
-- [ ] Migration: `MIGRATION_2` via the existing Migrator; pre-P13 databases load with
-      scheduler disabled.
+- [ ] Migration: next monotonic Migrator slot (expected `MIGRATION_3` after P11);
+      pre-P13 databases load with scheduler disabled; duplicate ordinals fail the gate.
 - [ ] **Mandatory** scorecard case `agent.schedule-...` (handover §7) proving the
       consumer's recurring turn; safety counters stay zero.
-- [ ] `rake ci` green under both locales; scorecard (existing 16 cases) unchanged with
-      safety counters zero.
+- [ ] `rake ci` green under both locales; every scorecard case present at P13 start is
+      unchanged; the mandatory schedule case is added; safety counters remain zero.
 - [ ] Trackers updated; deferrals + fugit version + circuit-scope resolution recorded.

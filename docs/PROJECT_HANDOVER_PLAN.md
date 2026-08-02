@@ -1,10 +1,11 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `c72f2b3` (`P3` complete)
+Implementation baseline: `a88572b` (P10 invocation/elicitation slice; design checkpoint
+`6ff0d40` is documentation-only)
 Current phase: `P10` — governed MCP client/host
-Next action: plan P10 per `docs/design-v0.1/MCP_DESIGN.md`; P9 is closed at `8b095ab`
-(P9-C/D2/E/B2 deferred per the accepted plan's own scope)
+Next action: continue P10 from `a88572b` under `docs/P10_MCP_PLAN.md`; this review does
+not re-plan or assess the active implementation.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -62,12 +63,15 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
 | P8 | complete (§5.3/§5.4 machinery deferred, disclosed) | trusted project profiles | `cab974f` | `a019167`, `0ed3944` |
 | P9 | complete (P9-C/D2/E/B2 deferred, disclosed) | evaluated skills | `5f66099` | `8b095ab` |
-| P10 | pending | governed MCP client/host | — | — |
+| P10 | implementing | governed MCP client/host | `1d14a22` | `54f675a`, `534a502`, `a88572b` |
 | P11 | pending | three-layer memory | — | — |
 | P12 | pending | bounded healing and improvement | — | — |
 | P13 | pending | durable scheduling | — | — |
 | P14 | pending | Situation streaming and simulated physical action | — | — |
 | P15 | pending | release hardening and independent completion audit | — | — |
+| P16 | pending | tools gem extraction | `6ff0d40` (revised by checkpoint deep review) | — |
+| P17 | pending | governed websearch + egress policy | `6ff0d40` (revised by checkpoint deep review) | — |
+| P18 | pending | capability host + graph surface audit | `6ff0d40` (revised by checkpoint deep review) | — |
 
 Update this table and `docs/PRODUCT_EXECUTION_ROADMAP.md` in the final commit of each phase.
 Never mark a phase complete based only on unit tests or an implementation claim.
@@ -102,28 +106,15 @@ phase's product proof.
 ## 5. Dependency path
 
 ```text
-P4 compound edit → P5 file creation → P6 durable recovery → P7 interactive CLI
-                                                   │
-                                                   ▼
-                                      P8 trusted project profile
-                                                   │
-                         ┌─────────────────────────┴─────────────────────────┐
-                         ▼                                                   ▼
-                    P9 skills                                           P10 MCP
-                         └─────────────────────────┬─────────────────────────┘
-                                                   ▼
-                                              P11 memory
-                                                   ▼
-                                      P12 healing + improvement
-                                                   ▼
-                                            P13 scheduler
-                                                   ▼
-                                  P14 streams + physical simulator
-                                                   ▼
-                                         P15 release hardening
+P4 → P5 → P6 → P7 → P8 → P9 → P10 → DR-4 → DR-5 → P16 → P17
+                                                                   │
+                                                                   ▼
+                                      P11 → P12 → P13 → P14 → P18 → P15
 ```
 
-P6, P8, P10, and P12 are hard prerequisites for any physical action path. P14 follows P13
+The single-active-phase order is P10 → DR-4 → DR-5 → P16 → P17 → P11 →
+P12 → P13 → P14 → P18 → P15. P6, P8, P10, and P12 are hard prerequisites
+for any physical action path. P14 follows P13
 for execution order even though civil scheduling is not part of stream semantics. A phase
 may be deferred only through a committed promotion decision proving why the final objective
 remains satisfied without it.
@@ -539,11 +530,12 @@ activates only after its dependencies close. None begins before P10 closes.
 
 Outcome: `tamoz-tools` (depends on tamoz-core only) holds the tool primitives and
 atomic-IO/validation core; the D-7 error taxonomy moves to `tamoz-core`;
-`tamoz-agent`'s Toolbox becomes a thin composition over capability sources. Behavior,
+`tamoz-agent` re-exports the moved Toolbox/Skills constants by identity. Capability-
+source composition remains P18 work. Behavior,
 invariants, and scorecard byte-identical. Plan `docs/P16_TOOLS_GEM_PLAN.md`.
 
 Hard gates: dependency isolation; packaged-gem install with only tamoz-core; full
-`rake ci` under both locales and the 16-case scorecard unchanged; safety counters 0;
+`rake ci` under both locales and the P16-start scorecard unchanged; safety counters 0;
 no invariant (24–27, 35) weakened.
 
 ### P17 — websearch capability and egress policy
@@ -552,7 +544,7 @@ Outcome: ONE governed read-only websearch capability (MCP-server shape preferred
 through the P10 surface; a new `egress:` section in the P8 profile
 (allowlisted hosts, https-only, deny-private-ranges, credential refs, budgets); DR-2
 egress circuit; results are untrusted bounded `:reported` evidence; NO raw URL fetch.
-Scorecard gains `agent.websearch-governed` (17 cases). Plan
+Scorecard gains exactly one `agent.websearch-governed` case over the P17-start baseline. Plan
 `docs/P17_WEBSEARCH_PLAN.md`.
 
 Hard gates: SSRF/redirect/credential-param/oversize/injection matrix; no exfiltration
@@ -569,7 +561,7 @@ tested-only surface (the graph IS the agent runtime; measurement, not rewrite). 
 
 Hard gates: P9/P10/P17 adversarial cases pass unchanged; model-visible surface
 byte-identical; no plugin API/marketplace/auto-install (invariant 42 non-goal); scorecard
-unchanged at 17 cases, safety 0.
+unchanged from the P18-start baseline, safety 0.
 
 ## 7. Cross-phase non-negotiables
 

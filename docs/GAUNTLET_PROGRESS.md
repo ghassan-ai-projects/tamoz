@@ -910,9 +910,22 @@ Key findings the reviewers verified against code (and that changed the designs):
   an admission set (never a second reader of profile policy); the registry is a
   closed set of four sources.
 
-P10 remains the active implementation phase. P11–P18 plans are accepted and wait for
-their activation order: P11 → P12 → P13 → P14 → P15, with P16/P17/P18 after P10 close
-(P16 → P17 → P18), and DR-1/DR-2/DR-4/DR-5 consumed by the phases they serve.
+P10 remains the active implementation phase. The single-active-phase order after it is:
+DR-4 → DR-5 → P16 → P17 → P11 → P12 → P13 → P14 → P18 → P15.
+P15 cannot audit a release before P18 closes. Scorecard baselines are measured at each
+phase start rather than copied from the original 16/17-case forecast.
+
+### Round 14 — deep review of design checkpoint `6ff0d40` (documentation only)
+
+Verdict: the committed checkpoint was rejected as a cross-document executable design;
+critical/high corrections are integrated in the working-tree revisions and recorded in
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`. No implementation file changed.
+
+Load-bearing corrections: DR-1 separates allocation/active/pending behavior state;
+DR-2 uses one aggregate scope record with stable bounded owner sub-state; P11 and P13
+name transaction-owning repository/adapter seams; migration ordinals are monotonic;
+P18 resolves closed-registry vs fifth-source contradiction; P17 pins the validated IP to
+the actual dial; P15 restores direct-evidence and high/critical security release gates.
 
 ## 4. Phase ledger (mirrors the handover plan)
 
@@ -926,8 +939,8 @@ their activation order: P11 → P12 → P13 → P14 → P15, with P16/P17/P18 af
 | D-7 tool-error recovery (invariant 17) | — | **merged** (`35c2ffb`) — typed taxonomy, bounded repair, CLI failure reasons, scorecard 10/13, safety zero; critic pending |
 | P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | complete | **complete** (`8b095ab`) — D/A/B landed, adversarial suite 37 tests, `skill-no-authority` scorecard case (15 cases, 12 successes, safety zero); P9-C/D2/E/B2 deferred per accepted plan; critic pending |
-| P10 governed MCP | pending | **in progress** — plan+review `1d14a22`; P10-D admission `54f675a` (31 tests green both locales); catalog/invocation/adversarial slices next |
-| P11–P15 | pending | not started |
+| P10 governed MCP | implementing | **in progress** — latest implementation checkpoint `a88572b`; remaining proof follows the active P10 plan and is outside this design review |
+| DR-4/DR-5, P11–P18 | pending | not started; ordered by the checkpoint deep review |
 
 ---
 

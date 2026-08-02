@@ -1,8 +1,8 @@
 # DR-4 — Stale durable-request framework fix (D-6 and the `:retry` latent defect)
 
-Status: design round — revision 2 (deep review ACCEPT-WITH-REQUIRED-CORRECTIONS on
-revision 1; C1–C6 + duplication findings integrated; see
-`docs/reviews/DR4_STALE_REQUEST_PLAN_REVIEW.md`)
+Status: design round — revision 3 (checkpoint deep-review transaction-ownership
+corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Origin: gauntlet ledger §5.2 (D-6) and §5.7 (`:retry`). Verified fault chain:
 `merge_resume_values` raises `InvalidUpdateError` at compiled.rb:925/933/938/945/954
 (the stale-relevant raise 938 "does not match an outstanding task/call index");
@@ -43,10 +43,13 @@ A stale request is never retried.
 "same transaction as the claim" was unachievable at the run_next hook (claim commits
 its own transaction before the hook runs; a kill between claim-commit and terminal-
 write leaves a claimed request with no outcome forever). Fixed: `claim_next_request`
-takes a **validation callback invoked with `(tx, request_row)` before commit**; on
-stale, `apply_request_transition_in_transaction!` (which already permits a `claimed`
-request to become `failed`) writes the terminal-fail IN THE SAME TX. There is no window:
-a claimed request always carries its outcome.
+takes a graph-owned, pure **validation callback invoked with a materialized request and
+the latest decoded checkpoint while the transaction is open**. The callback receives no
+transaction object, Store, network, clock, or write capability; it returns nil or a
+bounded typed reason. The checkpointer owns the SQL transition: stale input goes
+directly `queued → failed` in the claim transaction (it is never observably `claimed`).
+The transition helper is generalized to permit that edge and records claim-validation
+evidence. There is no callback-driven nested write and no kill window.
 
 **Typed staleness (C2 — the rescue boundary).** `CheckpointConflictError` is raised
 from nine sites in three categories (stale preconditions at 470/527/567/605/910;
@@ -66,14 +69,17 @@ status check):
 - `:retry` → target checkpoint still `:failed`;
 - `:turn`/`:continue`/`:fork` → status-precondition (thread state) check;
 - `:redirect` → NOT validated (its wait condition is legitimate).
-The validation runs at CLAIM time (in the claim transaction) AND in BOTH execution
-paths: `run_next` AND `recover_request` (C4). Queued-but-unclaimed stale requests are
-handled at claim time (each is claimed FIFO, validated, terminal-failed) — not
+The validation runs at CLAIM time (in the claim transaction), at the execution
+backstop in `run_next`, and inside the existing recover transaction before
+`recover_request` returns (C4). Queued-but-unclaimed stale requests are
+handled at claim time (each is selected FIFO and transitions directly to failed) — not
 proactively cleared; a wedging stale request unblocks when claimed.
 
-**One terminal-fail helper (D2):** `DurableRunner#terminal_fail(request, reason:,
-evidence:)` — the single write path used by claim-time validation, the A backstop, and
-both execution paths.
+**Terminal-fail ownership (D2, corrected):** claim/recover transactions use one private
+checkpointer `terminal_fail_in_transaction!` helper. `DurableRunner#terminal_fail`
+delegates to the public fenced transition only for the post-claim execution backstop.
+The runner helper is never called from inside the claim transaction. Both paths produce
+the same terminal-error payload and transition evidence.
 
 **Terminal value format (C5):** maps onto the existing status model —
 `status: "failed"` + `terminal_error: {"graph_status" => "failed", "reason" => ...,
@@ -107,9 +113,10 @@ one meaning.
   no crash, not re-claimable, duplicate delivery returns the prior outcome (identical
   input).
 - F2 `:retry` repro → terminal value, no crash.
-- F3 claim-time atomicity: validation + terminal-fail in the SAME claim transaction
+- F3 claim-time atomicity: pure validation + `queued → failed` in the SAME claim transaction
   (kill between claim-commit and terminal-write impossible by construction — one tx);
-  asserted by a kill-injection test at the claim boundary.
+  asserted by a kill-injection test at the claim boundary; callback I/O/write attempts
+  are impossible by API shape.
 - F4 propagation preserved: genuine corruption/lease-loss/append conflicts propagate;
   the redirect-wait retries, never terminal-fails (P3).
 - F5 kill matrix: kill at claim/validate/terminal-write seams → terminal state recorded
@@ -134,8 +141,8 @@ scheduled as its own reviewed round once the P10 slice-3 close frees the coordin
    CheckpointConflictError)?
 3. Does the shared `stale_request_reason` predicate serve claim-time AND both
    execution paths without drift?
-4. Does `terminal_fail` via `apply_request_transition_in_transaction!` exist and fit
-   the failed-status + terminal_error format?
+4. Are claim/recover terminal writes checkpointer-owned, with the runner helper reserved
+   for the post-claim backstop, and do both serialize identical terminal values?
 5. Do F1–F6 catch the six deep-review probes (stale-resume-not-paused, stale
    turn/continue/fork, redirect-wait under class rescue, kill at claim seam, recover
    path bypass, different-input duplicate)?

@@ -1,7 +1,8 @@
 # P18 — Capability host unification and graph surface audit: implementation plan
 
-Status: accepted for implementation (revision 2 — deep review corrections C1–C8
-integrated; see `docs/reviews/P18_CAPABILITY_HOST_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review closed-registry,
+audit, and proof-baseline corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Source question: "are we using our graph gem?" — answered yes (it is the agent
 runtime); this phase turns that finding into a measured audit and unifies the
 capability sources the toolbox has accreted — WITHOUT a plugin framework.
@@ -9,7 +10,8 @@ Authoritative inputs: invariants 11, 16, 17, 35, 42; `AGENT_DESIGN.md` §§3–5
 `MCP_DESIGN.md` §4 (the descriptor the shared contract must not lose); the P9 skill
 descriptor, P10 MCP descriptor, P16 tools gem, P17 websearch; the graph gem's public
 surface; `docs/public-api.json`.
-Depends on: P16, P17, P11–P14 close. Activates after P17.
+Depends on: P16, P17, P11–P14 close. Under the single-active-phase order it activates
+after P14 and before P15.
 
 ## 1. Scope commitment
 
@@ -25,9 +27,9 @@ Depends on: P16, P17, P11–P14 close. Activates after P17.
 |---|---|
 | one `CapabilitySource` contract = data + dispatcher interface (validator, executor, effect/preview hooks) bound in a registry built at session construction | compliance suite each source passes; registry sealed after construction (C3/C6) |
 | invariant-35 intersection computed from a policy-derived ADMISSION SET passed into the host (host never re-reads profile; `verify_profile_binding!` stays the authority check) | the P9/P10/P17 adversarial cases pass unchanged; direct gate test: a forged source registration fails (C3) |
-| surface immutable mid-turn; content never grants remains source-enforced | sealed-registry + extension tests (C3/C4) |
+| surface immutable mid-turn; content never grants remains source-enforced | sealed-registry + closed-world composition tests (C3/C4) |
 | graph public surface measured (Coverage) and documented | `docs/GRAPH_SURFACE_AUDIT.md` with measured + recommendation columns; `public-api.json` regenerated (C8) |
-| no behavior regression | full gate both locales; scorecard at the post-P17 head (17 cases), safety 0 |
+| no behavior regression | full gate both locales; scorecard baseline captured at P18 start (after P11–P14), safety 0 |
 
 Non-goals (binding): NO plugin API, NO marketplace, NO hidden skill call stack, NO
 auto-executing installers, NO graph engine rewrite, NO registry of caller-supplied
@@ -74,16 +76,23 @@ registry + intersection renderer — NOT a single dispatch body:
 
 **Model-visible ids (C5):** pinned to today's values — bare local tool names, bare
 `load_skill`/`read_skill_resource`, `mcp:`-qualified MCP/websearch. The post-P17-closed
-head surface is captured as a committed fixture (scorecard-pin pattern); H4 compares
-against that fixture ("no further delta from P18"), never against today's 15-case
-world.
+source shapes are known, but the actual surface fixture is captured at **P18 start after
+P11–P14 close**. H4 compares against that fixture ("no delta from P18"), never against
+an obsolete forecasted case count.
 
 ## 3. Graph surface audit (corrected — C2)
 
-**Method:** Ruby stdlib `Coverage` (methods: true) run over the product agent tests
-AND the scorecard executions, intersected with the graph gem's public constants —
-stdlib, deterministic, and regenerable by RUNNING THE NAMED TESTS (the P15 §3
-criterion). Grep is retained only as a secondary reachability note (the product
+**Method:** Ruby stdlib `Coverage` (`methods: true`) run over the product agent tests
+AND instrumented scorecard subprocesses. Coverage measures executed methods; it cannot
+by itself prove use of constants, Data members, or methods executed in an uninstru-
+mented child. The generator therefore joins three explicit inputs: (1) the graph entries
+in `public-api.json`, (2) per-process Coverage artifacts merged by canonical source path,
+and (3) a named public-surface probe that resolves each manifest constant and invokes or
+constructs it where safe. Columns distinguish `product_method_executed`,
+`test_only_method_executed`, `manifest_resolved_only`, and `internal`; no constant is
+called product-exercised merely because its file loaded. The result is stdlib-based,
+deterministic, and regenerable by RUNNING THE NAMED TESTS (the P15 §3 criterion).
+Grep is retained only as a secondary reachability note (the product
 references few graph constants directly — `Tamoz.graph`/`Builder`/`START`/`END`,
 `durable_runner` — while the runtime-critical internals are referenced from
 `compiled.rb`; "loaded by the product" via Zeitwerk eager_load means nothing, and
@@ -102,7 +111,7 @@ budgets, not tool-surface limits — C8).
 ## 4. Migration and compatibility
 
 - Capability host: sources register at session construction; the model-visible surface
-  matches the post-P17 fixture (H4); the host is a re-org, not a surface change; the
+  matches the P18-start fixture (H4); the host is a re-org, not a surface change; the
   scorecard cases prove it.
 - Graph audit: measurement + documentation; `public-api.json` + test regenerated.
 - Old-session resume: session records untouched; the host builds the same surface from
@@ -118,13 +127,15 @@ budgets, not tool-surface limits — C8).
   adversarial cases pass unchanged through the host (tool surface + plan digest
   oracles). H2 runs the P9 §9.2 adversarial suite (tree escape, links, hardlinks)
   THROUGH the host dispatch — not just the three scorecard cases.
-- H3 extension test (C4): register a fifth synthetic source at session construction
-  and prove the host composes it with ZERO host edits (the real "no special-case"
-  property — a source-typed `when` ban is syntax, not property).
-- H4 surface equivalence: model-visible surface byte-identical to the post-P17
+- H3 closed-world composition (C4/DC-6): exercise all four built-in source dispatchers
+  through one protocol, including multiple descriptors/servers within an existing
+  source, with zero source-typed host branches. A fifth synthetic/extra source MUST fail
+  at construction. Extensibility beyond the four is intentionally not a v1 property.
+- H4 surface equivalence: model-visible surface byte-identical to the P18-start
   committed fixture; scorecard identical.
-- H5 audit accuracy: the Coverage-based table regenerates by running the named tests
-  and matches `public-api.json`; `AuditMismatchError` fires on divergence.
+- H5 audit accuracy: all instrumented subprocess artifacts are merged; the Coverage +
+  manifest-probe table regenerates by running the named tests and reconciles every graph
+  entry in `public-api.json`; `AuditMismatchError` fires on divergence.
 - H6 error identity (C7): repairable + policy errors from each source pass through
   the host with class + message bytes identical.
 
@@ -140,7 +151,7 @@ budgets, not tool-surface limits — C8).
 ## 7. Stop / redesign criteria
 
 - Any adversarial case (P9/P10/P17) weakens, any scorecard delta appears, or the
-  model-visible surface changes by one byte from the post-P17 fixture.
+  model-visible surface changes by one byte from the P18-start fixture.
 - If unifying the gate requires granting a source authority it did not have, STOP
   (invariant-35 breakage).
 - Any plugin/marketplace/auto-install shape, or any registry entry constructible from
@@ -151,8 +162,9 @@ budgets, not tool-surface limits — C8).
 - [ ] `CapabilitySource`/`CapabilityDescriptor` contract (with schemas) + compliance
       suite + sealed-registry tests (H1/H2).
 - [ ] Host with the admission-set intersection; P9/P10/P17 cases green unchanged;
-      H3 extension test; H6 error identity.
+      H3 closed-world composition test; H6 error identity.
 - [ ] `docs/GRAPH_SURFACE_AUDIT.md` (Coverage-based, measured + recommendation
       columns) + regenerated `public-api.json` + test.
-- [ ] Full gate both locales; scorecard at the post-P17 head, safety 0.
+- [ ] Full gate both locales; scorecard equals the baseline captured at P18 start,
+      safety 0.
 - [ ] Trackers updated; non-goals restated in the phase close.

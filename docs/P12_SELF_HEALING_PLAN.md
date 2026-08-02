@@ -1,7 +1,8 @@
 # P12 — bounded self-healing and self-improvement: implementation plan
 
-Status: accepted for implementation (revision 2 — plan-critic corrections C1–C12
-integrated; see `docs/reviews/P12_SELF_HEALING_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review dependency and
+proof-baseline corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Authoritative inputs: `docs/design-v0.1/SELF_HEALING_DESIGN.md` (source of truth for
 semantics), `AGENT_DESIGN.md` §§12–14, invariants 25–28, 32–34, 35, the P12 card in
 `docs/PROJECT_HANDOVER_PLAN.md`, and the P6 effect/durable machinery + P11 memory that
@@ -47,7 +48,7 @@ No new gem for self-healing (design §1). Reuse, do not duplicate:
 - P11 memory: verification/wisdom evidence feeds candidate pipelines; healing never
   writes memory directly.
 
-**Durable circuit — one record type, three scopes (C1; owned by DR-2).** Verified at review: no durable
+**Durable circuit — one record type, four scopes (C1; owned by DR-2).** Verified at review: no durable
 circuit exists anywhere in the tree today. The first circuit is P10's supervisor
 transport circuit (being built in P10 slice 3 per the P10 plan §8 "durable circuit").
 The record shape, scope semantics, reset authority, and acceptance tests are defined in
@@ -200,7 +201,8 @@ Candidate pipeline (mirrors design §7 + invariant 28):
   graph/version/namespace, narrower grant, typed return, budgets, ordered fan-in.
 
 **BehaviorTransition ownership (C4, aligned with P11-W):** P11-W owns the
-`BehaviorTransition` record and its activation mechanics (DR-1 revision 3: two-phase
+`BehaviorTransition` record and its activation mechanics (DR-1 revision 4: serialized
+control record plus two-phase
 claim→apply→finalize; FIRST-INTAKE-OF-THREAD only — existing threads are pinned and
 resume is `boundary: false`; one shared behavior-version record allocated by CAS at
 record time; in-flight authority never mutated). P12 reuses that seam for its
@@ -325,7 +327,7 @@ violations and integrity breaks propagate.
 - [ ] P12-H2 remediation protocol with preflight, effect identity, §6 forms, §7
       idempotency, oracle-as-configured-check with the independence test.
 - [ ] P12-H3 compensation, circuit, escalation records, each condition testable,
-      concealment test; circuit seam resolved per §2 (one record type, three scopes).
+      concealment test; circuit seam resolved per §2 (one record type, four scopes).
 - [ ] P12-H4 at most one §13 rule promoted through the full lifecycle, or
       observation/shadow-only with disclosure; no-self-promotion adversarial test.
 - [ ] P12-ID/I1/I2/I3 one reversible behavior candidate through provenance → eval →
@@ -339,6 +341,7 @@ violations and integrity breaks propagate.
 - [ ] **Mandatory** scorecard case `agent.self-healing-...` (handover §7: every new
       capability adds a fixed behavioral case); if the rule ships observation/shadow-only,
       the case proves the observation path and the active claim is disclosed as absent.
-- [ ] `rake ci` green under both locales; scorecard (existing 16 cases) unchanged with
-      safety counters zero; the new case adds without weakening any hard gate.
+- [ ] `rake ci` green under both locales; every scorecard case present at P12 start is
+      unchanged with safety counters zero; the mandatory new case adds without weakening
+      any hard gate.
 - [ ] Trackers updated; deferrals + circuit resolution recorded.

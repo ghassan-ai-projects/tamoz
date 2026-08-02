@@ -1,7 +1,8 @@
 # P17 — Websearch capability and egress policy: implementation plan
 
-Status: accepted for implementation (revision 2 — deep review corrections 1–8
-integrated; see `docs/reviews/P17_WEBSEARCH_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review dial-path and
+proof-baseline corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Source question: "can we have a websearch tool and give it to the agent?" — answered
 yes, as a governed capability, never a raw fetch; this is the phase.
 Authoritative inputs: `MCP_DESIGN.md`, invariants 23, 24, 35–37, the P10 plan (the
@@ -98,8 +99,11 @@ the pin — silent widening, invariant 35/36.
 - Resolve + range-check + allowlist-check run **on every connection AND every redirect
   target** (never once before connecting — a TTL-0 rebinding DNS defeats a single
   pre-connect check).
-- IP pinning or second-resolution comparison against rebinding; a redirect hop bound
-  (3); no credential/header forwarding across hosts on redirect.
+- The validated address is the address actually passed to the socket dialer; TLS still
+  verifies the allowlisted hostname through SNI/certificate validation. A second DNS
+  lookup comparison by itself is NOT an enforcement mechanism because it leaves a
+  check-to-connect resolution race. Every redirect repeats resolve → classify → pin →
+  dial. Redirect hop bound is 3; no credential/header forwarding across hosts.
 - IPv6 literals, IPv4-mapped (`::ffff:127.0.0.1`), and decimal/hex/octal IP forms are
   neutralized by the config rule (no IP literals in the allowlist) AND by the per-hop
   check (redirect targets re-run the full check, not just "off-list fails").
@@ -140,8 +144,8 @@ never `:observed`; the descriptor's description states this to the model.
 - W2 invocation: search success bounded/attributed; oversize → bounded + circuit
   counter; provider error → typed; timeout → typed; corrupt frame → PolicyError.
 - W3 per-hop SSRF: adapter units with injectable resolver — localhost/private-range
-  targets refused at connect AND at each redirect hop; rebinding sequence refused
-  (IP pinning/second resolution); exotic literals neutralized; off-allowlist redirect
+  targets refused at connect AND at each redirect hop; rebinding sequence refused and
+  the dial-spy receives exactly the validated IP; exotic literals neutralized; off-allowlist redirect
   fails typed.
 - W4 redirect: hop bound enforced; no credential/header forwarding across hosts.
 - W5 injection: scripted model follows the payload → tool surface unchanged, plan
@@ -155,7 +159,7 @@ never `:observed`; the descriptor's description states this to the model.
   `websearch:search` through review + approval, executes through the effect journal;
   the oracle proves pinned descriptor digest, bounded/attributed results, no fetch
   path, no credential leak, circuit opened on induced failure, teardown left no
-  process. 16 → 17 cases, safety 0.
+  process. It adds exactly one case to the baseline measured at P17 start; safety 0.
 
 ## 7. Scorecard network_enforcement (correction 4)
 
@@ -197,7 +201,8 @@ accordingly — no claim without the mechanism.
 - [ ] Real provider adapter implemented behind the operator gate with injectable
       resolver units; live network = recorded deferral.
 - [ ] P10 invocation + DR-2 egress circuit (both conditions) wired; W2–W7 green.
-- [ ] Scorecard case `agent.websearch-governed` green; 17 cases; safety 0.
+- [ ] Scorecard case `agent.websearch-governed` green; all P17-start cases unchanged,
+      exactly one case added; safety 0.
 - [ ] `network_enforcement` resolved (named mechanism + harness work, or honestly
       `not_claimed`).
 - [ ] `rake ci` both locales; trackers updated; deferrals (live network, P10-D2

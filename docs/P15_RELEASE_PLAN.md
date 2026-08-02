@@ -1,7 +1,8 @@
 # P15 — release hardening and completion audit: implementation plan
 
-Status: accepted for implementation (revision 2 — plan-critic corrections 1–9
-integrated; see `docs/reviews/P15_RELEASE_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review release-gate
+and dependency corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Authoritative inputs: every promoted design in `docs/design-v0.1/`, all 55 invariants as
 applicable, `docs/public-api.json`, SECURITY.md, packaging/migrations, evaluation
 artifacts, the P15 card in `docs/PROJECT_HANDOVER_PLAN.md`, and the open debts recorded
@@ -15,8 +16,9 @@ actuators without explicit owner approval.** P15-I's owner gate is exactly that 
 everything before it runs locally and in clean-clone rehearsal only.
 
 Phase activation rule: committed as a design artifact while P10 is active; the handover
-ledger's P15 row stays `pending` until P14 closes. No P15 code before that (except this
-plan and its review).
+ledger's P15 row stays `pending` until P18, DR-4, and DR-5 implementation close. P15 is
+the final audit and cannot run ahead of capability-host unification or the framework
+rounds it is required to certify.
 
 ## 1. Scope commitment
 
@@ -75,10 +77,12 @@ that runs the named test and maps exit → status.
 `deferred-by-contract` / `owner-signed-residual`.
 - `deferred-by-contract`: clauses the invariants themselves assign to v0.2 (29–31,
   41–43) or v0.3 (28, 32–34) — enumerated, not free-form.
-- `owner-signed-residual`: a known gap carried with owner sign-off (incl. the
-  critic-can't-run case).
-- DoD: **zero `missing` among applicable rows** (not "zero non-pass"); the residual and
-  deferred rows are enumerated and signed.
+- `owner-signed-residual`: a known non-security gap carried with owner sign-off (incl.
+  the critic-can't-run case); it never converts a release-blocking row to pass.
+- DoD: every applicable `release_blocking: true` row is `pass` with direct evidence.
+  `indirect` is allowed only for non-release-blocking rows and must name why direct proof
+  is unavailable. Residual/deferred rows are enumerated and signed; no critical/high
+  security finding can be residualized into a release candidate.
 
 **Promotion matrix (correction 3):** at the release head, P9 skills, P11 memory, P12
 healing, P13 scheduler, P14 stream will have shipped as available features while the
@@ -116,8 +120,9 @@ Dependency/license/provenance review of every runtime gem (committed report); in
 24 sweep over durable stores (session records, checkpoints, memory, schedule payloads,
 stream admissions); injection surfaces across tool/skill/profile/MCP/memory/scheduler/
 stream boundaries (adversarial suites re-run at release head, findings re-audited);
-zero unresolved high/critical findings — each known finding has a disposition (fixed +
-test, or owner-signed residual).
+zero unresolved high/critical findings — each is fixed with a regression test before a
+release candidate exists. Owner sign-off may acknowledge lower-severity residual risk;
+it cannot waive a critical/high security gate.
 
 ## 7. P15-E — performance/value (correction 8)
 
@@ -188,19 +193,19 @@ as such.
 
 ## 12. Stop / redesign criteria
 
-- Any applicable requirement row `missing` at the end of the phase (per the §3
-  vocabulary).
+- Any release-blocking applicable requirement row not `pass`, or any non-release-
+  blocking `indirect` row without an explicit evidence-gap rationale.
 - Any promoted conditional invariant (MCP 35–37, scheduler 38–40, stream 44–51)
   untested at the release head.
 - A dirty worktree, a failing gate, or a rehearsal that depends on the development
   checkout or on non-pinned toolchain state.
-- Any unresolved high/critical security finding without an owner-signed disposition.
+- Any unresolved high/critical security finding.
 - Release claims made before the owner gate.
 
 ## 13. Definition of done (v1)
 
-- [ ] `docs/requirements-manifest.json` + regenerable audit with zero `missing` among
-      applicable rows; promotion matrix signed.
+- [ ] `docs/requirements-manifest.json` + regenerable audit with every applicable
+      release-blocking row directly evidenced and `pass`; promotion matrix signed.
 - [ ] P15-B compatibility suite incl. Ruby matrix, pinned ranges, migration, old-format
       fixture resume, D-6 regression proof (DR-4).
 - [ ] P15-C operational suite closing the P6-F gaps + the `.tamoz-*` seam + runbooks

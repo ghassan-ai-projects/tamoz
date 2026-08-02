@@ -1,7 +1,8 @@
 # P14 — streaming input and simulated physical action: implementation plan
 
-Status: accepted for implementation (revision 2 — plan-critic corrections C1–C10
-integrated; see `docs/reviews/P14_STREAM_PLAN_REVIEW.md`)
+Status: accepted for implementation (revision 3 — checkpoint deep-review migration and
+behavioral-proof corrections integrated; see
+`docs/reviews/DESIGN_CHECKPOINT_6FF0D40_DEEP_REVIEW.md`)
 Authoritative inputs: `docs/design-v0.1/STREAMING_INPUT_DESIGN.md` (source of truth for
 semantics), `AGENT_DESIGN.md` §16, invariants 44–51, the P14 card in
 `docs/PROJECT_HANDOVER_PLAN.md`.
@@ -66,8 +67,9 @@ payload → `CheckpointConflictError`, surfaced typed). Crash between outbox app
 drain: the drain retries the same row → one logical episode (invariant 23). Named test:
 kill-between-outbox-and-enqueue (C10/P5).
 
-**Migration (C8):** stream tables live in the SAME database via the existing Migrator
-(`MIGRATION_2+`, checksummed, `CURRENT_VERSION` bump) — the P11 precedent. Migration
+**Migration (C8):** stream tables live in the SAME database via the next checksummed
+Migrator slot at activation (expected `MIGRATION_4` after P11/P13; `CURRENT_VERSION`
+bump). No plan owns a reusable `MIGRATION_2+` placeholder. Migration
 never reinterprets old bytes (design §5): digest domains and canonicalization versions
 are stored; old payload bytes are never re-decoded under a new scheme.
 
@@ -286,7 +288,7 @@ R4 or a life-safety role dispatched.
       ablation comparison; all hard-failure gates zero; protected scenarios
       structurally separated (C10).
 - [ ] Migration via the existing Migrator (C8); typed failure taxonomy (C9).
-- [ ] `rake ci` green under both locales; scorecard (existing 16 cases) unchanged with
-      safety counters zero; a `agent.situation-...` case only if it proves value without
-      weakening any hard gate.
+- [ ] `rake ci` green under both locales; every scorecard case present at P14 start is
+      unchanged with safety counters zero; mandatory fixed `agent.situation-...` case
+      proves the new capability without weakening any hard gate (handover §7).
 - [ ] Trackers updated; deferrals recorded incl. the real-adapter owner gate.
