@@ -47,6 +47,19 @@ module Tamoz
             "profile_id" => STRING,
             "profile_digest" => STRING,
             "profile_authority" => HASH,
+            # DR-5 D1: per-role POST-OVERRIDE {provider:, model:} tuples — the
+            # accurate record of which models actually ran, built from
+            # model_roles + override names only (never the model instance, never
+            # a credential). Optional HASH, legacy sentinel {}, RECORD_VERSION
+            # stays 1. The invariant `profile_roles ≡ f(model_roles, overrides)`
+            # holds: it carries NO independent data. `{}` with a present
+            # profile_id means "profiled with zero roles"; `{}` under the legacy
+            # profile_id sentinel means "no profile resolution existed".
+            "profile_roles" => HASH,
+            # DR-5 D1 RC9: the validated profile budgets, recorded per profile
+            # (equality to `profile.budgets` only — labeled). Forward-looking for
+            # P13; no runtime consumer exists today. Empty sentinel {}.
+            "profile_budgets" => HASH,
             "skill_epoch" => STRING,
             "prompt_surface_digest" => STRING,
             # P10 §5 epoch rules: a session that used an MCP capability pins the
@@ -256,6 +269,12 @@ module Tamoz
           unless migrated.key?("prompt_surface_digest")
             defaults["prompt_surface_digest"] = LEGACY_PROMPT_SURFACE_DIGEST
           end
+          # DR-5 D1: no profile resolution is one state, however it arose — a
+          # pre-P8 session and a P8 profiled session with zero roles both carry
+          # {} as `profile_roles`, disambiguated by `profile_id` ("legacy"
+          # sentinel vs a real id). Budgets likewise default to {}.
+          defaults["profile_roles"] = {} unless migrated.key?("profile_roles")
+          defaults["profile_budgets"] = {} unless migrated.key?("profile_budgets")
           # P10 §5: no MCP catalogs is one state, however it arose — a pre-P10
           # session and a P10 session built without an MCP source both resume
           # against "no catalogs". "{}" is the legacy sentinel.

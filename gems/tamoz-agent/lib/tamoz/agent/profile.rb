@@ -123,9 +123,12 @@ module Tamoz
 
       # P8-B §5.1/§5.4: the exact capability authority a durable session was
       # started under, in a form that can be replayed from the checkpoint alone.
-      # Credential references are stripped: a checkpoint never carries anything
-      # credential-shaped (invariant 24), and nothing here can widen authority
-      # because reconstruction re-runs the same validators (invariant 35).
+      # Credential references are recorded by NAME only (DR-5 RC4): the checkpoint
+      # never carries a credential VALUE (invariant 24), and replay resolves the
+      # IDENTICAL env key the original ask used instead of silently falling back to
+      # the generic provider key. The name is an env-var identifier, which
+      # invariant 24 permits; nothing here can widen authority because
+      # reconstruction re-runs the same validators (invariant 35).
       def authority_snapshot
         Profile.deep_freeze(
           "profile_id" => profile_id,
@@ -133,7 +136,12 @@ module Tamoz
           "canonical_digest" => canonical_digest,
           "canonical_root" => canonical_root,
           "model_roles" => model_roles.transform_values do |role|
-            role.reject { |key, _| key == "credential_ref" }
+            ref = role["credential_ref"]
+            if ref
+              role.merge("credential_ref" => {"kind" => "env", "name" => ref.fetch("name")})
+            else
+              role
+            end
           end,
           "checks" => checks,
           "tools" => {
@@ -188,9 +196,9 @@ module Tamoz
       # P8-B §5.4/§5.5: rebuild the authority a session was pinned to from its
       # own checkpoint. The snapshot is treated as untrusted input and re-runs
       # every validator, so a corrupted or tampered checkpoint can only narrow
-      # or fail, never widen. Model roles carry no credential reference, so a
-      # replayed profile can never resolve a credential the operator did not
-      # supply in the currently loaded profile.
+      # or fail, never widen. Model roles may carry a credential reference NAME
+      # (DR-5 RC4), validated by the same `validate_model_roles!` gate a profile
+      # file passes; replay resolves that env key, never a value stored here.
       def self.from_authority(snapshot, source: "<pinned session authority>")
         unless snapshot.is_a?(Hash)
           raise ValidationError, "#{source}: pinned profile authority must be a mapping"
@@ -632,6 +640,16 @@ module Tamoz
         unless id.is_a?(String) && PROFILE_ID_PATTERN.match?(id)
           raise ValidationError, "#{path}: profile.profile_id must match #{PROFILE_ID_PATTERN.inspect}"
         end
+        # DR-5 RC3: "legacy" is the session-record sentinel for sessions that
+        # predate trusted profiles (SessionRecords::LEGACY_PROFILE_ID). A real
+        # profile named "legacy" would be misclassified by the shipped cli.rb
+        # sentinel guard and silently destroy the sentinel semantics, so the id
+        # is reserved and refused here, at load.
+        if id == SessionRecords::LEGACY_PROFILE_ID
+          raise ValidationError,
+                "#{path}: profile.profile_id \"legacy\" is reserved for sessions that " \
+                "predate trusted profiles; choose another profile id"
+        end
         version = profile["profile_version"]
         unless version.is_a?(String) && PROFILE_VERSION_PATTERN.match?(version)
           raise ValidationError,
@@ -997,19 +1015,35 @@ module Tamoz
 
       # One operator-recorded candidate profile transition for a thread (§5.4).
       # A candidate is not authority: it only permits the *next turn boundary*
-      # of that exact thread to move from `from_digest` to `to_digest`.
-      Transition = Data.define(:thread_id, :profile_id, :from_digest, :to_digest, :reason) do
+      # of that exact thread to move from `from_digest` to `to_digest`. DR-5 D2:
+      # an entry is optionally marked consumed (`consumed_by` request id +
+      # `consumed_at`) inside the registry's single flocked critical section; a
+      # consumed entry is an audit record and never re-applies.
+      Transition = Data.define(
+        :thread_id, :profile_id, :from_digest, :to_digest, :reason, :consumed_by, :consumed_at
+      ) do
         def initialize(**members)
-          super(**members.transform_values { |value| String(value).dup.freeze })
+          members = {consumed_by: nil, consumed_at: nil}.merge(members)
+          normalized = members.transform_values do |value|
+            value.nil? ? nil : String(value).dup.freeze
+          end
+          super(**normalized)
         end
 
+        def consumed? = !consumed_by.nil?
+
         def to_h_document
-          {
+          document = {
             "profile_id" => profile_id,
             "from_digest" => from_digest,
             "to_digest" => to_digest,
             "reason" => reason
           }
+          if consumed?
+            document["consumed_by"] = consumed_by
+            document["consumed_at"] = consumed_at
+          end
+          document
         end
       end
 
@@ -1017,8 +1051,18 @@ module Tamoz
       # adoption registry, outside any profile file and any repository, mode 0600,
       # and participates in no digest. Recording a candidate never touches session
       # state, so in-flight authority cannot be mutated by writing here.
+      #
+      # DR-5 D2 codec: schema_version 2 allows entries to carry `consumed_by` +
+      # `consumed_at`; v1 documents (the exact 4-key entries) remain readable and
+      # are never rewritten on read. Every writer — operator `record` and the
+      # consuming boundary ask — does its full-file read-modify-write inside ONE
+      # flocked critical section (`with_registry_lock`), so concurrent record and
+      # consume cannot clobber each other's writes and the candidate is consumed
+      # exactly once. flock releases on fd close, so a killed writer never leaves
+      # a stale lock wedging the registry.
       class TransitionRegistry
-        REGISTRY_SCHEMA_VERSION = 1
+        REGISTRY_SCHEMA_VERSION = 2
+        LEGACY_REGISTRY_SCHEMA_VERSION = 1
         REASON_PATTERN = /\A[a-z][a-z0-9_]{0,63}\z/
         THREAD_PATTERN = /\A[A-Za-z0-9_\-.]{1,64}\z/
 
@@ -1036,38 +1080,125 @@ module Tamoz
               profile_id: entry.fetch("profile_id"),
               from_digest: entry.fetch("from_digest"),
               to_digest: entry.fetch("to_digest"),
-              reason: entry.fetch("reason")
+              reason: entry.fetch("reason"),
+              consumed_by: entry["consumed_by"],
+              consumed_at: entry["consumed_at"]
             )
           end
         end
 
+        # A consumed entry is an audit record: it can never re-apply, so it is
+        # never a candidate again.
         def candidate?(thread_id, profile_id:, from:, to:)
           candidates(thread_id).any? do |entry|
-            entry.profile_id == profile_id && entry.from_digest == from && entry.to_digest == to
+            !entry.consumed? &&
+              entry.profile_id == profile_id && entry.from_digest == from && entry.to_digest == to
+          end
+        end
+
+        # DR-5 D2 RC8: candidates that can no longer apply for this thread — the
+        # session is past `from_digest` and the current profile is past
+        # `to_digest` — are surfaced at the boundary instead of sitting silently
+        # inert. Consumed entries are excluded so the advisory never fires on
+        # every subsequent ask for the thread's life; no pruning in v1 (audit).
+        def dead_candidates(thread_id, stored_digest, loaded_digest)
+          candidates(thread_id).select do |entry|
+            !entry.consumed? &&
+              entry.from_digest != stored_digest &&
+              entry.to_digest != loaded_digest
           end
         end
 
         def record(transition)
           validate!(transition)
-          Profile.verify_permissions!(@path) if File.exist?(@path)
-          current = File.exist?(@path) ? document : empty_document
-          transitions = current.fetch("transitions")
-          list = transitions.fetch(transition.thread_id, [])
-          entry = transition.to_h_document
-          return transition if list.include?(entry)
+          with_registry_lock do
+            current = File.exist?(@path) ? document : empty_document
+            transitions = current.fetch("transitions")
+            list = transitions.fetch(transition.thread_id, [])
+            entry = transition.to_h_document
+            return transition if list.include?(entry)
 
-          updated = current.merge(
-            "transitions" => transitions.merge(transition.thread_id => list + [entry])
-          )
-          directory = File.dirname(@path)
-          FileUtils.mkdir_p(directory, mode: 0o700)
-          File.chmod(0o700, directory)
-          File.write(@path, Psych.dump(updated))
-          File.chmod(0o600, @path)
-          transition
+            updated = current.merge(
+              "transitions" => transitions.merge(transition.thread_id => list + [entry])
+            )
+            write_document(updated)
+            transition
+          end
+        end
+
+        # DR-5 D2 RC2: ONE flocked check-and-mark RMW. Returns the consumed
+        # Transition when this writer won the race, nil when the entry is absent
+        # or already consumed (a lost race falls through to pinned replay — never
+        # a typed terminal error). The decision is made on the CURRENT file bytes
+        # inside the lock, so no stale before-image can be consumed (no TOCTOU).
+        def consume_if_candidate!(thread_id, profile_id:, from:, to:, consumed_by:)
+          raise ArgumentError, "consumed_by is required to consume a candidate" if consumed_by.to_s.empty?
+
+          with_registry_lock do
+            current = File.exist?(@path) ? document : empty_document
+            transitions = current.fetch("transitions")
+            list = transitions.fetch(String(thread_id), [])
+            index = list.index do |entry|
+              entry.fetch("profile_id") == profile_id &&
+                entry.fetch("from_digest") == from &&
+                entry.fetch("to_digest") == to
+            end
+            return nil unless index
+
+            candidate = list.fetch(index)
+            return nil if candidate.key?("consumed_by")
+
+            consumed_at = Time.now.utc.iso8601
+            updated_list = list.dup
+            updated_list[index] = candidate.merge(
+              "consumed_by" => String(consumed_by),
+              "consumed_at" => consumed_at
+            )
+            updated = current.merge(
+              "transitions" => transitions.merge(String(thread_id) => updated_list)
+            )
+            write_document(updated)
+            Transition.new(
+              thread_id: String(thread_id),
+              profile_id: candidate.fetch("profile_id"),
+              from_digest: candidate.fetch("from_digest"),
+              to_digest: candidate.fetch("to_digest"),
+              reason: candidate.fetch("reason"),
+              consumed_by: String(consumed_by),
+              consumed_at: consumed_at
+            )
+          end
         end
 
         private
+
+        # The registry's single write critical section. flock is advisory but the
+        # only writers are the two paths through this class, so both serialize
+        # here; flock releases when the descriptor closes (including process
+        # death), so a killed writer can never leave the registry wedged.
+        def with_registry_lock
+          directory = File.dirname(@path)
+          FileUtils.mkdir_p(directory, mode: 0o700)
+          File.chmod(0o700, directory)
+          File.open("#{@path}.lock", File::RDWR | File::CREAT, 0o600) do |lock|
+            lock.flock(File::LOCK_EX)
+            begin
+              Profile.verify_permissions!(@path) if File.exist?(@path)
+              yield
+            ensure
+              lock.flock(File::LOCK_UN)
+            end
+          end
+        end
+
+        # Every write bumps the file to schema_version 2 (the codec's only
+        # migration step, stated): a v1 file that is recorded onto or consumed
+        # from is upgraded in place; v1 files are never rewritten by a mere read.
+        def write_document(document)
+          document = document.merge("schema_version" => REGISTRY_SCHEMA_VERSION)
+          File.write(@path, Psych.dump(document))
+          File.chmod(0o600, @path)
+        end
 
         def validate!(transition)
           unless THREAD_PATTERN.match?(transition.thread_id)
@@ -1106,9 +1237,13 @@ module Tamoz
           raise AdoptionError, "#{@path}: transition registry is unreadable: #{error.message}"
         end
 
+        # DR-5 D2: backward-compatible READ. v1 documents (the shipped shape,
+        # schema_version 1, exact 4-key entries) load unchanged and are never
+        # rewritten on read; v2 documents add consumed_by/consumed_at on entries.
         def valid_document?(data)
           return false unless data.is_a?(Hash)
-          return false unless data["schema_version"] == REGISTRY_SCHEMA_VERSION
+          return false unless [LEGACY_REGISTRY_SCHEMA_VERSION, REGISTRY_SCHEMA_VERSION]
+                              .include?(data["schema_version"])
           return false unless data["transitions"].is_a?(Hash)
 
           data["transitions"].all? do |thread_id, entries|
@@ -1117,13 +1252,23 @@ module Tamoz
           end
         end
 
+        # v1 entries carry exactly the 4 base keys; v2 entries may add the two
+        # consumed keys. Anything else (a partial load, a dropped key, an unknown
+        # field) is refused typed rather than partially loaded.
         def valid_entry?(entry)
-          entry.is_a?(Hash) &&
-            (entry.keys.sort == %w[from_digest profile_id reason to_digest]) &&
-            PROFILE_ID_PATTERN.match?(entry["profile_id"].to_s) &&
+          return false unless entry.is_a?(Hash)
+
+          base = %w[from_digest profile_id reason to_digest]
+          consumed = %w[consumed_at consumed_by]
+          keys = entry.keys.sort
+          return false unless keys == base.sort || keys == (base + consumed).sort
+
+          PROFILE_ID_PATTERN.match?(entry["profile_id"].to_s) &&
             REASON_PATTERN.match?(entry["reason"].to_s) &&
             DIGEST_PATTERN.match?(entry["from_digest"].to_s) &&
-            DIGEST_PATTERN.match?(entry["to_digest"].to_s)
+            DIGEST_PATTERN.match?(entry["to_digest"].to_s) &&
+            (!entry.key?("consumed_by") || entry["consumed_by"].is_a?(String)) &&
+            (!entry.key?("consumed_at") || entry["consumed_at"].is_a?(String))
         end
       end
     end

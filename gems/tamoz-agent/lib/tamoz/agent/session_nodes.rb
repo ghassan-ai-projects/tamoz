@@ -32,7 +32,9 @@ module Tamoz
         max_repair_attempts:,
         model_call_safety:,
         profile: nil,
-        mcp: nil
+        mcp: nil,
+        profile_roles: nil,
+        profile_budgets: nil
       )
         @model = model
         @toolbox = toolbox
@@ -44,6 +46,15 @@ module Tamoz
         # has no MCP surface, in which case every branch below is inert and the
         # session behaves byte-identically to before P10.
         @mcp = mcp
+        # DR-5 D1 (RC5): the post-override per-role {provider:, model:} tuples are
+        # computed by the caller (cli.rb's shared resolution function, the SAME
+        # one build_model uses) and folded into the session record at intake —
+        # the seam is named, not left to the implementer. nil means "no overrides":
+        # intake then records the file values, which is f(model_roles, no
+        # overrides) — still no independent data.
+        @profile_roles = profile_roles
+        @profile_budgets = profile_budgets
+        verify_profile_roles!(profile_roles)
         freeze
       end
 
@@ -114,15 +125,62 @@ module Tamoz
       # (§5.2), so intake records the identity plus the exact authority snapshot
       # (§5.4) that a later resume replays instead of re-reading the profile file.
       # Editing the file afterwards cannot reach this record.
+      #
+      # DR-5 D1: the post-override `profile_roles` tuples and the validated
+      # `profile_budgets` ride along in the same binding — the accurate record of
+      # what actually ran (P11/P12 consumers read this, never a second table).
       def profile_binding
         return {} unless profile
 
         {
           profile_id: profile.profile_id,
           profile_digest: profile.canonical_digest,
-          profile_authority: profile.authority_snapshot
+          profile_authority: profile.authority_snapshot,
+          profile_roles: recorded_profile_roles,
+          profile_budgets: recorded_profile_budgets
         }
       end
+
+      # DR-5 D1: the recorded roles are exactly f(model_roles, overrides). The
+      # caller-supplied value (cli.rb) is already post-override; the default is
+      # the file values, i.e. f with no overrides. Either way there is NO
+      # independent data — only provider/model strings, never a model instance
+      # and never a credential.
+      def recorded_profile_roles
+        return @profile_roles if @profile_roles
+        return {} unless profile
+
+        profile.model_roles.transform_values do |role|
+          {"provider" => role.fetch("provider"), "model" => role.fetch("model")}
+        end
+      end
+
+      def recorded_profile_budgets
+        return @profile_budgets unless @profile_budgets.nil?
+        return {} unless profile
+
+        profile.budgets
+      end
+
+      # DR-5 A2: `profile_roles` is a durable record — it must be plain data
+      # (strings only), never a model instance, never a provider object. Refusal
+      # is typed and terminal, before any checkpoint write.
+      def verify_profile_roles!(roles)
+        return unless roles
+
+        unless roles.is_a?(Hash)
+          raise ProfilePolicyError,
+                "profile_roles must be a mapping of role name to {provider, model}"
+        end
+        roles.each do |name, entry|
+          unless entry.is_a?(Hash) && entry.keys.sort == %w[model provider] &&
+                 entry["provider"].is_a?(String) && entry["model"].is_a?(String)
+            raise ProfilePolicyError,
+                  "profile role #{name.inspect} must record exactly string provider and model"
+          end
+        end
+      end
+      private :verify_profile_roles!
 
       def deliberate(state, context)
         # A cancel sentinel routed by intake must reach terminal without any model I/O.

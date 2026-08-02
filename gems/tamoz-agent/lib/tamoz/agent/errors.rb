@@ -66,5 +66,19 @@ module Tamoz
     # `Session#verify_mcp_binding!` when the pinned `mcp_catalogs` no longer match
     # the caller's current source.
     class McpCatalogSnapshotUnavailableError < Error; end
+
+    # DR-5 D1: profile role resolution failed for a referenced role at session
+    # start — most commonly a credential reference whose env-var name is not set.
+    # Terminal: the session refuses to start, before any model I/O, checkpoint, or
+    # request enqueue. The untyped `ArgumentError` raised by the model factory is
+    # wrapped here at the boundary so the message names the role and the reference.
+    class ProfileRoleUnavailableError < Error; end
+
+    # DR-5 D1: an override value entering the durable `profile_roles` record is
+    # credential-shaped. Terminal: nothing secret-shaped may be recorded (invariant
+    # 24), and the refusal happens at construction, before any session record or
+    # checkpoint exists. The existing profile secret predicates
+    # (`SECRET_VALUE_PATTERNS` / `ENTROPY_PATTERN`) are the gate.
+    class ProfilePolicyError < Error; end
   end
 end

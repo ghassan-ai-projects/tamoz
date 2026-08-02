@@ -202,8 +202,11 @@ module Tamoz
 
         profile = load_operator_profile(options)
         thread_id = resolve_thread_id(options)
-        profile = resolve_session_authority(options, thread_id, profile, boundary: true)
-        run_durable(options, thread_id, profile:) do |session, request_id, owner_id|
+        # DR-5 RC1: the request id exists BEFORE authority resolution so a consumed
+        # transition can be marked with the id that actually executes the turn.
+        request_id = SecureRandom.uuid
+        profile = resolve_session_authority(options, thread_id, profile, boundary: true, request_id:)
+        run_durable(options, thread_id, profile:, request_id:) do |session, request_id, owner_id|
           drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
         end
       end
@@ -282,8 +285,11 @@ module Tamoz
         raise OptionParser::MissingArgument, "TASK" if task.empty?
 
         profile = load_operator_profile(options)
-        profile = resolve_session_authority(options, thread_id, profile, boundary: true)
-        run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
+        # DR-5 RC1: same request-id-before-authority rule as cmd_ask — a consumed
+        # transition must be marked with the id of the ask that actually runs.
+        request_id = SecureRandom.uuid
+        profile = resolve_session_authority(options, thread_id, profile, boundary: true, request_id:)
+        run_durable(options, thread_id, read_only: false, profile:, request_id:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
           request = session.app.durable_runner.submit(
             {"task" => task},
@@ -887,7 +893,7 @@ module Tamoz
         Tamoz::Agent::Session.new(model: dummy_model, toolbox:, checkpointer: adapter)
       end
 
-      def run_durable(options, thread_id, read_only: false, profile: nil)
+      def run_durable(options, thread_id, read_only: false, profile: nil, request_id: nil)
         # Deferred: tamoz/agent must not load the adapter package at require time
         # (dependency isolation), only when a durable subcommand actually runs.
         require "tamoz/sqlite"
@@ -906,9 +912,20 @@ module Tamoz
           limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
         )
         begin
-          session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, profile:)
+          # DR-5 D1 (RC5): the post-override resolution and the profile budgets are
+          # computed HERE, in cli.rb, and folded into the session record at intake
+          # via the extra constructor parameters — the same shared resolution
+          # function build_model used, so the record never disagrees with the run.
+          session = Tamoz::Agent::Session.new(
+            model:,
+            toolbox:,
+            checkpointer: adapter,
+            profile:,
+            profile_roles: resolve_profile_roles(profile, options),
+            profile_budgets: profile && profile.budgets
+          )
           install_signal_handlers do
-            yield session, SecureRandom.uuid, SecureRandom.uuid
+            yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
           end
         ensure
           adapter.close unless read_only
@@ -969,7 +986,14 @@ module Tamoz
       # in its own checkpoint, or the operator has recorded an explicit candidate
       # transition that only a turn boundary may consume, or the command fails
       # closed. Nothing here can widen authority from repository or model content.
-      def resolve_session_authority(options, thread_id, profile, boundary:)
+      #
+      # DR-5 D2: at a turn boundary the candidate is consumed inside the registry's
+      # ONE flocked check-and-mark RMW (`consume_if_candidate!`), marked with the
+      # request id that will actually execute the turn (RC1). A losing concurrent
+      # ask falls through to pinned replay below — never a typed terminal error for
+      # a race. Dead candidates (stale on both ends, unconsumed) are surfaced as an
+      # advisory; consumed entries never nag again (RC8).
+      def resolve_session_authority(options, thread_id, profile, boundary:, request_id: nil)
         return nil unless profile
 
         record = peek_session_record(options, thread_id)
@@ -989,12 +1013,20 @@ module Tamoz
         stored_digest = record.fetch("profile_digest")
         return profile if stored_digest == profile.canonical_digest
 
-        if boundary && transition_registry.candidate?(
-          thread_id, profile_id: stored_id, from: stored_digest, to: profile.canonical_digest
-        )
-          @err.puts "Applying operator transition for #{thread_id}: " \
-                    "#{stored_digest} -> #{profile.canonical_digest}."
-          return profile
+        if boundary
+          consumed = transition_registry.consume_if_candidate!(
+            thread_id,
+            profile_id: stored_id,
+            from: stored_digest,
+            to: profile.canonical_digest,
+            consumed_by: request_id
+          )
+          surface_dead_candidates(thread_id, stored_digest, profile.canonical_digest)
+          if consumed
+            @err.puts "Applying operator transition for #{thread_id}: " \
+                      "#{stored_digest} -> #{profile.canonical_digest}."
+            return profile
+          end
         end
 
         pinned = pinned_authority(record, stored_digest)
@@ -1011,6 +1043,22 @@ module Tamoz
               "#{stored_digest}' to keep the original authority, or --digest " \
               "#{profile.canonical_digest} to record a candidate transition; inspect the " \
               "session read-only with 'tamoz show #{thread_id}'."
+      end
+
+      # DR-5 D2 RC8: candidates for this thread that can no longer apply — stale on
+      # both ends and unconsumed — are surfaced at the boundary instead of sitting
+      # silently inert. Consumed entries are excluded (they are an audit trail, not
+      # a nag). No pruning in v1; the operator re-records if the change should apply.
+      def surface_dead_candidates(thread_id, stored_digest, loaded_digest)
+        dead = transition_registry.dead_candidates(thread_id, stored_digest, loaded_digest)
+        return if dead.empty?
+
+        @err.puts "Session #{thread_id} has stale candidate transitions that can no longer apply:"
+        dead.each do |entry|
+          @err.puts "  #{entry.from_digest} -> #{entry.to_digest} (#{entry.reason})"
+        end
+        @err.puts "Record a fresh candidate with 'tamoz profile activate --thread #{thread_id} " \
+                  "--digest <digest>' if the change should still take effect."
       end
 
       # The pinned snapshot is replayed through the full profile validator, so a
@@ -1374,18 +1422,75 @@ module Tamoz
         end
       end
 
+      # DR-5 D1: ONE shared resolution path for both `build_model` and the recorded
+      # `profile_roles`. f(model_roles, overrides): per-role {provider:, model:}
+      # POST-OVERRIDE tuples with build_model's exact precedence — a CLI/flag value
+      # wins over TAMOZ_MODEL/TAMOZ_PROVIDER, which win over the role's file value
+      # for the :primary role; every other role keeps its file value (build_model
+      # only ever resolves :primary). The record therefore carries NO independent
+      # data: it is exactly what build_model used. Changing one precedence rule
+      # here changes both consumers.
+      #
+      # DR-5 RC6: an override value entering the durable field is gated by the
+      # SAME secret predicates profiles validate against (SECRET_VALUE_PATTERNS /
+      # ENTROPY_PATTERN with the entropy exemption list), so nothing
+      # credential-shaped is ever recorded (invariant 24). The 40-char entropy
+      # floor can false-positive a long env-supplied model id — stated as
+      # acceptable, since a profile file cannot carry such a value; the refusal
+      # names the role and the predicate.
+      def resolve_profile_roles(profile, options)
+        return {} unless profile
+
+        overridden_model = options[:model] || @env["TAMOZ_MODEL"]
+        overridden_provider = options[:provider] || @env["TAMOZ_PROVIDER"]
+        profile.model_roles.each_with_object({}) do |(name, role), resolved|
+          entry = {
+            "provider" => String(role.fetch("provider")),
+            "model" => String(role.fetch("model"))
+          }
+          if name == "primary"
+            if overridden_model
+              entry["model"] = String(overridden_model)
+              reject_secret_shaped_override!(name, "model", overridden_model)
+            end
+            if overridden_provider
+              entry["provider"] = String(overridden_provider)
+              reject_secret_shaped_override!(name, "provider", overridden_provider)
+            end
+          end
+          resolved[name] = entry
+        end
+      end
+
+      def reject_secret_shaped_override!(role, field, value)
+        if Profile::SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+          raise ProfilePolicyError,
+                "override for profile role #{role.inspect} field #{field.inspect} " \
+                "matches the embedded-secret pattern and cannot be recorded in profile_roles"
+        end
+        if Profile::ENTROPY_PATTERN.match?(value) &&
+           !Profile::ENTROPY_EXEMPT_KEYS.include?(field)
+          raise ProfilePolicyError,
+                "override for profile role #{role.inspect} field #{field.inspect} is a " \
+                "40+ character high-entropy value (candidate secret). Pin an explicit " \
+                "identifier with --model/--provider if this value is a legitimate model id."
+        end
+      end
+
       def build_model(options, profile: nil)
         return @model_factory.call(options) if @model_factory
 
+        # §5.3 precedence: CLI/flag > TAMOZ_MODEL/TAMOZ_PROVIDER > role. The role
+        # side comes from the shared resolution function, so the model that runs
+        # and the profile_roles record are computed by the same code (DR-5 D1).
         model_name = options[:model] || @env["TAMOZ_MODEL"]
         provider = options[:provider] || @env["TAMOZ_PROVIDER"]
+        primary = resolve_profile_roles(profile, options)["primary"]
+        model_name ||= primary && primary.fetch("model")
+        provider ||= primary && primary.fetch("provider")
         api_key = nil
         role = profile && profile.model_roles["primary"]
         if role
-          # §5.3: the symbolic :primary role resolves through the profile when
-          # the operator has not pinned a model on the command line.
-          model_name ||= role.fetch("model")
-          provider ||= role.fetch("provider")
           ref = role["credential_ref"]
           api_key = @env[ref.fetch("name")] if ref
         end
@@ -1401,13 +1506,27 @@ module Tamoz
         provider_key = RubyLLMModel::ENV_KEYS[provider.downcase.to_sym]
         api_key ||= provider_key && @env[provider_key]
         api_base = @env["#{provider.upcase}_API_BASE"]
-        RubyLLMModel.new(
-          model: model_name,
-          provider:,
-          api_key:,
-          api_base:,
-          assume_model_exists: options[:assume_model_exists]
-        )
+        begin
+          RubyLLMModel.new(
+            model: model_name,
+            provider:,
+            api_key:,
+            api_base:,
+            assume_model_exists: options[:assume_model_exists]
+          )
+        rescue ArgumentError => error
+          # DR-5 D1: a role that references a credential name absent from the
+          # environment surfaces as the typed ProfileRoleUnavailableError at
+          # session start (before any model I/O or checkpoint), naming the role
+          # and the failing reference — never a leaked untyped ArgumentError.
+          if role && role["credential_ref"]
+            raise ProfileRoleUnavailableError,
+                  "profile role \"primary\" cannot resolve credential reference " \
+                  "#{role.fetch("credential_ref").fetch("name").inspect}: #{error.message}"
+          end
+
+          raise
+        end
       end
 
       def render_runtime_event(event, json:)
