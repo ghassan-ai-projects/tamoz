@@ -1,0 +1,172 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Deterministic MCP stdio test server for the tamoz-mcp gate (P10 §9), built
+# with the official SDK so the wire stays honest. Invoked as a child process:
+#
+#   ruby script/mcp_test_server [answer_file]
+#
+# Tools: echo_constant, set_answer, needs_input, churn, sleep_ms.
+# Environment flags (all opt-in, all read from the operator-controlled env):
+#   MCP_TEST_SERVER_MALFORMED_FRAMES=1  emit a non-JSON line before serving
+#   MCP_TEST_SERVER_EXIT_MID_CALL=1     exit!(3) inside sleep_ms
+#   MCP_TEST_SERVER_OVERSIZE_OUTPUT=1   echo_constant returns ~8 MiB
+#   MCP_TEST_SERVER_EXTRA_TOOLS=N       add N filler tools (catalog budget proof)
+#   MCP_TEST_SERVER_LONG_DESCRIPTION=1  add a tool with an over-budget,
+#                                       control-character-laden description
+#   MCP_TEST_SERVER_PROTOCOL_VERSION=V  version the server falls back to when
+#                                       the client offer is unsupported
+#   MCP_TEST_SERVER_GRANDCHILD=1        spawn a sleeping grandchild in the same
+#                                       process group (teardown proof)
+
+require "mcp"
+
+ANSWER_FILE = ARGV[0]
+
+def text_response(text)
+  MCP::Tool::Response.new([{ type: "text", text: text }])
+end
+
+EchoConstant = MCP::Tool.define(
+  name: "echo_constant",
+  description: "Read-only echo of its argument.",
+  input_schema: {
+    type: "object",
+    properties: { "value" => { type: "string" } },
+    required: ["value"]
+  }
+) do |value: nil, **|
+  body = ENV["MCP_TEST_SERVER_OVERSIZE_OUTPUT"] == "1" ? "x" * (8 * 1024 * 1024) : value.to_s
+  text_response(body)
+end
+
+SetAnswer = MCP::Tool.define(
+  name: "set_answer",
+  description: "Writes the answer to the file named by argv.",
+  input_schema: {
+    type: "object",
+    properties: { "answer" => { type: "string" } },
+    required: ["answer"]
+  }
+) do |answer: nil, **|
+  if ANSWER_FILE.nil?
+    text_response("no answer file configured")
+  else
+    File.write(ANSWER_FILE, answer.to_s, encoding: Encoding::UTF_8)
+    text_response("answer written")
+  end
+end
+
+NeedsInput = MCP::Tool.define(
+  name: "needs_input",
+  description: "Always asks for more input (elicitation proof).",
+  input_schema: { type: "object", properties: {} }
+) do |**|
+  # SEP-2322 multi-round-trip result: a Hash return becomes the JSON-RPC
+  # result verbatim, so the client sees resultType "input_required".
+  {
+    resultType: "input_required",
+    inputRequests: {
+      "elicit-1" => {
+        "method" => "elicitation/create",
+        "params" => {
+          "message" => "Which value should be used?",
+          "requestedSchema" => {
+            "type" => "object",
+            "properties" => { "value" => { "type" => "string" } },
+            "required" => ["value"]
+          }
+        }
+      }
+    },
+    requestState: "tamoz-test-state"
+  }
+end
+
+module Churn
+  @list_calls = 0
+
+  class << self
+    attr_accessor :list_calls
+  end
+end
+
+# Its advertised schema changes between two list calls (epoch/candidate proof).
+ChurnTool = MCP::Tool.define(
+  name: "churn",
+  description: "Schema changes between list calls.",
+  input_schema: { type: "object", properties: { "value" => { type: "string" } } }
+) do |**|
+  text_response("churn")
+end
+
+def (ChurnTool).to_h
+  Churn.list_calls += 1
+  base = super
+  return base if Churn.list_calls <= 1
+
+  base.merge(
+    description: "Schema changes between list calls (v#{Churn.list_calls}).",
+    inputSchema: {
+      type: "object",
+      properties: { "value" => { type: "integer" } }
+    }
+  )
+end
+
+SleepMs = MCP::Tool.define(
+  name: "sleep_ms",
+  description: "Sleeps for the given number of milliseconds.",
+  input_schema: {
+    type: "object",
+    properties: { "ms" => { type: "integer" } },
+    required: ["ms"]
+  }
+) do |ms: 0, **|
+  exit!(3) if ENV["MCP_TEST_SERVER_EXIT_MID_CALL"] == "1"
+  sleep(ms.to_i / 1000.0)
+  text_response("slept #{ms.to_i} ms")
+end
+
+tools = [EchoConstant, SetAnswer, NeedsInput, ChurnTool, SleepMs]
+
+if ENV["MCP_TEST_SERVER_LONG_DESCRIPTION"] == "1"
+  tools << MCP::Tool.define(
+    name: "verbose",
+    description: "#{"padding\x00\x07 " * 700}end",
+    input_schema: { type: "object", properties: {} }
+  ) { |**| text_response("verbose") }
+end
+
+ENV.fetch("MCP_TEST_SERVER_EXTRA_TOOLS", "0").to_i.times do |index|
+  filler = format("filler_%03d", index)
+  tools << MCP::Tool.define(
+    name: filler,
+    description: "Filler tool #{index}.",
+    input_schema: { type: "object", properties: {} }
+  ) { |**| text_response(filler) }
+end
+
+if ENV["MCP_TEST_SERVER_GRANDCHILD"] == "1"
+  # Same process group (no pgroup option): teardown must reap it too.
+  Process.spawn(RbConfig.ruby, "-e", "sleep 600")
+end
+
+if ENV["MCP_TEST_SERVER_MALFORMED_FRAMES"] == "1"
+  $stdout.print("this is not a json-rpc frame\n")
+  $stdout.flush
+end
+
+configuration = MCP::Configuration.new
+if (version = ENV["MCP_TEST_SERVER_PROTOCOL_VERSION"])
+  configuration.protocol_version = version
+end
+
+server = MCP::Server.new(
+  name: "tamoz-mcp-test-server",
+  version: "0.1.0",
+  tools: tools,
+  configuration: configuration
+)
+
+MCP::Server::Transports::StdioTransport.new(server).open

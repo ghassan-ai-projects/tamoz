@@ -113,13 +113,17 @@
       "Tamoz::Send"
     ],
     "tamoz-mcp": [
+      "Tamoz::Mcp::Catalog",
+      "Tamoz::Mcp::Catalog.compile",
       "Tamoz::Mcp::CatalogSnapshotUnavailableError",
+      "Tamoz::Mcp::Entry",
       "Tamoz::Mcp::Error",
       "Tamoz::Mcp::ProtocolError",
       "Tamoz::Mcp::ServerConfig",
       "Tamoz::Mcp::ServerConfig::Budgets",
-      "Tamoz::Mcp::ValidationError",
-      "Tamoz::Mcp::VERSION"
+      "Tamoz::Mcp::Supervisor",
+      "Tamoz::Mcp::VERSION",
+      "Tamoz::Mcp::ValidationError"
     ],
     "tamoz-sqlite": [
       "Tamoz::SQLite::VERSION"
