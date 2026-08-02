@@ -1044,6 +1044,23 @@ locales (29,950 assertions each); scorecard **16 cases / 13 successes / decision
 4/4 hard gates / safety 0**, the 15 existing cases byte-identical, report deterministic
 across seeds and locales; no orphan processes.
 
+**Slice-4 critic verdict: PASS-WITH-GAPS** — 17/17 held-out probes pass on the real wire
+(scorecard reproduced byte-for-byte, content_digest `sha256:137d02c3…`; criticals 1/3/5/14/16
+pass; no credential in the raw sqlite; name-shadowing, injection, schema bombs bounded at
+call time, corruption terminal, epoch-stop zero-I/O, resume guards fail-closed, exactly-once
+journal re-drive 0 new wire requests). One **feature-breaking gap found outside the exam**:
+`Deliberation.planning_prompt` renders `toolbox.descriptions.slice(*allowed_tools)` and
+`Hash#slice` drops the source-qualified MCP names — the MCP capability surface is INVISIBLE
+to the planner; a real model never sees `mcp:test-server/…` exists (case 16 passes only
+because it is scripted). Contradicts the plan's §3 "the session consumes the source at the
+planning surface" boundary claim. Fix queued (must touch `deliberation.rb planning_prompt`,
+the same method D-8's Fix B is editing — sequenced after D-8 lands): merge the MCP names +
+bounded/control-stripped descriptions into `available_tools`. Minor deviations recorded:
+self-`$ref` schema bombs accepted at admission but bounded+typed at call time (7 ms,
+`ToolArgumentError`, digest-pinned — defense holds, row partially satisfied); MRTR reissue
+once-only guard absent at the invocation layer (agent-unreachable — an `:interrupt` is a
+terminal `ToolError`, never auto-reissued; tracked in the caller-journal contract).
+
 Disclosed by the builder: v1 glue cannot durably suspend an MCP `input_required` mid-perform
 (mid-flight effect row at a pause → `:wait`/LeaseLostError on resume) — executor surfaces
 the interrupt as a typed terminal error; elicitation proven at the tamoz-mcp level; within
