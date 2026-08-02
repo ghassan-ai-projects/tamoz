@@ -307,7 +307,12 @@ module Tamoz
         # interrupt is raised and before any journal entry exists. A repairable
         # rejection here has prepared nothing, so it is pure evidence.
         begin
-          intent = build_intent(step, accepted)
+          # D-8 Fix A (RC-2): resolve an absent mutation digest exactly once, here.
+          # The SAME resolved arguments flow into the intent, the preview, and the
+          # approval descriptor; `prepare_patch`'s equality check re-verifies them at
+          # execution, so preview and execution always describe the same bytes.
+          resolved_arguments = resolved_effect_arguments(step.fetch("arguments"), tool)
+          intent = build_intent(step, accepted, resolved_arguments)
           unless approval_required?(tool)
             return {next_node: "step_execute", effect_intents: [intent]}
           end
@@ -317,7 +322,7 @@ module Tamoz
             raise ToolError, "insufficient observation budget for #{tool}"
           end
 
-          preview = preview_for(tool, step.fetch("arguments"))
+          preview = preview_for(tool, resolved_arguments)
         rescue ToolArgumentError => error
           return tool_failure_update(
             state,
@@ -335,7 +340,7 @@ module Tamoz
           "plan_digest" => accepted.fetch("plan_digest"),
           "step_id" => step.fetch("id"),
           "tool" => tool,
-          "arguments" => step.fetch("arguments"),
+          "arguments" => resolved_arguments,
           "preview" => preview,
           "arguments_digest" => intent.fetch("arguments_digest"),
           "preview_digest" => preview_digest
@@ -594,7 +599,12 @@ module Tamoz
 
       def dispatch(context, intent, step)
         tool = intent.fetch("tool")
-        arguments = step.fetch("arguments")
+        # D-8 Fix A (RC-2): execute the RESOLVED arguments. The digest bound at
+        # build_intent is re-injected here from the committed intent, so the bytes
+        # executed are the bytes approved (and `verify_intent_before_state!` above
+        # re-proves the workspace still matches before `prepare_patch`'s equality
+        # check runs as the second binding).
+        arguments = resolved_execution_arguments(intent, step)
         safety = intent.fetch("safety").to_sym
         reconciler =
           if safety == :reconcilable
@@ -680,9 +690,8 @@ module Tamoz
         end
       end
 
-      def build_intent(step, accepted)
+      def build_intent(step, accepted, arguments)
         tool = step.fetch("tool")
-        arguments = step.fetch("arguments")
         fields = {
           step_id: step.fetch("id"),
           plan_id: accepted.fetch("plan_id"),
@@ -702,6 +711,44 @@ module Tamoz
         end
         fields[:check_name] = arguments.fetch("name") if tool == "run_check"
         SessionRecords.build("effect_intent", **fields)
+      end
+
+      # D-8 Fix A (RC-2): single resolution of an absent mutation digest, at the
+      # step-gate boundary. apply_patch digests come from observation of the current
+      # bytes; create_file digests are content-derived (`hexdigest(content)`, no
+      # observation — the file does not exist yet). A present digest is never
+      # touched, so the stale-digest refusal stays live.
+      def resolved_effect_arguments(arguments, tool)
+        return arguments unless %w[apply_patch create_file].include?(tool)
+        return arguments if arguments.key?("expected_sha256")
+
+        case tool
+        when "apply_patch"
+          observed = EffectDispatcher.observe(toolbox.root.join(arguments.fetch("path")))
+          arguments.merge("expected_sha256" => observed.fetch("state"))
+        when "create_file"
+          arguments.merge("expected_sha256" => Digest::SHA256.hexdigest(arguments.fetch("content")))
+        end
+      end
+
+      # Re-injects the digest committed in the effect intent into the arguments that
+      # actually reach execution. The intent carries `before_state` (the observed
+      # digest) for apply_patch and `after_digest` (the content digest) for
+      # create_file, so the executed arguments always match the approved state even
+      # though the plan's own arguments carry no digest.
+      def resolved_execution_arguments(intent, step)
+        tool = intent.fetch("tool")
+        arguments = step.fetch("arguments")
+        return arguments unless %w[apply_patch create_file].include?(tool)
+        return arguments if arguments.key?("expected_sha256")
+
+        digest =
+          case tool
+          when "apply_patch" then intent.fetch("before_state")
+          when "create_file" then intent.fetch("after_digest")
+          else raise ToolError, "unreachable resolved execution arguments"
+          end
+        arguments.merge("expected_sha256" => digest)
       end
 
       def tool_safety(tool, arguments)
@@ -980,7 +1027,22 @@ module Tamoz
           }
         end
 
-        raise PlanRejectedError, "no plan passed review after #{max_plan_attempts} attempts"
+        raise PlanRejectedError, plan_rejected_message(reviews)
+      end
+
+      # D-8 Fix C (RC-3): the disclosed message is bounded to the last attempt's
+      # STRUCTURAL-layer issues — Tamoz-generated validation text, first three issues,
+      # further clamped by `Error.disclosable_message` at the safe_message boundary.
+      # Semantic feedback is model-authored and protocol feedback quotes the provider
+      # payload, so either yields the generic phrase; neither is ever interpolated.
+      def plan_rejected_message(reviews)
+        prefix = "no plan passed review after #{max_plan_attempts} attempts"
+        last = reviews.last
+        unless last && last.fetch("layer") == "structural" && last.fetch("decision") == "revise"
+          return "#{prefix}: the plan did not pass review; the last feedback is not discloseable"
+        end
+
+        "#{prefix}: #{last.fetch("issues").first(3).join("; ")}"
       end
 
       def clarify_update(state, context:, plan_id:, plan_digest:, review:, phase:, repair_attempt:, plans:, reviews:, ambiguity:)

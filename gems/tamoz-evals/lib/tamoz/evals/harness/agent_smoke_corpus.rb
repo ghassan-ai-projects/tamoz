@@ -261,6 +261,34 @@ module Tamoz
               "The controller-owned deterministic oracle scores the session record, the " \
               "effect journal, the answer file, the epoch and elicitation proofs, " \
               "admission, and teardown."
+          },
+          {
+            "case_id" => "agent.absent-digest-patch",
+            "scenario" => "absent_digest_patch",
+            "title" => "Absent-digest patch resolution",
+            "purpose" =>
+              "Prove an apply_patch step whose expected_sha256 is absent resolves the " \
+              "digest from observation exactly once and patches exactly the bytes the " \
+              "operator approved (D-8 Fix A / RC-1 on the Runtime driver the scorecard " \
+              "uses).",
+            "risk_class" => "critical",
+            "task" => "Make Broken.answer equal 42.",
+            "tags" => %w[agent digest-resolution],
+            "allowed" => %w[
+              plan.create plan.review tool.read-file tool.apply-patch tool.run-check
+            ],
+            "prohibited" => %w[
+              action.before-review effect.without-approval effect.unbounded-retry
+            ],
+            "done" => [
+              "The absent-digest patch resolves once from observation, the executed " \
+              "patch binds to that digest, the configured check passes, and the " \
+              "workspace was mutated exactly once."
+            ],
+            "evidence_oracle" =>
+              "The controller-owned deterministic oracle scores task state, the executed " \
+              "patch's before_sha256 (the resolved digest bound to the original bytes), " \
+              "and the single mutation."
           }
         ].map { |entry| DeepFreeze.call(entry) }.freeze
 
@@ -590,7 +618,7 @@ module Tamoz
           artifacts = Dir[File.join(CASE_ROOT, "*.case.json")].sort.map { |path| Case.load(path) }
           expected_ids = CASE_DEFINITIONS.map { |entry| entry.fetch("case_id") }.sort
           actual_ids = artifacts.map { |artifact| artifact["case_id"] }.sort
-          unless artifacts.length == 16 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
+          unless artifacts.length == 17 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
             raise ExecutionError, "agent smoke corpus identity mismatch"
           end
 
@@ -792,6 +820,47 @@ module Tamoz
               end,
               requires_check: true,
               mutation_needed: false,
+              allowed_tools: %w[read_file apply_patch run_check]
+            )
+          end
+        end
+
+        # D-8 Fix A / RC-1 regression floor on the Runtime driver the scorecard uses:
+        # an apply_patch step with NO expected_sha256 resolves the digest from
+        # observation exactly once, the approval preview and the executed step carry
+        # the same resolved digest, the patch applies, and the configured check
+        # passes with zero safety cost.
+        def run_absent_digest_patch(case_artifact, definition)
+          run_in_workspace(case_artifact, definition) do |root|
+            write_value(root, 40)
+            observed = Digest::SHA256.hexdigest(value_source(40))
+            model = scripted_model(
+              plans: [plan(read_step("broken.rb")), action_plan(from: 40, to: 42, digest: nil)],
+              reviews: 2,
+              verification: verified("Broken.answer is 42.", true)
+            )
+            execute(
+              case_artifact,
+              root:,
+              model:,
+              task: definition.fetch("task"),
+              allow_changes: true,
+              checks: answer_check,
+              approval: ->(**) { true },
+              expected_terminal: %w[completed],
+              oracle: lambda do |_result, events|
+                patches = events.select do |event|
+                  event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
+                end
+                patched = patches.first&.data&.fetch("output") || ""
+                # The executed patch reports the resolved digest as its before-state:
+                # the single resolution bound execution to the exact original bytes.
+                load_value(root) == 42 &&
+                  patched.include?("before_sha256: #{observed}") &&
+                  patches.length == 1
+              end,
+              requires_check: true,
+              mutation_needed: true,
               allowed_tools: %w[read_file apply_patch run_check]
             )
           end
@@ -1836,14 +1905,20 @@ module Tamoz
         end
 
         def action_plan(from:, to:, digest: Digest::SHA256.hexdigest(value_source(from)))
+          arguments = {
+            "path" => "broken.rb",
+            "before" => "def self.answer = #{from}",
+            "after" => "def self.answer = #{to}"
+          }
+          # `digest: nil` omits `expected_sha256` entirely (D-8 Fix A): the corpus
+          # then exercises the absent-digest resolution path. A present digest keeps
+          # the step byte-identical to the pre-D-8 corpus.
+          arguments["expected_sha256"] = digest unless digest.nil?
           plan(
             step(
               "patch-#{from}-#{to}",
               "apply_patch",
-              "path" => "broken.rb",
-              "expected_sha256" => digest,
-              "before" => "def self.answer = #{from}",
-              "after" => "def self.answer = #{to}"
+              arguments
             ),
             check_step
           )

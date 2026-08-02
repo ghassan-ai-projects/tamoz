@@ -10,7 +10,15 @@ module Tamoz
     # `Tamoz::DisclosableMessage`.
     class ProtocolError < Error; end
 
-    class PlanRejectedError < Error; end
+    # Raised when every plan attempt failed review. D-8 Fix C (RC-3): the raise site
+    # authors the message — either a bounded summary of the last attempt's
+    # STRUCTURAL-layer issues (Tamoz-generated validation text) or a generic phrase —
+    # so the class opts in to `Tamoz::DisclosableMessage` like `ToolError`. It must
+    # never carry model-authored semantic feedback or provider payloads, which is why
+    # the structural-only rule lives at the raise site.
+    class PlanRejectedError < Error
+      include Tamoz::DisclosableMessage
+    end
     class ApprovalDeniedError < Error; end
 
     # A tool refused to act.

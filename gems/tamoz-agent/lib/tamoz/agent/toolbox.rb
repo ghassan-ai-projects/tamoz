@@ -278,9 +278,17 @@ module Tamoz
           raise ToolArgumentError, "query must be valid UTF-8" unless query.valid_encoding?
         when "apply_patch"
           validate_path_argument!(normalized_arguments.fetch("path"))
-          digest = normalized_arguments.fetch("expected_sha256")
-          unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
-            raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
+          # D-8 Fix A: `expected_sha256` is optional at the toolbox boundary. A real
+          # model cannot know a target's digest before a read executes, so the plan
+          # leaves it out and the driver resolves it from observation exactly once,
+          # injecting it into both preview and execute. When PRESENT the check is
+          # unchanged: a stale or malformed digest is still a repairable rejection
+          # (the stale-digest refusal at `prepare_patch` is the live second binding).
+          if normalized_arguments.key?("expected_sha256")
+            digest = normalized_arguments.fetch("expected_sha256")
+            unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
+              raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
+            end
           end
 
           has_legacy = normalized_arguments.key?("before") || normalized_arguments.key?("after")
@@ -338,12 +346,25 @@ module Tamoz
           reject_unknown!(normalized_arguments, %w[path content expected_sha256 mode])
           validate_path_argument!(normalized_arguments.fetch("path"))
           validate_file_text!(normalized_arguments.fetch("content"))
-          expected = normalized_arguments.fetch("expected_sha256")
-          unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
-            raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
+          # D-8 Fix A / RC-6: the content digest is deterministic (`hexdigest(content)`,
+          # no observation), so an absent digest is resolved right here and the whole
+          # create_file surface (effect_intent, preview, prepare_create_file,
+          # render_create_preview) consumes the computed value. A PRESENT digest is
+          # checked against the content unchanged, so a wrong explicit digest is still
+          # refused.
+          if normalized_arguments.key?("expected_sha256")
+            expected = normalized_arguments.fetch("expected_sha256")
+            unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
+              raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
+            end
+            actual = Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
+            raise ToolArgumentError,
+                  "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
+          else
+            normalized_arguments = normalized_arguments.merge(
+              "expected_sha256" => Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
+            )
           end
-          actual = Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
-          raise ToolArgumentError, "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
           mode = normalized_arguments.fetch("mode", "0644")
           validate_mode!(mode)
           validate_create_path!(normalized_arguments.fetch("path"))
@@ -393,7 +414,11 @@ module Tamoz
 
         case normalized_name
         when "apply_patch"
-          patch = prepare_patch(normalized_arguments)
+          # D-8 Fix A: drivers resolve an absent digest exactly once and inject it, so
+          # this branch only fires for a direct caller. Resolving from observation here
+          # keeps `prepare_patch`'s equality check the single authoritative binding.
+          arguments = resolved_apply_patch_arguments(normalized_arguments)
+          patch = prepare_patch(arguments)
           {
             "path" => normalized_arguments.fetch("path"),
             "before_state" => patch.fetch(:before_digest),
@@ -417,7 +442,11 @@ module Tamoz
 
         case normalized_name
         when "apply_patch"
-          patch = prepare_patch(normalized_arguments)
+          # D-8 Fix A: preview the RESOLVED state. Drivers inject the digest they
+          # resolved once; a direct caller with an absent digest resolves from the
+          # current workspace, and `prepare_patch`'s equality check still binds.
+          arguments = resolved_apply_patch_arguments(normalized_arguments)
+          patch = prepare_patch(arguments)
           render_diff(normalized_arguments.fetch("path"), patch)
         when "run_check"
           argv = checks.fetch(normalized_arguments.fetch("name"))
@@ -435,6 +464,20 @@ module Tamoz
       end
 
       private
+
+      # D-8 Fix A: an apply_patch digest is knowable only after a read executes, so
+      # the drivers resolve it exactly once from observation and inject it into both
+      # preview and execute. This fallback exists only for a direct toolbox caller
+      # that omits the digest; the drivers always pass it present, so `prepare_patch`
+      # stays the single authoritative equality binding. `observe` digests raw bytes
+      # and `prepare_patch` digests UTF-8-tagged content — identical bytes for valid
+      # UTF-8, so the two digests agree.
+      def resolved_apply_patch_arguments(arguments)
+        return arguments if arguments.key?("expected_sha256")
+
+        state = EffectDispatcher.observe(@root.join(arguments.fetch("path"))).fetch("state")
+        arguments.merge("expected_sha256" => state)
+      end
 
       def validate_skill_reference!(reference)
         raise ToolArgumentError, "skill must be a string" unless reference.is_a?(String)
@@ -600,7 +643,11 @@ module Tamoz
       end
 
       def apply_patch(arguments)
-        patch = prepare_patch(arguments)
+        # D-8 Fix A: resolve an absent digest from the current workspace for a
+        # direct caller, exactly like `effect_intent` and `preview`. The drivers
+        # inject their single resolution, so `prepare_patch`'s equality check below
+        # stays the live second binding for every approved execution.
+        patch = prepare_patch(resolved_apply_patch_arguments(arguments))
         atomic_replace(patch.fetch(:path), patch.fetch(:after_content))
         after_digest = Digest::SHA256.hexdigest(patch.fetch(:after_content))
         if arguments.key?("replacements")

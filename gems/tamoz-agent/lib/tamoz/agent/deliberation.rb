@@ -36,6 +36,18 @@ module Tamoz
 
       MUTATION_TOOLS = %w[apply_patch create_file].freeze
 
+      # D-8 Fix B (RC-4): template placeholders and cross-step references in step
+      # arguments. Scoped so legitimate `<`/`>` in patch text, content, or queries
+      # (comparisons, generics, HTML) is never rejected: the `<`+`>` containment rule
+      # applies only to `path` and digest-shaped arguments (where a placeholder is
+      # never legitimate); the whole-string and reference-phrase rules apply to every
+      # string argument.
+      PLACEHOLDER_ISSUE = "arguments contain a placeholder; every argument must be " \
+                          "a concrete value already known from evidence"
+      PLACEHOLDER_REFERENCE_PHRASES = %w[from step from read_file from search result].freeze
+      PLACEHOLDER_WHOLE_STRING = /\A<.*>\z/
+      PLACEHOLDER_CONTAINMENT_KEYS = %w[path expected_sha256].freeze
+
       module_function
 
       def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context, toolbox:)
@@ -54,6 +66,29 @@ module Tamoz
           "phase_instruction" => phase_instruction,
           "workspace_root" => ".",
           "path_policy" => "All tool paths are relative to the workspace root.",
+          # D-8 Fix B: an argument must be a concrete value already known from
+          # evidence, and a patch digest is knowable only after a read executes.
+          # A plan is one document, so a step's arguments can only use values
+          # known BEFORE the plan runs (task names, prior discovery evidence) —
+          # never guesses or references to the plan's own steps. `path` is
+          # REQUIRED; `expected_sha256` is the ONE argument a model may omit when
+          # it has not read the target yet (the framework resolves it at step
+          # time).
+          "argument_rule" =>
+            "Every step argument must be a concrete value already known from evidence " \
+            "BEFORE the plan runs: a path, query, or digest taken from the task or " \
+            "from the discovery evidence list above. Never write a placeholder or a " \
+            "reference to another step's output in any argument (for example \"<path " \
+            "from search result>\", \"<SHA-256 from read_file>\", \"from step 1\"); " \
+            "such arguments are rejected and waste a plan attempt. Do not guess a " \
+            "path either: if you do not know the exact path, do not include a read of " \
+            "it in this plan — read it in the action phase using the exact path " \
+            "recorded in discovery evidence. Required arguments such as path must be " \
+            "exact relative paths. The expected_sha256 argument of apply_patch is the " \
+            "ONLY argument you may omit: if you have not read the target yet, leave " \
+            "expected_sha256 out — the framework binds the digest from the current " \
+            "file state before execution, so the patch step still succeeds. If you " \
+            "know the digest from a read_file result, copy it verbatim.",
           "available_tools" => toolbox.descriptions.slice(*allowed_tools),
           "evidence_from_discovery" => evidence,
           "feedback_from_previous_attempt" => feedback
@@ -114,6 +149,9 @@ module Tamoz
           unless step.arguments.is_a?(Hash)
             issues << "#{prefix} arguments must be an object"
           end
+          if step.tool && step.arguments.is_a?(Hash) && placeholder_arguments?(step.arguments)
+            issues << "#{prefix} #{PLACEHOLDER_ISSUE}"
+          end
           if step.tool.nil? && !step.arguments.empty?
             issues << "#{prefix} has arguments without a tool"
           elsif step.tool
@@ -145,6 +183,30 @@ module Tamoz
           end
         end
         issues.freeze
+      end
+
+      # D-8 Fix B (RC-4), scoped heuristic. `path` and `expected_sha256` are never
+      # legitimate `<`+`>` carriers, so they get the containment check ON TOP of the
+      # universal rules; every other string argument is checked for the whole-string
+      # `\A<.*>\z` shape and the cross-step reference phrases. Nested values
+      # (compound replacement entries) are walked with the same rules.
+      def placeholder_arguments?(arguments)
+        arguments.any? do |key, value|
+          case value
+          when String
+            contained = PLACEHOLDER_CONTAINMENT_KEYS.include?(String(key)) &&
+              value.include?("<") && value.include?(">")
+            universal = value.match?(PLACEHOLDER_WHOLE_STRING) ||
+              PLACEHOLDER_REFERENCE_PHRASES.any? { |phrase| value.include?(phrase) }
+            contained || universal
+          when Hash
+            placeholder_arguments?(value)
+          when Array
+            value.any? { |entry| entry.is_a?(Hash) && placeholder_arguments?(entry) }
+          else
+            false
+          end
+        end
       end
 
       def parse_review(raw)

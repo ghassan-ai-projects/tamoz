@@ -205,6 +205,11 @@ module Tamoz
       )
         event_context = {"phase" => phase.to_s}.merge(metadata)
         feedback = []
+        # D-8 Fix C (RC-3): track the last attempt's feedback layer so the
+        # PlanRejectedError discloses a bounded summary of STRUCTURAL-layer issues
+        # only; semantic (model-authored) and protocol (provider-quoting) feedback
+        # yields the generic phrase.
+        last_layer = nil
         max_plan_attempts.times do |offset|
           attempt = offset + 1
           raw = model.generate(
@@ -236,6 +241,7 @@ module Tamoz
           ) { |event| yield event }
           unless structural_issues.empty?
             feedback = structural_issues
+            last_layer = :structural
             next
           end
 
@@ -251,8 +257,10 @@ module Tamoz
           end
 
           feedback = review.fetch("issues")
+          last_layer = :semantic
         rescue ProtocolError => error
           feedback = [error.message]
+          last_layer = :protocol
           emit(
             :plan_reviewed,
             event_context.merge(
@@ -264,7 +272,18 @@ module Tamoz
           ) { |event| yield event }
         end
 
-        raise PlanRejectedError, "no plan passed review after #{max_plan_attempts} attempts"
+        raise PlanRejectedError, plan_rejected_message(last_layer, feedback)
+      end
+
+      # D-8 Fix C (RC-3): bounded structural-only rejection disclosure, mirroring
+      # `SessionNodes#plan_rejected_message`. `Error.disclosable_message` clamps and
+      # scrubs again at the safe_message boundary.
+      def plan_rejected_message(last_layer, feedback)
+        prefix = "no plan passed review after #{max_plan_attempts} attempts"
+        return "#{prefix}: the plan did not pass review; the last feedback is not discloseable" \
+          unless last_layer == :structural
+
+        "#{prefix}: #{feedback.first(3).join("; ")}"
       end
 
       def structural_issues(plan, phase:, allowed_tools:)
@@ -303,13 +322,22 @@ module Tamoz
             next
           end
 
+          # D-8 Fix A (RC-1): resolve an absent mutation digest exactly once, at the
+          # start of this step. The SAME resolved arguments feed the preview, the
+          # approval callback, and the actual execute, so a mutation between preview
+          # and execute — or inside the approval callback — trips `prepare_patch`'s
+          # live equality check ("file changed") and never patches unapproved bytes.
+          # Emitted events keep the PLAN's arguments so the execution always matches
+          # the accepted plan step for audit purposes; the injected digest is
+          # execution metadata binding execution to the approved state.
+          effect_arguments = resolved_effect_arguments(step)
           begin
             if toolbox.approval_required?(step.tool)
               maximum_output = toolbox.maximum_effect_output_bytes(step.tool)
               if total_bytes + maximum_output > MAX_OBSERVATION_BYTES
                 raise ToolError, "insufficient observation budget for #{step.tool}"
               end
-              preview = toolbox.preview(step.tool, step.arguments)
+              preview = toolbox.preview(step.tool, effect_arguments)
               request = {
                 **event_context,
                 "step_id" => step.id,
@@ -320,7 +348,7 @@ module Tamoz
               emit(:approval_requested, request) { |event| yield event }
               approved = approval&.call(
                 tool: step.tool,
-                arguments: step.arguments,
+                arguments: effect_arguments,
                 preview:
               )
               unless approved == true
@@ -338,7 +366,7 @@ module Tamoz
                 "arguments" => step.arguments
               )
             ) { |event| yield event }
-            tool_result = toolbox.execute(step.tool, step.arguments)
+            tool_result = toolbox.execute(step.tool, effect_arguments)
           rescue ToolArgumentError => error
             # Invariant 17: an invalid-argument rejection is a typed result. Nothing was
             # mutated, so it becomes evidence rather than ending the run.
@@ -416,6 +444,25 @@ module Tamoz
 
       def observation_bytes(observations)
         observations.sum { |entry| entry.fetch("output").bytesize }
+      end
+
+      # D-8 Fix A (RC-1): single resolution of an absent mutation digest, at step
+      # entry. apply_patch digests come from observation of the current bytes
+      # (`EffectDispatcher.observe`), create_file digests are content-derived. A
+      # present digest is never touched, so the stale-digest refusal stays live.
+      def resolved_effect_arguments(step)
+        tool = step.tool
+        arguments = step.arguments
+        return arguments unless %w[apply_patch create_file].include?(tool)
+        return arguments if arguments.key?("expected_sha256")
+
+        case tool
+        when "apply_patch"
+          observed = EffectDispatcher.observe(toolbox.root.join(arguments.fetch("path")))
+          arguments.merge("expected_sha256" => observed.fetch("state"))
+        when "create_file"
+          arguments.merge("expected_sha256" => Digest::SHA256.hexdigest(arguments.fetch("content")))
+        end
       end
 
       def verify(task, plan, review, observations, verification_context:)

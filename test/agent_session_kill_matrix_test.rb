@@ -149,16 +149,20 @@ class AgentSessionKillMatrixTest < Minitest::Test
               "verification" => "the receipt reports the published digest"
             }
           else
+            arguments = {
+              "path" => "app.rb",
+              "before" => "value = 1",
+              "after" => "value = 2"
+            }
+            # D-8 Fix A (T7): with TAMOZ_ABSENT_DIGEST=1 the patch step carries no
+            # digest — the shape a real model produces before a read executes. The
+            # session resolves it from observation at step_gate.
+            arguments["expected_sha256"] = @digest unless ENV["TAMOZ_ABSENT_DIGEST"] == "1"
             {
               "id" => "edit",
               "purpose" => "apply the exact replacement",
               "tool" => "apply_patch",
-              "arguments" => {
-                "path" => "app.rb",
-                "expected_sha256" => @digest,
-                "before" => "value = 1",
-                "after" => "value = 2"
-              },
+              "arguments" => arguments,
               "verification" => "the receipt reports the new digest"
             }
           end
@@ -313,6 +317,16 @@ class AgentSessionKillMatrixTest < Minitest::Test
       operation: "checkpoint.commit",
       skip: 1
     },
+    # D-8 Fix A / T7: the checkpoint that commits the APPROVAL RECORD (and the
+    # resolved effect intent), i.e. the third checkpoint.commit after the action
+    # review. A kill here leaves the committed intent in state, so a resumed
+    # dispatch re-verifies it rather than re-resolving (probe 9).
+    "D8.after_approval_recorded" => {
+      marker: "model:review:action",
+      point: "after_commit",
+      operation: "checkpoint.commit",
+      skip: 2
+    },
     "K6.after_effect_prepare" => {
       marker: "resume:r1",
       point: "after_commit",
@@ -445,6 +459,40 @@ class AgentSessionKillMatrixTest < Minitest::Test
         assert result.fetch("integrity_ok"), when_to_kill
         assert_no_public_partial(context, %w[app.rb greeting.txt], when_to_kill)
       end
+    end
+  end
+
+  # D-8 Fix A / T7 (review probe 9): an absent-digest plan killed between approval
+  # and dispatch re-verifies the COMMITTED intent on resume. The workspace is
+  # mutated while the child is dead; the resumed dispatch must stop (the patch is
+  # never applied to the mutated bytes) instead of silently re-binding.
+  def test_absent_digest_patch_killed_between_approval_and_dispatch_rebinds_to_committed_intent
+    with_scenario do |context|
+      environment = {"TAMOZ_ABSENT_DIGEST" => "1"}
+      status = run_child(
+        context,
+        mode: "run",
+        seam: SEAMS.fetch("D8.after_approval_recorded"),
+        environment:
+      )
+      assert status.signaled?, "child was not killed: #{status.inspect}"
+      assert_equal Signal.list.fetch("KILL"), status.termsig
+
+      mutated = "value = 99\n"
+      File.write(File.join(context.fetch(:workspace), "app.rb"), mutated)
+      sleep 0.35
+      recovery = run_child(context, mode: "recover", seam: {}, environment:)
+      assert recovery.success?, "recovery child failed: #{recovery.inspect}"
+
+      result = JSON.parse(File.read(context.fetch(:result)))
+      assert_equal "failed", result.fetch("status"),
+                   "the resumed dispatch must stop on the changed workspace"
+      assert_equal mutated, File.read(File.join(context.fetch(:workspace), "app.rb")),
+                   "the patch must never apply to the mutated bytes"
+      events = File.readlines(context.fetch(:log), chomp: true)
+      assert_equal 0, events.count("publish:apply_patch"),
+                   "no filesystem publication may reach the workspace"
+      assert result.fetch("integrity_ok")
     end
   end
 

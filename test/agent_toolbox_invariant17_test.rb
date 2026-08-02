@@ -225,6 +225,34 @@ class AgentToolboxInvariant17Test < Minitest::Test
     end
   end
 
+  # D-8 Fix A (probe 10): an ABSENT digest is accepted by validate for both mutation
+  # tools — the structural review must never reject a plan whose read step has not
+  # run yet — while every other reject row above still leaves the workspace
+  # byte-identical.
+  def test_absent_digest_is_accepted_at_validate_for_mutation_tools
+    Dir.mktmpdir("tamoz-invariant17-absent") do |root|
+      File.write(File.join(root, "values.rb"), "ONE = 1\n", encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      accepted = toolbox.validate("apply_patch", {
+        "path" => "values.rb",
+        "before" => "ONE = 1",
+        "after" => "ONE = 2"
+      })
+      refute accepted.key?("expected_sha256"), "validate must not invent a digest"
+
+      accepted = toolbox.validate("create_file", {
+        "path" => "new.txt",
+        "content" => "hello\n"
+      })
+      assert_equal Digest::SHA256.hexdigest("hello\n"), accepted.fetch("expected_sha256"),
+                   "create_file resolves its content digest at validate (no observation)"
+
+      assert_equal "ONE = 1\n", File.read(File.join(root, "values.rb"))
+      refute File.exist?(File.join(root, "new.txt"))
+    end
+  end
+
   def test_create_file_failures_return_tool_error_and_leave_workspace_byte_identical
     Dir.mktmpdir("tamoz-invariant17") do |root|
       Dir.mkdir(File.join(root, "subdir"))
