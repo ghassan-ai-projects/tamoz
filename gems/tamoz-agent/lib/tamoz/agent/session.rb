@@ -113,6 +113,29 @@ module Tamoz
       end
       private :verify_profile_binding!
 
+      # P9 §7, invariant 41: a resumed session must bind the exact skill tree it was
+      # planned against. Any epoch difference stops; there is no degraded read-only
+      # continuation, because a changed skill body is changed *instructions* and
+      # continuing an accepted plan under different instructions is the failure the
+      # invariant names. Legacy and skill-free sessions share the "none" epoch, so
+      # pre-P9 sessions resume untouched.
+      def verify_skill_binding!(thread:)
+        record = begin
+          view(thread:).state&.[](:session)
+        rescue Tamoz::Agent::Error
+          nil
+        end
+        return unless record
+
+        stored = record.fetch("skill_epoch", SessionRecords::LEGACY_SKILL_EPOCH)
+        current = toolbox.skill_epoch
+        return if stored == current
+
+        raise SkillSnapshotUnavailableError,
+              "session #{thread} was planned against skill epoch #{stored}; the current " \
+              "catalog is #{current}. Restore the exact skill trees or start a new session."
+      end
+
       def self.build_definition(nodes)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
           state :task, default: ""

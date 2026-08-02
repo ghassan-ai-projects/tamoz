@@ -74,8 +74,19 @@ module Tamoz
             behavior_version: BEHAVIOR_VERSION,
             tool_catalog_digest: toolbox.catalog_digest,
             created_at_ms: 0,
-            **profile_binding
+            **profile_binding,
+            **skill_binding
           )
+        }
+      end
+
+      # P9 §7: the session pins the exact skill catalog it was planned against.
+      # `Session#verify_skill_binding!` compares this on resume and stops rather
+      # than continuing an accepted plan under changed instructions (invariant 41).
+      def skill_binding
+        {
+          skill_epoch: toolbox.skill_epoch,
+          prompt_surface_digest: toolbox.prompt_surface_digest
         }
       end
 

@@ -211,6 +211,7 @@ module Tamoz
         profile = load_operator_profile(options)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           guard_profile_resume!(session, thread_id, profile)
+          session.verify_skill_binding!(thread: thread_id)
           drive_resume(session, thread_id:, request_id:, owner_id:, options:, resume_options:)
         end
       end
@@ -220,6 +221,7 @@ module Tamoz
         profile = load_operator_profile(options)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           guard_profile_resume!(session, thread_id, profile)
+          session.verify_skill_binding!(thread: thread_id)
           drive_continue(session, thread_id:, request_id:, owner_id:, options:)
         end
       end
@@ -279,6 +281,7 @@ module Tamoz
         profile = load_operator_profile(options)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           guard_profile_resume!(session, thread_id, profile)
+          session.verify_skill_binding!(thread: thread_id)
           request = session.app.durable_runner.submit(
             {"task" => task},
             thread: thread_id,
@@ -303,6 +306,7 @@ module Tamoz
         profile = load_operator_profile(options)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           guard_profile_resume!(session, thread_id, profile)
+          session.verify_skill_binding!(thread: thread_id)
           session.app.durable_runner.submit(
             {"task" => task},
             thread: thread_id,
