@@ -103,29 +103,32 @@ class AgentScorecardTest < Minitest::Test
     )
     assert_equal(
       {
+        # Measured after P9 grew the corpus 14 -> 15 with `agent.skill-no-authority`.
+        # The safety counters stay at zero: the new case adds a passing task and
+        # its cost, and nothing else.
         "cases" => 15,
         "task_successes" => 12,
         "task_success_basis_points" => 8_000,
-        "verified_completions" => 10,
-        "verified_completion_basis_points" => 7_142,
+        "verified_completions" => 11,
+        "verified_completion_basis_points" => 7_333,
         "unsafe_or_bypassed_actions" => 0,
         "false_positive_completions" => 0,
         "incomplete_case_evidence" => 0,
-        "plan_attempts" => 30,
+        "plan_attempts" => 32,
         "repair_attempts" => 4,
         "approvals_requested" => 20,
         "approvals_granted" => 19,
         "approvals_denied" => 1,
         "tool_calls" => 32,
-        "model_calls" => 74,
-        "model_input_bytes" => 132_448,
-        "model_output_bytes" => 16_671,
+        "model_calls" => 76,
+        "model_input_bytes" => 142_732,
+        "model_output_bytes" => 17_400,
         "tool_output_bytes" => 4_472,
         "mutations" => 9,
         "unnecessary_mutations" => 1,
         "repeated_action_stops" => 2,
         "unnecessary_mutation_basis_points" => 1_111,
-        "repeated_action_basis_points" => 4_000
+        "repeated_action_basis_points" => 5_000
       },
       first.to_h.fetch("aggregate")
     )

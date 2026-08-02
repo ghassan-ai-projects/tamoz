@@ -913,10 +913,12 @@ No stored skill artifact exists anywhere before P9, so there is no data migratio
 
 ---
 
-## 11. Guarantees that are CONDITIONAL on P8-E
+## 11. Guarantees that were CONDITIONAL on P8-E
 
-Stated plainly, because P8-E (adversarial fuzz of the trusted-profile boundary) is **not
-started** and P8-B is partial.
+P8-E has since landed (`0ed3944`): the trusted-profile boundary is adversarially fuzzed
+and the `agent.profile-trusted-boundary` scorecard case proves a malicious repository
+suggestion never becomes authority. The conditional column below now holds; the table is
+kept as written at design time.
 
 | Gate | Unconditional in P9 | Conditional on P8-E |
 |---|---|---|
