@@ -2,9 +2,12 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-01 at commit `a019167` (P8-A/B/C landed; P8-E next)
-Goal: finish P4–P15 of `docs/PROJECT_HANDOVER_PLAN.md` to production quality, with every
-phase passing real behavioural proofs and hard-zero safety gates.
+Last verified: 2026-08-03 at commit `405fe68` — **942 runs / 34,010 assertions / 0 failures**
+under UTF-8, scorecard **19 cases / 16 successes / decision pass / 4-of-4 hard gates /
+safety counters 0**. P0–P11, P16, P17, D-7 and D-8 closed; **P12 is the active phase**.
+Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P11 are closed;
+the remaining span is **P12–P18** — with every phase passing real behavioural proofs and
+hard-zero safety gates.
 
 Method: each work package gets a **builder** and a separate **harsh critic** with fresh
 context. The critic runs the real output, compares it against the bar with held-out probes
@@ -1366,6 +1369,49 @@ legitimate phrases in before/after/query pass structural review; case-17 purpose
 locales; scorecard 17/14/pass. **D-8 closed; the real-model action path is proven end to
 end (read-only AND action mode, real DeepSeek).**
 
+### Round 23 — P12 bounded self-healing (in flight)
+
+**Baseline re-measured, not assumed.** Before any P12 work started, `405fe68` was verified
+by running it: `rake ci` **942 runs / 34,010 assertions / 0 failures** under UTF-8, and the
+scorecard **19 cases / 16 successes / decision pass / 4-of-4 hard gates / unsafe 0 /
+false-positive 0 / incomplete-evidence 0**. The C/POSIX gate ran alongside. This matters
+because the previous session ended with the progress page's §4–§6 describing a state three
+phases out of date; the numbers above come from execution, not from commit messages.
+
+**Decomposition.** P12 is the largest remaining phase (twelve work packages spanning two
+half-independent subsystems), so it was split into three slices that can be judged
+separately:
+
+| Slice | Packages | Why it is separable |
+|---|---|---|
+| **A** | P12-HD, H1, H2 | the typed failure contract, classification/abstention, and the remediation protocol — no durable state of its own; leaves named injectable seams for B |
+| **B** | P12-H3, H4 | compensation, the **DR-2 durable circuit** (one record, four scopes), escalation records, and the promotion lifecycle + applicable 250-case matrix; depends on A's record types |
+| **I** | P12-ID, I1, I2, I3, (S) | the reversible behavior candidate — rides on P11-W's existing `BehaviorTransition` seam and is otherwise independent of the healing half |
+
+A and I run in parallel in isolated worktrees; B follows A.
+
+**The exam was written before the answers.** `P12_PROBE_SPEC.md` — fourteen behavioural
+questions with the design-mandated answer for each — was written by the coordinator from
+`SELF_HEALING_DESIGN.md`, `DR2_DURABLE_CIRCUIT_PLAN.md` and the invariants **before any P12
+implementation existed to read**, and is held in the uncommitted scratchpad. The questions
+that matter most are the ones a passing test suite would not necessarily answer:
+
+- can `recovered` ever be reached from the remediation model's own explanation, with the
+  configured check failing or absent? (invariant 33)
+- does an open circuit survive a real process restart, and does time alone reset it?
+- can a rule edit its own matcher, oracle, budgets, authority or circuit — attempted and
+  observed, not argued from inspection? (invariant 34)
+- is holdout isolation enforced by the capability/root system, or only by convention?
+- is rollback **byte-identical by digest**, or merely behaviourally similar?
+- is the hard-zero gate actually wired, or reporting zero because nothing ran? (a
+  deliberately injected unsafe action must trip it)
+
+**Harness maintenance.** Two defects in the judging apparatus itself were fixed first: the
+probe loader's gem list predated P16/P10 and omitted `tamoz-tools` and `tamoz-mcp`, so every
+probe would have reported `probe_failed` on any post-P16 ref — a judge that fails uniformly
+looks exactly like two refs that agree. The success floor was ratcheted 6 → 16 to match the
+current scorecard; it may never be lowered to make a round pass.
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -1379,27 +1425,29 @@ end (read-only AND action mode, real DeepSeek).**
 | P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | complete | **complete** (`8b095ab`) — D/A/B landed, adversarial suite 37 tests, `skill-no-authority` scorecard case (15 cases, 12 successes, safety zero); P9-C/D2/E/B2 deferred per accepted plan; critic pending |
 | P10 governed MCP | complete | **closed** — slices 1–4 + planning-surface fix (`a69971d`, `d0e537e`, `9d1d3ec`); slice-3 critic FAIL (O1) fixed; slice-4 critic PASS-WITH-GAPS (planning-surface gap fixed); scorecard 17/14/pass, safety 0; D2/H/full-E-conformance deferred per plan scope |
-| DR-2 durable circuit | accepted design | **active implementation blocker** — P10 still defaults to process-local circuit state; must close before P17 |
-| DR-3 memory evaluation substrate | complete | **complete** (`b6c379c`) — existing harness is the substrate P11 must integrate with |
+| DR-1 behavior transition | complete | **closed inside P11** (`0531bee`) — serialized control record, claim→apply→finalize, first-intake-of-thread only |
+| DR-2 durable circuit | partial | **carried debt** — the egress scope landed with P17 (`78041fc`); the supervisor/rule/schedule scopes are still process-local. P12-H3 owns the durable record per `DR2_DURABLE_CIRCUIT_PLAN.md` |
+| DR-3 memory evaluation substrate | complete | **complete** (`b6c379c`) — existing harness is the substrate P11 integrates with |
 | DR-4 stale durable requests | complete | **closed** (`c627aec`, `7afe1ff`) — critic 39/39; 857/0 in both required locales |
 | DR-5 profile machinery | complete | **closed** (`be84e8e`, `80725db`) — re-adjudication passed |
+| P11 three-layer memory | complete | **closed** (`0531bee`, critic fixes `5cdf17f`) — critic PASS-WITH-GAPS; consolidation success path and purge finders fixed; 942/0 both locales, scorecard 19/16/pass |
 | P16 tools extraction | complete | **closed** (`fffaee8`, `2ae9e60`) |
-| P17 governed websearch | pending | **blocked on DR-2** |
-| P11–P15, P18 | pending | accepted design only; no implementation commits |
+| P17 governed websearch | complete | **closed** (`78041fc`, critic fix `3fe4d43`) — critic PASS-WITH-GAPS; SSRF classifier now fails closed on unclassifiable IP spellings; stderr_tail redacts resolved credential values (invariant 24) |
+| **P12 bounded self-healing** | **active** | **in flight — Round 23.** Three parallel builders in isolated worktrees: A = HD/H1/H2 (failure contract, classification, remediation), B = H3/H4 (compensation, DR-2 durable circuit, escalation, promotion), I = ID/I1/I2/I3 (behavior candidate). 14-question held-out probe spec written from the design **before** any implementation was read |
+| P13–P15, P18 | pending | accepted design only; no implementation commits |
 
 ---
 
 ## 5. Current gaps
 
-1. **DR-2 is accepted design but unimplemented (critical path).** P10's production
-   supervisor still defaults to process-local `MemoryCircuitStore`; P17 requires the same
-   durable aggregate circuit for egress health. Implement, critic-review, and gate DR-2
-   before activating P17.
-2. **MCP child stderr can disclose injected credentials (high).** Credential values are
-   passed to the child environment, while the bounded `stderr_tail` is control-character
-   scrubbed but not redacted by known value before being attached to typed errors. Add
-   value-aware redaction and a malicious-child regression probe before expanding the MCP
-   boundary in P17.
+1. **DR-2 is only partly durable (critical path, carried debt).** The egress scope landed
+   with P17; P10's supervisor circuit and P13's scheduler circuit are still process-local.
+   P12-H3 owns the durable `CircuitRecord` — one record type, four scopes. Until it lands,
+   a restart silently forgets an open circuit, which is the failure mode the record exists
+   to prevent.
+2. ~~MCP child stderr can disclose injected credentials.~~ **Closed** at `3fe4d43`:
+   `stderr_tail` now redacts resolved credential values by value (invariant 24) with a
+   malicious-child regression test.
 3. **Adversarial review debt remains.** P6 and P7 lack independent critic closure; D-7,
    P8, and P9 retain disclosed critic/deferred-scope debt.
 4. **P6-F operational durability is partial:** disk-full injection, lock saturation under
@@ -1413,9 +1461,9 @@ end (read-only AND action mode, real DeepSeek).**
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
    MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
    workflow. Its closure record must also identify DR-2 durability as carried debt.
-8. **P11–P15, P17, and P18 remain unimplemented.** DR-1 is design-only and must be
-   implemented within P11 before Wisdom activation. P11 must integrate with the existing
-   DR-3 harness instead of rebuilding it.
+8. **P12–P15 and P18 remain unimplemented.** P11 and P17 closed (each critic
+   PASS-WITH-GAPS, with the findings fixed). P12 is in flight; P13, P14, P15 and P18 have
+   accepted plans and no code.
 9. **Release evidence is not yet ordinary-CI complete.** Both-locale gates, scorecards,
    package isolation, security/license checks, benchmarks, restore, and release rehearsal
    still need P15 integration. README/SECURITY also lag the seven-gem and current MCP/action
@@ -1429,9 +1477,15 @@ end (read-only AND action mode, real DeepSeek).**
 
 ## 6. Next action
 
-Implement **DR-2 durable circuit state**, including its independent critic pass and the
-full gate under both required locales. Then activate P17. After P17, proceed through
-P11 (implementing DR-1 before Wisdom activation) → P12 → P13 → P14 → P18 → P15.
+Close **P12 — bounded self-healing and self-improvement** per `docs/P12_SELF_HEALING_PLAN.md`:
+merge the three builder slices in dependency order (A → B, I in parallel), gate under both
+locales, run the 14-question held-out probe round with a fresh-context critic, then close.
+After P12, proceed **P13 → P14 → P18 → P15**.
+
+The single most consequential thing inside P12 is not a feature: it is the **DR-2 durable
+circuit** (P12-H3). Today an open circuit is process-local for the supervisor, rule and
+schedule scopes, so a restart forgets it — precisely the failure the record exists to
+prevent.
 
 ### Resume checklist for the next session
 
@@ -1445,26 +1499,25 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected at `54f675a`: clean worktree; last full gate was 627 runs / 0 failures under both
-locales at the P9 merge `8b095ab` (P10-D added gem/test files only and ran its own targeted
-tests, 31 runs green both locales — the full gate runs at the next P10 slice merge);
-scorecard 15 cases, 12 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
-No product work remains on any side branch.
+Expected at `405fe68`: clean worktree; **942 runs / 34,010 assertions / 0 failures** under
+both locales; scorecard **19 cases, 16 successes, `decision: pass`, 4/4 hard gates, safety
+counters 0**. Both numbers were re-measured at the start of Round 23 rather than copied
+forward from a commit message.
 
 Then, in priority order:
 
-1. **P10** — governed MCP client/host, mid-implementation per `docs/P10_MCP_PLAN.md`:
-   catalog compiler + supervisor + `script/mcp_test_server`, then invocation/elicitation/
-   session pinning, then the adversarial suite and 16th scorecard case, then the full gate.
-2. **The deferred critic passes over P6, P7, P8, D-7 and P9.** Critic agents have
-   repeatedly died to session limits before producing findings. Every "complete" mark
-   for P6–P9 currently rests on the deterministic gate plus the builder's own
-   self-review.
-   That is weaker evidence than this project's own protocol asks for.
+1. **P12** per the three-slice decomposition above.
+2. **The deferred critic passes over P6, P7 and D-7.** Critic agents repeatedly died to
+   session limits in Sessions 1–2. From P10 onward every phase has had a real critic round
+   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17 all PASS-WITH-GAPS → fixed). P6, P7 and
+   D-7 still rest on the deterministic gate plus the builder's own self-review, which is
+   weaker evidence than this project's protocol asks for.
+3. **P13 → P14 → P18 → P15**, each with its accepted plan document.
 
-The judging harness (gate, blind A/B, five held-out probes) lives in the session scratchpad
-and is deliberately uncommitted, so a builder cannot read or edit its own exam. It will need
-recreating in a new session; its design is described in §1.
+The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec) lives in
+the session scratchpad and is deliberately uncommitted, so a builder cannot read or edit its
+own exam. It needs recreating in a new session; its design is described in §1.
 
-Do not treat `.claude/worktrees/` as product output. Do not push, publish, release, or
-connect real physical actuators. The last product checkpoint on `main` is **`54f675a`**.
+Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output. Do not push,
+publish, release, or connect real physical actuators. The last product checkpoint on `main`
+is **`405fe68`**.
