@@ -60,7 +60,9 @@ module Tamoz
         max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
         model_call_safety: :idempotent,
         profile: nil,
-        mcp: nil
+        mcp: nil,
+        profile_roles: nil,
+        profile_budgets: nil
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
@@ -90,7 +92,9 @@ module Tamoz
           max_repair_attempts:,
           model_call_safety:,
           profile:,
-          mcp:
+          mcp:,
+          profile_roles:,
+          profile_budgets:
         )
         @definition = Session.build_definition(@nodes)
         @app = @definition.compile(checkpointer:)

@@ -21,7 +21,7 @@ class AgentProfileTransitionTest < Minitest::Test
 
   # --- authority snapshot ----------------------------------------------------
 
-  def test_authority_snapshot_carries_the_surface_and_no_credential_reference
+  def test_authority_snapshot_carries_the_surface_and_credential_ref_name_only
     profile = load_profile(
       document(
         "model_roles" => {
@@ -38,13 +38,34 @@ class AgentProfileTransitionTest < Minitest::Test
     assert profile.high_risk?
     assert_equal profile.canonical_digest, snapshot.fetch("canonical_digest")
     assert_equal READ_ONLY_TOOLS, snapshot.fetch("tools").fetch("allowed")
+    # DR-5 RC4: the snapshot records the credential reference NAME so replay
+    # resolves the IDENTICAL env key the original ask used; it never records a
+    # credential value (invariant 24).
+    assert_equal(
+      {
+        "provider" => "openai",
+        "model" => "gpt-5",
+        "credential_ref" => {"kind" => "env", "name" => "TAMOZ_OPENAI_API_KEY"}
+      },
+      snapshot.fetch("model_roles").fetch("primary")
+    )
+    assert_includes JSON.generate(snapshot), "TAMOZ_OPENAI_API_KEY"
+    assert snapshot.frozen?
+  end
+
+  def test_authority_snapshot_without_refs_keeps_plain_roles
+    profile = load_profile(
+      document(
+        "model_roles" => {"primary" => {"provider" => "openai", "model" => "gpt-5"}}
+      )
+    )
+    snapshot = profile.authority_snapshot
+
     assert_equal(
       {"provider" => "openai", "model" => "gpt-5"},
       snapshot.fetch("model_roles").fetch("primary")
     )
-    refute_includes JSON.generate(snapshot), "credential_ref"
-    refute_includes JSON.generate(snapshot), "TAMOZ_OPENAI_API_KEY"
-    assert snapshot.frozen?
+    refute snapshot.fetch("model_roles").fetch("primary").key?("credential_ref")
   end
 
   def test_from_authority_reproduces_the_exact_capability_surface
