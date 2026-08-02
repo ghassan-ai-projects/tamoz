@@ -84,6 +84,23 @@ module Tamoz
       DEFAULT_CHECK_SAFETY = :unsafe
       DEFAULT_APPROVAL_REQUIRED = ACTION_DESCRIPTIONS.keys.freeze
 
+      # P8-E / invariant 24. A configured check is a child process whose stdout and
+      # stderr are captured verbatim into the check receipt, and that receipt is fed
+      # back into the model prompt, the event stream, and the durable effect log. An
+      # inherited credential variable is therefore one `printenv` away from every
+      # place invariant 24 says a credential must never appear. Credential-shaped
+      # variables are removed from the child environment; everything a build needs
+      # (PATH, HOME, LANG, TMPDIR, ...) is inherited unchanged.
+      CREDENTIAL_ENV_PATTERN = /(?:\A|_)(?:
+        API_?KEYS? | ACCESS_?KEYS? | SECRET_?KEYS? | PRIVATE_?KEYS? | SESSION_?KEYS? |
+        TOKENS? | SECRETS? | PASSWORD | PASSWD | CREDENTIALS? | PASSPHRASE
+      )(?:\z|_)/x
+      CREDENTIAL_ENV_NAMES = %w[
+        AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_SECURITY_TOKEN
+        ANTHROPIC_API_KEY DEEPSEEK_API_KEY GEMINI_API_KEY MISTRAL_API_KEY OLLAMA_API_KEY
+        OPENAI_API_KEY OPENROUTER_API_KEY PERPLEXITY_API_KEY XAI_API_KEY
+      ].freeze
+
       attr_reader :root, :checks, :check_timeout, :check_safeties, :allowed_tools, :approval_required
 
       def initialize(
@@ -140,6 +157,20 @@ module Tamoz
         )}".freeze
       rescue SystemCallError
         raise ToolError, "workspace root is unavailable"
+      end
+
+      # Environment delta that unsets every credential-shaped variable for a child
+      # check process. A `nil` value tells `Process.spawn` to remove the name, so
+      # unrelated variables keep their inherited values.
+      def self.credential_free_env(env = ENV)
+        env.keys.each_with_object({}) do |name, delta|
+          delta[name] = nil if credential_env?(name)
+        end
+      end
+
+      def self.credential_env?(name)
+        upper = String(name).upcase
+        CREDENTIAL_ENV_NAMES.include?(upper) || CREDENTIAL_ENV_PATTERN.match?(upper)
       end
 
       def descriptions = @descriptions
@@ -353,8 +384,24 @@ module Tamoz
             raise ArgumentError, "check #{name.inspect} must be a non-empty argv Array"
           end
 
+          validate_check_program!(name, raw_argv.first)
           [name.freeze, raw_argv.map { |entry| entry.dup.freeze }.freeze]
         end.freeze
+      end
+
+      # P8-E: `run_check` spawns with the workspace as the working directory, so a
+      # relative argv[0] carrying a separator names a file the workspace supplies.
+      # Whatever surface configured the check — profile, `--check`, or a caller —
+      # the narrow waist refuses to execute repository content. Bare names go
+      # through PATH and absolute paths name an operator-chosen program.
+      def validate_check_program!(name, program)
+        return unless program.include?(File::SEPARATOR) ||
+                      (File::ALT_SEPARATOR && program.include?(File::ALT_SEPARATOR))
+        return if program.start_with?(File::SEPARATOR)
+
+        raise ArgumentError,
+              "check #{name.inspect} argv[0] #{program.inspect} is a relative path and would " \
+              "resolve inside the workspace; use an absolute path or a bare program name"
       end
 
       def normalize_check_safeties(value)
@@ -768,7 +815,9 @@ module Tamoz
         status = nil
         timed_out = false
 
-        Open3.popen3(*argv, chdir: root.to_s, pgroup: true) do |stdin, stdout, stderr, wait_thread|
+        Open3.popen3(
+          self.class.credential_free_env, *argv, chdir: root.to_s, pgroup: true
+        ) do |stdin, stdout, stderr, wait_thread|
           stdin.close
           stream_limit = MAX_CHECK_OUTPUT_BYTES / 2
           stdout_reader = Thread.new { read_bounded(stdout, limit: stream_limit) }
