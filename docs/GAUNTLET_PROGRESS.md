@@ -866,7 +866,13 @@ directory showed as untracked. Corrected here.
    resume request enqueued by a process that then loses the lease stays queued; a later drain
    claims it, its answers no longer match the outstanding interrupts, and
    `Tamoz::InvalidUpdateError` escapes `run_next` — the CLI crashes with an unhandled error
-   and the request is never terminally failed. Fix belongs to a dedicated, design-reviewed
+   and the request is never terminally failed. Fault chain localized (Round 12, read-only):
+   answer application raises at `gems/tamoz-graph/lib/tamoz/graph/compiled.rb:925-954`
+   ("resume answers cannot be empty" / "already exists"); `execute_durable_request` has no
+   rescue; `durable_runner.rb:56-88 run_next` lets it escape `open_writer`; the CLI's
+   `drain_to_terminal` (`gems/tamoz-agent/lib/tamoz/agent/cli.rb:444`) does not rescue
+   either, and nothing marks the claimed request terminally failed. Fix belongs to a
+   dedicated, design-reviewed
    framework round: a stale durable request must fail as a terminal request value without
    taking the thread down.
 3. **P7 is not adversarially verified.** Coordinator gate and self-review pass; the
