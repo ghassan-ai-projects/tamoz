@@ -6,7 +6,12 @@ module Tamoz
   module SQLite
     class Migrator
       APPLICATION_ID = 0x54414D5A # TAMZ
-      CURRENT_VERSION = 1
+      # P11 (three-layer memory): CURRENT_VERSION moves 1 -> 2 through the
+      # checksummed MIGRATION_2, which adds the lexical memory index table
+      # `tamoz_memory_index` (P11 plan §2/§4 P11-B). Ordinals are consumed
+      # monotonically; a later phase cannot reuse ordinal 2 (the
+      # monotonic-ordering test in test/sqlite_migration_test.rb asserts it).
+      CURRENT_VERSION = 2
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -320,6 +325,56 @@ module Tamoz
         MIGRATION_1.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # P11 (three-layer memory) §2/§4 P11-B: the lexical memory index. One
+      # row per Store version of a memory record, written in the SAME
+      # transaction as the Store version/head append (DC-3) by
+      # `Tamoz::SQLite::MemoryRepository`. The retrieval query filters on the
+      # scope/state/sensitivity/validity/compatibility columns BEFORE any row
+      # is materialized or decrypted (invariant 30); `statement_search` is
+      # populated only for non-sensitive records, so a sensitive statement
+      # never enters a searchable column (invariant 24).
+      MIGRATION_2 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_memory_index (
+            store_namespace TEXT NOT NULL,
+            memory_id TEXT NOT NULL,
+            record_version INTEGER NOT NULL CHECK (record_version > 0),
+            layer TEXT NOT NULL,
+            class TEXT NOT NULL,
+            state TEXT NOT NULL,
+            scopes_tenant TEXT NOT NULL,
+            scopes_user TEXT NOT NULL,
+            scopes_project TEXT NOT NULL,
+            sensitivity TEXT NOT NULL CHECK (
+              sensitivity IN ('public', 'internal', 'sensitive')
+            ),
+            valid_until_ms INTEGER,
+            compatibility_graph TEXT NOT NULL,
+            compatibility_behavior TEXT NOT NULL,
+            statement_search TEXT,
+            searchable INTEGER NOT NULL CHECK (searchable IN (0, 1)),
+            PRIMARY KEY (store_namespace, memory_id, record_version)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_memory_index_scope
+            ON tamoz_memory_index(
+              store_namespace, state, scopes_tenant, scopes_user, scopes_project
+            )
+        SQL
+      ].freeze
+
+      MIGRATION_2_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_2.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
+      # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
+      # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
+      MIGRATIONS = {
+        1 => [MIGRATION_1, MIGRATION_1_CHECKSUM],
+        2 => [MIGRATION_2, MIGRATION_2_CHECKSUM]
+      }.freeze
+
       attr_reader :path, :limits, :fault_injector
 
       def self.verify_connection!(connection)
@@ -331,16 +386,20 @@ module Tamoz
         unless version == CURRENT_VERSION
           raise MigrationError, "SQLite schema version is invalid"
         end
-        row = connection.get_first_row(
-          "SELECT checksum FROM tamoz_schema_migrations WHERE version = 1"
-        )
-        unless row && row.fetch(0) == MIGRATION_1_CHECKSUM
-          raise MigrationError, "SQLite migration 1 checksum is invalid"
+        (1..CURRENT_VERSION).each do |ordinal|
+          verify_migration_row!(connection, ordinal)
         end
 
         version
       rescue ::SQLite3::Exception => error
         ExceptionMapper.raise_mapped(error, operation: "schema verification")
+      end
+
+      # A later phase cannot reuse an ordinal already consumed by an earlier
+      # migration: the migration set must be exactly the contiguous range
+      # 1..CURRENT_VERSION, and every ordinal's checksum is registered.
+      def self.migration_ordinals
+        (1..CURRENT_VERSION).to_a
       end
 
       def initialize(path:, limits:, fault_injector:)
@@ -361,10 +420,14 @@ module Tamoz
                 "SQLite schema version #{version} is newer than #{CURRENT_VERSION}"
         end
 
-        if version.zero?
-          apply_migration_1(connection)
+        case version
+        when 0
+          apply_migrations(connection, from: 0, set_application_id: true)
+        when 1
+          self.class.verify_migration_row!(connection, 1)
+          apply_migrations(connection, from: 1, set_application_id: false)
         else
-          verify_migration_1!(connection)
+          self.class.verify_connection!(connection)
         end
         true
       rescue ::SQLite3::Exception => error
@@ -375,42 +438,65 @@ module Tamoz
 
       private
 
-      def apply_migration_1(connection)
+      # All pending migrations (from + 1 .. CURRENT_VERSION) apply in ONE
+      # transaction: a failure rolls back every statement, so a fresh database
+      # and an in-place 1 -> 2 upgrade are both all-or-nothing. Each ordinal
+      # runs under its own Transaction label (`migration.1`, `migration.2`) so
+      # fault injection can target a specific migration's statements while the
+      # outer rollback stays atomic across them all.
+      def apply_migrations(connection, from:, set_application_id:)
         connection.execute("BEGIN EXCLUSIVE")
-        transaction = Transaction.new(
-          connection:,
-          operation: "migration.1",
-          attempt: 1,
-          fault_injector:
-        )
-        MIGRATION_1.each_with_index do |sql, index|
-          transaction.execute("migration.1.#{index + 1}", sql)
+        begin
+          transaction = nil
+          (from + 1..CURRENT_VERSION).each do |ordinal|
+            statements, checksum = MIGRATIONS.fetch(ordinal)
+            transaction = Transaction.new(
+              connection:,
+              operation: "migration.#{ordinal}",
+              attempt: 1,
+              fault_injector:
+            )
+            statements.each_with_index do |sql, index|
+              transaction.execute("migration.#{ordinal}.#{index + 1}", sql)
+            end
+            now = transaction.scalar("migration.#{ordinal}.time", backend_time_sql)
+            transaction.execute(
+              "migration.#{ordinal}.record",
+              <<~SQL,
+                INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms)
+                VALUES (?, ?, ?)
+              SQL
+              [ordinal, checksum, now]
+            )
+          end
+          if set_application_id
+            transaction.execute(
+              "migration.application_id",
+              "PRAGMA application_id = #{APPLICATION_ID}"
+            )
+          end
+          transaction.execute(
+            "migration.user_version",
+            "PRAGMA user_version = #{CURRENT_VERSION}"
+          )
+          connection.execute("COMMIT")
+        rescue Exception # rubocop:disable Lint/RescueException
+          connection.execute("ROLLBACK") if connection.transaction_active?
+          raise
         end
-        now = transaction.scalar("migration.1.time", backend_time_sql)
-        transaction.execute(
-          "migration.1.record",
-          <<~SQL,
-            INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms)
-            VALUES (?, ?, ?)
-          SQL
-          [1, MIGRATION_1_CHECKSUM, now]
-        )
-        transaction.execute(
-          "migration.1.application_id",
-          "PRAGMA application_id = #{APPLICATION_ID}"
-        )
-        transaction.execute(
-          "migration.1.user_version",
-          "PRAGMA user_version = #{CURRENT_VERSION}"
-        )
-        connection.execute("COMMIT")
-      rescue Exception # rubocop:disable Lint/RescueException
-        connection.execute("ROLLBACK") if connection.transaction_active?
-        raise
       end
 
-      def verify_migration_1!(connection)
-        self.class.verify_connection!(connection)
+      def self.verify_migration_row!(connection, ordinal)
+        statements, checksum = MIGRATIONS.fetch(ordinal)
+        row = connection.get_first_row(
+          "SELECT checksum FROM tamoz_schema_migrations WHERE version = ?",
+          [ordinal]
+        )
+        unless row && row.fetch(0) == checksum
+          raise MigrationError,
+                "SQLite migration #{ordinal} checksum is invalid " \
+                "(#{statements.length} statements)"
+        end
       end
 
       def backend_time_sql
@@ -423,8 +509,9 @@ module Tamoz
         sql.lines.map(&:strip).join(" ")
       end
 
-      private_constant :APPLICATION_ID, :CURRENT_VERSION, :MIGRATION_1,
-                       :MIGRATION_1_CHECKSUM
+      private_constant :APPLICATION_ID, :MIGRATION_1,
+                       :MIGRATION_1_CHECKSUM, :MIGRATION_2, :MIGRATION_2_CHECKSUM,
+                       :MIGRATIONS
     end
   end
 end

@@ -25,7 +25,8 @@ module Tamoz
           treatment:,
           store_root:,
           auditor: AgentRunAudit.new,
-          store: nil
+          store: nil,
+          store_factory: nil
         )
           @corpus = corpus
           @case_artifact = case_artifact
@@ -33,6 +34,7 @@ module Tamoz
           @store_root = store_root
           @auditor = auditor
           @store = store
+          @store_factory = store_factory
         end
 
         def run
@@ -47,10 +49,18 @@ module Tamoz
           self
         end
 
+        # P11-ED: a `store_factory` (callable(cell_root, fixtures) -> store)
+        # builds a per-cell store over the REAL production memory stack
+        # (`MemoryRepositoryAdapter`); the default seeds the DR-3 JSON fixture
+        # store. Both keep per-cell isolation + the seed-digest precondition.
         def seed_store
           fixtures = @case_artifact.to_h.fetch("treatments", {}).dig("seed", "fixtures")
-          path = File.join(@cell_root, "store", "store.json")
-          MemoryStore.seed(path, fixtures)
+          if @store_factory
+            @store_factory.call(@cell_root, fixtures)
+          else
+            path = File.join(@cell_root, "store", "store.json")
+            MemoryStore.seed(path, fixtures)
+          end
         end
 
         private

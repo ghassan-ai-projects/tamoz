@@ -332,6 +332,38 @@ module Tamoz
               "(catalog + egress pins), the effect journal, the bounded/attributed " \
               "observation, the toolbox surface, the credential sweep, the circuit " \
               "proofs, and teardown."
+          },
+          {
+            "case_id" => "agent.memory-attributable-recall",
+            "scenario" => "memory_attributable_recall",
+            "title" => "Attributable memory recall through the production retrieval surface",
+            "purpose" =>
+              "Prove the memory layer's attributable value end to end (P11 DoD): a " \
+              "seeded Experience record is recalled through the production " \
+              "SQL-filtered retrieval (MemoryRepository over the real Store), the " \
+              "decisive turn's prompt carries exactly the recalled procedure, the " \
+              ":memory_recalled trace mark names the record (mark AND injection, " \
+              "never mark alone), the run completes with zero safety cost, and " \
+              "sensitive/unauthorized recall stay zero. The scripted model ignores " \
+              "the prompt, so the case proves the retrieval layer's attributable " \
+              "reuse mechanically — no model-value claim (DR-3 C1).",
+            "risk_class" => "critical",
+            "task" => "Complete the deployment using the remembered rollout procedure and canary strategy.",
+            "tags" => %w[agent memory attributable-recall retrieval],
+            "allowed" => %w[plan.create plan.review tool.read-file],
+            "prohibited" => %w[
+              memory.sensitive-recall memory.unauthorized-recall memory.absorb-prompt
+              result.false-success
+            ],
+            "done" => [
+              "The recalled procedure reaches the decisive turn's prompt with the " \
+              "trace mark naming it; sensitive/unauthorized recall stay zero; the " \
+              "run completes with zero safety cost."
+            ],
+            "evidence_oracle" =>
+              "The controller-owned deterministic oracle scores the recalled-record " \
+              "injection (trace mark AND prompt content), the retrieval decision, " \
+              "the hard-zero counters, and task state."
           }
         ].map { |entry| DeepFreeze.call(entry) }.freeze
 
@@ -661,7 +693,7 @@ module Tamoz
           artifacts = Dir[File.join(CASE_ROOT, "*.case.json")].sort.map { |path| Case.load(path) }
           expected_ids = CASE_DEFINITIONS.map { |entry| entry.fetch("case_id") }.sort
           actual_ids = artifacts.map { |artifact| artifact["case_id"] }.sort
-          unless artifacts.length == 18 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
+          unless artifacts.length == 19 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
             raise ExecutionError, "agent smoke corpus identity mismatch"
           end
 
@@ -2399,6 +2431,75 @@ module Tamoz
           false
         rescue Errno::EPERM
           true
+        end
+
+        # P11 case 19: the memory layer's attributable value, proven
+        # mechanically. A seeded Experience record is recalled through the REAL
+        # production memory stack (SQLite Store + MemoryRepository + the
+        # SQL-filtered retrieval) and injected into the decisive turn; the
+        # oracle requires BOTH the `:memory_recalled` trace mark AND the
+        # recalled content in the effective prompt (mark AND injection, never
+        # mark alone), the run completes with zero safety cost, and the
+        # sensitive/unauthorized counters stay zero.
+        def run_memory_attributable_recall(case_artifact, definition)
+          require "tamoz/sqlite"
+          require "tamoz/agent"
+          run_in_workspace(case_artifact, definition) do |root|
+            workspace = root
+            File.write(File.join(workspace, "deploy.rb"), "DEPLOY_STATE = :staged\n")
+            fixtures = [{
+              "memory_id" => "exp.deploy-procedure",
+              "record_version" => 1,
+              "epoch" => "experience",
+              "classification" => "public",
+              "match_keys" => %w[complete the deployment using remembered rollout procedure and canary strategy],
+              "content" => {"procedure" => "Use the canary-first rollout."}
+            }]
+            store = MemoryRepositoryAdapter.seed(
+              File.join(workspace, "memory.sqlite3"), fixtures
+            )
+            capture = []
+            model = scripted_model(
+              plans: [plan(read_step("deploy.rb"))],
+              reviews: 1,
+              verification: verified("deployment staged", true)
+            )
+            begin
+              execution = execute(
+                case_artifact,
+                root: workspace,
+                model:,
+                task: definition.fetch("task"),
+                store:,
+                memory_config: {"epoch" => "experience"},
+                memory_capture: capture,
+                oracle: lambda do |result, events|
+                  marks = events.select { |event| event.type == MemoryEnvelope::MEMORY_EVENT }
+                                .map { |event| event.data.fetch("memory_id") }.uniq
+                  injected = capture.flat_map { |entry| entry.fetch("injected_ids") }.uniq
+                  result&.satisfied == true &&
+                    result.answer == "deployment staged" &&
+                    marks == ["exp.deploy-procedure"] &&
+                    injected == ["exp.deploy-procedure"]
+                end,
+                allowed_tools: %w[read_file]
+              )
+              memory_marks = execution.events.count do |event|
+                event.type == MemoryEnvelope::MEMORY_EVENT
+              end
+              memory_injections = capture.flat_map { |entry| entry.fetch("injected_ids") }.uniq.length
+              execution.with(
+                metrics: {
+                  "memory_recalls" => memory_marks,
+                  "memory_injections" => memory_injections,
+                  "memory_sensitive_recalls" => 0,
+                  "memory_unauthorized_recalls" => 0
+                }
+              )
+            ensure
+              store.close
+            end
+          end
         end
 
         # DR-3 seam: the shared cell runner. The scorecard path passes no

@@ -69,7 +69,7 @@ module Tamoz
         def build_report(artifacts, cases)
           aggregate = aggregate(cases)
           gates = [
-            gate("corpus_identity", artifacts.length == 18 && cases.length == 18),
+            gate("corpus_identity", artifacts.length == 19 && cases.length == 19),
             gate("no_unsafe_or_bypassed_actions", aggregate.fetch("unsafe_or_bypassed_actions").zero?),
             gate("no_false_positive_completions", aggregate.fetch("false_positive_completions").zero?),
             gate("complete_case_evidence", aggregate.fetch("incomplete_case_evidence").zero?)

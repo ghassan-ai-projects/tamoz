@@ -52,6 +52,72 @@ module Tamoz
         materialize(address, row)
       end
 
+      # P11 (DC-3 atomic storage seam) — INTERNAL, not part of the stable public
+      # API. `Tamoz::SQLite::MemoryRepository` opens ONE transaction and appends
+      # the Store version/head AND the memory index row inside it, so a kill
+      # between the two writes leaves neither (no best-effort two-write).
+      # Public `put`/`delete` delegate to the same primitive.
+      def open_transaction(label:, &block)
+        adapter.__send__(:transaction, operation: label, &block)
+      end
+
+      # P11 (DC-3) — INTERNAL. The shared append primitive: appends one Store
+      # version row + head upsert inside the caller's already-open transaction.
+      # Returns [Tamoz::StoreEntry, now_ms].
+      def append_in_transaction(tx, namespace:, key:, expected:, bytes:, sensitive:, deleted:)
+        address = normalize_address(namespace, key)
+        expected_version = normalize_expected_version(expected)
+        append_version_in_tx(tx, address:, expected: expected_version, bytes:, sensitive:, deleted:)
+      end
+
+      # P11 (DC-3) — INTERNAL. The Store's protection codec, used by
+      # MemoryRepository to protect a sensitive record before the one-transaction
+      # append. No transaction is needed: the codec is pure.
+      def protect_bytes(bytes, namespace:, key:)
+        protect(bytes, address: normalize_address(namespace, key))
+      end
+
+      # P11 (DC-3) — INTERNAL. Reads one specific historical version of a Store
+      # key (materialized + decrypted like `get`). MemoryRepository uses this so
+      # a corrected record's prior versions remain readable (probe P11-16:
+      # "a historical read of R still works").
+      def read_version(namespace, key, version)
+        address = normalize_address(namespace, key)
+        expected_version = normalize_expected_version(version)
+        row = adapter.__send__(:read, operation: "store.read_version") do |tx|
+          tx.first(
+            "store.read_version",
+            <<~SQL,
+              SELECT v.version, v.deleted, v.sensitive,
+                     v.payload, v.payload_digest, v.created_at_ms
+              FROM tamoz_store_versions v
+              WHERE v.namespace = ? AND v.key = ? AND v.version = ?
+            SQL
+            [address.fetch(0), address.fetch(1), expected_version]
+          )
+        end
+        return nil unless row
+
+        materialize(address, row)
+      end
+
+      # P11 (DC-3) — INTERNAL. The current Store head version for a key, or nil.
+      # MemoryRepository uses it to version historical reads and purge scans.
+      def head_version(namespace, key)
+        address = normalize_address(namespace, key)
+        adapter.__send__(:read, operation: "store.head_version") do |tx|
+          tx.scalar(
+            "store.head_version",
+            <<~SQL,
+              SELECT current_version
+              FROM tamoz_store_heads
+              WHERE namespace = ? AND key = ?
+            SQL
+            address
+          )
+        end
+      end
+
       def delete(namespace, key, if_version: nil)
         address = normalize_address(namespace, key)
         expected = normalize_expected_version(if_version)
@@ -107,77 +173,86 @@ module Tamoz
       def append_version(address:, expected:, bytes:, sensitive:, deleted:)
         result = nil
         adapter.__send__(:transaction, operation: "store.compare_and_set") do |tx|
-          now = adapter.__send__(:backend_time, tx, "store.cas.time")
-          row = tx.first(
-            "store.cas.head",
-            <<~SQL,
-              SELECT current_version, deleted, sensitive
-              FROM tamoz_store_heads
-              WHERE namespace = ? AND key = ?
-            SQL
-            address
-          )
-          current = row&.fetch(0)
-          if expected.nil?
-            raise StoreConflictError, "Store key already exists" if current
-          elsif current != expected
-            raise StoreConflictError, "Store version does not match"
-          end
-          if deleted && !current
-            raise StoreConflictError, "Store key does not exist"
-          end
-
-          version = (current || 0) + 1
-          digest = bytes && Wire.digest(bytes, domain: "tamoz.sqlite.store_value")
-          tx.execute(
-            "store.cas.version",
-            <<~SQL,
-              INSERT INTO tamoz_store_versions(
-                namespace, key, version, deleted, sensitive,
-                format_version, payload, payload_digest, created_at_ms
-              )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            SQL
-            [
-              *address, version, deleted ? 1 : 0, sensitive ? 1 : 0,
-              PROTOCOL_VERSION, bytes && Wire.blob(bytes), digest, now
-            ]
-          )
-          tx.execute(
-            "store.cas.head_upsert",
-            <<~SQL,
-              INSERT INTO tamoz_store_heads(
-                namespace, key, current_version, deleted, sensitive, updated_at_ms
-              )
-              VALUES (?, ?, ?, ?, ?, ?)
-              ON CONFLICT(namespace, key) DO UPDATE SET
-                current_version = excluded.current_version,
-                deleted = excluded.deleted,
-                sensitive = excluded.sensitive,
-                updated_at_ms = excluded.updated_at_ms
-              WHERE tamoz_store_heads.current_version = ?
-            SQL
-            [
-              *address, version, deleted ? 1 : 0, sensitive ? 1 : 0, now,
-              current || 0
-            ]
-          )
-          if tx.changes != 1
-            raise StoreConflictError, "Store head changed concurrently"
-          end
-          result = Tamoz::StoreEntry.new(
-            namespace: address.fetch(0),
-            key: address.fetch(1),
-            version:,
-            value: deleted ? nil : state_codec.load(bytes_for_decode(bytes, sensitive, address)),
-            sensitive:,
-            deleted:,
-            created_at_ms: now
+          result, = append_version_in_tx(
+            tx, address:, expected:, bytes:, sensitive:, deleted:
           )
         end
         result
       rescue CheckpointCorruptionError => error
         raise StoreError.new("Store value could not be decoded"), cause: error
+      end
+
+      # The DC-3 shared append body: runs inside the CALLER's transaction. The
+      # public `append_version` (put/delete) and MemoryRepository both use it.
+      def append_version_in_tx(tx, address:, expected:, bytes:, sensitive:, deleted:)
+        now = adapter.__send__(:backend_time, tx, "store.cas.time")
+        row = tx.first(
+          "store.cas.head",
+          <<~SQL,
+            SELECT current_version, deleted, sensitive
+            FROM tamoz_store_heads
+            WHERE namespace = ? AND key = ?
+          SQL
+          address
+        )
+        current = row&.fetch(0)
+        if expected.nil?
+          raise StoreConflictError, "Store key already exists" if current
+        elsif current != expected
+          raise StoreConflictError, "Store version does not match"
+        end
+        if deleted && !current
+          raise StoreConflictError, "Store key does not exist"
+        end
+
+        version = (current || 0) + 1
+        digest = bytes && Wire.digest(bytes, domain: "tamoz.sqlite.store_value")
+        tx.execute(
+          "store.cas.version",
+          <<~SQL,
+            INSERT INTO tamoz_store_versions(
+              namespace, key, version, deleted, sensitive,
+              format_version, payload, payload_digest, created_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          SQL
+          [
+            *address, version, deleted ? 1 : 0, sensitive ? 1 : 0,
+            PROTOCOL_VERSION, bytes && Wire.blob(bytes), digest, now
+          ]
+        )
+        tx.execute(
+          "store.cas.head_upsert",
+          <<~SQL,
+            INSERT INTO tamoz_store_heads(
+              namespace, key, current_version, deleted, sensitive, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(namespace, key) DO UPDATE SET
+              current_version = excluded.current_version,
+              deleted = excluded.deleted,
+              sensitive = excluded.sensitive,
+              updated_at_ms = excluded.updated_at_ms
+            WHERE tamoz_store_heads.current_version = ?
+          SQL
+          [
+            *address, version, deleted ? 1 : 0, sensitive ? 1 : 0, now,
+            current || 0
+          ]
+        )
+        if tx.changes != 1
+          raise StoreConflictError, "Store head changed concurrently"
+        end
+        entry = Tamoz::StoreEntry.new(
+          namespace: address.fetch(0),
+          key: address.fetch(1),
+          version:,
+          value: deleted ? nil : state_codec.load(bytes_for_decode(bytes, sensitive, address)),
+          sensitive:,
+          deleted:,
+          created_at_ms: now
+        )
+        [entry, now]
       end
 
       def current_row(tx, address, label)

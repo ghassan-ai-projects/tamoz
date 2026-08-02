@@ -62,7 +62,9 @@ module Tamoz
         profile: nil,
         mcp: nil,
         profile_roles: nil,
-        profile_budgets: nil
+        profile_budgets: nil,
+        memory: nil,
+        memory_owner: nil
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
@@ -84,6 +86,10 @@ module Tamoz
         verify_mcp_source!(mcp)
         @toolbox = toolbox
         @mcp = mcp
+        # P11: the optional memory surface and its per-session owner. Nil keeps
+        # every memory branch inert (pre-P11 sessions resume byte-identically).
+        @memory = memory
+        @memory_owner = memory_owner
         verify_profile_binding!(profile)
         @nodes = SessionNodes.new(
           model:,
@@ -94,7 +100,9 @@ module Tamoz
           profile:,
           mcp:,
           profile_roles:,
-          profile_budgets:
+          profile_budgets:,
+          memory:,
+          memory_owner:
         )
         @definition = Session.build_definition(@nodes)
         @app = @definition.compile(checkpointer:)
@@ -182,6 +190,23 @@ module Tamoz
         nil
       end
 
+      # P11-W / DR-1: a resumed session must bind the exact behavior version it
+      # was planned under. A changed behavior version fails closed
+      # (`BehaviorSnapshotUnavailableError`): the Wisdom (or heuristic) snapshot
+      # is changed instructions, and resuming an accepted plan under changed
+      # instructions is the silent behavior change invariant 28 forbids. The
+      # pinned snapshot is replayed from the Store by digest; resume verifies
+      # the served injection region against the pinned snapshot (region
+      # comparison, DR-1 §4 C5). Existing threads are pinned: resume/continue/
+      # redirect are boundary: false and never rewrite the session record.
+      def verify_behavior_binding!(thread:)
+        return unless @memory
+
+        stored = stored_state(thread)
+        enforce_behavior_binding!(thread, stored) if stored
+        nil
+      end
+
       # A thread with no checkpoint has nothing to protect: intake will write the
       # current epoch. Every other failure — corruption, an unsupported record
       # version — propagates, because a guard that swallows an unreadable record
@@ -238,6 +263,29 @@ module Tamoz
       end
       private :enforce_egress_binding!
 
+      # DR-1 §7 resume binding: the pinned snapshot is REPLAYED on resume (the
+      # old version is kept — resume/continue/redirect never rewrite the
+      # session record and never silently upgrade). The resume "fails closed"
+      # against a changed behavior version by serving exactly the pinned
+      # snapshot; if that snapshot can no longer be rebuilt from the Store, the
+      # resume stops typed (`BehaviorSnapshotUnavailableError`) instead of
+      # silently running under a different behavior.
+      def enforce_behavior_binding!(thread, state)
+        record = state[:session]
+        return unless record
+
+        digest = record["behavior_snapshot_digest"]
+        return unless digest
+
+        snapshot = @memory.transitions.snapshot_for(digest)
+        return if snapshot
+
+        raise Tamoz::Agent::Memory::BehaviorSnapshotUnavailableError,
+              "session #{thread} pinned behavior snapshot #{digest} is unavailable; " \
+              "start a new thread to adopt the promoted behavior"
+      end
+      private :enforce_behavior_binding!
+
       # The egress declaration the session was CONSTRUCTED with (the profile's
       # validated `egress:` section, canonically normalized). `{}` means "no
       # egress declaration" — the state a profile-less session and a session
@@ -272,6 +320,9 @@ module Tamoz
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []
+          # P11-W / DR-1: the intake's BehaviorTransition claim ids, finalized
+          # by the deliberate node after the apply (checkpoint commit).
+          state :behavior_transition_claim, reduce: :append, default: []
 
           node(:intake, implementation_name: "tamoz.agent.session.intake", version: "1") do |state, context|
             nodes.intake(state, context)
@@ -459,6 +510,7 @@ module Tamoz
         enforce_skill_binding!(thread, state)
         enforce_mcp_binding!(thread, state)
         enforce_egress_binding!(thread, state)
+        enforce_behavior_binding!(thread, state) if @memory
         state
       end
 

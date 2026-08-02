@@ -9,9 +9,15 @@ require "tmpdir"
 module TamozSQLiteOracle
   VERSION = 1
   APPLICATION_ID = 1_413_565_786
-  SCHEMA_VERSION = 1
-  MIGRATION_CHECKSUM =
+  # P11: the schema moved 1 -> 2 through the checksummed MIGRATION_2 (the
+  # lexical memory index). The oracle is a second, independent read-only
+  # verifier: it must agree with the migrated schema or every scenario database
+  # is schema_invalid.
+  SCHEMA_VERSION = 2
+  MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
+  MIGRATION_2_CHECKSUM =
+    "1fa635c75408f2d75d7c9a026d25ae1fc10948152b84e07ed144f20c8c0d837f"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -428,6 +434,7 @@ module TamozSQLiteOracle
       tamoz_store_versions
       tamoz_thread_tombstones
       tamoz_deletion_receipts
+      tamoz_memory_index
     ].freeze
 
     attr_reader :rows, :integrity, :foreign_keys
@@ -724,10 +731,14 @@ module TamozSQLiteOracle
              scalar("PRAGMA user_version") == SCHEMA_VERSION
         raise OracleError, "schema_invalid"
       end
-      checksum = scalar(
-        "SELECT checksum FROM tamoz_schema_migrations WHERE version = 1"
+      expected = [
+        [1, MIGRATION_1_CHECKSUM],
+        [2, MIGRATION_2_CHECKSUM]
+      ]
+      rows = @database.execute(
+        "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"
       )
-      raise OracleError, "schema_invalid" unless checksum == MIGRATION_CHECKSUM
+      raise OracleError, "schema_invalid" unless rows == expected
     rescue SQLite3::SQLException
       raise OracleError, "schema_invalid"
     end

@@ -1,0 +1,107 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "fileutils"
+
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+require "tamoz/evals"
+
+root = ENV.fetch(
+  "TAMOZ_FIXTURE_ROOT",
+  File.expand_path("../gems/tamoz-evals", __dir__)
+)
+case_root = File.join(root, "suites", "agent", "memory_repository")
+FileUtils.mkdir_p(case_root)
+
+def write_case(path, document)
+  document["content_digest"] = Tamoz::Evals::CanonicalJSON.content_digest(
+    document,
+    domain: "eval.case"
+  )
+  File.write(
+    path,
+    "#{Tamoz::Evals::CanonicalJSON.dump(document)}\n",
+    encoding: Encoding::UTF_8
+  )
+end
+
+def case_document(index, definition)
+  {
+    "artifact_type" => "case",
+    "format_version" => 1,
+    "digest_version" => 1,
+    "content_digest" => "pending",
+    "case_id" => definition.fetch("case_id"),
+    "case_version" => 1,
+    "suite_id" => Tamoz::Evals::Harness::AgentMemoryCorpus::SUITE_ID,
+    "split" => "development",
+    "title" => definition.fetch("title"),
+    "purpose" => definition.fetch("purpose"),
+    "tags" => definition.fetch("tags"),
+    "risk_class" => definition.fetch("risk_class"),
+    "input" => {
+      "kind" => "tamoz-agent-memory",
+      "payload" => {
+        "scenario" => definition.fetch("scenario"),
+        "task" => definition.fetch("task")
+      }
+    },
+    "environment" => {
+      "profile" => "pr",
+      "isolation" => "in_process",
+      "network" => "recorded"
+    },
+    "capabilities" => {
+      "allowed" => definition.fetch("allowed"),
+      "prohibited" => definition.fetch("prohibited")
+    },
+    "definition_of_done" => definition.fetch("done"),
+    "evidence" => {
+      "required" => [
+        {
+          "id" => format("agent.memory.evidence.%02d", index),
+          "kind" => "state",
+          "oracle" =>
+            "The controller-owned deterministic oracle scores injection " \
+            "correctness, store integrity, and task state."
+        }
+      ],
+      "optional" => []
+    },
+    "scorers" => [
+      {
+        "id" => "tamoz.agent-memory.deterministic",
+        "kind" => "deterministic",
+        "version" => "v1"
+      }
+    ],
+    "budgets" => {
+      "turns" => definition.fetch("turns", 1),
+      "steps" => 36,
+      "tool_calls" => 20,
+      "tokens" => 0,
+      "cost_microusd" => 0,
+      "time_ms" => definition.fetch("time_ms", 5_000)
+    },
+    "repetitions" => {
+      "count" => 1,
+      "comparison_method" => "exact"
+    },
+    "content_policy" => {
+      "classification" => "public",
+      "capture" => "metadata"
+    },
+    "references" => [],
+    "treatments" => definition.fetch("treatments")
+  }
+end
+
+Tamoz::Evals::Harness::AgentMemoryRepositoryCorpus::CASE_DEFINITIONS.each_with_index do |definition, offset|
+  index = offset + 1
+  filename = format(
+    "%02d_%s.case.json",
+    index,
+    definition.fetch("case_id").delete_prefix("agent.").tr("-", "_")
+  )
+  write_case(File.join(case_root, filename), case_document(index, definition))
+end

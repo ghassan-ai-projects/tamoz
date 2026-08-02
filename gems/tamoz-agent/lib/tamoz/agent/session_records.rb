@@ -70,7 +70,24 @@ module Tamoz
             # no egress" state are one and the same "no egress declaration".
             # `Session#verify_egress_binding!` compares this on resume and stops
             # typed on a mismatch (invariant 35/36).
-            "egress_pin" => HASH
+            "egress_pin" => HASH,
+            # P11 (C4): the per-session memory snapshot — {"layers" => [...],
+            # "retrieval_policy" => ..., "catalog_digest" => ...}. Legacy
+            # sentinel "none" is filled at load when memory did not exist
+            # (RECORD_VERSION stays 1; exact P9 LEGACY_SKILL_EPOCH pattern).
+            # Pre-P11 sessions resume with zero memory injection and an
+            # identical prefix digest. Retrieval/injection policy is
+            # per-session; the snapshot rides the session record.
+            "memory_epoch" => ANY,
+            # DR-1 (P11-W): a promoted behavior change activates at the FIRST
+            # INTAKE OF A THREAD. The adopting session record pins the new
+            # behavior version, the behavior-snapshot digest + inline content
+            # (bounded), the extended prompt-surface digest (the cache epoch
+            # moved, invariant 16), and `epoch_reason` = the transition id.
+            # Optional; absent means "no behavior transition" (pre-P11 state).
+            "epoch_reason" => STRING,
+            "behavior_snapshot_digest" => STRING,
+            "behavior_snapshot" => ANY
           }
         },
         "plan" => {
@@ -305,6 +322,11 @@ module Tamoz
           # and a P17 session whose profile carried no `egress:` section both
           # resume against "no egress declaration". "{}" is the legacy sentinel.
           defaults["egress_pin"] = {} unless migrated.key?("egress_pin")
+          # P11 (C4): pre-P11 sessions carry no memory snapshot; they load with
+          # the "none" sentinel so resume is byte-identical (zero memory
+          # injection, identical prefix digest). A session built post-P11 with
+          # memory records a hash-shaped `memory_epoch`.
+          defaults["memory_epoch"] = Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH unless migrated.key?("memory_epoch")
           migrated = Plan.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
         end
 
@@ -395,6 +417,16 @@ module Tamoz
           next unless value.key?(name)
 
           check_type!(value.fetch(name), type, kind, name)
+        end
+        # P11 (C4): the memory_epoch value is either the legacy "none" sentinel
+        # or a hash-shaped snapshot; anything else is corruption.
+        if value.key?("memory_epoch")
+          snapshot = value.fetch("memory_epoch")
+          unless snapshot == Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH || snapshot.is_a?(Hash)
+            raise CheckpointCorruptionError,
+                  "session record memory_epoch must be #{Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH.inspect} " \
+                  "or an object"
+          end
         end
         value
       end

@@ -13,7 +13,7 @@ class SQLiteKernelTest < Minitest::Test
         {
           "integrity" => ["ok"],
           "foreign_key_violations" => [],
-          "schema_version" => 1,
+          "schema_version" => Tamoz::SQLite::Migrator::CURRENT_VERSION,
           "ok" => true
         },
         adapter.integrity_check

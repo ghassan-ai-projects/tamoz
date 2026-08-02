@@ -55,6 +55,12 @@ class EvalsVerifierTest < Minitest::Test
         ROOT.join("script", "generate_agent_memory_fixtures").to_s
       )
       assert status.success?, stderr
+      _stdout, stderr, status = Open3.capture3(
+        {"TAMOZ_FIXTURE_ROOT" => directory},
+        RbConfig.ruby,
+        ROOT.join("script", "generate_agent_memory_repository_fixtures").to_s
+      )
+      assert status.success?, stderr
 
       expected_root = GEM_ROOTS.fetch("tamoz-evals")
       expected = fixture_files(expected_root).to_h do |path|
@@ -97,11 +103,11 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
-  def test_all_eighteen_agent_smoke_cases_are_public_verified_and_digest_pinned
+  def test_all_nineteen_agent_smoke_cases_are_public_verified_and_digest_pinned
     cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
 
-    assert_equal 18, cases.length
-    assert_equal 18, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    assert_equal 19, cases.length
+    assert_equal 19, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
     cases.each do |path|
       artifact = Tamoz::Evals::Case.load(path)
       assert_equal "tamoz.agent.smoke", artifact["suite_id"]

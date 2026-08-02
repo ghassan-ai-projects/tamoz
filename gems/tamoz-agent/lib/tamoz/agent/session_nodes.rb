@@ -34,7 +34,9 @@ module Tamoz
         profile: nil,
         mcp: nil,
         profile_roles: nil,
-        profile_budgets: nil
+        profile_budgets: nil,
+        memory: nil,
+        memory_owner: nil
       )
         @model = model
         @toolbox = toolbox
@@ -46,6 +48,12 @@ module Tamoz
         # has no MCP surface, in which case every branch below is inert and the
         # session behaves byte-identically to before P10.
         @mcp = mcp
+        # P11: the per-tenant memory surface (Tamoz::Agent::Memory::Engine) or
+        # nil. Nil keeps every memory branch inert: intake records the "none"
+        # legacy sentinel, retrieval injects nothing, and the prompt surface is
+        # byte-identical to before P11.
+        @memory = memory
+        @memory_owner = memory_owner
         # DR-5 D1 (RC5): the post-override per-role {provider:, model:} tuples are
         # computed by the caller (cli.rb's shared resolution function, the SAME
         # one build_model uses) and folded into the session record at intake —
@@ -75,12 +83,16 @@ module Tamoz
           raise ArgumentError, "task exceeds #{MAX_TASK_BYTES} bytes"
         end
 
+        # P11-W / DR-1: at the FIRST INTAKE OF A THREAD the pending behavior
+        # transition is claimed (Store CAS) before any checkpoint write.
+        claimed = claim_behavior_transition(context)
         {
           task:,
           phase: toolbox.action_capable? ? "discovery" : "read_only",
           repair_attempt: 0,
           step_cursor: 0,
           next_node: "deliberate",
+          **claimed_behavior_channel(claimed),
           session: SessionRecords.build(
             "session",
             session_id: String(context.thread_id),
@@ -88,15 +100,96 @@ module Tamoz
             task_digest: Digest::SHA256.hexdigest(task),
             root: toolbox.root.to_s,
             graph_version: GRAPH_VERSION,
-            behavior_version: BEHAVIOR_VERSION,
+            behavior_version: behavior_version(claimed),
             tool_catalog_digest: toolbox.catalog_digest,
             created_at_ms: 0,
             **profile_binding,
             **skill_binding,
             **mcp_binding,
-            **egress_binding
+            **egress_binding,
+            **behavior_binding(claimed),
+            **memory_binding
           )
         }
+      end
+
+      # P11 (C4): the per-session memory snapshot. A memory-enabled session
+      # records the layers/policy/catalog-digest snapshot; a memory-free
+      # session records nothing and the "none" legacy sentinel is filled at
+      # load (zero memory injection, identical prefix digest).
+      def memory_binding
+        return {} unless @memory
+
+        {
+          memory_epoch: {
+            "layers" => %w[experience knowledge wisdom],
+            "retrieval_policy" => "explicit_plus_automatic",
+            "catalog_digest" => toolbox.prompt_surface_digest
+          }
+        }
+      end
+
+      # P11-W / DR-1: a promoted Wisdom (or heuristic) transition is consumed
+      # at the FIRST INTAKE OF A THREAD. Claim (Store CAS, before any
+      # checkpoint write); the checkpoint commit IS the apply (the session
+      # record carries behavior_version_after + the pinned snapshot + the
+      # extended prompt-surface digest + epoch_reason); the next node
+      # finalizes. Existing threads (resume/continue/redirect, boundary false)
+      # never re-run intake, so they stay pinned.
+      def claim_behavior_transition(context)
+        return nil unless @memory
+
+        pending = @memory.transitions.pending_transition
+        return nil unless pending
+
+        @memory.transitions.claim(
+          transition_id: pending.transition_id,
+          owner: "intake:#{context.thread_id}",
+          attempt: 1
+        )
+      rescue Memory::BehaviorTransitionClaimConflictError
+        # Another consumer claimed the same transition; this thread stays on
+        # the prior active version.
+        nil
+      end
+
+      # The behavior_transition_claim state channel (the finalize hook for the
+      # next node), or {} when nothing was claimed.
+      def claimed_behavior_channel(claimed)
+        return {} unless claimed
+
+        {behavior_transition_claim: [claimed.transition_id]}
+      end
+
+      # The session-record binding for the claimed transition: the new behavior
+      # version, the pinned snapshot digest + inline content, the extended
+      # prompt-surface digest (the cache epoch moved, invariant 16), and
+      # `epoch_reason` = the transition id.
+      def behavior_binding(claimed)
+        return {} unless claimed
+
+        snapshot = @memory.transitions.snapshot_for(claimed.behavior_snapshot_digest)
+        {
+          epoch_reason: claimed.transition_id,
+          behavior_snapshot_digest: claimed.behavior_snapshot_digest,
+          behavior_snapshot: snapshot,
+          prompt_surface_digest: Memory::BehaviorTransition.extended_prompt_surface_digest(
+            toolbox:, behavior_snapshot_digest: claimed.behavior_snapshot_digest
+          )
+        }
+      end
+
+      # The behavior version recorded at intake: the claimed transition's AFTER
+      # version when adopting; the control record's active version when a
+      # transition is already active; the baseline otherwise.
+      def behavior_version(claimed)
+        return claimed.behavior_version_after if claimed
+
+        if @memory && @memory.transitions.active.fetch("active_version") != BEHAVIOR_VERSION
+          @memory.transitions.active.fetch("active_version")
+        else
+          BEHAVIOR_VERSION
+        end
       end
 
       # P9 §7: the session pins the exact skill catalog it was planned against.
@@ -201,6 +294,11 @@ module Tamoz
         if state.fetch(:next_node) == "terminal" && state.fetch(:terminal_reason) == "cancelled_by_user"
           return {}
         end
+
+        # P11-W / DR-1: the intake's checkpoint commit IS the apply; this node
+        # finalizes the claimed transition (Store CAS) before any model call.
+        # Idempotent by transition_id.
+        finalize_behavior_claim(state)
 
         phase = state.fetch(:phase).to_sym
         repair_attempt = state.fetch(:repair_attempt)
@@ -658,6 +756,10 @@ module Tamoz
 
       def terminal(state, _context)
         verification = state[:verification]
+        # P11 (scope item 7): memory writes at turn boundaries — a completed
+        # bounded episode with an independently observed Outcome becomes an
+        # Experience record (deterministic admission gate (a), provider-free).
+        record_episode_memory(state, verification) if @memory
         {
           phase: "terminal",
           terminal: SessionRecords.build(
@@ -667,6 +769,58 @@ module Tamoz
             blocked: state[:blocked]
           )
         }
+      end
+
+      private
+
+      # P11-W / DR-1: finalize the intake's claimed behavior transition. The
+      # checkpoint commit of the intake (the apply) has happened by the time
+      # this node runs; finalize is idempotent by transition_id.
+      def finalize_behavior_claim(state)
+        return unless @memory
+
+        Array(state.fetch(:behavior_transition_claim, [])).each do |transition_id|
+          session_id = state[:session] && state[:session].fetch("session_id")
+          @memory.transitions.finalize(transition_id:, consumed_by: session_id.to_s)
+        rescue Memory::BehaviorTransitionClaimConflictError
+          nil
+        end
+      end
+
+      # P11-A: a completed bounded episode (terminal_reason in the completed
+      # set with an independently observed verification outcome) is admitted as
+      # Experience. Never a transcript; recalled content is excluded by the
+      # admission boundary itself.
+      def record_episode_memory(state, verification)
+        return unless %w[completed completed_without_check check_passed].include?(state.fetch(:terminal_reason))
+        return unless verification && verification.fetch("satisfied") == true
+
+        session = state.fetch(:session)
+        episode = {
+          session_id: session.fetch("session_id"),
+          task: state.fetch(:task),
+          plan_digest: state[:accepted_plan] ? state.fetch(:accepted_plan).fetch("plan_digest") : "sha256:none",
+          completed_at: Time.now.to_i,
+          scopes: {
+            "tenant" => @memory.tenant,
+            "user" => memory_owner,
+            "project" => "session",
+            "session" => session.fetch("session_id")
+          },
+          sensitivity: :internal,
+          decisions: state.fetch(:plan_versions, []).last(3).map { |record| record.fetch("plan_id") },
+          corrections: [],
+          observed_outcome: {
+            "outcome" => verification.fetch("answer"),
+            "independently_observed" => true,
+            "confidence" => 0.9
+          }
+        }
+        @memory.admission.admit_episode(episode:, owner: memory_owner)
+      rescue StandardError
+        # Memory writes never fail the session: the episode is evidence, not a
+        # gate.
+        nil
       end
 
       # --- helpers -------------------------------------------------------------
@@ -1090,26 +1244,81 @@ module Tamoz
       end
 
       def planning_context_for(state, phase)
-        return {} unless %i[action repair].include?(phase)
+        context = {}
+        if %i[action repair].include?(phase)
+          prior_plans = state.fetch(:plan_versions).filter_map do |record|
+            record.fetch("plan") if %w[action repair].include?(record.fetch("phase"))
+          end
+          prior_reviews = state.fetch(:plan_reviews).filter_map do |record|
+            next unless record.fetch("layer") == "semantic"
 
-        prior_plans = state.fetch(:plan_versions).filter_map do |record|
-          record.fetch("plan") if %w[action repair].include?(record.fetch("phase"))
-        end
-        prior_reviews = state.fetch(:plan_reviews).filter_map do |record|
-          next unless record.fetch("layer") == "semantic"
-
-          {
-            "decision" => record.fetch("decision"),
-            "issues" => record.fetch("issues"),
-            "rationale" => record.fetch("rationale", "")
+            {
+              "decision" => record.fetch("decision"),
+              "issues" => record.fetch("issues"),
+              "rationale" => record.fetch("rationale", "")
+            }
+          end
+          context = {
+            "prior_action_plans" => prior_plans,
+            "prior_action_reviews" => prior_reviews,
+            "prior_action_signatures" => state.fetch(:seen_action_signatures).sort,
+            "prior_failure_signatures" => state.fetch(:seen_failure_signatures).sort
           }
         end
-        {
-          "prior_action_plans" => prior_plans,
-          "prior_action_reviews" => prior_reviews,
-          "prior_action_signatures" => state.fetch(:seen_action_signatures).sort,
-          "prior_failure_signatures" => state.fetch(:seen_failure_signatures).sort
-        }
+
+        # P11-W / DR-1 (C5): the promoted Wisdom snapshot is injected as a
+        # delimited, findable block; `behavior_snapshot_digest` hashes exactly
+        # these canonical bytes, so resume's region comparison is well-posed.
+        if (snapshot = state[:session] && state[:session]["behavior_snapshot"])
+          context["behavior_snapshot"] = {
+            "marker" => Memory::BehaviorTransition::SNAPSHOT_MARKERS,
+            "content" => snapshot
+          }
+        end
+
+        # P11 (scope item 7): automatic injection into the planning context.
+        # Experience is NEVER automatic; Knowledge/Wisdom only, bounded by
+        # MemoryLimits, sensitive records never injected. A memory-free session
+        # (or one without the memory_epoch snapshot) injects nothing and the
+        # prompt stays byte-identical.
+        if @memory && %i[action repair].include?(phase) &&
+           (state[:session] && state[:session]["memory_epoch"]).is_a?(Hash)
+          caller = memory_caller(state)
+          recall = @memory.retrieval.recall(
+            caller:,
+            query: {terms: [state.fetch(:task)]},
+            automatic: true
+          )
+          unless recall.records.empty?
+            context["memory"] = recall.records.map do |record|
+              {
+                "memory_id" => record.memory_id,
+                "record_version" => record.record_version,
+                "layer" => record.layer.to_s,
+                "class" => record.klass.to_s,
+                "statement" => record.statement
+              }
+            end
+          end
+        end
+        context
+      end
+
+      # P11: the per-session retrieval caller. Scopes are the session's own
+      # tenant/user/project (the session memory is scoped to the session).
+      def memory_caller(state)
+        @memory.caller(
+          user: memory_owner,
+          project: "session",
+          sensitivity: :internal,
+          compatibility: {"graph_version" => "1", "behavior_version" => behavior_version(nil)}
+        )
+      end
+
+      # P11: the authenticated owner of the session's memory writes. Defaults
+      # to "session"; a caller may override via Session#memory_owner.
+      def memory_owner
+        @memory_owner || "session"
       end
 
       def accept_plan(state, plan:, plan_id:, plan_digest:, plan_hash:, phase:, plans:, reviews:, ambiguity:)

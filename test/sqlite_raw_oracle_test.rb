@@ -195,7 +195,11 @@ class SQLiteRawOracleTest < Minitest::Test
 
       schema_path = File.join(directory, "schema.db")
       trace_scenario("lease.acquire-new", schema_path)
-      mutate(schema_path) { |database| database.execute("PRAGMA user_version = 2") }
+      mutate(schema_path) do |database|
+        database.execute(
+          "PRAGMA user_version = #{Tamoz::SQLite::Migrator::CURRENT_VERSION + 1}"
+        )
+      end
       assert_invalid(
         oracle("lease.acquire-new", schema_path),
         "schema_invalid"

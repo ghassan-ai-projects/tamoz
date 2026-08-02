@@ -112,7 +112,7 @@ module Tamoz
         end
         unless result.fetch("integrity") == ["ok"] &&
                result.fetch("foreign_key_violations").empty? &&
-               result.fetch("schema_version") == 1
+               result.fetch("schema_version") == Migrator::CURRENT_VERSION
           raise IntegrityError, "SQLite integrity check failed"
         end
 
@@ -203,7 +203,7 @@ module Tamoz
             destination: destination_path.freeze,
             pages:,
             bytes: stat.size,
-            schema_version: 1,
+            schema_version: Migrator::CURRENT_VERSION,
             created_at_ms: (Time.now.to_r * 1_000).to_i
           )
         rescue ::SQLite3::Exception => error

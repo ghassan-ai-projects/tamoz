@@ -46,13 +46,15 @@ module Tamoz
           mode: :ci,
           live_adapter: nil,
           auditor: AgentRunAudit.new,
-          store_root: nil
+          store_root: nil,
+          store_factory: nil
         )
           @corpus = corpus
           @mode = mode
           @live_adapter = live_adapter
           @auditor = auditor
           @store_root = store_root
+          @store_factory = store_factory
           validate_mode!
         end
 
@@ -127,7 +129,8 @@ module Tamoz
                 case_artifact: artifact,
                 treatment:,
                 store_root: root,
-                auditor: @auditor
+                auditor: @auditor,
+                store_factory: @store_factory
               ).run
             end
           end
