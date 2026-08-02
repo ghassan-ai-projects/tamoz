@@ -1187,6 +1187,18 @@ subprocess pin; generic-key-set corner). Gates re-verified: 856/0, machinery 24/
 scorecard 17/14/pass, safety 0. Remaining open items are pre-existing and out of DR-5 scope
 (subprocess-timing flake class — P15-owned; single-owner lease concurrency semantics).
 
+**DR-4 CLOSED — critic PASS + hardening landed.** 39/39 probes passed (33 core + 5
+adversarial + 1 extra real-SIGKILL probe): the D-6 two-owner shape terminal-fails at claim
+in ONE tx (never observably claimed, invariant 53), real CLI subprocess + real SIGKILL
+proof (exit 0, typed "stale resume request" rendered once, thread completes), FIFO never
+wedges, rescue boundaries exact (745 redirect-wait stays CheckpointConflictError, never
+burned), backstop payloads byte-identical. The critic's one optional hardening landed
+(`c627aec`): the durable claim→execute drift window now surfaces as `StaleRequestError`
+(converted at `resume_with_writer` only when `durable_request_id` is set — the ephemeral
+path keeps `InvalidUpdateError` for caller bugs, pinned by graph_interrupt_test) so the
+runner's backstop terminal-fails it — closing the last InvalidUpdateError-escape path of
+the D-6 class. Gate: 857/0 both locales, scorecard 17/14/pass, safety 0.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
