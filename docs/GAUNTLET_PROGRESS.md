@@ -1177,6 +1177,16 @@ paths; generic-key-set corner). Gates: 856/0 both locales, scorecard 17/14/pass.
 probes passed pre-fix (DR5-17 harness deferral honest); the critic re-runs its blocker
 repro + corner for the final verdict.
 
+**DR-5 CLOSED — re-adjudication PASS.** The critic re-ran its exact clean-process `exe/tamoz`
+repro: the consuming ask now executes the flocked consume path cleanly ("Applying operator
+transition", entry consumed=true with a real request id, no NoMethodError); the corner probe
+flips to typed `ProfileRoleUnavailableError` (generic fallback can no longer mask a missing
+ref at start, and the raise sits BEFORE `api_key ||= generic` — RC-4's replay guarantee is
+now enforced at both start and replay). Regression tests meaningful (corpus-exact `-I`
+subprocess pin; generic-key-set corner). Gates re-verified: 856/0, machinery 24/230/0,
+scorecard 17/14/pass, safety 0. Remaining open items are pre-existing and out of DR-5 scope
+(subprocess-timing flake class — P15-owned; single-owner lease concurrency semantics).
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
