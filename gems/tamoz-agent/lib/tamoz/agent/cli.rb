@@ -51,6 +51,14 @@ module Tamoz
       rescue Tamoz::Agent::Error => error
         @err.puts "tamoz: #{error.message}"
         1
+      # P16: the D-7 taxonomy moved to tamoz-core (`Tamoz::Core::ToolError` family),
+      # so it no longer subclasses `Tamoz::Agent::Error`. Catch it EXPLICITLY here —
+      # never widen to `Tamoz::Error`, which would also swallow StoreError,
+      # LeaseLostError, ConfigurationError, and the Checkpoint* classes, converting
+      # their backtraces into clean "tamoz: …" exit-1 output.
+      rescue Tamoz::Core::ToolError => error
+        @err.puts "tamoz: #{error.message}"
+        1
       rescue Tamoz::CheckpointConflictError => error
         @err.puts "tamoz: #{error.message}"
         1

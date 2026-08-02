@@ -426,7 +426,9 @@ module Tamoz
           "failure" => {
             "kind" => "tool_error",
             "tool" => step.tool,
-            "error_class" => error.class.name,
+            # P16: map the core taxonomy name back to the public
+            # `Tamoz::Agent::Tool*` spelling (see `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`).
+            "error_class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
             "reason" => error.message,
             "failure_signature" => Digest::SHA256.hexdigest(
               JSON.generate(

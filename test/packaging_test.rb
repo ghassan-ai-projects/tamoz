@@ -123,9 +123,10 @@ class PackagingTest < Minitest::Test
 
   # P10 slice 4: the governed-MCP gem joins the packaged scorecard, because case
   # 16 (`agent.mcp-governed-call`) drives the real MCP test server through
-  # tamoz-mcp and the session.
+  # tamoz-mcp and the session. P16: tamoz-tools joins the packaged scorecard
+  # because the agent gem now depends on it for the Toolbox and Skills surface.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent tamoz-mcp tamoz-evals]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent tamoz-mcp tamoz-evals]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -253,6 +254,123 @@ class PackagingTest < Minitest::Test
       assert_equal "inspect", result.fetch("result")
       assert_equal "ok", result.fetch("stream")
       assert_equal false, result.fetch("graph_loaded")
+      assert_empty stderr
+    end
+  end
+
+  # P16 T6: the packaged tamoz-tools installs in isolation with only tamoz-core
+  # and NOTHING else (the agent gem is absent), then constructs AND executes a
+  # toolbox: a real configured check through Open3, a digest-bound patch, a
+  # create_file mutation, and a compiled skills catalog. The `$LOADED_FEATURES`
+  # scan proves no tamoz-agent feature was pulled in at runtime.
+  def test_packaged_tools_runs_clean_with_only_core_installed
+    core_root = GEM_ROOTS.fetch("tamoz-core")
+    tools_root = GEM_ROOTS.fetch("tamoz-tools")
+
+    Dir.mktmpdir("tamoz-installed-tools") do |directory|
+      install_root = File.join(directory, "install")
+      core_package = File.join(directory, "tamoz-core.gem")
+      tools_package = File.join(directory, "tamoz-tools.gem")
+      core_spec = Gem::Specification.load(core_root.join("tamoz-core.gemspec").to_s)
+      tools_spec = Gem::Specification.load(tools_root.join("tamoz-tools.gemspec").to_s)
+      Dir.chdir(core_root) { Gem::Package.build(core_spec, false, true, core_package) }
+      Dir.chdir(tools_root) { Gem::Package.build(tools_spec, false, true, tools_package) }
+      clean_environment = ENV.each_key
+                             .grep(/\A(?:BUNDLE|BUNDLER)/)
+                             .to_h { |key| [key, nil] }
+                             .merge(
+                               "GEM_HOME" => install_root,
+                               "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+                               "RUBYLIB" => nil,
+                               "RUBYOPT" => nil
+                             )
+      [core_package, tools_package].each do |package|
+        _stdout, stderr, status = Open3.capture3(
+          clean_environment,
+          RbConfig.ruby,
+          "-S",
+          "gem",
+          "install",
+          "--no-document",
+          "--ignore-dependencies",
+          "--install-dir",
+          install_root,
+          package
+        )
+        assert status.success?, stderr
+      end
+
+      script = <<~'RUBY'
+        # encoding: UTF-8
+        require "json"
+        require "tmpdir"
+        require "fileutils"
+        require "digest"
+        require "tamoz/tools"
+        Dir.mktmpdir("tamoz-tools-packaged") do |root|
+          File.write(File.join(root, "a.txt"), "hello world\n", encoding: Encoding::UTF_8)
+          source = File.join(root, "operator")
+          FileUtils.mkdir_p(File.join(source, "fix", "references"))
+          File.write(
+            File.join(source, "fix", "SKILL.md"),
+            "---\nname: fix\ndescription: A bounded procedure.\nallowed-tools: [read_file]\n---\n\nBody.\n",
+            encoding: Encoding::UTF_8
+          )
+          File.write(
+            File.join(source, "fix", "references", "guide.md"),
+            "Reference material.\n",
+            encoding: Encoding::UTF_8
+          )
+          snapshot = Tamoz::Tools::Skills::Compiler.new(
+            sources: [
+              Tamoz::Tools::Skills::SkillSource.new(id: "operator", root: source, trust: "operator")
+            ]
+          ).compile
+          toolbox = Tamoz::Tools::Toolbox.new(
+            root:, allow_changes: true,
+            checks: {"verify" => ["sh", "-c", "test -f a.txt && echo ok"]},
+            check_safeties: {"verify" => :read_only},
+            skills: snapshot
+          )
+          receipt = toolbox.execute("run_check", {"name" => "verify"})
+          patch = toolbox.execute(
+            "apply_patch",
+            {"path" => "a.txt", "expected_sha256" => Digest::SHA256.hexdigest("hello world\n"),
+             "before" => "hello", "after" => "goodbye"}
+          )
+          created = toolbox.execute("create_file", {"path" => "new.txt", "content" => "x\n"})
+          loaded = toolbox.execute("load_skill", {"skill" => "operator/fix"})
+          resource = toolbox.execute("read_skill_resource", {"skill" => "operator/fix", "path" => "references/guide.md"})
+          puts JSON.generate(
+            "check_passed" => receipt.passed?,
+            "receipt_class" => receipt.class.name,
+            "patched" => File.read(File.join(root, "a.txt")),
+            "created" => File.exist?(File.join(root, "new.txt")),
+            "skill_epoch" => toolbox.skill_epoch,
+            "loaded" => loaded.include?("UNTRUSTED SKILL CONTENT"),
+            "resource" => resource.include?("Reference material."),
+            "agent_defined" => defined?(Tamoz::Agent).inspect,
+            "agent_features" => $LOADED_FEATURES.select { |path| path.include?("/tamoz/agent") }
+          )
+        end
+      RUBY
+      stdout, stderr, status = Open3.capture3(
+        clean_environment,
+        RbConfig.ruby,
+        "-e",
+        script
+      )
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+      assert_equal true, result.fetch("check_passed")
+      assert_equal "Tamoz::Tools::CheckReceipt", result.fetch("receipt_class")
+      assert_equal "goodbye world\n", result.fetch("patched")
+      assert_equal true, result.fetch("created")
+      assert result.fetch("skill_epoch").start_with?("skills:1:")
+      assert_equal true, result.fetch("loaded")
+      assert_equal true, result.fetch("resource")
+      assert_equal "nil", result.fetch("agent_defined")
+      assert_empty result.fetch("agent_features")
       assert_empty stderr
     end
   end

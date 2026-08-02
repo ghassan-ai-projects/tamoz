@@ -10,7 +10,7 @@ require "stringio"
 require "tmpdir"
 
 ROOT = Pathname.new(File.expand_path("..", __dir__)).freeze
-GEM_ROOTS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent tamoz-evals tamoz-mcp].to_h do |name|
+GEM_ROOTS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent tamoz-evals tamoz-mcp].to_h do |name|
   [name, ROOT.join("gems", name)]
 end.freeze
 
@@ -21,6 +21,7 @@ end
 require "tamoz/core"
 require "tamoz/graph"
 require "tamoz/sqlite"
+require "tamoz/tools"
 require "tamoz/agent"
 require "tamoz/evals"
 require "tamoz/mcp"

@@ -358,9 +358,10 @@ class AgentSkillsAdversarialTest < Minitest::Test
   # ------------------------------------------------------- load-time inertness --
 
   # A-13a: static. A stubbed-method test is not honestly implementable (plan review
-  # C-2), so the source itself is asserted to contain no execution verb.
+  # C-2), so the source itself is asserted to contain no execution verb. P16: the
+  # compiler moved wholesale to tamoz-tools, so the source lives there now.
   def test_a13a_the_compiler_source_contains_no_execution_verb
-    source_path = ROOT.join("gems", "tamoz-agent", "lib", "tamoz", "agent", "skills.rb")
+    source_path = ROOT.join("gems", "tamoz-tools", "lib", "tamoz", "tools", "skills.rb")
     code = source_path.read(encoding: Encoding::UTF_8)
                       .lines
                       .reject { |line| line.strip.start_with?("#") }

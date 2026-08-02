@@ -26,6 +26,21 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  # P16: the tools gem must load core only — zero graph/sqlite/agent/evals/
+  # ruby_llm features, exactly the boundary the packaged install test also proves.
+  def test_tools_loads_core_only_and_no_agent_graph_or_sqlite
+    features = loaded_features_after("tamoz/tools")
+
+    assert_includes features, "tamoz/core.rb"
+    assert_includes features, "tamoz/tools.rb"
+    assert_includes features, "tamoz/tools/toolbox.rb"
+    assert_includes features, "tamoz/tools/skills.rb"
+    refute(
+      features.any? { |path| path.match?(%r{tamoz/(?:graph|sqlite|agent|evals)|ruby_llm}) },
+      features.inspect
+    )
+  end
+
   def test_agent_defers_provider_loading_and_does_not_load_evals_or_sqlite
     features = loaded_features_after("tamoz/agent")
 

@@ -266,18 +266,9 @@ module Tamoz
         arguments.merge("replacements" => sorted)
       end
 
-      def canonical(value)
-        case value
-        when Hash
-          value.each_with_object({}) do |(key, entry), normalized|
-            normalized[String(key)] = canonical(entry)
-          end.sort.to_h
-        when Array
-          value.map { |entry| canonical(entry) }
-        else
-          value
-        end
-      end
+      # P16: the pure canonical sorter is homed in tamoz-core so the skills digests
+      # (in tamoz-tools) and the session-record digests share one implementation.
+      def canonical(value) = Tamoz::Core.canonical(value)
     end
   end
 end

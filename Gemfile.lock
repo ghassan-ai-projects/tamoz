@@ -5,6 +5,7 @@ PATH
       ruby_llm (~> 1.16.0)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-core
@@ -37,6 +38,12 @@ PATH
     tamoz-sqlite (0.1.0.alpha.1)
       sqlite3 (~> 2.9)
       tamoz-graph (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-tools
+  specs:
+    tamoz-tools (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
 
 GEM
   remote: https://rubygems.org/
@@ -108,6 +115,7 @@ DEPENDENCIES
   tamoz-graph!
   tamoz-mcp!
   tamoz-sqlite!
+  tamoz-tools!
   zeitwerk (~> 2.6)
 
 CHECKSUMS
@@ -144,6 +152,7 @@ CHECKSUMS
   tamoz-graph (0.1.0.alpha.1)
   tamoz-mcp (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
+  tamoz-tools (0.1.0.alpha.1)
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12
 

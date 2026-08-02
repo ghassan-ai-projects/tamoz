@@ -182,10 +182,14 @@ module Tamoz
       # journalled, so a replayed `:failed` decision reaches the same conclusion as the
       # original attempt without re-deriving anything from message text. A record
       # written before this field existed has no key, and the reader's `== true` test
-      # therefore treats it as terminal.
+      # therefore treats it as terminal. P16: the taxonomy classes now live in
+      # tamoz-core, so the serialized "class" is mapped back to the public
+      # `Tamoz::Agent::Tool*` spelling via `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`;
+      # the repair-loop dedup keys never include the class name, so the mapping
+      # cannot churn dedup.
       def tool_error_detail(error)
         {
-          "class" => error.class.name,
+          "class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
           "message" => error.message,
           "repairable" => error.repairable?
         }.freeze
@@ -224,19 +228,11 @@ module Tamoz
         end
       end
 
-      def observe(path)
-        return {"state" => "absent"} unless path.exist?
-        return {"state" => "not_a_regular_file"} unless path.file?
-        return {"state" => "symlink"} if path.symlink?
-
-        content = path.read(mode: "rb")
-        {
-          "state" => Digest::SHA256.hexdigest(content),
-          "mode" => path.stat.mode & 0o777
-        }
-      rescue SystemCallError
-        {"state" => "unreadable"}
-      end
+      # P16: the observation helper is homed on the toolbox in tamoz-tools so the
+      # moved digest-resolution path never references agent machinery; this keeps
+      # the agent-side callers (`verify_intent_before_state!`,
+      # `resolved_effect_arguments`) on the same single implementation.
+      def observe(path) = Toolbox.observe(path)
 
       def mode_matches?(tool, intent, observed)
         return true unless tool == "create_file"

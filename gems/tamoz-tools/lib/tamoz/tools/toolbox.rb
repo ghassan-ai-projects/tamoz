@@ -9,7 +9,7 @@ require "tempfile"
 require "timeout"
 
 module Tamoz
-  module Agent
+  module Tools
     CheckReceipt = Data.define(:name, :outcome, :stdout, :stderr) do
       def initialize(name:, outcome:, stdout:, stderr:)
         super(
@@ -200,6 +200,24 @@ module Tamoz
         CREDENTIAL_ENV_NAMES.include?(upper) || CREDENTIAL_ENV_PATTERN.match?(upper)
       end
 
+      # Pure filesystem observation for the digest-resolution path (invariant 17:
+      # digests come from the current bytes, never from a caller's claim). Homed
+      # here so the toolbox never references the agent's effect machinery; the
+      # agent's `EffectDispatcher.observe` delegates to this implementation.
+      def self.observe(path)
+        return {"state" => "absent"} unless path.exist?
+        return {"state" => "not_a_regular_file"} unless path.file?
+        return {"state" => "symlink"} if path.symlink?
+
+        content = path.read(mode: "rb")
+        {
+          "state" => Digest::SHA256.hexdigest(content),
+          "mode" => path.stat.mode & 0o777
+        }
+      rescue SystemCallError
+        {"state" => "unreadable"}
+      end
+
       def descriptions = @descriptions
       def names = descriptions.keys
 
@@ -217,7 +235,7 @@ module Tamoz
       # P9 session built without skills must resume against each other, so both
       # report the same epoch rather than two different spellings of empty.
       def skill_epoch
-        @skills.empty? ? SessionRecords::LEGACY_SKILL_EPOCH : @skills.epoch
+        @skills.empty? ? Tamoz::Core::LEGACY_SKILL_EPOCH : @skills.epoch
       end
 
       # Invariant 16 requires the skill catalog digest to be part of the stable
@@ -475,7 +493,7 @@ module Tamoz
       def resolved_apply_patch_arguments(arguments)
         return arguments if arguments.key?("expected_sha256")
 
-        state = EffectDispatcher.observe(@root.join(arguments.fetch("path"))).fetch("state")
+        state = self.class.observe(@root.join(arguments.fetch("path"))).fetch("state")
         arguments.merge("expected_sha256" => state)
       end
 

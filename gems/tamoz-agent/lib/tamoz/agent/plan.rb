@@ -76,20 +76,12 @@ module Tamoz
         raise ProtocolError, "model returned invalid JSON: #{error.message}"
       end
 
-      def self.deep_freeze(value)
-        case value
-        when Hash
-          value.to_h { |key, entry| [String(key).dup.freeze, deep_freeze(entry)] }.freeze
-        when Array
-          value.map { |entry| deep_freeze(entry) }.freeze
-        when String
-          value.dup.freeze
-        when NilClass, TrueClass, FalseClass, Numeric
-          value
-        else
-          raise ProtocolError, "unsupported plan argument #{value.class}"
-        end
-      end
+      # P16: the deep freezer is homed in tamoz-core so the skills compiler (in
+      # tamoz-tools) and the durable records share one implementation. The core
+      # version raises `Tamoz::Error` for a non-JSON value where this one raised
+      # `ProtocolError`; the branch is unreachable for the JSON-shaped values both
+      # callers pass, so behavior is identical.
+      def self.deep_freeze(value) = Tamoz::Core.deep_freeze(value)
 
       def self.string(value, name:)
         raise ProtocolError, "#{name} must be a string" unless value.is_a?(String)
