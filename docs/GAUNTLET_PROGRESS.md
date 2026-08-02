@@ -1259,6 +1259,34 @@ the tail; "[REDACTED]" does). Gate: 901/33,666/0 both locales, scorecard 18/15/p
 0, no orphans. **P17 CLOSED — the governed websearch capability ships (egress policy,
 per-hop pinned dial, dual-condition circuit, honest enforcement claims).**
 
+### Round 22 — P11 merged and gated (critic in flight)
+
+P11 landed via the preserved worktree (resumed after a user stop; the continuation builder
+fixed 3 broken in-flight spots, committed `0531bee`, merged cleanly). Three-layer memory
+per the plan: immutable versioned `MemoryRecord` (codec-registered, fails before partial
+load), deterministic 3-gate admission (episode/owner_request/consolidation — no model
+decides admission), **SQL-filtered retrieval that authorizes BEFORE materialization/
+decryption** (P11-07 decryption-boundary: zero unauthorized decrypts during scan; control
+decrypts only authorized rows), lifecycle (supersede/quarantine/delete with invariant-54
+receipt, purge after retention), bounded consolidation (the phase's only model call,
+provider-gated), Wisdom promotion, `memory_epoch` sentinel, MemoryLimits. **DR-1
+BehaviorTransition implemented per rev4** (serialized control record: allocator
+`next_version` ≠ `active_version`, singleton pending id, claim→apply→finalize with
+registry CAS before checkpoint write, idempotent finalize, same-owner take-over,
+snapshot-by-digest, `epoch_reason` in the session record, existing threads pinned —
+`verify_behavior_binding!` stops typed). **P11-ED integrated the SHIPPED DR-3 harness** via
+a `store_factory` seam (real `Memory::Engine` behind the `MemoryStore` interface; content
+digest over store rows; new `memory_repository_adapter` + 2 word-aligned corpus cases —
+the real SQL search ANDs terms). **MIGRATION_2** (ordinal 2, checksummed `tamoz_memory_index`,
+monotonic-ordering test, `CURRENT_VERSION` 1→2, oracle verified both checksums). Scorecard
+18→19 (`agent.memory-attributable-recall`: real-adapter seeded Experience record recalled
+through production SQL retrieval; oracle requires the `:memory_recalled` mark AND prompt
+injection — never mark alone); 18 prior cases byte-identical (regeneration reproduces all
+19 byte-for-byte). Gate: **940/34,000/0 BOTH locales** (identical totals), design:validate
+55 invariants, scorecard 19/16/pass, 4/4 gates, safety 0, no orphans. Deferrals unchanged
+(vector search, Situation coupling, cross-user learning, separate memory gem — entry
+conditions recorded). 30-probe critic in flight.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
