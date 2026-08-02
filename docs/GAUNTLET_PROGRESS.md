@@ -1005,8 +1005,24 @@ only in-process in v1; DR-2 owns the durable record (`MemoryCircuitStore` defaul
 caller-owned durable store).
 
 Fix round OPEN (slice-3 fix): O1 critical + O2 medium + O4 low in scope; O5/advB deferred
-to slice-4 caller glue; advC stays DR-2's. Gate after fix: full `rake ci` both locales,
-scorecard, and the critic's own probe harness re-run (probe 4 must flip to PASS).
+to slice-4 caller glue; advC stays DR-2's.
+
+**Slice-3 fix CLOSED.** Landed `a69971d` (7 files, +290/−24); coordinator gate verified at
+`01876d5`: `rake ci` **733 runs / 0 failures** under BOTH locales; scorecard **15/12/pass,
+4/4 hard gates, safety 0**; the critic's own harness re-run: **probe 4 PASS**, all 18 prior
+probes unchanged, no orphans. O1: connect-phase wire corruption → terminal `ToolPolicyError`
+(`mcp_wire:`), `repairable? == false`, circuit still counts; test server now emits malformed
+frames persistently (one-shot frame let a second connect succeed — the "cannot iterate"
+property is now real on the wire) plus a new `MCP_TEST_SERVER_MALFORMED_MID_CALL=1` mode
+proving the mid-session corruption row on the real wire (was fake-client-only). O2:
+elicitation schema sanitized — control-strip + byte-bound, keys included, before the
+credential check. O3: multi-block text attribution (single block stays bare — pinned by
+probe 1's `obs.text == "hello"`). O4: `stderr_tail` in typed error metadata (~20 lines).
+Deferred (recorded): advB reissue once-only → slice-4 caller glue (inv 21); advC
+circuit-restart → DR-2; advD d2 single-block attribution pinned by probe 1; advD d3 stderr
+secret-scrub out of scope. **Slice 3 CLOSED; slice 4 next** (agent glue: McpCapabilitySource,
+session-record `mcp_catalogs` pinning, resume guard, §10.2 adversarial suite, scorecard case
+16 `agent.mcp-governed-call`).
 
 ## 4. Phase ledger (mirrors the handover plan)
 
