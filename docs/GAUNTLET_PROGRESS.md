@@ -1225,6 +1225,24 @@ not_claimed + live_network_validation: "deferred". Gate: 899/33,651/0 BOTH local
 (identical totals), decision pass, 4/4 gates, safety 0, no orphans. Deferral: live-network
 validation (operator-gated, never CI). 26-probe critic in flight.
 
+**Round 21 addendum — external progress deep review reconciled.** A reviewer (not
+gauntlet-spawned) produced `docs/reviews/PROJECT_PROGRESS_REVIEW_2026-08-02.md` and amended
+the trackers at a STALE snapshot (`9e024a2`, pre-P17-merge). Adjudicated: **F1 (DR-2 as
+active blocker) STALE** — P17 shipped the egress-scope circuit (`78041fc`, both DR-2 open
+conditions + authority-gated reset); the P10-supervisor/server/rule/schedule scopes'
+durable record remains for P12-H3/P13-E and is tracked there. **F2 (MCP stderr can
+disclose credential values, inv 24) CONFIRMED REAL** — `child_environment` puts resolved
+credential values in the child env; `stderr_tail` bounds + control-scrubs but has no
+KNOWN-VALUE redaction; invocation error metadata attaches the tail (this is the slice-3
+advD-d3 deferral, now upgraded to must-fix). Fix queued (runs right after the P17 critic
+lands, to keep its evidence tree clean): redact resolved credential values from the
+stderr tail + a malicious-child regression test. **F3/F4/F5 ACCEPTED** — tracker split
+into design/implementation status, P11-ED integrates the existing DR-3 harness (no second
+substrate), P15 protected corpora (P11/P12) become release-blocking, residual
+verification/operations debt kept as explicit closure inputs. Its review-time `rake ci`
+failed 5 env/process probes (macOS network-sandbox self-tests, MCP process-group probes,
+kill-matrix) — diagnostic only; the stable-checkout gates remain 899/0.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
