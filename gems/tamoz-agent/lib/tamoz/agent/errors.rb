@@ -36,6 +36,15 @@ module Tamoz
     # the caller's current source.
     class McpCatalogSnapshotUnavailableError < Error; end
 
+    # P17 (correction 5): a resumed session cannot bind the egress declaration it
+    # was pinned to. A changed egress declaration is a changed network policy
+    # (invariant 35/36) — resuming an accepted plan under different egress is the
+    # silent widening the correction names. Raised by
+    # `Session#verify_egress_binding!` when the pinned `egress_pin` in the session
+    # record no longer matches the egress section of the profile the session was
+    # constructed with.
+    class EgressBindingUnavailableError < Error; end
+
     # DR-5 D1: profile role resolution failed for a referenced role at session
     # start — most commonly a credential reference whose env-var name is not set.
     # Terminal: the session refuses to start, before any model I/O, checkpoint, or

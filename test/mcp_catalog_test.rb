@@ -14,17 +14,19 @@ class McpCatalogTest < Minitest::Test
     PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB
   ].freeze
 
-  # Exact digest expectations for the fixture below (5 tools, protocol
-  # 2026-07-28, server_id "test-server"). Pinned from a real compile; the
-  # determinism test below proves the compiler reproduces them.
+  # Exact digest expectations for the fixture below (6 tools — P17 added the
+  # deterministic `search` fixture tool; protocol 2026-07-28, server_id
+  # "test-server"). Pinned from a real compile; the determinism test below
+  # proves the compiler reproduces them.
   EXPECTED_SNAPSHOT_DIGEST =
-    "sha256:6c32875e13a39c11a8c08832ce9dccd9d02f497d32cc896bb1db34c572ebf8df"
+    "sha256:1f6d55d7d7733b8c1a83309e23a9ca05fccaaf3b26274ceeddeb55bc71a16f8b"
   EXPECTED_ENTRY_DIGESTS = {
     "echo_constant" => "sha256:d60e00d326bed04f3c898de73049f0659689e1569b01063ecc5a5235718450a1",
     "set_answer" => "sha256:7aae47642bbb1aa31d94ed1cc1d7e4e178d20944d0f86256c7c6a91f7a7f13fe",
     "needs_input" => "sha256:340fcbbb7cd6cab13926eaf6fde0e15c27f95b4c4ac2a9bcc5e64e709296fb6b",
     "churn" => "sha256:99dc452b9edb93bb6795f3fae206d792d646d417d89425b96d25581d42bec07b",
-    "sleep_ms" => "sha256:b34d03e93dfc08e0ee02f82065cddd920b25d87ac1c63be527cc0c9d7468375e"
+    "sleep_ms" => "sha256:b34d03e93dfc08e0ee02f82065cddd920b25d87ac1c63be527cc0c9d7468375e",
+    "search" => "sha256:b781ffafcb164d5ff1bce99bc148afa85ba09e420a3a7a0b6b37af410360726c"
   }.freeze
 
   def setup
@@ -133,7 +135,7 @@ class McpCatalogTest < Minitest::Test
     config = build_config(budgets: Budgets.new(max_catalog_entries: 8))
 
     error = assert_raises(Tamoz::Mcp::ProtocolError) { Catalog.compile(config) }
-    assert_match(/15 entries/, error.message)
+    assert_match(/16 entries/, error.message)
     assert_match(/budget of 8/, error.message)
   end
 

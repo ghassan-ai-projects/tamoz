@@ -46,7 +46,7 @@ module Tamoz
       KNOWN_TOOLS = %w[read_file list_directory search_text apply_patch create_file run_check].freeze
       KNOWN_PROVIDERS = RubyLLMModel::ENV_KEYS.keys.map(&:to_s).freeze
 
-      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy].freeze
+      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress].freeze
       PROFILE_KEYS = %w[schema_version profile_id profile_version canonical_root description].freeze
       ROOTS_KEYS = %w[workspace].freeze
       MODEL_ROLE_KEYS = %w[provider model credential_ref].freeze
@@ -57,6 +57,43 @@ module Tamoz
       POLICY_KEYS = %w[
         allow_changes default_check_safety graph_version behavior_version tool_catalog_digest
       ].freeze
+      # P17 §3: the operator-declared egress policy for governed network
+      # capabilities (the websearch server). Exact FQDNs only in v1 — no
+      # wildcards, no IP literals, no ports, https only. `credential_refs`
+      # carries NAMES only; values never materialize in a profile (invariant
+      # 24). The whole section is part of the profile's canonical digest, so any
+      # edit is a new profile version that the session-authority machinery
+      # re-pins (P8 §5.4 / P17 correction 5).
+      EGRESS_KEYS = %w[
+        allowlisted_hosts schemes deny_private_ranges max_request_bytes
+        max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs
+      ].freeze
+      EGRESS_CIRCUIT_KEYS = %w[threshold scope_type budget_breach].freeze
+      EGRESS_SCOPE_TYPE = "egress"
+      EGRESS_SCHEMES = ["https"].freeze
+      EGRESS_MAX_REQUEST_BYTES = 8192
+      EGRESS_MAX_RESPONSE_BYTES = 64 * 1024
+      EGRESS_MAX_CONNECT_TIMEOUT_S = 300
+      EGRESS_MAX_REDIRECT_HOPS = 10
+      EGRESS_MAX_CIRCUIT_THRESHOLD = 10
+      # A bare IP-shaped host in any spelling defeats the "exact FQDN" rule if
+      # only the common spellings are checked, so the admission rule rejects
+      # dotted-quad, bare decimal, hex, and octal forms outright; the per-hop
+      # adapter check re-runs the full neutralization at every connection and
+      # redirect target (P17 §4).
+      EGRESS_IPV4_PATTERN = /\A(?:\d{1,3}\.){3}\d{1,3}\z/
+      EGRESS_IPV6_PATTERN = /\A[0-9A-Fa-f]{0,4}(?::[0-9A-Fa-f]{0,4}){2,7}(?:%[0-9A-Za-z.]+)?\z/
+      EGRESS_NUMERIC_IP_PATTERN = /\A(?:\d+|0[xX][0-9A-Fa-f]+|0[0-7]+)\z/
+      EGRESS_HOST_LABEL_PATTERN = /\A[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z/
+      # Credential-shaped NAME in a non-ref egress list. `TAMOZ_SEARCH_API_TOKEN`
+      # is a credential-ref name and is admitted in `credential_refs` only; the
+      # same shape in `allowlisted_hosts` or anywhere else is a mistake that
+      # would quietly smuggle a secret-bearing name into policy, so it is a
+      # typed rejection (invariant 24).
+      EGRESS_CREDENTIAL_NAME_PATTERN = /(?:\A|_)(?:
+        API_?KEYS? | ACCESS_?KEYS? | SECRET_?KEYS? | PRIVATE_?KEYS? | SESSION_?KEYS? |
+        TOKENS? | SECRETS? | PASSWORD | PASSWD | CREDENTIALS? | PASSPHRASE
+      )(?:\z|_)/x
 
       # A configured check is an exact argv executed without a shell. Metacharacters
       # are meaningless to `exec`, so rejecting them is defence in depth; the vector
@@ -99,9 +136,10 @@ module Tamoz
       Fields = Data.define(
         :profile_id, :profile_version, :canonical_root, :description,
         :model_roles, :budgets, :checks, :tools_allowed, :tools_approval_required,
-        :policy, :canonical_digest, :suggestion, :pinned
+        :policy, :canonical_digest, :suggestion, :pinned, :egress
       ) do
         def initialize(pinned: false, **members)
+          members[:egress] = nil unless members.key?(:egress)
           super(pinned:, **Profile.deep_freeze(members))
         end
 
@@ -120,7 +158,7 @@ module Tamoz
                      :profile_id, :profile_version, :canonical_root, :description,
                      :model_roles, :budgets, :checks, :tools_allowed,
                      :tools_approval_required, :policy, :canonical_digest,
-                     :suggestion, :pinned, :allow_changes?, :high_risk?
+                     :suggestion, :pinned, :allow_changes?, :high_risk?, :egress
 
       # P8-B §5.1/§5.4: the exact capability authority a durable session was
       # started under, in a form that can be replayed from the checkpoint alone.
@@ -131,7 +169,7 @@ module Tamoz
       # invariant 24 permits; nothing here can widen authority because
       # reconstruction re-runs the same validators (invariant 35).
       def authority_snapshot
-        Profile.deep_freeze(
+        snapshot = {
           "profile_id" => profile_id,
           "profile_version" => profile_version,
           "canonical_digest" => canonical_digest,
@@ -150,7 +188,13 @@ module Tamoz
             "approval_required" => tools_approval_required
           },
           "policy" => policy
-        )
+        }
+        # P17 (correction 5): the operator-declared egress policy joins the
+        # pinned authority, so a resumed checkpoint re-pins the exact egress
+        # declaration. `nil` (no egress section) is the pre-P17 sentinel and is
+        # simply omitted — `from_authority` treats absence as "no egress".
+        snapshot["egress"] = egress if egress
+        Profile.deep_freeze(snapshot)
       end
 
       def self.load(path, env: ENV, adoption_registry: nil, confirm_adoption: nil)
@@ -191,7 +235,7 @@ module Tamoz
       end
 
       AUTHORITY_KEYS = %w[
-        profile_id profile_version canonical_digest canonical_root model_roles checks tools policy
+        profile_id profile_version canonical_digest canonical_root model_roles checks tools policy egress
       ].freeze
 
       # P8-B §5.4/§5.5: rebuild the authority a session was pinned to from its
@@ -210,7 +254,7 @@ module Tamoz
         unless unknown.empty?
           raise ValidationError, "#{source}: unknown pinned authority fields #{unknown.sort.inspect}"
         end
-        missing = AUTHORITY_KEYS - hash.keys - %w[model_roles checks]
+        missing = AUTHORITY_KEYS - hash.keys - %w[model_roles checks egress]
         unless missing.empty?
           raise ValidationError, "#{source}: pinned authority is missing #{missing.sort.inspect}"
         end
@@ -234,12 +278,17 @@ module Tamoz
           "tools" => hash.fetch("tools"),
           "policy" => hash.fetch("policy")
         }
+        # P17 (correction 5): the pinned egress declaration is replayed through
+        # the same fail-closed validator a profile file passes, so a tampered
+        # checkpoint can only narrow or fail, never widen.
+        synthetic["egress"] = hash["egress"] if hash.key?("egress")
         validate_profile_fields!(synthetic.fetch("profile"), source)
         validate_roots!(synthetic, synthetic.fetch("profile"), source)
         validate_model_roles!(synthetic, source)
         validate_checks!(synthetic, source)
         tools = validate_tools!(synthetic, source)
         validate_policy!(synthetic, tools, source)
+        validate_egress!(synthetic, source)
         new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
       end
 
@@ -598,6 +647,7 @@ module Tamoz
         validate_checks!(hash, path)
         tools = validate_tools!(hash, path)
         validate_policy!(hash, tools, path)
+        validate_egress!(hash, path)
         hash
       end
 
@@ -907,6 +957,146 @@ module Tamoz
         end
       end
 
+      # P17 §3: the operator-declared egress policy, validated fail-closed.
+      # Absent (`nil`) is the pre-P17 state and means "no governed egress
+      # declaration"; present means every field is exact and bounded. The
+      # declaration is part of the canonical digest, so any edit is a new
+      # profile version that the session-authority machinery re-pins.
+      def self.validate_egress!(hash, path)
+        egress = hash["egress"]
+        return nil if egress.nil?
+
+        unless egress.is_a?(Hash)
+          raise ValidationError, "#{path}: egress must be a mapping"
+        end
+
+        unknown = egress.keys - EGRESS_KEYS
+        unless unknown.empty?
+          raise ValidationError, "#{path}: unknown egress fields #{unknown.sort.inspect}"
+        end
+
+        hosts = egress["allowlisted_hosts"]
+        unless hosts.is_a?(Array) && !hosts.empty? &&
+               hosts.all? { |host| host.is_a?(String) } && hosts.uniq == hosts
+          raise ValidationError,
+                "#{path}: egress.allowlisted_hosts must be a non-empty array of distinct strings"
+        end
+        hosts.each do |host|
+          field = "egress.allowlisted_hosts entry #{host.inspect}"
+          if EGRESS_CREDENTIAL_NAME_PATTERN.match?(host)
+            raise ValidationError,
+                  "#{path}: #{field} is credential-shaped; names belong in " \
+                  "egress.credential_refs only (values never enter a profile)"
+          end
+          validate_egress_host!(host, path, field)
+        end
+
+        schemes = egress["schemes"]
+        unless schemes == EGRESS_SCHEMES
+          raise ValidationError, "#{path}: egress.schemes must be exactly #{EGRESS_SCHEMES.inspect} in v1"
+        end
+
+        deny = egress["deny_private_ranges"]
+        unless deny == true || deny == false
+          raise ValidationError, "#{path}: egress.deny_private_ranges must be true or false"
+        end
+
+        validate_egress_integer!(
+          egress["max_request_bytes"], path, "egress.max_request_bytes",
+          1, EGRESS_MAX_REQUEST_BYTES
+        )
+        validate_egress_integer!(
+          egress["max_response_bytes"], path, "egress.max_response_bytes",
+          1, EGRESS_MAX_RESPONSE_BYTES
+        )
+        timeout = egress["connect_timeout_s"]
+        unless timeout.is_a?(Numeric) && timeout.finite? && timeout.positive? &&
+               timeout <= EGRESS_MAX_CONNECT_TIMEOUT_S
+          raise ValidationError,
+                "#{path}: egress.connect_timeout_s must be a positive finite number " \
+                "of at most #{EGRESS_MAX_CONNECT_TIMEOUT_S}"
+        end
+        validate_egress_integer!(
+          egress["redirect_max_hops"], path, "egress.redirect_max_hops",
+          1, EGRESS_MAX_REDIRECT_HOPS
+        )
+
+        circuit = egress["circuit"]
+        unless circuit.is_a?(Hash)
+          raise ValidationError, "#{path}: egress.circuit must be a mapping"
+        end
+        unknown_circuit = circuit.keys - EGRESS_CIRCUIT_KEYS
+        unless unknown_circuit.empty?
+          raise ValidationError,
+                "#{path}: unknown egress.circuit fields #{unknown_circuit.sort.inspect}"
+        end
+        unless circuit["scope_type"] == EGRESS_SCOPE_TYPE
+          raise ValidationError,
+                "#{path}: egress.circuit.scope_type must be #{EGRESS_SCOPE_TYPE.inspect}"
+        end
+        validate_egress_integer!(
+          circuit["threshold"], path, "egress.circuit.threshold",
+          1, EGRESS_MAX_CIRCUIT_THRESHOLD
+        )
+        budget_breach = circuit["budget_breach"]
+        unless budget_breach == true || budget_breach == false
+          raise ValidationError, "#{path}: egress.circuit.budget_breach must be true or false"
+        end
+
+        refs = egress["credential_refs"]
+        unless refs.is_a?(Array) && refs.uniq == refs &&
+               refs.all? { |name| name.is_a?(String) && CREDENTIAL_REF_PATTERN.match?(name) }
+          raise ValidationError,
+                "#{path}: egress.credential_refs must be distinct names matching " \
+                "#{CREDENTIAL_REF_PATTERN.inspect}; names only, values never enter a profile"
+        end
+
+        egress
+      end
+
+      # Exact absolute DNS FQDN: lowercase, at least two dot-separated labels,
+      # no wildcard, no IP literal in any spelling, no scheme/port/path/
+      # userinfo. v1 deliberately has no wildcards or IP-literal allowlisting;
+      # the per-hop adapter check is the second layer (P17 §4).
+      def self.validate_egress_host!(host, path, field)
+        if host.bytesize > 253 || host.empty?
+          raise ValidationError, "#{path}: #{field} must be an absolute DNS name of at most 253 bytes"
+        end
+        if host.include?("*")
+          raise ValidationError, "#{path}: #{field} contains a wildcard; v1 allows exact FQDNs only"
+        end
+        if host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/)
+          raise ValidationError,
+                "#{path}: #{field} must be a bare hostname with no scheme, port, path, or userinfo"
+        end
+        unless host == host.downcase
+          raise ValidationError, "#{path}: #{field} must be lowercase"
+        end
+        if EGRESS_IPV4_PATTERN.match?(host) || EGRESS_IPV6_PATTERN.match?(host) ||
+           EGRESS_NUMERIC_IP_PATTERN.match?(host)
+          raise ValidationError, "#{path}: #{field} is an IP literal; v1 allows exact FQDNs only"
+        end
+        labels = host.split(".")
+        unless labels.length >= 2 && labels.none?(&:empty?) &&
+               labels.all? { |label| label.bytesize <= 63 && EGRESS_HOST_LABEL_PATTERN.match?(label) }
+          raise ValidationError, "#{path}: #{field} is not a valid absolute DNS name"
+        end
+        if labels.last.match?(/\A\d+\z/)
+          raise ValidationError, "#{path}: #{field} must not end in a numeric label"
+        end
+
+        host
+      end
+
+      def self.validate_egress_integer!(value, path, field, minimum, maximum)
+        unless value.is_a?(Integer) && value.between?(minimum, maximum)
+          raise ValidationError,
+                "#{path}: #{field} must be an integer between #{minimum} and #{maximum}"
+        end
+
+        value
+      end
+
       def self.canonical_digest(hash)
         "sha256:#{Digest::SHA256.hexdigest(
           DIGEST_DOMAIN + JSON.generate(Deliberation.canonical(hash))
@@ -943,7 +1133,8 @@ module Tamoz
           policy: hash.fetch("policy"),
           canonical_digest: digest,
           suggestion:,
-          pinned:
+          pinned:,
+          egress: hash["egress"]
         }
         Fields.new(**new_fields)
       end

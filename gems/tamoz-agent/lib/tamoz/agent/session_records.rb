@@ -63,7 +63,14 @@ module Tamoz
             # P10 §5 epoch rules: a session that used an MCP capability pins the
             # catalog digests it ran against as {server_id => snapshot_digest}.
             # Optional HASH, legacy sentinel {}, RECORD_VERSION stays 1.
-            "mcp_catalogs" => HASH
+            "mcp_catalogs" => HASH,
+            # P17 (correction 5): a session that ran under a profile carrying an
+            # `egress:` section pins the canonical egress declaration. Optional
+            # HASH, legacy sentinel {} — the pre-P17 state and the "profile has
+            # no egress" state are one and the same "no egress declaration".
+            # `Session#verify_egress_binding!` compares this on resume and stops
+            # typed on a mismatch (invariant 35/36).
+            "egress_pin" => HASH
           }
         },
         "plan" => {
@@ -191,6 +198,23 @@ module Tamoz
 
       KINDS = SCHEMAS.keys.freeze
 
+      # P17 W6 (correction 6) — invariant 24 at the checkpoint boundary for
+      # MODEL-PROPOSED INVOCATIONS. A credential VALUE must never enter a plan
+      # record (the durable proposal) or an accepted plan: plans flow into the
+      # journal, prompts, and audit, and a rejected credential-shaped step must
+      # not leave its raw value behind. Tool OBSERVATIONS are the user's own
+      # workspace content and are deliberately NOT scanned (the pre-P17
+      # `test_sensitive_content_is_not_rendered_to_streams_or_transcript`
+      # behavior). The patterns are the profile.rb credential set, duplicated
+      # across the file boundary exactly as tamoz-mcp duplicates them.
+      SECRET_VALUE_PATTERNS = [
+        /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+        /\b(sk|pk|xox[baprs])-[A-Za-z0-9][A-Za-z0-9_-]{7,}/,
+        /\bAKIA[0-9A-Z]{16}\b/,
+        /\bAIza[0-9A-Za-z_-]{35}\b/
+      ].freeze
+      CREDENTIAL_SCANNED_KINDS = %w[plan accepted_plan].freeze
+
       # Pure `old_hash -> new_hash` upgrade functions keyed by [kind, from_version].
       # Empty at RECORD_VERSION 1: there is no earlier shipped version to migrate.
       MIGRATIONS = {}.freeze
@@ -277,11 +301,16 @@ module Tamoz
           # session and a P10 session built without an MCP source both resume
           # against "no catalogs". "{}" is the legacy sentinel.
           defaults["mcp_catalogs"] = {} unless migrated.key?("mcp_catalogs")
+          # P17: no egress pin is one state, however it arose — a pre-P17 session
+          # and a P17 session whose profile carried no `egress:` section both
+          # resume against "no egress declaration". "{}" is the legacy sentinel.
+          defaults["egress_pin"] = {} unless migrated.key?("egress_pin")
           migrated = Plan.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
         end
 
         validate_fields!(migrated, stored_kind)
         reject_sensitive!(migrated)
+        reject_credential_values!(migrated) if CREDENTIAL_SCANNED_KINDS.include?(stored_kind)
         migrated
       end
 
@@ -314,6 +343,26 @@ module Tamoz
           value.each_value { |entry| reject_sensitive!(entry) }
         when Array
           value.each { |entry| reject_sensitive!(entry) }
+        end
+        value
+      end
+
+      # The plan/acceptance credential gate (P17 W6). Fail-closed and typed:
+      # a plan record carrying a credential VALUE raises `SensitiveValueError`,
+      # which `SessionNodes#deliberate` converts into a plan-revision issue so
+      # the model replans without the value — nothing is committed.
+      def reject_credential_values!(value)
+        case value
+        when String
+          if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+            raise SensitiveValueError,
+                  "the plan step arguments carry a credential value; use a " \
+                  "credential reference instead"
+          end
+        when Hash
+          value.each_value { |entry| reject_credential_values!(entry) }
+        when Array
+          value.each { |entry| reject_credential_values!(entry) }
         end
         value
       end

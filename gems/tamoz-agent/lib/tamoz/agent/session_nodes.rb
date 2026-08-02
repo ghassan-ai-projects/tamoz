@@ -93,7 +93,8 @@ module Tamoz
             created_at_ms: 0,
             **profile_binding,
             **skill_binding,
-            **mcp_binding
+            **mcp_binding,
+            **egress_binding
           )
         }
       end
@@ -118,6 +119,19 @@ module Tamoz
         return {} unless mcp && !mcp.catalogs.empty?
 
         {mcp_catalogs: mcp.mcp_catalogs}
+      end
+
+      # P17 (correction 5): a session that ran under a profile carrying an
+      # `egress:` section pins the canonical egress declaration as `egress_pin`.
+      # `Session#verify_egress_binding!` compares this on resume and stops with
+      # the typed `EgressBindingUnavailableError` rather than continuing an
+      # accepted plan under a changed network policy (invariant 35/36). A session
+      # without a profile, or whose profile has no egress section, pins nothing
+      # (the legacy sentinel is the empty hash at load time).
+      def egress_binding
+        return {} unless profile && profile.egress
+
+        {egress_pin: Deliberation.canonical(profile.egress)}
       end
 
       # P8: a profile-bound session pins its authority in the session record. The
@@ -242,14 +256,34 @@ module Tamoz
 
           plan_hash = Deliberation.canonical(plan.to_h)
           plan_digest = SessionRecords.digest(plan_hash)
-          plans << SessionRecords.build(
-            "plan",
-            plan_id:,
-            phase: phase.to_s,
-            attempt:,
-            plan: plan_hash,
-            plan_digest:
-          )
+          begin
+            plans << SessionRecords.build(
+              "plan",
+              plan_id:,
+              phase: phase.to_s,
+              attempt:,
+              plan: plan_hash,
+              plan_digest:
+            )
+          rescue Tamoz::SensitiveValueError => error
+            # P17 W6 (correction 6): a plan whose step arguments carry a
+            # credential VALUE is rejected at the checkpoint boundary — the
+            # value never enters the session record, journal, or audit. The
+            # model gets the typed reason as revision feedback and replans
+            # without the value; nothing was committed and no call was issued.
+            feedback = [error.message]
+            reviews << SessionRecords.build(
+              "review",
+              review_id: "#{plan_id}.credentials",
+              plan_id:,
+              plan_digest:,
+              layer: "protocol",
+              decision: "revise",
+              issues: feedback,
+              rationale: "the plan step arguments carry a credential-shaped value"
+            )
+            next
+          end
 
           structural = Deliberation.structural_issues(
             plan,

@@ -169,6 +169,19 @@ module Tamoz
         nil
       end
 
+      # P17 (correction 5): a resumed session must bind the exact egress
+      # declaration it was planned under. A mismatch stops with the typed
+      # `EgressBindingUnavailableError` — a changed egress declaration is a
+      # changed network policy (invariant 35/36), so there is no degraded
+      # read-only continuation. The empty pin `{}` covers both the pre-P17
+      # session and the "profile has no egress section" state, so sessions that
+      # never declared egress resume identically.
+      def verify_egress_binding!(thread:)
+        stored = stored_state(thread)
+        enforce_egress_binding!(thread, stored) if stored
+        nil
+      end
+
       # A thread with no checkpoint has nothing to protect: intake will write the
       # current epoch. Every other failure — corruption, an unsupported record
       # version — propagates, because a guard that swallows an unreadable record
@@ -209,6 +222,32 @@ module Tamoz
               "snapshots or start a new session."
       end
       private :enforce_mcp_binding!
+
+      def enforce_egress_binding!(thread, state)
+        record = state[:session]
+        return unless record
+
+        stored = record.fetch("egress_pin", {})
+        current = current_egress_pin
+        return if stored == current
+
+        raise EgressBindingUnavailableError,
+              "session #{thread} was pinned to egress declaration #{stored.inspect}; the " \
+              "current profile declares #{current.inspect}. Restore the exact profile " \
+              "egress section or start a new session."
+      end
+      private :enforce_egress_binding!
+
+      # The egress declaration the session was CONSTRUCTED with (the profile's
+      # validated `egress:` section, canonically normalized). `{}` means "no
+      # egress declaration" — the state a profile-less session and a session
+      # whose profile has no egress section share.
+      def current_egress_pin
+        return {} unless @nodes.profile && @nodes.profile.egress
+
+        Tamoz::Agent::Deliberation.canonical(@nodes.profile.egress)
+      end
+      private :current_egress_pin
 
       def self.build_definition(nodes)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
@@ -419,6 +458,7 @@ module Tamoz
 
         enforce_skill_binding!(thread, state)
         enforce_mcp_binding!(thread, state)
+        enforce_egress_binding!(thread, state)
         state
       end
 

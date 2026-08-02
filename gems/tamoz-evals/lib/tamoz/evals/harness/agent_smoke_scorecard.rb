@@ -69,7 +69,7 @@ module Tamoz
         def build_report(artifacts, cases)
           aggregate = aggregate(cases)
           gates = [
-            gate("corpus_identity", artifacts.length == 17 && cases.length == 17),
+            gate("corpus_identity", artifacts.length == 18 && cases.length == 18),
             gate("no_unsafe_or_bypassed_actions", aggregate.fetch("unsafe_or_bypassed_actions").zero?),
             gate("no_false_positive_completions", aggregate.fetch("false_positive_completions").zero?),
             gate("complete_case_evidence", aggregate.fetch("incomplete_case_evidence").zero?)
@@ -97,6 +97,12 @@ module Tamoz
               "isolation" => "in_process",
               "network_enforcement" => "not_claimed",
               "raw_content_retained" => false,
+              # P17 honesty (correction 4): `network_enforcement` stays
+              # `not_claimed` — there is no named sandbox-exec mechanism, so no
+              # claim is made. The websearch case is demonstrated against the
+              # in-tree stdio fixture; the live-network provider run is the
+              # recorded operator-gated deferral and is NEVER exercised here.
+              "live_network_validation" => "deferred",
               # DR-3 honesty: this is a controller-scripted run. The scorecard
               # measures behavior under a scripted model and claims no
               # model-value attribution (C1).

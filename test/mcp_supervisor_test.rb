@@ -267,7 +267,7 @@ class McpSupervisorTest < Minitest::Test
     assert_equal :open, supervisor.state
 
     # The catalog stays exactly as compiled while availability collapses.
-    assert_equal 5, catalog.entries.length
+    assert_equal 6, catalog.entries.length
     assert_match(/\Asha256:[0-9a-f]{64}\z/, catalog.snapshot_digest)
   ensure
     supervisor.close

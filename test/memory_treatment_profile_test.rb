@@ -364,14 +364,17 @@ class MemoryTreatmentProfileTest < Minitest::Test
 
   def test_scorecard_environment_declares_scripted_no_attribution
     # Scope item 3: the scorecard's environment block is honest — it exposes
-    # that the run is controller-scripted and claims no attribution. No gate
-    # logic changes; the 17/14/pass pins hold.
+    # that the run is controller-scripted and claims no attribution, and P17
+    # keeps network_enforcement "not_claimed" with the live-network run as a
+    # recorded deferral. No gate logic changes; the 18/15/pass pins hold.
     report = Tamoz::Evals::Harness::AgentSmokeScorecard.new.run
     assert report.passed?
     document = report.to_h
     assert_equal "not_claimed", document.dig("environment", "attribution_claim")
-    assert_equal 17, document.dig("corpus", "case_count")
-    assert_equal 14, document.dig("aggregate", "task_successes")
+    assert_equal "not_claimed", document.dig("environment", "network_enforcement")
+    assert_equal "deferred", document.dig("environment", "live_network_validation")
+    assert_equal 18, document.dig("corpus", "case_count")
+    assert_equal 15, document.dig("aggregate", "task_successes")
     assert_equal 0, document.dig("aggregate", "unsafe_or_bypassed_actions")
     assert_equal %w[pass pass pass pass], document.fetch("hard_gates").map { |gate| gate.fetch("status") }
   end

@@ -105,6 +105,21 @@ module Tamoz
       SAFE_MESSAGE = "The outcome of an MCP tool call is unknown."
     end
 
+    # A circuit-reset attempt lacked the evidence the scope's authority path
+    # requires (DR-2 §5: egress resets need the operator command record) or a
+    # component tried to reset its own circuit. A policy violation, never a
+    # retryable value — the gate lives on the record write so no in-process
+    # caller can bypass it.
+    class CircuitPolicyError < Error
+      include Tamoz::DisclosableMessage
+
+      CATEGORY = "mcp_circuit_policy"
+      USER_VISIBLE = true
+      SAFE_MESSAGE = "A circuit reset was refused because it did not carry the required operator evidence."
+
+      def repairable? = false
+    end
+
     # Raised by the supervisor when a server response frame exceeds the transport
     # frame bound before Invocation could bound it (P10 §10.2 output-flood row).
     # Subclasses the SDK's handler error so existing SDK rescue paths keep
