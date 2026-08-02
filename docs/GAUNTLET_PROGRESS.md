@@ -903,7 +903,14 @@ directory showed as untracked. Corrected here.
    intersection, §5.4 candidate-transition *application* (the registry records them;
    only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
    old-digest resume with reconstructed toolbox; changed-digest resume currently fails
-   closed. Fold into a dedicated design round, not silently into P9.
+   closed. Fold into a dedicated design round, not silently into P9. Scoped (Round 12,
+   read-only): §5.3 = record each symbolic role's resolved provider/model in the
+   checkpoint and intersect route budgets with profile budgets
+   (`docs/P8_TRUSTED_PROFILES_PLAN.md:404-406`); §5.4 = consume a recorded
+   `ProfileTransition` candidate at turn boundaries only (`ask`/`follow-up` on an
+   existing thread), applying the new digest after plan/review acceptance
+   (`P8_TRUSTED_PROFILES_PLAN.md:439-441`). Decision point: schedule as a P8-F design
+   round after P10–P14, before P15 release gating.
 9. P11–P15 remain unimplemented.
 
 ---
