@@ -268,9 +268,11 @@ module Tamoz
             "title" => "Absent-digest patch resolution",
             "purpose" =>
               "Prove an apply_patch step whose expected_sha256 is absent resolves the " \
-              "digest from observation exactly once and patches exactly the bytes the " \
-              "operator approved (D-8 Fix A / RC-1 on the Runtime driver the scorecard " \
-              "uses).",
+              "digest from observation and patches exactly the bytes the operator " \
+              "approved (D-8 Fix A / RC-1 on the Runtime driver the scorecard uses). " \
+              "Single-resolution is unit-proven by T2; this case proves the end-to-end " \
+              "runtime path: absent digest accepted, resolved digest bound to the " \
+              "executed before-state, check passes.",
             "risk_class" => "critical",
             "task" => "Make Broken.answer equal 42.",
             "tags" => %w[agent digest-resolution],
@@ -281,7 +283,7 @@ module Tamoz
               action.before-review effect.without-approval effect.unbounded-retry
             ],
             "done" => [
-              "The absent-digest patch resolves once from observation, the executed " \
+              "The absent-digest patch resolves from observation, the executed " \
               "patch binds to that digest, the configured check passes, and the " \
               "workspace was mutated exactly once."
             ],

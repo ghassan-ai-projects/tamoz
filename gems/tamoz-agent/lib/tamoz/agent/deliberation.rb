@@ -195,20 +195,25 @@ module Tamoz
         issues.freeze
       end
 
-      # D-8 Fix B (RC-4), scoped heuristic. `path` and `expected_sha256` are never
-      # legitimate `<`+`>` carriers, so they get the containment check ON TOP of the
-      # universal rules; every other string argument is checked for the whole-string
-      # `\A<.*>\z` shape and the cross-step reference phrases. Nested values
-      # (compound replacement entries) are walked with the same rules.
+      # D-8 Fix B (RC-4), scoped heuristic + D-8 critic hardening. `path` and
+      # `expected_sha256` are never legitimate carriers of `<`+`>` containment or
+      # cross-step reference phrases ("from step", "from read_file", "from search
+      # result") — a model only writes those as placeholders for values it expects
+      # from another step. EVERY other string argument gets only the whole-string
+      # `\A<.*>\z` shape check: English phrase collisions ("from step 1" -> "from
+      # step 2" in patch text, "from search result" in a query) are legitimate
+      # content and must not be rejected (the D-8 critic probe confirmed the
+      # false positive). Nested values (compound replacement entries) are walked
+      # with the same rules.
       def placeholder_arguments?(arguments)
         arguments.any? do |key, value|
           case value
           when String
-            contained = PLACEHOLDER_CONTAINMENT_KEYS.include?(String(key)) &&
-              value.include?("<") && value.include?(">")
-            universal = value.match?(PLACEHOLDER_WHOLE_STRING) ||
-              PLACEHOLDER_REFERENCE_PHRASES.any? { |phrase| value.include?(phrase) }
-            contained || universal
+            keyed = PLACEHOLDER_CONTAINMENT_KEYS.include?(String(key)) &&
+              (value.include?("<") && value.include?(">") ||
+               PLACEHOLDER_REFERENCE_PHRASES.any? { |phrase| value.include?(phrase) })
+            universal = value.match?(PLACEHOLDER_WHOLE_STRING)
+            keyed || universal
           when Hash
             placeholder_arguments?(value)
           when Array

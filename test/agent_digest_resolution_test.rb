@@ -185,8 +185,8 @@ class AgentDigestResolutionTest < Minitest::Test
     Dir.mktmpdir("tamoz-digest-reference-path") do |root|
       File.write(File.join(root, "note.txt"), "content\n")
       # A bare reference with no angle brackets (the F2 shape a real model emits)
-      # must still be rejected: the reference-phrase rule applies to every string
-      # argument, path included.
+      # must still be rejected: the reference-phrase rule applies to `path` and
+      # digest-shaped arguments (the critic-hardened scope).
       model = scripted_model(
         plans: [
           plan_for("read_file", {"path" => "to be filled from search result"}),
@@ -231,6 +231,53 @@ class AgentDigestResolutionTest < Minitest::Test
 
       assert result.satisfied
       assert_equal "answer = a >= b\n", File.read(File.join(root, "expr.rb"))
+      structural = events.select do |event|
+        event.type == :plan_reviewed && event.data.fetch("layer") == "structural"
+      end
+      assert_equal %w[accept accept], structural.map { |event| event.data.fetch("decision") }
+    end
+  end
+
+  def test_reference_phrases_in_patch_text_and_queries_are_not_placeholders
+    Dir.mktmpdir("tamoz-digest-phrase-negative") do |root|
+      File.write(File.join(root, "doc.rb"), "from step 1\n")
+      # The D-8 critic hardening: cross-step reference phrases are legitimate
+      # text in patch `before`/`after` and in query/content values — only `path`
+      # and digest-shaped arguments can carry a placeholder reference. Without
+      # this, a real model patching "from step 1" -> "from step 2" is rejected
+      # with the placeholder message (the exact failure class D-8 exists to fix).
+      model = scripted_model(
+        plans: [
+          # Discovery: a query legitimately containing the phrase must pass
+          # structural review (only path/digest args are phrase-checked).
+          {
+            "goal" => "locate the step reference",
+            "done_when" => ["the query and the read both succeed"],
+            "steps" => [
+              {"id" => "q", "purpose" => "search for the phrase", "tool" => "search_text",
+               "arguments" => {"query" => "from search result", "path" => "doc.rb"},
+               "verification" => "the search finds the line"},
+              {"id" => "r", "purpose" => "read the file", "tool" => "read_file",
+               "arguments" => {"path" => "doc.rb"}, "verification" => "the content is read"}
+            ]
+          },
+          # Action: patch text legitimately containing the phrase.
+          plan_for("apply_patch", {
+            "path" => "doc.rb",
+            "expected_sha256" => Digest::SHA256.hexdigest("from step 1\n"),
+            "before" => "from step 1",
+            "after" => "from step 2"
+          })
+        ],
+        reviews: 2,
+        final_satisfied: true
+      )
+      events = []
+      result = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { true })
+                          .run("Fix the step reference") { |event| events << event }
+
+      assert result.satisfied
+      assert_equal "from step 2\n", File.read(File.join(root, "doc.rb"))
       structural = events.select do |event|
         event.type == :plan_reviewed && event.data.fetch("layer") == "structural"
       end
