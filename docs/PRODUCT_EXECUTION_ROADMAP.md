@@ -1,12 +1,11 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P11 — three-layer memory
-Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals substrate, P17 all
-closed; scorecard 18 cases / 15 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: implement P11 per docs/P11_MEMORY_PLAN.md (DR-1 before Wisdom
-activation), then P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18,
-P15 (single-active-phase order)
+Current phase: P12 — bounded self-healing and improvement
+Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11 all
+closed; scorecard 19 cases / 16 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: implement P12 per docs/P12_SELF_HEALING_PLAN.md (incl. the DR-2
+supervisor-scope durable record), then P13, P14, P18, P15 (single-active-phase order)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
