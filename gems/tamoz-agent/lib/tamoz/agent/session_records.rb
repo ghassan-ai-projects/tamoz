@@ -40,7 +40,8 @@ module Tamoz
           },
           optional: {
             "profile_id" => STRING,
-            "profile_digest" => STRING
+            "profile_digest" => STRING,
+            "profile_authority" => HASH
           }
         },
         "plan" => {

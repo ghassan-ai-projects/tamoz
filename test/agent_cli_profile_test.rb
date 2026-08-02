@@ -77,27 +77,145 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  def test_resume_with_changed_profile_digest_blocks_mutation
+  # P8-B §5.5.3: an edited profile never rebinds an existing thread by itself.
+  # The thread replays the authority snapshot pinned in its own checkpoint, so
+  # the narrowed tool set in the edited file is simply not applied.
+  def test_changed_profile_keeps_the_pinned_authority_of_an_existing_thread
     with_profile_env do |workspace, session_dir, config_home|
       File.write(File.join(workspace, "note.txt"), "hello\n")
-      path, = write_profile(workspace:, config_home:)
-      status = run_cli(
+      path, first_digest = write_profile(workspace:, config_home:)
+      assert_equal 0, run_cli(
         ["--profile", path, "ask", "read note.txt"],
         workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
         factory: read_factory, session: "th"
       )
-      assert_equal 0, status
 
-      # Operator edits the profile; both digests are activated.
-      write_profile(workspace:, config_home:, budgets: {"steps" => 5})
+      # Operator narrows the profile; both digests are adopted.
+      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      refute_equal first_digest, second_digest
+
+      prompts = []
       err = StringIO.new
       status = run_cli(
-        ["--profile", path, "resume", "th"],
-        workspace:, session_dir:, config_home:, out: StringIO.new, err:, factory: read_factory
+        ["--profile", path, "ask", "read note.txt again"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:,
+        factory: recording_factory(prompts), session: "th"
+      )
+
+      assert_equal 0, status, err.string
+      assert_match(/keeps its pinned authority #{Regexp.escape(first_digest)}/, err.string)
+      assert_equal first_digest, session_record(session_dir, "th").fetch("profile_digest")
+      # The pinned epoch still offers the original tool surface.
+      assert_includes prompts.first, "search_text"
+    end
+  end
+
+  # P8-B §5.4/§6.5: only an explicit operator-recorded candidate transition moves
+  # a thread onto a new digest, and only at a turn boundary.
+  def test_candidate_transition_applies_only_at_a_turn_boundary
+    with_profile_env do |workspace, session_dir, config_home|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      path, first_digest = write_profile(workspace:, config_home:)
+      assert_equal 0, run_cli(
+        ["--profile", path, "ask", "read note.txt"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
+        factory: read_factory, session: "th"
+      )
+
+      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      before = Digest::SHA256.file(File.join(session_dir, "th.sqlite3")).hexdigest
+
+      out = StringIO.new
+      status = run_cli(
+        ["--profile", path, "profile", "activate", "--thread", "th", "--digest", second_digest],
+        workspace:, session_dir:, config_home:, out:, err: StringIO.new, factory: read_factory
+      )
+      assert_equal 0, status
+      assert_match(/Candidate transition recorded for th/, out.string)
+      assert_match(/next turn boundary/, out.string)
+      # Recording a candidate is operator-side only: the durable session is untouched.
+      assert_equal before, Digest::SHA256.file(File.join(session_dir, "th.sqlite3")).hexdigest
+      assert_equal first_digest, session_record(session_dir, "th").fetch("profile_digest")
+
+      prompts = []
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", path, "ask", "read note.txt again"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:,
+        factory: recording_factory(prompts), session: "th"
+      )
+      assert_equal 0, status, err.string
+      assert_match(/Applying operator transition for th/, err.string)
+      assert_equal second_digest, session_record(session_dir, "th").fetch("profile_digest")
+      refute_includes prompts.first, "search_text"
+    end
+  end
+
+  # P8-B §5.5.4: when the operator has revoked the grant for the digest a thread
+  # was created under, the thread fails closed instead of silently adopting the
+  # current file.
+  def test_revoked_old_digest_fails_closed
+    with_profile_env do |workspace, session_dir, config_home|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      path, first_digest = write_profile(workspace:, config_home:)
+      assert_equal 0, run_cli(
+        ["--profile", path, "ask", "read note.txt"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
+        factory: read_factory, session: "th"
+      )
+
+      FileUtils.rm_f(File.join(config_home, "adoption.yaml"))
+      _, second_digest = write_profile(workspace:, config_home:, tools: %w[read_file])
+      refute_equal first_digest, second_digest
+
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", path, "ask", "read note.txt again"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:,
+        factory: read_factory, session: "th", input: StringIO.new("y\n")
       )
       assert_equal 1, status
       assert_match(/Session was created with profile test-profile digest/, err.string)
       assert_match(/current profile digest is/, err.string)
+      assert_equal first_digest, session_record(session_dir, "th").fetch("profile_digest")
+    end
+  end
+
+  def test_profile_activate_rejects_foreign_threads_and_unknown_digests
+    with_profile_env do |workspace, session_dir, config_home|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      path, = write_profile(workspace:, config_home:)
+      assert_equal 0, run_cli(
+        ["--profile", path, "ask", "read note.txt"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err: StringIO.new,
+        factory: read_factory, session: "th"
+      )
+
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", path, "profile", "activate", "--thread", "th",
+         "--digest", "sha256:#{"c" * 64}"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:, factory: read_factory
+      )
+      assert_equal 1, status
+      assert_match(/is neither the session digest/, err.string)
+
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", path, "profile", "activate", "--thread", "absent",
+         "--digest", "sha256:#{"c" * 64}"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:, factory: read_factory
+      )
+      assert_equal 1, status
+      assert_match(/no durable session absent/, err.string)
+
+      err = StringIO.new
+      status = run_cli(
+        ["--profile", path, "profile", "activate", "--thread", "th", "--digest", "nope"],
+        workspace:, session_dir:, config_home:, out: StringIO.new, err:, factory: read_factory
+      )
+      assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
+      assert_match(/sha256:/, err.string)
     end
   end
 
@@ -227,13 +345,15 @@ class AgentCLIProfileTest < Minitest::Test
     end
   end
 
-  def write_profile(workspace:, config_home:, path: nil, mode: 0o600, activate: true, budgets: {})
-    checks = {}
+  def write_profile(
+    workspace:, config_home:, path: nil, mode: 0o600, activate: true, budgets: {},
+    tools: READ_ONLY_TOOLS
+  )
     digest = Tamoz::Agent::Toolbox.new(
       root: workspace,
       allow_changes: false,
       checks: {},
-      allowed_tools: READ_ONLY_TOOLS,
+      allowed_tools: tools,
       approval_required: []
     ).catalog_digest
     document = {
@@ -244,7 +364,7 @@ class AgentCLIProfileTest < Minitest::Test
         "canonical_root" => workspace
       },
       "roots" => {"workspace" => workspace},
-      "tools" => {"allowed" => READ_ONLY_TOOLS, "approval_required" => []},
+      "tools" => {"allowed" => tools, "approval_required" => []},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -269,6 +389,21 @@ class AgentCLIProfileTest < Minitest::Test
       Profile::AdoptionRegistry.new(env:).activate("test-profile", digest)
     end
     [path, digest]
+  end
+
+  # Records the planning prompt so a test can prove which tool surface the
+  # session was actually planned against.
+  def recording_factory(sink)
+    lambda do |options|
+      model = read_factory.call(options)
+      model.singleton_class.prepend(Module.new do
+        define_method(:generate) do |stage:, system:, prompt:|
+          sink << prompt if stage == :plan
+          super(stage:, system:, prompt:)
+        end
+      end)
+      model
+    end
   end
 
   def read_factory

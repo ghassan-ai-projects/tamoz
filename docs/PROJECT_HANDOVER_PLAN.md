@@ -276,12 +276,14 @@ Work packages:
   (Design `docs/P8_TRUSTED_PROFILES_PLAN.md`, accepted at `cab974f`.)
 - [x] **P8-A** Implement strict load/validate/normalize with no code, interpolation, shell,
   aliases, implicit host timezone, or embedded credentials. (`a019167`)
-- [~] **P8-B** Bind profiles to session/checkpoint/cache epochs; changes create candidate
-  transitions and never mutate in-flight authority. (`a019167`: session records pin
-  `profile_id`/`profile_digest` with legacy sentinels, constructor-time catalog-digest
-  binding fails before model I/O, and a changed digest blocks mutation fail-closed.
-  `ProfileTransition` candidate records and old-digest toolbox reconstruction are deferred;
-  resume under a changed digest currently fails closed with the §5.5 advisory.)
+- [x] **P8-B** Bind profiles to session/checkpoint/cache epochs; changes create candidate
+  transitions and never mutate in-flight authority. (`a019167` pinned
+  `profile_id`/`profile_digest` with legacy sentinels and constructor-time catalog-digest
+  binding. Completed here: the session record also pins a `profile_authority` snapshot
+  (credential references stripped) that resume replays through the full validator, an
+  operator-side `transitions.yaml` registry records candidate `ProfileTransition`s that only
+  a turn boundary may consume, and `tamoz profile activate --thread --digest` records them
+  without opening the durable session for writing.)
 - [x] **P8-C** Add `--profile`, exact preview/import of repository suggestions, and
   operator-confirmed activation. Suggestions never become authority automatically. (`a019167`)
 - [ ] **P8-E** Fuzz permissions, symlinks, duplicate keys, unknown fields, root swaps,

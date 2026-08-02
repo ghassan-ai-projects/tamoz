@@ -81,11 +81,17 @@ module Tamoz
 
       # P8: a profile-bound session pins its authority in the session record. The
       # constructor has already verified the toolbox matches the profile surface
-      # (§5.2), so intake only records the identity.
+      # (§5.2), so intake records the identity plus the exact authority snapshot
+      # (§5.4) that a later resume replays instead of re-reading the profile file.
+      # Editing the file afterwards cannot reach this record.
       def profile_binding
         return {} unless profile
 
-        {profile_id: profile.profile_id, profile_digest: profile.canonical_digest}
+        {
+          profile_id: profile.profile_id,
+          profile_digest: profile.canonical_digest,
+          profile_authority: profile.authority_snapshot
+        }
       end
 
       def deliberate(state, context)
