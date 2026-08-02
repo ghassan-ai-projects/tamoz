@@ -887,7 +887,13 @@ directory showed as untracked. Corrected here.
 6. **Gate assertion variance** — assertion count varies by a few between identical runs.
    Diagnose before P15 evidence pinning.
 7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
-   after a kill, and the `:retry` request-recovery latent defect — localized (Round 12,
+   after a kill — localized (Round 12, read-only): `atomic_create`
+   (`gems/tamoz-agent/lib/tamoz/agent/toolbox.rb:717`) and `atomic_replace`
+   (`toolbox.rb:874`) stage via a Tempfile in the target's parent and publish by
+   link/rename; a SIGKILL between staging and publish never runs the ensure cleanup, so
+   the staged file persists. `tamoz-sqlite`'s adapter.rb:138 uses the same staging
+   pattern. A startup/reaper sweep of stale `.tamoz-*.tmp` (or staging in one private
+   dir) is the candidate fix — and the `:retry` request-recovery latent defect — localized (Round 12,
    read-only): a queued `:retry` durable request claimed after the thread's latest
    checkpoint is no longer `:failed` (already recovered/retried by another owner) raises
    `CheckpointConflictError` at `compiled.rb:566-568 retry_failed_with_writer`, which
