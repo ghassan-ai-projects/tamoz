@@ -176,17 +176,32 @@ class AgentSkillsAdversarialTest < Minitest::Test
     end
   end
 
+  # Injects an entry the filesystem cannot express (a name the OS would reject, or
+  # one that only exists between two calls), so the walk's own validation is what
+  # is under test rather than the filesystem's. `$VERBOSE` is suppressed only
+  # around the redefinition itself: `rake ci` runs with warnings enabled and a
+  # deliberate stub must not add noise that hides a real warning.
   def with_injected_listing(directory, extra)
     original = Dir.method(:children)
     target = File.realpath(directory)
-    Dir.define_singleton_method(:children) do |path, *rest|
-      entries = original.call(path, *rest)
-      File.realpath(path) == target ? entries + [extra] : entries
+    silently do
+      Dir.define_singleton_method(:children) do |path, *rest|
+        entries = original.call(path, *rest)
+        File.realpath(path) == target ? entries + [extra] : entries
+      end
     end
     yield
   ensure
     Dir.singleton_class.remove_method(:children)
-    Dir.define_singleton_method(:children, original)
+    silently { Dir.define_singleton_method(:children, original) }
+  end
+
+  def silently
+    previous = $VERBOSE
+    $VERBOSE = nil
+    yield
+  ensure
+    $VERBOSE = previous
   end
 
   # ------------------------------------------------------------------- YAML --

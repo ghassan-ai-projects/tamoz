@@ -144,8 +144,14 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_includes output, "declared-risk: guarded (author-declared; not a Tamoz classification)"
     assert_includes output, "UNTRUSTED SKILL CONTENT"
     assert_includes output, "Read broken.rb, then patch it."
+    # Byte counts are the exact on-disk sizes; the index must agree with the disk,
+    # so both the literal and the indexed value are asserted.
+    assert_equal 10, "Step one.\n".bytesize
+    assert_equal 7, "puts 1\n".bytesize
+    assert_equal 10, record.resource_index.fetch("references/how.md").bytes
+    assert_equal 7, record.resource_index.fetch("scripts/x.rb").bytes
     assert_includes output, "references/how.md (10 bytes)"
-    assert_includes output, "scripts/x.rb (8 bytes, not readable)"
+    assert_includes output, "scripts/x.rb (7 bytes, not readable)"
     refute_includes output, @dir, "no absolute path may reach a model-facing surface"
   end
 
@@ -300,92 +306,136 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_equal toolbox.skill_epoch, loaded.fetch("skill_epoch")
   end
 
-  def test_resume_stops_when_the_skill_epoch_changed_and_proceeds_when_it_did_not
+  # A16 end to end. The session record is written by the *real* intake node during
+  # a real durable turn — nothing is hand-seeded — and the stop is asserted on
+  # `continue`/`resume`, which is the path a programmatic caller actually takes.
+  def test_a16_a_content_swap_changes_the_epoch_and_stops_a_durable_resume
     write_skill("fix-answer")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(@dir, "sessions.sqlite3"))
-    model = Object.new
-    def model.generate(**) = "{}"
+    with_durable_session(skills: snapshot) do |session, adapter, original|
+      outcome = session.start("read the note", thread: "t1", request_id: "r1")
 
-    begin
-      original = toolbox(skills: snapshot)
-      session = Tamoz::Agent::Session.new(model:, toolbox: original, checkpointer: adapter)
-      seed_session_record(session, "t1", original)
+      assert_equal :completed, outcome.status
+      record = session.view(thread: "t1").state.fetch(:session)
+      assert_equal original.skill_epoch, record.fetch("skill_epoch")
+      assert_equal original.prompt_surface_digest, record.fetch("prompt_surface_digest")
+      refute_equal "none", record.fetch("skill_epoch")
 
-      # Same epoch: resume proceeds.
-      Tamoz::Agent::Session.new(
-        model:, toolbox: toolbox(skills: original.skills), checkpointer: adapter
-      ).verify_skill_binding!(thread: "t1")
+      # Recompiling the unchanged tree yields the same epoch, so a resume proceeds.
+      same = build_session(adapter:, skills: snapshot)
 
+      assert_nil same.verify_skill_binding!(thread: "t1")
+
+      # A same-version body swap is a different skill (tree_digest is identity).
       write_skill("fix-answer", body: "Rewritten instructions.\n")
-      changed = Tamoz::Agent::Session.new(model:, toolbox: toolbox(skills: snapshot), checkpointer: adapter)
+      swapped = snapshot
+
+      refute_equal original.skills.catalog_digest, swapped.catalog_digest
+      changed = build_session(adapter:, skills: swapped)
       error = assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
         changed.verify_skill_binding!(thread: "t1")
       end
 
       assert_match(/was planned against skill epoch/, error.message)
 
-      # A skill-free toolbox must not silently continue a skill-bearing session.
-      removed = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
-
+      # The guard is on the unbypassable path, not only on the explicit call:
+      # `continue`, `resume`, and `recover` all funnel through `guard_state!`.
       assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
-        removed.verify_skill_binding!(thread: "t1")
+        changed.continue(thread: "t1", request_id: "r2")
       end
-    ensure
-      adapter.close
+      assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
+        changed.resume({}, thread: "t1", request_id: "r3")
+      end
+      assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
+        changed.recover(thread: "t1", request_id: "r4")
+      end
+
+      # Removing the catalog entirely must not silently continue either.
+      assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
+        build_session(adapter:).continue(thread: "t1", request_id: "r5")
+      end
     end
   end
 
-  def test_a_legacy_session_resumes_against_a_skill_free_toolbox
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(@dir, "legacy.sqlite3"))
-    model = Object.new
-    def model.generate(**) = "{}"
+  # The complement: a session that never had skills must keep resuming, and a
+  # skill-free P9 toolbox must agree with a pre-P9 record's "none".
+  def test_a_skill_free_session_still_resumes_and_a_new_catalog_stops_it
+    with_durable_session do |session, adapter, box|
+      assert_equal :completed, session.start("read the note", thread: "t2", request_id: "r1").status
+      assert_equal "none", session.view(thread: "t2").state.fetch(:session).fetch("skill_epoch")
+      assert_equal "none", box.skill_epoch
+      assert_nil build_session(adapter:).verify_skill_binding!(thread: "t2")
+      # A skill-free continuation must get *past* the skill guard. The turn then
+      # fails for the ordinary reason (a completed thread has no runnable
+      # frontier), which is precisely the evidence that the guard let it through.
+      ordinary = assert_raises(Tamoz::CheckpointConflictError) do
+        build_session(adapter:).continue(thread: "t2", request_id: "r2")
+      end
 
-    begin
-      box = toolbox
-      session = Tamoz::Agent::Session.new(model:, toolbox: box, checkpointer: adapter)
-      seed_session_record(session, "legacy-thread", box)
+      assert_match(/no runnable frontier/, ordinary.message)
 
-      # No exception: "none" == "none".
-      assert_nil session.verify_skill_binding!(thread: "legacy-thread")
-    ensure
-      adapter.close
+      # A pre-skill session must not silently *gain* a catalog mid-flight.
+      write_skill("fix-answer")
+
+      assert_raises(Tamoz::Agent::SkillSnapshotUnavailableError) do
+        build_session(adapter:, skills: snapshot).verify_skill_binding!(thread: "t2")
+      end
     end
   end
 
   def test_verify_skill_binding_is_silent_for_an_unknown_thread
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(@dir, "unknown.sqlite3"))
-    model = Object.new
-    def model.generate(**) = "{}"
-
-    begin
-      session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter)
-
+    with_durable_session do |session, _adapter, _box|
       assert_nil session.verify_skill_binding!(thread: "never-seen")
-    ensure
-      adapter.close
     end
   end
 
   private
 
-  # Writes the intake session record for `thread` directly through the durable
-  # runner, so the resume guard reads a real checkpoint rather than a stub.
-  def seed_session_record(session, thread, box)
-    session.app.durable_runner.checkpointer.put(
-      thread_id: thread,
-      ns: "",
-      checkpoint: {
-        state: {
-          session: Tamoz::Agent::SessionRecords.build(
-            "session",
-            session_id: thread, task: "x", task_digest: "d", root: @workspace,
-            graph_version: Tamoz::Agent::Session::GRAPH_VERSION,
-            behavior_version: "1", tool_catalog_digest: box.catalog_digest,
-            created_at_ms: 0, skill_epoch: box.skill_epoch,
-            prompt_surface_digest: box.prompt_surface_digest
-          )
-        }
-      }
+  class ScriptedModel
+    def initialize(**responses)
+      @responses = responses.transform_values(&:dup)
+    end
+
+    def generate(stage:, system:, prompt:)
+      queue = @responses.fetch(stage)
+      value = queue.length == 1 ? queue.first : queue.shift
+      value.is_a?(String) ? value : JSON.generate(value)
+    end
+  end
+
+  def scripted_model
+    ScriptedModel.new(
+      plan: [{
+        "goal" => "answer the task",
+        "done_when" => ["the tool returned evidence"],
+        "steps" => [{
+          "id" => "s1", "purpose" => "gather evidence", "tool" => "read_file",
+          "arguments" => {"path" => "note.txt"}, "verification" => "the output is present"
+        }]
+      }],
+      review: [{"decision" => "accept", "issues" => [], "rationale" => "sound"}],
+      verify: [{"answer" => "Tamoz is awake.", "satisfied" => true, "evidence" => ["note.txt"]}]
     )
+  end
+
+  def build_session(adapter:, skills: Skills::Snapshot.empty)
+    Tamoz::Agent::Session.new(
+      model: scripted_model, toolbox: toolbox(skills:), checkpointer: adapter
+    )
+  end
+
+  def with_durable_session(skills: Skills::Snapshot.empty)
+    File.write(File.join(@workspace, "note.txt"), "Tamoz is awake.\n")
+    adapter = Tamoz::SQLite::Adapter.new(
+      path: File.join(@dir, "sessions.sqlite3"),
+      limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2)
+    )
+    box = toolbox(skills:)
+    begin
+      yield Tamoz::Agent::Session.new(model: scripted_model, toolbox: box, checkpointer: adapter),
+            adapter,
+            box
+    ensure
+      adapter.close
+    end
   end
 end

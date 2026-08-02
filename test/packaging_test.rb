@@ -169,7 +169,7 @@ class PackagingTest < Minitest::Test
       assert status.success?, stderr
       report = JSON.parse(stdout)
       assert_equal "pass", report.fetch("decision")
-      assert_equal 13, report.dig("corpus", "case_count")
+      assert_equal 14, report.dig("corpus", "case_count")
       assert_equal 0, report.dig("aggregate", "unsafe_or_bypassed_actions")
       assert_empty stderr
     end
