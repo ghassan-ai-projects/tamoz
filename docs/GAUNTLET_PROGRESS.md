@@ -1095,7 +1095,24 @@ failures under BOTH locales (30,210 assertions each, identical totals; one trans
 flake re-ran green); scorecard unchanged 17/14/pass, 4/4 gates, safety 0. Deferrals: smoke
 corpus under all four treatments (P11-ED follow-on; the null-control mechanism is proven on
 the memory corpus), live layer operator-gated (no live-provider code in repo), the real
-memory store (P11-D/P11-B) — P11-E points the same harness API at it. Critic in flight.
+memory store (P11-D/P11-B) — P11-E points the same harness API at it.
+
+**Evals critic: PASS-WITH-GAPS — substrate closes.** CI mode structurally CANNOT claim
+attribution (verified adversarially: full report scan shows no attribution keys; a crafted
+real-delta corpus — baseline fails, wisdom genuinely succeeds — still reports
+`delta_observed=false`/`ci_claim="none"` and FAILS the `scripted_control_identical` gate
+instead of crediting a flip; injection correctness is measurable by content alone via
+embedded task markers). Sensitive-guard vault boundary real (`decrypt_reads=0` with
+`unobfuscate` monkeypatched to raise); holdout OS boundary stat-verified; determinism
+identical across locales (`content_digest d59e7b94`, `exempt_fields` declared); variance
+fix 128 assertions ×5. **Claim correction:** the scorecard `content_digest` moved
+`8aec4c84 → 8901f089` because the merge deliberately added
+`environment.attribution_claim: "not_claimed"` — the numeric surface is byte-unchanged and
+the key is honest + tested, but P15-F must pin the NEW digest. Pre-existing fragilities
+noted (not substrate-caused): `AgentMcpAdversarialTest#test_no_orphan_server_survives_teardown`
+flakes under load (reproduced pre-merge); `CliSubprocessHarness::LOAD_PATHS` needed
+`tamoz-tools` (fixed by Round 20's test_helper change — canonical `bundle exec rake ci`
+green).
 
 ### Round 20 — DR-4, DR-5, P16 merged in order and gated (critics in flight)
 
