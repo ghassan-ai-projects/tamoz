@@ -1,12 +1,12 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `7afe1ff` (P10, D-8, DR-4, DR-5, P16, evals substrate all closed;
-scorecard 17/14/pass)
-Current phase: `P17` — governed websearch capability
-Next action: implement P17 per `docs/P17_WEBSEARCH_PLAN.md` (worktree); merge, gate, then
-the 26-probe critic round; then P11 per the single-active-phase order.
-This review does not re-plan or assess the active implementation.
+Implementation baseline: `16e91b0` (P10, D-8, DR-3, DR-4, DR-5, P16, evals substrate
+closed; P17 implemented in critic round; scorecard 18/15/pass)
+Current phase: `P17` — governed websearch (critic round in flight)
+Next action: close the P17 critic round, then P11 (implementing DR-1 before Wisdom
+activation), P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18, P15
+per the single-active-phase order.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -19,14 +19,13 @@ At the implementation baseline:
 - branch: `main`;
 - remote: `origin git@github.com:ghassan-ai-projects/tamoz.git`;
 - P0–P3 are complete;
-- Tamoz Agent supports reviewed read-only work, one exact existing-file replacement,
-  configured checks, and two bounded reviewed repairs;
-- `tamoz-eval scorecard agent-smoke` runs 12 deterministic cases;
-- scorecard baseline: 7/12 task successes, zero unsafe/bypassed actions, zero false-positive
-  completions, one unnecessary mutation, and one repeated-action stop;
-- last full gate: design validation plus 393 tests / 27,456 assertions / zero failures;
-- every gem packaged successfully;
-- the implementation branch was 28 commits ahead of `origin/main` and had not been pushed.
+- Tamoz Agent supports reviewed read/change/check/repair, durable multi-turn resume,
+  trusted profiles, evaluated skills, governed MCP, and real-model read-only/action paths;
+- `tamoz-eval scorecard agent-smoke` runs 17 deterministic cases: 14 successes,
+  decision pass, 4/4 hard gates, safety counters zero;
+- last committed full gate: 857 runs / zero failures under both locales at `7afe1ff`;
+- seven gems package successfully, including `tamoz-tools` and `tamoz-mcp`;
+- P6-F operations, several independent legacy critics, and release evidence remain open.
 
 The handover-plan commit will be newer than `c72f2b3`; use `git log` for its hash. Do not
 push, publish gems, create releases, rewrite history, or merge external changes unless the
@@ -62,16 +61,20 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P5 | complete | reviewed file creation | `73017b0` | `d8ae1c0`, `6504398` |
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
-| P8 | complete (§5.3/§5.4 machinery deferred, disclosed) | trusted project profiles | `cab974f` | `a019167`, `0ed3944` |
+| P8 | complete (DR-5 machinery closed; budget consumption waits for P13) | trusted project profiles | `cab974f`, `6ff0d40` | `a019167`, `0ed3944`, `1c6efa1`, `be84e8e` |
 | P9 | complete (P9-C/D2/E/B2 deferred, disclosed) | evaluated skills | `5f66099` | `8b095ab` |
 | P10 | complete (P10-D2/H/full-E-conformance deferred with entry conditions, disclosed) | governed MCP client/host | `1d14a22` | `54f675a`, `534a502`, `a88572b`, `a69971d`, `d0e537e`, `9d1d3ec` |
+| DR-2 | reviewing | durable circuit shared by server/rule/schedule/egress scopes | `6ff0d40`, `999b5c9` | egress scope `78041fc` (P17); supervisor scope lands with P12-H3/P13-E |
+| DR-3 | complete | memory treatment/evaluation substrate | `6ff0d40` | `7bac0e1`, `b6c379c` |
+| DR-4 | complete | stale durable requests terminal-fail without poisoning threads | `6ff0d40`, `999b5c9` | `5c16bed`, `c627aec` |
+| DR-5 | complete | profile role/transition/resume machinery | `6ff0d40` | `1c6efa1`, `be84e8e` |
 | P11 | pending | three-layer memory | — | — |
 | P12 | pending | bounded healing and improvement | — | — |
 | P13 | pending | durable scheduling | — | — |
 | P14 | pending | Situation streaming and simulated physical action | — | — |
 | P15 | pending | release hardening and independent completion audit | — | — |
-| P16 | pending | tools gem extraction | `6ff0d40` (revised by checkpoint deep review) | — |
-| P17 | pending | governed websearch + egress policy | `6ff0d40` (revised by checkpoint deep review) | — |
+| P16 | complete | tools gem extraction, behavior-neutral | `6ff0d40`, `999b5c9` | `8f6b893`, `38d2e94` (merge), `2ae9e60` |
+| P17 | reviewing | governed websearch + egress policy | `6ff0d40`, `999b5c9` | `78041fc` (in critic round) |
 | P18 | pending | capability host + graph surface audit | `6ff0d40` (revised by checkpoint deep review) | — |
 
 Update this table and `docs/PRODUCT_EXECUTION_ROADMAP.md` in the final commit of each phase.
@@ -107,14 +110,15 @@ phase's product proof.
 ## 5. Dependency path
 
 ```text
-P4 → P5 → P6 → P7 → P8 → P9 → P10 → DR-4 → DR-5 → P16 → P17
-                                                                   │
-                                                                   ▼
-                                      P11 → P12 → P13 → P14 → P18 → P15
+P4 → P5 → P6 → P7 → P8 → P9 → P10 → DR-3/DR-4/DR-5 → P16 → P17
+                                                                          │
+                                                                          ▼
+                                     P11[DR-1] → P12[DR-2 record] → P13 → P14 → P18 → P15
 ```
 
-The single-active-phase order is P10 → DR-4 → DR-5 → P16 → P17 → P11 →
-P12 → P13 → P14 → P18 → P15. P6, P8, P10, and P12 are hard prerequisites
+The remaining single-active-phase order is P17 (critic) → P11 (implementing DR-1
+before Wisdom activation) → P12 (incl. the DR-2 supervisor-scope durable record) → P13 →
+P14 → P18 → P15. P6, P8, P10, and P12 are hard prerequisites
 for any physical action path. P14 follows P13
 for execution order even though civil scheduling is not part of stream semantics. A phase
 may be deferred only through a committed promotion decision proving why the final objective
@@ -600,13 +604,12 @@ rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 Then:
 
 1. confirm the worktree is clean and no user changes overlap;
-2. confirm P7 is the only active phase;
-3. read P7's authoritative sections and current `Session`, `Runtime`, `CLI`, P3 corpus/tests;
-4. create the P7 plan and plan review;
-5. commit those documents before implementation;
-6. implement only P7; deep-review, run full CI, commit, update trackers;
-7. stop and report the checkpoint before beginning P8 unless the owner explicitly asks to
-   continue.
+2. confirm DR-2 is the only active implementation round and P17 remains pending;
+3. read DR-2, the P10 `CircuitStore` seam, P17 egress requirements, and Store CAS code;
+4. implement the single durable record without adding a second circuit engine;
+5. run DR-2's restart/multi-owner/corruption/reset probes and an independent critic;
+6. run the full gate under both locales plus the scorecard, commit, and update all trackers;
+7. only then activate P17.
 
 If the scorecard or CI is already red at the unchanged baseline, diagnose the regression
 before adding capability. Do not update expected numbers merely to make it green.
@@ -617,17 +620,20 @@ before adding capability. Do not update expected numbers merely to make it green
 |---|---|---|
 | Tamoz name and Ruby monorepo | package/app manifests and existing gems | P15 packaging audit |
 | plan before action + review | P0–P3 runtime and hard-gate scorecard | regress every phase; durable proof P6 |
-| smart bounded action | P2 repair policy + P3 metrics | P4–P5 capability, P11–P12 adaptation, P15 value comparison |
-| evaluation as a core gem | `tamoz-evals`, canonical artifacts, P3 scorecard | extend each phase; signed evidence P15 |
-| useful coding agent | existing exact edit/check/repair | P4–P8 |
-| crash-durable agent | `Tamoz::Agent::Session` over the existing durable contracts; sixteen real `kill -9` seams | P7 resumable CLI; P6-F remainder |
-| trusted configuration | design only | P8 |
-| skills | accepted design only | P9 |
-| MCP-native support | accepted design only | P10 |
+| smart bounded action | compound/create tools, bounded repair, 17-case scorecard, real-model action | P11–P12 adaptation; P15 value comparison |
+| evaluation as a core gem | canonical scorecard + DR-3 treatment substrate | per-phase extensions; signed evidence P15 |
+| useful coding agent | read/edit/create/check/repair, profiles, skills, durable CLI | documentation/release proof P15 |
+| crash-durable agent | durable Session/CLI; sixteen real `kill -9` seams | P6-F remainder + independent critic |
+| trusted configuration | P8 + DR-5 closed | P13 budget consumption proof; legacy critic debt |
+| skills | P9 implemented; P16 moved surface behavior-neutrally | deferred P9 items/critic or signed residual at P15 |
+| MCP-native support | P10 closed with real SDK server and scorecard proof | durable DR-2 store, operator-facing admission, deferred D2/H/conformance |
+| tools package boundary | P16 closed; isolated package + clean-env proof | release packaging audit P15 |
+| governed websearch | accepted P17 design | DR-2 then P17 implementation/critic |
 | Experience/Knowledge/Wisdom memory | accepted design only | P11 |
 | bounded self-healing and improvement | accepted design only | P12 |
 | scheduled tasks | accepted design only | P13 |
 | streaming physical-world assistance | accepted design only | P14 simulator/interlock profile |
+| unified capability host + graph audit | accepted design only | P18 |
 | release-ready framework/agent | incomplete | P15 requirement audit and release candidate |
 
 The project goal is not complete today. This matrix must reach direct, verified evidence in

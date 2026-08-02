@@ -1,13 +1,13 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P17 — governed websearch capability
+Current phase: P17 — governed websearch (critic round in flight)
 Last completed product checkpoints: P10 (closed), D-8 (real-model action proven), DR-4
 (stale-request), DR-5 (profile machinery), P16 (tools gem — scorecard byte-identical),
-evals substrate (DR-3 + assertion variance); scorecard 17 cases / 14 successes / pass /
-4/4 hard gates / safety 0
-Canonical next action: implement P17 per docs/P17_WEBSEARCH_PLAN.md, then P11, P12, P13,
-P14, P18, P15 (single-active-phase order)
+evals substrate (DR-3 + assertion variance), P17 (implemented — governed websearch);
+scorecard 18 cases / 15 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: close the P17 critic round, then P11 (DR-1 before Wisdom
+activation), P12 (incl. the DR-2 supervisor-scope durable record), P13, P14, P18, P15.
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -50,16 +50,23 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P5 | Reviewed file creation | high | medium | complete `6504398` | create one new bounded file with parent/root policy, exact preview, approval, atomic commit |
 | P6 | Durable session/effect recovery | very high | medium–high | complete `b69701c` (P6-F partial) | SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing |
 | P7 | Interactive multi-turn CLI | high | medium | complete `7469fa2` | clarify, redirect, continue, and resume one durable session |
-| P8 | Trusted project profiles | medium–high | medium | complete `0ed3944` (§5.3/§5.4 machinery deferred, disclosed) | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
+| P8 | Trusted project profiles | medium–high | medium | complete; DR-5 machinery closed (budget use waits for P13) | user-owned profile pins roots, named checks, model roles, budgets, and policy digest |
 | P9 | Skills | medium–high | medium | complete `8b095ab` (P9-C/D2/E/B2 deferred, disclosed) | one evaluated content-addressed skill improves a task without granting authority |
 | P10 | MCP client/host slice | high | high | complete (D2/H/E-conformance deferred) | one real server, pinned catalog, supervised transport, local policy, durable effects |
+| DR-2 | Durable circuit | high | medium | egress scope complete via P17; supervisor/rule/schedule scopes pending (P12/P13) | one persistent record serves P10 server + P17/P12/P13 scopes across restart |
+| DR-3 | Memory evaluation substrate | high | medium | complete `b6c379c` | isolated four-treatment CI substrate makes injection-correctness-only claims |
+| DR-4 | Stale request framework | high | medium | complete `c627aec` | stale requests terminal-fail atomically; thread continues |
+| DR-5 | Profile machinery | high | medium | complete `be84e8e` | roles/transitions/credential-ref replay are durable and critic-proven |
+| P16 | Tools gem extraction | medium | medium | complete `38d2e94` | tamoz-tools loads/runs with core only and preserves behavior byte-for-byte |
+| P17 | Governed websearch | high | high | implemented `78041fc` (critic round) | one bounded attributed search path with enforced per-hop egress policy |
 | P11 | Three-layer memory | high | high | pending | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
 | P12 | Bounded self-healing and improvement | high | high | pending | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates |
 | P13 | Durable scheduler | medium | high | pending | one recurring task enters the ordinary request/review/effect path exactly once |
 | P14 | Streaming physical-world input | strategic | very high | pending | deterministic Situation replay, bounded admission, simulated effector, external interlocks |
+| P18 | Capability host + graph audit | high | high | pending | four closed built-in sources share one host; graph surface measured and documented |
 | P15 | Release hardening | very high | high | pending | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
 
-P2–P8 are the usable v0.1 product path. P9–P14 are promoted only after the preceding product
+P2–P10 plus P16/P17 are the current usable alpha path. P11–P14/P18 are promoted only after the preceding product
 path is reliable and their design promotion evidence exists. P15 closes the release; it does
 not replace each phase's tests and review.
 
@@ -166,7 +173,7 @@ canonical root digest/identity, named argv checks, model roles, budgets, and pol
 Repository files may suggest configuration but never become executable authority without an
 explicit import and preview.
 
-### P9–P15
+### P9–P18
 
 Use the accepted designs in `docs/design-v0.1/` and their promotion gates. Each phase must
 have one real consumer and a treatment evaluation. Do not begin physical action before P6,
@@ -189,7 +196,8 @@ When work resumes after context compaction or in a new task:
 
 “Finalize Tamoz” means:
 
-- P0–P15 are complete or a documented promotion gate explicitly defers an extension;
+- P0–P18 and their required DR implementations are complete, or a documented promotion
+  gate explicitly defers a non-security extension;
 - the CLI completes, repairs, resumes, and verifies real tasks without private RubyLLM APIs;
 - evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned
   baselines;

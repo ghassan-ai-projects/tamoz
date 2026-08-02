@@ -148,8 +148,11 @@ runs), reproducible in rehearsal.
 - **Reproducible verifier:** regeneration RE-RUNS the deterministic harness (the decision
   depends on hard-gate execution) and compares artifact digests. The verifier is
   tamper-tested: corrupt one pinned artifact → verifier fails.
-- **Protected corpora:** no holdout corpus exists at v0.1 (P11-W/P12 ship theirs later);
-  declared a non-goal for v0.1 with the public corpus as the denominator.
+- **Protected corpora:** P11 and P12 precede P15 and must produce their protected
+  evaluation corpora. P15 pins public metadata, evaluator-manifest digests, and
+  structural-isolation evidence for them; a missing required corpus blocks the affected
+  release row. Raw protected case bytes need not be committed, but the evaluator manifest
+  and access-boundary evidence must be reproducible.
 - Both-locale regeneration: pinned artifact digests must be byte-identical when
   regenerated under `LC_ALL=en_US.UTF-8` and `LC_ALL=C` (D-1/D-3 proved ambient-encoding
   sensitivity); envelope fields excluded from the decision digest (environment/timing)

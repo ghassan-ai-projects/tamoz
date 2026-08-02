@@ -317,7 +317,8 @@ rollback test.
 
 ### P11-ED — treatment evaluation harness (C2, explicit work package)
 
-`tamoz-evals` gains a treatment harness (new evaluator profile, lazy-loaded): one
+The existing DR-3 `Tamoz::Evals::Harness` gains the P11 production-memory adapter; P11
+does not build a second treatment harness. The existing lazy-loaded evaluator profile runs one
 corpus identity; per-treatment config injection (no memory / Experience-only /
 +Knowledge / +Wisdom) driving the same task set; accounting for retrieval token/cost,
 recall, attribution (each reused memory's influence traced to the decision it changed);
@@ -426,7 +427,8 @@ snapshot), and asserted by the token-budget bound test.
 - [ ] P11-W one promoted Wisdom candidate through the full gated pipeline with
       BehaviorTransition + cache-epoch-change proof; P11-W→P12-I handoff declared in
       code comments and this plan.
-- [ ] P11-ED treatment harness (deterministic CI runs + env-gated live run); P11-E
+- [ ] P11-ED integration with the existing DR-3 treatment harness (deterministic CI
+      runs + env-gated live run); P11-E
       four-treatment comparison on the identical corpus; decisive metric reported;
       sensitive/unauthorized recall hard-zero.
 - [ ] `rake ci` green under both locales; every scorecard case present at P11 start is

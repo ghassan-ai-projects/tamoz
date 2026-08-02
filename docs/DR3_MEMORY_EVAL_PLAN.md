@@ -139,7 +139,9 @@ No new error classes; the evals family (`ExecutionError`, `InvalidArtifactError`
 
 ## 6. Consuming phases
 
-- P11-ED implements the profile (with P11-E running it).
+- The DR-3 substrate and profile are implemented. P11-ED integrates the real P11
+  `MemoryRepository` adapter into that existing harness; P11-E runs it. P11 must not
+  create a second treatment substrate.
 - P11-W uses the holdout mechanics for Wisdom promotion.
 - P12-I2 reuses the paired-baseline/holdout machinery (same engine, candidate-shaped
   difference — DR-1's single promotion engine).
