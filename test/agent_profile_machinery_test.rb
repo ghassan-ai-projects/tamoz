@@ -261,6 +261,65 @@ class AgentProfileMachineryTest < Minitest::Test
     end
   end
 
+  # DR-5 critic corner: a referenced credential that is UNSET must fail typed at
+  # session start even when the GENERIC provider key IS set — the silent generic
+  # fallback is the same divergence class RC-4 fixes at replay, re-introduced at
+  # resolution.
+  def test_referenced_credential_unset_fails_typed_even_with_the_generic_key_set
+    with_profile_env do |workspace, session_dir, config_home|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      broken, = write_profile(
+        workspace:, config_home:, name: "broken.yaml",
+        model_roles: {
+          "primary" => {
+            "provider" => "openai",
+            "model" => "gpt-5",
+            "credential_ref" => {"kind" => "env", "name" => "TAMOZ_DOES_NOT_EXIST_XYZ"}
+          }
+        }
+      )
+
+      # The GENERIC key is set; only the ref-named key is absent. Pre-fix this
+      # silently started the session on the generic key (critic DR5-05 corner).
+      without_env_keys("TAMOZ_DOES_NOT_EXIST_XYZ") do
+        ENV["OPENAI_API_KEY"] = "sk-generic-fallback-should-not-run"
+        err = StringIO.new
+        status = run_cli(
+          ["--profile", broken, "ask", "read note.txt"],
+          workspace:, session_dir:, config_home:, out: StringIO.new, err:,
+          factory: nil, session: "th"
+        )
+        assert_equal 1, status
+        assert_match(/TAMOZ_DOES_NOT_EXIST_XYZ/, err.string)
+
+        cli = new_cli(env: {"TAMOZ_CONFIG_HOME" => config_home})
+        assert_raises(ProfileRoleUnavailableError) do
+          cli.send(:build_model, {}, profile: Profile.preview(broken))
+        end
+      end
+
+      refute File.exist?(File.join(session_dir, "th.sqlite3"))
+    end
+  end
+
+  # DR-5 critic blocker: consume_if_candidate! calls Time#iso8601 (a stdlib
+  # extension); the shipped exe/tamoz crashed with NoMethodError in a clean
+  # subprocess because nothing in the agent load chain required "time". Pin the
+  # clean-process load chain (the corpus harness's -I lib paths, no bundler).
+  def test_clean_subprocess_load_chain_provides_time_iso8601
+    load_paths = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-agent].flat_map do |gem|
+      ["-I", File.join(ROOT, "gems", gem, "lib")]
+    end
+    child = <<~'RUBY'
+      require "tamoz/agent"
+      raise "iso8601 unavailable" unless Time.now.utc.respond_to?(:iso8601)
+      puts "ok"
+    RUBY
+    output = IO.popen([RbConfig.ruby, *load_paths, "-e", child], &:read)
+    assert_equal 0, $?.exitstatus
+    assert_includes output, "ok"
+  end
+
   # DR5-06: budgets recorded per profile — deep-equal to profile.budgets when
   # present, the documented empty sentinel when absent; no route table invented.
   def test_budgets_recorded_or_empty_sentinel

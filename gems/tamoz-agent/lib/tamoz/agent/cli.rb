@@ -1500,7 +1500,19 @@ module Tamoz
         role = profile && profile.model_roles["primary"]
         if role
           ref = role["credential_ref"]
-          api_key = @env[ref.fetch("name")] if ref
+          if ref
+            api_key = @env[ref.fetch("name")]
+            # DR-5 critic: a referenced credential that is not set must fail
+            # TYPED at session start — never silently fall back to the generic
+            # provider key (the divergence class RC-4 fixes at replay must not
+            # be re-introduced at resolution). The existing rescue below stays
+            # as the backstop for other constructor failures.
+            if api_key.to_s.empty?
+              raise ProfileRoleUnavailableError,
+                    "profile role \"primary\" references credential " \
+                    "#{ref.fetch("name").inspect} which is not set in the environment"
+            end
+          end
         end
         raise OptionParser::MissingArgument, "--model or TAMOZ_MODEL" if model_name.to_s.empty?
 

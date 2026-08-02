@@ -6,6 +6,7 @@ require "forwardable"
 require "json"
 require "pathname"
 require "psych"
+require "time"
 
 module Tamoz
   module Agent
