@@ -592,6 +592,42 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 
 ---
 
+### Session handoff — paused at a usage limit
+
+This session ended on a usage limit, not on a completed round. Recorded honestly so the next
+session resumes from fact rather than from optimism.
+
+**Landed and gate-verified on `main`:**
+
+| Commit | Content | Gate |
+|---|---|---|
+| `f74a794` | P8-B — profiles bound to session/checkpoint/cache epochs; candidate transitions never mutate in-flight authority | UTF-8 522 runs / 28,273 assertions / 0 failures · C 522 runs / 28,276 / 0 failures · scorecard 13 cases, 9 successes, `pass`, 4/4 hard gates, safety counters 0 |
+
+P8-B was verified under **both** locales and the scorecard **before** it was committed, not
+after. Nothing was committed on the strength of an agent's report.
+
+**Preserved but NOT on `main`** — branch `worktree-agent-a6088313fb93fc259`:
+
+| Commit | Status |
+|---|---|
+| `5f66099` P9-D — evaluated skills plan + adversarial plan review | committed by the builder |
+| `be832a4` P9-A — inert skill compiler, tree digest, catalog epoch | committed by the builder |
+| `4c05c74` WIP P9-B — progressive skill use | **UNVERIFIED, DO NOT MERGE** — preservation checkpoint only |
+
+`4c05c74` is a snapshot taken when the builder was interrupted mid-way through writing the
+P9-B test suite. It has not passed the gate and has not been reviewed. It exists so the work
+is recoverable, and is labelled in its own commit message so it cannot be mistaken for a
+product checkpoint.
+
+**Never ran:** the P6 critic and the P8/P9 critics all died to session limits before doing any
+work. This is why P6 is still recorded as *gate-verified, not adversarially verified*.
+
+**Incidental fix:** `1b7c64d` intended to ignore the embedded worktrees directory but added
+`/.worktrees/` while the real path is `.claude/worktrees/`, so the rule never matched and the
+directory showed as untracked. Corrected here.
+
+---
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -601,8 +637,9 @@ genuinely verbatim. Those are open until the critic reports, and P6 should be re
 | P5 reviewed file creation | complete | **complete** — A/B/C/E implemented, reviewed, scorecard 8/12, safety zero |
 | P6 durable session/effect recovery | complete (P6-F partial) | **gate-verified, critic pending** — 16 kill seams, no second engine, scorecard 8/12, safety zero |
 | P7 interactive/resumable CLI | complete | **complete, critic pending** — CLI subcommands, kill-resume scorecard case, scorecard 9/13, safety zero |
-| P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) — loader, toolbox bind, CLI surface; P8-E adversarial proofs + scorecard case remaining |
-| P9–P15 | pending | not started |
+| P8 trusted project profiles | implementing | **A/B/C landed** (`a019167`) + **B epoch binding landed** (`f74a794`); **P8-E adversarial fuzz NOT started** — the trust boundary P9 and P10 both depend on is still untested |
+| P9 evaluated skills | pending | **D + A landed on side branch `worktree-agent-a6088313fb93fc259`** (`5f66099`, `be832a4`); P9-B is unverified WIP (`4c05c74`). None of it is on `main`. |
+| P10–P15 | pending | not started |
 
 ---
 
@@ -657,6 +694,38 @@ budget intersection, ProfileTransition) folds into P8-E or gets its own design r
 When subagent quota returns, run the deferred independent critic passes over P6, P7, and
 P8, and schedule the D-6 stale-resume framework fix as its own reviewed round.
 
-Do not treat the untracked `.claude/` worktree directory as product output. Do not push,
-publish, release, or connect real physical actuators. The committed design checkpoint is
-`cab974f`; the last product checkpoint is `a019167`.
+### Resume checklist for the next session
+
+Run this first; it is cheap and tells you the truth about where things stand:
+
+```sh
+cd /Users/ghassan/my-projects/tamoz
+git status --short && git log --oneline -5
+git branch -v | grep worktree-agent          # P9 work lives here, not on main
+LC_ALL=en_US.UTF-8 rbenv exec bundle exec rake ci
+LC_ALL=C           rbenv exec bundle exec rake ci
+LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
+```
+
+Expected at `f74a794`: clean worktree; 522 runs / 0 failures under both locales; scorecard
+13 cases, 9 successes, `decision: pass`, 4/4 hard gates, safety counters 0.
+
+Then, in priority order:
+
+1. **P8-E** — the adversarial fuzz, per §8.2/§8.3 above. This is the highest-value remaining
+   work, because P9 and P10 both inherit their authority guarantees from a trust boundary
+   that has never been attacked.
+2. **Decide the fate of the P9 side branch.** `5f66099` and `be832a4` are real reviewed
+   commits; `4c05c74` is unverified WIP. None has been through a critic. Do not fast-forward
+   any of it onto `main` without the full protocol.
+3. **The deferred critic passes over P6, P7 and P8.** Three critic agents were launched and
+   all three died to session limits before producing a single finding. Every "complete" mark
+   for P6/P7/P8 currently rests on the deterministic gate plus the builder's own self-review.
+   That is weaker evidence than this project's own protocol asks for.
+
+The judging harness (gate, blind A/B, five held-out probes) lives in the session scratchpad
+and is deliberately uncommitted, so a builder cannot read or edit its own exam. It will need
+recreating in a new session; its design is described in §1.
+
+Do not treat `.claude/worktrees/` as product output. Do not push, publish, release, or
+connect real physical actuators. The last product checkpoint on `main` is **`f74a794`**.
