@@ -15,7 +15,11 @@
 /vendor/
 
 # Used by dotenv library to load environment variables.
-# .env
+# Credentials must never be committable. Invariant 24 forbids secret values in
+# durable records; the same rule applies to the repository itself.
+.env
+.env.*
+!.env.example
 
 # Ignore Byebug command history file.
 .byebug_history
