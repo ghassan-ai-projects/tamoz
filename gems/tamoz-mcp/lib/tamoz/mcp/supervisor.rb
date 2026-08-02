@@ -1,9 +1,111 @@
 # frozen_string_literal: true
 
+require "digest"
+
 require "mcp"
 
 module Tamoz
   module Mcp
+    # In-memory circuit state behind the Supervisor's `CircuitStore` seam
+    # (DR-2). The threshold is evaluated INSIDE every read-modify-write, so a
+    # crash between increment and open can never lose the open state — a durable
+    # caller-owned store is expected to do the same inside its transaction.
+    #
+    # Duck-typed `CircuitStore` contract (caller-injected; tamoz-mcp stays
+    # tamoz-sqlite-free, plan §3 — a durable implementation is owned by the
+    # caller, exactly like the EffectDispatcher journal pattern):
+    #   record_failure(kind:, context:) -> :degraded | :open
+    #   record_success -> :closed | :open     # never closes an open circuit
+    #   open? -> bool
+    #   failures -> Integer                   # consecutive transport failures
+    #   reset(evidence:) -> :closed           # records the evidence
+    #   reset_evidence -> Hash | nil
+    #   last_failure_kind -> Symbol | nil
+    #   last_failure_context -> Hash | nil
+    #   conditions_digest(server_id) -> String
+    class MemoryCircuitStore
+      CONDITIONS_DOMAIN = "tamoz.mcp.circuit.conditions.v1\n"
+
+      def initialize(threshold:)
+        unless threshold.is_a?(Integer) && threshold >= 1
+          raise ValidationError, "circuit threshold must be an integer >= 1"
+        end
+
+        @threshold = threshold
+        @failures = 0
+        @state = :closed
+        @last_failure_kind = nil
+        @last_failure_context = nil
+        @reset_evidence = nil
+        @mutex = Mutex.new
+      end
+
+      # Single atomic read-modify-write: counter += 1, then evaluate the
+      # threshold inside the write so the open state is never lost between a
+      # durable increment and a separate open decision.
+      def record_failure(kind: :transport, context: nil)
+        @mutex.synchronize do
+          @failures += 1
+          @last_failure_kind = kind.to_sym
+          @last_failure_context = context.nil? ? nil : context.to_h.freeze
+          @state = @failures >= @threshold ? :open : :degraded
+          @state
+        end
+      end
+
+      def record_success
+        @mutex.synchronize do
+          unless @state == :open
+            @failures = 0
+            @state = :closed
+          end
+          @state
+        end
+      end
+
+      def open?
+        @mutex.synchronize { @state == :open }
+      end
+
+      def failures
+        @mutex.synchronize { @failures }
+      end
+
+      def reset(evidence: nil)
+        @mutex.synchronize do
+          @failures = 0
+          @state = :closed
+          @reset_evidence = evidence
+          @state
+        end
+      end
+
+      def reset_evidence
+        @mutex.synchronize { @reset_evidence }
+      end
+
+      def last_failure_kind
+        @mutex.synchronize { @last_failure_kind }
+      end
+
+      def last_failure_context
+        @mutex.synchronize { @last_failure_context }
+      end
+
+      # Typed digest of the failure state a :server-scoped reset clears — the
+      # "conditions met" evidence. Deterministic given the same failure state, so
+      # a durable re-home can correlate a reset with the failures that preceded
+      # it.
+      def conditions_digest(server_id)
+        payload = CONDITIONS_DOMAIN + CanonicalJSON.dump(
+          "server_id" => server_id.to_s,
+          "failure_kind" => last_failure_kind&.to_s,
+          "context" => last_failure_context || {}
+        )
+        "sha256:#{Digest::SHA256.hexdigest(payload)}"
+      end
+    end
+
     # Owns the child process for one MCP server (P10 §8). Spawning reuses the
     # official SDK's stdio transport framing — this class subclasses
     # `MCP::Client::Stdio` so the JSON-RPC wire logic stays in the SDK — but
@@ -22,12 +124,46 @@ module Tamoz
       # Poll interval while waiting for the process group to die.
       REAP_POLL_SECONDS = 0.05
 
-      attr_reader :config
+      attr_reader :config, :circuit_threshold, :retry_budget
 
-      def initialize(config, environ: ENV)
+      # Jitter applied to the exponential restart backoff (±20%).
+      BACKOFF_JITTER = 0.2
+
+      # Defaults for the §8 circuit / restart machinery.
+      DEFAULT_CIRCUIT_THRESHOLD = 3
+      DEFAULT_RETRY_BUDGET = 1
+      DEFAULT_BASE_BACKOFF = 1.0
+      DEFAULT_MAX_BACKOFF = 30.0
+
+      def initialize(
+        config,
+        environ: ENV,
+        circuit_threshold: DEFAULT_CIRCUIT_THRESHOLD,
+        retry_budget: DEFAULT_RETRY_BUDGET,
+        base_backoff: DEFAULT_BASE_BACKOFF,
+        max_backoff: DEFAULT_MAX_BACKOFF,
+        random: Random.new,
+        circuit_store: nil
+      )
         unless config.is_a?(ServerConfig)
           raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
         end
+        unless circuit_threshold.is_a?(Integer) && circuit_threshold >= 1
+          raise ValidationError, "circuit_threshold must be an integer >= 1"
+        end
+        unless retry_budget.is_a?(Integer) && retry_budget >= 0
+          raise ValidationError, "retry_budget must be an integer >= 0"
+        end
+        unless base_backoff.is_a?(Numeric) && base_backoff.finite? && base_backoff.positive?
+          raise ValidationError, "base_backoff must be positive and finite"
+        end
+        unless max_backoff.is_a?(Numeric) && max_backoff.finite? && max_backoff.positive? &&
+               max_backoff >= base_backoff
+          raise ValidationError, "max_backoff must be positive, finite, and >= base_backoff"
+        end
+
+        store = circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
+        validate_circuit_store!(store)
 
         @config = config
         @environ = environ
@@ -35,6 +171,15 @@ module Tamoz
         @pid = nil
         @stderr_buffer = +""
         @stderr_mutex = Mutex.new
+        @circuit_threshold = circuit_threshold
+        @retry_budget = retry_budget
+        @base_backoff = base_backoff.to_f
+        @max_backoff = max_backoff.to_f
+        @random = random
+        @circuit_store = store
+        @retired = false
+        @request_sent = false
+        @sent_mutex = Mutex.new
         super(
           command: config.command,
           args: config.arguments,
@@ -42,17 +187,117 @@ module Tamoz
         )
       end
 
-      # Health state from the plan's lifecycle: starting → ready → retired.
-      # (degraded/open arrive with the circuit slice; v1 catalog use only
-      # exercises these three.)
+      # Health state from the plan's lifecycle: disabled → starting → ready,
+      # with degraded/open on transport failures and retired after teardown.
+      # Failure changes availability, never the pinned catalog.
       def state
-        return :retired unless @started
+        return :retired if @retired
+        return :disabled unless @started
+        return :open if @circuit_store.open?
+        return :degraded if @circuit_store.failures.positive?
 
         connected? ? :ready : :starting
       end
 
+      def started?
+        !!@started
+      end
+
       def pid
         @pid
+      end
+
+      # --- §8 circuit --------------------------------------------------------
+
+      # True once `circuit_threshold` consecutive transport failures have been
+      # recorded. While open, every call fails typed-unavailable until `reset`.
+      def open?
+        @circuit_store.open?
+      end
+
+      def consecutive_failures
+        @circuit_store.failures
+      end
+
+      def last_failure_kind
+        @circuit_store.last_failure_kind
+      end
+
+      # Counts one transport failure toward the circuit. A successful round-trip
+      # (`record_success`) resets the streak, so only *consecutive* failures open
+      # the circuit. Argument/remote/elicitation outcomes never call this — the
+      # transport demonstrably worked for them. `context:` is optional typed
+      # metadata (e.g. tool name / failure class) recorded for the reset
+      # evidence. The threshold is evaluated inside the store's atomic write.
+      def record_failure(kind: :transport, context: nil)
+        @circuit_store.record_failure(kind: kind, context: context)
+      end
+
+      def record_success
+        @circuit_store.record_success
+      end
+
+      # Caller-initiated circuit reset (§8): availability returns to normal.
+      # Never called automatically — the design requires policy-defined recovery.
+      # `evidence:` must be a Hash describing who authorized the reset and why
+      # (operator identity + command digest for a :server scope); the supervisor
+      # augments it with `scope`/`server_id` and a typed `conditions_digest` of
+      # the failure state being cleared, and records it for audit.
+      def reset(evidence: nil)
+        unless evidence.nil? || evidence.is_a?(Hash)
+          raise ValidationError, "reset evidence must be a Hash"
+        end
+
+        record = {
+          "scope" => "server",
+          "server_id" => @config.server_id,
+          "conditions_digest" => @circuit_store.conditions_digest(@config.server_id)
+        }.merge(evidence || {}).freeze
+        @circuit_store.reset(evidence: record)
+      end
+
+      def reset_evidence
+        @circuit_store.reset_evidence
+      end
+
+      # Exponential restart backoff with jitter, bounded by [0, max_backoff].
+      # Deterministic for a seeded `random:` (tests); jittered in production.
+      def backoff_delay(failures = @circuit_store.failures)
+        return 0.0 unless failures.is_a?(Integer) && failures.positive?
+
+        base = @base_backoff * (2 ** (failures - 1))
+        base = @max_backoff if base > @max_backoff
+        jitter = @random.rand(-BACKOFF_JITTER..BACKOFF_JITTER)
+        (base * (1.0 + jitter)).clamp(0.0, @max_backoff)
+      end
+
+      # Kills any surviving child and spawns a fresh one after the backoff
+      # delay. Only called for recovery (read-only retry path); never retries a
+      # non-idempotent call.
+      def restart
+        delay = backoff_delay
+        close
+        sleep(delay) if delay.positive?
+        start
+      end
+
+      # --- request-sent boundary ---------------------------------------------
+      #
+      # The SDK yields after the request line has been written to the child's
+      # stdin, so the boolean distinguishes "timeout/crash before the request was
+      # sent" (provably no effect) from "after the request was sent" (ambiguous
+      # for non-idempotent effects). Resets at the start of every `send_request`.
+
+      def send_request(request:, &block)
+        @sent_mutex.synchronize { @request_sent = false }
+        super do
+          @sent_mutex.synchronize { @request_sent = true }
+          block&.call
+        end
+      end
+
+      def request_sent?
+        @sent_mutex.synchronize { @request_sent }
       end
 
       # Bounded, scrubbed tail of the child's stderr. Untrusted server content:
@@ -99,13 +344,17 @@ module Tamoz
         @wait_thread = Process.detach(@pid)
         start_stderr_capture
         @started = true
+        @retired = false
         nil
       end
 
       # Reliable teardown: close the pipes, wait for a clean exit, then
       # SIGTERM → grace → SIGKILL addressed to the whole process group so no
-      # child or grandchild survives (plan §8 teardown contract).
+      # child or grandchild survives (plan §8 teardown contract). Also retires
+      # a supervisor that was never started — a closed supervisor is never
+      # auto-started again.
       def close
+        @retired = true
         return unless @started
 
         [@stdin, @stdout].each do |io|
@@ -133,11 +382,46 @@ module Tamoz
         @started = false
         @initialized = false
         @server_info = nil
+        @retired = true
         nil
       end
       alias_method :teardown, :close
 
       private
+
+      # The injected store must satisfy the full CircuitStore contract so a
+      # durable swap is mechanical (DR-2).
+      def validate_circuit_store!(store)
+        required = %i[
+          record_failure record_success open? failures reset
+          reset_evidence last_failure_kind last_failure_context conditions_digest
+        ]
+        missing = required.reject { |method| store.respond_to?(method) }
+        return if missing.empty?
+
+        raise ValidationError,
+              "circuit_store must respond to #{missing.join(", ")}"
+      end
+
+      # Reads one newline-delimited frame from the server's stdout, bounded by
+      # the SDK's per-frame limit. Overrides the SDK's `read_line` so an
+      # oversized frame raises the typed `OutputLimitError` instead of a generic
+      # handler error: the stream is desynced and the transport must be closed
+      # (mirrors the SDK's own behavior exactly), and the typed class lets
+      # Invocation classify the output-flood row without matching on message
+      # text.
+      def read_line(method, params)
+        line = @stdout.gets("\n", @max_line_bytes)
+        return line unless line && !line.end_with?("\n") && line.bytesize >= @max_line_bytes
+
+        begin
+          close
+        rescue StandardError
+          nil
+        end
+
+        raise OutputLimitError
+      end
 
       # Environment handed to the child: allowlisted names inherited from the
       # operator environment plus credential refs resolved from it. Values are
