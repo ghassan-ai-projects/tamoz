@@ -14,6 +14,11 @@ module Tamoz
         "evidence" => "eval.evidence",
         "result" => "eval.result"
       }.freeze
+      # DR-3 (C6/E8): memory-corpus cases must declare a non-null
+      # `treatments.expected_delta` (`failure_flip | cost_delta`). This is the
+      # closing of the filler-case hole; it is enforced only for the memory
+      # suite so the scorecard corpus (17 cases, phase-owned) is untouched.
+      MEMORY_EVAL_SUITE_ID = "tamoz.agent.memory"
       RESULT_DECISIONS = {
         "passed" => "pass",
         "failed" => "fail",
@@ -193,6 +198,16 @@ module Tamoz
         unless overlap.empty?
           raise InvalidArtifactError,
                 "capabilities cannot be both allowed and prohibited: #{overlap.sort.inspect}"
+        end
+
+        # DR-3 (C6/E8): the mandatory treatments.expected_delta block. `null` is
+        # rejected for memory-corpus cases; the schema already rejects a null
+        # value inside the block, so this guards against the block being absent.
+        if document.fetch("suite_id") == MEMORY_EVAL_SUITE_ID &&
+           document.dig("treatments", "expected_delta").nil?
+          raise UnsupportedFormatError,
+                "memory-corpus case requires treatments.expected_delta " \
+                "(failure_flip | cost_delta)"
         end
       end
 

@@ -1804,6 +1804,11 @@ module Tamoz
           true
         end
 
+        # DR-3 seam: the shared cell runner. The scorecard path passes no
+        # `store:` and is byte-identical to the pre-DR-3 behavior; the memory
+        # treatment profile passes a per-cell store + retrieval config and the
+        # model is wrapped in a `MemoryEnvelope` that emits `:memory_recalled`
+        # events and snapshots each turn into `memory_capture` (C3/C4).
         def execute(
           case_artifact,
           root:,
@@ -1818,12 +1823,27 @@ module Tamoz
           expected_terminal: %w[completed],
           requires_check: false,
           mutation_needed: false,
-          skills: Tamoz::Agent::Skills::Snapshot.empty
+          skills: Tamoz::Agent::Skills::Snapshot.empty,
+          store: nil,
+          memory_config: nil,
+          memory_capture: nil
         )
           events = []
           result = nil
           terminal = "completed"
           begin
+            if store
+              raise ExecutionError, "memory_config is required with a memory store" unless memory_config
+
+              capture = memory_capture || []
+              model = MemoryEnvelope.new(
+                inner: model,
+                store:,
+                retrieval: MemoryRetrieval.new(memory_config),
+                events:,
+                captures: capture
+              )
+            end
             runtime = Tamoz::Agent.build(
               model:,
               root:,

@@ -28,6 +28,13 @@ require_relative "evals/harness/sqlite_selector_control_intervention"
 require_relative "evals/harness/agent_smoke_corpus"
 require_relative "evals/harness/agent_run_audit"
 require_relative "evals/harness/agent_smoke_scorecard"
+require_relative "evals/harness/memory_store"
+require_relative "evals/harness/memory_retrieval"
+require_relative "evals/harness/memory_envelope"
+require_relative "evals/harness/memory_holdout"
+require_relative "evals/harness/agent_memory_corpus"
+require_relative "evals/harness/memory_cell"
+require_relative "evals/harness/memory_treatment_profile"
 require_relative "evals/cli"
 
 module Tamoz

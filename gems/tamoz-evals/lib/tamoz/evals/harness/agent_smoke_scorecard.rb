@@ -96,7 +96,11 @@ module Tamoz
             "environment" => {
               "isolation" => "in_process",
               "network_enforcement" => "not_claimed",
-              "raw_content_retained" => false
+              "raw_content_retained" => false,
+              # DR-3 honesty: this is a controller-scripted run. The scorecard
+              # measures behavior under a scripted model and claims no
+              # model-value attribution (C1).
+              "attribution_claim" => "not_claimed"
             },
             "cases" => cases,
             "aggregate" => aggregate,

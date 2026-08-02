@@ -225,10 +225,10 @@ class SubprocessRunnerTest < Minitest::Test
 
   def test_nil_intervention_decision_remains_bounded_by_process_timeout
     polls = 0
+    observations = []
     intervention = Intervention.new(
       handler: lambda do |stop_signal:, remaining_ms:|
-        assert_equal "STOP", stop_signal
-        assert_operator remaining_ms, :>=, 0
+        observations << [stop_signal, remaining_ms]
         polls += 1
         nil
       end
@@ -245,16 +245,22 @@ class SubprocessRunnerTest < Minitest::Test
     assert_equal "timeout", result.termination_reason
     assert_equal "kill", result.termination
     assert_equal "KILL", result.term_signal
+    # The poll count is timing-dependent (0 < polls <= 75), so the assertions
+    # live on the AGGREGATE, never inside the poll callback: identical runs
+    # produce identical assertion totals (GAUNTLET_PROGRESS §5.6).
     assert_operator polls, :>, 0
     assert_operator polls, :<=, 75
+    assert_equal polls, observations.length
+    assert observations.all? { |stop_signal, _remaining_ms| stop_signal == "STOP" }
+    assert observations.all? { |_stop_signal, remaining_ms| remaining_ms >= 0 }
   end
 
   def test_timeout_wins_when_intervention_decision_crosses_deadline
     polls = 0
+    observations = []
     intervention = Intervention.new(
       handler: lambda do |stop_signal:, remaining_ms:|
-        assert_equal "STOP", stop_signal
-        assert_operator remaining_ms, :>, 0
+        observations << [stop_signal, remaining_ms]
         polls += 1
         sleep 0.15
         "kill"
@@ -269,6 +275,9 @@ class SubprocessRunnerTest < Minitest::Test
     )
 
     assert_equal 1, polls
+    assert_equal 1, observations.length
+    assert_equal "STOP", observations.first.first
+    assert_operator observations.first.last, :>, 0
     assert result.timed_out
     assert_equal "timeout", result.termination_reason
     assert_equal "kill", result.termination
@@ -276,8 +285,12 @@ class SubprocessRunnerTest < Minitest::Test
   end
 
   def test_configured_intervention_is_not_polled_without_a_stop
+    calls = []
     intervention = Intervention.new(
-      handler: ->(**) { flunk "intervention must not poll a running child" }
+      handler: lambda do |**|
+        calls << :polled
+        nil
+      end
     )
 
     result = build_runner.capture(
@@ -289,6 +302,7 @@ class SubprocessRunnerTest < Minitest::Test
 
     assert result.success?
     assert_equal "none", result.termination_reason
+    assert_empty calls
   end
 
   def test_intervention_failure_and_invalid_decision_trigger_bounded_cleanup

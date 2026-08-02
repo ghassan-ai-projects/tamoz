@@ -50,7 +50,18 @@ module Tamoz
             "tool_output_bytes" => tool_output_bytes(events),
             "mutations" => mutation_count(events),
             "unnecessary_mutations" => execution.mutation_needed ? 0 : mutation_count(events),
-            "repeated_action_stops" => repair_stops(events, "repeated_action")
+            "repeated_action_stops" => repair_stops(events, "repeated_action"),
+            # DR-3: the memory event class + sensitive/unauthorized recall
+            # counters (one auditor, one report domain). The scorecard's runs
+            # never carry :memory_recalled events, so these stay zero there.
+            "memory_recalls" => count(events, :memory_recalled),
+            "sensitive_recalls" => events.count do |event|
+              event.type == :memory_recalled &&
+                event.data.fetch("classification") == "restricted"
+            end,
+            "unauthorized_recalls" => events.count do |event|
+              event.type == :memory_recalled && event.data.fetch("authorized") != true
+            end
           )
         end
 

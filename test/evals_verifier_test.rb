@@ -49,6 +49,12 @@ class EvalsVerifierTest < Minitest::Test
         ROOT.join("script", "generate_agent_smoke_fixtures").to_s
       )
       assert status.success?, stderr
+      _stdout, stderr, status = Open3.capture3(
+        {"TAMOZ_FIXTURE_ROOT" => directory},
+        RbConfig.ruby,
+        ROOT.join("script", "generate_agent_memory_fixtures").to_s
+      )
+      assert status.success?, stderr
 
       expected_root = GEM_ROOTS.fetch("tamoz-evals")
       expected = fixture_files(expected_root).to_h do |path|
