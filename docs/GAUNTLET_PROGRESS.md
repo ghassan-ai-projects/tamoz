@@ -1243,6 +1243,22 @@ verification/operations debt kept as explicit closure inputs. Its review-time `r
 failed 5 env/process probes (macOS network-sandbox self-tests, MCP process-group probes,
 kill-matrix) — diagnostic only; the stable-checkout gates remain 899/0.
 
+**P17 CLOSED — critic PASS-WITH-GAPS, both findings fixed.** 26/26 held-out probes
+executed; 899/33,651/0 verified by the critic itself; design:validate 55 invariants green;
+case-18 oracle counters wired to real behavior; 17 prior cases byte-identical against the
+true P17-start reference; enforcement honesty held (no dial site reachable from Tamoz's own
+process; network_enforcement not_claimed). **The one real gap — SSRF classifier fail-open on
+non-canonical dotted IPv4 forms** (`classify_address` nil ⇒ `private_range?` false ⇒ dialed;
+verified: "127.1"→127.0.0.1, "10.1"/"192.168.1"→RFC1918, "169.254.1"→link-local) — fixed
+(`3fe4d43`): fail-closed on unclassifiable addresses when deny_private_ranges is set
+(legit DNS resolutions are always canonical, so no real flow is refused), + 8 regression
+rows with a canonical-public positive control. **F2 (stderr credential redaction) also
+landed in the same commit** — `stderr_tail` redacts resolved credential_refs values
+(length ≥ 8) with a malicious-child regression test (the leaky child's value never reaches
+the tail; "[REDACTED]" does). Gate: 901/33,666/0 both locales, scorecard 18/15/pass, safety
+0, no orphans. **P17 CLOSED — the governed websearch capability ships (egress policy,
+per-hop pinned dial, dual-condition circuit, honest enforcement claims).**
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
