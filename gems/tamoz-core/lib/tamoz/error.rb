@@ -134,6 +134,17 @@ module Tamoz
     SAFE_MESSAGE = "Workflow state changed concurrently."
   end
 
+  # A durable request whose dispatch context is stale: it was enqueued for a thread
+  # state that no longer matches at claim/execute/recover time. Distinct from
+  # `CheckpointConflictError` (genuine concurrent change that must propagate) and from
+  # the redirect wait (a legitimate condition that must retry). Not retryable — a stale
+  # request fails as a terminal request value, never re-runs (DR-4).
+  class StaleRequestError < CheckpointError
+    CATEGORY = "stale_request"
+    RETRYABLE = false
+    SAFE_MESSAGE = "The durable request is stale."
+  end
+
   class CheckpointVersionError < CheckpointError
     CATEGORY = "checkpoint_version"
     SAFE_MESSAGE = "The workflow state version is unsupported."

@@ -75,6 +75,19 @@ module Tamoz
           request.transition.insert
           request.claim.result
         ].freeze
+        # DR-4: a claim that validates and terminal-fails a stale request inside the
+        # claim transaction (queued -> failed in one atomic write; the claim UPDATE
+        # and bound-execution reads are skipped on the stale path).
+        REQUEST_CLAIM_STALE = (
+          REQUEST_CLAIM_BASE +
+          %w[
+            request.claim.latest_checkpoint
+            request.terminal_fail
+            request.transition.index
+            request.transition.insert
+            request.claim.result
+          ]
+        ).freeze
         REQUEST_RECOVER = %w[
           request.recover.time
           request.recover.lease.thread
@@ -82,6 +95,21 @@ module Tamoz
           request.recover.row
           request.recover.earlier
           request.recover.update
+          request.transition.index
+          request.transition.insert
+          request.recover.result
+        ].freeze
+        # DR-4: a recover that validates and terminal-fails a stale claimed request
+        # inside the recover transaction (the fence UPDATE is skipped on the stale
+        # path).
+        REQUEST_RECOVER_STALE = %w[
+          request.recover.time
+          request.recover.lease.thread
+          request.recover.lease.row
+          request.recover.row
+          request.recover.earlier
+          request.recover.latest_checkpoint
+          request.terminal_fail
           request.transition.index
           request.transition.insert
           request.recover.result
@@ -523,6 +551,12 @@ module Tamoz
                       ] +
                       REQUEST_CLAIM_TAIL
           ),
+          definition(
+            "request.claim-stale",
+            family: "request",
+            operation: "request.claim",
+            coverage: REQUEST_CLAIM_STALE
+          ),
           *%w[claimed running redirecting].map do |status|
             definition(
               "request.recover-#{status}",
@@ -531,6 +565,12 @@ module Tamoz
               coverage: REQUEST_RECOVER
             )
           end,
+          definition(
+            "request.recover-stale",
+            family: "request",
+            operation: "request.recover",
+            coverage: REQUEST_RECOVER_STALE
+          ),
           definition(
             "request.mark-running",
             family: "request",

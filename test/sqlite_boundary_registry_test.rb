@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteBoundaryRegistryTest < Minitest::Test
   REGISTRY_DIGEST =
-    "sha256:f70bc5983cf86fd7f870919a302c9e93bc26d659fc526495bfdb5a1ad2e5cd85"
+    "sha256:ac6ab030d6d27811c61db6c4e526df8b1520e6e6839d7785bfb573c8a0671cbd"
 
   def test_registry_is_deeply_frozen_unique_and_digest_stable
     registry = boundary_registry
@@ -15,7 +15,7 @@ class SQLiteBoundaryRegistryTest < Minitest::Test
     operations = document.fetch("operations")
     names = operations.map { |entry| entry.fetch("operation") }
     assert_equal names.uniq, names
-    assert_equal 19, names.length
+    assert_equal 20, names.length
     operations.each do |operation|
       templates = operation.fetch("statements").map do |entry|
         entry.fetch("template")

@@ -99,9 +99,11 @@ module Tamoz
           when "request.claim-turn" then prepare_request_claim_turn
           when "request.claim-resume" then prepare_request_claim_resume
           when "request.claim-redirect" then prepare_request_claim_redirect
+          when "request.claim-stale" then prepare_request_claim_stale
           when "request.recover-claimed" then prepare_request_recover_claimed
           when "request.recover-running" then prepare_request_recover_running
           when "request.recover-redirecting" then prepare_request_recover_redirecting
+          when "request.recover-stale" then prepare_request_recover_stale
           when "request.mark-running" then prepare_request_mark_running
           when "request.mark-redirect-running"
             prepare_request_mark_redirect_running
@@ -174,6 +176,32 @@ module Tamoz
           commit_start(lease, execution_id: EXECUTION_A)
           enqueue_request(:redirect, delivery: :redirect)
           @action = -> { @store.claim_next_request(lease:) }
+        end
+
+        # DR-4: the claim-time stale validator terminal-fails a queued request inside
+        # the claim transaction.
+        def prepare_request_claim_stale
+          lease = acquire_lease(OWNER_A)
+          commit_start(lease, execution_id: EXECUTION_A)
+          enqueue_request(:resume)
+          @action = lambda do
+            @store.claim_next_request(
+              lease:,
+              validator: ->(_request, _checkpoint) { "scenario-stale" }
+            )
+          end
+        end
+
+        def prepare_request_recover_stale
+          lease, request = claimed_request(:turn)
+          current = takeover_lease(lease)
+          @action = lambda do
+            @store.recover_request(
+              lease: current,
+              request_id: request.request_id,
+              validator: ->(_request, _checkpoint) { "scenario-stale" }
+            )
+          end
         end
 
         def prepare_request_recover_claimed

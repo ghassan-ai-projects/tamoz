@@ -27,9 +27,11 @@ module Tamoz
             "request.claim-turn" => "inbox-reopen",
             "request.claim-resume" => "inbox-reopen",
             "request.claim-redirect" => "inbox-reopen",
+            "request.claim-stale" => "stale-request-fail",
             "request.recover-claimed" => "request-recovery",
             "request.recover-running" => "request-recovery",
             "request.recover-redirecting" => "request-recovery",
+            "request.recover-stale" => "stale-request-fail",
             "request.mark-running" => "inbox-reopen",
             "request.mark-redirect-running" => "inbox-reopen",
             "request.redirect-ready" => "checkpoint-reopen",
@@ -52,6 +54,8 @@ module Tamoz
               "old" => "queued",
               "new" => "redirecting"
             },
+            "request.claim-stale" => {"old" => "queued", "new" => "failed"},
+            "request.recover-stale" => {"old" => "claimed", "new" => "failed"},
             "request.mark-running" => {
               "old" => "claimed",
               "new" => "running"
@@ -413,6 +417,35 @@ module Tamoz
             "checkpoint_status" => snapshot.status.to_s,
             "execution_preserved" => true,
             "history_count" => history_count
+          }
+        end
+
+        # DR-4: a stale request terminal-failed at claim or recover is a durable
+        # failed request carrying the typed terminal payload and a claim-time
+        # execution binding; it is never re-claimable.
+        def probe_stale_request_fail(app, _adapter, scenario, state, _ledger)
+          runner = app.durable_runner
+          request = runner.fetch(thread: THREAD_ID, request_id: REQUEST_ID)
+          expected = REQUEST_STATES.fetch(scenario).fetch(state)
+          unless request && request.status.to_s == expected
+            raise ExecutionError,
+                  "SQLite convergence stale-fail state is inconsistent"
+          end
+          if state == "new"
+            unless request.terminal_error.is_a?(Hash) &&
+                   request.terminal_error.fetch("graph_status") == "failed" &&
+                   !request.terminal_error.fetch("reason").to_s.empty? &&
+                   request.execution_id
+              raise ExecutionError,
+                    "SQLite convergence stale-fail state is inconsistent"
+            end
+          end
+          {
+            "request_status" => request.status.to_s,
+            "terminal_reason" =>
+              request.terminal_error.is_a?(Hash) ?
+                request.terminal_error.fetch("reason") : nil,
+            "execution_bound" => !request.execution_id.nil?
           }
         end
 

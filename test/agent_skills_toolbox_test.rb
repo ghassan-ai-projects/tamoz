@@ -364,14 +364,18 @@ class AgentSkillsToolboxTest < Minitest::Test
       assert_equal "none", session.view(thread: "t2").state.fetch(:session).fetch("skill_epoch")
       assert_equal "none", box.skill_epoch
       assert_nil build_session(adapter:).verify_skill_binding!(thread: "t2")
-      # A skill-free continuation must get *past* the skill guard. The turn then
-      # fails for the ordinary reason (a completed thread has no runnable
-      # frontier), which is precisely the evidence that the guard let it through.
-      ordinary = assert_raises(Tamoz::CheckpointConflictError) do
-        build_session(adapter:).continue(thread: "t2", request_id: "r2")
-      end
-
-      assert_match(/no runnable frontier/, ordinary.message)
+      # A skill-free continuation must get *past* the skill guard. The continue is
+      # then stale (a completed thread has no runnable frontier) and terminal-fails
+      # as a typed request value (DR-4) instead of raising — which is precisely the
+      # evidence that the guard let it through.
+      ordinary = build_session(adapter:).continue(thread: "t2", request_id: "r2")
+      assert_equal :failed, ordinary.request_status
+      request = build_session(adapter:).app.durable_runner.fetch(
+        thread: "t2",
+        request_id: "r2"
+      )
+      assert_equal :failed, request.status
+      assert_match(/no runnable frontier/, request.terminal_error.fetch("reason"))
 
       # A pre-skill session must not silently *gain* a catalog mid-flight.
       write_skill("fix-answer")

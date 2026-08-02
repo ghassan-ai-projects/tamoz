@@ -259,6 +259,50 @@ module Tamoz
         DurableRunner.new(self)
       end
 
+      # Pure staleness predicate for a durable request against the thread's latest
+      # checkpoint (DR-4). The graph owns this predicate; callers (the claim
+      # transaction, the recover transaction, and the runner backstop) supply nothing.
+      # Returns nil when the request is still applicable, or a bounded, typed reason
+      # string when it can no longer run. `:redirect` is deliberately NOT validated —
+      # its wait condition is legitimate and must retry, never terminal-fail.
+      #
+      # The reason strings are framework-authored and never interpolate untrusted
+      # payload content (only bounded numeric indices), so they are safe to persist in
+      # `terminal_error` (invariant 24).
+      def stale_request_reason(checkpoint, request)
+        case request.operation
+        when :redirect
+          nil
+        when :resume
+          # A resume already `running` after a barrier commit continues the
+          # interrupted execution (invariant 52); only the full validation applies to
+          # claim-time and recovered-but-unstarted requests.
+          if request.status == :running && checkpoint&.status == :running
+            nil
+          else
+            stale_resume_reason(checkpoint, request)
+          end
+        when :retry
+          stale_status_reason(checkpoint, :failed, "latest checkpoint is not failed")
+        when :continue
+          stale_status_reason(
+            checkpoint,
+            :running,
+            "latest checkpoint has no runnable frontier"
+          )
+        when :turn, :fork
+          if request.status == :running
+            stale_status_reason(
+              checkpoint,
+              :running,
+              "latest checkpoint has no runnable frontier"
+            )
+          elsif checkpoint && !%i[completed failed].include?(checkpoint.status)
+            "latest checkpoint is not terminal"
+          end
+        end
+      end
+
       def update_state(
         update,
         thread:,
@@ -467,7 +511,7 @@ module Tamoz
       )
         latest = writer.latest
         if latest && !new_execution
-          raise CheckpointConflictError,
+          raise StaleRequestError,
                 "thread already exists; use resume, retry_failed, or new_execution: true"
         end
         mode = latest ? :turn : :start
@@ -524,7 +568,7 @@ module Tamoz
       )
         checkpoint = compatible_latest!(thread, namespace:, writer:)
         unless checkpoint.status == :paused
-          raise CheckpointConflictError, "latest checkpoint is not paused"
+          raise StaleRequestError, "latest checkpoint is not paused"
         end
         resume_values = merge_resume_values(checkpoint, answers)
         if durable_request_id && mark_request_running
@@ -564,7 +608,7 @@ module Tamoz
       )
         checkpoint = compatible_latest!(thread, namespace:, writer:)
         unless checkpoint.status == :failed
-          raise CheckpointConflictError, "latest checkpoint is not failed"
+          raise StaleRequestError, "latest checkpoint is not failed"
         end
         if durable_request_id && mark_request_running
           writer.mark_request_running(
@@ -602,7 +646,7 @@ module Tamoz
       )
         checkpoint = compatible_latest!(thread, namespace:, writer:)
         unless checkpoint.status == :running
-          raise CheckpointConflictError, "latest checkpoint has no runnable frontier"
+          raise StaleRequestError, "latest checkpoint has no runnable frontier"
         end
         if durable_request_id && mark_request_running
           writer.mark_request_running(
@@ -919,6 +963,52 @@ module Tamoz
                              checkpoint.definition_digest == definition_digest
 
         raise CheckpointVersionError, "checkpoint graph identity is incompatible"
+      end
+
+      def stale_status_reason(checkpoint, required, reason)
+        checkpoint&.status == required ? nil : reason
+      end
+
+      # Refactored from `merge_resume_values`' task/call-index matching plus the
+      # pre-merge duplicate check (DR-4 C3): (a) status paused, (b) answers' indices
+      # match the current interrupts, (c) no answer index already merged into
+      # `resume_values`. Returns a typed reason string or nil.
+      def stale_resume_reason(checkpoint, request)
+        unless checkpoint && checkpoint.status == :paused
+          return "latest checkpoint is not paused"
+        end
+
+        answers = request.payload
+        return "resume answers must be a Hash" unless answers.is_a?(Hash)
+        return "resume answers cannot be empty" if answers.empty?
+
+        expected = checkpoint.interrupts.to_h do |interrupt|
+          [[interrupt.task_id, interrupt.call_index], true]
+        end
+        answers.each do |raw_task_id, raw_indices|
+          task_id = String(raw_task_id)
+          return "resume task answers must be a Hash" unless raw_indices.is_a?(Hash)
+
+          raw_indices.each_key do |raw_index|
+            index = Integer(raw_index, exception: false)
+            unless index && index >= 0 && expected.key?([task_id, index])
+              return "resume answer does not match an outstanding task/call index"
+            end
+          end
+        end
+        answers.each do |raw_task_id, raw_indices|
+          task_id = String(raw_task_id)
+          raw_indices.each_key do |raw_index|
+            index = Integer(raw_index, exception: false)
+            next unless index && index >= 0
+
+            values = checkpoint.resume_values.fetch(task_id, nil)
+            if values && values.key?(index)
+              return "resume answer already exists for call index #{index}"
+            end
+          end
+        end
+        nil
       end
 
       def merge_resume_values(checkpoint, answers)

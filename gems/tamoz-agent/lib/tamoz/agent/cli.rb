@@ -33,6 +33,7 @@ module Tamoz
         @cancellation = nil
         @model_factory = model_factory
         @stream_error = nil
+        @rendered_stale_request_ids = {}
       end
 
       def run(argv)
@@ -431,6 +432,11 @@ module Tamoz
 
       def drain_to_terminal(session, thread_id:, owner_id:, options:, tracked_request: nil, resume_options: {})
         loop do
+          # A stale request ahead of the current work may already have been
+          # terminal-failed by a `deliver` (session.resume/start/continue) rather
+          # than by this loop's own run_next. Render any unrendered stale-failure
+          # once per request id (DR-4 D3 / DR4-27).
+          render_pending_stale_failures(session, thread_id:, options:)
           view = session.view(thread: thread_id)
 
           if tracked_request && tracked_request_queued?(session, tracked_request) &&
@@ -439,12 +445,18 @@ module Tamoz
             return session.view(thread: thread_id)
           end
 
-          # Advance any queued request first (follow-up, redirect, cancel).
+          # Advance any queued request first (follow-up, redirect, cancel). A stale
+          # request is terminal-failed by run_next; render its typed reason once and
+          # keep draining — the failed request is terminal, so it is never re-claimed
+          # and never re-resumed (DR-4 D3 / DR4-29).
           request_id = SecureRandom.uuid
           advanced = run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
             session.app.durable_runner.run_next(thread: thread_id, owner_id:, context:)
           end
-          next if advanced
+          if advanced
+            render_request_terminal_failure(advanced, options:) if stale_request_failure?(advanced)
+            next
+          end
 
           view = session.view(thread: thread_id)
           case view.status
@@ -492,6 +504,47 @@ module Tamoz
         else
           @err.puts "Follow-up queued behind request #{front_request_id} (status: #{view.status})."
           @err.puts "Run `tamoz resume #{thread_id}` to advance."
+        end
+      end
+
+      # A run_next return is a stale-fail exactly when the request carries the typed
+      # terminal payload DR-4 writes (graph_status failed + a reason). Ordinary run
+      # failures carry no reason and are rendered by the stream/final-view path.
+      def stale_request_failure?(request)
+        request.status == :failed &&
+          request.terminal_error.is_a?(Hash) &&
+          request.terminal_error.fetch("graph_status", nil) == "failed" &&
+          !request.terminal_error["reason"].to_s.empty?
+      end
+
+      def render_request_terminal_failure(request, options:)
+        @rendered_stale_request_ids[request.request_id] = true
+        reason = request.terminal_error.fetch("reason")
+        if options[:json]
+          emit_cli_event("cli.request_stale", {
+            "thread_id" => request.thread_id,
+            "request_id" => request.request_id,
+            "operation" => request.operation.to_s,
+            "reason" => reason
+          })
+        else
+          @err.puts(
+            "tamoz: stale #{request.operation} request #{request.request_id} " \
+            "was not run: #{reason}"
+          )
+        end
+      end
+
+      # Render stale terminal-failures already recorded in the thread history (a
+      # claim consumed by a `deliver` inside session.resume/start/continue never
+      # surfaces through the drain loop's own run_next). Each request id is rendered
+      # at most once per CLI process.
+      def render_pending_stale_failures(session, thread_id:, options:)
+        session.app.durable_runner.history(thread: thread_id).each do |request|
+          next unless stale_request_failure?(request)
+          next if @rendered_stale_request_ids.key?(request.request_id)
+
+          render_request_terminal_failure(request, options:)
         end
       end
 

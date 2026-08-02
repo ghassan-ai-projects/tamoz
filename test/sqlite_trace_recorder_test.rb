@@ -6,7 +6,7 @@ class SQLiteTraceRecorderTest < Minitest::Test
   RECORDER_DIGEST =
     "sha256:ebf5a908b273654e63a35bd1ba98c06a57b0ee41cb88e14f4b843983c8153a47"
   LEASE_RELEASE_MANIFEST_DIGEST =
-    "sha256:3e3dda5a9a4bb018d74619cb1401a9a5447681b1f218b045053c517677e745eb"
+    "sha256:95262826c9da14952b9f2ab8c11fff73fd71c336008559137b6a9e713da4fdbf"
   EVENT_FIELDS = %w[
     sequence scenario point hook_version kind operation statement attempt
     occurrence
