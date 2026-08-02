@@ -1061,11 +1061,41 @@ self-`$ref` schema bombs accepted at admission but bounded+typed at call time (7
 once-only guard absent at the invocation layer (agent-unreachable — an `:interrupt` is a
 terminal `ToolError`, never auto-reissued; tracked in the caller-journal contract).
 
-Disclosed by the builder: v1 glue cannot durably suspend an MCP `input_required` mid-perform
-(mid-flight effect row at a pause → `:wait`/LeaseLostError on resume) — executor surfaces
-the interrupt as a typed terminal error; elicitation proven at the tamoz-mcp level; within
-the plan's v1 boundary. advC (durable circuit) unchanged — DR-2 owns it. Harsh critic with
-the held-out slice-4 probes is in flight.
+### Round 18 — D-8 implemented and gate-verified (critic pending)
+
+D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
+create_file, SINGLE resolution injected into both preview and execute args on the Session
+driver (build_intent → `EffectDispatcher.observe` for patches, `hexdigest(content)` for
+create_file; `dispatch` re-injects from the committed intent; `verify_intent_before_state!`
+primary binding + `prepare_patch` equality live second) AND the Runtime driver (resolve once
+at step entry; approval-callback mutation trips "file changed", fail-closed — RC-1/RC-2);
+Fix B — scoped placeholder heuristic (path/digest containment + whole-string/reference-
+phrase rules on all string args; negative test for legitimate `<`/`>`) + iterated
+`argument_rule` in the planning prompt (see flag below); Fix C — `PlanRejectedError` includes
+`DisclosableMessage` with structural-layer-only bounded summary, semantic/protocol → generic
+phrase; corpus case 17 `agent.absent-digest-patch` (Runtime driver, digest omitted, check
+passes, safety 0). `ACTION_DESCRIPTIONS`, `plan.rb`, tamoz-mcp, and all MCP touchpoints
+untouched.
+
+**T6 — the real-model gate PASSES.** Provider deepseek / model deepseek-chat / commit
+`b3fe512` / 2026-08-02: exit **0**; `calculator.rb` bytes are exactly `a + b`; session record
+pins `configured_check_passed == true`, `terminal_reason: check_passed`; exactly one
+`apply_patch` succeeded + one `run_check` succeeded; only `calculator.rb` changed; the model's
+ACTION plan genuinely OMITTED `expected_sha256` (Fix A mechanism confirmed on a real LLM).
+Coordinator gate: `rake ci` **770 runs / 0 failures** under BOTH locales; scorecard **17
+cases / 14 successes / decision pass / 4/4 hard gates / safety 0**; the 16 prior cases
+byte-identical.
+
+Flags for the D-8 critic (judgment calls beyond the accepted design's literal wording):
+(1) the design's minimum `argument_rule` prompt text FAILED 5/5 real-model smoke runs — the
+builder iterated the prompt wording (3 versions) to teach "values must be known before the
+plan runs / don't guess paths / `expected_sha256` is the ONE argument to omit"; prompt text
+is not digested (RC-7 safe), scorecard `model_input_bytes` re-measured per iteration; (2) a
+Fix-B heuristic bug found during the work (reference-phrase rule must apply to ALL string
+args, not exclude path/digest keys — caught by T6); (3) coordinator observation: discovery
+plans in the T6 run still carried `PLACEHOLDER_FROM_SEARCH` paths (no `<`/`>`, no exact
+reference phrase — slipped the heuristic; recovered via the repairable-failure path) —
+assess whether the heuristic needs the "PLACEHOLDER_" shape or prompt reinforcement.
 
 ## 4. Phase ledger (mirrors the handover plan)
 
