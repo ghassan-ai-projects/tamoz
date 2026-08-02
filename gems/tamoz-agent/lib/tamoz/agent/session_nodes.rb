@@ -135,6 +135,7 @@ module Tamoz
         task = state.fetch(:task)
         evidence = state.fetch(:observations).map { |record| observation_payload(record) }
         allowed_tools = allowed_tool_names(phase)
+        mcp_tools = mcp_planning_surface(allowed_tools)
         planning_context = planning_context_for(state, phase)
         ambiguity = state.fetch(:provider_ambiguity)
         plans = []
@@ -155,7 +156,8 @@ module Tamoz
               evidence,
               feedback,
               planning_context,
-              toolbox:
+              toolbox:,
+              mcp_tools:
             ),
             call_index: attempt * 2
           )
@@ -770,6 +772,34 @@ module Tamoz
 
       def mcp_tool?(tool)
         !!(mcp && mcp.name?(tool))
+      end
+
+      # P10 §3 planning surface: merge the source-qualified MCP capability names
+      # with their catalog descriptions (compile-bounded and control-stripped;
+      # re-stripped at render so no server text enters the prompt unscrubbed).
+      # A session without an MCP source renders byte-identically to before.
+      def mcp_planning_surface(allowed)
+        return {} unless mcp
+
+        allowed.filter_map do |name|
+          next unless mcp.name?(name)
+
+          descriptor = mcp.descriptor_for(name)
+          snapshot = mcp.catalogs[descriptor.source_id]
+          entry = snapshot && snapshot.entries.find { |candidate| candidate.name == descriptor.name }
+          description = entry && entry.description
+          next if description.nil? || description.empty?
+
+          [name, prompt_safe(description)]
+        end.to_h.freeze
+      end
+
+      def prompt_safe(value)
+        text = String(value)
+        unless text.valid_encoding?
+          text = text.encode("UTF-8", invalid: :replace, undef: :replace)
+        end
+        text.gsub(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/, "")
       end
 
       def allowed_tool_names(phase)

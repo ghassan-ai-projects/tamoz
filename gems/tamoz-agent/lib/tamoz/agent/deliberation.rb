@@ -50,7 +50,17 @@ module Tamoz
 
       module_function
 
-      def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context, toolbox:)
+      # P10 §3 planning surface: source-qualified MCP capability names are NOT
+      # toolbox keys, so Hash#slice on toolbox.descriptions drops them — merge
+      # the caller-supplied MCP descriptions in, filtered to the allowed set.
+      # With no MCP surface the prompt is byte-identical to the pre-P10 shape.
+      def merge_tool_surfaces(descriptions, allowed_tools, mcp_tools)
+        local = descriptions.slice(*allowed_tools)
+        mcp = mcp_tools.select { |name, _| allowed_tools.include?(name) }
+        mcp.empty? ? local : local.merge(mcp)
+      end
+
+      def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context, toolbox:, mcp_tools: {})
         phase_instruction = if phase == :discovery
                               "Gather only the evidence needed to prepare a later action plan. Do not mutate or run commands."
                             elsif phase == :action
@@ -89,7 +99,7 @@ module Tamoz
             "expected_sha256 out — the framework binds the digest from the current " \
             "file state before execution, so the patch step still succeeds. If you " \
             "know the digest from a read_file result, copy it verbatim.",
-          "available_tools" => toolbox.descriptions.slice(*allowed_tools),
+          "available_tools" => merge_tool_surfaces(toolbox.descriptions, allowed_tools, mcp_tools),
           "evidence_from_discovery" => evidence,
           "feedback_from_previous_attempt" => feedback
         }

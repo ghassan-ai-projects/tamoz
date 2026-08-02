@@ -25,9 +25,13 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     MCP_TEST_SERVER_PROTOCOL_VERSION MCP_TEST_SERVER_GRANDCHILD
   ].freeze
 
-  FakeEntry = Data.define(:name, :definition_digest) do
-    def initialize(name:, definition_digest:)
-      super(name: name.dup.freeze, definition_digest: definition_digest.dup.freeze)
+  FakeEntry = Data.define(:name, :definition_digest, :description) do
+    def initialize(name:, definition_digest:, description: nil)
+      super(
+        name: name.dup.freeze,
+        definition_digest: definition_digest.dup.freeze,
+        description: description&.dup&.freeze
+      )
     end
   end
 
@@ -106,8 +110,14 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
 
   # --- source construction ------------------------------------------------------
 
-  def fake_snapshot(server_id: "test-server", digest: "sha256:#{"a" * 64}", names: %w[echo set_answer])
-    entries = names.map { |name| FakeEntry.new(name:, definition_digest: "sha256:#{name}#{"b" * 44}") }
+  def fake_snapshot(server_id: "test-server", digest: "sha256:#{"a" * 64}", names: %w[echo set_answer], descriptions: {})
+    entries = names.map do |name|
+      FakeEntry.new(
+        name:,
+        definition_digest: "sha256:#{name}#{"b" * 44}",
+        description: descriptions.fetch(name, nil)
+      )
+    end
     FakeSnapshot.new(server_id:, snapshot_digest: digest, entries:)
   end
 
@@ -678,6 +688,78 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       end
     ensure
       supervisor.close
+    end
+  end
+
+  # --- planning surface (P10 §3: the MCP names must reach the planner) ---------
+
+  def test_the_planning_prompt_renders_the_mcp_surface
+    toolbox = Tamoz::Agent::Toolbox.new(root: @dir)
+    allowed = toolbox.names + ["mcp:test-server/set_answer"]
+    prompt = Tamoz::Agent::Deliberation.planning_prompt(
+      "task", :discovery, allowed, [], [], {}, toolbox:,
+      mcp_tools: {"mcp:test-server/set_answer" => "Set the answer variable"}
+    )
+
+    assert_includes prompt, "mcp:test-server/set_answer"
+    assert_includes prompt, "Set the answer variable"
+    assert_includes prompt, "read_file"
+  end
+
+  def test_the_planning_prompt_filters_mcp_tools_to_the_allowed_set
+    toolbox = Tamoz::Agent::Toolbox.new(root: @dir)
+    prompt = Tamoz::Agent::Deliberation.planning_prompt(
+      "task", :discovery, toolbox.names, [], [], {}, toolbox:,
+      mcp_tools: {"mcp:test-server/set_answer" => "Set the answer variable"}
+    )
+
+    refute_includes prompt, "mcp:test-server/set_answer"
+  end
+
+  def test_the_planning_prompt_without_mcp_is_byte_identical
+    toolbox = Tamoz::Agent::Toolbox.new(root: @dir)
+    base = Tamoz::Agent::Deliberation.planning_prompt(
+      "task", :read_only, toolbox.names, [], [], {}, toolbox:
+    )
+
+    assert_equal base, Tamoz::Agent::Deliberation.planning_prompt(
+      "task", :read_only, toolbox.names, [], [], {}, toolbox:, mcp_tools: {}
+    )
+    refute_includes base, "mcp:"
+  end
+
+  def test_a_session_with_mcp_renders_the_stripped_mcp_surface_in_the_plan_prompt
+    snapshot = fake_snapshot(descriptions: {"set_answer" => "Set the answer\x00 value"})
+    with_workspace do |root, adapter|
+      File.write(File.join(root, "note.txt"), "Tamoz is awake.\n")
+      source = Source.new(
+        catalogs: {snapshot.server_id => snapshot},
+        descriptors: [fake_descriptor(snapshot, "set_answer")],
+        executor: ->(_, _, _) { "answer file written" }
+      )
+      model = ScriptedModel.new(
+        plan: [plan_for("read_file", {"path" => "note.txt"})],
+        review: [accepted_review],
+        verify: [verified("Tamoz is awake.", true)]
+      )
+      session = Tamoz::Agent::Session.new(
+        model:,
+        toolbox: Tamoz::Agent::Toolbox.new(root:),
+        checkpointer: adapter,
+        mcp: source
+      )
+      outcome = session.start(
+        "What does note.txt say?",
+        thread: "planning.surface",
+        request_id: "request.1"
+      )
+      assert_equal :completed, outcome.status
+
+      plan_call = model.calls.find { |call| call[:stage] == :plan }
+      assert plan_call, "a plan call must have happened"
+      assert_includes plan_call[:prompt], "mcp:test-server/set_answer"
+      assert_includes plan_call[:prompt], "Set the answer value"
+      refute_includes plan_call[:prompt], "\x00"
     end
   end
 

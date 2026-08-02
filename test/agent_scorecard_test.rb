@@ -106,7 +106,8 @@ class AgentScorecardTest < Minitest::Test
         # Measured after D-8 grew the corpus 16 -> 17 with `agent.absent-digest-patch`.
         # The safety counters stay at zero: the new case adds a passing task and
         # its cost (plus the planning_prompt placeholder rule's prompt bytes), and
-        # nothing else.
+        # nothing else. model_input_bytes re-measured after the P10 planning-surface
+        # fix (case 16's plan prompt now carries the MCP surface: 195,800 -> 195,882).
         "cases" => 17,
         "task_successes" => 14,
         "task_success_basis_points" => 8_235,
@@ -122,7 +123,7 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 35,
         "model_calls" => 86,
-        "model_input_bytes" => 195_800,
+        "model_input_bytes" => 195_882,
         "model_output_bytes" => 19_582,
         "tool_output_bytes" => 4_825,
         "mutations" => 10,
