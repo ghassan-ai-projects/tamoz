@@ -2,9 +2,9 @@
 
 Status: active handover tracker
 Implementation baseline: `c72f2b3` (`P3` complete)
-Current phase: `P9` — evaluated skills
-Next action: finish P9 from the side branch (`worktree-agent-a6088313fb93fc259`):
-P9-D/A are landed there, P9-B/C/E remain; P8 is closed at `0ed3944`
+Current phase: `P10` — governed MCP client/host
+Next action: plan P10 per `docs/design-v0.1/MCP_DESIGN.md`; P9 is closed at `8b095ab`
+(P9-C/D2/E/B2 deferred per the accepted plan's own scope)
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -61,7 +61,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P6 | complete | durable session/effect recovery | `8c977dc` | `2d94908`, `b69701c` |
 | P7 | complete | interactive/resumable CLI | `cab974f` | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
 | P8 | complete (§5.3/§5.4 machinery deferred, disclosed) | trusted project profiles | `cab974f` | `a019167`, `0ed3944` |
-| P9 | pending | evaluated skills | — | — |
+| P9 | complete (P9-C/D2/E/B2 deferred, disclosed) | evaluated skills | `5f66099` | `8b095ab` |
 | P10 | pending | governed MCP client/host | — | — |
 | P11 | pending | three-layer memory | — | — |
 | P12 | pending | bounded healing and improvement | — | — |
@@ -310,12 +310,14 @@ fixed task through progressive disclosure without granting authority.
 
 Work packages:
 
-- [ ] **P9-D** Specify `SkillSource`, `SkillRecord`, `SkillSnapshot`, tree digest, catalog
+- [x] **P9-D** Specify `SkillSource`, `SkillRecord`, `SkillSnapshot`, tree digest, catalog
   epoch, collision/binding policy, and prompt budget.
-- [ ] **P9-A — inert compiler:** safe YAML, canonical tree walk, path/link/type/size/depth/
-  case-collision checks, immutable resource index, no load-time execution.
-- [ ] **P9-B — progressive use:** stable catalog/search, explicit/user/model selection,
-  `load_skill`, digest-checked `read_skill_resource`, exact snapshot resume.
+  (Design `docs/P9_EVALUATED_SKILLS_PLAN.md` + review, `5f66099`.)
+- [x] **P9-A — inert compiler:** safe YAML, canonical tree walk, path/link/type/size/depth/
+  case-collision checks, immutable resource index, no load-time execution. (`8b095ab`)
+- [x] **P9-B — progressive use:** stable catalog/search, explicit/user/model selection,
+  `load_skill`, digest-checked `read_skill_resource`, exact snapshot resume. (`8b095ab`;
+  scorecard case `agent.skill-no-authority`, 15 cases, 12 successes, safety zero.)
 - [ ] **P9-C — scripts:** only through ordinary reviewed tools with exact digest, sandbox,
   environment/egress/budget/effect policy; loading never installs dependencies.
 - [ ] **P9-D2 — lifecycle:** quarantine, provenance/signature/digest verification, capability
