@@ -1199,6 +1199,32 @@ path keeps `InvalidUpdateError` for caller bugs, pinned by graph_interrupt_test)
 runner's backstop terminal-fails it — closing the last InvalidUpdateError-escape path of
 the D-6 class. Gate: 857/0 both locales, scorecard 17/14/pass, safety 0.
 
+### Round 21 — P17 merged and gated (critic in flight)
+
+P17 worktree merged cleanly (`78041fc`, 25 files; no conflicts). Governed websearch as an
+MCP-server capability through the P10 surface — Tamoz itself NEVER dials (the honest
+enforcement point: the operator-side deployment enforces its own egress; Tamoz pins +
+validates the declaration). egress: profile section (exact FQDNs, no wildcards/IP
+literals incl. decimal/hex/octal spellings, schemes https-only, deny_private_ranges,
+budgets, redirect_max_hops, circuit config, credential_refs) W1-validated at load AND
+replayed via from_authority; authority snapshot carries it; session record pins
+`egress_pin`; `verify_egress_binding!` resume guard (typed EgressBindingUnavailableError).
+Real adapter `script/websearch_adapter` (SDK-built MCP server, one search tool,
+default-DISABLED behind grant + declaration + provider) with per-hop logic in
+`tamoz/mcp/websearch/` (EgressPolicy range classifier neutralizing mapped/alt-spelling
+literals, EgressClient resolve→classify→pin→dial on EVERY connection + redirect hop,
+no credential/header forwarding across hosts) — NOT required by tamoz/mcp.rb (the dialer
+never enters core's load path). Circuit IMPLEMENTED (not deferred): both DR-2 open
+conditions (consecutive connect failures ≥ threshold AND single budget breach);
+reset requires authority:"owner" + operator_command_digest, self/evidence-free resets
+raise typed CircuitPolicyError. In-tree deterministic fixture (mcp_test_server search
+tool, grant-gated, no resolver/dialer — asserted). Scorecard 17→18 (`agent.websearch-governed`,
+completed, injection_contained/credential_sweeps/circuit_opens/reset_refusals all
+counted; 17 prior cases byte-identical); env honesty: network_enforcement stays
+not_claimed + live_network_validation: "deferred". Gate: 899/33,651/0 BOTH locales
+(identical totals), decision pass, 4/4 gates, safety 0, no orphans. Deferral: live-network
+validation (operator-gated, never CI). 26-probe critic in flight.
+
 ### Round 18 — D-8 implemented and gate-verified (critic pending)
 
 D-8 landed `b3fe512` (14 files): Fix A — `expected_sha256` optional for apply_patch/
@@ -1267,84 +1293,59 @@ end (read-only AND action mode, real DeepSeek).**
 | P8 trusted project profiles | complete | **complete** (`a019167`, `0ed3944`) — A/B/C/D/E landed; adversarial suite + `profile_trusted_boundary` scorecard case (14 cases, 11 successes, safety zero); §5.3/§5.4 machinery deferred and disclosed; critic pending |
 | P9 evaluated skills | complete | **complete** (`8b095ab`) — D/A/B landed, adversarial suite 37 tests, `skill-no-authority` scorecard case (15 cases, 12 successes, safety zero); P9-C/D2/E/B2 deferred per accepted plan; critic pending |
 | P10 governed MCP | complete | **closed** — slices 1–4 + planning-surface fix (`a69971d`, `d0e537e`, `9d1d3ec`); slice-3 critic FAIL (O1) fixed; slice-4 critic PASS-WITH-GAPS (planning-surface gap fixed); scorecard 17/14/pass, safety 0; D2/H/full-E-conformance deferred per plan scope |
-| DR-4/DR-5, P11–P18 | pending | not started; ordered by the checkpoint deep review |
+| DR-2 durable circuit | accepted design | **active implementation blocker** — P10 still defaults to process-local circuit state; must close before P17 |
+| DR-3 memory evaluation substrate | complete | **complete** (`b6c379c`) — existing harness is the substrate P11 must integrate with |
+| DR-4 stale durable requests | complete | **closed** (`c627aec`, `7afe1ff`) — critic 39/39; 857/0 in both required locales |
+| DR-5 profile machinery | complete | **closed** (`be84e8e`, `80725db`) — re-adjudication passed |
+| P16 tools extraction | complete | **closed** (`fffaee8`, `2ae9e60`) |
+| P17 governed websearch | pending | **blocked on DR-2** |
+| P11–P15, P18 | pending | accepted design only; no implementation commits |
 
 ---
 
 ## 5. Current gaps
 
-1. **P6 is not adversarially verified.** The coordinator's deterministic gate passes, but the
-   independent critic pass is still in flight. Open questions it is attacking: do the kills
-   land where the seam names claim; can `:unknown` be driven to `:not_applied` from an unproven
-   pre-state; can `MAX_ATTEMPTS = 3` be exceeded or reset; was the `Deliberation` extraction
-   genuinely verbatim.
-2. **D-6 — a fenced-out resume poisons its thread (severity: high, found in Round 7).** A
-   resume request enqueued by a process that then loses the lease stays queued; a later drain
-   claims it, its answers no longer match the outstanding interrupts, and
-   `Tamoz::InvalidUpdateError` escapes `run_next` — the CLI crashes with an unhandled error
-   and the request is never terminally failed. Fault chain localized (Round 12, read-only):
-   answer application raises at `gems/tamoz-graph/lib/tamoz/graph/compiled.rb:925-954`
-   ("resume answers cannot be empty" / "already exists"); `execute_durable_request` has no
-   rescue; `durable_runner.rb:56-88 run_next` lets it escape `open_writer`; the CLI's
-   `drain_to_terminal` (`gems/tamoz-agent/lib/tamoz/agent/cli.rb:444`) does not rescue
-   either, and nothing marks the claimed request terminally failed. Fix belongs to a
-   dedicated, design-reviewed
-   framework round: a stale durable request must fail as a terminal request value without
-   taking the thread down.
-3. **P7 is not adversarially verified.** Coordinator gate and self-review pass; the
-   independent critic pass is quota-blocked. One residual by disclosure: stale
-   graph/behavior/catalog is proven at the library level, not through a CLI subprocess.
-4. **P6-F operational durability is partial**: disk-full injection, lock saturation under load,
-   the unresolved-effect deletion guard through a session, thread-leak measurement, and soak
-   are not done.
-5. **Evaluation corpus versioning.** P4/P5/P7 changed case definitions while `case_version`
-   stayed `1`, so historical scorecard artifacts are not comparable. Belongs to P15-F evidence
-   pinning.
-6. **Gate assertion variance** — assertion count varies by a few between identical runs.
-   Diagnosed (Round 12): `test/subprocess_runner_test.rb` asserts *inside* intervention
-   poll callbacks whose poll count is timing-dependent — e.g.
-   `test_nil_intervention_decision_remains_bounded_by_process_timeout` (line 226)
-   asserts twice per poll and only bounds `polls` (0 < polls <= 75), so identical code
-   produces different totals (227 vs 230 observed back-to-back). Fix for P15 evidence
-   pinning: accumulate observations and assert once on the aggregate, never inside a
-   timing-dependent callback.
-7. **Two disclosed, unfixed defects carried forward**: orphaned private `.tamoz-*` temp file
-   after a kill — localized (Round 12, read-only): `atomic_create`
-   (`gems/tamoz-agent/lib/tamoz/agent/toolbox.rb:717`) and `atomic_replace`
-   (`toolbox.rb:874`) stage via a Tempfile in the target's parent and publish by
-   link/rename; a SIGKILL between staging and publish never runs the ensure cleanup, so
-   the staged file persists. `tamoz-sqlite`'s adapter.rb:138 uses the same staging
-   pattern. A startup/reaper sweep of stale `.tamoz-*.tmp` (or staging in one private
-   dir) is the candidate fix — and the `:retry` request-recovery latent defect — localized (Round 12,
-   read-only): a queued `:retry` durable request claimed after the thread's latest
-   checkpoint is no longer `:failed` (already recovered/retried by another owner) raises
-   `CheckpointConflictError` at `compiled.rb:566-568 retry_failed_with_writer`, which
-   escapes `run_next` unrescued exactly like D-6 — same fix round: claim-time stale
-   requests must fail as terminal request values, not exceptions.
-8. **P8 deferred machinery** — §5.3 model-role checkpoint recording and budget
-   intersection, §5.4 candidate-transition *application* (the registry records them;
-   only `tamoz profile activate` at a turn boundary consumes one), and §5.5 rule 3
-   old-digest resume with reconstructed toolbox; changed-digest resume currently fails
-   closed. Fold into a dedicated design round, not silently into P9. Scoped (Round 12,
-   read-only): §5.3 = record each symbolic role's resolved provider/model in the
-   checkpoint and intersect route budgets with profile budgets
-   (`docs/P8_TRUSTED_PROFILES_PLAN.md:404-406`); §5.4 = consume a recorded
-   `ProfileTransition` candidate at turn boundaries only (`ask`/`follow-up` on an
-   existing thread), applying the new digest after plan/review acceptance
-   (`P8_TRUSTED_PROFILES_PLAN.md:439-441`). Decision point: schedule as a P8-F design
-   round after P10–P14, before P15 release gating.
-9. P11–P15 remain unimplemented.
+1. **DR-2 is accepted design but unimplemented (critical path).** P10's production
+   supervisor still defaults to process-local `MemoryCircuitStore`; P17 requires the same
+   durable aggregate circuit for egress health. Implement, critic-review, and gate DR-2
+   before activating P17.
+2. **MCP child stderr can disclose injected credentials (high).** Credential values are
+   passed to the child environment, while the bounded `stderr_tail` is control-character
+   scrubbed but not redacted by known value before being attached to typed errors. Add
+   value-aware redaction and a malicious-child regression probe before expanding the MCP
+   boundary in P17.
+3. **Adversarial review debt remains.** P6 and P7 lack independent critic closure; D-7,
+   P8, and P9 retain disclosed critic/deferred-scope debt.
+4. **P6-F operational durability is partial:** disk-full injection, lock saturation under
+   load, unresolved-effect deletion guard through a session, thread-leak measurement, and
+   soak are not done.
+5. **SIGKILL can orphan private `.tamoz-*` staging files.** Toolbox and SQLite atomic
+   publishing rely on ensure cleanup that cannot run after SIGKILL; startup/reaper cleanup
+   or a bounded private staging area remains required.
+6. **Evaluation corpus comparability is incomplete.** P4/P5/P7 case definitions changed
+   without `case_version` bumps. P15-F must pin corrected versions and evidence digests.
+7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
+   MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
+   workflow. Its closure record must also identify DR-2 durability as carried debt.
+8. **P11–P15, P17, and P18 remain unimplemented.** DR-1 is design-only and must be
+   implemented within P11 before Wisdom activation. P11 must integrate with the existing
+   DR-3 harness instead of rebuilding it.
+9. **Release evidence is not yet ordinary-CI complete.** Both-locale gates, scorecards,
+   package isolation, security/license checks, benchmarks, restore, and release rehearsal
+   still need P15 integration. README/SECURITY also lag the seven-gem and current MCP/action
+   behavior.
+10. **Process exception to record:** DR-3 was implemented out of the planned order, and
+    DR-4/DR-5/P16 merged before their independent closure evidence was complete. Later
+    evidence closed those implementations, but the single-active-phase protocol was not
+    followed literally.
 
 ---
 
 ## 6. Next action
 
-Plan and implement **P10** (governed MCP client/host) per
-`docs/design-v0.1/MCP_DESIGN.md` and the handover plan's P10 card — re-check the
-official MCP specification and Ruby SDK at implementation time as the card requires.
-Then the deferred §5.3/§5.4 profile machinery as its own design round, the D-6
-stale-resume framework fix, and the deferred independent critic passes over P6, P7,
-P8, D-7, and P9 when subagent quota returns.
+Implement **DR-2 durable circuit state**, including its independent critic pass and the
+full gate under both required locales. Then activate P17. After P17, proceed through
+P11 (implementing DR-1 before Wisdom activation) → P12 → P13 → P14 → P18 → P15.
 
 ### Resume checklist for the next session
 
