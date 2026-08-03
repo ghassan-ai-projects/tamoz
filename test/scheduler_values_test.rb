@@ -206,4 +206,60 @@ class SchedulerValuesTest < Minitest::Test
       )
     end
   end
+
+  # --- P13-B: misfire selection (design §6) --------------------------------
+
+  def test_misfire_selection_for_each_policy
+    window = [ANCHOR, ANCHOR + 3_600, ANCHOR + 7_200]
+
+    # skip: deliver only the latest; older ones are skipped.
+    selection = interval_schedule(misfire_policy: :skip).misfire_selection(window)
+    assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
+    assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
+
+    # latest (default for recurring): coalesce the window into the latest.
+    selection = interval_schedule(misfire_policy: :latest).misfire_selection(window)
+    assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
+    assert_empty selection.fetch(:skipped)
+
+    # replay: oldest-first up to the limit.
+    selection = interval_schedule(
+      misfire_policy: :replay, misfire_limit: 2
+    ).misfire_selection(window)
+    assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:materialize)
+    assert_equal [ANCHOR + 7_200], selection.fetch(:skipped)
+
+    # fire_once (default for one-shots): one recovery instant.
+    selection = interval_schedule(misfire_policy: :fire_once).misfire_selection(window)
+    assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
+    assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
+
+    # An empty window selects nothing.
+    assert_equal({materialize: [], skipped: []},
+                 interval_schedule.misfire_selection([]))
+  end
+
+  # --- P13-B: overlap decision (design §7) ---------------------------------
+
+  def test_overlap_decision_for_each_policy
+    # forbid (default): any in-flight occurrence skips the new one.
+    assert_equal :skip, interval_schedule(overlap_policy: :forbid)
+                                   .overlap_decision(non_terminal: 1, pending: 0)
+    assert_equal :materialize, interval_schedule(overlap_policy: :forbid)
+                                        .overlap_decision(non_terminal: 0, pending: 0)
+
+    # queue_one: one bounded pending; later ones coalesce into it.
+    assert_equal :coalesce, interval_schedule(overlap_policy: :queue_one)
+                                     .overlap_decision(non_terminal: 1, pending: 1)
+    assert_equal :materialize, interval_schedule(overlap_policy: :queue_one)
+                                        .overlap_decision(non_terminal: 0, pending: 0)
+
+    # allow: concurrent up to max_concurrency.
+    assert_equal :materialize, interval_schedule(
+      overlap_policy: :allow, max_concurrency: 2
+    ).overlap_decision(non_terminal: 1, pending: 1)
+    assert_equal :skip, interval_schedule(
+      overlap_policy: :allow, max_concurrency: 2
+    ).overlap_decision(non_terminal: 2, pending: 1)
+  end
 end

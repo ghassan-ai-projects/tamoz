@@ -148,68 +148,154 @@ module Tamoz
             )
             next unless schedule
 
-            schedule.due_occurrences(now:).each do |fire_at|
-              occurrence = build_occurrence(schedule, fire_at, now)
-              existing = tx.scalar(
-                "schedule.materialize.occurrence",
-                <<~SQL,
-                  SELECT request_id FROM tamoz_occurrences WHERE occurrence_id = ?
-                SQL
-                [occurrence.occurrence_id]
-              )
-              next if existing
+            due = schedule.due_occurrences(now:, limit:)
+            next if due.empty?
 
-              thread, encoded_namespace = normalize_request_address(schedule)
-              request_id = occurrence.request_id
-              payload = build_request_payload(schedule, occurrence, request_template)
-              payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
-                REQUEST_OPERATION, payload
-              )
-              payload_digest = Wire.digest(
-                payload_bytes, domain: "tamoz.sqlite.request_payload"
-              )
-              input_digest = Wire.digest(
-                JSON.generate([REQUEST_OPERATION, REQUEST_DELIVERY, payload_bytes]),
-                domain: "tamoz.sqlite.request"
-              )
-              # Dedup inside the enqueue primitive (byte-exact; a different byte
-              # for the same request id raises — invariant 38).
-              @checkpoints.enqueue_request_in_transaction!(
-                tx,
-                thread:, encoded_namespace:, id: request_id,
-                operation_text: REQUEST_OPERATION, delivery_text: REQUEST_DELIVERY,
-                payload_bytes:, payload_digest:, input_digest:
-              )
-              tx.execute(
-                "schedule.materialize.occurrence.insert",
-                <<~SQL,
-                  INSERT INTO tamoz_occurrences(
-                    occurrence_id, schedule_id, schedule_revision,
-                    nominal_fire_at_utc, not_before, request_id, state,
-                    fence, owner, reason, payload_digest, created_at_ms, updated_at_ms
-                  )
-                  VALUES (?, ?, ?, ?, ?, ?, 'enqueued', ?, ?, NULL, ?, ?, ?)
-                SQL
-                [
-                  occurrence.occurrence_id, schedule.id, schedule.revision,
-                  occurrence.nominal_fire_at_utc, occurrence.not_before,
-                  request_id, now, owner, payload_digest, now, now
-                ]
-              )
-              claimed << occurrence
-                          .claimed(fence: now, owner:, now:)
-                          .enqueued(fence: now, now:)
+            # P13-B (design §6): misfire policy decides what this scan
+            # materializes vs. records as skipped. Deterministic, bounded.
+            selection = schedule.misfire_selection(due)
+            non_terminal, pending = occurrence_state(schedule.id, tx)
+
+            # Misfire-skipped instants are recorded as skipped history (never
+            # enqueued), per the policy's selection.
+            selection.fetch(:skipped).each do |fire_at|
+              occurrence = build_occurrence(schedule, fire_at, now)
+              next if occurrence_exists?(occurrence, tx)
+
+              record_terminal(schedule, occurrence, :skipped, "misfire", now, tx)
+            end
+
+            # P13-B (design §7): overlap decision from DURABLE occurrence
+            # state captured BEFORE this scan — never a process-local mutex,
+            # and same-scan replay occurrences are sequential, not concurrent.
+            overlap = schedule.overlap_decision(non_terminal:, pending:)
+
+            due.each do |fire_at|
+              occurrence = build_occurrence(schedule, fire_at, now)
+              next if occurrence_exists?(occurrence, tx)
+              next unless selection.fetch(:materialize).include?(fire_at)
+
+              case overlap
+              when :skip
+                record_terminal(schedule, occurrence, :skipped, "overlap", now, tx)
+              when :coalesce
+                record_terminal(
+                  schedule, occurrence, :coalesced,
+                  "into pending occurrence", now, tx
+                )
+              when :materialize
+                enqueue_occurrence(
+                  schedule, occurrence, now, owner, request_template, tx
+                ).then { |value| claimed << value }
+              end
             end
           end
         end
         claimed
       end
 
+      # P13-B internals ------------------------------------------------------
+
+      # Durable in-flight state for one schedule: [non_terminal, pending].
+      # `non_terminal` = claimed + enqueued + running; `pending` = enqueued
+      # only. Computed from the occurrence rows, never a process-local mutex.
+      def occurrence_state(schedule_id, tx)
+        row = tx.first(
+          "schedule.materialize.state",
+          <<~SQL,
+            SELECT
+              SUM(CASE WHEN state IN ('claimed', 'enqueued', 'running') THEN 1 ELSE 0 END),
+              SUM(CASE WHEN state = 'enqueued' THEN 1 ELSE 0 END)
+            FROM tamoz_occurrences
+            WHERE schedule_id = ?
+          SQL
+          [schedule_id]
+        )
+        [row.fetch(0).to_i, row.fetch(1).to_i]
+      end
+
+      def occurrence_exists?(occurrence, tx)
+        tx.scalar(
+          "schedule.materialize.occurrence",
+          "SELECT 1 FROM tamoz_occurrences WHERE occurrence_id = ?",
+          [occurrence.occurrence_id]
+        ) == 1
+      end
+
+      # Enqueue ONE occurrence: the deterministic request id is the dedup key
+      # (invariant 38), so a retried delivery re-enqueues the same request row.
+      def enqueue_occurrence(schedule, occurrence, now, owner, request_template, tx)
+        thread, encoded_namespace = normalize_request_address(schedule)
+        request_id = occurrence.request_id
+        payload = build_request_payload(schedule, occurrence, request_template)
+        payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
+          REQUEST_OPERATION, payload
+        )
+        payload_digest = Wire.digest(
+          payload_bytes, domain: "tamoz.sqlite.request_payload"
+        )
+        input_digest = Wire.digest(
+          JSON.generate([REQUEST_OPERATION, REQUEST_DELIVERY, payload_bytes]),
+          domain: "tamoz.sqlite.request"
+        )
+        @checkpoints.enqueue_request_in_transaction!(
+          tx,
+          thread:, encoded_namespace:, id: request_id,
+          operation_text: REQUEST_OPERATION, delivery_text: REQUEST_DELIVERY,
+          payload_bytes:, payload_digest:, input_digest:
+        )
+        tx.execute(
+          "schedule.materialize.occurrence.insert",
+          <<~SQL,
+            INSERT INTO tamoz_occurrences(
+              occurrence_id, schedule_id, schedule_revision,
+              nominal_fire_at_utc, not_before, request_id, state,
+              fence, owner, reason, payload_digest, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, 'enqueued', ?, ?, NULL, ?, ?, ?)
+          SQL
+          [
+            occurrence.occurrence_id, schedule.id, schedule.revision,
+            occurrence.nominal_fire_at_utc, occurrence.not_before,
+            request_id, now, owner, payload_digest, now, now
+          ]
+        )
+        occurrence.claimed(fence: now, owner:, now:).enqueued(fence: now, now:)
+      end
+
+      # Record a non-materialized occurrence as skipped/coalesced (bounded
+      # history, explicit in the occurrence row). `request_id` is still derived
+      # so history is queryable by request, but no request is enqueued. The
+      # payload_digest column is NOT NULL, so the terminal reason digest fills
+      # it (no request payload exists for a non-delivered occurrence).
+      def record_terminal(schedule, occurrence, state, reason, now, tx)
+        digest = "sha256:#{Digest::SHA256.hexdigest(
+          ENQUEUE_CONTEXT_DOMAIN + "#{state}:#{reason}:#{occurrence.occurrence_id}"
+        )}"
+        tx.execute(
+          "schedule.materialize.terminal.insert",
+          <<~SQL,
+            INSERT INTO tamoz_occurrences(
+              occurrence_id, schedule_id, schedule_revision,
+              nominal_fire_at_utc, not_before, request_id, state,
+              fence, owner, reason, payload_digest, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)
+          SQL
+          [
+            occurrence.occurrence_id, schedule.id, schedule.revision,
+            occurrence.nominal_fire_at_utc, occurrence.not_before,
+            occurrence.request_id, state.to_s, reason, digest, now, now
+          ]
+        )
+        nil
+      end
+
       def renew_occurrence_lease(id, fence:, lease_for:)
         now = now_ms
         changed = nil
         @adapter.__send__(:transaction, operation: "schedule.renew") do |tx|
-          changed = tx.execute(
+          tx.execute(
             "schedule.renew.update",
             <<~SQL,
               UPDATE tamoz_occurrences
@@ -218,7 +304,8 @@ module Tamoz
                 AND state IN ('claimed', 'enqueued', 'running')
             SQL
             [fence, now, id, fence]
-          ).changes
+          )
+          changed = tx.changes
         end
         if changed.zero?
           raise Tamoz::Scheduler::LeaseLostError,
@@ -227,11 +314,37 @@ module Tamoz
         nil
       end
 
+      # P13-B (design §10): the delivery→execution handoff. Delivery is
+      # `enqueued` (the request committed); the consumer acknowledges the
+      # occurrence when the graph starts running it. Distinct from completion —
+      # enqueued is never execution success (hard zero: no false green).
+      def acknowledge_occurrence(id, execution_id:, fence:, now: nil)
+        now ||= now_ms
+        changed = nil
+        @adapter.__send__(:transaction, operation: "schedule.acknowledge") do |tx|
+          tx.execute(
+            "schedule.acknowledge.update",
+            <<~SQL,
+              UPDATE tamoz_occurrences
+              SET state = 'running', fence = ?, reason = ?, updated_at_ms = ?
+              WHERE occurrence_id = ? AND state = 'enqueued' AND fence = ?
+            SQL
+            [fence, JSON.generate({"execution_id" => execution_id}), now, id, fence]
+          )
+          changed = tx.changes
+        end
+        if changed.zero?
+          raise Tamoz::Scheduler::LeaseLostError,
+                "occurrence #{id} is not enqueued under the given fence"
+        end
+        nil
+      end
+
       def complete_occurrence(id, execution_id:, status:, evidence:)
         now = now_ms
         changed = nil
         @adapter.__send__(:transaction, operation: "schedule.complete") do |tx|
-          changed = tx.execute(
+          tx.execute(
             "schedule.complete.update",
             <<~SQL,
               UPDATE tamoz_occurrences
@@ -239,7 +352,8 @@ module Tamoz
               WHERE occurrence_id = ? AND state = 'running'
             SQL
             [status.to_s, JSON.generate({"execution_id" => execution_id, "evidence" => evidence}), now, id]
-          ).changes
+          )
+          changed = tx.changes
         end
         if changed.zero?
           raise Tamoz::Scheduler::SchedulerError,

@@ -172,6 +172,57 @@ module Tamoz
         end
       end
 
+      # P13-B (design §6) — apply the misfire policy to a window of due
+      # instants. A misfire is an occurrence whose nominal time passed while no
+      # eligible scheduler delivered it. The policy decides what `materialize`
+      # enqueues and what it records as `skipped`; there is never unbounded
+      # catch-up (the window itself is bounded by the scan's `limit`).
+      #
+      # - :skip      — deliver only the latest instant; older ones are skipped.
+      # - :latest    — coalesce the whole missed window into the latest instant
+      #                (default for recurring).
+      # - :replay    — deliver oldest-first up to `misfire_limit`; older ones
+      #                are skipped.
+      # - :fire_once — one recovery instant for the missed window (default for
+      #                one-shots); older ones are skipped.
+      def misfire_selection(due_instants)
+        return {materialize: [], skipped: []} if due_instants.empty?
+
+        case misfire_policy
+        when :skip
+          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
+        when :latest
+          {materialize: [due_instants.last], skipped: []}
+        when :replay
+          limit = [misfire_limit, 1].max
+          # Oldest-first up to the limit; later ones are skipped.
+          {materialize: due_instants.first(limit), skipped: due_instants[limit..] || []}
+        when :fire_once
+          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
+        end
+      end
+
+      # P13-B (design §7) — the overlap decision given the durable occurrence
+      # state. `non_terminal` counts occurrences still in
+      # claimed/enqueued/running (in-flight for THIS schedule, never a
+      # process-local mutex); `pending` counts those enqueued but not yet
+      # running.
+      #
+      # - :forbid     — any in-flight occurrence skips the new one (default).
+      # - :queue_one  — one bounded pending occurrence; a later one coalesces
+      #                 into it.
+      # - :allow      — run concurrently up to `max_concurrency`.
+      def overlap_decision(non_terminal:, pending:)
+        case overlap_policy
+        when :forbid
+          non_terminal.positive? ? :skip : :materialize
+        when :queue_one
+          pending.positive? ? :coalesce : :materialize
+        when :allow
+          non_terminal >= max_concurrency ? :skip : :materialize
+        end
+      end
+
       # Deterministic jitter: a stable offset in [0, jitter_window) derived from
       # the occurrence identity. Same occurrence → same offset on every call and
       # every process; changes `not_before`, never the identity or nominal

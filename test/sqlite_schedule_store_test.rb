@@ -184,4 +184,149 @@ class SQLiteScheduleStoreTest < Minitest::Test
       end
     end
   end
+
+  # --- P13-B: misfire policies (design §6) ---------------------------------
+
+  # Interval schedule with a 1h cadence, polled at now = anchor + 3h. The due
+  # window is [a, a+1h, a+2h, a+3h]; the misfire policy picks what enqueues.
+  def test_misfire_skip_delivers_only_the_latest_and_records_older_skipped
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(start_at: anchor, misfire_policy: :skip))
+
+      claimed = store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 1, claimed.length, "skip coalesces the missed window into the latest"
+      assert_equal anchor + 10_800, claimed.first.nominal_fire_at_utc
+
+      # The three older missed occurrences are recorded as skipped (bounded
+      # history, explicit), never enqueued.
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      assert_equal 4, occurrences.length
+      skipped = occurrences.select { |o| o.state == :skipped }
+      assert_equal 3, skipped.length
+      assert_equal [anchor, anchor + 3_600, anchor + 7_200],
+                   skipped.map(&:nominal_fire_at_utc).sort
+    end
+  end
+
+  def test_misfire_replay_delivers_oldest_first_up_to_the_limit
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(start_at: anchor, misfire_policy: :replay, misfire_limit: 2)
+      )
+
+      claimed = store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      # replay delivers the two OLDEST missed occurrences (the window is 4);
+      # the later two are skipped because the limit is 2.
+      assert_equal 2, claimed.length
+      assert_equal [anchor, anchor + 3_600], claimed.map(&:nominal_fire_at_utc).sort
+
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      assert_equal 2, occurrences.count { |o| o.state == :skipped }
+    end
+  end
+
+  def test_misfire_fire_once_delivers_one_recovery_for_a_one_shot_window
+    with_engine do |store, _adapter, _checkpoints, _path|
+      # One-shot with fire_once: after the instant passes, exactly one
+      # recovery occurrence ever exists.
+      instant = Time.utc(2026, 8, 3, 12, 0, 0).to_i
+      store.put_schedule(
+        schedule(id: "one-shot", kind: :at, expression: "2026-08-03T12:00:00Z",
+                 misfire_policy: :fire_once)
+      )
+      claimed = store.materialize_due(
+        now: instant + 3_600, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 1, claimed.length
+      assert_equal instant, claimed.first.nominal_fire_at_utc
+      assert_equal 1, store.list_occurrences(schedule_id: "one-shot").length
+    end
+  end
+
+  # --- P13-B: overlap policies (design §7) ---------------------------------
+
+  # forbid (default): a non-terminal occurrence blocks the next one.
+  def test_overlap_forbid_skips_the_next_occurrence_while_one_is_in_flight
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(start_at: anchor, overlap_policy: :forbid))
+
+      first = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 1, first.length
+      # The first occurrence is still enqueued (non-terminal). The next
+      # materialization at the second cadence must SKIP the new occurrence.
+      second = store.materialize_due(
+        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 0, second.length
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      assert_equal 2, occurrences.length
+      assert_equal :enqueued, occurrences.min_by(&:nominal_fire_at_utc).state
+      assert_equal :skipped, occurrences.max_by(&:nominal_fire_at_utc).state
+    end
+  end
+
+  # allow: concurrent occurrences up to max_concurrency.
+  def test_overlap_allow_runs_concurrently_up_to_max_concurrency
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(start_at: anchor, overlap_policy: :allow, max_concurrency: 2)
+      )
+      claimed = store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      # With allow(2) under `latest` misfire, the first poll materializes the
+      # latest occurrence only. Complete it, then the next poll materializes
+      # the next due one (the one-shot window is exhausted, so the next cadence
+      # after the anchor is claimed).
+      assert_equal 1, claimed.length
+      occurrence = claimed.first
+      store.acknowledge_occurrence(
+        occurrence.occurrence_id, execution_id: "e-1", fence: occurrence.fence
+      )
+      store.complete_occurrence(
+        occurrence.occurrence_id, execution_id: "e-1", status: :succeeded, evidence: {"ok" => true}
+      )
+
+      again = store.materialize_due(
+        now: anchor + 14_400, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 1, again.length
+    end
+  end
+
+  # queue_one: one bounded pending occurrence; later ones coalesce into it.
+  def test_overlap_queue_one_coalesces_later_occurrences
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(start_at: anchor, overlap_policy: :queue_one)
+      )
+      first = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 1, first.length
+
+      # The first occurrence is still enqueued (pending=1). The next cadence
+      # (latest misfire) would materialize a+1h; queue_one coalesces it into
+      # the pending occurrence instead of enqueuing a second request.
+      later = store.materialize_due(
+        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:
+      )
+      assert_equal 0, later.length
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      coalesced = occurrences.select { |o| o.state == :coalesced }
+      assert_equal 1, coalesced.length
+      assert_equal anchor + 3_600, coalesced.first.nominal_fire_at_utc
+    end
+  end
 end
