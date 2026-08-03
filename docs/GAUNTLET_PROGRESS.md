@@ -1496,6 +1496,16 @@ mandatory scorecard case `agent.schedule-materialization` proves the recurring r
 scorecard summary end to end. The critic round (PASS-WITH-GAPS) found three
 design-conformance divergences and five gaps; all are fixed with committed tests.
 
+**P14 (streaming input + simulated physical action) is in flight — Round 26.** The
+`tamoz-stream` gem (ChannelDescriptor/EventEnvelope/StreamClock values, SituationSpec +
+SituationSnapshot, CognitionAdmission, ActionBoundary, ReplayRuntime, the production
+connector seam), MIGRATION_4/5, and the SQLite StreamStore (durable admission with
+idempotent dedup + quarantine per invariant 45, the atomic six-step process_partition
+under the injected clock, idle-watermark advancement, the idempotent outbox drain) are
+committed, with the mandatory case `agent.situation-observation` (case 22). The
+fresh-context critic round and the both-locale gate close the phase. Owner constraint
+honored: no real physical actuator; the ONLY effector is the simulator.
+
 ### Resume checklist for the next session
 
 Run this first; it is cheap and tells you the truth about where things stand:

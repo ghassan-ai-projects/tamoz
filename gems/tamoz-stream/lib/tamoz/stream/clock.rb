@@ -16,12 +16,18 @@ module Tamoz
       include StreamClock
 
       def initialize(now: nil)
-        @now = now || Time.now.to_i
-        @last = @now
+        @epoch = now || Time.now.to_i
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        @last = @epoch
       end
 
+      # Live-mode processing time: the epoch anchor plus the elapsed monotonic
+      # time since construction, so the clock ADVANCES in live mode (the
+      # idle-watermark mechanism depends on it — a frozen clock would never
+      # fire idleness, freezing global progress, design §7/P4).
       def now_processing
-        current = @now
+        current = @epoch + (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started_at).to_i
+        guard!(current)
         @last = current
         current
       end
@@ -32,6 +38,14 @@ module Tamoz
 
       def advance(delta)
         raise StreamClockError, "a wall clock cannot be advanced"
+      end
+
+      private
+
+      def guard!(value)
+        return if value >= @last
+
+        raise StreamClockError, "stream clock regressed from #{@last} to #{value}"
       end
     end
 

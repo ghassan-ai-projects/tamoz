@@ -237,6 +237,23 @@ module Tamoz
         end
       end
 
+      # The persisted cognition outcomes for a Situation, newest first
+      # (the trigger table is read-visible, not write-only).
+      def trigger_outcomes(situation_id, limit: 20)
+        bound = limit.clamp(1, 100)
+        rows = @adapter.__send__(:read, operation: "stream.trigger.list") do |tx|
+          tx.rows(
+            "stream.trigger.list",
+            <<~SQL,
+              SELECT outcome, created_at_ms FROM tamoz_stream_triggers
+              WHERE situation_id = ? ORDER BY created_at_ms DESC LIMIT ?
+            SQL
+            [situation_id, bound]
+          )
+        end
+        rows.map { |row| {"outcome" => row.fetch(0), "created_at_ms" => row.fetch(1)} }
+      end
+
       # --- P14-B: the atomic processing boundary (design §8, plan §5/C3) ----
 
       # `process_partition` is the ONE transaction owning all six steps:
@@ -264,7 +281,8 @@ module Tamoz
       #
       # @return [Hash] {"admitted" => [...], "situations" => [...],
       #                 "outbox" => [...], "watermark" => Integer}
-      def process_partition(partition_key, batch:, clock:, operators:, spec_digest:)
+      def process_partition(partition_key, batch:, clock:, operators:, spec_digest:,
+                            cognition_spec: nil)
         processing = clock.now_processing
         result = {
           "admitted" => [],
@@ -299,6 +317,18 @@ module Tamoz
             version = append_situation(partition_key, spec_digest, situation, processing, tx)
             versioned_situation = situation.merge("version" => version)
             trigger = operators[:trigger]&.call(versioned_situation, clock)
+            # P14-C integration: when a cognition spec is supplied, the PURE
+            # evaluator decides the persisted outcome (the operator's claim is
+            # a candidate, not the verdict). The situation_version is injected
+            # before evaluation (the evaluator requires it).
+            if trigger && cognition_spec
+              trigger = trigger.merge("situation_version" => version)
+              trigger = trigger.merge(
+                "outcome" => Tamoz::Stream::CognitionAdmission.evaluate(
+                  trigger:, now: processing, spec: cognition_spec
+                ).to_s
+              )
+            end
             append_trigger(partition_key, situation, trigger, version, processing, tx) if trigger
             result["situations"] << versioned_situation
           end
@@ -379,9 +409,15 @@ module Tamoz
         pending.each do |row|
           outbox_id = row.fetch(0)
           payload = JSON.parse(row.fetch(2), create_additions: false)
+          # C7: the bridge maps each Situation to its OWN thread namespace
+          # `["situation", situation_id]` so the graph's single-fenced-writer
+          # rule mechanically enforces one active episode per Situation
+          # (invariant 20). The situation_id is carried in the outbox payload.
+          situation_id = payload.is_a?(Hash) ? payload["situation_id"] : nil
+          thread_id = situation_id ? "situation.#{situation_id}" : "situation"
           # Own transaction (idempotent on the stable request id).
           checkpoints.enqueue_request(
-            thread_id: "situation",
+            thread_id:,
             request_id: outbox_id,
             operation: :turn,
             payload: payload
@@ -548,11 +584,18 @@ module Tamoz
       end
 
       def append_outbox(partition_key, item, processing, tx)
+        outbox_id = item.fetch("outbox_id")
+        # Plan C9: an oversized derived request id must fail at BUILD time,
+        # never at enqueue. The outbox id becomes the bridge request id, so
+        # the Wire request-id bound is enforced before the row exists.
+        unless outbox_id.is_a?(String) && outbox_id.bytesize <= 256
+          raise Tamoz::Stream::RequestIdTooLongError,
+                "outbox_id must fit the request-id bound (256 bytes)"
+        end
         payload = Tamoz::Core.canonical(item.fetch("payload"))
         digest = "sha256:#{Digest::SHA256.hexdigest(
           "tamoz.stream.outbox.v1\n" + JSON.generate(payload)
         )}"
-        outbox_id = item.fetch("outbox_id")
         tx.execute(
           "stream.outbox.insert",
           <<~SQL,

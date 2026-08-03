@@ -114,6 +114,7 @@ GEM
 
 PLATFORMS
   arm64-darwin-25
+  ruby
 
 DEPENDENCIES
   mcp (~> 1.1)
