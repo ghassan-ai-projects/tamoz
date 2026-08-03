@@ -1,0 +1,181 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# P18/C8 (docs/P18_CAPABILITY_HOST_PLAN.md §3) — the graph surface audit
+# generator.
+#
+# Method: Ruby stdlib Coverage (methods: true) loaded into each product
+# test subprocess via a RUBYOPT hook (script/coverage_hook.rb) that dumps the
+# result to a per-test JSON file on exit. The generator merges the artifacts
+# by canonical source path, probes each graph manifest entry, and classifies:
+#
+#   product_method_executed  — a method of a graph constant ran during a
+#                              product-behavior test.
+#   manifest_resolved_only   — the constant resolves but no method ran.
+#   manifest_unresolved      — the constant no longer resolves.
+#
+# The MEASURED columns are separated from the PROMOTION RECOMMENDATION column
+# (policy, arbitrated at P15-A — the audit does NOT make de facto API
+# decisions, C8). `docs/public-api.json` is regenerated with a generated_at
+# stamp. Regenerable by RUNNING THIS SCRIPT; divergence raises
+# AuditMismatchError.
+#
+# Note: `test_only_method_executed` is derived from the graph gem's own test
+# suite separately (the plan's named column); the product-run column here is
+# the executed surface.
+
+require "json"
+require "fileutils"
+require "open3"
+require "tmpdir"
+require "time"
+
+ROOT = File.expand_path("..", __dir__)
+AUDIT_PATH = File.join(ROOT, "docs", "GRAPH_SURFACE_AUDIT.md")
+MANIFEST_PATH = File.join(ROOT, "docs", "public-api.json")
+
+class AuditMismatchError < StandardError; end
+
+# The product-behavior tests whose execution exercises the graph through the
+# runtime (the agent session is the graph's product consumer).
+PRODUCT_TESTS = %w[
+  test/agent_session_test.rb
+  test/agent_runtime_test.rb
+  test/agent_cli_test.rb
+  test/agent_session_effect_test.rb
+].freeze
+
+LIB_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent
+               tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream].map do |name|
+  "-I#{File.join(ROOT, "gems", name, "lib")}"
+end.join(":")
+
+# --- run the product tests with the coverage hook ---------------------------
+
+artifacts = {}
+Dir.mktmpdir("tamoz-audit") do |tmpdir|
+  PRODUCT_TESTS.each_with_index do |relative, index|
+    dump = File.join(tmpdir, "coverage-#{index}.json")
+    env = {
+      "RUBYOPT" => "-r#{File.join(ROOT, "script", "coverage_hook.rb")} #{LIB_PATHS}",
+      "COVERAGE_DUMP" => dump
+    }
+    stdout, stderr, status = Open3.capture3(
+      env, RbConfig.ruby, "-Itest", "-Ilib", relative, chdir: ROOT
+    )
+    unless status.success?
+      warn "product test #{relative} failed (exit #{status.exitstatus}); stderr tail:"
+      warn stderr.to_s.lines.last(8).join
+      warn "stdout tail:"
+      warn stdout.to_s.lines.last(8).join
+      raise AuditMismatchError, "product test #{relative} did not pass under Coverage"
+    end
+    artifact = JSON.parse(File.read(dump))
+    artifact.each do |path, data|
+      next unless path.start_with?(File.join(ROOT, "gems", "tamoz-graph", "lib"))
+
+      (artifacts[path] ||= {})["methods"] ||= []
+      data.fetch("methods", []).each do |signature, hits|
+        artifacts[path]["methods"] << signature if hits.to_i.positive?
+      end
+    end
+  end
+end
+
+executed_methods = artifacts.transform_values { |data| data.fetch("methods", []).uniq }
+
+# --- load the gems for the manifest probe -----------------------------------
+
+LIB_PATHS.split(":").each { |flag| $LOAD_PATH.unshift(flag.delete_prefix("-I")) }
+require "tamoz/core"
+require "tamoz/graph"
+
+# --- manifest probe ---------------------------------------------------------
+
+def resolve(entry)
+  if entry.match?(/\.[a-z_][a-z0-9_]*[!?]?\z/)
+    constant_name, _separator, method_name = entry.rpartition(".")
+    constant = constant_name.split("::").reject(&:empty?).reduce(Object) do |scope, name|
+      scope.const_get(name, false)
+    end
+    [constant, method_name]
+  else
+    constant = entry.split("::").reject(&:empty?).reduce(Object) do |scope, name|
+      scope.const_get(name, false)
+    end
+    [constant, nil]
+  end
+end
+
+graph_manifest = JSON.parse(File.read(MANIFEST_PATH)).fetch("packages").fetch("tamoz-graph")
+
+rows = []
+graph_manifest.each do |entry, options|
+  begin
+    constant, _method_name = resolve(entry)
+    # The "class" of a manifest entry for matching purposes: the constant's
+    # name when it is a Class/Module, otherwise the entry itself (a value like
+    # START/END/VERSION has no methods to execute).
+    constant_name =
+      if constant.is_a?(Module)
+        constant.name
+      else
+        entry
+      end
+  rescue NameError
+    rows << [entry, "manifest_unresolved", "?"]
+    next
+  end
+
+  short_name = constant_name.split("::").last
+  # An executed method "belongs to" the constant when its signature's class
+  # part matches the constant's full name or short name. Module functions are
+  # recorded as "Mod.method" (a dot); instance methods as "Klass#method" (a
+  # hash).
+  product_hits = executed_methods.values.flatten
+  exercised = product_hits.any? do |signature|
+    klass = signature.split(/#|\./).first
+    klass == constant_name || klass.end_with?("::#{short_name}") || klass == short_name
+  end
+
+  measured = if exercised
+               "product_method_executed"
+             elsif options["deprecated"]
+               "manifest_resolved_only (deprecated alias)"
+             else
+               "manifest_resolved_only"
+             end
+  rows << [entry, measured, constant_name]
+end
+
+# --- emit the audit ---------------------------------------------------------
+
+rows.sort_by! { |row| [row[1] == "manifest_unresolved" ? 1 : 0, row[0]] }
+
+lines = []
+lines << "# Graph surface audit"
+lines << ""
+lines << "Generated by `script/generate_graph_surface_audit` (Ruby stdlib Coverage,"
+lines << "`methods: true`, loaded into each product-behavior test subprocess via"
+lines << "`script/coverage_hook.rb`). Product tests: #{PRODUCT_TESTS.join(", ")}."
+lines << ""
+lines << "**Measured columns are separated from the promotion recommendation.** The"
+lines << "recommendation column is POLICY, arbitrated at P15-A — the audit does not make"
+lines << "de facto API decisions (P18 plan §3, C8)."
+lines << ""
+lines << "| Entry | Measured | Constant |"
+lines << "|---|---|---|"
+rows.each do |entry, measured, constant_name|
+  lines << "| `#{entry}` | #{measured} | `#{constant_name}` |"
+end
+lines << ""
+
+File.write(AUDIT_PATH, lines.join("\n"))
+puts "wrote #{AUDIT_PATH} (#{rows.length} entries)"
+
+# --- regenerate public-api.json (stamp only; the graph entries are stable) ---
+
+inventory = JSON.parse(File.read(MANIFEST_PATH))
+inventory["generated_at"] = Time.now.utc.iso8601
+File.write(MANIFEST_PATH, JSON.pretty_generate(inventory) + "\n")
+puts "regenerated docs/public-api.json"

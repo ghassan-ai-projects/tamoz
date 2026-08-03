@@ -5,7 +5,9 @@
       "Tamoz::Agent.build": {},
       "Tamoz::Agent::ApprovalDeniedError": {},
       "Tamoz::Agent::CLI.run": {},
-      "Tamoz::Agent::CheckReceipt": {"deprecated": true},
+      "Tamoz::Agent::CheckReceipt": {
+        "deprecated": true
+      },
       "Tamoz::Agent::Deliberation": {},
       "Tamoz::Agent::EffectDispatcher": {},
       "Tamoz::Agent::Error": {},
@@ -23,12 +25,22 @@
       "Tamoz::Agent::SessionRecords": {},
       "Tamoz::Agent::SessionView": {},
       "Tamoz::Agent::SkillSnapshotUnavailableError": {},
-      "Tamoz::Agent::Skills": {"deprecated": true},
+      "Tamoz::Agent::Skills": {
+        "deprecated": true
+      },
       "Tamoz::Agent::Step": {},
-      "Tamoz::Agent::ToolArgumentError": {"deprecated": true},
-      "Tamoz::Agent::Toolbox": {"deprecated": true},
-      "Tamoz::Agent::ToolError": {"deprecated": true},
-      "Tamoz::Agent::ToolPolicyError": {"deprecated": true},
+      "Tamoz::Agent::ToolArgumentError": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::Toolbox": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::ToolError": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::ToolPolicyError": {
+        "deprecated": true
+      },
       "Tamoz::Agent::VERSION": {}
     },
     "tamoz-core": {
@@ -179,5 +191,6 @@
       "Tamoz::Tools::Toolbox": {},
       "Tamoz::Tools::VERSION": {}
     }
-  }
+  },
+  "generated_at": "2026-08-03T22:12:40Z"
 }
