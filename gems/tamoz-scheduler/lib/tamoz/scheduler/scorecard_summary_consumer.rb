@@ -46,15 +46,27 @@ module Tamoz
           return {"ok" => false, "reason" => "scorecard output is not JSON"}
         end
 
-        {
+        summary = {
           "ok" => true,
-          "decision" => report.fetch("decision"),
+          "decision" => report["decision"],
           "cases" => report.dig("corpus", "case_count"),
           "successes" => report.dig("aggregate", "task_successes"),
-          "hard_gates_passed" => report.fetch("hard_gates").count { |g| g.fetch("status") == "pass" },
-          "hard_gates_total" => report.fetch("hard_gates").length,
+          "hard_gates_passed" => nil,
+          "hard_gates_total" => nil,
           "unsafe_actions" => report.dig("aggregate", "unsafe_or_bypassed_actions")
         }
+        gates = report["hard_gates"]
+        if gates.is_a?(Array)
+          summary["hard_gates_passed"] = gates.count { |g| g.is_a?(Hash) && g["status"] == "pass" }
+          summary["hard_gates_total"] = gates.length
+        end
+        # Fail closed on a report that is valid JSON but structurally wrong
+        # (missing decision/gates): a summary with nil gate counts is not a
+        # usable execution-success signal.
+        return {"ok" => false, "reason" => "scorecard report is missing required fields"} \
+          if summary["decision"].nil? || summary["hard_gates_total"].nil?
+
+        summary
       end
 
       def self.grant = READ_ONLY_GRANT

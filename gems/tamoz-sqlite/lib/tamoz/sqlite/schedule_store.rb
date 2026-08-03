@@ -56,6 +56,23 @@ module Tamoz
             raise Tamoz::Scheduler::StoreConflictError,
                   "schedule #{schedule.id} is at revision #{current}, expected #{expected_revision}"
           end
+          # `enabled` is lifecycle STATE, not definition: an edit preserves the
+          # current enabled flag unless the new definition explicitly sets it,
+          # so a paused schedule stays paused across edits (critic repro J).
+          enabled = if schedule.enabled == false
+                      false
+                    elsif current
+                      tx.scalar(
+                        "schedule.put.enabled",
+                        <<~SQL,
+                          SELECT enabled FROM tamoz_schedules
+                          WHERE schedule_id = ? AND revision = ?
+                        SQL
+                        [schedule.id, current]
+                      ) == 1
+                    else
+                      true
+                    end
           next_revision = (current || 0) + 1
           tx.execute(
             "schedule.put.insert",
@@ -68,7 +85,7 @@ module Tamoz
             SQL
             [
               schedule.id, next_revision, schedule.definition_digest,
-              bytes, digest, schedule.enabled ? 1 : 0, now, now
+              bytes, digest, enabled ? 1 : 0, now, now
             ]
           )
           row = tx.first(
@@ -122,13 +139,13 @@ module Tamoz
       # the request id.
       #
       # P13-C (invariant 40): `current_grant` is the operator policy AT the
-      # enforcement point. The schedule's stored maximum grant is intersected
-      # against it: a revoked schedule skips (escalates), a narrowed one runs
-      # under the effective intersection. When `current_grant` is nil the
-      # check is skipped (the scorecard harness and tests that pin claim-time
-      # behavior before P13-C); production callers always pass it.
+      # enforcement point — REQUIRED. The schedule's stored maximum grant is
+      # intersected against it: a revoked schedule skips (escalates), a
+      # narrowed one runs under the effective intersection. `nil` fails
+      # closed (treated as an empty policy, so nothing survives the
+      # intersection): no operator policy means no delayed authority.
       def materialize_due(now:, owner:, lease_for:, limit:, request_template:,
-                          current_grant: nil)
+                          current_grant:)
         claimed = []
         @adapter.__send__(:transaction, operation: "schedule.materialize_due") do |tx|
           schedules = tx.rows(
@@ -156,64 +173,99 @@ module Tamoz
             )
             next unless schedule
 
-            # P13-C (invariant 40, claim-time): the stored maximum grant is a
-            # ceiling. Revocation skips/escalates; narrowing runs under the
-            # intersection. The request template carries the effective grant.
-            claim_template = request_template
-            if current_grant
-              effective = Tamoz::Scheduler::GrantIntersector.effective_grant(
-                schedule.capability_grant, current_grant
-              )
-              if effective.nil?
-                record_grant_denied(schedule, now, tx)
-                next
-              end
-              claim_template = request_template.merge(
-                "effective_grant" => effective
-              )
+            begin
+              claim_one_schedule(
+                schedule, now:, owner:, limit:, request_template:,
+                current_grant:, tx:
+              ).each { |value| claimed << value }
+            rescue Tamoz::Scheduler::StoreConflictError, Tamoz::CheckpointConflictError => error
+              # Plan §11: one schedule's conflict never crashes the poller.
+              # Record the conflict as a skipped reason and continue the scan.
+              record_scan_conflict(schedule, now, error.message, tx)
             end
+          end
+        end
+        claimed
+      end
 
-            due = schedule.due_occurrences(now:, limit:)
-            next if due.empty?
+      # The per-schedule claim body: grant intersection, due window, misfire
+      # selection, overlap enforcement (per-occurrence for `allow`), and the
+      # enqueue. Runs inside the caller's transaction.
+      def claim_one_schedule(schedule, now:, owner:, limit:, request_template:,
+                             current_grant:, tx:)
+        claimed = []
+        # P13-C (invariant 40, claim-time): the stored maximum grant is a
+        # ceiling. `nil` current policy fails closed (nothing survives).
+        effective = Tamoz::Scheduler::GrantIntersector.effective_grant(
+          schedule.capability_grant, current_grant
+        )
+        if effective.nil?
+          record_grant_denied(schedule, now, tx)
+          return claimed
+        end
+        claim_template = request_template.merge("effective_grant" => effective)
 
-            # P13-B (design §6): misfire policy decides what this scan
-            # materializes vs. records as skipped. Deterministic, bounded.
-            selection = schedule.misfire_selection(due)
-            non_terminal, pending = occurrence_state(schedule.id, tx)
+        due = schedule.due_occurrences(now:, limit:)
+        return claimed if due.empty?
 
-            # Misfire-skipped instants are recorded as skipped history (never
-            # enqueued), per the policy's selection.
-            selection.fetch(:skipped).each do |fire_at|
-              occurrence = build_occurrence(schedule, fire_at, now)
-              next if occurrence_exists?(occurrence, tx)
+        # P13-B (design §6): misfire policy decides what this scan
+        # materializes vs. records as skipped. Deterministic, bounded.
+        selection = schedule.misfire_selection(due)
+        non_terminal, pending = occurrence_state(schedule.id, tx)
 
-              record_terminal(schedule, occurrence, :skipped, "misfire", now, tx)
-            end
+        # P13-B (design §7): `forbid`/`queue_one` gate running-ahead against
+        # the DURABLE pre-scan state (a prior poll's in-flight occurrence
+        # blocks/coalesces THIS scan); `allow` re-evaluates per occurrence.
+        overlap = schedule.overlap_policy == :allow ? nil :
+                  schedule.overlap_decision(non_terminal:, pending:)
 
-            # P13-B (design §7): overlap decision from DURABLE occurrence
-            # state captured BEFORE this scan — never a process-local mutex,
-            # and same-scan replay occurrences are sequential, not concurrent.
+        # Misfire-skipped instants are recorded as skipped history (never
+        # enqueued), per the policy's selection.
+        selection.fetch(:skipped).each do |fire_at|
+          occurrence = build_occurrence(schedule, fire_at, now)
+          next if occurrence_exists?(occurrence, tx)
+
+          record_terminal(schedule, occurrence, :skipped, "misfire", now, tx)
+        end
+
+        due.each do |fire_at|
+          occurrence = build_occurrence(schedule, fire_at, now)
+          next if occurrence_exists?(occurrence, tx)
+          next unless selection.fetch(:materialize).include?(fire_at)
+
+          # P13-C/§5 (design §5): an occurrence is deliverable only once its
+          # `not_before` (nominal instant + deterministic jitter) has passed.
+          next if now < occurrence.not_before
+
+          # P13-B (design §7): overlap from DURABLE occurrence state — never
+          # a process-local mutex. `forbid`/`queue_one` gate running-ahead
+          # (evaluated against the pre-scan state once, so replay catch-up is
+          # not blocked by its own same-scan materializations); `allow` is
+          # re-evaluated per occurrence so same-scan materializations count
+          # toward max_concurrency.
+          if schedule.overlap_policy == :allow
             overlap = schedule.overlap_decision(non_terminal:, pending:)
-
-            due.each do |fire_at|
-              occurrence = build_occurrence(schedule, fire_at, now)
-              next if occurrence_exists?(occurrence, tx)
-              next unless selection.fetch(:materialize).include?(fire_at)
-
-              case overlap
-              when :skip
-                record_terminal(schedule, occurrence, :skipped, "overlap", now, tx)
-              when :coalesce
-                record_terminal(
-                  schedule, occurrence, :coalesced,
-                  "into pending occurrence", now, tx
-                )
-              when :materialize
-                enqueue_occurrence(
-                  schedule, occurrence, now, owner, claim_template, tx
-                ).then { |value| claimed << value }
-              end
+          end
+          case overlap
+          when :skip
+            if schedule.overlap_policy == :allow
+              # Backpressure, not a skip: the occurrence stays eligible for a
+              # later scan once concurrency frees (design §7 "exhaustion
+              # delays with a reason"). It is NOT recorded as terminal.
+              next
             end
+            record_terminal(schedule, occurrence, :skipped, "overlap", now, tx)
+          when :coalesce
+            record_terminal(
+              schedule, occurrence, :coalesced,
+              "into pending occurrence", now, tx
+            )
+          when :materialize
+            enqueue_occurrence(
+              schedule, occurrence, now, owner, claim_template, tx
+            ).then { |value| claimed << value }
+            non_terminal += 1
+            pending += 1
           end
         end
         claimed
@@ -248,19 +300,33 @@ module Tamoz
       end
 
       # P13-C (invariant 40): the schedule's stored grant is REVOKED under
-      # current policy. The NEWEST due occurrence is recorded as skipped with
-      # reason `grant_revoked` (bounded, queryable history) and nothing is
-      # enqueued — a revoked schedule never runs with a fabricated grant.
-      # The newest instant is used so a poll after prior materialization still
-      # records the revocation.
+      # current policy. EVERY due occurrence (bounded by the due window) is
+      # recorded as skipped with reason `grant_revoked` (design §6: every due
+      # occurrence has exactly one durable reason); nothing is enqueued — a
+      # revoked schedule never runs with a fabricated grant.
       def record_grant_denied(schedule, now, tx)
+        schedule.due_occurrences(now:).each do |fire_at|
+          occurrence = build_occurrence(schedule, fire_at, now)
+          next if occurrence_exists?(occurrence, tx)
+
+          record_terminal(schedule, occurrence, :skipped, "grant_revoked", now, tx)
+        end
+      end
+
+      # Plan §11: a schedule whose enqueue conflicted (a byte-different
+      # duplicate request id, or a stale revision) records the conflict as a
+      # skipped reason — the scan continues, the poller never crashes.
+      def record_scan_conflict(schedule, now, message, tx)
         due = schedule.due_occurrences(now:)
         return if due.empty?
 
         occurrence = build_occurrence(schedule, due.last, now)
         return if occurrence_exists?(occurrence, tx)
 
-        record_terminal(schedule, occurrence, :skipped, "grant_revoked", now, tx)
+        record_terminal(
+          schedule, occurrence, :skipped,
+          "scan_conflict:#{message.to_s.byteslice(0, 128)}", now, tx
+        )
       end
 
       # Enqueue ONE occurrence: the deterministic request id is the dedup key
@@ -381,7 +447,14 @@ module Tamoz
         nil
       end
 
+      TERMINAL_EXECUTION_STATUSES = %i[succeeded failed cancelled unknown].freeze
+
       def complete_occurrence(id, execution_id:, status:, evidence:)
+        unless TERMINAL_EXECUTION_STATUSES.include?(status)
+          raise Tamoz::Scheduler::SchedulerError,
+                "execution status must be one of " \
+                "#{TERMINAL_EXECUTION_STATUSES.inspect}, got #{status.inspect}"
+        end
         now = now_ms
         changed = nil
         @adapter.__send__(:transaction, operation: "schedule.complete") do |tx|

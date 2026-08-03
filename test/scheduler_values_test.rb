@@ -217,10 +217,12 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
     assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
 
-    # latest (default for recurring): coalesce the window into the latest.
+    # latest (default for recurring): coalesce the window into the latest,
+    # recording the covered range (design §6: every due occurrence has a
+    # durable reason).
     selection = interval_schedule(misfire_policy: :latest).misfire_selection(window)
     assert_equal [ANCHOR + 7_200], selection.fetch(:materialize)
-    assert_empty selection.fetch(:skipped)
+    assert_equal [ANCHOR, ANCHOR + 3_600], selection.fetch(:skipped)
 
     # replay: oldest-first up to the limit.
     selection = interval_schedule(

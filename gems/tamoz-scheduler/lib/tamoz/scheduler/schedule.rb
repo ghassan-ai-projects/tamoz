@@ -192,7 +192,10 @@ module Tamoz
         when :skip
           {materialize: [due_instants.last], skipped: due_instants[0...-1]}
         when :latest
-          {materialize: [due_instants.last], skipped: []}
+          # Coalesce the covered range: every older due instant is recorded
+          # with a durable reason (design §6: "every due occurrence has
+          # exactly one durable reason"), the latest carries the work.
+          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
         when :replay
           limit = [misfire_limit, 1].max
           # Oldest-first up to the limit; later ones are skipped.

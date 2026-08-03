@@ -1498,9 +1498,14 @@ round): the `tamoz-scheduler` gem (validated Schedule/Occurrence values for the 
 MIGRATION_3 (scheduler tables), the `enqueue_request_in_transaction!` extraction (the
 P13-A atomicity seam), and `Tamoz::SQLite::ScheduleStore` with the atomic `materialize_due`
 (claim → create occurrence → enqueue request in ONE transaction; duplicate-turn hard zero
-via the deterministic request id). Slices 2–5 remain: misfire/overlap/backpressure (P13-B),
-grant intersection (P13-C), the scorecard consumer + mandatory case (P13-P), and the
-fake-clock determinism suite + both-locale gate + critic round.
+via the deterministic request id). Slices 2–5 committed: misfire/overlap/backpressure
+(P13-B), grant intersection (P13-C), the scorecard consumer + mandatory case `agent.schedule-materialization`
+(P13-P, scorecard 21 cases / 18 successes / pass), and the fake-clock determinism suite.
+The fresh-context critic round returned PASS-WITH-GAPS; its three design-conformance
+findings (latest covered-range recording, per-occurrence `allow` cap with backpressure,
+`not_before` gating) and the gap fixes (nil-grant fail-closed, scan-conflict isolation,
+typed execution lifecycle, consumer fail-closed) are implemented and tested; the round
+closes with the final both-locale gate.
 
 ### Resume checklist for the next session
 

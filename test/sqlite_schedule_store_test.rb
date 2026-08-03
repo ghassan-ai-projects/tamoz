@@ -77,7 +77,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       now = 1_700_000_000
       claimed = store.materialize_due(
         now:, owner: "poller-1", lease_for: 30, limit: 10,
-        request_template:
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, claimed.length
       occurrence = claimed.first
@@ -100,12 +101,12 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.put_schedule(schedule)
       now = 1_700_000_000
 
-      first = store.materialize_due(now:, owner: "poller-1", lease_for: 30, limit: 10, request_template:)
+      first = store.materialize_due(now:, owner: "poller-1", lease_for: 30, limit: 10, request_template:, current_grant: {"scopes" => ["read"], "capabilities" => []})
       assert_equal 1, first.length
 
       # A repeated materialization re-runs the same transaction: same identity,
       # same request id, NO second request row and NO second occurrence.
-      second = store.materialize_due(now:, owner: "poller-1", lease_for: 30, limit: 10, request_template:)
+      second = store.materialize_due(now:, owner: "poller-1", lease_for: 30, limit: 10, request_template:, current_grant: {"scopes" => ["read"], "capabilities" => []})
       assert_equal 0, second.length
 
       # Exactly one queued request exists for that occurrence.
@@ -123,7 +124,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.put_schedule(schedule(start_at: 1_700_000_000))
       claimed = store.materialize_due(
         now: 1_700_000_100, owner: "poller-1", lease_for: 30, limit: 10,
-        request_template:
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, claimed.length
 
@@ -141,7 +143,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
         reopened = reopened_adapter.bind_schedule_store(reopened_app.checkpointer)
         again = reopened.materialize_due(
           now: 1_700_000_100, owner: "poller-2", lease_for: 30, limit: 10,
-          request_template:
+          request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
         )
         assert_equal 0, again.length, "restart must not duplicate an occurrence"
         assert_equal 1, reopened.list_occurrences(schedule_id: "daily").length
@@ -157,13 +160,13 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.put_schedule(schedule(id: "one-shot", kind: :at, expression: "2026-08-03T12:00:00Z"))
 
       # Before the instant: no occurrence.
-      before = store.materialize_due(now: instant - 10, owner: "p", lease_for: 30, limit: 10, request_template:)
+      before = store.materialize_due(now: instant - 10, owner: "p", lease_for: 30, limit: 10, request_template:, current_grant: {"scopes" => ["read"], "capabilities" => []})
       assert_equal 0, before.length
 
       # At/after the instant: exactly one occurrence, ever.
-      at = store.materialize_due(now: instant + 1, owner: "p", lease_for: 30, limit: 10, request_template:)
+      at = store.materialize_due(now: instant + 1, owner: "p", lease_for: 30, limit: 10, request_template:, current_grant: {"scopes" => ["read"], "capabilities" => []})
       assert_equal 1, at.length
-      later = store.materialize_due(now: instant + 1000, owner: "p", lease_for: 30, limit: 10, request_template:)
+      later = store.materialize_due(now: instant + 1000, owner: "p", lease_for: 30, limit: 10, request_template:, current_grant: {"scopes" => ["read"], "capabilities" => []})
       assert_equal 0, later.length
     end
   end
@@ -174,7 +177,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.disable_schedule("daily", expected_revision: stored.revision, reason: "manual pause")
 
       claimed = store.materialize_due(
-        now: 1_700_000_100, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: 1_700_000_100, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 0, claimed.length
 
@@ -195,7 +199,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.put_schedule(schedule(start_at: anchor, misfire_policy: :skip))
 
       claimed = store.materialize_due(
-        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, claimed.length, "skip coalesces the missed window into the latest"
       assert_equal anchor + 10_800, claimed.first.nominal_fire_at_utc
@@ -219,7 +224,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       )
 
       claimed = store.materialize_due(
-        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       # replay delivers the two OLDEST missed occurrences (the window is 4);
       # the later two are skipped because the limit is 2.
@@ -241,7 +247,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
                  misfire_policy: :fire_once)
       )
       claimed = store.materialize_due(
-        now: instant + 3_600, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: instant + 3_600, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, claimed.length
       assert_equal instant, claimed.first.nominal_fire_at_utc
@@ -258,13 +265,15 @@ class SQLiteScheduleStoreTest < Minitest::Test
       store.put_schedule(schedule(start_at: anchor, overlap_policy: :forbid))
 
       first = store.materialize_due(
-        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, first.length
       # The first occurrence is still enqueued (non-terminal). The next
       # materialization at the second cadence must SKIP the new occurrence.
       second = store.materialize_due(
-        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 0, second.length
       occurrences = store.list_occurrences(schedule_id: "daily")
@@ -282,7 +291,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
         schedule(start_at: anchor, overlap_policy: :allow, max_concurrency: 2)
       )
       claimed = store.materialize_due(
-        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       # With allow(2) under `latest` misfire, the first poll materializes the
       # latest occurrence only. Complete it, then the next poll materializes
@@ -298,7 +308,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       )
 
       again = store.materialize_due(
-        now: anchor + 14_400, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 14_400, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, again.length
     end
@@ -312,7 +323,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
         schedule(start_at: anchor, overlap_policy: :queue_one)
       )
       first = store.materialize_due(
-        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 1, first.length
 
@@ -320,7 +332,8 @@ class SQLiteScheduleStoreTest < Minitest::Test
       # (latest misfire) would materialize a+1h; queue_one coalesces it into
       # the pending occurrence instead of enqueuing a second request.
       later = store.materialize_due(
-        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:
+        now: anchor + 3_700, owner: "p", lease_for: 30, limit: 10, request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
       )
       assert_equal 0, later.length
       occurrences = store.list_occurrences(schedule_id: "daily")
@@ -381,6 +394,172 @@ class SQLiteScheduleStoreTest < Minitest::Test
       # execution-time authority is the intersection, never the stored max.
       assert_equal({"scopes" => ["read"], "capabilities" => []},
                    request.payload.fetch("effective_grant"))
+    end
+  end
+
+  # --- P13 critic fixes: covered range, grant history, allow cap, nil ---------
+
+  # latest misfire records EVERY covered instant (design §6), not just the
+  # latest.
+  def test_latest_records_the_covered_range
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(start_at: anchor, misfire_policy: :latest))
+      store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      # All four due instants have a durable row: one enqueued (the latest),
+      # three skipped (the covered range).
+      assert_equal 4, occurrences.length
+      assert_equal 1, occurrences.count { |o| o.state == :enqueued }
+      assert_equal 3, occurrences.count { |o| o.state == :skipped }
+    end
+  end
+
+  # A revoked grant records EVERY due occurrence (bounded), never just one.
+  def test_grant_denial_records_all_due_occurrences
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(
+          start_at: anchor,
+          capability_grant: {"scopes" => ["read"], "capabilities" => ["tool.apply-patch"]}
+        )
+      )
+      store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => [], "capabilities" => []}
+      )
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      assert_equal 4, occurrences.length
+      assert_equal 4, occurrences.count { |o| o.state == :skipped && o.reason == "grant_revoked" }
+    end
+  end
+
+  # nil current policy fails closed (nothing survives the intersection).
+  def test_nil_current_grant_fails_closed
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(start_at: anchor))
+      claimed = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: nil
+      )
+      assert_equal 0, claimed.length
+      assert_equal :skipped, store.list_occurrences(schedule_id: "daily").first.state
+    end
+  end
+
+  # allow(1) with a replay window materializes ONE occurrence per scan (the
+  # per-occurrence cap), never the whole backlog.
+  def test_allow_caps_same_scan_materializations
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(
+          start_at: anchor, overlap_policy: :allow, max_concurrency: 1,
+          misfire_policy: :replay, misfire_limit: 2
+        )
+      )
+      claimed = store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      assert_equal 1, claimed.length, "allow(1) caps same-scan materialization"
+      # The next cadence (after the first completes) materializes the next one.
+      store.acknowledge_occurrence(
+        claimed.first.occurrence_id, execution_id: "e", fence: claimed.first.fence
+      )
+      store.complete_occurrence(
+        claimed.first.occurrence_id, execution_id: "e", status: :succeeded, evidence: {}
+      )
+      again = store.materialize_due(
+        now: anchor + 10_800, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      assert_equal 1, again.length
+    end
+  end
+
+  # --- P13: typed execution lifecycle (plan §11 failure model) -------------
+
+  def test_completion_requires_a_terminal_status_and_the_running_state
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(start_at: anchor))
+      claimed = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      occurrence = claimed.first
+
+      assert_raises(Scheduler::SchedulerError) do
+        store.complete_occurrence(occurrence.occurrence_id, execution_id: "e", status: :enqueued, evidence: {})
+      end
+      assert_raises(Scheduler::SchedulerError) do
+        store.complete_occurrence(occurrence.occurrence_id, execution_id: "e", status: :bogus, evidence: {})
+      end
+      assert_raises(Scheduler::SchedulerError) do
+        store.complete_occurrence(occurrence.occurrence_id, execution_id: "e", status: :succeeded, evidence: {})
+      end
+
+      store.acknowledge_occurrence(
+        occurrence.occurrence_id, execution_id: "e-1", fence: occurrence.fence
+      )
+      store.complete_occurrence(
+        occurrence.occurrence_id, execution_id: "e-1", status: :succeeded, evidence: {"ok" => true}
+      )
+      assert_equal :succeeded, store.list_occurrences(schedule_id: "daily").first.state
+
+      assert_raises(Scheduler::SchedulerError) do
+        store.complete_occurrence(occurrence.occurrence_id, execution_id: "e-2", status: :failed, evidence: {})
+      end
+    end
+  end
+
+  # --- P13 critic fixes: scan conflict isolation ----------------------------
+
+  # A schedule whose enqueue conflicts must not wedge the whole scan (plan §11).
+  # B's deterministic request id is pre-poisoned with byte-different content;
+  # the scan's enqueue for B raises, B is recorded as a conflict, and A still
+  # materializes.
+  def test_scan_conflict_records_a_reason_and_continues
+    with_engine do |store, _adapter, checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(schedule(id: "good", start_at: anchor))
+      store.put_schedule(schedule(id: "conflict", start_at: anchor))
+
+      # Compute B's deterministic request id (from the schedule definition +
+      # nominal instant), then pre-enqueue a DIFFERENT payload under it.
+      fire_at = schedule(id: "conflict", start_at: anchor)
+                        .due_occurrences(now: anchor + 100).first
+      occurrence = Scheduler::Occurrence.new(
+        schedule_id: "conflict", schedule_revision: 1, nominal_fire_at_utc: fire_at,
+        created_at: anchor
+      )
+      checkpoints.enqueue_request(
+        thread_id: "thread.scheduler", request_id: occurrence.request_id,
+        operation: :turn, payload: {"kind" => "poisoned", "conflict_schedule" => "conflict"}
+      )
+
+      # The scan must NOT wedge: A materializes, B records the conflict.
+      claimed = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      assert_equal 1, claimed.length
+      assert_equal "good", claimed.first.schedule_id
+      conflict_rows = store.list_occurrences(schedule_id: "conflict")
+      assert conflict_rows.any? { |o| o.state == :skipped && o.reason.start_with?("scan_conflict") }
     end
   end
 end
