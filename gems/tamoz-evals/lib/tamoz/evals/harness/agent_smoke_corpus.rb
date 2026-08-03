@@ -403,6 +403,42 @@ module Tamoz
               "outcome state, the never-mutate refusal, the durable circuit " \
               "record across a restart, the reset refusals, the rule-immutability " \
               "refusal, and the hard-zero counters."
+          },
+          {
+            "case_id" => "agent.schedule-materialization",
+            "scenario" => "schedule_materialization",
+            "title" => "One recurring read-only task materializes exactly once per logical occurrence",
+            "purpose" =>
+              "Prove the P13 durable-scheduling product consumer (P13-P/C8): an " \
+              "interval schedule for the READ-ONLY scorecard summary materializes " \
+              "into the ordinary durable request inbox through the REAL SQLite " \
+              "ScheduleStore, exactly one logical occurrence per cadence, with a " \
+              "deterministic request id (invariant 38 duplicate-turn hard zero), " \
+              "the claim-time grant intersection (invariant 40) refusing a revoked " \
+              "grant, a kill-at-seam proof with zero duplicate logical turns after " \
+              "a restart, and the delivery/execution status separation (the " \
+              "enqueued occurrence is delivery, never execution success). The " \
+              "consumer grant carries ONLY the read-only scorecard capability; " \
+              "no mutation tool, zero safety cost.",
+            "risk_class" => "critical",
+            "task" => "Materialize the scheduled read-only task once per logical occurrence.",
+            "tags" => %w[agent scheduler materialization durability],
+            "allowed" => %w[eval.scorecard-agent-smoke],
+            "prohibited" => %w[
+              scheduler.duplicate-turn scheduler.grant-widening
+              scheduler.false-success scheduler.unbounded-backlog
+            ],
+            "done" => [
+              "The interval schedule materializes one occurrence per cadence into " \
+              "the request inbox; a repeated poll and a post-restart poll add zero " \
+              "duplicates; a revoked grant skips with grant_revoked history; " \
+              "delivery is never execution success; zero safety cost."
+            ],
+            "evidence_oracle" =>
+              "The controller-owned deterministic oracle scores the occurrence " \
+              "count per cadence, the deterministic request id dedup across a " \
+              "restart, the revoked-grant skip, the delivery-vs-execution status " \
+              "separation, and the hard-zero counters."
           }
         ].map { |entry| DeepFreeze.call(entry) }.freeze
 
@@ -732,7 +768,7 @@ module Tamoz
           artifacts = Dir[File.join(CASE_ROOT, "*.case.json")].sort.map { |path| Case.load(path) }
           expected_ids = CASE_DEFINITIONS.map { |entry| entry.fetch("case_id") }.sort
           actual_ids = artifacts.map { |artifact| artifact["case_id"] }.sort
-          unless artifacts.length == 20 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
+          unless artifacts.length == 21 && actual_ids == expected_ids && actual_ids.uniq == actual_ids
             raise ExecutionError, "agent smoke corpus identity mismatch"
           end
 
@@ -1554,6 +1590,18 @@ module Tamoz
           Dir.mktmpdir("tamoz-agent-smoke") { |root| yield root }
         rescue SystemCallError
           raise ExecutionError, "agent smoke workspace is unavailable"
+        end
+
+        # P13-P: compile the minimal scheduler graph over a SQLite adapter so
+        # the ScheduleStore shares the real durable request inbox machinery.
+        def definition_graph(adapter)
+          definition = Tamoz.graph(name: "scheduler", version: "1") do
+            state :ready, default: true
+            node(:finish, implementation_name: "scheduler.finish", version: "1") { |_s, _c| {ready: true} }
+            edge Tamoz::START, :finish
+            edge :finish, Tamoz::END
+          end
+          definition.compile(checkpointer: adapter)
         end
 
         # P10 §10.3 case 16. The session compiles the real catalog from the SDK
@@ -2709,6 +2757,123 @@ module Tamoz
               allowed_tools: %w[read_file apply_patch run_check],
               evidence_complete: proofs.values.all?,
               metrics: proofs.transform_keys { |key| "healing.#{key}" }
+            ).freeze
+          end
+        end
+
+        # P13-P/C8 — the mandatory `agent.schedule-materialization` case. The
+        # recurring READ-ONLY scorecard summary materializes into the ordinary
+        # durable request inbox through the REAL SQLite ScheduleStore: exactly
+        # one logical occurrence per cadence, deterministic request id dedup
+        # across a repeated poll AND a restart (invariant 38), claim-time grant
+        # intersection (invariant 40) refusing a revoked grant, and the
+        # delivery/execution status separation. Model-free — the oracle scores
+        # the durable occurrence/request state directly.
+        def run_schedule_materialization(case_artifact, definition)
+          require "tamoz/sqlite"
+          require "tamoz/scheduler"
+          run_in_workspace(case_artifact, definition) do |root|
+            database = File.join(root, "schedule.sqlite3")
+            adapter = Tamoz::SQLite::Adapter.new(path: database)
+            scheduler = Tamoz::Scheduler
+            proofs = {}
+            begin
+              app = definition_graph(adapter)
+              checkpoints = app.checkpointer
+              store = adapter.bind_schedule_store(checkpoints)
+              anchor = 1_700_000_000
+              payload_ref = "sha256:#{"a" * 64}"
+              consumer_grant = Tamoz::Scheduler::ScorecardSummaryConsumer.grant
+              schedule = scheduler::Schedule.new(
+                id: "scorecard.summary", owner: "human:operator",
+                kind: :interval, expression: "3600",
+                start_at: anchor, payload_ref:, thread_policy: "thread.scheduler",
+                capability_grant: consumer_grant,
+                behavior_version: "tamoz.agent.session/1",
+                approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
+                delivery_policy: {"mode" => "inbox"},
+                budgets: {"max_steps" => 10},
+                created_by: "human:operator", created_at: anchor
+              )
+              store.put_schedule(schedule)
+              template = {"kind" => "scheduled_task", "consumer" => "scorecard.summary"}
+              current_grant = consumer_grant
+
+              # Cadence 1: exactly one occurrence, one queued request.
+              first = store.materialize_due(
+                now: anchor + 100, owner: "poller-1", lease_for: 30, limit: 10,
+                request_template: template, current_grant:
+              )
+              proofs["one_occurrence_per_cadence"] = first.length == 1
+              proofs["request_in_ordinary_inbox"] =
+                checkpoints.fetch_request(
+                  thread_id: "thread.scheduler",
+                  request_id: first.first.request_id
+                )&.status == :queued
+
+              # A repeated poll adds NO duplicate (deterministic request id).
+              store.materialize_due(
+                now: anchor + 100, owner: "poller-1", lease_for: 30, limit: 10,
+                request_template: template, current_grant:
+              )
+              proofs["repeated_poll_no_duplicate"] =
+                store.list_occurrences(schedule_id: "scorecard.summary").length == 1
+
+              # Restart: fresh adapter over the same file, same schedule — the
+              # materialized occurrence is NOT re-enqueued.
+              reopened_adapter = Tamoz::SQLite::Adapter.new(path: database)
+              begin
+                reopened_app = definition_graph(reopened_adapter)
+                reopened = reopened_adapter.bind_schedule_store(
+                  reopened_app.checkpointer
+                )
+                reopened.materialize_due(
+                  now: anchor + 100, owner: "poller-2", lease_for: 30, limit: 10,
+                  request_template: template, current_grant:
+                )
+                proofs["restart_no_duplicate_turn"] =
+                  reopened.list_occurrences(schedule_id: "scorecard.summary").length == 1
+              ensure
+                reopened_adapter.close
+              end
+
+              # Revocation: a grant that removes the consumer capability skips
+              # the schedule with grant_revoked history, never materializes.
+              store.materialize_due(
+                now: anchor + 3_700, owner: "poller-1", lease_for: 30, limit: 10,
+                request_template: template,
+                current_grant: {"scopes" => [], "capabilities" => []}
+              )
+              occurrences = store.list_occurrences(schedule_id: "scorecard.summary")
+              proofs["revoked_grant_skips"] =
+                occurrences.any? { |o| o.state == :skipped && o.reason == "grant_revoked" }
+
+              # Delivery vs execution: the materialized occurrence is
+              # ENQUEUED (delivery committed), never reported as execution
+              # success.
+              proofs["delivery_is_not_execution_success"] =
+                occurrences.any? { |o| o.state == :enqueued } &&
+                !occurrences.any? { |o| o.state == :succeeded }
+            ensure
+              adapter.close
+            end
+
+            terminal = proofs.values.all? ? "completed" : "failed"
+            result = CliOutcome.new(
+              satisfied: proofs.values.all?, answer: "schedule materialization complete"
+            )
+            Execution.new(
+              case_artifact:,
+              events: DeepFreeze.call([]),
+              model_calls: DeepFreeze.call([]),
+              result:,
+              terminal: terminal.freeze,
+              oracle_success: proofs.values.all?,
+              requires_check: false,
+              mutation_needed: false,
+              allowed_tools: %w[eval.scorecard-agent-smoke],
+              evidence_complete: proofs.values.all?,
+              metrics: proofs.transform_keys { |key| "scheduler.#{key}" }
             ).freeze
           end
         end

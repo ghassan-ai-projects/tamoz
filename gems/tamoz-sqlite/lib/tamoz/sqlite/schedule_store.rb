@@ -248,14 +248,16 @@ module Tamoz
       end
 
       # P13-C (invariant 40): the schedule's stored grant is REVOKED under
-      # current policy. The earliest due occurrence is recorded as skipped with
+      # current policy. The NEWEST due occurrence is recorded as skipped with
       # reason `grant_revoked` (bounded, queryable history) and nothing is
       # enqueued — a revoked schedule never runs with a fabricated grant.
+      # The newest instant is used so a poll after prior materialization still
+      # records the revocation.
       def record_grant_denied(schedule, now, tx)
-        earliest = schedule.due_occurrences(now:).first
-        return unless earliest
+        due = schedule.due_occurrences(now:)
+        return if due.empty?
 
-        occurrence = build_occurrence(schedule, earliest, now)
+        occurrence = build_occurrence(schedule, due.last, now)
         return if occurrence_exists?(occurrence, tx)
 
         record_terminal(schedule, occurrence, :skipped, "grant_revoked", now, tx)
