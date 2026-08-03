@@ -8,6 +8,8 @@ require_relative "stream/stream_clock"
 require_relative "stream/clock"
 require_relative "stream/channel_descriptor"
 require_relative "stream/event_envelope"
+require_relative "stream/situation_spec"
+require_relative "stream/cognition_admission"
 require_relative "stream/connector"
 require_relative "stream/stream_store"
 
