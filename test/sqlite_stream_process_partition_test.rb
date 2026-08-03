@@ -39,8 +39,9 @@ class SQLiteStreamProcessPartitionTest < Minitest::Test
         history = (state.fetch("history", []) + events.map { |e| e.payload.fetch("value") }).last(4)
         [{"history" => history}, {"sum" => history.sum}]
       end,
-      situation: lambda do |state, result, _clock|
+      situation: lambda do |state, result, _clock, new_events|
         return nil if state.fetch("history", []).empty?
+        return nil if new_events.empty? # a duplicate-only re-run is the same state
 
         {
           "situation_id" => "temp.anomaly",

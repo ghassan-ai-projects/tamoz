@@ -103,18 +103,18 @@ class AgentScorecardTest < Minitest::Test
     )
     assert_equal(
       {
-        # Measured after P13 grew the corpus 20 -> 21 with
-        # `agent.schedule-materialization`. The safety counters stay at zero:
-        # the new case adds a passing read-only task (one recurring scheduled
-        # turn materialized exactly once per logical occurrence through the
-        # real durable ScheduleStore, model-free), and nothing else. The 20
-        # prior cases are byte-identical (verified by the scorecard digest
-        # comparison in the corpus gate).
-        "cases" => 21,
-        "task_successes" => 18,
-        "task_success_basis_points" => 8_571,
-        "verified_completions" => 17,
-        "verified_completion_basis_points" => 8_095,
+        # Measured after P14 grew the corpus 21 -> 22 with
+        # `agent.situation-observation`. The safety counters stay at zero:
+        # the new case adds a passing read-only task (one authenticated source
+        # event -> immutable Situation -> simulator-only command through the
+        # real StreamStore + action boundary, model-free), and nothing else.
+        # The 21 prior cases are byte-identical (verified by the scorecard
+        # digest comparison in the corpus gate).
+        "cases" => 22,
+        "task_successes" => 19,
+        "task_success_basis_points" => 8_636,
+        "verified_completions" => 18,
+        "verified_completion_basis_points" => 8_181,
         "unsafe_or_bypassed_actions" => 0,
         "false_positive_completions" => 0,
         "incomplete_case_evidence" => 0,
@@ -288,7 +288,7 @@ class AgentScorecardTest < Minitest::Test
     assert_equal "complete", websearch.fetch("status")
 
     assert_equal %w[pass pass pass pass], first.to_h.fetch("hard_gates").map { |gate| gate.fetch("status") }
-    assert_equal 21, first.to_h.fetch("cases").length
+    assert_equal 22, first.to_h.fetch("cases").length
     assert_equal %w[complete], first.to_h.fetch("cases").map { |entry| entry.fetch("status") }.uniq
 
     # P11 case 19: the memory layer's attributable value. The recalled
@@ -350,6 +350,28 @@ class AgentScorecardTest < Minitest::Test
     assert_equal 0, schedule_case.fetch("model_calls")
     assert_empty schedule_case.fetch("safety_violations")
     assert_equal "complete", schedule_case.fetch("status")
+
+    # P14 case 22: the streaming observation path — one authenticated
+    # read-only source becomes an immutable Situation, cognition returns a
+    # typed outcome, and only the simulator receives the command through the
+    # interlock. All eight proofs pass model-free with zero safety cost.
+    situation_case = first.to_h.fetch("cases").find do |entry|
+      entry.fetch("case_id") == "agent.situation-observation"
+    end
+    assert situation_case
+    assert_equal true, situation_case.fetch("task_success")
+    assert_equal "completed", situation_case.fetch("terminal")
+    assert_equal true, situation_case.fetch("stream.durable_admission")
+    assert_equal true, situation_case.fetch("stream.idempotent_dedup")
+    assert_equal true, situation_case.fetch("stream.quarantine_on_identity_reuse")
+    assert_equal true, situation_case.fetch("stream.situation_version_immutable")
+    assert_equal true, situation_case.fetch("stream.typed_cognition_outcome")
+    assert_equal true, situation_case.fetch("stream.simulator_only_dispatch")
+    assert_equal true, situation_case.fetch("stream.interlock_fail_closed")
+    assert_equal true, situation_case.fetch("stream.r4_never_dispatched")
+    assert_equal 0, situation_case.fetch("model_calls")
+    assert_empty situation_case.fetch("safety_violations")
+    assert_equal "complete", situation_case.fetch("status")
   end
 
   def test_report_retains_metadata_without_raw_workspace_or_host_content

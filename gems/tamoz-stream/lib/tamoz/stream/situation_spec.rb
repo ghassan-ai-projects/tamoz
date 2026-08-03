@@ -23,7 +23,7 @@ module Tamoz
       :late_data_policy, :idle_after_seconds,
       :spec_digest
     ) do
-      DIGEST_DOMAIN = "tamoz.stream.situation_spec.v1\n"
+      SPEC_DIGEST_DOMAIN = "tamoz.stream.situation_spec.v1\n"
       RISK_CLASSES = %i[r0_observe r1_notify r2_bounded r3_denied r4_advisory].freeze
       LATE_DATA_POLICIES = %i[drop_with_audit history_only correct correct_and_reconsider].freeze
 
@@ -64,7 +64,7 @@ module Tamoz
       def compute_digest(fields)
         definition = fields.reject { |key, _value| key == :spec_digest }
         "sha256:#{Digest::SHA256.hexdigest(
-          DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(definition))
+          SPEC_DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(definition))
         )}"
       end
 
@@ -115,7 +115,7 @@ module Tamoz
     # a superseded episode's late Decision dies on the snapshot-digest
     # mismatch (freshness check).
     class SituationSnapshot
-      DIGEST_DOMAIN = "tamoz.stream.situation_snapshot.v1\n"
+      SNAPSHOT_DIGEST_DOMAIN = "tamoz.stream.situation_snapshot.v1\n"
 
       attr_reader :situation_id, :situation_version, :evidence, :uncertainty,
                   :risk_class, :deadline, :created_at, :snapshot_digest
@@ -157,7 +157,7 @@ module Tamoz
           "deadline" => deadline
         }
         "sha256:#{Digest::SHA256.hexdigest(
-          DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(body))
+          SNAPSHOT_DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(body))
         )}"
       end
     end

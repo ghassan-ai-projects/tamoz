@@ -22,14 +22,14 @@ module Tamoz
       :classification, :payload
     ) do
       IDENTITY_DOMAIN = "tamoz.stream.event_identity.v1\n"
-      PAYLOAD_HASH_DOMAIN = "tamoz.stream.event_payload.v1\n"
+      ENVELOPE_PAYLOAD_HASH_DOMAIN = "tamoz.stream.event_payload.v1\n"
       ENVELOPE_ID_PATTERN = Patterns::ID_PATTERN
 
       # The canonical payload hash. Same bytes -> same hash; any byte change
       # -> different hash (the quarantine discriminator).
       def self.payload_hash(payload)
         "sha256:#{Digest::SHA256.hexdigest(
-          PAYLOAD_HASH_DOMAIN + JSON.generate(Tamoz::Core.canonical(payload))
+          ENVELOPE_PAYLOAD_HASH_DOMAIN + JSON.generate(Tamoz::Core.canonical(payload))
         )}"
       end
 

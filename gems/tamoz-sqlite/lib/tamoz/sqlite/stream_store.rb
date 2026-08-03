@@ -287,8 +287,12 @@ module Tamoz
           )
           save_operator_state(partition_key, spec_digest, new_state, processing, tx)
 
-          # Step 3/4: Situation version + trigger evaluation.
-          situation = operators[:situation]&.call(new_state, operator_result, clock)
+          # Step 3/4: Situation version + trigger evaluation. The situation
+          # operator receives the NEWLY ADMITTED events (a re-run with only
+          # duplicates is the same state — no new Situation version).
+          situation = operators[:situation]&.call(
+            new_state, operator_result, clock, admitted_events
+          )
           trigger = nil
           versioned_situation = nil
           if situation
@@ -343,6 +347,55 @@ module Tamoz
           advance_watermark_in_tx(partition_key, processing, clock, tx)
         end
         watermark(partition_key)
+      end
+
+      # C3/P5 — the outbox drain. Runs AFTER the processing transaction, with
+      # its own lease, and is idempotent by construction: it calls the
+      # checkpointer's `enqueue_request` with the stable derived request id, so
+      # a drained-twice row is a no-op (same request id + input digest -> no-op;
+      # a different payload -> CheckpointConflictError, surfaced typed). A crash
+      # between outbox append and drain retries the same row -> one logical
+      # episode (invariant 23).
+      #
+      # The enqueue happens OUTSIDE the drain's read/update transactions (the
+      # adapter's transaction is non-reentrant, plan §C3): read the pending
+      # rows, enqueue each (own transaction), then mark drained.
+      #
+      # @param checkpoints [Object] the graph checkpointer exposing
+      #   enqueue_request (duck-typed; nil = drain disabled).
+      # @return [Array<Hash>] the drained outbox rows.
+      def drain_outbox(checkpoints:, clock:)
+        return [] unless checkpoints
+
+        pending = @adapter.__send__(:read, operation: "stream.outbox.pending") do |tx|
+          tx.rows(
+            "stream.outbox.pending",
+            "SELECT outbox_id, kind, payload FROM tamoz_stream_outbox " \
+            "WHERE drained = 0 ORDER BY created_at_ms LIMIT 100"
+          )
+        end
+
+        drained = []
+        pending.each do |row|
+          outbox_id = row.fetch(0)
+          payload = JSON.parse(row.fetch(2), create_additions: false)
+          # Own transaction (idempotent on the stable request id).
+          checkpoints.enqueue_request(
+            thread_id: "situation",
+            request_id: outbox_id,
+            operation: :turn,
+            payload: payload
+          )
+          @adapter.__send__(:transaction, operation: "stream.outbox.mark") do |tx|
+            tx.execute(
+              "stream.outbox.mark_drained",
+              "UPDATE tamoz_stream_outbox SET drained = 1, updated_at_ms = ? WHERE outbox_id = ?",
+              [clock.now_processing, outbox_id]
+            )
+          end
+          drained << {"outbox_id" => outbox_id, "kind" => row.fetch(1), "payload" => payload}
+        end
+        drained
       end
 
       private
