@@ -1,13 +1,11 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: P0–P11, P16, P17, P12 all closed (scorecard 20/17/pass; P12
-critic PASS-WITH-GAPS, both gaps closed with committed tests)
-Current phase: `P13` — durable scheduling
-Next action: implement P13 per `docs/P13_SCHEDULER_PLAN.md` (one recurring read-only
-product task into the durable request inbox exactly once per logical occurrence; the
-DR-2 `schedule` scope already exists on the shared circuit record); merge, gate, critic
-round; then P14.
+Implementation baseline: P0–P11, P16, P17, P12, P13 all closed (scorecard 21/18/pass;
+P12 and P13 critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
+Current phase: `P14` — streaming input + simulated physical-world assistance
+Next action: implement P14 per `docs/P14_STREAM_PLAN.md`; merge, gate, critic round;
+then P18, then P15 (release hardening).
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -73,7 +71,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | DR-5 | complete | profile role/transition/resume machinery | `6ff0d40` | `1c6efa1`, `be84e8e` |
 | P11 | closed | three-layer memory | `0531bee` | critic fixes `5cdf17f` |
 | P12 | closed | bounded healing and improvement | Round 24 | observation/shadow-only disclosed; DR-2 durable circuit on one record type; critic PASS-WITH-GAPS, both gaps closed |
-| P13 | pending | durable scheduling | — | — |
+| P13 | closed | durable scheduling | Round 25 | tamoz-scheduler gem (at/interval, cron deferred); MIGRATION_3; atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
 | P14 | pending | Situation streaming and simulated physical action | — | — |
 | P15 | pending | release hardening and independent completion audit | — | — |
 | P16 | complete | tools gem extraction, behavior-neutral | `6ff0d40`, `999b5c9` | `8f6b893`, `38d2e94` (merge), `2ae9e60` |
@@ -442,18 +440,30 @@ product task into the ordinary durable request inbox exactly once per logical oc
 
 Work packages:
 
-- [ ] **P13-D** Define package/store contract, Schedule/Occurrence values, immutable revisions,
+- [x] **P13-D** Define package/store contract, Schedule/Occurrence values, immutable revisions,
   UTC identity, strict `at`/interval/cron, IANA timezone/DST, deterministic jitter.
-- [ ] **P13-A** Implement SQLite schedule/occurrence store, CAS/fence, due scan, atomic
-  occurrence/request identity via same transaction or durable outbox.
-- [ ] **P13-B** Implement bounded misfire, overlap, concurrency, backlog, lease reclaim,
-  pause/disable/delete/cancel, and separate delivery/execution statuses.
-- [ ] **P13-C** Intersect stored maximum grants with current P8 policy; plan/review every
+  (v1 ships `at` + `interval`; cron/IANA is a recorded deferral with entry conditions,
+  plan §12.)
+- [x] **P13-A** Implement SQLite schedule/occurrence store, CAS/fence, due scan, atomic
+  occurrence/request identity via same transaction or durable outbox. (Atomic
+  materialize_due via the shared enqueue_request_in_transaction! primitive; deterministic
+  request id dedup; MIGRATION_3.)
+- [x] **P13-B** Implement bounded misfire, overlap, concurrency, backlog, lease reclaim,
+  pause/disable/delete/cancel, and separate delivery/execution statuses. (All four misfire
+  policies, all three overlap policies with per-occurrence `allow` cap, `not_before`
+  gating, backpressure deferral, typed delivery→running→terminal lifecycle.)
+- [x] **P13-C** Intersect stored maximum grants with current P8 policy; plan/review every
   occurrence; missing approval denies/escalates; self-management stays narrow.
-- [ ] **P13-P** Ship one safe product consumer: a recurring reviewed read-only project status
-  or scorecard summary, not an unattended mutation.
-- [ ] **P13-E** Reference-calendar/fake-clock suite for DST gaps/folds, clock jumps, downtime,
+  (Claim-time intersection, invariant 40; `current_grant` required, nil fails closed;
+  revoked schedules skip with grant_revoked history; the effective grant rides the
+  enqueued request for execution-time re-validation.)
+- [x] **P13-P** Ship one safe product consumer: a recurring reviewed read-only project status
+  or scorecard summary, not an unattended mutation. (ScorecardSummaryConsumer, read-only
+  grant, mandatory case 21 agent.schedule-materialization.)
+- [x] **P13-E** Reference-calendar/fake-clock suite for DST gaps/folds, clock jumps, downtime,
   2–50 owners, crash seams, duplicate wakeups, races, revocation, headless approval.
+  (Fake-clock determinism suite: concurrent owners, crash-at-seam, duplicate wakeups,
+  byte-determinism; DST suite deferred with cron.)
 
 Hard zero: duplicate logical turn, authority widening, fabricated approval, false-green task
 success. Every due occurrence has exactly one durable reason.
