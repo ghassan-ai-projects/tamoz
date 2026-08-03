@@ -329,4 +329,58 @@ class SQLiteScheduleStoreTest < Minitest::Test
       assert_equal anchor + 3_600, coalesced.first.nominal_fire_at_utc
     end
   end
+
+  # --- P13-C: claim-time grant intersection (invariant 40) -----------------
+
+  def test_claim_time_grant_revocation_skips_the_schedule
+    with_engine do |store, _adapter, _checkpoints, _path|
+      anchor = 1_700_000_000
+      # Stored grant includes the read scope; current policy REMOVES it
+      # entirely, so nothing survives the intersection (invariant 40).
+      store.put_schedule(
+        schedule(
+          start_at: anchor,
+          capability_grant: {"scopes" => ["read"], "capabilities" => ["tool.apply-patch"]}
+        )
+      )
+
+      claimed = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => [], "capabilities" => []}
+      )
+      assert_equal 0, claimed.length, "revoked grant must not materialize"
+      occurrences = store.list_occurrences(schedule_id: "daily")
+      assert_equal 1, occurrences.length
+      assert_equal :skipped, occurrences.first.state
+      assert_equal "grant_revoked", occurrences.first.reason
+    end
+  end
+
+  def test_claim_time_narrowing_runs_under_the_effective_grant
+    with_engine do |store, _adapter, checkpoints, _path|
+      anchor = 1_700_000_000
+      store.put_schedule(
+        schedule(
+          start_at: anchor,
+          capability_grant: {"scopes" => ["read", "write"], "capabilities" => []}
+        )
+      )
+
+      claimed = store.materialize_due(
+        now: anchor + 100, owner: "p", lease_for: 30, limit: 10,
+        request_template:,
+        current_grant: {"scopes" => ["read"], "capabilities" => []}
+      )
+      assert_equal 1, claimed.length
+      occurrence = claimed.first
+      request = checkpoints.fetch_request(
+        thread_id: "thread.scheduler", request_id: occurrence.request_id
+      )
+      # The enqueued request carries the EFFECTIVE grant (write removed), so
+      # execution-time authority is the intersection, never the stored max.
+      assert_equal({"scopes" => ["read"], "capabilities" => []},
+                   request.payload.fetch("effective_grant"))
+    end
+  end
 end

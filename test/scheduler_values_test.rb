@@ -262,4 +262,43 @@ class SchedulerValuesTest < Minitest::Test
       overlap_policy: :allow, max_concurrency: 2
     ).overlap_decision(non_terminal: 2, pending: 1)
   end
+
+  # --- P13-C: grant intersection (design §9, invariant 40) -----------------
+
+  def test_grant_intersection_classifies_granted_narrowed_revoked
+    stored = {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}
+
+    granted = Scheduler::GrantIntersector.intersect(
+      stored, {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}
+    )
+    assert_equal :granted, granted.fetch("status")
+    assert_equal ["read"], granted.fetch("effective").fetch("scopes")
+
+    narrowed = Scheduler::GrantIntersector.intersect(
+      stored, {"scopes" => ["read"], "capabilities" => []}
+    )
+    assert_equal :narrowed, narrowed.fetch("status")
+    assert_equal ["tool.run-check"], narrowed.fetch("removed_capabilities")
+    assert_equal ["read"], narrowed.fetch("effective").fetch("scopes")
+
+    revoked = Scheduler::GrantIntersector.intersect(
+      stored, {"scopes" => [], "capabilities" => []}
+    )
+    assert_equal :revoked, revoked.fetch("status")
+    assert_empty revoked.fetch("effective").fetch("scopes")
+  end
+
+  def test_effective_grant_refuses_revocation_and_optionally_narrowing
+    stored = {"scopes" => ["read", "write"], "capabilities" => ["tool.apply-patch"]}
+    current = {"scopes" => ["read"], "capabilities" => []}
+
+    # Narrowed is allowed by default (the caller runs under the intersection).
+    effective = Scheduler::GrantIntersector.effective_grant(stored, current)
+    assert_equal({"scopes" => ["read"], "capabilities" => []}, effective)
+
+    # Revocation always yields nil.
+    assert_nil Scheduler::GrantIntersector.effective_grant(
+      stored, {"scopes" => [], "capabilities" => []}
+    )
+  end
 end

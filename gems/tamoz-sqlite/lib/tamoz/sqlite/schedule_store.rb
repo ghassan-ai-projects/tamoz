@@ -120,7 +120,15 @@ module Tamoz
       # its request — ONE transaction. Returns the occurrences whose requests
       # committed. A repeated call re-runs the same transaction and dedups on
       # the request id.
-      def materialize_due(now:, owner:, lease_for:, limit:, request_template:)
+      #
+      # P13-C (invariant 40): `current_grant` is the operator policy AT the
+      # enforcement point. The schedule's stored maximum grant is intersected
+      # against it: a revoked schedule skips (escalates), a narrowed one runs
+      # under the effective intersection. When `current_grant` is nil the
+      # check is skipped (the scorecard harness and tests that pin claim-time
+      # behavior before P13-C); production callers always pass it.
+      def materialize_due(now:, owner:, lease_for:, limit:, request_template:,
+                          current_grant: nil)
         claimed = []
         @adapter.__send__(:transaction, operation: "schedule.materialize_due") do |tx|
           schedules = tx.rows(
@@ -147,6 +155,23 @@ module Tamoz
               [row.fetch(1), row.fetch(2), row.fetch(3), row.fetch(4)]
             )
             next unless schedule
+
+            # P13-C (invariant 40, claim-time): the stored maximum grant is a
+            # ceiling. Revocation skips/escalates; narrowing runs under the
+            # intersection. The request template carries the effective grant.
+            claim_template = request_template
+            if current_grant
+              effective = Tamoz::Scheduler::GrantIntersector.effective_grant(
+                schedule.capability_grant, current_grant
+              )
+              if effective.nil?
+                record_grant_denied(schedule, now, tx)
+                next
+              end
+              claim_template = request_template.merge(
+                "effective_grant" => effective
+              )
+            end
 
             due = schedule.due_occurrences(now:, limit:)
             next if due.empty?
@@ -185,7 +210,7 @@ module Tamoz
                 )
               when :materialize
                 enqueue_occurrence(
-                  schedule, occurrence, now, owner, request_template, tx
+                  schedule, occurrence, now, owner, claim_template, tx
                 ).then { |value| claimed << value }
               end
             end
@@ -220,6 +245,20 @@ module Tamoz
           "SELECT 1 FROM tamoz_occurrences WHERE occurrence_id = ?",
           [occurrence.occurrence_id]
         ) == 1
+      end
+
+      # P13-C (invariant 40): the schedule's stored grant is REVOKED under
+      # current policy. The earliest due occurrence is recorded as skipped with
+      # reason `grant_revoked` (bounded, queryable history) and nothing is
+      # enqueued — a revoked schedule never runs with a fabricated grant.
+      def record_grant_denied(schedule, now, tx)
+        earliest = schedule.due_occurrences(now:).first
+        return unless earliest
+
+        occurrence = build_occurrence(schedule, earliest, now)
+        return if occurrence_exists?(occurrence, tx)
+
+        record_terminal(schedule, occurrence, :skipped, "grant_revoked", now, tx)
       end
 
       # Enqueue ONE occurrence: the deterministic request id is the dedup key
