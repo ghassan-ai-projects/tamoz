@@ -4,6 +4,7 @@ require "tamoz/core"
 require_relative "tools/version"
 require_relative "tools/skills"
 require_relative "tools/toolbox"
+require_relative "tools/capability_host"
 
 module Tamoz
   module Tools

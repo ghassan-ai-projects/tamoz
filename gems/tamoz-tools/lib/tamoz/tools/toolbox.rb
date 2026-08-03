@@ -221,6 +221,11 @@ module Tamoz
       def descriptions = @descriptions
       def names = descriptions.keys
 
+      # P18/C5: the policy-derived admission set (the already-intersected
+      # surface from build_profile_toolbox + verify_profile_binding!). The
+      # capability host consumes this — it never re-reads profile policy.
+      def allowed_tools = @allowed_tools
+
       # Read-only names include the skill tools when a catalog exists, so the
       # discovery phase can consult skills before an action plan is drafted.
       def read_only_names
