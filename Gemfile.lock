@@ -45,6 +45,13 @@ PATH
       sqlite3 (~> 2.9)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-scheduler (= 0.1.0.alpha.1)
+      tamoz-stream (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-stream
+  specs:
+    tamoz-stream (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-tools
@@ -107,7 +114,6 @@ GEM
 
 PLATFORMS
   arm64-darwin-25
-  ruby
 
 DEPENDENCIES
   mcp (~> 1.1)
@@ -120,6 +126,7 @@ DEPENDENCIES
   tamoz-mcp!
   tamoz-scheduler!
   tamoz-sqlite!
+  tamoz-stream!
   tamoz-tools!
   zeitwerk (~> 2.6)
 
@@ -156,6 +163,7 @@ CHECKSUMS
   tamoz-mcp (0.1.0.alpha.1)
   tamoz-scheduler (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
+  tamoz-stream (0.1.0.alpha.1)
   tamoz-tools (0.1.0.alpha.1)
   uri (1.1.1) sha256=379fa58d27ffb1387eaada68c749d1426738bd0f654d812fcc07e7568f5c57c6
   zeitwerk (2.8.2) sha256=7212a61311083c604184b1ea2574b9aa05cd14f855a0841c06985cabe9181d12

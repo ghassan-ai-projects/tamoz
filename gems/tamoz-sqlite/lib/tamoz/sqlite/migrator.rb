@@ -11,13 +11,11 @@ module Tamoz
       # `tamoz_memory_index` (P11 plan §2/§4 P11-B). Ordinals are consumed
       # monotonically; a later phase cannot reuse ordinal 2 (the
       # monotonic-ordering test in test/sqlite_migration_test.rb asserts it).
-      # P13 (durable scheduling) §10: CURRENT_VERSION moves 2 -> 3 through
-      # MIGRATION_3, which adds the scheduler tables. Existing tables
-      # (threads/namespaces/requests/checkpoints/effects/memory/...) are
-      # untouched; occurrences reference `tamoz_requests` by request id only,
-      # so a pre-P13 database without these tables loads with the scheduler
-      # disabled (legacy semantics, never a partial load).
-      CURRENT_VERSION = 3
+      # P14 (streaming input) §11/C8: CURRENT_VERSION moves 3 -> 4 through
+      # MIGRATION_4, which adds the stream tables. Existing tables are
+      # untouched; a pre-P14 database loads with the stream disabled (legacy
+      # semantics, never a partial load).
+      CURRENT_VERSION = 4
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -430,12 +428,82 @@ module Tamoz
         MIGRATION_3.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # P14 (streaming input) §11/C8: the stream tables.
+      # `tamoz_stream_channels` stores the content-addressed ChannelDescriptor
+      # revisions; `tamoz_stream_events` the admitted event log keyed by the
+      # scoped identity (admitted/duplicate/quarantined/rejected outcomes);
+      # `tamoz_stream_partitions` the checkpoint/watermark per partition.
+      # Admission metadata and the payload hash are stored; old bytes are
+      # never re-decoded under a new scheme (design §5).
+      MIGRATION_4 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_channels (
+            channel_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            definition_digest TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            payload_digest TEXT NOT NULL,
+            deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (channel_id, revision)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_events (
+            identity TEXT NOT NULL PRIMARY KEY,
+            event_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            schema_id TEXT NOT NULL,
+            schema_version INTEGER NOT NULL,
+            payload_hash TEXT NOT NULL,
+            tenant_id TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            channel_id TEXT NOT NULL,
+            channel_revision INTEGER NOT NULL,
+            partition_key TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            event_time INTEGER NOT NULL,
+            observed_time INTEGER NOT NULL,
+            ingestion_time INTEGER NOT NULL,
+            sequence INTEGER,
+            outcome TEXT NOT NULL CHECK (
+              outcome IN ('admitted', 'duplicate', 'quarantined', 'rejected')
+            ),
+            reason TEXT,
+            payload TEXT NOT NULL,
+            processing_time INTEGER NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_partitions (
+            partition_key TEXT NOT NULL PRIMARY KEY,
+            watermark INTEGER NOT NULL,
+            last_processing_time INTEGER NOT NULL,
+            idleness_at INTEGER,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_stream_events_channel
+            ON tamoz_stream_events(channel_id, event_time)
+        SQL
+      ].freeze
+
+      MIGRATION_4_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_4.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
         1 => [MIGRATION_1, MIGRATION_1_CHECKSUM],
         2 => [MIGRATION_2, MIGRATION_2_CHECKSUM],
-        3 => [MIGRATION_3, MIGRATION_3_CHECKSUM]
+        3 => [MIGRATION_3, MIGRATION_3_CHECKSUM],
+        4 => [MIGRATION_4, MIGRATION_4_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -575,6 +643,7 @@ module Tamoz
       private_constant :APPLICATION_ID, :MIGRATION_1,
                        :MIGRATION_1_CHECKSUM, :MIGRATION_2, :MIGRATION_2_CHECKSUM,
                        :MIGRATION_3, :MIGRATION_3_CHECKSUM,
+                       :MIGRATION_4, :MIGRATION_4_CHECKSUM,
                        :MIGRATIONS
     end
   end

@@ -33,6 +33,14 @@ module Tamoz
         ScheduleStore.new(adapter: self, checkpoints: checkpoint_store)
       end
 
+      # P14-A: the durable StreamStore over this adapter.
+      def bind_stream_store
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        StreamStore.new(adapter: self)
+      end
+
       def initialize(
         path:,
         limits: Limits.new,

@@ -11,6 +11,7 @@ TamozGemspec.build(
   dependencies: [
     ["tamoz-graph", "= #{Tamoz::SQLite::VERSION}"],
     ["tamoz-scheduler", "= #{Tamoz::SQLite::VERSION}"],
+    ["tamoz-stream", "= #{Tamoz::SQLite::VERSION}"],
     ["sqlite3", "~> 2.9"]
   ]
 )

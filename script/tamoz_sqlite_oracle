@@ -10,17 +10,19 @@ module TamozSQLiteOracle
   VERSION = 1
   APPLICATION_ID = 1_413_565_786
   # P11: the schema moved 1 -> 2 through the checksummed MIGRATION_2 (the
-  # lexical memory index). P13: the schema moved 2 -> 3 through MIGRATION_3
-  # (the scheduler tables). The oracle is a second, independent read-only
-  # verifier: it must agree with the migrated schema or every scenario database
-  # is schema_invalid.
-  SCHEMA_VERSION = 3
+  # lexical memory index). P13: 2 -> 3 through MIGRATION_3 (scheduler tables).
+  # P14: 3 -> 4 through MIGRATION_4 (stream tables). The oracle is a second,
+  # independent read-only verifier: it must agree with the migrated schema or
+  # every scenario database is schema_invalid.
+  SCHEMA_VERSION = 4
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
     "1fa635c75408f2d75d7c9a026d25ae1fc10948152b84e07ed144f20c8c0d837f"
   MIGRATION_3_CHECKSUM =
     "6ff111a2b929f06beeb3a0d446d0e73ad4e2945610672ed0b5b4c9ecd6848e91"
+  MIGRATION_4_CHECKSUM =
+    "a7f78a37cd6d15b16489bf9f67580589d778f2a3100e0c5f8f50827acee425ba"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -737,7 +739,8 @@ module TamozSQLiteOracle
       expected = [
         [1, MIGRATION_1_CHECKSUM],
         [2, MIGRATION_2_CHECKSUM],
-        [3, MIGRATION_3_CHECKSUM]
+        [3, MIGRATION_3_CHECKSUM],
+        [4, MIGRATION_4_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"
