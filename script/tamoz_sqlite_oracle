@@ -14,7 +14,7 @@ module TamozSQLiteOracle
   # P14: 3 -> 4 through MIGRATION_4 (stream tables). The oracle is a second,
   # independent read-only verifier: it must agree with the migrated schema or
   # every scenario database is schema_invalid.
-  SCHEMA_VERSION = 4
+  SCHEMA_VERSION = 5
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -23,6 +23,8 @@ module TamozSQLiteOracle
     "6ff111a2b929f06beeb3a0d446d0e73ad4e2945610672ed0b5b4c9ecd6848e91"
   MIGRATION_4_CHECKSUM =
     "a7f78a37cd6d15b16489bf9f67580589d778f2a3100e0c5f8f50827acee425ba"
+  MIGRATION_5_CHECKSUM =
+    "be5abbc58052d5d5c596dfe96b227b4f7eb0ed53b3a58d6cf550a6bde87b2fff"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -740,7 +742,8 @@ module TamozSQLiteOracle
         [1, MIGRATION_1_CHECKSUM],
         [2, MIGRATION_2_CHECKSUM],
         [3, MIGRATION_3_CHECKSUM],
-        [4, MIGRATION_4_CHECKSUM]
+        [4, MIGRATION_4_CHECKSUM],
+        [5, MIGRATION_5_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

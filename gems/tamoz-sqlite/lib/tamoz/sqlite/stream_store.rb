@@ -224,6 +224,333 @@ module Tamoz
           )
         end
       end
+
+      # The newest immutable version of a Situation (the current projection
+      # pointer), or nil when none exists.
+      def current_situation_version(situation_id)
+        @adapter.__send__(:read, operation: "stream.situation.current") do |tx|
+          tx.scalar(
+            "stream.situation.current",
+            "SELECT current_version FROM tamoz_stream_situation_current WHERE situation_id = ?",
+            [situation_id]
+          )
+        end
+      end
+
+      # --- P14-B: the atomic processing boundary (design §8, plan §5/C3) ----
+
+      # `process_partition` is the ONE transaction owning all six steps:
+      #
+      #   1. admission/dedup of the batch (durable outcomes, never raised);
+      #   2. deterministic operators + due timers over the admitted events and
+      #      the bounded per-partition operator state;
+      #   3. append any immutable Situation version (correction appends, never
+      #      rewrites);
+      #   4. persist trigger scores and the cognition-admission outcome;
+      #   5. append outbox work (drained OUTSIDE this transaction, C3);
+      #   6. advance the partition checkpoint/watermark.
+      #
+      # No model, network, approval, or effector call happens inside this
+      # transaction. All stream-owned timestamps come from the injected
+      # `clock` — never `backend_time` — so replay re-executes the identical
+      # chain under the same virtual clock and produces byte-identical rows.
+      #
+      # `operators` is a hash of pure, injected callables (deterministic
+      # configuration; no scripts/model/I/O per design §9):
+      #   :reduce    -> (events, state, clock) -> [new_state, result]
+      #   :situation -> (state, result, clock) -> situation_hash | nil
+      #   :trigger   -> (situation, clock) -> trigger_hash | nil
+      #   :outbox    -> (situation, clock) -> [{kind:, payload:}, ...]
+      #
+      # @return [Hash] {"admitted" => [...], "situations" => [...],
+      #                 "outbox" => [...], "watermark" => Integer}
+      def process_partition(partition_key, batch:, clock:, operators:, spec_digest:)
+        processing = clock.now_processing
+        result = {
+          "admitted" => [],
+          "situations" => [],
+          "outbox" => [],
+          "watermark" => nil
+        }
+        @adapter.__send__(:transaction, operation: "stream.partition.process") do |tx|
+          # Step 1: admission/dedup for the batch.
+          admitted_events = []
+          batch.each do |envelope|
+            outcome = admit_in_tx(envelope, clock:, tx:)
+            admitted_events << envelope if outcome == ADMITTED
+          end
+
+          # Step 2: deterministic operators over admitted events + state.
+          state = load_operator_state(partition_key, tx)
+          new_state, operator_result = operators.fetch(:reduce).call(
+            admitted_events, state, clock
+          )
+          save_operator_state(partition_key, spec_digest, new_state, processing, tx)
+
+          # Step 3/4: Situation version + trigger evaluation.
+          situation = operators[:situation]&.call(new_state, operator_result, clock)
+          trigger = nil
+          versioned_situation = nil
+          if situation
+            version = append_situation(partition_key, spec_digest, situation, processing, tx)
+            versioned_situation = situation.merge("version" => version)
+            trigger = operators[:trigger]&.call(versioned_situation, clock)
+            append_trigger(partition_key, situation, trigger, version, processing, tx) if trigger
+            result["situations"] << versioned_situation
+          end
+
+          # Step 5: outbox work (drained outside the transaction). The outbox
+          # sees the VERSIONED situation (the version is part of the immutable
+          # identity).
+          outbox_items = operators[:outbox]&.call(versioned_situation, clock) || []
+          outbox_items.each do |item|
+            append_outbox(partition_key, item, processing, tx)
+            result["outbox"] << item
+          end
+
+          # Step 6: advance the partition watermark (monotonic; a regression
+          # raises WatermarkRegressionError).
+          watermark = advance_watermark_in_tx(partition_key, processing, clock, tx)
+          result["watermark"] = watermark
+
+          result["admitted"] = admitted_events
+        end
+        result
+      end
+
+      # Idle-watermark advancement (design §7/P4): when a partition receives no
+      # events for `idle_after` virtual-time units, advance its watermark so
+      # global progress never silently freezes. Runs in its own transaction;
+      # idempotent (a repeated call is a no-op when not yet idle).
+      def advance_idle_watermark(partition_key, idle_after:, clock:)
+        processing = clock.now_processing
+        @adapter.__send__(:transaction, operation: "stream.partition.idle") do |tx|
+          row = tx.first(
+            "stream.partition.idle.state",
+            <<~SQL,
+              SELECT watermark, last_processing_time, idleness_at
+              FROM tamoz_stream_partitions WHERE partition_key = ?
+            SQL
+            [partition_key]
+          )
+          next unless row
+
+          last = row.fetch(1)
+          next if processing - last < idle_after
+
+          # Advance to the current processing time (a new watermark must never
+          # regress; it equals `now`, which is >= the previous watermark).
+          advance_watermark_in_tx(partition_key, processing, clock, tx)
+        end
+        watermark(partition_key)
+      end
+
+      private
+
+      def admit_in_tx(envelope, clock:, tx:)
+        processing = clock.now_processing
+        identity = envelope.identity
+        existing = tx.first(
+          "stream.event.existing",
+          "SELECT payload_hash FROM tamoz_stream_events WHERE identity = ?",
+          [identity]
+        )
+        return DUPLICATE if existing && existing.fetch(0) == envelope.payload_hash
+        if existing
+          tx.execute(
+            "stream.event.quarantine",
+            <<~SQL,
+              UPDATE tamoz_stream_events
+              SET outcome = ?, reason = ?, updated_at_ms = ?
+              WHERE identity = ? AND payload_hash = ?
+            SQL
+            [QUARANTINED, "payload hash changed for a reused identity", processing, identity, existing.fetch(0)]
+          )
+          return QUARANTINED
+        end
+
+        tx.execute(
+          "stream.event.insert",
+          <<~SQL,
+            INSERT INTO tamoz_stream_events(
+              identity, event_id, event_type, schema_id, schema_version,
+              payload_hash, tenant_id, source_id, channel_id,
+              channel_revision, partition_key, entity_id, event_time,
+              observed_time, ingestion_time, sequence, outcome, reason,
+              payload, processing_time, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?)
+          SQL
+          [
+            identity, envelope.event_id, envelope.event_type,
+            envelope.schema_id, envelope.schema_version,
+            envelope.payload_hash, envelope.tenant_id, envelope.source_id,
+            envelope.channel_id, envelope.channel_revision,
+            envelope.partition_key, envelope.entity_id, envelope.event_time,
+            envelope.observed_time, envelope.ingestion_time, envelope.sequence,
+            ADMITTED, JSON.generate(envelope.payload), processing,
+            processing, processing
+          ]
+        )
+        ADMITTED
+      end
+
+      def load_operator_state(partition_key, tx)
+        row = tx.first(
+          "stream.operator.load",
+          "SELECT state FROM tamoz_stream_operator_state WHERE partition_key = ?",
+          [partition_key]
+        )
+        row ? JSON.parse(row.fetch(0), create_additions: false) : {}
+      end
+
+      def save_operator_state(partition_key, spec_digest, state, processing, tx)
+        tx.execute(
+          "stream.operator.upsert",
+          <<~SQL,
+            INSERT INTO tamoz_stream_operator_state(
+              partition_key, spec_digest, state, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(partition_key) DO UPDATE SET
+              spec_digest = excluded.spec_digest,
+              state = excluded.state,
+              updated_at_ms = excluded.updated_at_ms
+          SQL
+          [partition_key, spec_digest, JSON.generate(Tamoz::Core.canonical(state)), processing]
+        )
+      end
+
+      def append_situation(partition_key, spec_digest, situation, processing, tx)
+        situation_id = situation.fetch("situation_id")
+        row = tx.first(
+          "stream.situation.current",
+          "SELECT current_version FROM tamoz_stream_situation_current WHERE situation_id = ?",
+          [situation_id]
+        )
+        version = (row&.fetch(0) || 0) + 1
+        tx.execute(
+          "stream.situation.insert",
+          <<~SQL,
+            INSERT INTO tamoz_stream_situations(
+              situation_id, version, spec_digest, phase, facts, hypotheses,
+              confidence, evidence, completeness, source_versions,
+              payload_digest, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          SQL
+          [
+            situation_id, version, spec_digest,
+            situation.fetch("phase"),
+            JSON.generate(Tamoz::Core.canonical(situation.fetch("facts"))),
+            JSON.generate(Tamoz::Core.canonical(situation.fetch("hypotheses"))),
+            situation.fetch("confidence"),
+            JSON.generate(Tamoz::Core.canonical(situation.fetch("evidence", []))),
+            situation.fetch("completeness"),
+            JSON.generate(Tamoz::Core.canonical(situation.fetch("source_versions", []))),
+            situation.fetch("payload_digest"), processing, processing
+          ]
+        )
+        tx.execute(
+          "stream.situation.upsert_current",
+          <<~SQL,
+            INSERT INTO tamoz_stream_situation_current(
+              situation_id, current_version, updated_at_ms
+            )
+            VALUES (?, ?, ?)
+            ON CONFLICT(situation_id) DO UPDATE SET
+              current_version = excluded.current_version,
+              updated_at_ms = excluded.updated_at_ms
+          SQL
+          [situation_id, version, processing]
+        )
+        version
+      end
+
+      def append_trigger(partition_key, situation, trigger, situation_version, processing, tx)
+        trigger_id = trigger.fetch("trigger_id")
+        tx.execute(
+          "stream.trigger.insert",
+          <<~SQL,
+            INSERT INTO tamoz_stream_triggers(
+              trigger_id, partition_key, situation_id, scores, evidence,
+              reasons, completeness, cost_estimate, freshness, deadline,
+              outcome, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          SQL
+          [
+            trigger_id, partition_key, situation.fetch("situation_id"),
+            JSON.generate(Tamoz::Core.canonical(trigger.fetch("scores"))),
+            JSON.generate(Tamoz::Core.canonical(trigger.fetch("evidence", []))),
+            JSON.generate(Tamoz::Core.canonical(trigger.fetch("reasons", []))),
+            trigger.fetch("completeness"),
+            trigger.fetch("cost_estimate"),
+            trigger.fetch("freshness"),
+            trigger["deadline"],
+            trigger.fetch("outcome"),
+            processing, processing
+          ]
+        )
+      end
+
+      def append_outbox(partition_key, item, processing, tx)
+        payload = Tamoz::Core.canonical(item.fetch("payload"))
+        digest = "sha256:#{Digest::SHA256.hexdigest(
+          "tamoz.stream.outbox.v1\n" + JSON.generate(payload)
+        )}"
+        outbox_id = item.fetch("outbox_id")
+        tx.execute(
+          "stream.outbox.insert",
+          <<~SQL,
+            INSERT INTO tamoz_stream_outbox(
+              outbox_id, partition_key, kind, payload, payload_digest,
+              drained, created_at_ms, updated_at_ms
+            )
+            VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+          SQL
+          [outbox_id, partition_key, item.fetch("kind"),
+           JSON.generate(payload), digest, processing, processing]
+        )
+      end
+
+      def advance_watermark_in_tx(partition_key, watermark, clock, tx)
+        current = tx.scalar(
+          "stream.partition.watermark",
+          "SELECT watermark FROM tamoz_stream_partitions WHERE partition_key = ?",
+          [partition_key]
+        )
+        if current && watermark < current
+          raise Tamoz::Stream::WatermarkRegressionError,
+                "partition #{partition_key} watermark regressed from #{current} to #{watermark}"
+        end
+
+        if current.nil?
+          tx.execute(
+            "stream.partition.insert",
+            <<~SQL,
+              INSERT INTO tamoz_stream_partitions(
+                partition_key, watermark, last_processing_time,
+                idleness_at, created_at_ms, updated_at_ms
+              )
+              VALUES (?, ?, ?, NULL, ?, ?)
+            SQL
+            [partition_key, watermark, watermark, watermark, watermark]
+          )
+        else
+          tx.execute(
+            "stream.partition.update",
+            <<~SQL,
+              UPDATE tamoz_stream_partitions
+              SET watermark = ?, last_processing_time = ?, updated_at_ms = ?
+              WHERE partition_key = ?
+            SQL
+            [watermark, watermark, watermark, partition_key]
+          )
+        end
+        watermark
+      end
     end
   end
 end
+

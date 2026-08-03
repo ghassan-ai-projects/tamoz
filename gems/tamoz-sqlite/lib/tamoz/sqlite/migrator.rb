@@ -11,11 +11,13 @@ module Tamoz
       # `tamoz_memory_index` (P11 plan §2/§4 P11-B). Ordinals are consumed
       # monotonically; a later phase cannot reuse ordinal 2 (the
       # monotonic-ordering test in test/sqlite_migration_test.rb asserts it).
-      # P14 (streaming input) §11/C8: CURRENT_VERSION moves 3 -> 4 through
-      # MIGRATION_4, which adds the stream tables. Existing tables are
-      # untouched; a pre-P14 database loads with the stream disabled (legacy
-      # semantics, never a partial load).
-      CURRENT_VERSION = 4
+      # P14 (streaming input) §11/C8: CURRENT_VERSION moves 4 -> 5 through
+      # MIGRATION_5, which adds the processing-plane tables (operator state,
+      # immutable Situation versions, trigger evaluations, outbox) on top of
+      # the admission tables from MIGRATION_4. Existing tables are untouched;
+      # a pre-P14 database loads with the stream disabled (legacy semantics,
+      # never a partial load).
+      CURRENT_VERSION = 5
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -497,13 +499,102 @@ module Tamoz
         MIGRATION_4.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # P14-B (design §8, plan §5/C3): the processing-plane tables.
+      # `tamoz_stream_operator_state` holds bounded per-partition operator
+      # state (windows/reducers/timers); `tamoz_stream_situations` the
+      # immutable Situation versions with a current-projection pointer;
+      # `tamoz_stream_triggers` the persisted trigger evaluations and
+      # cognition-admission outcomes; `tamoz_stream_outbox` the bridge work
+      # drained into the ordinary request inbox OUTSIDE the processing
+      # transaction (C3). All timestamps are stream-owned (injected clock),
+      # never backend_time.
+      MIGRATION_5 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_operator_state (
+            partition_key TEXT NOT NULL,
+            spec_digest TEXT NOT NULL,
+            state TEXT NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (partition_key)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_situations (
+            situation_id TEXT NOT NULL,
+            version INTEGER NOT NULL CHECK (version > 0),
+            spec_digest TEXT NOT NULL,
+            phase TEXT NOT NULL,
+            facts TEXT NOT NULL,
+            hypotheses TEXT NOT NULL,
+            confidence REAL NOT NULL CHECK (confidence >= 0.0 AND confidence <= 1.0),
+            evidence TEXT NOT NULL,
+            completeness TEXT NOT NULL CHECK (
+              completeness IN ('provisional', 'on_time', 'corrected', 'final_by_policy', 'uncertain')
+            ),
+            source_versions TEXT NOT NULL,
+            payload_digest TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (situation_id, version)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_situation_current (
+            situation_id TEXT NOT NULL PRIMARY KEY,
+            current_version INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_triggers (
+            trigger_id TEXT NOT NULL PRIMARY KEY,
+            partition_key TEXT NOT NULL,
+            situation_id TEXT NOT NULL,
+            scores TEXT NOT NULL,
+            evidence TEXT NOT NULL,
+            reasons TEXT NOT NULL,
+            completeness TEXT NOT NULL,
+            cost_estimate INTEGER NOT NULL,
+            freshness INTEGER NOT NULL,
+            deadline INTEGER,
+            outcome TEXT NOT NULL CHECK (
+              outcome IN ('ignored', 'debounced', 'coalesced', 'deferred',
+                          'admitted', 'superseded', 'expired', 'rejected')
+            ),
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_outbox (
+            outbox_id TEXT NOT NULL PRIMARY KEY,
+            partition_key TEXT NOT NULL,
+            kind TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            payload_digest TEXT NOT NULL,
+            drained INTEGER NOT NULL DEFAULT 0 CHECK (drained IN (0, 1)),
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_stream_situations_current
+            ON tamoz_stream_situations(situation_id, version DESC)
+        SQL
+      ].freeze
+
+      MIGRATION_5_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_5.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
         1 => [MIGRATION_1, MIGRATION_1_CHECKSUM],
         2 => [MIGRATION_2, MIGRATION_2_CHECKSUM],
         3 => [MIGRATION_3, MIGRATION_3_CHECKSUM],
-        4 => [MIGRATION_4, MIGRATION_4_CHECKSUM]
+        4 => [MIGRATION_4, MIGRATION_4_CHECKSUM],
+        5 => [MIGRATION_5, MIGRATION_5_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -644,6 +735,7 @@ module Tamoz
                        :MIGRATION_1_CHECKSUM, :MIGRATION_2, :MIGRATION_2_CHECKSUM,
                        :MIGRATION_3, :MIGRATION_3_CHECKSUM,
                        :MIGRATION_4, :MIGRATION_4_CHECKSUM,
+                       :MIGRATION_5, :MIGRATION_5_CHECKSUM,
                        :MIGRATIONS
     end
   end
