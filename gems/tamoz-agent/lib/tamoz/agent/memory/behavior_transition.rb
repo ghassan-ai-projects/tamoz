@@ -218,11 +218,7 @@ module Tamoz
           end
 
           # Persist the bounded immutable snapshot under its digest.
-          @store.put(
-            BehaviorTransition::SNAPSHOTS_NAMESPACE, snapshot_digest,
-            {"snapshot" => behavior_snapshot, "digest" => snapshot_digest},
-            if_version: nil
-          )
+          put_snapshot(snapshot_digest, behavior_snapshot)
 
           # CAS the control record: reserve next_version + 1, install exactly
           # one pending transition. The version allocator never moves backward.
@@ -389,6 +385,45 @@ module Tamoz
         end
 
         private
+
+        # P12-I fix. The snapshot namespace is CONTENT-ADDRESSED: the key IS
+        # the digest of the value. Writing it with `if_version: nil` therefore
+        # raised `Tamoz::StoreConflictError` ("Store key already exists")
+        # whenever the same snapshot content was recorded twice — which is
+        # exactly what DR-1 §7 rollback does, since a rollback re-records the
+        # PRIOR snapshot's bytes to restore them byte-identically. It also broke
+        # any two promotions that happened to carry identical snapshot content.
+        #
+        # For a content-addressed key, "already present with identical bytes" is
+        # success, not a conflict. Differing bytes under the same digest would be
+        # a SHA-256 collision or a corrupted row, and that propagates.
+        def put_snapshot(snapshot_digest, behavior_snapshot)
+          existing = @store.get(BehaviorTransition::SNAPSHOTS_NAMESPACE, snapshot_digest)
+          return if snapshot_matches?(existing, behavior_snapshot, snapshot_digest)
+
+          @store.put(
+            BehaviorTransition::SNAPSHOTS_NAMESPACE, snapshot_digest,
+            {"snapshot" => behavior_snapshot, "digest" => snapshot_digest},
+            if_version: nil
+          )
+        rescue Tamoz::StoreConflictError
+          # A concurrent recorder wrote the same content-addressed row between
+          # the read and the write: re-read and accept only identical bytes.
+          entry = @store.get(BehaviorTransition::SNAPSHOTS_NAMESPACE, snapshot_digest)
+          return if snapshot_matches?(entry, behavior_snapshot, snapshot_digest)
+
+          raise
+        end
+
+        def snapshot_matches?(entry, behavior_snapshot, snapshot_digest)
+          return false unless entry
+
+          stored = entry.value.is_a?(Hash) ? entry.value["snapshot"] : nil
+          return true if Tamoz::Core.canonical(stored) == Tamoz::Core.canonical(behavior_snapshot)
+
+          raise MemoryPolicyError,
+                "behavior snapshot #{snapshot_digest} is already stored with different content"
+        end
 
         def cas_control(expected, replacement)
           version = @store.head_version(BehaviorTransition::CONTROL_NAMESPACE, BehaviorTransition::CONTROL_KEY)

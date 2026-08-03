@@ -87,7 +87,15 @@ module Tamoz
             # Optional; absent means "no behavior transition" (pre-P11 state).
             "epoch_reason" => STRING,
             "behavior_snapshot_digest" => STRING,
-            "behavior_snapshot" => ANY
+            "behavior_snapshot" => ANY,
+            # P12 (P12-HD): the healing rule set a session was bound to, as
+            # {rule_id => "version:contract_digest"} (`Healing.pin_for`). Optional
+            # HASH, legacy sentinel {} — the pre-P12 state and the "healing is
+            # disabled" state are one and the same "no rule set was bound", the
+            # same equivalence `egress_pin` makes for egress. RECORD_VERSION stays
+            # 1: a pre-P12 record simply has no key, and `fetch("healing_pin", {})`
+            # yields legacy semantics without a migration.
+            "healing_pin" => HASH
           }
         },
         "plan" => {

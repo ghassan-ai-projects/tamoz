@@ -37,6 +37,8 @@ require_relative "evals/harness/memory_cell"
 require_relative "evals/harness/memory_treatment_profile"
 require_relative "evals/harness/memory_repository_adapter"
 require_relative "evals/harness/agent_memory_repository_corpus"
+require_relative "evals/harness/heuristic_corpus"
+require_relative "evals/harness/heuristic_paired_evaluation"
 require_relative "evals/cli"
 
 module Tamoz

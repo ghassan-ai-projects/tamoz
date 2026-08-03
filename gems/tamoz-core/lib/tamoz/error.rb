@@ -203,6 +203,17 @@ module Tamoz
     SAFE_MESSAGE = "An execution worker failed."
   end
 
+  # DR-2 (§6, invariant 17): a circuit policy violation — an unauthorized
+  # reset, a retired-owner attempt without evidence, an unstable owner
+  # identity. Always terminal (RETRYABLE = false): the caller must not iterate
+  # on a refused reset or an unclassifiable owner, and the refusal is never
+  # converted into a repairable tool result.
+  class CircuitPolicyError < Error
+    CATEGORY = "circuit_policy"
+    RETRYABLE = false
+    SAFE_MESSAGE = "The circuit operation was refused by policy."
+  end
+
   class ConfigurationError < StandardError
     CATEGORY = "configuration"
     RETRYABLE = false

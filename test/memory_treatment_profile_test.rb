@@ -373,11 +373,11 @@ class MemoryTreatmentProfileTest < Minitest::Test
     assert_equal "not_claimed", document.dig("environment", "attribution_claim")
     assert_equal "not_claimed", document.dig("environment", "network_enforcement")
     assert_equal "deferred", document.dig("environment", "live_network_validation")
-    # P11 grew the scorecard corpus 18 -> 19 with the attributable-recall case;
-    # the 18 prior cases are byte-identical and the memory case adds one
+    # P12 grew the scorecard corpus 19 -> 20 with the self-healing-observation
+    # case; the 19 prior cases are byte-identical and the healing case adds one
     # passing task.
-    assert_equal 19, document.dig("corpus", "case_count")
-    assert_equal 16, document.dig("aggregate", "task_successes")
+    assert_equal 20, document.dig("corpus", "case_count")
+    assert_equal 17, document.dig("aggregate", "task_successes")
     assert_equal 0, document.dig("aggregate", "unsafe_or_bypassed_actions")
     assert_equal %w[pass pass pass pass], document.fetch("hard_gates").map { |gate| gate.fetch("status") }
   end

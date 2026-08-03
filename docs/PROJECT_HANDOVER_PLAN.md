@@ -1,12 +1,13 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: `6ca114c` (P10, D-8, DR-4, DR-5, P16, evals, P17, P11 all
-closed; scorecard 19/16/pass)
-Current phase: `P12` — bounded self-healing and improvement
-Next action: implement P12 per `docs/P12_SELF_HEALING_PLAN.md` (worktree: typed recovery,
-DR-1 promotion consumption, the DR-2 supervisor-scope durable circuit record); merge,
-gate, then the 28-probe critic round; then P13.
+Implementation baseline: P0–P11, P16, P17, P12 all closed (scorecard 20/17/pass; P12
+critic PASS-WITH-GAPS, both gaps closed with committed tests)
+Current phase: `P13` — durable scheduling
+Next action: implement P13 per `docs/P13_SCHEDULER_PLAN.md` (one recurring read-only
+product task into the durable request inbox exactly once per logical occurrence; the
+DR-2 `schedule` scope already exists on the shared circuit record); merge, gate, critic
+round; then P14.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -64,12 +65,12 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P8 | complete (DR-5 machinery closed; budget consumption waits for P13) | trusted project profiles | `cab974f`, `6ff0d40` | `a019167`, `0ed3944`, `1c6efa1`, `be84e8e` |
 | P9 | complete (P9-C/D2/E/B2 deferred, disclosed) | evaluated skills | `5f66099` | `8b095ab` |
 | P10 | complete (P10-D2/H/full-E-conformance deferred with entry conditions, disclosed) | governed MCP client/host | `1d14a22` | `54f675a`, `534a502`, `a88572b`, `a69971d`, `d0e537e`, `9d1d3ec` |
-| DR-2 | reviewing | durable circuit shared by server/rule/schedule/egress scopes | `6ff0d40`, `999b5c9` | egress scope `78041fc` (P17); supervisor scope lands with P12-H3/P13-E |
+| DR-2 | complete | durable circuit shared by server/rule/schedule/egress scopes | `6ff0d40`, `999b5c9` | egress `78041fc` (P17); all four scopes on `Tamoz::SQLite::CircuitStore` with P12 |
 | DR-3 | complete | memory treatment/evaluation substrate | `6ff0d40` | `7bac0e1`, `b6c379c` |
 | DR-4 | complete | stale durable requests terminal-fail without poisoning threads | `6ff0d40`, `999b5c9` | `5c16bed`, `c627aec` |
 | DR-5 | complete | profile role/transition/resume machinery | `6ff0d40` | `1c6efa1`, `be84e8e` |
-| P11 | pending | three-layer memory | — | — |
-| P12 | pending | bounded healing and improvement | — | — |
+| P11 | closed | three-layer memory | `0531bee` | critic fixes `5cdf17f` |
+| P12 | closed | bounded healing and improvement | Round 24 | observation/shadow-only disclosed; DR-2 durable circuit on one record type; critic PASS-WITH-GAPS, both gaps closed |
 | P13 | pending | durable scheduling | — | — |
 | P14 | pending | Situation streaming and simulated physical action | — | — |
 | P15 | pending | release hardening and independent completion audit | — | — |
@@ -397,30 +398,32 @@ or widen authority.
 
 Healing work packages:
 
-- [ ] **P12-HD** Define typed failure/rule/remediation/verification/compensation/escalation/
+- [x] **P12-HD** Define typed failure/rule/remediation/verification/compensation/escalation/
   circuit records and lifecycle.
-- [ ] **P12-H1** Implement classification and abstention; unknown, corruption, policy denial,
+- [x] **P12-H1** Implement classification and abstention; unknown, corruption, policy denial,
   programmer error, and unknown effects do not become generic retry.
-- [ ] **P12-H2** Implement exact reviewed remediation, preconditions, current authority,
+- [x] **P12-H2** Implement exact reviewed remediation, preconditions, current authority,
   attempt/scope/magnitude/cost/time budgets, effect reconciliation, independent verifier.
-- [ ] **P12-H3** Add separately authorized compensation, durable circuit, owned escalation,
+- [x] **P12-H3** Add separately authorized compensation, durable circuit, owned escalation,
   replay → shadow → applicable fault injection → canary → active/retired transitions.
-- [ ] **P12-H4** Promote at most one narrow reference rule (prefer stale conditional file
+- [x] **P12-H4** Promote at most one narrow reference rule (prefer stale conditional file
   edit or bounded pre-dispatch provider retry). Observation/shadow-only is acceptable when
-  active evidence is insufficient.
+  active evidence is insufficient. (Ships observation/shadow-only; disclosure in the
+  scorecard case.)
 
 Improvement work packages:
 
-- [ ] **P12-ID** Define candidate provenance, train/holdout boundaries, affected behavior,
+- [x] **P12-ID** Define candidate provenance, train/holdout boundaries, affected behavior,
   policy/risk, artifact digests, evaluation lineage, activation scope, rollback target.
-- [ ] **P12-I1** Generate one bounded planning/routing/verification heuristic candidate from
+- [x] **P12-I1** Generate one bounded planning/routing/verification heuristic candidate from
   verified trajectories; never activate live prompt/code changes during the task.
-- [ ] **P12-I2** Run paired baseline/holdout evaluation, human gates for prompt hierarchy,
+- [x] **P12-I2** Run paired baseline/holdout evaluation, human gates for prompt hierarchy,
   tools, roots, credentials, policy, evaluator, skills/scripts, or code.
-- [ ] **P12-I3** Activate as a new behavior/cache epoch at a turn boundary, pin in-flight
+- [x] **P12-I3** Activate as a new behavior/cache epoch at a turn boundary, pin in-flight
   sessions, monitor the same gates, inject regression, and prove rollback.
 - [ ] **P12-S** Add bounded subagent/delegation only if the chosen candidate or product proof
   needs it: child graph/version/namespace, narrower grant, typed return, budgets, ordered fan-in.
+  (Not shipped — no product proof required it; documented as such.)
 
 Evaluation includes the applicable portion of the designed 250-case matrix before any
 active healing claim. Hard zero: unsafe/unauthorized action, blind ambiguous retry, false

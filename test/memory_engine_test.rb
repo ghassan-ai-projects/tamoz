@@ -684,4 +684,60 @@ class MemoryEngineTest < Minitest::Test
       )
     end
   end
+
+  def test_content_addressed_snapshot_rewrite_is_idempotent
+    # P12-I regression for the DR-1 rollback fix (slice I, 2026-08-02): the
+    # snapshot namespace is content-addressed — the key IS the digest of the
+    # value. Writing it with `if_version: nil` raised StoreConflictError
+    # whenever the same snapshot content was recorded twice, which is exactly
+    # what DR-1 §7 rollback does (it re-records the PRIOR snapshot's bytes to
+    # restore them byte-identically) and what two promotions with identical
+    # snapshot content would do. "Already present with identical bytes" must be
+    # success for a content-addressed key.
+    snapshot = {"wisdom" => "rollback target bytes"}
+    first, = @engine.transitions.record(
+      kind: :wisdom_promotion,
+      candidate_id: "wis.rollback-1",
+      candidate_digest: "sha256:candidate-1",
+      behavior_snapshot: snapshot,
+      behavior_version_after: "tamoz.agent.session/2",
+      promotion_evidence_digest: "sha256:evidence-1",
+      human_gate_evidence: "human:operator-1",
+      created_by: "test"
+    )
+    claimed = @engine.transitions.claim(
+      transition_id: first.transition_id, owner: "intake", attempt: 1
+    )
+    assert_equal :claimed, claimed.status
+    @engine.transitions.finalize(
+      transition_id: first.transition_id, consumed_by: "session.canary"
+    )
+    assert_equal :activated, @engine.transitions.transition(first.transition_id).status
+    assert_equal "tamoz.agent.session/2", @engine.transitions.active.fetch("active_version")
+
+    # A second promotion carrying the SAME snapshot bytes (the rollback shape:
+    # restore the prior snapshot's exact content) must record cleanly.
+    second, = @engine.transitions.record(
+      kind: :wisdom_promotion,
+      candidate_id: "wis.rollback-2",
+      candidate_digest: "sha256:candidate-2",
+      behavior_snapshot: snapshot,
+      behavior_version_after: "tamoz.agent.session/3",
+      promotion_evidence_digest: "sha256:evidence-2",
+      human_gate_evidence: "human:operator-1",
+      created_by: "test"
+    )
+    assert_equal :recorded, second.status
+
+    # The stored snapshot still resolves to the SAME bytes under its digest.
+    stored = @engine.store.get(
+      Memory::BehaviorTransition::SNAPSHOTS_NAMESPACE,
+      Memory::BehaviorTransition.snapshot_digest(snapshot)
+    )
+    assert stored
+    assert_equal(
+      {"snapshot" => snapshot, "digest" => Memory::BehaviorTransition.snapshot_digest(snapshot)},
+      Tamoz::Core.canonical(stored.value)
+    )
+  end
 end

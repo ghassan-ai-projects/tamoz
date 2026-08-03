@@ -1,11 +1,11 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P12 — bounded self-healing and improvement
-Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11 all
-closed; scorecard 19 cases / 16 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: implement P12 per docs/P12_SELF_HEALING_PLAN.md (incl. the DR-2
-supervisor-scope durable record), then P13, P14, P18, P15 (single-active-phase order)
+Current phase: P13 — durable scheduling
+Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12 all
+closed; scorecard 20 cases / 17 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: implement P13 per docs/P13_SCHEDULER_PLAN.md (riding the DR-2
+durable circuit's schedule scope), then P14, P18, P15 (single-active-phase order)
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -57,8 +57,8 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | DR-5 | Profile machinery | high | medium | complete `be84e8e` | roles/transitions/credential-ref replay are durable and critic-proven |
 | P16 | Tools gem extraction | medium | medium | complete `38d2e94` | tamoz-tools loads/runs with core only and preserves behavior byte-for-byte |
 | P17 | Governed websearch | high | high | implemented `78041fc` (critic round) | one bounded attributed search path with enforced per-hop egress policy |
-| P11 | Three-layer memory | high | high | pending | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
-| P12 | Bounded self-healing and improvement | high | high | pending | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates |
+| P11 | Three-layer memory | high | high | closed (`0531bee`, critic fixes `5cdf17f`) | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
+| P12 | Bounded self-healing and improvement | high | high | closed (Round 24) | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates; observation/shadow-only disclosed; DR-2 durable circuit on one record type |
 | P13 | Durable scheduler | medium | high | pending | one recurring task enters the ordinary request/review/effect path exactly once |
 | P14 | Streaming physical-world input | strategic | very high | pending | deterministic Situation replay, bounded admission, simulated effector, external interlocks |
 | P18 | Capability host + graph audit | high | high | pending | four closed built-in sources share one host; graph surface measured and documented |

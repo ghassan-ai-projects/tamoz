@@ -2,11 +2,12 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-03 at commit `405fe68` — **942 runs / 34,010 assertions / 0 failures**
-under UTF-8, scorecard **19 cases / 16 successes / decision pass / 4-of-4 hard gates /
-safety counters 0**. P0–P11, P16, P17, D-7 and D-8 closed; **P12 is the active phase**.
-Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P11 are closed;
-the remaining span is **P12–P18** — with every phase passing real behavioural proofs and
+Last verified: 2026-08-03 — **1020 runs / 34,752 assertions / 0 failures** under BOTH
+locales, scorecard **20 cases / 17 successes / decision pass / 4-of-4 hard gates /
+safety counters 0**. P0–P11, P16, P17, D-7, D-8 and **P12 closed** (critic PASS-WITH-GAPS,
+both gaps closed with committed tests); **P13 is the next phase**.
+Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P12 are closed;
+the remaining span is **P13–P18** — with every phase passing real behavioural proofs and
 hard-zero safety gates.
 
 Method: each work package gets a **builder** and a separate **harsh critic** with fresh
@@ -1433,18 +1434,19 @@ current scorecard; it may never be lowered to make a round pass.
 | P11 three-layer memory | complete | **closed** (`0531bee`, critic fixes `5cdf17f`) — critic PASS-WITH-GAPS; consolidation success path and purge finders fixed; 942/0 both locales, scorecard 19/16/pass |
 | P16 tools extraction | complete | **closed** (`fffaee8`, `2ae9e60`) |
 | P17 governed websearch | complete | **closed** (`78041fc`, critic fix `3fe4d43`) — critic PASS-WITH-GAPS; SSRF classifier now fails closed on unclassifiable IP spellings; stderr_tail redacts resolved credential values (invariant 24) |
-| **P12 bounded self-healing** | **active** | **in flight — Round 23.** Three parallel builders in isolated worktrees: A = HD/H1/H2 (failure contract, classification, remediation), B = H3/H4 (compensation, DR-2 durable circuit, escalation, promotion), I = ID/I1/I2/I3 (behavior candidate). 14-question held-out probe spec written from the design **before** any implementation was read |
+| **P12 bounded self-healing** | complete | **closed** (Round 24) — critic PASS-WITH-GAPS, both gaps closed with committed tests; DR-2 durable circuit landed (all four scopes on one record type); 1020/0 both locales, scorecard 20/17/pass |
 | P13–P15, P18 | pending | accepted design only; no implementation commits |
 
 ---
 
 ## 5. Current gaps
 
-1. **DR-2 is only partly durable (critical path, carried debt).** The egress scope landed
-   with P17; P10's supervisor circuit and P13's scheduler circuit are still process-local.
-   P12-H3 owns the durable `CircuitRecord` — one record type, four scopes. Until it lands,
-   a restart silently forgets an open circuit, which is the failure mode the record exists
-   to prevent.
+1. ~~**DR-2 is only partly durable (critical path, carried debt).**~~ **Closed with P12**:
+   `Tamoz::SQLite::CircuitStore` now serves all four scopes (server, rule_target, schedule,
+   egress) from ONE `Tamoz::Circuit` record type with CAS-append, restart survival, the
+   read-time self-heal rule, fail-closed corruption repair, and authority-gated reset
+   (`test/sqlite_circuit_store_test.rb`, D1–D10). P10's supervisor may re-home its
+   in-memory store onto this record; P13's scheduler scope uses it directly.
 2. ~~MCP child stderr can disclose injected credentials.~~ **Closed** at `3fe4d43`:
    `stderr_tail` now redacts resolved credential values by value (invariant 24) with a
    malicious-child regression test.
@@ -1461,9 +1463,9 @@ current scorecard; it may never be lowered to make a round pass.
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
    MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
    workflow. Its closure record must also identify DR-2 durability as carried debt.
-8. **P12–P15 and P18 remain unimplemented.** P11 and P17 closed (each critic
-   PASS-WITH-GAPS, with the findings fixed). P12 is in flight; P13, P14, P15 and P18 have
-   accepted plans and no code.
+8. **P13–P15 and P18 remain unimplemented.** P11, P16, P17 and P12 are closed (P12's
+   critic passed with gaps; both gaps closed with committed tests). P13, P14, P15 and P18
+   have accepted plans and no code.
 9. **Release evidence is not yet ordinary-CI complete.** Both-locale gates, scorecards,
    package isolation, security/license checks, benchmarks, restore, and release rehearsal
    still need P15 integration. README/SECURITY also lag the seven-gem and current MCP/action
@@ -1477,15 +1479,18 @@ current scorecard; it may never be lowered to make a round pass.
 
 ## 6. Next action
 
-Close **P12 — bounded self-healing and self-improvement** per `docs/P12_SELF_HEALING_PLAN.md`:
-merge the three builder slices in dependency order (A → B, I in parallel), gate under both
-locales, run the 14-question held-out probe round with a fresh-context critic, then close.
-After P12, proceed **P13 → P14 → P18 → P15**.
+Close **P13 — durable scheduling** per `docs/P13_SCHEDULER_PLAN.md` (invariants 38–40 plus
+23, 25–27, 35): one recurring read-only product task materialized into the ordinary durable
+request inbox exactly once per logical occurrence, riding the DR-2 durable circuit's
+`schedule` scope. After P13, proceed **P14 → P18 → P15**.
 
-The single most consequential thing inside P12 is not a feature: it is the **DR-2 durable
-circuit** (P12-H3). Today an open circuit is process-local for the supervisor, rule and
-schedule scopes, so a restart forgets it — precisely the failure the record exists to
-prevent.
+**P12 is closed.** The DR-2 durable circuit (the single most consequential item) now serves
+all four scopes from one record type: an open circuit survives a restart, time alone never
+resets it, corruption fails closed and repairs only with authority + observed digest, and
+the same record hosts the healing rule and scheduler scopes. The healing and improvement
+subsystems ship observation/shadow-only (disclosed in the mandatory scorecard case) with
+the reviewed remediation protocol, the reversible behavior candidate, and all hard-zero
+gates proven by committed tests.
 
 ### Resume checklist for the next session
 
@@ -1499,25 +1504,25 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected at `405fe68`: clean worktree; **942 runs / 34,010 assertions / 0 failures** under
-both locales; scorecard **19 cases, 16 successes, `decision: pass`, 4/4 hard gates, safety
-counters 0**. Both numbers were re-measured at the start of Round 23 rather than copied
-forward from a commit message.
+Expected after P12 closure: clean worktree; **1020 runs / 34,752 assertions / 0 failures**
+under both locales; scorecard **20 cases, 17 successes, `decision: pass`, 4/4 hard gates,
+safety counters 0**.
 
 Then, in priority order:
 
-1. **P12** per the three-slice decomposition above.
+1. **P13** per `docs/P13_SCHEDULER_PLAN.md`, then **P14 → P18 → P15**.
 2. **The deferred critic passes over P6, P7 and D-7.** Critic agents repeatedly died to
    session limits in Sessions 1–2. From P10 onward every phase has had a real critic round
-   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17 all PASS-WITH-GAPS → fixed). P6, P7 and
+   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12 all PASS-WITH-GAPS → fixed). P6, P7 and
    D-7 still rest on the deterministic gate plus the builder's own self-review, which is
    weaker evidence than this project's protocol asks for.
 3. **P13 → P14 → P18 → P15**, each with its accepted plan document.
 
-The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec) lives in
-the session scratchpad and is deliberately uncommitted, so a builder cannot read or edit its
-own exam. It needs recreating in a new session; its design is described in §1.
+The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec —
+`docs/P12_HELDOUT_PROBES.md`) lives in the session scratchpad and is deliberately
+uncommitted, so a builder cannot read or edit its own exam. It needs recreating in a new
+session; its design is described in §1.
 
 Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output. Do not push,
 publish, release, or connect real physical actuators. The last product checkpoint on `main`
-is **`405fe68`**.
+is the P12 closure commit.
