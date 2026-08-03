@@ -1,11 +1,11 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P14 — streaming input + simulated physical-world assistance
-Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12, P13
-all closed; scorecard 21 cases / 18 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: implement P14 per docs/P14_STREAM_PLAN.md, then P18, P15
-(single-active-phase order)
+Current phase: P18 — capability host unification + graph surface audit
+Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12, P13, P14
+all closed; scorecard 22 cases / 19 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: implement P18 per docs/P18_CAPABILITY_HOST_PLAN.md, then P15
+(release hardening); single-active-phase order
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -60,7 +60,7 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P11 | Three-layer memory | high | high | closed (`0531bee`, critic fixes `5cdf17f`) | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
 | P12 | Bounded self-healing and improvement | high | high | closed (Round 24) | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates; observation/shadow-only disclosed; DR-2 durable circuit on one record type |
 | P13 | Durable scheduler | medium | high | closed (Round 25) | tamoz-scheduler gem (at/interval); atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
-| P14 | Streaming physical-world input | strategic | very high | pending | deterministic Situation replay, bounded admission, simulated effector, external interlocks |
+| P14 | Streaming physical-world input | strategic | very high | closed (Round 26) | tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval) |
 | P18 | Capability host + graph audit | high | high | pending | four closed built-in sources share one host; graph surface measured and documented |
 | P15 | Release hardening | very high | high | pending | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
 

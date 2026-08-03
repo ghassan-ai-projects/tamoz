@@ -1,11 +1,11 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: P0–P11, P16, P17, P12, P13 all closed (scorecard 21/18/pass;
-P12 and P13 critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
-Current phase: `P14` — streaming input + simulated physical-world assistance
-Next action: implement P14 per `docs/P14_STREAM_PLAN.md`; merge, gate, critic round;
-then P18, then P15 (release hardening).
+Implementation baseline: P0–P11, P16, P17, P12, P13, P14 all closed (scorecard 22/19/pass;
+P12, P13, P14 critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
+Current phase: `P18` — capability host unification + graph surface audit
+Next action: implement P18 per `docs/P18_CAPABILITY_HOST_PLAN.md`; merge, gate, critic
+round; then P15 (release hardening).
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -72,7 +72,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P11 | closed | three-layer memory | `0531bee` | critic fixes `5cdf17f` |
 | P12 | closed | bounded healing and improvement | Round 24 | observation/shadow-only disclosed; DR-2 durable circuit on one record type; critic PASS-WITH-GAPS, both gaps closed |
 | P13 | closed | durable scheduling | Round 25 | tamoz-scheduler gem (at/interval, cron deferred); MIGRATION_3; atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
-| P14 | pending | Situation streaming and simulated physical action | — | — |
+| P14 | closed | Situation streaming and simulated physical action | Round 26 | tamoz-stream gem; MIGRATION_4/5; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed |
 | P15 | pending | release hardening and independent completion audit | — | — |
 | P16 | complete | tools gem extraction, behavior-neutral | `6ff0d40`, `999b5c9` | `8f6b893`, `38d2e94` (merge), `2ae9e60` |
 | P17 | reviewing | governed websearch + egress policy | `6ff0d40`, `999b5c9` | `78041fc` (in critic round) |
@@ -478,25 +478,27 @@ receives commands through current-state policy and an independently controlled i
 
 Work packages:
 
-- [ ] **P14-D** Select one safe supervisory profile and define channel/schema/source trust,
+- [x] **P14-D** Select one safe supervisory profile and define channel/schema/source trust,
   SituationSpec, risk ceiling, Decision/Intent/Command/Outcome schemas, external interlock.
-- [ ] **P14-A — admission/store:** versioned Channel/Event/Admission/StreamStore contracts,
+- [x] **P14-A — admission/store:** versioned Channel/Event/Admission/StreamStore contracts,
   auth, tenant binding, bounds, units/time/sequence, dedup/conflict quarantine, durable ack,
   explicit bounded backpressure/gap outcomes.
-- [ ] **P14-B — deterministic runtime:** stable virtual partitions, serial transition,
+- [x] **P14-B — deterministic runtime:** stable virtual partitions, serial transition,
   event/processing time, watermarks/idleness, bounded windows/timers, late policy, atomic
   Situation/admission/outbox/checkpoint under virtual-time replay.
-- [ ] **P14-C — cognition bridge:** bounded immutable SituationSnapshot, stable request,
+- [x] **P14-C — cognition bridge:** bounded immutable SituationSnapshot, stable request,
   one episode per Situation, plan bound to snapshot digest, supersession/expiry rejection,
   typed Decision and ActionIntent only.
-- [ ] **P14-P — action boundary:** reload current state after approval; check freshness,
+- [x] **P14-P — action boundary:** reload current state after approval; check freshness,
   completeness, uncertainty, quality/quorum, health/calibration/gaps/conflicts, scope/bounds,
   quotas, expiry, separation of duty, external interlock, effect reconciliation.
-- [ ] **P14-S — simulator proof:** deterministic, recorded-cognition, shadow, and
+- [x] **P14-S — simulator proof:** deterministic, recorded-cognition, shadow, and
   counterfactual modes have no production credentials; first effector is simulator only.
-- [ ] **P14-E** Golden traces for duplicates/reordering/late/idleness/skew/gaps/corruption/
+- [x] **P14-E** Golden traces for duplicates/reordering/late/idleness/skew/gaps/corruption/
   restart/races/overload; compare raw-event, window, and Situation treatments; independent
   safety review before any real adapter discussion.
+  (Simulated source only — the real-adapter gate is a recorded deferral requiring owner
+  approval, plan §11.)
 
 Hard stop: any silent evidence loss, nondeterministic replay, direct model-to-effector path,
 stale/superseded dispatch, replay reaching real effects, approval bypassing current state,

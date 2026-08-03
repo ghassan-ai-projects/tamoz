@@ -2,12 +2,12 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-03 — **1061 runs / 34,954 assertions / 0 failures** under BOTH
-locales, scorecard **21 cases / 18 successes / decision pass / 4-of-4 hard gates /
-safety counters 0**. P0–P11, P16, P17, D-7, D-8, **P12 and P13 closed** (both critic
-rounds PASS-WITH-GAPS, all findings closed with committed tests); **P14 is the next phase**.
-Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P13 are closed;
-the remaining span is **P14–P18** — with every phase passing real behavioural proofs and
+Last verified: 2026-08-03 — **1098 runs / 34,798 assertions / 0 failures** under BOTH
+locales, scorecard **22 cases / 19 successes / decision pass / 4-of-4 hard gates /
+safety counters 0**. P0–P11, P16, P17, D-7, D-8, **P12, P13 and P14 closed** (each critic
+round PASS-WITH-GAPS, all findings closed with committed tests); **P18 is the next phase**.
+Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P14 are closed;
+the remaining span is **P15 and P18** — with every phase passing real behavioural proofs and
 hard-zero safety gates.
 
 Method: each work package gets a **builder** and a separate **harsh critic** with fresh
@@ -1436,7 +1436,8 @@ current scorecard; it may never be lowered to make a round pass.
 | P17 governed websearch | complete | **closed** (`78041fc`, critic fix `3fe4d43`) — critic PASS-WITH-GAPS; SSRF classifier now fails closed on unclassifiable IP spellings; stderr_tail redacts resolved credential values (invariant 24) |
 | **P12 bounded self-healing** | complete | **closed** (Round 24) — critic PASS-WITH-GAPS, both gaps closed with committed tests; DR-2 durable circuit landed (all four scopes on one record type); 1020/0 both locales, scorecard 20/17/pass |
 | **P13 durable scheduling** | complete | **closed** (Round 25) — tamoz-scheduler gem (at/interval, cron deferred per plan §12), MIGRATION_3, atomic materialize_due, misfire/overlap/not_before, claim-time grant intersection (invariant 40), scorecard case 21; critic PASS-WITH-GAPS, all findings closed; 1061/0 both locales, scorecard 21/18/pass |
-| P14–P15, P18 | pending | accepted design only; no implementation commits |
+| **P14 streaming + simulated action** | complete | **closed** (Round 26) — tamoz-stream gem, MIGRATION_4/5, atomic process_partition + injected clock, durable admission/dedup/quarantine (invariant 45), action boundary + read-only interlock, replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; 1098/0 both locales, scorecard 22/19/pass; simulated source only |
+| P15, P18 | pending | accepted design only; no implementation commits |
 
 ---
 
@@ -1464,12 +1465,12 @@ current scorecard; it may never be lowered to make a round pass.
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
    MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
    workflow. Its closure record must also identify DR-2 durability as carried debt.
-8. **P14–P15 and P18 remain unimplemented.** P11, P16, P17, P12 and P13 are closed
-   (each critic PASS-WITH-GAPS with all findings closed by committed tests). P14, P15 and
-   P18 have accepted plans and no code.
+8. **P15 and P18 remain unimplemented.** P11, P16, P17, P12, P13 and P14 are closed
+   (each critic PASS-WITH-GAPS with all findings closed by committed tests). P15 and P18
+   have accepted plans and no code.
 9. **Release evidence is not yet ordinary-CI complete.** Both-locale gates, scorecards,
    package isolation, security/license checks, benchmarks, restore, and release rehearsal
-   still need P15 integration. README/SECURITY also lag the eight-gem and current MCP/action
+   still need P15 integration. README/SECURITY also lag the nine-gem and current MCP/action
    behavior.
 10. **Process exception to record:** DR-3 was implemented out of the planned order, and
     DR-4/DR-5/P16 merged before their independent closure evidence was complete. Later
@@ -1480,11 +1481,24 @@ current scorecard; it may never be lowered to make a round pass.
 
 ## 6. Next action
 
-Close **P14 — streaming input and simulated physical-world assistance** per
-`docs/P14_STREAM_PLAN.md`: one authenticated read-only physical source becomes
-deterministic immutable Situations; only a simulator receives commands (external
-interlocks; hard stops on raw video-rate cognition, motor control, PLC loops). After
-P14, proceed **P18 → P15**.
+Close **P18 — capability host unification and the graph surface audit** per
+`docs/P18_CAPABILITY_HOST_PLAN.md`: one CapabilitySource/CapabilityDescriptor contract under
+which local tools, skills, MCP, and websearch register (invariant-35 authority intersection
+in ONE gate), and the graph surface audit documents the graph gem's product-loaded vs
+tested-only surface via stdlib Coverage. After P18, proceed **P15 (release hardening)**.
+
+**P14 is closed.** The streaming path ships: durable admission with idempotent dedup and
+quarantine (invariant 45), the atomic six-step process_partition under the injected clock
+(replay byte-deterministic), immutable Situation versions, the pure 8-outcome cognition
+admission, the action boundary (post-approval revalidation + read-only interlock, TOCTOU
+closed both sides, R4 never dispatched), the four replay modes with no credentials, and
+the idempotent outbox drain (kill-between-outbox-and-enqueue is exactly one episode).
+The mandatory case `agent.situation-observation` proves it end to end. Owner constraint
+honored: the ONLY effector is the simulator; the real-adapter gate is a recorded deferral
+requiring owner approval. The critic round (PASS-WITH-GAPS) found four conformance gaps —
+all fixed (WallClock advance, outbox-id build-time bound, C7 situation namespace,
+evaluated cognition outcome); C2 graph-node wiring is agent-side by package boundary and
+recorded.
 
 **P13 is closed.** The durable scheduler ships `at` + `interval` (cron/IANA recorded as a
 deferral with entry conditions in plan §12): the atomic `materialize_due` claims → creates
@@ -1495,16 +1509,6 @@ fails closed), scan-conflict isolation, and the typed delivery→execution lifec
 mandatory scorecard case `agent.schedule-materialization` proves the recurring read-only
 scorecard summary end to end. The critic round (PASS-WITH-GAPS) found three
 design-conformance divergences and five gaps; all are fixed with committed tests.
-
-**P14 (streaming input + simulated physical action) is in flight — Round 26.** The
-`tamoz-stream` gem (ChannelDescriptor/EventEnvelope/StreamClock values, SituationSpec +
-SituationSnapshot, CognitionAdmission, ActionBoundary, ReplayRuntime, the production
-connector seam), MIGRATION_4/5, and the SQLite StreamStore (durable admission with
-idempotent dedup + quarantine per invariant 45, the atomic six-step process_partition
-under the injected clock, idle-watermark advancement, the idempotent outbox drain) are
-committed, with the mandatory case `agent.situation-observation` (case 22). The
-fresh-context critic round and the both-locale gate close the phase. Owner constraint
-honored: no real physical actuator; the ONLY effector is the simulator.
 
 ### Resume checklist for the next session
 
@@ -1518,19 +1522,19 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected after P13 closure: clean worktree; **1061 runs / 34,954 assertions / 0 failures**
-under both locales; scorecard **21 cases, 18 successes, `decision: pass`, 4/4 hard gates,
+Expected after P14 closure: clean worktree; **1098 runs / 34,798 assertions / 0 failures**
+under both locales; scorecard **22 cases, 19 successes, `decision: pass`, 4/4 hard gates,
 safety counters 0**.
 
 Then, in priority order:
 
-1. **P14** per `docs/P14_STREAM_PLAN.md`, then **P18 → P15**.
+1. **P18** per `docs/P18_CAPABILITY_HOST_PLAN.md`, then **P15**.
 2. **The deferred critic passes over P6, P7 and D-7.** Critic agents repeatedly died to
    session limits in Sessions 1–2. From P10 onward every phase has had a real critic round
-   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12, P13 all PASS-WITH-GAPS → fixed).
-   P6, P7 and D-7 still rest on the deterministic gate plus the builder's own self-review,
-   which is weaker evidence than this project's protocol asks for.
-3. **P14 → P18 → P15**, each with its accepted plan document.
+   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12, P13, P14 all PASS-WITH-GAPS →
+   fixed). P6, P7 and D-7 still rest on the deterministic gate plus the builder's own
+   self-review, which is weaker evidence than this project's protocol asks for.
+3. **P18 → P15**, each with its accepted plan document.
 
 The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec —
 `docs/P12_HELDOUT_PROBES.md`) lives in the session scratchpad and is deliberately
