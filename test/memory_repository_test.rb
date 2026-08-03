@@ -91,12 +91,13 @@ class MemoryRepositoryTest < Minitest::Test
 
   def test_migration_2_creates_the_index_table_and_ordinals_are_monotonic
     # P11-06: CURRENT_VERSION moved 1 -> 2 through a checksummed MIGRATION_2;
-    # the monotonic-ordering guard makes ordinal reuse impossible.
-    assert_equal 2, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2], Tamoz::SQLite::Migrator.migration_ordinals
+    # P13: CURRENT_VERSION moved 2 -> 3 through MIGRATION_3 (scheduler tables).
+    # The monotonic-ordering guard makes ordinal reuse impossible.
+    assert_equal 3, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3], Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 2, database.get_first_value("PRAGMA user_version")
+    assert_equal 3, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -117,12 +118,14 @@ class MemoryRepositoryTest < Minitest::Test
     legacy.close
     database = SQLite3::Database.new(old)
     database.execute("DROP TABLE tamoz_memory_index")
+    database.execute("DROP TABLE IF EXISTS tamoz_schedules")
+    database.execute("DROP TABLE IF EXISTS tamoz_occurrences")
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version = 2")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 2, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 3, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

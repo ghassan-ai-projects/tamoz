@@ -184,7 +184,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
   private
 
   def run_killed_child(path, point, operation: "checkpoint.commit", marker: nil)
-    load_paths = %w[tamoz-core tamoz-graph tamoz-sqlite].flat_map do |gem|
+    load_paths = %w[tamoz-core tamoz-graph tamoz-scheduler tamoz-sqlite].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]
     end
     pid = Process.spawn(
@@ -238,7 +238,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
   def spawn_lease_child(path, owner)
     input_reader, input_writer = IO.pipe
     output_reader, output_writer = IO.pipe
-    load_paths = %w[tamoz-core tamoz-graph tamoz-sqlite].flat_map do |gem|
+    load_paths = %w[tamoz-core tamoz-graph tamoz-scheduler tamoz-sqlite].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]
     end
     pid = Process.spawn(

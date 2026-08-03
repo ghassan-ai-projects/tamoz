@@ -259,82 +259,107 @@ module Tamoz
         row = nil
 
         adapter.__send__(:transaction, operation: "request.enqueue") do |tx|
-          now = adapter.__send__(:backend_time, tx, "request.enqueue.time")
-          ensure_namespace_for_enqueue!(
+          row = enqueue_request_in_transaction!(
             tx,
-            thread_id: thread,
-            namespace: encoded_namespace,
-            now:
+            thread:, encoded_namespace:, id:,
+            operation_text:, delivery_text:, payload_bytes:,
+            payload_digest:, input_digest:
           )
-          row = request_row(tx, thread, encoded_namespace, id, "request.enqueue.existing")
-          if row
-            unless row.fetch(4) == input_digest &&
-                   row.fetch(5) == operation_text &&
-                   row.fetch(6) == delivery_text &&
-                   row.fetch(9) == payload_digest
-              raise CheckpointConflictError,
-                    "request id is already bound to different input"
-            end
-            next
-          end
-
-          sequence = tx.scalar(
-            "request.enqueue.sequence",
-            <<~SQL,
-              SELECT next_request_sequence
-              FROM tamoz_namespaces
-              WHERE thread_id = ? AND namespace = ?
-            SQL
-            [thread, encoded_namespace]
-          )
-          tx.execute(
-            "request.enqueue.insert",
-            <<~SQL,
-              INSERT INTO tamoz_requests(
-                thread_id, namespace, request_id, enqueue_sequence,
-                input_digest, operation, delivery_mode, status, payload,
-                payload_digest, execution_id, target_execution_id,
-                cancellation_generation, owner_fence, checkpoint_id,
-                response, response_digest, terminal_error,
-                terminal_error_digest, retryable,
-                created_at_ms, updated_at_ms
-              )
-              VALUES (
-                ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?,
-                NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?
-              )
-            SQL
-            [
-              thread, encoded_namespace, id, sequence, input_digest,
-              operation_text, delivery_text, Wire.blob(payload_bytes),
-              payload_digest, now, now
-            ]
-          )
-          append_request_transition!(
-            tx,
-            thread_id: thread,
-            namespace: encoded_namespace,
-            request_id: id,
-            from_status: nil,
-            to_status: "queued",
-            fence: nil,
-            evidence: {"kind" => "enqueue"},
-            now:
-          )
-          tx.execute(
-            "request.enqueue.advance",
-            <<~SQL,
-              UPDATE tamoz_namespaces
-              SET next_request_sequence = ?,
-                  greatest_backend_time_ms = MAX(greatest_backend_time_ms, ?),
-                  updated_at_ms = ?
-              WHERE thread_id = ? AND namespace = ?
-            SQL
-            [sequence + 1, now, now, thread, encoded_namespace]
-          )
-          row = request_row(tx, thread, encoded_namespace, id, "request.enqueue.result")
         end
         materialize_request(row)
+      end
+
+      # P13-A seam (plan §4, C1/DC-4): the enqueue body extracted from the
+      # public method so the scheduler's `materialize_due` can claim → create
+      # occurrence → enqueue its request in ONE transaction. The public
+      # `enqueue_request` and the scheduler adapter both delegate here; neither
+      # nests a second transaction. Dedup lives in this primitive: the row key
+      # is `(thread_id, namespace, request_id)`, and a duplicate id is accepted
+      # only when operation/delivery/payload digests all match — any byte
+      # difference raises `CheckpointConflictError` (invariant 38 duplicate-turn
+      # hard zero).
+      #
+      # @return [Array] the request row (materialized by the caller)
+      def enqueue_request_in_transaction!(
+        tx,
+        thread:, encoded_namespace:, id:,
+        operation_text:, delivery_text:, payload_bytes:,
+        payload_digest:, input_digest:
+      )
+        now = adapter.__send__(:backend_time, tx, "request.enqueue.time")
+        ensure_namespace_for_enqueue!(
+          tx,
+          thread_id: thread,
+          namespace: encoded_namespace,
+          now:
+        )
+        row = request_row(tx, thread, encoded_namespace, id, "request.enqueue.existing")
+        if row
+          unless row.fetch(4) == input_digest &&
+                 row.fetch(5) == operation_text &&
+                 row.fetch(6) == delivery_text &&
+                 row.fetch(9) == payload_digest
+            raise CheckpointConflictError,
+                  "request id is already bound to different input"
+          end
+          return row
+        end
+
+        sequence = tx.scalar(
+          "request.enqueue.sequence",
+          <<~SQL,
+            SELECT next_request_sequence
+            FROM tamoz_namespaces
+            WHERE thread_id = ? AND namespace = ?
+          SQL
+          [thread, encoded_namespace]
+        )
+        tx.execute(
+          "request.enqueue.insert",
+          <<~SQL,
+            INSERT INTO tamoz_requests(
+              thread_id, namespace, request_id, enqueue_sequence,
+              input_digest, operation, delivery_mode, status, payload,
+              payload_digest, execution_id, target_execution_id,
+              cancellation_generation, owner_fence, checkpoint_id,
+              response, response_digest, terminal_error,
+              terminal_error_digest, retryable,
+              created_at_ms, updated_at_ms
+            )
+            VALUES (
+              ?, ?, ?, ?, ?, ?, ?, 'queued', ?, ?,
+              NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ?, ?
+            )
+          SQL
+          [
+            thread, encoded_namespace, id, sequence, input_digest,
+            operation_text, delivery_text, Wire.blob(payload_bytes),
+            payload_digest, now, now
+          ]
+        )
+        append_request_transition!(
+          tx,
+          thread_id: thread,
+          namespace: encoded_namespace,
+          request_id: id,
+          from_status: nil,
+          to_status: "queued",
+          fence: nil,
+          evidence: {"kind" => "enqueue"},
+          now:
+        )
+        tx.execute(
+          "request.enqueue.advance",
+          <<~SQL,
+            UPDATE tamoz_namespaces
+            SET next_request_sequence = ?,
+                greatest_backend_time_ms = MAX(greatest_backend_time_ms, ?),
+                updated_at_ms = ?
+            WHERE thread_id = ? AND namespace = ?
+          SQL
+          [sequence + 1, now, now, thread, encoded_namespace]
+        )
+        request_row(tx, thread, encoded_namespace, id, "request.enqueue.result")
       end
 
       def fetch_request(thread_id:, namespace: [], request_id:)

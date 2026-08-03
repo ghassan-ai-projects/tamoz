@@ -127,8 +127,10 @@ class PackagingTest < Minitest::Test
   # 16 (`agent.mcp-governed-call`) drives the real MCP test server through
   # tamoz-mcp and the session. P16: tamoz-tools joins the packaged scorecard
   # because the agent gem now depends on it for the Toolbox and Skills surface.
+  # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
+  # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent tamoz-mcp tamoz-evals]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-tools tamoz-agent tamoz-mcp tamoz-evals]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")

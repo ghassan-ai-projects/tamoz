@@ -152,6 +152,44 @@ class SQLiteStoreTest < Minitest::Test
     end
   end
 
+  # P13-A seam (invariant 38 duplicate-turn hard zero): the enqueue primitive
+  # dedups on `(thread_id, namespace, request_id)` — a repeated delivery of the
+  # SAME bytes is idempotent (one request row), and the same id with ANY byte
+  # difference is refused with CheckpointConflictError. A crash at any seam can
+  # repeat delivery; this is what makes "exactly one logical occurrence" durable.
+  def test_enqueue_dedup_is_byte_exact_and_same_bytes_are_idempotent
+    with_store do |_store, _path, adapter|
+      definition = Tamoz.graph(name: "enqueue-dedup", version: "1") do
+        state :ready, default: true
+        node(:finish, implementation_name: "enqueue-dedup.finish", version: "1") { |_s, _c| {ready: true} }
+        edge Tamoz::START, :finish
+        edge :finish, Tamoz::END
+      end
+      app = definition.compile(checkpointer: adapter)
+      checkpointer = app.checkpointer
+      enqueue = lambda do |id:, operation:, payload:|
+        checkpointer.enqueue_request(
+          thread_id: "t-1",
+          request_id: id,
+          operation:,
+          payload:
+        )
+      end
+
+      first = enqueue.call(id: "req.dedup", operation: "turn", payload: {"k" => "v"})
+      assert_equal :queued, first.status
+
+      # Same id + same bytes: idempotent, no second row.
+      again = enqueue.call(id: "req.dedup", operation: "turn", payload: {"k" => "v"})
+      assert_equal :queued, again.status
+
+      # Same id + ANY byte difference: refused (duplicate turn).
+      assert_raises(Tamoz::CheckpointConflictError) do
+        enqueue.call(id: "req.dedup", operation: "turn", payload: {"k" => "different"})
+      end
+    end
+  end
+
   private
 
   def with_store(store_protection: nil)

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tamoz/graph"
+require "tamoz/scheduler"
 require "sqlite3"
 require_relative "sqlite/version"
 require_relative "sqlite/error"
@@ -20,6 +21,7 @@ require_relative "sqlite/lease"
 require_relative "sqlite/lease_operations"
 require_relative "sqlite/store"
 require_relative "sqlite/circuit_store"
+require_relative "sqlite/schedule_store"
 require_relative "sqlite/memory_repository"
 require_relative "sqlite/effect_journal"
 require_relative "sqlite/checkpoint_store"

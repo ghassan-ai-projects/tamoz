@@ -1492,6 +1492,16 @@ subsystems ship observation/shadow-only (disclosed in the mandatory scorecard ca
 the reviewed remediation protocol, the reversible behavior candidate, and all hard-zero
 gates proven by committed tests.
 
+**P13 (durable scheduling) is in flight — Round 25.** Slice 1 (committed at the end of the
+round): the `tamoz-scheduler` gem (validated Schedule/Occurrence values for the `at` +
+`interval` kinds — cron/IANA deferred per plan §12 with recorded entry conditions),
+MIGRATION_3 (scheduler tables), the `enqueue_request_in_transaction!` extraction (the
+P13-A atomicity seam), and `Tamoz::SQLite::ScheduleStore` with the atomic `materialize_due`
+(claim → create occurrence → enqueue request in ONE transaction; duplicate-turn hard zero
+via the deterministic request id). Slices 2–5 remain: misfire/overlap/backpressure (P13-B),
+grant intersection (P13-C), the scorecard consumer + mandatory case (P13-P), and the
+fake-clock determinism suite + both-locale gate + critic round.
+
 ### Resume checklist for the next session
 
 Run this first; it is cheap and tells you the truth about where things stand:

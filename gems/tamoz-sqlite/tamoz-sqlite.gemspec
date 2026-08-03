@@ -10,6 +10,7 @@ TamozGemspec.build(
   description: "SQLite checkpoints, request inbox, effects, leases, and application storage.",
   dependencies: [
     ["tamoz-graph", "= #{Tamoz::SQLite::VERSION}"],
+    ["tamoz-scheduler", "= #{Tamoz::SQLite::VERSION}"],
     ["sqlite3", "~> 2.9"]
   ]
 )

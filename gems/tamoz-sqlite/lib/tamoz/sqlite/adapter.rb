@@ -23,6 +23,16 @@ module Tamoz
         CheckpointStore.new(adapter: self, checkpoint_codec:)
       end
 
+      # P13-A: the durable ScheduleStore over this adapter. `checkpoint_store`
+      # must be this adapter's bound graph checkpointer (the shared enqueue
+      # primitive is a CheckpointStore method).
+      def bind_schedule_store(checkpoint_store)
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        ScheduleStore.new(adapter: self, checkpoints: checkpoint_store)
+      end
+
       def initialize(
         path:,
         limits: Limits.new,

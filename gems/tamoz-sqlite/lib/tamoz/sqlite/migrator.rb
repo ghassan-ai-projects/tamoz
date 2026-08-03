@@ -11,7 +11,13 @@ module Tamoz
       # `tamoz_memory_index` (P11 plan §2/§4 P11-B). Ordinals are consumed
       # monotonically; a later phase cannot reuse ordinal 2 (the
       # monotonic-ordering test in test/sqlite_migration_test.rb asserts it).
-      CURRENT_VERSION = 2
+      # P13 (durable scheduling) §10: CURRENT_VERSION moves 2 -> 3 through
+      # MIGRATION_3, which adds the scheduler tables. Existing tables
+      # (threads/namespaces/requests/checkpoints/effects/memory/...) are
+      # untouched; occurrences reference `tamoz_requests` by request id only,
+      # so a pre-P13 database without these tables loads with the scheduler
+      # disabled (legacy semantics, never a partial load).
+      CURRENT_VERSION = 3
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -368,11 +374,68 @@ module Tamoz
         MIGRATION_2.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # P13 (durable scheduling) §10: the scheduler tables. `tamoz_schedules`
+      # stores one row per schedule revision (CAS on expected_revision);
+      # `tamoz_occurrences` stores the closed state machine (due → claimed →
+      # enqueued → running → succeeded|failed|cancelled|unknown, plus
+      # skipped|coalesced) with the durable fence/owner and a
+      # `request_id` UNIQUE constraint that is the dedup seam: a retried
+      # delivery re-enqueues the SAME request row, and a byte-different
+      # duplicate raises `CheckpointConflictError`. The occurrence references
+      # the request inbox by request id only — no FK into the request tables,
+      # so a pre-P13 database migrates forward without touching existing rows.
+      MIGRATION_3 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_schedules (
+            schedule_id TEXT NOT NULL,
+            revision INTEGER NOT NULL CHECK (revision > 0),
+            definition_digest TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            payload_digest TEXT NOT NULL,
+            enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+            deleted INTEGER NOT NULL DEFAULT 0 CHECK (deleted IN (0, 1)),
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (schedule_id, revision)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_occurrences (
+            occurrence_id TEXT NOT NULL,
+            schedule_id TEXT NOT NULL,
+            schedule_revision INTEGER NOT NULL CHECK (schedule_revision > 0),
+            nominal_fire_at_utc INTEGER NOT NULL,
+            not_before INTEGER NOT NULL,
+            request_id TEXT NOT NULL UNIQUE,
+            state TEXT NOT NULL CHECK (
+              state IN ('due', 'claimed', 'enqueued', 'running', 'succeeded',
+                        'failed', 'cancelled', 'unknown', 'skipped', 'coalesced')
+            ),
+            fence INTEGER,
+            owner TEXT,
+            reason TEXT,
+            payload_digest TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (occurrence_id)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_occurrences_due
+            ON tamoz_occurrences(schedule_id, state, not_before)
+        SQL
+      ].freeze
+
+      MIGRATION_3_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_3.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
         1 => [MIGRATION_1, MIGRATION_1_CHECKSUM],
-        2 => [MIGRATION_2, MIGRATION_2_CHECKSUM]
+        2 => [MIGRATION_2, MIGRATION_2_CHECKSUM],
+        3 => [MIGRATION_3, MIGRATION_3_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -511,6 +574,7 @@ module Tamoz
 
       private_constant :APPLICATION_ID, :MIGRATION_1,
                        :MIGRATION_1_CHECKSUM, :MIGRATION_2, :MIGRATION_2_CHECKSUM,
+                       :MIGRATION_3, :MIGRATION_3_CHECKSUM,
                        :MIGRATIONS
     end
   end

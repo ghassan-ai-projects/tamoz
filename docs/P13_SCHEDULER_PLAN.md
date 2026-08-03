@@ -266,6 +266,18 @@ failure, not a poller crash.
 
 ## 12. Deferrals (explicit, with entry conditions)
 
+- **Cron kind + IANA/DST (P13-D/E part)** — deferred to a follow-up round, recorded per
+  the gauntlet simplification mandate (Round 24). The v1 slice ships the `at` and
+  `interval` kinds only: elapsed-time cadence and one-shot nominal instants are pure UTC
+  arithmetic, need no `fugit` dependency, and keep invariants 38–40 fully non-vacuous for
+  the shipped kinds (identity = nominal UTC instant + durable uniqueness; no civil-time
+  surface to be wrong about). The recurring read-only scorecard consumer uses `interval`,
+  which proves the card outcome ("one recurring read-only product task materialized into
+  the ordinary durable request inbox exactly once per logical occurrence") end to end.
+  Entry condition for cron: add `fugit` (verified bundleable offline at Round 24; et-orbi
+  and raabro are its only runtime deps) and land the two DST named tests (forward gap →
+  `nonexistent_local_time`, backward fold → fire once at the earlier instant by default)
+  as the entry evidence, per §6 pinned defaults.
 - **Additional schedule kinds** (calendar rules, event streams, watchers,
   natural-language) — entry: `tamoz-stream` exists (P14); they belong there.
 - **Distributed worker** — entry: a second scheduler process needs coordination beyond

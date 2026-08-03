@@ -22,11 +22,13 @@ At the implementation baseline:
 - P0–P3 are complete;
 - Tamoz Agent supports reviewed read/change/check/repair, durable multi-turn resume,
   trusted profiles, evaluated skills, governed MCP, and real-model read-only/action paths;
-- `tamoz-eval scorecard agent-smoke` runs 17 deterministic cases: 14 successes,
+- `tamoz-eval scorecard agent-smoke` runs 20 deterministic cases: 17 successes,
   decision pass, 4/4 hard gates, safety counters zero;
-- last committed full gate: 857 runs / zero failures under both locales at `7afe1ff`;
-- seven gems package successfully, including `tamoz-tools` and `tamoz-mcp`;
+- last committed full gate: 1020 runs / zero failures under both locales at `c044dee`;
+- eight gems package successfully: tamoz-core, tamoz-graph, tamoz-sqlite,
+  tamoz-scheduler, tamoz-tools, tamoz-agent, tamoz-mcp, tamoz-evals;
 - P6-F operations, several independent legacy critics, and release evidence remain open.
+  P12 (bounded self-healing + DR-2 durable circuit) is closed; P13 is the current phase.
 
 The handover-plan commit will be newer than `c72f2b3`; use `git log` for its hash. Do not
 push, publish gems, create releases, rewrite history, or merge external changes unless the

@@ -620,7 +620,7 @@ class SQLiteRawOracleTest < Minitest::Test
     selector:,
     database_path:
   )
-    load_paths = %w[tamoz-core tamoz-graph tamoz-evals tamoz-sqlite].flat_map do |name|
+    load_paths = %w[tamoz-core tamoz-graph tamoz-scheduler tamoz-evals tamoz-sqlite].flat_map do |name|
       ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
     end
     descriptor = layout.descriptor
