@@ -1276,10 +1276,12 @@ module Tamoz
           operation,
           payload
         )
+        # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
+        # EffectJournal#decode_receipt).
         unless checkpoint_codec.dump_request_payload(
           operation,
           decoded_payload
-        ) == payload
+        ).b == payload.b
           raise CheckpointCorruptionError, "request payload is not canonical"
         end
         response = row.fetch(14)
@@ -1333,7 +1335,9 @@ module Tamoz
 
       def canonical_state_value(bytes, name)
         value = checkpoint_codec.state_codec.load(bytes)
-        unless checkpoint_codec.state_codec.dump(value) == bytes
+        # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
+        # EffectJournal#decode_receipt).
+        unless checkpoint_codec.state_codec.dump(value).b == bytes.b
           raise CheckpointCorruptionError, "#{name} is not canonical"
         end
 

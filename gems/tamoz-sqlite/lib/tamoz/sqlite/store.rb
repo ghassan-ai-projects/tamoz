@@ -291,7 +291,9 @@ module Tamoz
           Wire.verify_digest!(payload, digest, domain: "tamoz.sqlite.store_value")
           clear = bytes_for_decode(payload, sensitive, [address.fetch(0), key])
           value = state_codec.load(clear)
-          unless state_codec.dump(value) == clear
+          # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
+          # EffectJournal#decode_receipt).
+          unless state_codec.dump(value).b == clear.b
             raise CheckpointCorruptionError, "Store value is not canonical"
           end
         end

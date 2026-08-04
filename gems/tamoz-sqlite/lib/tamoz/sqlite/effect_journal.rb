@@ -911,7 +911,11 @@ module Tamoz
         end
         Wire.verify_digest!(bytes, digest, domain:)
         value = store.checkpoint_codec.state_codec.load(bytes)
-        unless store.checkpoint_codec.state_codec.dump(value) == bytes
+        # Canonicality is a BYTE property. SQLite returns BLOB columns as
+        # ASCII-8BIT while the codec dumps UTF-8, so `==` is false for any
+        # byte-identical payload that is not ASCII-only — one non-ASCII
+        # character in a model reply would forge a corruption error.
+        unless store.checkpoint_codec.state_codec.dump(value).b == bytes.b
           raise CheckpointCorruptionError, "#{domain} payload is not canonical"
         end
 

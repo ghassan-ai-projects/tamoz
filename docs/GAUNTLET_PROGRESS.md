@@ -2,13 +2,18 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-04 — **1113 runs / 35,294 assertions / 0 failures** under BOTH
-locales, scorecard **22 cases / 19 successes / decision pass / 4-of-4 hard gates /
-safety counters 0**. P0–P11, P16, P17, D-7, D-8, **P12, P13, P14 and P18 closed** (each
-critic round PASS-WITH-GAPS, all findings closed with committed tests); **P15 is the next phase**.
+Last verified: 2026-08-05 (Round 28) — **1124 runs / 35,350 assertions / 0 failures** under
+BOTH locales, scorecard **22 cases / 19 successes / decision pass / 4-of-4 hard gates /
+safety counters 0**, scorecard `content_digest sha256:08a7a526…`. P0–P11, P16, P17, D-7,
+D-8, **P12, P13, P14 and P18 closed** (each critic round PASS-WITH-GAPS, all findings closed
+with committed tests); **P15 is the next phase**.
 Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P14 and P18 are
 closed; the remaining span is **P15** — with every phase passing real behavioural proofs and
 hard-zero safety gates.
+
+Both bodies of work are now committed: `a2eb5bc` (P18 closure, carrying the D-9 fix because
+the defect was in P18's own work) and the Round 28 commit that adds this line (D-10/D-11 and
+this document's completion).
 
 Method: each work package gets a **builder** and a separate **harsh critic** with fresh
 context. The critic runs the real output, compares it against the bar with held-out probes
@@ -164,13 +169,40 @@ rejects **and leaves the file byte-identical**. No fix may weaken any of these.
 
 ## 3. Round ledger
 
+Narrative sections below appear in the order they were written, not in round order;
+this table is the ordered index.
+
 | Round | Scope | Builder | Critic | Verdict | Commit |
 |---|---|---|---|---|---|
 | 0 | judging substrate + baseline audit | main | — | substrate validated; 4 defects found | — |
 | 1 | D-1 locale gate + D-2 multibyte corruption (+D-3 found by builder) | done | done | **pass against baseline; D-4/D-5 split out** | `2df0063`, `fe1d26e`, `b5f7fb9`, `39a8679` |
 | 2 | D-4/D-5 UTF-8 contract correction | done | done | **pass against baseline; invariant-17 matrix added** | `b213b4a`, `a88f403` |
-| 5 | P6 durable session and effect recovery | done | in flight | **coordinator gate PASS; independent critic still running** | `8c977dc`, `2d94908`, `b69701c`, `752363f` |
-| 7 | P7 interactive/resumable CLI | done (builder + coordinator; quota killed subagents) | pending (quota) | **P7 closed — coordinator gate PASS; scorecard 9/13, safety zero** | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
+| 3 | P4 compound existing-file edits | done | done | **accepted; scorecard 6/12 → 7/12** | `a941f25`, `67f72d7` |
+| 4 | P5 reviewed file creation | done | done | **accepted after two required corrections; 8/12** | `6504398` |
+| 5 | P6 durable session and effect recovery | done | never completed (quota) | **coordinator gate PASS; adversarially unverified** | `8c977dc`, `2d94908`, `b69701c`, `752363f` |
+| 6 | P7 + P8 design plans | done ×2 | done ×2 | **both rejected on first draft, then accepted** | `cab974f` |
+| 7 | P7 interactive/resumable CLI | done (builder + coordinator; quota killed subagents) | pending (quota) | **P7 closed — coordinator gate PASS; scorecard 9/13, safety zero**; D-6 disclosed | `1f2c56a`, `9500acb`, `1e404d8`, `7469fa2` |
+| 8 | P8-A/B/C trusted project profiles | coordinator | pending (quota) | **landed; 9/13**; deviations disclosed | `a019167` |
+| 9 | D-7 tool-error surfacing + bounded repair | done | pending (quota) | **merged; 13 cases / 10 successes** | `35c2ffb` |
+| 10 | P8-E trusted-profile adversarial proofs | done | pending (quota) | **P8 closed; 14 cases / 11 successes** | `0ed3944` |
+| 11 | P9 evaluated skills merged | done | pending (quota) | **P9 closed to plan scope; 15 / 12** | `8b095ab` |
+| 12 | P10 governed MCP, slices 1–2 | done | (per-slice critics, rounds 16–17) | admission + catalog/supervisor landed | `1d14a22`, `54f675a`, `534a502` |
+| 13 | design rounds for P11–P18 and DR-1…DR-5 | done | done (fresh context per plan) | **13 plans accepted; 3 rejected on rev1**; red gate at HEAD found and fixed | `281056b` |
+| 14 | deep review of the design checkpoint | — | done | **checkpoint REJECTED as a cross-document design**; corrections integrated | working-tree revisions |
+| 15 | live-model smoke; D-8 opened | — | done (design review) | **action mode FAILS against a real model**; D-8 plan accepted (RC-1…RC-9) | `docs/D8_ACTION_PLAN_DIGEST_PLAN.md` |
+| 16 | P10 slice 3 + fix | done | done | **critic FAIL (O1 critical) → fix closed** | `a69971d`, `01876d5` |
+| 17 | P10 slice 4 + planning-surface fix | done | done | **PASS-WITH-GAPS**; MCP-invisible-to-planner gap fixed | `d0e537e`, `9d1d3ec` |
+| 18 | D-8 action-plan digest resolution | done | done | **PASS-WITH-GAPS**; hardening landed; T6 real-model PASS | `b3fe512`, `89eabf8` |
+| 19 | evals gem substrate (DR-3) | done | done | **PASS-WITH-GAPS**; substrate closes; digest claim corrected | `b6c379c` |
+| 20 | DR-4, DR-5, P16 merged in order | done ×3 | done ×3 | **DR-4 PASS; P16 PASS-WITH-GAPS; DR-5 FAIL → re-adjudication PASS** | `5c16bed`, `1c6efa1`, `8f6b893`, `be84e8e`, `c627aec` |
+| 21 | P17 governed websearch | done | done | **PASS-WITH-GAPS**; SSRF fail-closed + stderr redaction landed | `78041fc`, `3fe4d43` |
+| 22 | P11 three-layer memory (+DR-1) | done | done | **PASS-WITH-GAPS**; two must-fix defects landed | `0531bee`, `5cdf17f` |
+| 23 | P12 decomposition + probe spec | coordinator | — | exam written before any implementation existed | scratchpad |
+| 24 | P12 bounded self-healing + DR-2 durable circuit | done ×3 slices | done | **PASS-WITH-GAPS**; both gaps closed with tests | `c044dee` |
+| 25 | P13 durable scheduling | done | done | **PASS-WITH-GAPS**; three design divergences fixed | `019c0fd`, `4248df5` |
+| 26 | P14 streaming + simulated physical action | done ×5 slices | done | **PASS-WITH-GAPS**; 4 of 6 gaps fixed, 2 recorded | `1570f00`, `a6ffe04` |
+| 27 | P18 capability host + graph surface audit | done ×4 slices | recorded PASS-WITH-GAPS | **closed** — closure commit carries D-9's fix | `a8811dc`, `1bfa89a`, `21bbaf6`, `a2eb5bc` |
+| 28 | P15 round-open baseline audit | coordinator | — | **baseline RED under C/POSIX; D-9/D-10/D-11 found and fixed**; no critic | `a2eb5bc` (D-9), this round (D-10/D-11) |
 
 ### Round 1 — builder result
 
@@ -1370,7 +1402,7 @@ legitimate phrases in before/after/query pass structural review; case-17 purpose
 locales; scorecard 17/14/pass. **D-8 closed; the real-model action path is proven end to
 end (read-only AND action mode, real DeepSeek).**
 
-### Round 23 — P12 bounded self-healing (in flight)
+### Round 23 — P12 decomposition, probe spec, and harness maintenance
 
 **Baseline re-measured, not assumed.** Before any P12 work started, `405fe68` was verified
 by running it: `rake ci` **942 runs / 34,010 assertions / 0 failures** under UTF-8, and the
@@ -1413,6 +1445,268 @@ probe would have reported `probe_failed` on any post-P16 ref — a judge that fa
 looks exactly like two refs that agree. The success floor was ratcheted 6 → 16 to match the
 current scorecard; it may never be lowered to make a round pass.
 
+### Round 24 — P12 bounded self-healing closed (DR-2 durable circuit lands)
+
+The three slices merged and the critic round ran. Verdict **PASS-WITH-GAPS**; both gaps
+(`effect_unknown` reconcile-then-escalate, scope-intersection refusal) were closed with
+committed tests inside the round. Closed at `c044dee`.
+
+- **Healing (HD/H1/H2, H3/H4):** typed `FailureRecord` with five never-mutate classes,
+  abstention → escalated, immutable versioned `HealingRule`, and the reviewed remediation
+  protocol (classify → plan → semantic critic → preflight → execute → oracle verify) in
+  which `recovered` is reachable **only** through the digest-pinned configured check —
+  never through the remediation model's own explanation (invariant 33, probe-spec question
+  1). Self-edit and self-reset are refused (invariant 34). Ships observation/shadow-only,
+  disclosed in the scorecard case itself.
+- **DR-2 durable circuit:** `Tamoz::SQLite::CircuitStore` serves all four scopes (server,
+  rule_target, schedule, egress) from **one** `Tamoz::Circuit` record with CAS-append,
+  restart survival, a read-time self-heal rule, fail-closed corruption repair, and
+  authority-and-digest-gated reset (D1–D10). This answers probe-spec question 2 —
+  an open circuit survives a real process restart and time alone does not reset it.
+- **Improvement (ID/I1/I2/I3):** provenance completeness, one bounded heuristic candidate,
+  paired dev/holdout evaluation, human gates, and a **reversible** `BehaviorTransition`
+  promotion — rollback restores the prior snapshot byte-identically (probe-spec question 5)
+  and a rolled-back candidate is no longer live, so a later round can promote again.
+
+Five defects were found by the fresh-context critics and fixed in-round, each in shipped
+work: DR-1's content-addressed snapshot re-put broke rollback; a `Classification` Data class
+shadowed its own module in `Matrix.run`; Promotion's one-live-heuristic gate was monotonic
+and made the candidate irreversible; Monitor compared margins across different task sets; a
+latent `CircuitPolicyError` reference in `tamoz-core` resolved to the MCP-only class.
+
+Gate: **1020 runs / 34,752 assertions / 0 failures under BOTH locales**; scorecard **20
+cases / 17 successes / decision pass / 4-of-4 hard gates / safety 0**.
+
+### Round 25 — P13 durable scheduling closed
+
+`tamoz-scheduler` ships `at` + `interval`; cron/IANA is a recorded deferral with entry
+conditions (plan §12), the fugit bundling verified offline. The atomic `materialize_due`
+claims → creates → enqueues exactly one logical occurrence into the **ordinary** durable
+request inbox, deduplicated by the deterministic request id (invariant 38) — no second
+delivery path. Critic verdict **PASS-WITH-GAPS**; closed at `4248df5`.
+
+The critic reproduced three divergences between shipped behaviour and the accepted design,
+all fixed at `019c0fd`:
+
+| Divergence | Design requirement | Fix |
+|---|---|---|
+| latest-misfire dropped older due instants | §6 "every due occurrence has exactly one durable reason" | older instants recorded as skipped, the latest carries the work |
+| `allow` overlap ignored `max_concurrency` | §7 "enforced from durable occurrence state" | re-evaluated per occurrence, with backpressure (defer, not terminal) so a capped occurrence stays eligible |
+| `not_before` did not gate delivery | §5 | nominal + deterministic jitter gate enqueue |
+
+Plus: `current_grant` is **required** at `materialize_due` — nil fails closed rather than
+skipping the check (invariant 40); an enqueue conflict is recorded as a `scan_conflict` skip
+and the scan continues instead of wedging every schedule (plan §11 "never crash the
+poller"); a revoked grant records every due occurrence as `grant_revoked`; execution
+completion is typed and double-completion refused; the scorecard consumer fails closed on
+valid-JSON-malformed reports.
+
+Gate: **1061 runs / 34,954 assertions / 0 failures under BOTH locales**; scorecard **21
+cases / 18 successes / decision pass / 4-of-4 hard gates / safety 0**. The only errors each
+run are the pre-existing SIGSTOP selector-control flake, reproduced at clean HEAD and
+unrelated to P13.
+
+### Round 26 — P14 streaming input and simulated physical action closed
+
+Five slices plus the critic round; closed at `a6ffe04`. **The owner constraint held: the
+only effector is the simulator**, and the real-adapter gate remains a recorded deferral
+requiring explicit owner approval (plan §11).
+
+- **Slice 1–2:** `tamoz-stream` gem, MIGRATION_4, SQLite `StreamStore` admission, and the
+  one-transaction `process_partition` boundary under an injected clock (replay is
+  byte-deterministic).
+- **Slice 3:** `SituationSpec` (deterministic compiled configuration, content-addressed with
+  the existing P8/P9 artifact-digest pattern — never a new compiler scheme),
+  `SituationSnapshot` binding the exact Situation version, and the **pure 8-outcome**
+  `CognitionAdmission` evaluator. Expiry and supersession reject across the adversarial
+  window; debounce, cooldown, cost, freshness and confidence ceilings are enforced from the
+  injected clock and durable bounded state — never wall time or a store read.
+- **Slice 4:** the action boundary. Command dispatch happens **inside** the episode's graph
+  execution so the journal's active-execution precondition holds; before the simulator
+  receives a Command there is snapshot-freshness revalidation (a superseded episode's late
+  Decision dies here, invariant 49), post-approval deterministic revalidation, R4 advisory
+  never dispatched, and the interlock re-read at the narrowest point immediately before
+  delivery (TOCTOU closed on both sides). Interlock read failure raises
+  `InterlockUnavailableError` — fail closed. The four replay modes resolve **no**
+  credentials, proven behaviourally by a poison resolver that raises on any resolution and
+  type-level by a constructor with no credential parameter.
+- **Slice 5:** golden traces (quarantine on identity reuse never overwrites the original
+  admission; kill-between-outbox-and-enqueue yields exactly one logical episode after
+  restart), the idempotent outbox drain, and mandatory scorecard case 22
+  `agent.situation-observation` — model-free, proving the full path through the real
+  `StreamStore`.
+
+The critic (**PASS-WITH-GAPS**) confirmed all hard-zero gates under running tests and
+reproduced six conformance gaps. Four were fixed at `1570f00`: `WallClock` now advances in
+live mode (a frozen clock would freeze global progress, so the idle-watermark mechanism
+could never fire); an oversized outbox id fails at **build** time rather than at enqueue,
+because the outbox id becomes the bridge request id; `drain_outbox` maps each Situation to
+its own thread namespace so the graph's single-fenced-writer rule mechanically enforces one
+active episode per Situation (invariant 20); and the pure evaluator now decides the
+**persisted** trigger outcome — the operator's claim is a candidate, not the verdict. The
+two remaining gaps are recorded, not silently dropped: C2 graph-node wiring is agent-side by
+package boundary, and the determinism tests pin a projection (probe-verified byte-identical).
+
+Gate: **1098 runs / 34,798 assertions / 0 failures under BOTH locales**; scorecard **22
+cases / 19 successes / decision pass / 4-of-4 hard gates / safety 0**.
+
+### Round 27 — P18 capability host and the graph surface audit
+
+Four slices landed (`a8811dc`, `1bfa89a`, `21bbaf6`), and the closure commit `a2eb5bc`
+followed in Round 28 — the tracker updates marking P18 closed sat uncommitted in the working
+tree until then, which is how Round 28's round-open gate found the tree dirty. The recorded
+critic verdict (PASS-WITH-GAPS, all findings closed) has no committed evidence artifact; it
+is recorded here as stated by the round, and flagged rather than promoted.
+
+- **Slices 1–2 (`a8811dc`):** `Tamoz::Core::Capability` — a `Descriptor` restoring the
+  MCP_DESIGN §4 input/output schema fields, a `Source` that **no content path** can
+  construct from skill/catalog/profile/MCP content (invariant 42), and a `Registry` built at
+  session construction from the four built-in source prefixes. A fifth or forged source
+  fails at construction with `DescriptorConflictError` — a closed world. The invariant-35
+  intersection is computed **once** from the policy-derived admission set; the registry
+  never re-reads profile policy and the surface is immutable mid-turn.
+- **Slice 3 (`1bfa89a`):** `Tamoz::Tools::CapabilityHost` — interface, sealed registry and
+  intersection renderer, deliberately **not** a single dispatch body. The uniform dispatch
+  protocol has zero source-typed branches; typed errors pass through with identity and only
+  non-`ToolError` exceptions are wrapped at the boundary (invariant 17). H4 proves the
+  host's model-visible surface is byte-identical to the toolbox's direct surface — the host
+  is a re-org, not a surface change.
+- **Slice 4 (`21bbaf6`):** the Coverage-based graph surface audit, answering the source
+  question "are we using our graph gem?" with a measured answer: **yes — it is the agent
+  runtime**. 27/27 manifest entries resolve; the runtime-critical surface (Compiled,
+  Definition, Task, Branch, Channel, Interrupt, Limits, MemoryCheckpointer, NodeSpec,
+  Reducers::Reducer) is product-method-executed. Measured columns are kept separate from the
+  promotion recommendation, which is policy arbitrated at P15-A — the audit makes no de
+  facto API decisions (C8).
+
+Recorded gate for the round: 1113 runs / 35,294 assertions / 0 failures under both locales;
+scorecard 22/19/pass. Round 28 re-measured the tree and found that figure stale — see below.
+
+### Round 28 — P15 round-open baseline audit (three defects, two of them shipped)
+
+Before P15 work begins, the round-open gate was run against the tree as it actually stands
+rather than against the previous round's recorded numbers. The process exists for exactly
+this: Round 13 opened by finding a red gate at HEAD, and Round 23 opened by re-measuring a
+baseline whose recorded state was three phases out of date.
+
+**Baseline gate result (working tree, P18 slices uncommitted):**
+
+| Check | Result |
+|---|---|
+| worktree clean | **FAIL** — 14 modified files plus untracked `test/fixtures/`; P18's own closure commit did not exist (it is now `a2eb5bc`) |
+| `rake ci` under C/POSIX | **FAIL** — 1122 runs, 35,331 assertions, **2 failures** (`GraphSurfaceAuditTest`) |
+| `rake ci` under UTF-8 | not run at the pre-fix tree; the two failing tests pass under UTF-8 in isolation (4 runs, 0 failures), which is what localised the defect to encoding |
+| scorecard decision | pass — 22 cases / 19 successes, 4-of-4 hard gates |
+| hard-zero safety counters | pass — unsafe/bypassed 0, false-positive 0, incomplete evidence 0 |
+
+The recorded "1113 runs / 0 failures under BOTH locales" predates the uncommitted P18 test
+additions; the tree as it stands runs 1122, and under C/POSIX it is red. **A round may not
+open on a number that was true for a different tree.**
+
+Three defects were then found — one in the in-flight P18 work, two in shipped code that
+every gate since M3 and P7 respectively has passed over.
+
+#### D-9 — the graph surface audit fails on locale alone (severity: high, not shipped)
+
+The working-tree revision of `script/generate_graph_surface_audit` verifies the committed
+table by comparing it against a fresh regeneration, and reads the committed file with
+`File.read` — inheriting `Encoding.default_external`. Under `LC_ALL=C` the file is tagged
+US-ASCII; because it contains an em dash it is not ASCII-only, so a **byte-identical** file
+never compares equal to the UTF-8 regeneration and `AuditMismatchError` is raised.
+
+Measured: the file is byte-identical (`same_bytes=true`) while `string_equal=false`. This is
+D-1 recurring in new code — the same defect class the loop opened with, in the very script
+whose job is to certify a surface. It reached the working tree because the committed
+`21bbaf6` revision has no comparison at all; the check and the encoding bug arrived together.
+
+Status: **closed in `a2eb5bc`** — the audit and manifest reads are explicitly UTF-8. The fix
+rides in P18's own closure commit because the defect is P18's. Reverified: the audit test
+passes under both `LC_ALL=C` and UTF-8.
+
+#### D-10 — any non-ASCII model reply forges a durable corruption error (severity: critical, shipped)
+
+`EffectJournal#decode_receipt` proves canonicality with
+`state_codec.dump(value) == bytes`. SQLite returns BLOB columns as `ASCII-8BIT` while the
+codec dumps UTF-8, so the comparison is false for every byte-identical payload that is not
+ASCII-only. One em dash, curly quote, accent or emoji in a model reply raises
+`CheckpointCorruptionError: tamoz.sqlite.effect_result payload is not canonical` — a
+**forged** corruption error against uncorrupted bytes.
+
+Found by running the product, not by reading it: a live DeepSeek durable session died at the
+`verify` node's model call. Reproduced minimally on the real codec —
+
+| Payload | stored encoding | bytes equal | `==` |
+|---|---|---|---|
+| ASCII only | ASCII-8BIT | true | **true** |
+| contains `—` | ASCII-8BIT | true | **false** |
+
+Why every gate missed it: the scorecard's scripted corpus and the SQLite suites use ASCII
+fixtures throughout, so the comparison is only ever exercised on its passing branch. The
+defect is unreachable from the committed corpus and unavoidable in real use — the precise
+shape D-7 and D-8 had, and the third time this loop has found a class of defect that only
+a real model produces.
+
+Six sites carried the identical comparison: `effect_journal.rb`, `checkpoint_store.rb` (×2),
+`store.rb`, `wire.rb` (namespace decode) and `graph/checkpoint_codec.rb` (×2). Fixing only
+the crashing site would have moved the crash.
+
+Status: **closed in this round's commit** — every canonicality check compares bytes (`.b`).
+Regression test `test_non_ascii_effect_receipt_replays_without_forging_corruption` added and
+**confirmed to fail without the fix**. Shipped since `ae27b96` (the M3 durable SQLite
+runtime).
+
+#### D-11 — `tamoz list` has always reported nothing (severity: medium, shipped)
+
+`list_entry` reads `snapshot.updated_at_ms`, which is not a member of
+`Tamoz::Graph::Checkpoint` — no checkpoint or snapshot value carries a wall-clock stamp. The
+resulting `NoMethodError` is swallowed by a blanket `rescue StandardError` → `nil`, so the
+command prints its header and no rows, for every session that exists, with no error. Verified
+against a real durable thread: the store returns the snapshot and the view reports
+`completed`, while the CLI reports nothing.
+
+The subcommand had **no test at all** — the first `list` test in the repository was written
+in this round. A whole CLI verb sat outside the corpus, and a blanket rescue guaranteed its
+failure could never surface.
+
+Status: **closed in this round's commit** — the column now uses the session file's last write
+(the honest last-activity signal available), the rescue is narrowed to
+`Tamoz::Error`/`SQLite3::Exception` so a programming error can never masquerade as "no
+sessions", and `test_list_reports_a_written_session` covers the verb. Shipped since
+`1e404d8` (P7-C).
+
+**Live-model smokes (real DeepSeek `deepseek-chat`, sandboxed workspace):**
+
+| Smoke | Before | After |
+|---|---|---|
+| read-only `ask` | PASS | PASS |
+| action mode (`--allow-changes` + real `--check`) | PASS — reviewed diff, approval, check, `Verification: satisfied`; tests independently re-run green | PASS |
+| durable `ask` (`--session-dir`) | **FAIL** — `CheckpointCorruptionError` (D-10) | PASS |
+| durable `follow-up` (multi-turn resume) | not reachable | PASS — correct answer on the resumed thread |
+| `list` / `show` | **FAIL** (D-11) / PASS | PASS / PASS |
+
+**Post-fix gate:**
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=C` | pass — **1124 runs, 35,350 assertions, 0 failures** |
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — **1124 runs, 35,350 assertions, 0 failures** (identical totals) |
+| design validation | pass — 22 documents, 55 invariants, 40 ADRs |
+| gem packaging | pass — all nine gems |
+| scorecard | pass — 22 cases / 19 successes / 4-of-4 hard gates |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive 0, incomplete evidence 0 |
+| scorecard `content_digest` | `sha256:08a7a526…` — **byte-identical before and after the fixes** |
+
+The unchanged content digest is the round's behaviour-neutrality proof: three defect fixes
+across six files changed nothing the corpus can observe, which is also the reason the corpus
+never caught them.
+
+**Committed as two commits, not one.** D-9 rides in P18's closure (`a2eb5bc`) because the
+defect is P18's own; D-10, D-11 and this document's completion are this round's commit, so a
+defect round that postdates P18 is not entangled with P18's closure record. **No independent
+critic has run against any of it** — this round is coordinator-gated only, the weaker
+evidence class this project's protocol names explicitly. The claims worth attacking are
+listed in §6.
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -1437,7 +1731,8 @@ current scorecard; it may never be lowered to make a round pass.
 | **P12 bounded self-healing** | complete | **closed** (Round 24) — critic PASS-WITH-GAPS, both gaps closed with committed tests; DR-2 durable circuit landed (all four scopes on one record type); 1020/0 both locales, scorecard 20/17/pass |
 | **P13 durable scheduling** | complete | **closed** (Round 25) — tamoz-scheduler gem (at/interval, cron deferred per plan §12), MIGRATION_3, atomic materialize_due, misfire/overlap/not_before, claim-time grant intersection (invariant 40), scorecard case 21; critic PASS-WITH-GAPS, all findings closed; 1061/0 both locales, scorecard 21/18/pass |
 | **P14 streaming + simulated action** | complete | **closed** (Round 26) — tamoz-stream gem, MIGRATION_4/5, atomic process_partition + injected clock, durable admission/dedup/quarantine (invariant 45), action boundary + read-only interlock, replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; 1098/0 both locales, scorecard 22/19/pass; simulated source only |
-| **P18 capability host + graph surface audit** | complete | **closed** (Round 27) — one CapabilitySource/CapabilityDescriptor contract (invariant-35 in ONE gate, sealed registry), surface equivalence (H4), Coverage-based graph surface audit (H5/C8); 27/27 manifest entries resolve; critic PASS-WITH-GAPS, all findings closed; 1113/0 both locales, scorecard 22/19/pass |
+| **P18 capability host + graph surface audit** | complete | **closed** (Round 27) — one CapabilitySource/CapabilityDescriptor contract (invariant-35 in ONE gate, sealed registry), surface equivalence (H4), Coverage-based graph surface audit (H5/C8); 27/27 manifest entries resolve; critic PASS-WITH-GAPS, all findings closed. Slices `a8811dc`, `1bfa89a`, `21bbaf6`; closure `a2eb5bc`, which also carries Round 28's D-9 fix |
+| D-9/D-10/D-11 round-open audit | — | **fixed** (Round 28) — locale-dependent audit comparison (`a2eb5bc`); forged `CheckpointCorruptionError` on any non-ASCII model reply, shipped since `ae27b96`; `tamoz list` always empty, shipped since `1e404d8`. 1124/0 both locales, scorecard digest byte-identical; **no critic** |
 | P15 | pending | accepted design only; no implementation commits |
 
 ---
@@ -1477,6 +1772,22 @@ current scorecard; it may never be lowered to make a round pass.
     DR-4/DR-5/P16 merged before their independent closure evidence was complete. Later
     evidence closed those implementations, but the single-active-phase protocol was not
     followed literally.
+11. **The corpus cannot see non-ASCII content (Round 28, D-10).** Every scripted case and
+    every SQLite suite uses ASCII fixtures, so canonicality, digest and encoding paths are
+    exercised only on their passing branch — a defect that crashed every real durable
+    session was invisible to 1122 green tests. P15-F should require at least one non-ASCII
+    payload (accent, curly quote, emoji) through the durable model-call path, the store, and
+    the effect journal.
+12. **Whole CLI verbs sit outside the corpus (Round 28, D-11).** `list` had no test in the
+    repository until this round, and a blanket `rescue StandardError` guaranteed its failure
+    could never surface. `show`, `cancel`, `redirect` and `resolve` still have no
+    behavioural coverage of their rendered output. P15-G should enumerate every subcommand
+    and require one assertion per verb; blanket rescues on a rendering path are a defect
+    class, not a style preference.
+13. **Round 28 has no critic (Round 28).** D-9/D-10/D-11 were found and fixed by the same
+    coordinator; the fixes are committed and gate-verified but adversarially unexamined,
+    the same weaker evidence class P6, P7 and D-7 sit in. The specific claims to attack are
+    listed in §6 item 3.
 
 ---
 
@@ -1532,19 +1843,36 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected after P18 closure: clean worktree; **1113 runs / 35,294 assertions / 0 failures**
-under both locales; scorecard **22 cases, 19 successes, `decision: pass`, 4/4 hard gates,
-safety counters 0**.
+Expected at the Round 28 commit: clean worktree; **1124 runs / 35,350 assertions / 0
+failures** under both locales (identical totals); scorecard **22 cases, 19 successes,
+`decision: pass`, 4/4 hard gates, safety counters 0**, `content_digest sha256:08a7a526…`.
+
+A real-model smoke is cheap and catches what the corpus structurally cannot (D-7, D-8 and
+D-10 were all found this way, never by the gate). `.env` carries a DeepSeek key; a UTF-8
+locale is required or `ruby_llm` dies decoding its own model catalogue:
+
+```sh
+export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY[[:space:]]*=[[:space:]]*//p' .env)"
+export TAMOZ_PROVIDER=deepseek TAMOZ_MODEL=deepseek-chat LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+rbenv exec bundle exec tamoz --root /tmp/smoke --session-dir /tmp/smoke-sessions ask "…"
+```
 
 Then, in priority order:
 
 1. **P15** per `docs/P15_RELEASE_PLAN.md` (the completion audit; P15-A arbitrates the
-   graph surface audit's promotion recommendations).
+   graph surface audit's promotion recommendations). Gaps 11 and 12 are P15 inputs:
+   the corpus is blind to non-ASCII content and to whole CLI verbs.
 2. **The deferred critic passes over P6, P7 and D-7.** Critic agents repeatedly died to
    session limits in Sessions 1–2. From P10 onward every phase has had a real critic round
    (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12, P13, P14, P18 all PASS-WITH-GAPS →
    fixed). P6, P7 and D-7 still rest on the deterministic gate plus the builder's own
    self-review, which is weaker evidence than this project's protocol asks for.
+3. **A critic pass over Round 28.** D-9/D-10/D-11 were found and fixed by the same
+   coordinator, with no independent exam. The claims worth attacking: that byte comparison
+   is the correct canonicality semantics rather than a weakening of it; that all six
+   comparison sites were found; that narrowing `list_entry`'s rescue cannot make a
+   listable session unlistable; and that the file-mtime timestamp is honest rather than
+   convenient.
 
 The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec —
 `docs/P12_HELDOUT_PROBES.md`) lives in the session scratchpad and is deliberately
@@ -1553,4 +1881,4 @@ session; its design is described in §1.
 
 Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output. Do not push,
 publish, release, or connect real physical actuators. The last product checkpoint on `main`
-is the P18 closure commit.
+is the Round 28 commit, immediately after P18's closure commit `a2eb5bc`.

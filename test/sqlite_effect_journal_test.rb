@@ -74,6 +74,56 @@ class SQLiteEffectJournalTest < Minitest::Test
     end
   end
 
+  # Canonicality is a byte property. SQLite hands BLOB columns back as
+  # ASCII-8BIT while the state codec dumps UTF-8, so an encoding-sensitive
+  # `==` forged a CheckpointCorruptionError for any receipt that was not
+  # ASCII-only — every real model reply containing an em dash, a curly quote,
+  # or an accent crashed the durable session on replay.
+  def test_non_ascii_effect_receipt_replays_without_forging_corruption
+    receipt = {"reply" => "résumé — “quoted” ✅"}
+    with_effect_store do |_adapter, _app, store, execution_id|
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.effect",
+        ttl: store.writer_ttl
+      ) do |writer|
+        decision = prepare_effect(
+          writer.effects,
+          execution_id:,
+          safety: :idempotent
+        )
+        writer.effects.start(
+          key: decision.record.key,
+          attempt_token: decision.attempt_token
+        )
+        completed = writer.effects.complete(
+          key: decision.record.key,
+          attempt_token: decision.attempt_token,
+          status: :succeeded,
+          result: receipt,
+          external_id: "external.utf8"
+        )
+        assert_equal receipt, completed.attempts.last.result
+      end
+
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.replay",
+        ttl: store.writer_ttl
+      ) do |writer|
+        replay = prepare_effect(
+          writer.effects,
+          execution_id:,
+          safety: :idempotent
+        )
+        assert_equal :return, replay.action
+        assert_equal receipt, replay.record.attempts.last.result
+      end
+    end
+  end
+
   def test_effect_start_requires_current_graph_fence_but_late_receipt_does_not
     with_effect_store do |_adapter, _app, store, execution_id|
       old_effects = nil

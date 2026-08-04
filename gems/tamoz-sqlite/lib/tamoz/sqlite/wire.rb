@@ -41,8 +41,10 @@ module Tamoz
 
       def decode_namespace(bytes)
         value = JSON.parse(bytes, create_additions: false, max_nesting: 256)
+        # Byte comparison: the stored column decodes as ASCII-8BIT, which never
+        # compares equal to the UTF-8 re-encoding unless both are ASCII-only.
         unless value.is_a?(Array) &&
-               JSON.generate(value) == bytes &&
+               JSON.generate(value).b == bytes.b &&
                value.length <= MAX_NAMESPACE_PARTS
           raise CheckpointCorruptionError, "stored namespace is invalid"
         end

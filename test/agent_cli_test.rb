@@ -91,6 +91,37 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  # `list` must actually report the threads it wrote. The command had no test
+  # and a blanket StandardError rescue in `list_entry`, so a NoMethodError
+  # turned every listing into an empty table without any error.
+  def test_list_reports_a_written_session
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+          review: [accepted_review],
+          verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+        )
+      end
+      assert_equal 0, run_cli(
+        ["ask", "read note.txt"],
+        session: "listed-thread", workspace:, session_dir:, factory:
+      )
+
+      out = StringIO.new
+      status = run_cli(["--json", "list"], workspace:, session_dir:, out:, factory:)
+      assert_equal 0, status
+
+      threads = JSON.parse(out.string).fetch("threads")
+      assert_equal ["listed-thread"], threads.map { |entry| entry.fetch("thread_id") }
+      entry = threads.fetch(0)
+      assert_equal "completed", entry.fetch("status")
+      assert_match(/read note.txt/, entry.fetch("summary"))
+      assert_operator entry.fetch("updated_at_ms"), :>, 0
+    end
+  end
+
   def test_resume_collects_interrupt_answers
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "app.rb"), "value = 1\n")

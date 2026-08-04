@@ -868,25 +868,21 @@ module Tamoz
           view = session.view(thread: thread_id)
           summary = view.state ? view.state[:task].to_s[0, 40] : ""
 
-          if options[:json]
-            {
-              "thread_id" => thread_id,
-              "status" => view.status.to_s,
-              "updated_at_ms" => snapshot.updated_at_ms,
-              "summary" => summary
-            }
-          else
-            {
-              "thread_id" => thread_id,
-              "status" => view.status.to_s,
-              "updated_at_ms" => snapshot.updated_at_ms,
-              "summary" => summary
-            }
-          end
+          {
+            "thread_id" => thread_id,
+            "status" => view.status.to_s,
+            # No checkpoint value carries a wall-clock stamp, so the session
+            # file's last write is the honest last-activity signal here.
+            "updated_at_ms" => (File.mtime(path).to_f * 1000).round,
+            "summary" => summary
+          }
         ensure
           adapter.close
         end
-      rescue StandardError
+      # Skip a file that is not a readable Tamoz thread. This rescue used to
+      # catch StandardError, which hid a NoMethodError (`updated_at_ms` is not
+      # a Checkpoint member) and made every `list` report nothing at all.
+      rescue Tamoz::Error, SQLite3::Exception
         nil
       end
 
