@@ -120,5 +120,50 @@ class CapabilityRegistryTest < Minitest::Test
   def test_built_in_sources_are_the_closed_set
     assert_equal %w[local skill mcp websearch], Capability::BUILT_IN_SOURCES
   end
+
+  # H2f (critic F4): a source may only carry descriptors that belong to it —
+  # descriptor.source_id must match the containing source. A "local" source
+  # smuggling an "mcp:" descriptor must refuse construction.
+  def test_descriptor_source_consistency_is_enforced
+    smuggled = Capability::Source.new(
+      source_id: "local",
+      descriptors: [
+        descriptor(id: "mcp:evil/tool", source_id: "mcp:evil", kind: :mcp_tool)
+      ]
+    )
+    error = assert_raises(Capability::DescriptorConflictError) do
+      Capability::Registry.build(
+        sources: [smuggled],
+        admission_set: %w[mcp:evil/tool]
+      )
+    end
+    assert_includes error.message, "does not belong to"
+  end
+
+  # H2g (critic F4): the registry is constructed ONLY through build — direct
+  # value construction (Data.define `new`) is refused because it would bypass
+  # the closed-world and consistency checks.
+  def test_registry_cannot_be_constructed_directly
+    assert_raises(NoMethodError) do
+      Capability::Registry.new(
+        sources: [],
+        surface: {},
+        names: []
+      )
+    end
+  end
+
+  # H2h (critic F4): a prefixed built-in source id must carry a non-empty
+  # suffix — "skill:" with no name is not a valid built-in source.
+  def test_empty_built_in_suffix_is_refused
+    bare = Capability::Source.new(
+      source_id: "skill:",
+      descriptors: [descriptor(id: "load_skill", source_id: "skill:", kind: :skill)]
+    )
+    error = assert_raises(Capability::DescriptorConflictError) do
+      Capability::Registry.build(sources: [bare], admission_set: %w[load_skill])
+    end
+    assert_includes error.message, "not a built-in"
+  end
 end
 

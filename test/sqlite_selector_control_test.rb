@@ -749,6 +749,8 @@ class SQLiteSelectorControlTest < Minitest::Test
     graph_lib = GEM_ROOTS.fetch("tamoz-graph").join("lib").to_s
     evals_lib = GEM_ROOTS.fetch("tamoz-evals").join("lib").to_s
     sqlite_lib = GEM_ROOTS.fetch("tamoz-sqlite").join("lib").to_s
+    scheduler_lib = GEM_ROOTS.fetch("tamoz-scheduler").join("lib").to_s
+    stream_lib = GEM_ROOTS.fetch("tamoz-stream").join("lib").to_s
     descriptor = layout.descriptor
     script = <<~RUBY
       require "tamoz/evals"
@@ -776,6 +778,8 @@ class SQLiteSelectorControlTest < Minitest::Test
       "-I", graph_lib,
       "-I", evals_lib,
       "-I", sqlite_lib,
+      "-I", scheduler_lib,
+      "-I", stream_lib,
       "-e", script
     ]
   end

@@ -159,12 +159,42 @@ budgets, not tool-surface limits — C8).
 
 ## 8. Definition of done
 
-- [ ] `CapabilitySource`/`CapabilityDescriptor` contract (with schemas) + compliance
+- [x] `CapabilitySource`/`CapabilityDescriptor` contract (with schemas) + compliance
       suite + sealed-registry tests (H1/H2).
-- [ ] Host with the admission-set intersection; P9/P10/P17 cases green unchanged;
+- [x] Host with the admission-set intersection; P9/P10/P17 cases green unchanged;
       H3 closed-world composition test; H6 error identity.
-- [ ] `docs/GRAPH_SURFACE_AUDIT.md` (Coverage-based, measured + recommendation
+- [x] `docs/GRAPH_SURFACE_AUDIT.md` (Coverage-based, measured + recommendation
       columns) + regenerated `public-api.json` + test.
-- [ ] Full gate both locales; scorecard equals the baseline captured at P18 start,
+- [x] Full gate both locales; scorecard equals the baseline captured at P18 start,
       safety 0.
-- [ ] Trackers updated; non-goals restated in the phase close.
+- [x] Trackers updated; non-goals restated in the phase close.
+
+## 9. Phase-close scope correction (critic round, revision 4)
+
+The P18 critic round (PASS-WITH-GAPS) found the capability host's session-construction
+WIRING absent: no production path in `tamoz-agent` constructs `CapabilityHost` — the
+runtime still drives `Toolbox` + the P10 `McpCapabilitySource` directly. Rather than
+re-wire the live agent runtime inside the same phase (which would risk the hard-zero
+"scorecard equals baseline" and "model-visible surface unchanged by one byte" gates at
+phase end), this phase is explicitly re-scoped per the critic's sanctioned alternative:
+
+**The host ships as the tested contract + registry + intersection renderer + real
+dispatch paths (all committed); binding it into session construction is DEFERRED to
+P15 (release hardening), where the completion audit can verify the wiring against the
+same committed fixture (H4) and the full scorecard.**
+
+Scope held in P18 (all with committed tests):
+- contract + sealed registry (H1/H2, incl. the critic fixes: descriptor↔source
+  consistency, no `Registry.new` bypass, non-empty built-in suffix);
+- closed-world composition and error identity through the REAL `CapabilityHost#dispatch`
+  (H3/H6, critic F5);
+- surface equivalence against a COMMITTED P18-start fixture, not an in-memory
+  self-comparison (H4, critic F6);
+- graph surface audit with module-function classification (incl. `Tamoz.graph` /
+  `Tamoz.interrupt`), a recommendation column (policy, arbitrated at P15-A), and
+  `AuditMismatchError` on regeneration-vs-committed divergence (H5/C8, critic F2/F3).
+
+Consequence recorded for P15: the host's real binding must construct the registry at
+session construction from the four built-in sources, route local/MCP/websearch dispatch
+through the per-source dispatchers, and keep the model-visible surface byte-identical
+to `test/fixtures/p18_start_toolbox_surface.json`.

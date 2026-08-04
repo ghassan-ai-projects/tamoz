@@ -1,0 +1,22 @@
+{
+  "names": [
+    "apply_patch",
+    "create_file",
+    "list_directory",
+    "read_file",
+    "search_text"
+  ],
+  "read_only_names": [
+    "list_directory",
+    "read_file",
+    "search_text"
+  ],
+  "descriptions": {
+    "apply_patch": "Replace exact text occurrences atomically. expected_sha256 must come from current read_file evidence. Single replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"before\": \"exact existing text\", \"after\": \"replacement text\"}. Compound replacement: {\"path\": \"relative/file\", \"expected_sha256\": \"64 hex characters\", \"replacements\": [{\"before\": \"...\", \"after\": \"...\"}]}.",
+    "create_file": "Create a new regular file with exact bytes and mode. Overwrite is never allowed. Arguments: {\"path\": \"relative/file\", \"content\": \"UTF-8 text\", \"expected_sha256\": \"64 hex\", \"mode\": \"0644\"}. mode is optional and defaults to 0644.",
+    "list_directory": "List entries. Arguments: {\"path\": \"relative/directory\"}; path is optional.",
+    "read_file": "Read UTF-8 text with its SHA-256 digest. Arguments: {\"path\": \"relative/file\"}.",
+    "search_text": "Find literal text. Arguments: {\"query\": \"text\", \"path\": \"relative/path\"}; path is optional."
+  },
+  "catalog_digest": "sha256:15955ce12f49ae5b2f535a7a225c8ac87c15e747322fa61aab3b8a403ab24903"
+}

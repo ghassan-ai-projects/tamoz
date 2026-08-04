@@ -2,12 +2,12 @@
 
 Status: **active**
 Started: 2026-08-01
-Last verified: 2026-08-03 — **1098 runs / 34,798 assertions / 0 failures** under BOTH
+Last verified: 2026-08-04 — **1113 runs / 35,294 assertions / 0 failures** under BOTH
 locales, scorecard **22 cases / 19 successes / decision pass / 4-of-4 hard gates /
-safety counters 0**. P0–P11, P16, P17, D-7, D-8, **P12, P13 and P14 closed** (each critic
-round PASS-WITH-GAPS, all findings closed with committed tests); **P18 is the next phase**.
-Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P14 are closed;
-the remaining span is **P15 and P18** — with every phase passing real behavioural proofs and
+safety counters 0**. P0–P11, P16, P17, D-7, D-8, **P12, P13, P14 and P18 closed** (each
+critic round PASS-WITH-GAPS, all findings closed with committed tests); **P15 is the next phase**.
+Goal: finish `docs/PROJECT_HANDOVER_PLAN.md` to production quality — P4–P14 and P18 are
+closed; the remaining span is **P15** — with every phase passing real behavioural proofs and
 hard-zero safety gates.
 
 Method: each work package gets a **builder** and a separate **harsh critic** with fresh
@@ -1437,7 +1437,8 @@ current scorecard; it may never be lowered to make a round pass.
 | **P12 bounded self-healing** | complete | **closed** (Round 24) — critic PASS-WITH-GAPS, both gaps closed with committed tests; DR-2 durable circuit landed (all four scopes on one record type); 1020/0 both locales, scorecard 20/17/pass |
 | **P13 durable scheduling** | complete | **closed** (Round 25) — tamoz-scheduler gem (at/interval, cron deferred per plan §12), MIGRATION_3, atomic materialize_due, misfire/overlap/not_before, claim-time grant intersection (invariant 40), scorecard case 21; critic PASS-WITH-GAPS, all findings closed; 1061/0 both locales, scorecard 21/18/pass |
 | **P14 streaming + simulated action** | complete | **closed** (Round 26) — tamoz-stream gem, MIGRATION_4/5, atomic process_partition + injected clock, durable admission/dedup/quarantine (invariant 45), action boundary + read-only interlock, replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; 1098/0 both locales, scorecard 22/19/pass; simulated source only |
-| P15, P18 | pending | accepted design only; no implementation commits |
+| **P18 capability host + graph surface audit** | complete | **closed** (Round 27) — one CapabilitySource/CapabilityDescriptor contract (invariant-35 in ONE gate, sealed registry), surface equivalence (H4), Coverage-based graph surface audit (H5/C8); 27/27 manifest entries resolve; critic PASS-WITH-GAPS, all findings closed; 1113/0 both locales, scorecard 22/19/pass |
+| P15 | pending | accepted design only; no implementation commits |
 
 ---
 
@@ -1465,9 +1466,9 @@ current scorecard; it may never be lowered to make a round pass.
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
    MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
    workflow. Its closure record must also identify DR-2 durability as carried debt.
-8. **P15 and P18 remain unimplemented.** P11, P16, P17, P12, P13 and P14 are closed
-   (each critic PASS-WITH-GAPS with all findings closed by committed tests). P15 and P18
-   have accepted plans and no code.
+8. **P15 remains unimplemented.** P11, P16, P17, P12, P13, P14 and P18 are closed
+   (each critic PASS-WITH-GAPS with all findings closed by committed tests). P15
+   has an accepted plan and no code.
 9. **Release evidence is not yet ordinary-CI complete.** Both-locale gates, scorecards,
    package isolation, security/license checks, benchmarks, restore, and release rehearsal
    still need P15 integration. README/SECURITY also lag the nine-gem and current MCP/action
@@ -1481,11 +1482,20 @@ current scorecard; it may never be lowered to make a round pass.
 
 ## 6. Next action
 
-Close **P18 — capability host unification and the graph surface audit** per
-`docs/P18_CAPABILITY_HOST_PLAN.md`: one CapabilitySource/CapabilityDescriptor contract under
-which local tools, skills, MCP, and websearch register (invariant-35 authority intersection
-in ONE gate), and the graph surface audit documents the graph gem's product-loaded vs
-tested-only surface via stdlib Coverage. After P18, proceed **P15 (release hardening)**.
+Close **P15 — release hardening (the completion audit)** per `docs/P15_RELEASE_PLAN.md`:
+requirements, compatibility, operations, security, performance, evaluation, product/docs,
+release rehearsal, owner gate. The graph surface audit (docs/GRAPH_SURFACE_AUDIT.md)
+supplies the graph's documented public API input; the P15-A arbitration decides promotion
+recommendations from the MEASURED columns.
+
+**P18 is closed.** Capability host unification ships: one CapabilitySource/CapabilityDescriptor
+contract under which local tools, skills, MCP, and websearch register (invariant-35
+authority intersection in ONE gate, sealed registry, closed-world composition), and the
+graph surface audit (docs/GRAPH_SURFACE_AUDIT.md) documents the graph gem's product-executed
+vs manifest-resolved surface via stdlib Coverage — 27/27 entries resolve, and the
+runtime-critical surface is product-method-executed (the graph gem IS the agent runtime, C8).
+The critic round (PASS-WITH-GAPS) ran held-out probes; all findings closed with committed
+tests.
 
 **P14 is closed.** The streaming path ships: durable admission with idempotent dedup and
 quarantine (invariant 45), the atomic six-step process_partition under the injected clock
@@ -1522,19 +1532,19 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected after P14 closure: clean worktree; **1098 runs / 34,798 assertions / 0 failures**
+Expected after P18 closure: clean worktree; **1113 runs / 35,294 assertions / 0 failures**
 under both locales; scorecard **22 cases, 19 successes, `decision: pass`, 4/4 hard gates,
 safety counters 0**.
 
 Then, in priority order:
 
-1. **P18** per `docs/P18_CAPABILITY_HOST_PLAN.md`, then **P15**.
+1. **P15** per `docs/P15_RELEASE_PLAN.md` (the completion audit; P15-A arbitrates the
+   graph surface audit's promotion recommendations).
 2. **The deferred critic passes over P6, P7 and D-7.** Critic agents repeatedly died to
    session limits in Sessions 1–2. From P10 onward every phase has had a real critic round
-   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12, P13, P14 all PASS-WITH-GAPS →
+   (P10 slice-3 FAIL → fixed; P10 slice-4, P11, P17, P12, P13, P14, P18 all PASS-WITH-GAPS →
    fixed). P6, P7 and D-7 still rest on the deterministic gate plus the builder's own
    self-review, which is weaker evidence than this project's protocol asks for.
-3. **P18 → P15**, each with its accepted plan document.
 
 The judging harness (gate, blind A/B, five held-out probes, and the P12 probe spec —
 `docs/P12_HELDOUT_PROBES.md`) lives in the session scratchpad and is deliberately
@@ -1543,4 +1553,4 @@ session; its design is described in §1.
 
 Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output. Do not push,
 publish, release, or connect real physical actuators. The last product checkpoint on `main`
-is the P12 closure commit.
+is the P18 closure commit.

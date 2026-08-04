@@ -70,7 +70,7 @@ Dir.mktmpdir("tamoz-audit") do |tmpdir|
       warn stdout.to_s.lines.last(8).join
       raise AuditMismatchError, "product test #{relative} did not pass under Coverage"
     end
-    artifact = JSON.parse(File.read(dump))
+    artifact = JSON.parse(File.read(dump, encoding: Encoding::UTF_8))
     artifact.each do |path, data|
       next unless path.start_with?(File.join(ROOT, "gems", "tamoz-graph", "lib"))
 
@@ -107,12 +107,26 @@ def resolve(entry)
   end
 end
 
-graph_manifest = JSON.parse(File.read(MANIFEST_PATH)).fetch("packages").fetch("tamoz-graph")
+graph_manifest = JSON.parse(File.read(MANIFEST_PATH, encoding: Encoding::UTF_8))
+                     .fetch("packages").fetch("tamoz-graph")
+
+# Split a Coverage signature into [class, method]. Coverage records:
+#   "Klass#method"        — instance methods (a hash separator)
+#   "#<Class:Tamoz>#graph" — module functions (singleton class form)
+#   "Mod.method"          — the dotted form (defensive; the hook emits #)
+def parse_signature(signature)
+  if signature.start_with?("#<Class:") && signature.include?(">#")
+    klass, method = signature.delete_prefix("#<Class:").split(">#", 2)
+    [klass, method]
+  else
+    signature.split(/#|\./, 2)
+  end
+end
 
 rows = []
 graph_manifest.each do |entry, options|
   begin
-    constant, _method_name = resolve(entry)
+    constant, entry_method = resolve(entry)
     # The "class" of a manifest entry for matching purposes: the constant's
     # name when it is a Class/Module, otherwise the entry itself (a value like
     # START/END/VERSION has no methods to execute).
@@ -123,19 +137,32 @@ graph_manifest.each do |entry, options|
         entry
       end
   rescue NameError
-    rows << [entry, "manifest_unresolved", "?"]
+    rows << [entry, "manifest_unresolved", "P15-A: reconcile", "?"]
     next
   end
 
   short_name = constant_name.split("::").last
   # An executed method "belongs to" the constant when its signature's class
-  # part matches the constant's full name or short name. Module functions are
-  # recorded as "Mod.method" (a dot); instance methods as "Klass#method" (a
-  # hash).
+  # part matches the constant's full name or short name, AND — when the
+  # manifest entry names a method (e.g. `Tamoz.graph`) — the method part
+  # matches too. Matching class alone would credit every entry of a class on
+  # the strength of ONE executed method (e.g. the internal `Reducers.resolve`
+  # must not credit the five `Reducers.*` reducers). Module functions are
+  # recorded by Coverage as "#<Class:Tamoz>#graph" (a singleton-class
+  # signature): the "#<Class:NAME>" form is normalized back to NAME so
+  # `Tamoz.graph` / `Tamoz.interrupt` are credited as executed. Instance
+  # methods are "Klass#method" (a hash); module functions are
+  # "Mod.method" or the "#<Class:Mod>#method" singleton form.
   product_hits = executed_methods.values.flatten
   exercised = product_hits.any? do |signature|
-    klass = signature.split(/#|\./).first
-    klass == constant_name || klass.end_with?("::#{short_name}") || klass == short_name
+    klass, method = parse_signature(signature)
+    class_matches =
+      klass == constant_name ||
+      klass.end_with?("::#{short_name}") ||
+      klass == short_name
+    next false unless class_matches
+
+    entry_method.nil? || method == entry_method
   end
 
   measured = if exercised
@@ -145,7 +172,18 @@ graph_manifest.each do |entry, options|
              else
                "manifest_resolved_only"
              end
-  rows << [entry, measured, constant_name]
+  # The promotion recommendation is POLICY, arbitrated at P15-A — the audit
+  # derives it from the MEASURED column but never decides it (C8). The
+  # recommendation names the P15-A action, not a de facto API decision.
+  recommendation = case measured
+                   when "product_method_executed"
+                     "P15-A: promote candidate"
+                   when "manifest_unresolved"
+                     "P15-A: reconcile"
+                   else
+                     "P15-A: review"
+                   end
+  rows << [entry, measured, recommendation, constant_name]
 end
 
 # --- emit the audit ---------------------------------------------------------
@@ -163,19 +201,38 @@ lines << "**Measured columns are separated from the promotion recommendation.** 
 lines << "recommendation column is POLICY, arbitrated at P15-A — the audit does not make"
 lines << "de facto API decisions (P18 plan §3, C8)."
 lines << ""
-lines << "| Entry | Measured | Constant |"
-lines << "|---|---|---|"
-rows.each do |entry, measured, constant_name|
-  lines << "| `#{entry}` | #{measured} | `#{constant_name}` |"
+lines << "| Entry | Measured | Recommendation | Constant |"
+lines << "|---|---|---|---|"
+rows.each do |entry, measured, recommendation, constant_name|
+  lines << "| `#{entry}` | #{measured} | #{recommendation} | `#{constant_name}` |"
 end
 lines << ""
 
-File.write(AUDIT_PATH, lines.join("\n"))
+content = lines.join("\n")
+
+# Regenerable determinism (H5): the committed table IS the regeneration
+# output. Running the script verifies the committed table against a fresh
+# run; divergence raises AuditMismatchError instead of silently overwriting.
+# `--accept` (or P18_AUDIT_ACCEPT=1) writes the regenerated table — the
+# deliberate reconciliation path after a measured change.
+accepted = ARGV.include?("--accept") || ENV["P18_AUDIT_ACCEPT"] == "1"
+# The committed table is read as UTF-8 explicitly: under a non-UTF-8 locale
+# (LC_ALL=C) the default external encoding is US-ASCII, and a byte-identical
+# file tagged US-ASCII never compares equal to the UTF-8 `content` — a false
+# AuditMismatchError that fails the gate on locale alone.
+if File.exist?(AUDIT_PATH) &&
+   File.read(AUDIT_PATH, encoding: Encoding::UTF_8) != content && !accepted
+  raise AuditMismatchError,
+        "regenerated graph surface audit diverges from the committed table; " \
+        "re-run with --accept after reconciling (P15-A)"
+end
+
+File.write(AUDIT_PATH, content)
 puts "wrote #{AUDIT_PATH} (#{rows.length} entries)"
 
 # --- regenerate public-api.json (stamp only; the graph entries are stable) ---
 
-inventory = JSON.parse(File.read(MANIFEST_PATH))
+inventory = JSON.parse(File.read(MANIFEST_PATH, encoding: Encoding::UTF_8))
 inventory["generated_at"] = Time.now.utc.iso8601
 File.write(MANIFEST_PATH, JSON.pretty_generate(inventory) + "\n")
 puts "regenerated docs/public-api.json"

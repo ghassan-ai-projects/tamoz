@@ -1,11 +1,13 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: P0–P11, P16, P17, P12, P13, P14 all closed (scorecard 22/19/pass;
-P12, P13, P14 critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
-Current phase: `P18` — capability host unification + graph surface audit
-Next action: implement P18 per `docs/P18_CAPABILITY_HOST_PLAN.md`; merge, gate, critic
-round; then P15 (release hardening).
+Implementation baseline: P0–P14, P18 all closed (scorecard 22/19/pass; P12, P13, P14, P18
+critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
+Current phase: `P15` — release hardening (the completion audit)
+Next action: implement P15 per `docs/P15_RELEASE_PLAN.md` — requirements, compatibility,
+operations, security, performance, evaluation, product/docs, release rehearsal, owner
+gate; the graph surface audit (docs/GRAPH_SURFACE_AUDIT.md) supplies the graph's
+documented public API input.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics

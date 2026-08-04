@@ -33,10 +33,25 @@ module Tamoz
                     "capability source (#{BUILT_IN_SOURCES.inspect})"
             end
           end
+          # C3/C6: a source may only carry descriptors that belong to it —
+          # descriptor.source_id must match the containing source. This closes
+          # the smuggling path (a "local" source cannot surface an
+          # "mcp:" descriptor under a built-in prefix).
+          sources.each do |source|
+            source.descriptors.each do |descriptor|
+              unless descriptor.source_id == source.source_id
+                raise DescriptorConflictError,
+                      "descriptor #{descriptor.id.inspect} (source " \
+                      "#{descriptor.source_id.inspect}) does not belong to " \
+                      "source #{source.source_id.inspect}"
+              end
+            end
+          end
 
           registry = build_registry(sources)
           surface = compute_surface(registry, admission_set)
-          new(
+          send(
+            :new,
             sources: sources.freeze,
             surface: surface.freeze,
             names: surface.keys.freeze
@@ -58,6 +73,14 @@ module Tamoz
           raise DescriptorConflictError,
                 "the capability registry is sealed; only the four built-in " \
                 "sources register at session construction"
+        end
+
+        # The registry is constructed ONLY through build — direct value
+        # construction would bypass the closed-world and descriptor-source
+        # consistency checks (critic finding F4). Data.define provides `new`;
+        # it is private here, so `Registry.new(...)` is refused.
+        class << self
+          private :new
         end
 
         class << self
@@ -97,12 +120,15 @@ module Tamoz
             end
           end
 
+          # The four built-in prefixes. A prefixed source_id (skill:/mcp:/
+          # websearch:) must carry a non-empty suffix — "skill:" with an empty
+          # name is not a valid built-in source id.
           def built_in_prefix?(source_id)
             source_id == "local" ||
               source_id == "websearch" ||
-              source_id.start_with?("skill:") ||
-              source_id.start_with?("mcp:") ||
-              source_id.start_with?("websearch:")
+              (source_id.start_with?("skill:") && source_id.length > "skill:".length) ||
+              (source_id.start_with?("mcp:") && source_id.length > "mcp:".length) ||
+              (source_id.start_with?("websearch:") && source_id.length > "websearch:".length)
           end
         end
       end
