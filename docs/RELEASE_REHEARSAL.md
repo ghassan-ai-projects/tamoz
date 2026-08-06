@@ -5,7 +5,7 @@ candidate commit with a pinned toolchain — never in the development checkout.
 
 | Field | Value |
 |---|---|
-| Candidate commit | `41e0f0afabbd9db2d003774eeed5563fbcebeeb2` |
+| Candidate commit | `56f9e984f25577c1ffffcca10c5a8f73988d7f7f` |
 | Ruby | `3.3.11` (pinned `3.3.11`) |
 | Bundler | `4.0.12` (lockfile `4.0.12`) |
 | Platform | `arm64-darwin25` |
@@ -17,17 +17,19 @@ candidate commit with a pinned toolchain — never in the development checkout.
 | Step | Result | Seconds | Detail |
 |---|---|---:|---|
 | provisioning | pass | 0.0 | ruby 3.3.11, bundler 4.0.12 |
-| clean-clone | pass | 1.42 | cloned 41e0f0afabbd |
-| bundle-install | pass | 0.19 | resolved offline from the local gem cache |
-| gate-lc-c | pass | 217.74 | 1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips |
-| gate-lc-utf8 | pass | 215.62 | 1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips |
+| clean-clone | pass | 1.71 | cloned 56f9e984f255 |
+| bundle-install | pass | 0.24 | resolved offline from the local gem cache |
+| gate-lc-c | pass | 232.07 | 1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips |
+| gate-lc-utf8 | pass | 232.98 | 1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips |
 | gate-locale-agreement | pass | 0.0 | identical totals in both locales |
-| scorecard | pass | 6.31 | 22 cases / 19 successes / sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254 |
-| packaged-gem-isolation | pass | 10.44 | 8 runs, 207 assertions, 0 failures, 0 errors, 0 skips |
-| durable-kill-resume | pass | 1.39 | 1 runs, 33 assertions, 0 failures, 0 errors, 0 skips |
-| backup-restore | pass | 0.42 | 3 runs, 16 assertions, 0 failures, 0 errors, 0 skips |
-| session-operations | pass | 2.84 | 6 runs, 36 assertions, 0 failures, 0 errors, 0 skips |
-| requirements-audit | pass | 74.54 | {"deferred-by-contract"=>11, "indirect"=>4, "missing"=>3, "pass"=>333}, gaps: ["INV-39", "INV-48", "OBJ-7"] |
+| scorecard | pass | 6.85 | 22 cases / 19 successes / sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254 |
+| packaged-gem-isolation | pass | 11.39 | 8 runs, 207 assertions, 0 failures, 0 errors, 0 skips |
+| durable-kill-resume | pass | 1.47 | 1 runs, 33 assertions, 0 failures, 0 errors, 0 skips |
+| backup-restore | pass | 0.48 | 3 runs, 16 assertions, 0 failures, 0 errors, 0 skips |
+| session-operations | pass | 3.21 | 6 runs, 36 assertions, 0 failures, 0 errors, 0 skips |
+| release-evaluation-pin | pass | 7.11 | release evaluation pin verified (22 cases, pass) |
+| benchmark | pass | 1.36 | durability overhead: 255.86x (ephemeral p50 0.11ms, durable p50 42.33ms) |
+| requirements-audit | pass | 78.78 | {"deferred-by-contract"=>11, "indirect"=>4, "missing"=>3, "pass"=>333}, gaps: ["INV-39", "INV-48", "OBJ-7"] |
 
 ## Requirements audit at the candidate
 
