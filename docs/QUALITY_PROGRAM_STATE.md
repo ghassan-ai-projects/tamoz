@@ -171,23 +171,31 @@ fresh-context critic.
 ## Next actions (ordered)
 
 **GIANTS-FIRST (owner 2026-08-06):** slice selection targets the largest production
-files first (measured 2026-08-06, after 4 CLI slices): checkpoint_store.rb 2,070 (173
-reek) > profile.rb 1,547 (126) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450
-(113) > toolbox.rb 1,213 (140) > compiled.rb 1,152 (139) > skills.rb 1,063 >
-effect_journal.rb 950. (agent_smoke_corpus.rb 3,287 is the evals corpus driver —
-classified separately per Q0; handle after the production giants.) Each giant gets the
-characterize-then-extract treatment.
+files first (measured 2026-08-06): checkpoint_store.rb (2,070 → 1,760 — SAFE
+EXTRACTIONS COMPLETE: CheckpointWire validators/decoders/materialize/merge +
+CheckpointWriter facade; the remaining ~1,700 lines are the atomic transaction core —
+claim/recover/append/transition — which stays together BY DESIGN: splitting atomic
+transactions is forbidden (charter), so the store's core is a recorded exception with
+its own characterization tests). Next queue: profile.rb 1,547 (126 smells, authority-
+critical) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450 (113) > toolbox.rb 1,213
+(140) > compiled.rb 1,152 (139) > skills.rb 1,063 > effect_journal.rb 950.
+(agent_smoke_corpus.rb 3,287 is the evals corpus driver — classified separately.)
 
-1. **Q2/Q3 checkpoint_store:** characterize `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb`
-   (2,070 lines, 173 smells — durability-critical: checkpoint persistence, leases,
-   effect journal access). Enola impact analysis + callers; responsibility map; add
-   characterization + failure-path + adversarial tests at natural seams;
-   mutation-prove; commit tests only. Then extraction slices along the charter's SQLite
-   target architecture (checkpoint persistence, leases/fencing, effect journal access).
-2. Then profile.rb (authority-critical), session_nodes.rb (session graph), toolbox.rb
-   (path confinement), compiled.rb (graph runtime) — each characterize-then-extract.
+1. **Q2/Q3 profile.rb:** characterize `gems/tamoz-agent/lib/tamoz/agent/profile.rb`
+   (1,547 lines, 126 smells — AUTHORITY-CRITICAL: trusted profiles, adoption registry,
+   canonical digests, transition registry). Enola impact + callers (the CLI's
+   resolve_session_authority + the profile machinery are callers); responsibility map;
+   gap analysis against test/agent_profile_test.rb + agent_cli_profile_test.rb +
+   agent_profile_transition_test.rb; add characterization + failure-path + adversarial
+   tests at the authority seams (digest mismatch, adoption, transitions); mutation-
+   prove; commit tests only. Then extraction slices along the charter's Profile target
+   architecture (schema/constants, safe document loader, structural/semantic
+   validators, canonicalizer/digester, adoption/transition registries, authority
+   projection).
+2. Then session_nodes.rb, toolbox.rb, compiled.rb, skills.rb, effect_journal.rb — each
+   characterize-then-extract.
 3. CLI completion (session factory, renderer, command objects, validate_thread_id!
-   bang cleanup) interleaved when a giant is mid-flight and no larger file is waiting.
+   bang cleanup) interleaved when no larger file is waiting.
 
 ## Slice ledger
 
