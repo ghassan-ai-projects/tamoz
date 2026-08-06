@@ -1,0 +1,151 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# P15-B (docs/P15_RELEASE_PLAN.md §4, correction 9) — the old-format session
+# fixture.
+#
+# Invariant 22 says a checkpoint from an older build must resume EXACTLY or
+# stop typed. Every existing legacy test proves that in process: it hands a
+# hash to `SessionRecords.load!` and checks the sentinels. None of them prove
+# it against BYTES — a real SQLite file, written once, read back by a build
+# that did not write it. A schema change, a codec change or a wire-encoding
+# change would sail past the in-process tests and break every existing user's
+# database.
+#
+# So this writes a real durable session to a real database, drives it to
+# completion, and then rewrites its stored session record down to the PRE-P8
+# shape: no profile identity, no skill epoch, no MCP catalogs, no egress pin,
+# no memory epoch, no behavior snapshot. That is the oldest record shape this
+# codebase has ever produced, and the sentinels that make it resumable are the
+# ones the legacy paths were built for.
+#
+# The result is committed as `test/fixtures/legacy_session_v1.sqlite3` and read
+# by `test/legacy_session_resume_test.rb`. Regenerating it is a deliberate act:
+# if a format change makes the committed fixture unreadable, the correct
+# response is a migration or a typed refusal, NOT a fresh fixture.
+
+require "json"
+require "fileutils"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite
+   tamoz-tools tamoz-agent].each do |gem|
+  $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
+end
+require "tamoz/sqlite"
+require "tamoz/agent"
+
+FIXTURE = File.join(ROOT, "test", "fixtures", "legacy_session_v1.sqlite3")
+THREAD = "legacy-thread"
+
+# The pre-P8 record carries only the fields that existed then. Everything the
+# later phases added is ABSENT, not nil: an absent field is what an old build
+# actually wrote, and the legacy sentinels exist to read exactly that.
+LEGACY_FIELDS = %w[
+  record record_version session_id task task_digest root graph_version
+  behavior_version tool_catalog_digest created_at_ms
+].freeze
+
+class ScriptedModel
+  def generate(stage:, system:, prompt:)
+    case stage
+    when :plan
+      JSON.generate(
+        "goal" => "read the note",
+        "done_when" => ["note.txt has been read"],
+        "steps" => [{"id" => "s1", "purpose" => "read the note", "tool" => "read_file",
+                     "arguments" => {"path" => "note.txt"},
+                     "verification" => "the content is returned"}]
+      )
+    when :review
+      JSON.generate("decision" => "accept", "issues" => [], "rationale" => "bounded")
+    else
+      JSON.generate(
+        "answer" => "the note says hello", "satisfied" => true,
+        "evidence" => ["note.txt"]
+      )
+    end
+  end
+end
+
+FileUtils.mkdir_p(File.dirname(FIXTURE))
+FileUtils.rm_f(FIXTURE)
+
+Dir.mktmpdir("tamoz-legacy-fixture") do |directory|
+  workspace = File.join(directory, "workspace")
+  FileUtils.mkdir_p(workspace)
+  File.write(File.join(workspace, "note.txt"), "hello\n", encoding: Encoding::UTF_8)
+
+  adapter = Tamoz::SQLite::Adapter.new(path: FIXTURE)
+  begin
+    session = Tamoz::Agent::Session.new(
+      model: ScriptedModel.new,
+      toolbox: Tamoz::Tools::Toolbox.new(root: workspace),
+      checkpointer: adapter
+    )
+    outcome = session.start(
+      "read the note", thread: THREAD, request_id: "legacy-request"
+    )
+    raise "fixture session did not complete: #{outcome.status}" unless outcome.completed?
+  ensure
+    adapter.close
+  end
+
+  # Rewrite the stored session record down to the pre-P8 shape, in place, using
+  # the same codec the runtime uses so the checkpoint stays canonical.
+payload = nil
+  payload_digest = nil
+  checkpoint_id = nil
+  adapter = Tamoz::SQLite::Adapter.new(path: FIXTURE)
+  begin
+    session = Tamoz::Agent::Session.new(
+      model: ScriptedModel.new,
+      toolbox: Tamoz::Tools::Toolbox.new(root: workspace),
+      checkpointer: adapter
+    )
+    store = session.app.checkpointer
+    snapshot = store.latest(thread_id: THREAD, namespace: [])
+    raise "fixture has no checkpoint" unless snapshot
+
+    state = session.app.snapshot(snapshot).state
+    record = state.fetch(:session)
+    stripped = record.select { |key, _value| LEGACY_FIELDS.include?(key) }
+    missing = LEGACY_FIELDS - stripped.keys
+    raise "fixture record is missing #{missing.inspect}" unless missing.empty?
+
+    warn "stripped modern fields: #{(record.keys - stripped.keys).sort.join(", ")}"
+    codec = store.checkpoint_codec
+    # The checkpoint row stores ONE encoded payload plus its digest, so the
+    # rewrite re-encodes the whole checkpoint through the runtime's own codec
+    # and recomputes the digest exactly as the store does. A fixture with a
+    # hand-made payload would prove nothing about the real decode path.
+    rewritten_state = codec.state_codec.dump(
+      codec.state_codec.load(snapshot.state_bytes).merge("session" => stripped)
+    )
+    payload = codec.dump(snapshot.to_h.merge(state_bytes: rewritten_state))
+    payload_digest = Tamoz::SQLite.const_get(:Wire).digest(
+      payload, domain: "tamoz.sqlite.checkpoint_payload"
+    )
+    checkpoint_id = snapshot.id
+  ensure
+    adapter.close
+  end
+
+  # The rewrite itself uses raw SQLite3 on purpose. `Adapter#transaction` only
+  # accepts statements registered in the reviewed boundary registry — that
+  # refusal is a production safety property (a fixture generator must not be
+  # able to smuggle arbitrary SQL through the runtime), so the generator opens
+  # the file directly instead of weakening it.
+  database = SQLite3::Database.new(FIXTURE)
+  begin
+    database.execute(
+      "UPDATE tamoz_checkpoints SET payload = ?, payload_digest = ? WHERE id = ?",
+      [SQLite3::Blob.new(payload), payload_digest, checkpoint_id]
+    )
+  ensure
+    database.close
+  end
+end
+
+puts "wrote #{FIXTURE} (#{File.size(FIXTURE)} bytes)"

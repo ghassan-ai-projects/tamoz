@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 351 | 236 | 3 | **no** |
+| 351 | 241 | 3 | **no** |
 
 ## Status counts
 
@@ -303,11 +303,11 @@ generating run.
 | `INV-15` | invariant | yes | pass | `test/graph_stream_test.rb#test_stopping_at_every_event_boundary_never_commits_late_state` |
 | `INV-16` | invariant | yes | pass | `test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it` |
 | `INV-17` | invariant | yes | pass | `test/agent_tool_error_recovery_test.rb#test_taxonomy_marks_only_argument_failures_repairable` |
-| `INV-18` | invariant | yes | pass | `test/agent_session_records_test.rb#test_newer_version_fails_before_any_field_is_read` |
+| `INV-18` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read` |
 | `INV-19` | invariant | yes | pass | `test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state` |
 | `INV-20` | invariant | yes | pass | `test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover` |
 | `INV-21` | invariant | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |
-| `INV-22` | invariant | yes | pass | `test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code` |
+| `INV-22` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database` |
 | `INV-23` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_duplicate_delivery_returns_one_completed_turn_and_conflicts_on_change` |
 | `INV-24` | invariant | yes | pass | `test/agent_session_records_test.rb#test_sensitive_values_are_rejected_at_every_depth` |
 | `INV-25` | invariant | yes | pass | `test/agent_runtime_test.rb#test_never_executes_when_no_plan_passes_review` |
