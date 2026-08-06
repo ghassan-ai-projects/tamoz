@@ -394,6 +394,100 @@ module Tamoz
         rows.map { |row| materialize_request(row) }.freeze
       end
 
+      # Every (thread, namespace) that currently holds non-terminal request work,
+      # oldest enqueue first. A worker polls this to learn WHERE to work; it
+      # claims nothing, takes no lease, and orders threads by their oldest
+      # outstanding request so no thread can be starved by a busier neighbour.
+      #
+      # `head_status` is the status of that oldest request, which is the whole
+      # recovery signal: `queued` means claimable, while `claimed`/`running`
+      # means a previous worker died holding it and the thread needs `recover`
+      # rather than a fresh claim.
+      def pending_threads(limit: 100)
+        bounded = Integer(limit)
+        raise ConfigurationError, "limit must be positive" unless bounded.positive?
+        rows = adapter.__send__(:read, operation: "request.pending_threads") do |tx|
+          tx.rows(
+            "request.pending_threads.select",
+            <<~SQL,
+              SELECT thread_id, namespace, request_id, status, enqueue_sequence
+              FROM tamoz_requests AS outer_request
+              WHERE status NOT IN ('completed', 'failed')
+                AND enqueue_sequence = (
+                  SELECT MIN(enqueue_sequence) FROM tamoz_requests AS inner_request
+                  WHERE inner_request.thread_id = outer_request.thread_id
+                    AND inner_request.namespace = outer_request.namespace
+                    AND inner_request.status NOT IN ('completed', 'failed')
+                )
+              ORDER BY enqueue_sequence ASC
+              LIMIT ?
+            SQL
+            [bounded]
+          )
+        end
+        rows.map do |row|
+          {
+            thread_id: row.fetch(0),
+            namespace: Wire.decode_namespace(row.fetch(1)),
+            head_request_id: row.fetch(2),
+            head_status: row.fetch(3).to_sym,
+            enqueue_sequence: row.fetch(4)
+          }.freeze
+        end.freeze
+      end
+
+      # Read-only census of every recorded effect, with the attempt outcomes that
+      # decide whether it was applied once, applied twice, or retried after its
+      # result stopped being knowable.
+      #
+      # This exists so an operator's safety counters can be DERIVED from the
+      # journal rather than self-reported by the component being audited. A
+      # counter the worker increments is a claim; this is evidence. It takes no
+      # lease and writes nothing, so `tamoz status` can run against a live
+      # runtime without contending with the worker.
+      #
+      # `succeeded_attempts > 1` is a duplicate effect. `attempts_after_unknown > 0`
+      # is a machine that retried something whose outcome it could not prove.
+      # Both must be zero, always.
+      def effect_census(limit: 10_000)
+        bounded = Integer(limit)
+        raise ConfigurationError, "limit must be positive" unless bounded.positive?
+
+        rows = adapter.__send__(:read, operation: "effect.census") do |tx|
+          tx.rows(
+            "effect.census.select",
+            <<~SQL,
+              SELECT e.effect_key, e.thread_id, e.operation, e.safety, e.status,
+                     e.requires_reconciliation,
+                     (SELECT COUNT(*) FROM tamoz_effect_attempts a
+                       WHERE a.effect_key = e.effect_key AND a.status = 'succeeded'),
+                     (SELECT COUNT(*) FROM tamoz_effect_attempts a
+                       WHERE a.effect_key = e.effect_key
+                         AND a.attempt_number > (
+                           SELECT MIN(u.attempt_number) FROM tamoz_effect_attempts u
+                            WHERE u.effect_key = e.effect_key AND u.status = 'unknown'
+                         ))
+              FROM tamoz_effects AS e
+              ORDER BY e.created_at_ms ASC, e.effect_key ASC
+              LIMIT ?
+            SQL
+            [bounded]
+          )
+        end
+        rows.map do |row|
+          {
+            effect_key: row.fetch(0),
+            thread_id: row.fetch(1),
+            operation: row.fetch(2),
+            safety: row.fetch(3).to_sym,
+            status: row.fetch(4).to_sym,
+            requires_reconciliation: row.fetch(5) == 1,
+            succeeded_attempts: row.fetch(6),
+            attempts_after_unknown: row.fetch(7).to_i
+          }.freeze
+        end.freeze
+      end
+
       # Claim the oldest queued request under the lease. When a `validator` is
       # supplied (the graph-owned staleness predicate, DR-4 C1), it is invoked inside
       # this transaction with the materialized request and the latest decoded

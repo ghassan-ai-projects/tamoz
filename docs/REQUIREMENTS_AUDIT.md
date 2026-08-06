@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 351 | 243 | 3 | **no** |
+| 357 | 259 | 3 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 3 |
-| pass | 333 |
+| pass | 339 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -276,16 +276,22 @@ generating run.
 | `API-tamoz-tools-Tamoz::Tools::ToolPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::Toolbox` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `CLI-approve` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence` |
 | `CLI-ask` | cli_command | yes | pass | `test/agent_cli_test.rb#test_ask_creates_session_file` |
 | `CLI-cancel` | cli_command | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
+| `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
 | `CLI-list` | cli_command | yes | pass | `test/agent_cli_test.rb#test_list_reports_a_written_session` |
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
+| `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `CLI-redirect` | cli_command | yes | pass | `test/agent_cli_test.rb#test_redirect_replaces_in_flight_goal` |
 | `CLI-resolve` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution` |
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
+| `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
+| `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
+| `CLI-worker` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `INV-01` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
 | `INV-02` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
 | `INV-03` | invariant | yes | pass | `test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories` |

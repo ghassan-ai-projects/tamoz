@@ -138,11 +138,20 @@ module Tamoz
       def verify_profile_binding!(profile)
         return unless profile
 
+        # A profile pins TWO catalogs, because it describes two situations. The
+        # interactive catalog is what a human drives; the unattended catalog is
+        # what a worker drives, and it differs only by needing approval on more
+        # tools — the `unattended` section decides which. Both are pinned
+        # explicitly, so neither can be reached by mutating the other, and a
+        # session that matches neither is refused.
         expected = profile.policy.fetch("tool_catalog_digest")
-        unless toolbox.catalog_digest == expected
+        unattended = profile.policy["unattended_catalog_digest"]
+        unless toolbox.catalog_digest == expected ||
+               (unattended && toolbox.catalog_digest == unattended)
+          pinned = [expected, unattended].compact.join(" or ")
           raise Profile::ValidationError,
                 "toolbox catalog digest #{toolbox.catalog_digest} does not match " \
-                "profile #{profile.profile_id.inspect} policy.tool_catalog_digest #{expected}"
+                "profile #{profile.profile_id.inspect} policy.tool_catalog_digest #{pinned}"
         end
         unless toolbox.root.to_s == File.expand_path(profile.canonical_root)
           raise Profile::ValidationError,

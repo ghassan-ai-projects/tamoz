@@ -262,6 +262,22 @@ module Tamoz
           "phase" => 2,
           "kill_required" => false,
           "statements" => [READ.call("request.history.select")].freeze
+        },
+        # The worker's read-only polling and inspection surface. None of these
+        # take a lease, write a row, or need a kill probe: they answer "where is
+        # there work" and "what does the journal say", which is why `tamoz status`
+        # can run against a live runtime without contending with the worker.
+        {
+          "operation" => "request.pending_threads",
+          "phase" => 2,
+          "kill_required" => false,
+          "statements" => [READ.call("request.pending_threads.select")].freeze
+        },
+        {
+          "operation" => "effect.census",
+          "phase" => 2,
+          "kill_required" => false,
+          "statements" => [READ.call("effect.census.select")].freeze
         }
       ].map(&:freeze).freeze
 

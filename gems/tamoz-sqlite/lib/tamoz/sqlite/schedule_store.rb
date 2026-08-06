@@ -101,6 +101,73 @@ module Tamoz
         materialize_schedule(row)
       end
 
+      # Every schedule at its ACTIVE revision, for `tamoz schedule list/show`.
+      # Read-only, no lease: an operator must be able to look at a running
+      # runtime without contending with the worker polling it.
+      def list_schedules(limit: 500)
+        bounded = Integer(limit)
+        raise ConfigurationError, "limit must be positive" unless bounded.positive?
+
+        rows = @adapter.__send__(:read, operation: "schedule.list_definitions") do |tx|
+          tx.rows(
+            "schedule.list_definitions.select",
+            <<~SQL,
+              SELECT s.revision, s.definition_digest, s.payload, s.enabled
+              FROM tamoz_schedules s
+              JOIN (
+                SELECT schedule_id, MAX(revision) AS revision
+                FROM tamoz_schedules
+                WHERE deleted = 0
+                GROUP BY schedule_id
+              ) latest ON latest.schedule_id = s.schedule_id
+                       AND latest.revision = s.revision
+              WHERE s.deleted = 0
+              ORDER BY s.schedule_id COLLATE BINARY
+              LIMIT ?
+            SQL
+            [bounded]
+          )
+        end
+        rows.filter_map { |row| materialize_schedule(row) }.freeze
+      end
+
+      def fetch_schedule(id)
+        list_schedules.find { |schedule| schedule.id == id }
+      end
+
+      # The symmetric partner of `disable_schedule`. Enabling is lifecycle state,
+      # not definition: `put_schedule` deliberately PRESERVES the stored enabled
+      # flag across edits (so an edit cannot silently un-pause a schedule), which
+      # is exactly why resuming needs its own path rather than a re-put.
+      def enable_schedule(id, expected_revision:)
+        now = now_ms
+        @adapter.__send__(:transaction, operation: "schedule.enable") do |tx|
+          current = tx.scalar(
+            "schedule.enable.revision",
+            <<~SQL,
+              SELECT revision FROM tamoz_schedules
+              WHERE schedule_id = ? AND deleted = 0
+              ORDER BY revision DESC LIMIT 1
+            SQL
+            [id]
+          )
+          unless current == expected_revision
+            raise Tamoz::Scheduler::StoreConflictError,
+                  "schedule #{id} is at revision #{current}, expected #{expected_revision}"
+          end
+          tx.execute(
+            "schedule.enable.update",
+            <<~SQL,
+              UPDATE tamoz_schedules
+              SET enabled = 1, updated_at_ms = ?
+              WHERE schedule_id = ? AND revision = ?
+            SQL
+            [now, id, current]
+          )
+        end
+        nil
+      end
+
       def disable_schedule(id, expected_revision:, reason:)
         now = now_ms
         @adapter.__send__(:transaction, operation: "schedule.disable") do |tx|
@@ -144,8 +211,18 @@ module Tamoz
       # narrowed one runs under the effective intersection. `nil` fails
       # closed (treated as an empty policy, so nothing survives the
       # intersection): no operator policy means no delayed authority.
+      # `include_provenance` controls whether the enqueued request payload carries
+      # the schedule/occurrence identifiers alongside the template.
+      #
+      # It defaults to true, which is the original behaviour. A caller whose
+      # consumer treats the payload as a CLOSED schema — the agent session, whose
+      # payload is its initial graph state and rejects any key that is not a
+      # declared channel — passes false. The identifiers are not lost by doing so:
+      # every one of them is a column on the occurrence row this method writes in
+      # the same transaction, so provenance stays queryable through
+      # `list_occurrences` either way.
       def materialize_due(now:, owner:, lease_for:, limit:, request_template:,
-                          current_grant:)
+                          current_grant:, include_provenance: true)
         claimed = []
         @adapter.__send__(:transaction, operation: "schedule.materialize_due") do |tx|
           schedules = tx.rows(
@@ -176,7 +253,7 @@ module Tamoz
             begin
               claim_one_schedule(
                 schedule, now:, owner:, limit:, request_template:,
-                current_grant:, tx:
+                current_grant:, tx:, include_provenance:
               ).each { |value| claimed << value }
             rescue Tamoz::Scheduler::StoreConflictError, Tamoz::CheckpointConflictError => error
               # Plan §11: one schedule's conflict never crashes the poller.
@@ -192,7 +269,7 @@ module Tamoz
       # selection, overlap enforcement (per-occurrence for `allow`), and the
       # enqueue. Runs inside the caller's transaction.
       def claim_one_schedule(schedule, now:, owner:, limit:, request_template:,
-                             current_grant:, tx:)
+                             current_grant:, tx:, include_provenance: true)
         claimed = []
         # P13-C (invariant 40, claim-time): the stored maximum grant is a
         # ceiling. `nil` current policy fails closed (nothing survives).
@@ -203,7 +280,27 @@ module Tamoz
           record_grant_denied(schedule, now, tx)
           return claimed
         end
-        claim_template = request_template.merge("effective_grant" => effective)
+        # Resolve a callable template ONCE per schedule, before it is merged or
+        # enqueued, so one scan can carry a different task per schedule.
+        resolved_template =
+          request_template.respond_to?(:call) ? request_template.call(schedule) : request_template
+        unless resolved_template.is_a?(Hash)
+          raise Tamoz::Scheduler::SchedulerError,
+                "request_template must be a Hash or return one, got #{resolved_template.class}"
+        end
+
+        # The claim-time grant intersection rides in the payload for consumers
+        # with an open payload schema. For a closed-schema consumer it is left
+        # out — and not lost: it is a pure function of the schedule's stored
+        # `capability_grant` at the revision the occurrence pins, intersected
+        # with the worker's grant at claim time, so it stays reconstructible from
+        # the occurrence row rather than being taken on trust from the payload.
+        claim_template =
+          if include_provenance
+            resolved_template.merge("effective_grant" => effective)
+          else
+            resolved_template
+          end
 
         due = schedule.due_occurrences(now:, limit:)
         return claimed if due.empty?
@@ -262,7 +359,7 @@ module Tamoz
             )
           when :materialize
             enqueue_occurrence(
-              schedule, occurrence, now, owner, claim_template, tx
+              schedule, occurrence, now, owner, claim_template, tx, include_provenance:
             ).then { |value| claimed << value }
             non_terminal += 1
             pending += 1
@@ -331,10 +428,11 @@ module Tamoz
 
       # Enqueue ONE occurrence: the deterministic request id is the dedup key
       # (invariant 38), so a retried delivery re-enqueues the same request row.
-      def enqueue_occurrence(schedule, occurrence, now, owner, request_template, tx)
+      def enqueue_occurrence(schedule, occurrence, now, owner, request_template, tx,
+                             include_provenance: true)
         thread, encoded_namespace = normalize_request_address(schedule)
         request_id = occurrence.request_id
-        payload = build_request_payload(schedule, occurrence, request_template)
+        payload = build_request_payload(schedule, occurrence, request_template, include_provenance)
         payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
           REQUEST_OPERATION, payload
         )
@@ -535,8 +633,10 @@ module Tamoz
         [thread, Wire.namespace(REQUEST_NAMESPACE)].freeze
       end
 
-      def build_request_payload(schedule, occurrence, template)
+      def build_request_payload(schedule, occurrence, template, include_provenance = true)
         base = template.dup
+        return base unless include_provenance
+
         {
           "schedule_id" => schedule.id,
           "schedule_revision" => schedule.revision,

@@ -12,10 +12,27 @@ RUBY_SOURCES = FileList[
   "test/**/*.rb"
 ].select { |path| File.file?(path) }.freeze
 
+# The autonomy scorecard is a MILESTONE gate, not a regression gate: its cases
+# describe the product Tamoz is being built into and fail until that product
+# exists. Keeping it out of `rake test` lets `rake ci` keep its meaning — no
+# regression in what already works — while `rake autonomy` reports honestly on
+# what does not work yet. Both must pass to close the milestone.
+AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
+
 Rake::TestTask.new(:test) do |task|
   task.libs << "test"
-  task.pattern = "test/**/*_test.rb"
+  task.test_files = FileList["test/**/*_test.rb"].reject { |path| AUTONOMY_TESTS.include?(path) }
   task.warning = true
+end
+
+desc "Run the autonomy scorecard and regenerate docs/autonomy-scorecard.json"
+task :autonomy do
+  ruby "script/autonomy_scorecard"
+end
+
+desc "The autonomy milestone gate: every scorecard case must pass"
+task :autonomy_strict do
+  ruby "script/autonomy_scorecard --strict"
 end
 
 desc "Check every Ruby source file for syntax errors"

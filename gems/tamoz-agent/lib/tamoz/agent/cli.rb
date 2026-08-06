@@ -14,9 +14,16 @@ module Tamoz
       EXIT_SIGINT = 130
       EXIT_SIGTERM = 143
 
+      # The unattended surface (`init`, `queue`, `worker`, `status`) lives in its
+      # own file; it is the same CLI object, split only so neither half becomes
+      # unreadable.
+      include CLIWorkerCommands
+      include CLIScheduleCommands
+
       SUBCOMMANDS = %w[
         ask resume continue list show follow-up follow_up followup
         redirect cancel resolve profile
+        init queue worker status schedule approve
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
@@ -81,7 +88,11 @@ module Tamoz
             Usage: tamoz [global-options] [subcommand] [options] [ARGS]
                    tamoz [options] TASK
 
-            Subcommands: ask, resume, continue, list, show, follow-up, redirect, cancel, resolve, profile
+            Interactive:  ask, resume, continue, list, show, follow-up, redirect,
+                          cancel, resolve, profile
+            Unattended:   init, queue, worker, status, schedule, approve
+
+            Run 'tamoz <subcommand> --help' for a subcommand's own options.
           BANNER
           value.on("--profile PROFILE", "Trusted profile path or id (durable sessions)") do |entry|
             options[:profile] = entry
@@ -95,6 +106,9 @@ module Tamoz
           end
           value.on("--session-dir PATH", "Durable session directory") do |entry|
             options[:session_dir] = entry
+          end
+          value.on("--runtime-dir PATH", "Operator runtime directory (worker, queue, schedule)") do |entry|
+            options[:runtime_dir] = entry
           end
           value.on("--session NAME", "Thread name (default: generated)") do |entry|
             options[:session] = entry
@@ -150,6 +164,19 @@ module Tamoz
         when "cancel" then cmd_cancel(options, argv)
         when "resolve" then cmd_resolve(options, argv)
         when "profile" then cmd_profile(options, argv)
+        when "init", "queue", "worker", "status", "schedule", "approve"
+          # `--help` on a subcommand prints that subcommand's options and stops
+          # there, without opening a runtime directory it was never asked to touch.
+          catch(:tamoz_subcommand_help) do
+            case subcommand
+            when "init" then cmd_init(options, argv)
+            when "queue" then cmd_queue(options, argv)
+            when "worker" then cmd_worker(options, argv)
+            when "status" then cmd_status(options, argv)
+            when "schedule" then cmd_schedule(options, argv)
+            when "approve" then cmd_approve(options, argv)
+            end
+          end
         else
           raise OptionParser::InvalidArgument, "unknown subcommand: #{subcommand}"
         end

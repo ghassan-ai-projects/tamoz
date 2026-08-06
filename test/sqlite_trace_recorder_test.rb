@@ -5,8 +5,13 @@ require_relative "test_helper"
 class SQLiteTraceRecorderTest < Minitest::Test
   RECORDER_DIGEST =
     "sha256:ebf5a908b273654e63a35bd1ba98c06a57b0ee41cb88e14f4b843983c8153a47"
+  # The recorder is constructed WITH the boundary registry, so this manifest
+  # digest moves whenever the registry does. It moved here because the worker
+  # added two read-only operations (`request.pending_threads`, `effect.census`);
+  # the lease.release trace itself — its events, selectors and ordering, all
+  # asserted below — is unchanged.
   LEASE_RELEASE_MANIFEST_DIGEST =
-    "sha256:95262826c9da14952b9f2ab8c11fff73fd71c336008559137b6a9e713da4fdbf"
+    "sha256:540fdd45712a12faa9c98cd2f657871e1dcaa73238cf1baf08ba17bbbfc3dfb2"
   EVENT_FIELDS = %w[
     sequence scenario point hook_version kind operation statement attempt
     occurrence

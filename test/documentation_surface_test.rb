@@ -41,9 +41,20 @@ class DocumentationSurfaceTest < Minitest::Test
 
   # Every global flag the guide shows a reader must be a flag the CLI accepts.
   def test_every_documented_flag_is_a_real_flag
-    out = StringIO.new
-    Tamoz::Agent::CLI.run(["--help"], out:, err: StringIO.new, env: {})
-    help = out.string
+    # A flag is real if the global parser accepts it OR the subcommand it is
+    # shown with accepts it. Checking only the global parser would either reject
+    # honest documentation of a subcommand's own flags, or push every subcommand
+    # flag into the global namespace to keep a test happy.
+    help = +capture_help(["--help"])
+    # The unattended subcommands each carry their own `--help`. The interactive
+    # ones share the global flag surface and parse positionally, so asking them
+    # for help means something else entirely. `queue` and `schedule` dispatch on
+    # a verb first, so their flags live on the verb.
+    [%w[init], %w[worker], %w[status], %w[queue add], %w[queue list],
+     %w[schedule add], %w[schedule list]].each do |argv|
+      help << capture_help(argv + ["--help"])
+    end
+
     # Only flags shown on an actual `tamoz` command line are CLI flags; the page
     # also documents script flags such as `--jobs`, which belong to the audit
     # generator and would be a false positive here.
@@ -56,6 +67,16 @@ class DocumentationSurfaceTest < Minitest::Test
     documented.each do |flag|
       assert_includes help, flag, "#{flag} is documented but the CLI does not accept it"
     end
+  end
+
+  def capture_help(argv)
+    out = StringIO.new
+    Tamoz::Agent::CLI.run(argv, out:, err: StringIO.new, input: StringIO.new, env: {})
+    out.string
+  rescue StandardError
+    # A subcommand with no help of its own contributes nothing; the global
+    # parser still has to account for whatever the guide shows.
+    ""
   end
 
   # The gem table must match what the repository actually packages — this is

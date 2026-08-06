@@ -1,0 +1,131 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The autonomy scorecard runner.
+#
+# It does NOT read a status from anywhere. It RUNS each case in
+# `test/autonomy_scorecard_test.rb` and maps the executed result to a row, so a
+# case can only read `pass` because it ran and passed in this invocation.
+#
+# The scorecard is the gate for the autonomy milestone: the milestone is not
+# complete while any case is `fail`, and no case may pass with a non-zero hard
+# safety counter.
+#
+# Usage:
+#   script/autonomy_scorecard              # run, write docs/autonomy-scorecard.json, report
+#   script/autonomy_scorecard --strict     # exit 1 unless every case passes
+
+require "json"
+require "open3"
+require "time"
+
+ROOT = File.expand_path("..", __dir__)
+TEST_FILE = File.join(ROOT, "test", "autonomy_scorecard_test.rb")
+OUTPUT = File.join(ROOT, "docs", "autonomy-scorecard.json")
+
+# The ten behaviours the owner named. The `case` key is the test method suffix;
+# the order here is the order the milestone values them.
+CASES = [
+  {id: "01", name: "queued_read_only_task_completes_unattended",
+   behavior: "A queued read-only task completes with nobody watching.",
+   priority: "trigger-to-completion"},
+  {id: "02", name: "interval_schedule_produces_exactly_one_occurrence",
+   behavior: "An interval schedule produces exactly one logical occurrence.",
+   priority: "trigger-to-completion"},
+  {id: "03", name: "worker_death_after_claim_resumes_without_duplicate",
+   behavior: "A worker that dies after claiming resumes without duplicate execution.",
+   priority: "crash-recovery"},
+  {id: "04", name: "preauthorized_reconcilable_edit_completes_unattended",
+   behavior: "A preauthorized reconcilable edit completes unattended.",
+   priority: "approval-and-authority"},
+  {id: "05", name: "unauthorized_edit_pauses_before_mutation",
+   behavior: "An unauthorized edit pauses durably BEFORE mutating anything.",
+   priority: "approval-and-authority"},
+  {id: "06", name: "approval_resumes_the_same_occurrence",
+   behavior: "Approval resumes the same occurrence rather than starting a new one.",
+   priority: "approval-and-authority"},
+  {id: "07", name: "exhausted_budget_stops_durably",
+   behavior: "An exhausted budget produces a typed, durable, observable stop.",
+   priority: "resource-bounds"},
+  {id: "08", name: "capability_source_requires_operator_configuration",
+   behavior: "A capability source is available only when the operator configured it.",
+   priority: "capability-integration"},
+  {id: "09", name: "fast_producer_stays_within_enforced_bounds",
+   behavior: "A fast stream producer cannot grow queue or spool without bound.",
+   priority: "resource-bounds"},
+  {id: "10", name: "unknown_effect_never_retries_automatically",
+   behavior: "An unknown effect is never retried by a machine.",
+   priority: "crash-recovery"}
+].freeze
+
+strict = ARGV.include?("--strict")
+
+def run_case(entry)
+  pattern = "test_case_#{entry[:id]}_#{entry[:name]}"
+  stdout, stderr, status = Open3.capture3(
+    RbConfig.ruby, "-Itest", TEST_FILE, "-n", pattern,
+    chdir: ROOT
+  )
+  output = "#{stdout}#{stderr}"
+  ran = output[/(\d+) runs/, 1].to_i
+  if ran.zero?
+    {status: "missing", detail: "no case matched #{pattern}"}
+  elsif status.success?
+    {status: "pass", detail: nil}
+  else
+    {status: "fail", detail: first_reason(output)}
+  end
+end
+
+# The first assertion message, trimmed — enough to see WHY without pasting a
+# whole backtrace into a committed document.
+def first_reason(output)
+  lines = output.lines.map(&:rstrip)
+  index = lines.index { |line| line =~ /^\s*\d+\) (Failure|Error):/ }
+  return "unknown failure" unless index
+
+  reason = lines[(index + 2)..(index + 4)].to_a.reject(&:empty?).first.to_s.strip
+  reason = reason[0, 300]
+  reason.empty? ? "unknown failure" : reason
+end
+
+results = CASES.map do |entry|
+  print "case #{entry[:id]} #{entry[:name]}... "
+  $stdout.flush
+  outcome = run_case(entry)
+  puts outcome[:status]
+  entry.merge(outcome)
+end
+
+passed = results.count { |row| row[:status] == "pass" }
+document = {
+  "schema_version" => 1,
+  "generated_at" => Time.now.utc.iso8601,
+  "source" => "test/autonomy_scorecard_test.rb",
+  "note" => "Every row is produced by RUNNING its case through the public CLI. " \
+            "A row is `pass` only because the case executed and passed.",
+  "total" => results.length,
+  "passed" => passed,
+  "verdict" => passed == results.length ? "pass" : "incomplete",
+  "hard_safety_counters" => %w[
+    unauthorized_effects duplicate_effects unknown_effect_retries headless_auto_approvals
+  ],
+  "cases" => results.map do |row|
+    {
+      "id" => row[:id],
+      "behavior" => row[:behavior],
+      "priority" => row[:priority],
+      "test" => "test_case_#{row[:id]}_#{row[:name]}",
+      "status" => row[:status],
+      "detail" => row[:detail]
+    }.compact
+  end
+}
+
+File.write(OUTPUT, "#{JSON.pretty_generate(document)}\n")
+
+puts
+puts "autonomy scorecard: #{passed}/#{results.length} passing — #{document["verdict"]}"
+puts "written: #{OUTPUT.sub("#{ROOT}/", "")}"
+
+exit(1) if strict && passed != results.length

@@ -3547,6 +3547,23 @@
       "package": "tamoz-tools"
     },
     {
+      "id": "CLI-approve",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz approve",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence",
+      "supporting_tests": [
+        "test/agent_unattended_policy_test.rb#test_a_denied_approval_stops_without_mutating",
+        "test/agent_unattended_policy_test.rb#test_approving_an_unknown_request_is_refused",
+        "test/agent_unattended_policy_test.rb#test_an_approval_does_not_carry_to_the_next_occurrence"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-ask",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -3599,6 +3616,21 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-init",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz init",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_worker_refuses_a_world_readable_runtime_directory"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-list",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -3621,6 +3653,22 @@
       "named_test": "test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands",
       "supporting_tests": [
         "test/agent_cli_profile_test.rb#test_suggestion_preview_and_import_flow"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-queue",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz queue",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_queue_add_refuses_an_unknown_profile",
+        "test/agent_worker_test.rb#test_profile_id_cannot_escape_the_runtime_directory"
       ],
       "classification": "direct",
       "rationale": null,
@@ -3668,6 +3716,21 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-schedule",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz schedule",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence",
+      "supporting_tests": [
+        "test/agent_schedule_test.rb#test_schedule_lifecycle_add_pause_resume_remove"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-show",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -3676,6 +3739,38 @@
       "status": "unverified",
       "named_test": "test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-status",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz status",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_status_safety_counters_are_present_and_zero_on_a_clean_runtime"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-worker",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz worker",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+      "supporting_tests": [
+        "test/autonomy_scorecard_test.rb#test_case_03_worker_death_after_claim_resumes_without_duplicate",
+        "test/agent_worker_test.rb#test_stop_request_ends_the_polling_loop_promptly",
+        "test/agent_worker_test.rb#test_worker_with_no_work_exits_without_spinning"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null

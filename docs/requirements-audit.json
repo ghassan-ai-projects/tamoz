@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T07:18:00Z",
-  "manifest_requirements": 351,
-  "named_cases_run": 243,
+  "generated_at": "2026-08-06T09:42:55Z",
+  "manifest_requirements": 357,
+  "named_cases_run": 259,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 3,
-    "pass": 333
+    "pass": 339
   },
   "release_blocking_gaps": [
     "INV-39",
@@ -3993,6 +3993,25 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-approve",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz approve",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence",
+      "supporting_tests": [
+        "test/agent_unattended_policy_test.rb#test_a_denied_approval_stops_without_mutating",
+        "test/agent_unattended_policy_test.rb#test_approving_an_unknown_request_is_refused",
+        "test/agent_unattended_policy_test.rb#test_an_approval_does_not_carry_to_the_next_occurrence"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-ask",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -4053,6 +4072,23 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-init",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz init",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_worker_refuses_a_world_readable_runtime_directory"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-list",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -4077,6 +4113,24 @@
       "named_test": "test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands",
       "supporting_tests": [
         "test/agent_cli_profile_test.rb#test_suggestion_preview_and_import_flow"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-queue",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz queue",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_queue_add_refuses_an_unknown_profile",
+        "test/agent_worker_test.rb#test_profile_id_cannot_escape_the_runtime_directory"
       ],
       "classification": "direct",
       "rationale": null,
@@ -4132,6 +4186,23 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-schedule",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz schedule",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence",
+      "supporting_tests": [
+        "test/agent_schedule_test.rb#test_schedule_lifecycle_add_pause_resume_remove"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-show",
       "category": "cli_command",
       "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -4140,6 +4211,42 @@
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-status",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz status",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model",
+      "supporting_tests": [
+        "test/agent_worker_test.rb#test_status_safety_counters_are_present_and_zero_on_a_clean_runtime"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-worker",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz worker",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+      "supporting_tests": [
+        "test/autonomy_scorecard_test.rb#test_case_03_worker_death_after_claim_resumes_without_duplicate",
+        "test/agent_worker_test.rb#test_stop_request_ends_the_polling_loop_promptly",
+        "test/agent_worker_test.rb#test_worker_with_no_work_exits_without_spinning"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5468,7 +5575,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

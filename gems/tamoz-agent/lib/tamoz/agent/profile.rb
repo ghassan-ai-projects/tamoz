@@ -46,7 +46,12 @@ module Tamoz
       KNOWN_TOOLS = %w[read_file list_directory search_text apply_patch create_file run_check].freeze
       KNOWN_PROVIDERS = RubyLLMModel::ENV_KEYS.keys.map(&:to_s).freeze
 
-      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress].freeze
+      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress unattended].freeze
+      # What may run with NOBODY WATCHING. This is deliberately a separate axis
+      # from `tools`: `tools.allowed` says what the agent can ever do on this
+      # project, `unattended` says what a worker may do without asking first.
+      # A tool can be allowed and still require a human every time.
+      UNATTENDED_KEYS = %w[read_only reconcilable approval_required forbidden].freeze
       PROFILE_KEYS = %w[schema_version profile_id profile_version canonical_root description].freeze
       ROOTS_KEYS = %w[workspace].freeze
       MODEL_ROLE_KEYS = %w[provider model credential_ref].freeze
@@ -56,6 +61,7 @@ module Tamoz
       TOOLS_KEYS = %w[allowed approval_required].freeze
       POLICY_KEYS = %w[
         allow_changes default_check_safety graph_version behavior_version tool_catalog_digest
+        unattended_catalog_digest
       ].freeze
       # P17 §3: the operator-declared egress policy for governed network
       # capabilities (the websearch server). Exact FQDNs only in v1 — no
@@ -125,7 +131,9 @@ module Tamoz
       ENTROPY_PATTERN = /\b(?![0-9a-f]{32,}\b)[A-Za-z0-9_+\/=-]{40,}\b/.freeze
       # Fields whose values are legitimately long tokens (paths, digests) are
       # exempt from the entropy heuristic.
-      ENTROPY_EXEMPT_KEYS = %w[canonical_root workspace tool_catalog_digest].freeze
+      ENTROPY_EXEMPT_KEYS = %w[
+        canonical_root workspace tool_catalog_digest unattended_catalog_digest
+      ].freeze
       TIMEZONE_WORDS = %w[local system host].freeze
 
       ProfileError = Class.new(Tamoz::Agent::Error)
@@ -136,14 +144,32 @@ module Tamoz
       Fields = Data.define(
         :profile_id, :profile_version, :canonical_root, :description,
         :model_roles, :budgets, :checks, :tools_allowed, :tools_approval_required,
-        :policy, :canonical_digest, :suggestion, :pinned, :egress
+        :policy, :canonical_digest, :suggestion, :pinned, :egress, :unattended
       ) do
         def initialize(pinned: false, **members)
           members[:egress] = nil unless members.key?(:egress)
+          members[:unattended] = nil unless members.key?(:unattended)
           super(pinned:, **Profile.deep_freeze(members))
         end
 
         def allow_changes? = policy.fetch("allow_changes")
+
+        # The tools a worker may use with nobody watching. Absent section means
+        # NOTHING is preauthorized — a profile that has never thought about
+        # unattended execution does not accidentally authorize it.
+        #
+        # `forbidden` is subtracted last so it cannot be overridden.
+        def unattended_preauthorized
+          return [] if unattended.nil?
+
+          preauthorized = Array(unattended["read_only"]) + Array(unattended["reconcilable"])
+          (preauthorized - Array(unattended["forbidden"])).uniq.freeze
+        end
+
+        # Everything else the profile allows: possible, but only with a human.
+        def unattended_requires_approval
+          (tools_allowed - unattended_preauthorized).uniq.freeze
+        end
         def high_risk? = model_roles.values.any? { |role| role.key?("credential_ref") }
       end
 
@@ -158,7 +184,8 @@ module Tamoz
                      :profile_id, :profile_version, :canonical_root, :description,
                      :model_roles, :budgets, :checks, :tools_allowed,
                      :tools_approval_required, :policy, :canonical_digest,
-                     :suggestion, :pinned, :allow_changes?, :high_risk?, :egress
+                     :suggestion, :pinned, :allow_changes?, :high_risk?, :egress,
+                     :unattended, :unattended_preauthorized, :unattended_requires_approval
 
       # P8-B §5.1/§5.4: the exact capability authority a durable session was
       # started under, in a form that can be replayed from the checkpoint alone.
@@ -640,6 +667,7 @@ module Tamoz
         end
 
         validate_strings!(hash, path)
+        validate_unattended!(hash, path)
         validate_profile_fields!(profile, path)
         validate_roots!(hash, profile, path)
         validate_model_roles!(hash, path)
@@ -924,6 +952,45 @@ module Tamoz
         {"allowed" => allowed, "approval_required" => required}
       end
 
+      # The unattended section names tools by RISK CLASS. Every name must be a
+      # tool this profile allows: preauthorizing something the profile does not
+      # permit is a contradiction, and silently ignoring it would let a profile
+      # look more permissive than it is.
+      #
+      # `forbidden` wins over every other list. A tool named there can never run
+      # unattended no matter what else claims it — a deny must not be defeatable
+      # by adding the same name somewhere more permissive.
+      def self.validate_unattended!(hash, path)
+        section = hash["unattended"]
+        return if section.nil?
+
+        unless section.is_a?(Hash)
+          raise ValidationError, "#{path}: unattended must be a mapping"
+        end
+
+        unknown = section.keys - UNATTENDED_KEYS
+        unless unknown.empty?
+          raise ValidationError, "#{path}: unknown unattended fields #{unknown.sort.inspect}"
+        end
+
+        allowed = hash.dig("tools", "allowed") || []
+        UNATTENDED_KEYS.each do |key|
+          names = section[key]
+          next if names.nil?
+
+          unless names.is_a?(Array) && names.all? { |name| name.is_a?(String) } &&
+                 names.uniq == names
+            raise ValidationError, "#{path}: unattended.#{key} must be distinct tool names"
+          end
+          outside = names - allowed
+          unless outside.empty?
+            raise ValidationError,
+                  "#{path}: unattended.#{key} names #{outside.sort.inspect}, which " \
+                  "tools.allowed does not permit"
+          end
+        end
+      end
+
       def self.validate_policy!(hash, tools, path)
         policy = required_hash(hash, "policy", path)
         unknown = policy.keys - POLICY_KEYS
@@ -950,6 +1017,11 @@ module Tamoz
         behavior = policy["behavior_version"]
         unless behavior.is_a?(String) && !behavior.empty? && behavior.bytesize <= 64
           raise ValidationError, "#{path}: policy.behavior_version must be a string of at most 64 bytes"
+        end
+        unattended_digest = policy["unattended_catalog_digest"]
+        if !unattended_digest.nil? && !DIGEST_PATTERN.match?(unattended_digest)
+          raise ValidationError,
+                "#{path}: policy.unattended_catalog_digest must be a sha256: digest"
         end
         digest = policy["tool_catalog_digest"]
         unless digest.is_a?(String) && DIGEST_PATTERN.match?(digest)
@@ -1134,7 +1206,8 @@ module Tamoz
           canonical_digest: digest,
           suggestion:,
           pinned:,
-          egress: hash["egress"]
+          egress: hash["egress"],
+          unattended: hash["unattended"]
         }
         Fields.new(**new_fields)
       end

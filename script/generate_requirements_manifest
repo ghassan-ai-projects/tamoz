@@ -678,6 +678,27 @@ EVIDENCE = {
   "CLI-profile" => {test: "test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands",
                     supporting: ["test/agent_cli_profile_test.rb#test_suggestion_preview_and_import_flow"]},
 
+  # ---- The unattended surface ---------------------------------------------
+  # These are the autonomy milestone's public commands. Each row points at a
+  # test that drives the REAL command, never a library call underneath it.
+  "CLI-init" => {test: "test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory",
+                 supporting: ["test/agent_worker_test.rb#test_worker_refuses_a_world_readable_runtime_directory"]},
+  "CLI-queue" => {test: "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+                  supporting: ["test/agent_worker_test.rb#test_queue_add_refuses_an_unknown_profile",
+                               "test/agent_worker_test.rb#test_profile_id_cannot_escape_the_runtime_directory"]},
+  "CLI-worker" => {test: "test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended",
+                   supporting: ["test/autonomy_scorecard_test.rb#test_case_03_worker_death_after_claim_resumes_without_duplicate",
+                                "test/agent_worker_test.rb#test_stop_request_ends_the_polling_loop_promptly",
+                                "test/agent_worker_test.rb#test_worker_with_no_work_exits_without_spinning"]},
+  "CLI-status" => {test: "test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model",
+                   supporting: ["test/agent_worker_test.rb#test_status_safety_counters_are_present_and_zero_on_a_clean_runtime"]},
+  "CLI-schedule" => {test: "test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence",
+                     supporting: ["test/agent_schedule_test.rb#test_schedule_lifecycle_add_pause_resume_remove"]},
+  "CLI-approve" => {test: "test/autonomy_scorecard_test.rb#test_case_06_approval_resumes_the_same_occurrence",
+                    supporting: ["test/agent_unattended_policy_test.rb#test_a_denied_approval_stops_without_mutating",
+                                 "test/agent_unattended_policy_test.rb#test_approving_an_unknown_request_is_refused",
+                                 "test/agent_unattended_policy_test.rb#test_an_approval_does_not_carry_to_the_next_occurrence"]},
+
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
               supporting: ["test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"]},

@@ -18,6 +18,11 @@ require_relative "agent/improvement"
 require_relative "agent/session_nodes"
 require_relative "agent/session"
 require_relative "agent/profile"
+require_relative "agent/runtime_directory"
+require_relative "agent/worker_runtime"
+require_relative "agent/worker"
+require_relative "agent/cli_worker_commands"
+require_relative "agent/cli_schedule_commands"
 require_relative "agent/cli"
 
 module Tamoz
