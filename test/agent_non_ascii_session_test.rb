@@ -255,8 +255,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
     "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb" => 1,
-    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb" => 1,
-    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 1,
+    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/store.rb" => 1
   }.freeze
 

@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "8d3611a",
+    "commit": "a772603",
     "dirty": true
   },
   "toolchain": {
@@ -11,7 +11,7 @@
   },
   "loc": {
     "files": 255,
-    "total_code_lines": 50073,
+    "total_code_lines": 50065,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
@@ -21,7 +21,7 @@
       "gems/tamoz-graph": 4367,
       "gems/tamoz-mcp": 2222,
       "gems/tamoz-scheduler": 608,
-      "gems/tamoz-sqlite": 8181,
+      "gems/tamoz-sqlite": 8173,
       "gems/tamoz-stream": 639,
       "gems/tamoz-tools": 1883,
       "script/autonomy_scorecard": 99,
@@ -52,22 +52,22 @@
     }
   },
   "rubocop": {
-    "total": 42364,
+    "total": 42340,
     "files_inspected": 400,
     "by_cop": {
-      "Style/StringLiterals": 30331,
+      "Style/StringLiterals": 30314,
       "Layout/SpaceInsideHashLiteralBraces": 3704,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
-      "Metrics/AbcSize": 935,
-      "Metrics/MethodLength": 926,
+      "Metrics/AbcSize": 933,
+      "Metrics/MethodLength": 924,
       "Minitest/MultipleAssertions": 596,
       "Style/IfUnlessModifier": 431,
       "Style/StringLiteralsInInterpolation": 396,
-      "Layout/EmptyLineAfterGuardClause": 303,
+      "Layout/EmptyLineAfterGuardClause": 302,
       "Minitest/AssertPredicate": 275,
-      "Metrics/CyclomaticComplexity": 270,
+      "Metrics/CyclomaticComplexity": 269,
       "Metrics/BlockLength": 266,
-      "Metrics/PerceivedComplexity": 263,
+      "Metrics/PerceivedComplexity": 262,
       "Naming/RescuedExceptionsVariableName": 189,
       "Metrics/ParameterLists": 161,
       "Style/Documentation": 131,
@@ -249,7 +249,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41880,
+      "convention": 41856,
       "warning": 484
     },
     "metrics_over_ceiling": {
@@ -259,7 +259,7 @@
       },
       "Metrics/MethodLength": {
         "max": 240,
-        "count": 926
+        "count": 924
       },
       "Metrics/ParameterLists": {
         "max": 29,
@@ -271,11 +271,11 @@
       },
       "Metrics/CyclomaticComplexity": {
         "max": 43,
-        "count": 270
+        "count": 269
       },
       "Metrics/PerceivedComplexity": {
         "max": 39,
-        "count": 263
+        "count": 262
       },
       "Layout/LineLength": {
         "max": 454,
@@ -292,17 +292,17 @@
     }
   },
   "reek": {
-    "total": 4562,
+    "total": 4554,
     "by_type": {
-      "DuplicateMethodCall": 1296,
-      "TooManyStatements": 789,
-      "FeatureEnvy": 389,
+      "DuplicateMethodCall": 1293,
+      "TooManyStatements": 788,
+      "FeatureEnvy": 387,
       "LongParameterList": 309,
       "MissingSafeMethod": 255,
       "IrresponsibleModule": 242,
       "UtilityFunction": 214,
       "DataClump": 187,
-      "NilCheck": 153,
+      "NilCheck": 152,
       "ControlParameter": 148,
       "NestedIterators": 107,
       "RepeatedConditional": 70,
@@ -310,8 +310,8 @@
       "ManualDispatch": 69,
       "BooleanParameter": 52,
       "TooManyInstanceVariables": 51,
-      "TooManyConstants": 46,
       "InstanceVariableAssumption": 46,
+      "TooManyConstants": 45,
       "TooManyMethods": 42,
       "UncommunicativeVariableName": 18,
       "Attribute": 5,
@@ -321,7 +321,7 @@
     "by_file": {
       "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb": 248,
       "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 196,
-      "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb": 168,
+      "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb": 160,
       "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb": 140,
       "gems/tamoz-graph/lib/tamoz/graph/compiled.rb": 139,
       "gems/tamoz-agent/lib/tamoz/agent/profile.rb": 126,
@@ -524,7 +524,7 @@
     }
   },
   "enola": {
-    "facts": 5490,
+    "facts": 5495,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -536,8 +536,8 @@
   },
   "coverage": {
     "line_percent": 87.88,
-    "line_covered": 17963,
-    "line_total": 20440,
+    "line_covered": 17966,
+    "line_total": 20443,
     "branch_percent": 68.8,
     "branch_covered": 5213,
     "branch_total": 7577,

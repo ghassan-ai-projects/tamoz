@@ -9,10 +9,6 @@ module Tamoz
       CHECKPOINT_PROTOCOL_VERSION = 1
       REQUEST_PROTOCOL_VERSION = 1
       MAX_HISTORY_LIMIT = 100_000
-      REQUEST_OPERATIONS = %w[
-        turn resume retry continue fork redirect
-      ].freeze
-      DELIVERY_MODES = %w[queue redirect].freeze
       REQUEST_SELECT = <<~SQL.lines.map(&:strip).join(" ").freeze
         SELECT thread_id, namespace, request_id, enqueue_sequence,
                input_digest, operation, delivery_mode, status, payload,
@@ -230,12 +226,12 @@ module Tamoz
         )
         operation_text = @wire.enum_text(
           operation,
-          REQUEST_OPERATIONS,
+          CheckpointWire::REQUEST_OPERATIONS,
           "request operation"
         )
         delivery_text = @wire.enum_text(
           delivery,
-          DELIVERY_MODES,
+          CheckpointWire::DELIVERY_MODES,
           "request delivery mode"
         )
         if (operation_text == "redirect") != (delivery_text == "redirect")
@@ -264,7 +260,7 @@ module Tamoz
             payload_digest:, input_digest:
           )
         end
-        materialize_request(row)
+        @wire.materialize_request(row)
       end
 
       # P13-A seam (plan §4, C1/DC-4): the enqueue body extracted from the
@@ -370,7 +366,7 @@ module Tamoz
         row = adapter.__send__(:read, operation: "request.fetch") do |tx|
           request_row(tx, thread, encoded_namespace, id, "request.fetch")
         end
-        row && materialize_request(row)
+        row && @wire.materialize_request(row)
       end
 
       # Ordered, durable request inbox history for one thread namespace. This is
@@ -389,7 +385,7 @@ module Tamoz
             [thread, encoded_namespace]
           )
         end
-        rows.map { |row| materialize_request(row) }.freeze
+        rows.map { |row| @wire.materialize_request(row) }.freeze
       end
 
       # Every (thread, namespace) that currently holds non-terminal request work,
@@ -528,7 +524,7 @@ module Tamoz
             )
             reason = invoke_stale_validator!(
               validator,
-              materialize_request(row),
+              @wire.materialize_request(row),
               checkpoint
             )
             if reason
@@ -622,7 +618,7 @@ module Tamoz
             "request.claim.result"
           )
         end
-        row && materialize_request(row)
+        row && @wire.materialize_request(row)
       end
 
       # Recover an interrupted claimed/running/redirecting request under a fresh
@@ -682,7 +678,7 @@ module Tamoz
             )
             reason = invoke_stale_validator!(
               validator,
-              materialize_request(row),
+              @wire.materialize_request(row),
               checkpoint
             )
             if reason
@@ -739,7 +735,7 @@ module Tamoz
             "request.recover.result"
           )
         end
-        materialize_request(row)
+        @wire.materialize_request(row)
       end
 
       def mark_request_running(lease:, request_id:, execution_id:)
@@ -808,7 +804,7 @@ module Tamoz
             "request.terminal_fail.result"
           )
         end
-        materialize_request(row)
+        @wire.materialize_request(row)
       end
 
       def request_transition(
@@ -1340,84 +1336,6 @@ module Tamoz
         )
       end
 
-      def materialize_request(row)
-        payload = row.fetch(8)
-        Wire.verify_digest!(
-          payload,
-          row.fetch(9),
-          domain: "tamoz.sqlite.request_payload"
-        )
-        operation = @wire.persisted_enum_symbol(
-          row.fetch(5),
-          REQUEST_OPERATIONS,
-          "request operation"
-        )
-        delivery_mode = @wire.persisted_enum_symbol(
-          row.fetch(6),
-          DELIVERY_MODES,
-          "request delivery mode"
-        )
-        decoded_payload = checkpoint_codec.load_request_payload(
-          operation,
-          payload
-        )
-        # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
-        # EffectJournal#decode_receipt).
-        unless checkpoint_codec.dump_request_payload(
-          operation,
-          decoded_payload
-        ).b == payload.b
-          raise CheckpointCorruptionError, "request payload is not canonical"
-        end
-        response = row.fetch(14)
-        if response
-          Wire.verify_digest!(
-            response,
-            row.fetch(15),
-            domain: "tamoz.sqlite.request_response"
-          )
-        elsif row.fetch(15)
-          raise CheckpointCorruptionError,
-                "request response digest exists without response"
-        end
-        terminal_error = row.fetch(16)
-        if terminal_error
-          Wire.verify_digest!(
-            terminal_error,
-            row.fetch(17),
-            domain: "tamoz.sqlite.request_error"
-          )
-        elsif row.fetch(17)
-          raise CheckpointCorruptionError,
-                "request error digest exists without terminal error"
-        end
-        Tamoz::Graph::RequestRecord.new(
-          thread_id: Wire.identity(row.fetch(0), name: "stored request thread"),
-          namespace: Wire.decode_namespace(row.fetch(1)),
-          request_id: Wire.identity(
-            row.fetch(2),
-            name: "stored request id",
-            max_bytes: Wire::MAX_REQUEST_ID_BYTES
-          ),
-          enqueue_sequence: row.fetch(3),
-          input_digest: row.fetch(4).dup.freeze,
-          operation:,
-          delivery_mode:,
-          status: @wire.request_status(row.fetch(7)),
-          payload: decoded_payload,
-          execution_id: row.fetch(10)&.dup&.freeze,
-          target_execution_id: row.fetch(11)&.dup&.freeze,
-          cancellation_generation: row.fetch(12),
-          checkpoint_id: row.fetch(13)&.dup&.freeze,
-          response: response && @wire.canonical_state_value(response, "request response"),
-          terminal_error: terminal_error &&
-                          @wire.canonical_state_value(terminal_error, "request terminal error"),
-          retryable: row.fetch(18).nil? ? nil : row.fetch(18) == 1,
-          created_at_ms: row.fetch(19),
-          updated_at_ms: row.fetch(20)
-        )
-      end
-
       def active_execution_id!(tx, lease, label)
         execution_id = tx.scalar(
           label,
@@ -1453,34 +1371,7 @@ module Tamoz
           SQL
           [thread_id, namespace]
         )
-        row && row.fetch(0) && decode_checkpoint_row(row)
-      end
-
-      def decode_checkpoint_row(row)
-        payload = row.fetch(11)
-        Wire.verify_digest!(
-          payload,
-          row.fetch(12),
-          domain: "tamoz.sqlite.checkpoint_payload"
-        )
-        attributes = checkpoint_codec.load(payload)
-        unless attributes.fetch(:execution_id) == row.fetch(6) &&
-               attributes.fetch(:graph_name) == row.fetch(7) &&
-               attributes.fetch(:graph_version) == row.fetch(8) &&
-               attributes.fetch(:definition_digest) == row.fetch(9) &&
-               attributes.fetch(:status).to_s == row.fetch(10)
-          raise CheckpointCorruptionError,
-                "checkpoint columns and payload disagree"
-        end
-        Tamoz::Graph::Checkpoint.new(
-          format_version: row.fetch(5),
-          id: Wire.identity(row.fetch(0), name: "stored checkpoint id"),
-          sequence: row.fetch(1),
-          thread_id: Wire.identity(row.fetch(2), name: "stored thread id"),
-          namespace: Wire.decode_namespace(row.fetch(3)),
-          parent_id: row.fetch(4)&.dup&.freeze,
-          **attributes
-        )
+        row && row.fetch(0) && @wire.decode_checkpoint_row(row)
       end
 
       # Invokes the graph-owned staleness predicate with the materialized request and
@@ -1651,7 +1542,7 @@ module Tamoz
             "request.transition.result"
           )
         end
-        materialize_request(row)
+        @wire.materialize_request(row)
       end
 
       def apply_request_transition_in_transaction!(
@@ -2026,8 +1917,7 @@ module Tamoz
       end
 
       private_constant :CHECKPOINT_PROTOCOL_VERSION, :REQUEST_PROTOCOL_VERSION,
-                       :MAX_HISTORY_LIMIT,
-                       :REQUEST_OPERATIONS, :DELIVERY_MODES, :REQUEST_SELECT,
+                       :MAX_HISTORY_LIMIT, :REQUEST_SELECT,
                        :Writer
     end
   end
