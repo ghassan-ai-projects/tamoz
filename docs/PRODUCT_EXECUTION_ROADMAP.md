@@ -4,10 +4,11 @@ Status: active
 Current phase: P15 — release hardening (the completion audit)
 Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12, P13,
 P14, P18 all closed; scorecard 22 cases / 19 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: finish P15 per docs/P15_RELEASE_PLAN.md. Release status is
+Canonical next action: the P15-I owner decision (docs/P15_OWNER_GATE.md). Every P15 work
+package has landed; the clean-clone rehearsal passes all fourteen steps. Release status is
 machine-readable in docs/requirements-manifest.json and docs/REQUIREMENTS_AUDIT.md; the
 open release-blocking gaps are INV-39 (cron/IANA civil time not implemented), INV-48
-(channel backpressure declared but never enforced) and OBJ-7 (release evidence).
+(channel backpressure declared but never enforced) and OBJ-7 (the gate itself).
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -64,7 +65,7 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | P13 | Durable scheduler | medium | high | closed (Round 25) | tamoz-scheduler gem (at/interval); atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
 | P14 | Streaming physical-world input | strategic | very high | closed (Round 26) | tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval) |
 | P18 | Capability host + graph audit | high | high | closed (Round 27); session wiring landed in P15 `13ea8fd` | four closed built-in sources share one host; graph surface measured and documented |
-| P15 | Release hardening | very high | high | implementing (`d37ba24`, `13ea8fd`, `d36d0c6`, `848c28f`) | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
+| P15 | Release hardening | very high | high | reviewing — all packages landed, owner gate open | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
 
 P2–P10 plus P16/P17 are the current usable alpha path. P11–P14/P18 are promoted only after the preceding product
 path is reliable and their design promotion evidence exists. P15 closes the release; it does

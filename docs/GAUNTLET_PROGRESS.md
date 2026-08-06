@@ -1804,6 +1804,19 @@ API would be documentation that misrepresents the product.
 The unchanged digest across a production dispatch re-wiring is the round's
 behaviour-neutrality proof.
 
+**The remaining P15 packages, all landed after the entry above:**
+
+| Package | What landed | Commit |
+|---|---|---|
+| P15-F non-ASCII | the corpus can see non-ASCII: five payload classes through the durable model reply, request payload, store, effect path and check receipt; canonicality-site coverage MEASURED (4 of 7 reachable, 3 named unreachable) and the whole set pinned | `5d24710` |
+| P15-C reaper | stale `.tamoz-*.tmp` sweep at action-capable construction, narrow enough that a symlink wearing the name survives | `ffecc39` |
+| P15-H script | the clean-clone rehearsal on a pinned toolchain | `41e0f0a` |
+| P15-G docs | LIMITATIONS/INSTALL/OPERATIONS bound to the real surface and the MEASURED audit gaps; README and SECURITY corrected | `075c4dc` |
+| P15-B compat | old-format resume proven against a committed SQLite fixture in the pre-P8 record shape | `4a62496` |
+| P15-D security | dependency/licence/provenance review as a gate, the invariant-24 sweep over ten durable surfaces, 216 adversarial cases | `aba7d0f` |
+| P15-F pin | the external evaluation pin with three tamper tests | `ba048ed` |
+| P15-E benchmark | gated counters and reported latency, with the overhead ratio published in its context | `56f9e98` |
+
 **Release-blocking gaps, stated plainly:**
 
 1. **INV-39** — cron/IANA civil time is not implemented (P13 §12 deferral). The
@@ -1815,8 +1828,13 @@ behaviour-neutrality proof.
    enforcement does.
 3. **OBJ-7** — release evidence: P15-G docs and the P15-H clean-clone rehearsal.
 
-1 and 2 are owner decisions (implement, or exclude the feature from the v0.1 surface);
-3 is remaining P15 work. **No independent critic has run against Round 29.**
+1 and 2 are owner decisions (implement, or exclude the feature from the v0.1 surface).
+3 is the owner gate itself: the reproducibility and documentation halves are evidenced,
+and what remains is the decision. `docs/P15_OWNER_GATE.md` is the request.
+
+**No independent critic has run against Round 29.** Every defect this phase found was
+found and fixed by the same coordinator — the builder graded its own work, which is the
+largest evidence gap in the candidate.
 
 ## 4. Phase ledger (mirrors the handover plan)
 
@@ -1861,9 +1879,12 @@ behaviour-neutrality proof.
    malicious-child regression test.
 3. **Adversarial review debt remains.** P6 and P7 lack independent critic closure; D-7,
    P8, and P9 retain disclosed critic/deferred-scope debt.
-4. **P6-F operational durability is partial:** disk-full injection, lock saturation under
-   load, unresolved-effect deletion guard through a session, thread-leak measurement, and
-   soak are not done.
+4. **P6-F operational durability is still partial:** disk-full injection, lock saturation
+   under load, and a long soak are not done. Round 29 closed the thread/FD-leak half —
+   `script/benchmark_release` gates file-descriptor and thread growth at zero across 20
+   repetitions, absolutely rather than against a pin — and the unresolved-effect deletion
+   guard is covered by `sqlite_deletion_test` plus the acceptance workflow's
+   no-`:unknown`-effect assertion.
 5. ~~**SIGKILL can orphan private `.tamoz-*` staging files.**~~ **Closed in Round 29**:
    `Toolbox#reap_stale_staging` sweeps them at ACTION-CAPABLE construction, before any
    tool runs. The rule is deliberately narrow — inside the root only, the exact staging
@@ -1874,8 +1895,14 @@ behaviour-neutrality proof.
    created survive that run by design and are reclaimed by the next action-capable
    session; the kill matrix now asserts every orphan it leaves MATCHES the sweep's
    pattern and is reclaimed once aged, so an unreclaimable orphan is a failure.
-6. **Evaluation corpus comparability is incomplete.** P4/P5/P7 case definitions changed
-   without `case_version` bumps. P15-F must pin corrected versions and evidence digests.
+6. ~~**Evaluation corpus comparability is incomplete.**~~ **Closed in Round 29**:
+   `docs/release-evaluation-manifest.json` pins the corpus, every case version and every
+   case digest EXTERNALLY, so an edited case fails against the candidate even when
+   internally consistent, and a definition changed without a `case_version` bump is caught
+   by the same comparison. Three tamper tests break the pin on purpose, each preceded by a
+   faithfulness assertion so it cannot pass for the wrong reason. The historical P4/P5/P7
+   drift is not retro-versioned — the versions that shipped are the versions pinned — but
+   it cannot recur silently.
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;
    MCP preview/admission exists as a programmatic surface but has no confirmed operator CLI
    workflow. Its closure record must also identify DR-2 durability as carried debt.

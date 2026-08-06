@@ -11,8 +11,11 @@ regenerated `docs/REQUIREMENTS_AUDIT.md`. At `848c28f`: 333 pass with executed e
 11 deferred-by-contract, 4 indirect, and three release-blocking gaps — INV-39 (cron/IANA
 civil time is not implemented), INV-48 (channel backpressure is declared and never
 enforced), OBJ-7 (release evidence, closed by P15-G/P15-H).
-Next action: P15-B/C/D/E/F and the P15-H clean-clone rehearsal, then the P15-I owner
-gate. Do NOT claim a release before that gate.
+Next action: the P15-I OWNER DECISION (`docs/P15_OWNER_GATE.md`). Every P15 work package
+has landed and the clean-clone rehearsal passes all fourteen steps. Three release-blocking
+gaps remain, two of which are owner decisions (INV-39 cron, INV-48 backpressure) and one of
+which is the gate itself. Do NOT push, tag, publish, announce, or connect a real actuator
+before that decision.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -82,7 +85,7 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P12 | closed | bounded healing and improvement | Round 24 | observation/shadow-only disclosed; DR-2 durable circuit on one record type; critic PASS-WITH-GAPS, both gaps closed |
 | P13 | closed | durable scheduling | Round 25 | tamoz-scheduler gem (at/interval, cron deferred); MIGRATION_3; atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
 | P14 | closed | Situation streaming and simulated physical action | Round 26 | tamoz-stream gem; MIGRATION_4/5; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed |
-| P15 | implementing | release hardening and independent completion audit | `6ff0d40` | `d37ba24` (A: manifest + audit), `13ea8fd` (W: capability-host wiring), `d36d0c6` (E2E: acceptance workflow), `848c28f` (G/H: scheduler+stream API + isolation) |
+| P15 | reviewing (owner gate open) | release hardening and independent completion audit | `6ff0d40` | `d37ba24` (A: manifest + audit), `13ea8fd` (W: capability-host wiring), `d36d0c6` (E2E: acceptance workflow), `848c28f` (G/H: scheduler+stream API + isolation) |
 | P16 | complete | tools gem extraction, behavior-neutral | `6ff0d40`, `999b5c9` | `8f6b893`, `38d2e94` (merge), `2ae9e60` |
 | P17 | complete | governed websearch + egress policy | `6ff0d40`, `999b5c9` | `78041fc`, critic fix `3fe4d43` |
 | P18 | complete | capability host + graph surface audit | `6ff0d40` (revised by checkpoint deep review) | `a8811dc`, `1bfa89a`, `21bbaf6`, `a2eb5bc`; session-construction wiring deferred to P15 and landed in `13ea8fd` |
