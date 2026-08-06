@@ -8,11 +8,13 @@ every slice and whenever the phase table changes.
 
 ## Checkpoint
 
-- **Date:** 2026-08-06
-- **HEAD:** `7735ea9` (main) — "Q0: state — checkpoint_store safe extractions complete, profile.rb next"
+- **Date:** 2026-08-07
+- **HEAD:** `cc1b9d3` (main) — "Q2 giant #2: characterize the adoption-registry authority seams"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
-- **Quality commits so far:** 26 (`8ce5581` Q0 toolchain → `7735ea9` profile pivot)
+- **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
+  (`8ce5581` Q0 toolchain → `cc1b9d3`). Recount with that command rather than
+  incrementing by hand — the previous entry had drifted one ahead of the tree.
 
 ## Precondition verdict
 
@@ -181,20 +183,33 @@ critical) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450 (113) > toolbox.r
 (140) > compiled.rb 1,152 (139) > skills.rb 1,063 > effect_journal.rb 950.
 (agent_smoke_corpus.rb 3,287 is the evals corpus driver — classified separately.)
 
-1. **Q2/Q3 profile.rb:** characterize `gems/tamoz-agent/lib/tamoz/agent/profile.rb`
-   (1,547 lines, 126 smells — AUTHORITY-CRITICAL: trusted profiles, adoption registry,
-   canonical digests, transition registry). Enola impact + callers (the CLI's
-   resolve_session_authority + the profile machinery are callers); responsibility map;
-   gap analysis against test/agent_profile_test.rb + agent_cli_profile_test.rb +
-   agent_profile_transition_test.rb; add characterization + failure-path + adversarial
-   tests at the authority seams (digest mismatch, adoption, transitions); mutation-
-   prove; commit tests only. Then extraction slices along the charter's Profile target
-   architecture (schema/constants, safe document loader, structural/semantic
-   validators, canonicalizer/digester, adoption/transition registries, authority
-   projection).
-2. Then session_nodes.rb, toolbox.rb, compiled.rb, skills.rb, effect_journal.rb — each
-   characterize-then-extract.
-3. CLI completion (session factory, renderer, command objects, validate_thread_id!
+**EXTRACTION-FIRST (owner 2026-08-07):** the priority is breaking large files into
+small ones and large methods into small ones. Q3 extraction is the DEFAULT slice type
+from here. Characterization is still the precondition for touching a seam (charter:
+behavior before structure) but is no longer its own slice — write only the
+characterization the seam being extracted in that same slice actually needs, and only
+where the suite does not already cover it. Two axes count as progress, and a slice may
+target either: file size (extract a responsibility into its own file) and method size
+(a method over the Q6 20-line ceiling split into named steps). Do not re-run a
+standalone characterization pass on a file already covered at its extraction seam.
+
+1. **Q3 profile.rb slice 1 — lift the two registries out of the file.**
+   `AdoptionRegistry` (1,224–1,285), `Transition` (1,293–1,319), and
+   `TransitionRegistry` (1,334–1,544) are ~320 lines of nested classes at the bottom of
+   `profile.rb` (1,547 lines) with no dependency on the loader above them. Move them to
+   `profile/adoption_registry.rb`, `profile/transition.rb`,
+   `profile/transition_registry.rb` (Zeitwerk maps the paths; keep the constant paths
+   so no caller changes). Both are now characterized — adoption by slice 17, transitions
+   by agent_profile_transition_test + agent_profile_machinery_test — so this is a move,
+   not a rewrite. Expect profile.rb ≈ 1,230 lines after.
+2. **Q3 profile.rb slices 2+ — the loader**, along the charter's target architecture:
+   schema/constants, safe document loader, structural validator, semantic validator,
+   canonicalizer/digester, authority projection. `validate_egress!` (1,043–1,138, ~95
+   lines) and `scan_yaml!` (531–631, ~100 lines) are the two worst methods in the file
+   and are method-split candidates in their own right.
+3. Then session_nodes.rb 1,450, toolbox.rb 1,213, compiled.rb 1,152, skills.rb 1,063,
+   effect_journal.rb 950 — extract-first, characterizing only the seam being moved.
+4. CLI completion (session factory, renderer, command objects, validate_thread_id!
    bang cleanup) interleaved when no larger file is waiting.
 
 ## Slice ledger
@@ -216,7 +231,8 @@ critical) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450 (113) > toolbox.r
 | 13 | 2026-08-06 | checkpoint_store (Q3 slice 2, giant #1) | row decoders (materialize_request + decode_checkpoint_row moved into CheckpointWire; REQUEST_OPERATIONS/DELIVERY_MODES constants moved with them) | checkpoint_store.rb 2,034 → 1,925 + wire 54 → 169 | 90.5% (unchanged) | reek 4,562 → 4,554 (decoders' baselined smells left the store; wire 0 smells, disables load-bearing) | PASS | behavior byte-identical (critic: fetch indices/digest domains/messages/field mapping verified; atomic transaction methods + materialize zero hunks); canonicality map (store → 0, wire → 2); **ci_full both locales** 130/24,970; critic verdict **PASS** (1 LOW defensive reek token removed) | 320658d |
 | 14 | 2026-08-06 | checkpoint_store (Q3 slice 3, giant #1) | active-checkpoint mapper (materialize + merge_pending into CheckpointWire; store keeps the pending-outcomes wrapper; decode core consolidated into verified_attributes/checkpoint helpers; fail-closed nil-pending precondition) | checkpoint_store.rb 1,925 → 1,886 + wire 169 → 215 | 90.5% (unchanged) | reek 4,554 → 4,548 (merge+materialize baselined smells left the store; wire smell-free with documented disables) | PASS | behavior equivalent (critic verified fetch indices/messages/merge semantics + NO query-count change; atomic tx methods + pending_outcomes + verify_existing_writes zero hunks); wire-layer COMPLETE (validators + request/checkpoint decoders + materialize + merge); critic verdict **PASS** (1 MED duplication consolidated + 2 LOW fixed: dead reek token, nil-pending hardening); **ci_full both locales** on the final state 130/24,970 | 98606fb |
 | 15 | 2026-08-06 | checkpoint_store (Q3 slice 4, giant #1) | fenced writer facade (nested Writer → Tamoz::SQLite::CheckpointWriter, 16 guarded delegations) | checkpoint_store.rb 1,886 → 1,760 + checkpoint_writer.rb 150 | 90.5% (unchanged) | reek 4,548 → 4,536 (nested class's baselined smells left the store; writer smell-free — disables exactly cover TooManyMethods/MissingSafeMethod/2×ManualDispatch/2×FeatureEnvy/2×LongParameterList, critic strip-verified) | PASS | method-for-method identical (critic: 16 delegations + lease usage verified; structural fixes lease/adapter locals behavior-neutral; callers duck-typed unaffected; lease-arg store methods zero hunks); **ci_full both locales** 130/24,970; critic verdict **PASS** (0 fixes; Q4 note: merge accepts_effects?/accepts_store? duplication) | fc919b3 |
-| 16 | 2026-08-06 | profile.rb (Q2, giant #2) | characterization tests — schema-validation seams (YAML safety, profile/roots/model_roles/credential_ref/checks validation) | — (tests only) | 90.9% line before (672/739) | gate 0; reek 4,536 unchanged | PASS | +11 tests (33 assertions): YAML merge keys + nesting limit → ValidationError; profile_id pattern + legacy-reserved; unknown profile/roots fields; invalid model role name; unknown provider; credential_ref kind; invalid check name; check argv non-string; **mutation-proven** (removing the merge-key rejection failed the test); 13 previously-untested validation branches now pinned | pending |
+| 16 | 2026-08-06 | profile.rb (Q2, giant #2) | characterization tests — schema-validation seams (YAML safety, profile/roots/model_roles/credential_ref/checks validation) | — (tests only) | 90.9% line before (672/739) | gate 0; reek 4,536 unchanged | PASS | +11 tests (33 assertions): YAML merge keys + nesting limit → ValidationError; profile_id pattern + legacy-reserved; unknown profile/roots fields; invalid model role name; unknown provider; credential_ref kind; invalid check name; check argv non-string; **mutation-proven** (removing the merge-key rejection failed the test); 13 previously-untested validation branches now pinned | 8ca17c2 |
+| 17 | 2026-08-07 | profile.rb (Q2, giant #2) | characterization tests — adoption-registry authority seams (codec fail-closed, unreadable bytes, owner-only storage, activate's write contract) | — (tests only) | 87.95 line / 68.92 branch (suite, after) | gate 0; reek drift matches baseline | PASS (new edges are the test file's own) | +15 tests (42 assertions): no test in the suite had asserted either adoption-registry error message — the transition registry beside it had exactly these. Foreign schema_version / non-digest token / short digest / non-mapping document / non-mapping `activated` / non-array list / non-string id → "invalid"; unparseable YAML + alias expansion → "unreadable"; group-readable refused on read AND before `activate` writes; activate 0600-in-0700, idempotent, appends per digest. **Mutation-proven** (drop DIGEST_PATTERN → 2 fail; drop schema_version equality → 1 fail) | cc1b9d3 |
 
 ## Owner-decision queue
 
