@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'support/simplecov_setup' if ENV['RUN_COVERAGE'] == '1'
+
 require "json"
 require "fileutils"
 require "minitest/autorun"
