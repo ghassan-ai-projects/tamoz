@@ -241,7 +241,7 @@ module Tamoz
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
                                       .map { |row| {"effect_key" => row[:effect_key], "status" => "unknown"} },
-          "budget_exhaustions" => []
+          "budget_exhaustions" => runtime.budget_exhaustions
         }
       end
 

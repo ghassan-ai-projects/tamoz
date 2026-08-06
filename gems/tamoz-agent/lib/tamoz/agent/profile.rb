@@ -56,7 +56,13 @@ module Tamoz
       ROOTS_KEYS = %w[workspace].freeze
       MODEL_ROLE_KEYS = %w[provider model credential_ref].freeze
       CREDENTIAL_REF_KEYS = %w[kind name].freeze
-      BUDGET_KEYS = %w[cost_usd input_tokens output_tokens wall_clock_seconds steps].freeze
+      # `model_calls` and `wall_clock_seconds` are the two the WORKER enforces
+      # from durable evidence, which is why they are the two that actually bind
+      # an unattended run. The rest are recorded and pinned; see
+      # docs/LIMITATIONS.md for exactly which are enforced.
+      BUDGET_KEYS = %w[
+        cost_usd input_tokens output_tokens wall_clock_seconds steps model_calls
+      ].freeze
       CHECK_KEYS = %w[argv safety].freeze
       TOOLS_KEYS = %w[allowed approval_required].freeze
       POLICY_KEYS = %w[

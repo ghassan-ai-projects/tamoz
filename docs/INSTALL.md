@@ -226,6 +226,29 @@ repair.
 Wired today: **skills**, **memory**, **MCP** and **websearch**. Streaming input
 is NOT reachable from the worker — see [`docs/LIMITATIONS.md`](LIMITATIONS.md).
 
+### Budgets
+
+A profile can put a ceiling on unattended work:
+
+```yaml
+budgets:
+  model_calls: 40
+  wall_clock_seconds: 900
+```
+
+These two are ENFORCED, and enforced by the worker rather than by the run itself:
+model calls are counted from the effect journal, wall clock from the occurrence
+record the worker opened at claim time. Neither number is reachable from a task,
+model output or a workspace file, so a run cannot widen its own ceiling.
+
+Exhaustion is terminal for that occurrence: it stops, records a durable
+`budget_exhaustions` entry visible in `tamoz status --json`, and does not resume
+on the next poll. Raising the ceiling and re-queueing is the deliberate way to
+continue.
+
+The other budget keys (`cost_usd`, `input_tokens`, `output_tokens`, `steps`) are
+recorded and pinned but NOT enforced — see [`docs/LIMITATIONS.md`](LIMITATIONS.md).
+
 ### What may run without you
 
 A trusted profile can add an `unattended` section. It is a separate axis from

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "time"
+
 module Tamoz
   module Agent
     # The opened form of a runtime directory: one SQLite adapter, the stores bound
@@ -180,6 +182,63 @@ module Tamoz
         @adapter.store.each(OPEN_OCCURRENCES, limit:).map do |entry|
           {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"]}
         end
+      rescue StandardError
+        []
+      end
+
+      # How much of a thread's budget has been spent, measured from durable
+      # evidence rather than from anything the run reports about itself.
+      #
+      # Model calls are counted from the effect journal: every model call is
+      # dispatched as an effect with operation `model.generate.<stage>`, so the
+      # journal is already an accurate, crash-surviving ledger. Wall clock is
+      # measured from the occurrence record the worker opened at claim time.
+      #
+      # Nothing the agent produces participates in either number. There is no
+      # state channel, tool or model output that reaches them, which is what
+      # "the agent may never widen its own budget" has to mean structurally.
+      # The budgets governing a thread, from the profile bound to it. Operator
+      # authority, resolved the same way every other authority decision is.
+      def thread_budgets(thread_id)
+        resolved = profile(thread_profile(thread_id))
+        resolved && resolved.budgets
+      rescue StandardError
+        nil
+      end
+
+      def budget_usage(thread_id)
+        model_calls = checkpoints.effect_census.count do |row|
+          row[:thread_id] == thread_id && row[:operation].to_s.start_with?("model.generate")
+        end
+        {"model_calls" => model_calls, "wall_clock_seconds" => occurrence_age_seconds(thread_id)}
+      rescue StandardError
+        {"model_calls" => 0, "wall_clock_seconds" => 0.0}
+      end
+
+      def occurrence_age_seconds(thread_id)
+        entry = @adapter.store.get(OPEN_OCCURRENCES, thread_id)
+        opened = entry && entry.value["opened_at"]
+        return 0.0 unless opened
+
+        (Time.now.utc - Time.parse(opened)).to_f
+      rescue StandardError
+        0.0
+      end
+
+      # A stop caused by a spent budget. Durable so `tamoz status` can report it
+      # after the worker has exited, and keyed by occurrence so an operator can
+      # see which piece of work hit which ceiling.
+      BUDGET_EXHAUSTIONS = %w[tamoz worker budget_exhaustion].freeze
+
+      def record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
+        upsert(BUDGET_EXHAUSTIONS, "#{thread_id}/#{occurrence_id}",
+               {"thread_id" => thread_id, "occurrence_id" => occurrence_id,
+                "budget" => budget, "detail" => String(detail)[0, 500],
+                "stopped_at" => Time.now.utc.iso8601})
+      end
+
+      def budget_exhaustions(limit: 500)
+        @adapter.store.each(BUDGET_EXHAUSTIONS, limit:).map { |entry| entry.value }
       rescue StandardError
         []
       end

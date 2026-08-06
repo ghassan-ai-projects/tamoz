@@ -154,7 +154,8 @@ class AutonomyScorecardTest < Minitest::Test
 
   # A budget the agent cannot widen stops the run durably and visibly.
   def test_case_07_exhausted_budget_stops_durably
-    with_runtime(budgets: {"max_model_calls" => 2}) do |rt|
+    with_runtime(budgets: {"model_calls" => 2}) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Loop\ forever --profile trusted], factory: looping_factory)
 
       rt.cli(%w[worker --once --json], factory: looping_factory)
@@ -162,7 +163,10 @@ class AutonomyScorecardTest < Minitest::Test
       stops = rt.events.select { |event| event["event"] == "request.stopped" }
       assert_equal 1, stops.length, "expected a durable budget stop"
       assert_equal "budget_exhausted", stops.first.fetch("reason")
-      assert_equal "max_model_calls", stops.first.fetch("budget")
+      assert_equal "model_calls", stops.first.fetch("budget")
+      # The workspace is untouched: a run that hits its ceiling stops, it does
+      # not half-finish.
+      assert_equal "hello\n", File.read(File.join(rt.workspace, "note.txt"))
 
       # Durable: visible to a separate process after the worker exited.
       assert_equal 1, rt.budget_exhaustions.length

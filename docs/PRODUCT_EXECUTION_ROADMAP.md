@@ -26,7 +26,7 @@ fails, and no case may pass with a non-zero hard safety counter.
 | C | `tamoz schedule` (add/list/show/pause/resume/remove/run-now/occurrences) | complete — case 02 |
 | D | Trusted unattended policy + `tamoz approve` | complete — cases 04, 05, 06 |
 | E | Capability sources through operator configuration | complete — skills (case 08), memory, MCP and websearch all operator-configurable and reaching the worker |
-| F | Enforced runtime budgets | pending — case 07 |
+| F | Enforced runtime budgets | partial — `model_calls` and `wall_clock_seconds` enforced (case 07); cost/token budgets recorded only |
 | G | Stream backpressure bounds | pending — case 09 |
 | H | Cron/IANA scheduling (INV-39) | pending |
 | — | Unknown-effect non-retry through the worker | pending — case 10; the `:unknown` reconciliation itself is P6-proven, what is missing is a worker-level acceptance case |

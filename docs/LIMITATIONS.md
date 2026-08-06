@@ -95,8 +95,13 @@ These are not gaps to be filled later; they are decisions.
 - **Tamoz does not survive loss of the SQLite file without a backup.** Byzantine
   storage adapters and remote effects that are both non-idempotent and
   impossible to reconcile are outside the fault model.
-- **Model cost and latency are not budgeted at runtime.** Profile budgets are
-  recorded and pinned; they are not enforced as a spend cap.
+- **Only two budgets are enforced.** `model_calls` and `wall_clock_seconds` are
+  enforced by the worker from durable evidence — the effect journal counts every
+  `model.generate.*` dispatch, and the occurrence record carries its own start
+  time — and exhaustion is a typed, durable, terminal stop the agent cannot
+  reach or widen. `cost_usd`, `input_tokens`, `output_tokens` and `steps` are
+  still RECORDED AND PINNED ONLY. There is no spend cap in currency or tokens,
+  because nothing in the model path reports usage back to the runtime yet.
 
 ## Release readiness
 

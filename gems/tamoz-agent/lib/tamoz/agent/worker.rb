@@ -238,6 +238,12 @@ module Tamoz
         else
           IDLE
         end
+      rescue Tamoz::RecursionLimitError => error
+        # The graph refused to take another super-step because the profile's
+        # `steps` budget is spent. This is a STOP, not a failure: the work was
+        # well-formed and the ceiling did its job, so it is reported as its own
+        # typed event and recorded durably for `tamoz status`.
+        budget_exhausted(entry, budget: "steps", detail: error.message)
       rescue StandardError => error
         emit("request.failed",
              thread: entry.fetch(:thread_id),
@@ -245,6 +251,50 @@ module Tamoz
              reason: "#{error.class}: #{error.message}")
         park(entry, nil, reason: "failed")
         PARKED
+      end
+
+      # Which budget, if any, this thread has spent. Returns nil when the profile
+      # sets no enforceable budget — a profile that never asked for a ceiling
+      # does not silently acquire one.
+      def exhausted_budget(thread_id)
+        budgets = @runtime.thread_budgets(thread_id)
+        return nil if budgets.nil? || budgets.empty?
+
+        usage = @runtime.budget_usage(thread_id)
+        %w[model_calls wall_clock_seconds].each do |name|
+          limit = budgets[name]
+          next unless limit.is_a?(Numeric) && limit.positive?
+
+          spent = usage.fetch(name, 0)
+          next unless spent >= limit
+
+          return {budget: name, detail: "#{name} #{spent} reached the configured limit #{limit}"}
+        end
+        nil
+      end
+
+      # Durable and observable, in that order. The record is written before the
+      # event is emitted, so a worker that dies between the two still leaves an
+      # operator able to see why the occurrence stopped.
+      def budget_exhausted(entry, budget:, detail:)
+        thread_id = entry.fetch(:thread_id)
+        occurrence_id = entry.fetch(:head_request_id)
+        @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
+        # A budget stop is TERMINAL for the occurrence, so the record is closed.
+        # Parking would only be in-memory: the next worker process would have an
+        # empty park map, re-examine the same occurrence and stop it again, and
+        # the operator would collect one stop event per poll forever. Raising the
+        # ceiling and re-queueing is the deliberate way to continue, which is the
+        # right amount of friction for work that already spent its budget.
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.stopped",
+             thread: thread_id,
+             request_id: occurrence_id,
+             reason: "budget_exhausted",
+             budget:,
+             detail:)
+        PROGRESSED
       end
 
       # Deliver a recorded human decision to the paused turn.
@@ -310,6 +360,17 @@ module Tamoz
       end
 
       def settle(session, thread_id:, occurrence_id:)
+        # The budget is checked BEFORE the outcome is interpreted, so a run that
+        # spent its ceiling stops as a budget stop rather than being reported as
+        # whatever the turn happened to look like when it ran out.
+        spent = exhausted_budget(thread_id)
+        if spent
+          return budget_exhausted(
+            {thread_id:, head_request_id: occurrence_id},
+            budget: spent.fetch(:budget), detail: spent.fetch(:detail)
+          )
+        end
+
         view = view_of(session, thread_id)
         return IDLE unless view
 
