@@ -45,10 +45,19 @@ arriving silently.
 | Gem | Version | Licence |
 |---|---|---|
 | `ast` | 2.4.3 | MIT |
+| `concurrent-ruby` | 1.3.8 | MIT |
 | `docile` | 1.4.1 | MIT |
 | `drb` | 2.2.3 | Ruby, BSD-2-Clause |
+| `dry-configurable` | 1.4.0 | MIT |
+| `dry-core` | 1.2.0 | MIT |
+| `dry-inflector` | 1.3.1 | MIT |
+| `dry-initializer` | 3.2.0 | MIT |
+| `dry-logic` | 1.6.0 | MIT |
+| `dry-schema` | 1.16.0 | MIT |
+| `dry-types` | 1.9.1 | MIT |
 | `language_server-protocol` | 3.17.0.5 | MIT |
 | `lint_roller` | 1.1.0 | MIT |
+| `mini_portile2` | 2.8.9 | UNDECLARED |
 | `minitest` | 6.0.6 | MIT |
 | `parallel` | 2.1.0 | MIT |
 | `parser` | 3.3.11.1 | MIT |
@@ -56,8 +65,11 @@ arriving silently.
 | `racc` | 1.8.1 | Ruby, BSD-2-Clause |
 | `rainbow` | 3.1.1 | MIT |
 | `rake` | 13.4.2 | MIT |
+| `reek` | 6.5.0 | MIT |
+| `rexml` | 3.4.4 | BSD-2-Clause |
 | `rubocop` | 1.87.0 | MIT |
 | `rubocop-ast` | 1.49.1 | MIT |
+| `rubocop-minitest` | 0.40.0 | MIT |
 | `rubocop-performance` | 1.26.1 | MIT |
 | `ruby-progressbar` | 1.13.0 | MIT |
 | `simplecov` | 0.22.0 | MIT |

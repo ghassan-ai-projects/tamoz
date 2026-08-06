@@ -1,0 +1,33 @@
+---
+# Reek — code smell detection. INSTALLED, NOT YET BASELINED.
+#
+# This file does one thing: keep reek pointed at repository content. Without it
+# reek walks the gitignored agent worktrees (.qwen/, .claude/, .cursor/) and the
+# user-owned agenteval/ tree and reports thousands of smells about code that is
+# not part of this project — the same isolation mcp-arch.yaml applies to the
+# Enola snapshot, for the same reason.
+#
+# Deliberately absent: detector tuning and a debt baseline. Both are judgement
+# calls that belong to the quality program (Q0-5), not to installing the tool.
+# Until they exist, `reek` reports the RAW smell count and does not gate.
+#
+# Current raw baseline, for reference when that work starts:
+#
+#   4,588 smells over gems/ script/ bin/ apps/  (reek 6.5.0, no tuning)
+#
+#   1,302  DuplicateMethodCall      229  TooManyStatements
+#     394  FeatureEnvy              187  DataClump
+#     260  MissingSafeMethod        156  NilCheck
+#     242  IrresponsibleModule      148  ControlParameter
+#
+# One thing worth knowing before that baseline is taken: reek's `--todo` output
+# is CONTEXT-NAMED (`Tamoz::Agent::Session#initialize`), not per-file. A new
+# smell in an already-listed file still fires, which makes it a stricter ratchet
+# than .rubocop_todo.yml's per-file excludes.
+exclude_paths:
+  - .qwen
+  - .claude
+  - .cursor
+  - .worktrees
+  - agenteval
+  - tmp
