@@ -1,9 +1,9 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T02:02:47Z",
+  "generated_at": "2026-08-06T02:15:45Z",
   "manifest_requirements": 351,
-  "named_cases_run": 233,
+  "named_cases_run": 236,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
@@ -5452,10 +5452,13 @@
       "supporting_tests": [
         "test/release_rehearsal_evidence_test.rb#test_the_recorded_rehearsal_passed",
         "test/release_rehearsal_evidence_test.rb#test_the_candidate_commit_is_resolvable",
-        "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"
+        "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
+        "test/documentation_surface_test.rb#test_the_install_guide_documents_exactly_the_real_subcommands",
+        "test/documentation_surface_test.rb#test_limitations_discloses_every_measured_release_blocking_gap",
+        "test/documentation_surface_test.rb#test_the_readme_does_not_deny_shipped_capabilities"
       ],
       "classification": "missing",
-      "rationale": "Partly evidenced. The REPRODUCIBILITY half is done: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout (docs/RELEASE_REHEARSAL.md), covering both locales, the scorecard, the isolated packaged-gem install with per-gem example tasks, and durable restore/resume. The DOCUMENTATION half is not: the install guide, tutorial, operations runbook and limitations page do not exist yet (P15-G). The row stays a release-blocking gap until they do.",
+      "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
       "evidence_result": "pass",
       "owner_signature": null

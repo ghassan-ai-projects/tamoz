@@ -1,95 +1,110 @@
 # Tamoz
 
-Tamoz is a Ruby-native durable agent framework for checkpointed, interruptible, observable,
-and evaluation-governed AI workflows.
+Tamoz is a Ruby-native durable agent framework for checkpointed, interruptible,
+observable, and evaluation-governed AI workflows.
 
-The repository is a monorepo containing independently publishable gems:
+An agent turn is a graph run over a SQLite-backed checkpoint store. It survives
+`kill -9`, resumes from its last committed barrier, and reconciles an
+interrupted side effect from proven state rather than guessing. Nothing acts
+without a reviewed plan bound to its digest, and nothing changes a file without
+an approval you granted.
+
+**This is pre-release software.** Read
+[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) before building on it — it lists,
+with evidence, what Tamoz does not do.
+
+## The nine gems
 
 | Package | Responsibility | Runtime dependencies |
 |---|---|---|
-| `tamoz-core` | Shared values and runtime protocols | stdlib, Zeitwerk |
+| `tamoz-core` | Shared values, context, secrets, codec, worker pool | stdlib, Zeitwerk |
 | `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
-| `tamoz-sqlite` | SQLite persistence adapter | `tamoz-graph` |
-| `tamoz-agent` | Deliberative agent runtime over RubyLLM | `tamoz-graph` |
-| `tamoz-evals` | Conformance, artifact verification, and release evidence | stdlib |
+| `tamoz-scheduler` | Schedule and occurrence values, store contract | `tamoz-core` |
+| `tamoz-stream` | Channels, envelopes, Situations, the action boundary | `tamoz-core` |
+| `tamoz-sqlite` | Checkpoints, request inbox, effect journal, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
+| `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools` |
+| `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
-Tamoz Agent is the reference application under `apps/tamoz-agent`. The runtime is being
-built risk-first: evaluation contracts precede agent behavior, deterministic execution
-precedes persistence, and persistence precedes model integration.
+Each gem installs and runs with only its declared dependencies, proven per gem
+by an isolated install into its own `GEM_HOME`. `tamoz-evals` is a non-runtime
+gem: no production gemspec may depend on it.
 
-## Current status
+Tamoz Agent is the reference application under `apps/tamoz-agent`.
 
-The framework has implemented core, graph, and SQLite durability foundations. Tamoz Agent
-now also has a deliberately narrow working product: real RubyLLM model calls,
-plan-before-action, deterministic and semantic plan review, workspace-confined tools,
-human-approved atomic patches, configured verification commands, and final evidence-bound
-verification. Failed checks can drive up to two newly reviewed repairs with fresh approvals;
-repeated actions or failures stop safely.
+## What works today
 
-```sh
-export OPENAI_API_KEY="..."
-export TAMOZ_MODEL="gpt-5-mini"
-rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+- **Reviewed change loop.** Discovery reads, then a separately reviewed action
+  plan, an exact diff shown before approval, a digest-bound atomic patch, and a
+  configured verification command. A failed check becomes evidence for up to two
+  newly reviewed repairs with fresh approvals; a repeated action or a repeated
+  failure stops safely rather than looping.
+- **Durable multi-turn sessions.** `ask`, `resume`, `continue`, `follow-up`,
+  `redirect`, `cancel`, `show`, `list`, `resolve`. A killed process resumes; an
+  ambiguous effect stops as `:unknown` and waits for a human decision.
+- **Trusted project profiles.** Project authority lives outside the repository
+  being worked on. A file in an untrusted checkout can suggest configuration; it
+  never becomes executable authority without an explicit import and preview.
+- **One sealed capability host.** Local tools, skills, MCP servers and websearch
+  register as four built-in sources at session construction and are then sealed.
+  The authority intersection is computed once from policy; content never grants.
+- **Evaluated skills, governed MCP, three-layer memory, bounded self-healing,
+  durable scheduling, and streaming observation** with a simulated effector.
 
-# Opt in to changes. The model can select "test" but cannot alter its argv.
-rbenv exec bundle exec tamoz --root . --allow-changes \
-  --check 'test=rbenv exec bundle exec rake test' \
-  "Fix the failing test"
+```bash
+export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
 ```
 
-Read-only mode remains the default. Change mode uses separate reviewed discovery, action,
-and bounded repair plans, displays the exact diff/command, and asks before every effect. It
-is not yet crash-durable. See [`docs/WORKING_SLICE_3.md`](docs/WORKING_SLICE_3.md) for the
-exact scope.
+```bash
+rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
+```
 
-The authoritative design is committed under [`docs/design-v0.1/`](docs/design-v0.1/).
-The value-first product build order and active phase are recorded in
-[`docs/PRODUCT_EXECUTION_ROADMAP.md`](docs/PRODUCT_EXECUTION_ROADMAP.md).
-The evaluation artifact contract is documented in
-[`docs/evaluation-artifacts-v1.md`](docs/evaluation-artifacts-v1.md).
+```bash
+rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' "Fix the failing test"
+```
 
-## Development
+Read-only is the default. See [`docs/INSTALL.md`](docs/INSTALL.md) for durable
+sessions, profiles and the full subcommand surface, and
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md) for backup, restore and crash
+recovery.
 
-Ruby 3.3 or newer is required. The local version is pinned through rbenv:
+## Evidence
 
-```sh
-rbenv exec bundle install
+Release status is machine-readable, not a claim in prose.
+[`docs/requirements-manifest.json`](docs/requirements-manifest.json) is generated
+from the invariants, the ADRs, the phase exit criteria, the public API, the CLI
+surface and the migrations; [`docs/REQUIREMENTS_AUDIT.md`](docs/REQUIREMENTS_AUDIT.md)
+is regenerated by RUNNING each named test, so a row is `pass` only because its
+test executed and passed.
+
+```bash
 rbenv exec bundle exec rake ci
 ```
 
-Verify an evaluation artifact directly:
-
-```sh
-rbenv exec bundle exec tamoz-eval verify \
-  gems/tamoz-evals/suites/m0/golden/01_barrier-atomicity.case.json
-```
-
-The verifier returns distinct exit codes:
-
-| Code | Meaning |
-|---:|---|
-| 0 | valid artifact or passing result |
-| 1 | gate failure |
-| 2 | invalid evidence, schema, digest, or reference |
-| 3 | infrastructure failure |
-| 4 | insufficient evidence |
-| 64 | command usage error |
-
-Run the deterministic Tamoz Agent development scorecard:
-
-```sh
+```bash
 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Its 12 public cases report task success, safety, plan/repair attempts, approvals, calls,
-bounded byte proxies, unnecessary mutation, and repeated-action stops. See
-[`docs/P3_AGENT_SCORECARD.md`](docs/P3_AGENT_SCORECARD.md) for the honest baseline and limits.
+The scorecard runs a fixed deterministic corpus and reports task success,
+verified completion, plan and repair attempts, approvals, call and byte proxies,
+unnecessary mutation and repeated-action stops, with hard-zero gates on unsafe
+actions, false-positive completions and incomplete evidence.
+
+[`docs/RELEASE_REHEARSAL.md`](docs/RELEASE_REHEARSAL.md) records a clean-clone
+rehearsal on a pinned toolchain outside the development checkout.
+
+The authoritative design is committed under
+[`docs/design-v0.1/`](docs/design-v0.1/); the build order and active phase are in
+[`docs/PRODUCT_EXECUTION_ROADMAP.md`](docs/PRODUCT_EXECUTION_ROADMAP.md).
 
 ## Security and guarantees
 
-Tamoz does not claim arbitrary effects execute exactly once. Replay-safe effects require
-idempotency, atomic participation, or reconciliation; ambiguous work stops. See
-[`SECURITY.md`](SECURITY.md) and the design invariants for the complete boundary.
+Tamoz makes no exactly-once claim for arbitrary external effects. Replay-safe
+effects require idempotency, atomic participation, or reconciliation; ambiguous
+work stops rather than repeating. See [`SECURITY.md`](SECURITY.md) and
+[`docs/design-v0.1/INVARIANTS.md`](docs/design-v0.1/INVARIANTS.md) for the
+complete boundary.
 
 ## License
 

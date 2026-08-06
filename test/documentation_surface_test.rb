@@ -1,0 +1,164 @@
+# frozen_string_literal: true
+
+require_relative "test_helper"
+
+# P15-G — the user-facing documentation is checked against the REAL surface.
+#
+# Stale documentation is not a cosmetic problem: this repository shipped a
+# README claiming the agent "is not yet crash-durable" for months after P6 made
+# it durable, and a SECURITY.md describing an M0 foundation with "not an
+# operational agent" long after the agent could edit files. A doc that
+# describes a product nobody has is worse than no doc, because a reader
+# believes it.
+#
+# So every claim these pages make about the surface is derived from the surface
+# here, and every gap they disclose is derived from the measured audit.
+class DocumentationSurfaceTest < Minitest::Test
+  INSTALL = ROOT.join("docs", "INSTALL.md")
+  LIMITATIONS = ROOT.join("docs", "LIMITATIONS.md")
+  OPERATIONS = ROOT.join("docs", "OPERATIONS.md")
+  README = ROOT.join("README.md")
+
+  def text(path) = File.read(path, encoding: Encoding::UTF_8)
+
+  def test_the_user_facing_pages_exist
+    [INSTALL, LIMITATIONS, OPERATIONS, README].each { |path| assert_path_exists path }
+  end
+
+  # Every subcommand the CLI has must be documented, and every subcommand the
+  # install guide documents must exist. Both directions matter: the first stops
+  # a verb shipping undocumented, the second stops the guide describing a verb
+  # that was removed.
+  def test_the_install_guide_documents_exactly_the_real_subcommands
+    documented = text(INSTALL).scan(/^\| `([a-z-]+)` \| /).flatten
+                              .reject { |name| name.start_with?("tamoz-") }
+    real = Tamoz::Agent::CLI::SUBCOMMANDS.map do |name|
+      {"follow_up" => "follow-up", "followup" => "follow-up"}.fetch(name, name)
+    end.uniq
+
+    assert_equal real.sort, documented.sort
+  end
+
+  # Every global flag the guide shows a reader must be a flag the CLI accepts.
+  def test_every_documented_flag_is_a_real_flag
+    out = StringIO.new
+    Tamoz::Agent::CLI.run(["--help"], out:, err: StringIO.new, env: {})
+    help = out.string
+    # Only flags shown on an actual `tamoz` command line are CLI flags; the page
+    # also documents script flags such as `--jobs`, which belong to the audit
+    # generator and would be a false positive here.
+    documented = text(INSTALL).lines
+                              .select { |line| line.include?("exec tamoz ") }
+                              .flat_map { |line| line.scan(/--[a-z][a-z-]+/) }
+                              .uniq
+
+    refute_empty documented
+    documented.each do |flag|
+      assert_includes help, flag, "#{flag} is documented but the CLI does not accept it"
+    end
+  end
+
+  # The gem table must match what the repository actually packages — this is
+  # the check that would have caught tamoz-scheduler and tamoz-stream shipping
+  # with no documentation at all.
+  def test_the_install_guide_lists_every_packaged_gem
+    documented = text(INSTALL).scan(/^\| `(tamoz-[a-z]+)` \| /).flatten
+
+    assert_equal GEM_ROOTS.keys.sort, documented.sort
+  end
+
+  # The limitations page must disclose exactly the release-blocking gaps the
+  # audit MEASURED. If a gap closes, this fails until the page stops claiming
+  # it; if a new gap opens, this fails until the page discloses it.
+  def test_limitations_discloses_every_measured_release_blocking_gap
+    audit = read_json(ROOT.join("docs", "requirements-audit.json"))
+    gaps = audit.fetch("release_blocking_gaps")
+    body = text(LIMITATIONS)
+
+    # Each measured gap has a human name on the page; the mapping is explicit
+    # so a renamed requirement cannot silently drop its disclosure.
+    disclosures = {
+      "INV-39" => "Cron and civil-time scheduling (invariant 39)",
+      "INV-48" => "Channel backpressure enforcement (invariant 48)",
+      "INV-43" => "Skill installation and update (invariant 43)",
+      "OBJ-7" => "## Release readiness"
+    }
+    gaps.each do |gap|
+      heading = disclosures.fetch(gap) do
+        flunk "#{gap} is a measured release-blocking gap with no entry in this test's " \
+              "disclosure map; add it here and to docs/LIMITATIONS.md"
+      end
+
+      assert_includes body, heading,
+                      "#{gap} is a measured release-blocking gap that LIMITATIONS.md " \
+                      "does not disclose"
+    end
+  end
+
+  # A limitation the page claims must still be TRUE. `OVERFLOW_POLICIES` being
+  # unenforced is the load-bearing example: if someone implements enforcement,
+  # this test fails and the page must be corrected rather than left claiming a
+  # limitation the product no longer has.
+  def test_claimed_limitations_are_still_true
+    body = text(LIMITATIONS)
+
+    if body.include?("Nothing reads them.")
+      readers = Dir[ROOT.join("gems", "tamoz-{stream,sqlite}", "lib", "**", "*.rb")].reject do |path|
+        path.end_with?("channel_descriptor.rb")
+      end.select do |path|
+        File.read(path, encoding: Encoding::UTF_8).match?(/queue_capacity|spool_capacity_bytes/)
+      end
+
+      assert_empty readers,
+                   "LIMITATIONS.md claims the overflow declaration is never read, but " \
+                   "#{readers.inspect} reads it"
+    end
+
+    if body.include?("Cron expressions and IANA timezones are not implemented")
+      assert_equal %i[at interval], Tamoz::Scheduler::KINDS,
+                   "LIMITATIONS.md claims cron is absent but the scheduler declares it"
+    end
+
+    if body.include?("The only effector is the simulator")
+      refute defined?(Tamoz::Stream::RealEffector),
+             "LIMITATIONS.md claims simulator-only actuation"
+    end
+  end
+
+  # The README must not describe shipped capabilities as unavailable. These
+  # exact phrases were live for months after the capability they denied.
+  def test_the_readme_does_not_deny_shipped_capabilities
+    body = text(README)
+    denials = [
+      "not yet crash-durable",
+      "not an operational agent",
+      "M0 contains package and evaluation foundations"
+    ]
+    denials.each do |phrase|
+      refute_includes body, phrase,
+                      "README denies a capability that shipped: #{phrase.inspect}"
+    end
+    assert_includes body, "docs/LIMITATIONS.md",
+                    "the README must point at the honest limitations page"
+  end
+
+  def test_security_policy_does_not_deny_shipped_capabilities
+    body = text(ROOT.join("SECURITY.md"))
+
+    refute_includes body, "not an operational agent"
+    refute_includes body, "M0 contains package and evaluation foundations"
+  end
+
+  # Operations must name a real recovery surface, not an aspirational one.
+  def test_the_operations_runbook_names_real_apis
+    body = text(OPERATIONS)
+
+    assert_includes body, "integrity_check"
+    assert_respond_to Tamoz::SQLite::Adapter.instance_method(:integrity_check), :name
+    assert_includes body, "resolve THREAD EFFECT_KEY succeeded"
+    assert_includes Tamoz::Agent::CLI::SUBCOMMANDS, "resolve"
+    assert_includes body, "backup(to:"
+    assert Tamoz::SQLite::Adapter.instance_method(:backup),
+           "the runbook documents backup(to:) — it must exist"
+  end
+end
