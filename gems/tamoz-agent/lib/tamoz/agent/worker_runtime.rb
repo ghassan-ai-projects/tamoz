@@ -52,9 +52,15 @@ module Tamoz
       def initialize(directory, model_factory:, lease_ttl: 30.0)
         @directory = directory
         @model_factory = model_factory
+        # The memory codec is the default codec PLUS one registration for
+        # MemoryRecord, so it decodes everything the default could. Installing it
+        # only when memory is enabled keeps a runtime that never asked for memory
+        # byte-identical to what it was before.
+        codec = directory.enabled_sources.include?("memory") ? Memory::Surface.codec : nil
         @adapter = Tamoz::SQLite::Adapter.new(
           path: directory.database_path,
-          limits: Tamoz::SQLite::Limits.new(lease_ttl:)
+          limits: Tamoz::SQLite::Limits.new(lease_ttl:),
+          **(codec ? {state_codec: codec} : {})
         )
         @sessions = {}
         @profiles = {}
@@ -345,6 +351,36 @@ module Tamoz
         end
       end
 
+      # The three-layer memory engine, when the operator asked for one.
+      #
+      # `tenant` scopes the memory namespace and `owner` is the identity episodes
+      # are admitted under; both come from operator configuration, never from a
+      # task, a model, or the workspace. Memory is EVIDENCE the agent may read —
+      # it is never allowed to alter policy, which is why nothing in this path
+      # touches the profile or the capability surface.
+      def memory_engine
+        return nil unless @directory.enabled_sources.include?("memory")
+
+        @memory_engine ||= Memory::Engine.new(
+          tenant: @directory.source_settings("memory")["tenant"] || "default",
+          adapter: @adapter
+        )
+      end
+
+      def memory_owner
+        @directory.source_settings("memory")["owner"] || "operator"
+      end
+
+      # What an operator needs to see about memory without a second UI: whether it
+      # is on, and under which tenant/owner the episodes are being written.
+      def memory_summary
+        return {"enabled" => false} unless memory_engine
+
+        {"enabled" => true, "tenant" => memory_engine.tenant, "owner" => memory_owner}
+      rescue StandardError => error
+        {"enabled" => false, "error" => error.message}
+      end
+
       def skill_rejections
         skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
@@ -370,12 +406,15 @@ module Tamoz
                                 checks: {}, skills: skills_snapshot)
                   end
 
+        engine = memory_engine
         Session.new(
           model: DeferredModel.new { @model_factory.call(profile: resolved) },
           toolbox:,
           checkpointer: @adapter,
           profile: resolved,
-          profile_budgets: resolved && resolved.budgets
+          profile_budgets: resolved && resolved.budgets,
+          memory: engine,
+          memory_owner: engine && memory_owner
         )
       end
     end

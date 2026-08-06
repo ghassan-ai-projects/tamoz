@@ -25,7 +25,7 @@ fails, and no case may pass with a non-zero hard safety counter.
 | B | `tamoz worker`, `queue`, `status`, runtime directory | complete — cases 01, 03 |
 | C | `tamoz schedule` (add/list/show/pause/resume/remove/run-now/occurrences) | complete — case 02 |
 | D | Trusted unattended policy + `tamoz approve` | complete — cases 04, 05, 06 |
-| E | Capability sources through operator configuration | partial — skills wired (case 08); memory, MCP, websearch NOT wired |
+| E | Capability sources through operator configuration | partial — skills (case 08) and memory wired; MCP and websearch NOT wired |
 | F | Enforced runtime budgets | pending — case 07 |
 | G | Stream backpressure bounds | pending — case 09 |
 | H | Cron/IANA scheduling (INV-39) | pending |

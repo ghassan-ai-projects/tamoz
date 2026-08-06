@@ -135,6 +135,47 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # Memory is off until the operator turns it on, and when it is on the worker
+  # really carries it — the tenant and owner come from operator configuration,
+  # never from a task or the workspace.
+  def test_memory_is_absent_until_the_operator_configures_it
+    with_runtime do |rt|
+      rt.cli(%w[status --json])
+      refute JSON.parse(rt.out).dig("memory", "enabled"), "memory was on without configuration"
+
+      path = File.join(rt.dir, "config.yaml")
+      document = Psych.safe_load_file(path)
+      document["sources"] = {"memory" => {"enabled" => true, "tenant" => "acme", "owner" => "alice"}}
+      File.write(path, Psych.dump(document))
+
+      status = rt.cli(%w[status --json])
+
+      assert_equal 0, status, rt.err
+      memory = JSON.parse(rt.out).fetch("memory")
+      assert memory.fetch("enabled"), "operator-configured memory was not available"
+      assert_equal "acme", memory.fetch("tenant")
+      assert_equal "alice", memory.fetch("owner")
+    end
+  end
+
+  # A memory-enabled runtime must still run a plain task end to end; enabling a
+  # source must not change what an ordinary turn does.
+  def test_a_memory_enabled_runtime_still_completes_a_queued_task
+    with_runtime do |rt|
+      path = File.join(rt.dir, "config.yaml")
+      document = Psych.safe_load_file(path)
+      document["sources"] = {"memory" => {"enabled" => true, "tenant" => "acme"}}
+      File.write(path, Psych.dump(document))
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+
+      rt.cli(%W[queue add --task Read\ note.txt], factory: read_only_factory)
+      assert_equal 0, rt.cli(%w[worker --once --json], factory: read_only_factory), rt.err
+
+      completed = rt.events.select { |event| event["event"] == "request.completed" }
+      assert_equal 1, completed.length
+    end
+  end
+
   def test_unknown_capability_source_in_operator_config_is_refused
     with_runtime do |rt|
       rt.enable_source("definitely_not_a_source")

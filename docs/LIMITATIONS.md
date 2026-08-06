@@ -11,20 +11,25 @@ Read it before deciding whether Tamoz fits your problem.
 
 ## Not implemented
 
-### Memory, MCP and websearch are not reachable from the worker
+### MCP and websearch are not reachable from the worker
 
-The unattended runtime can turn on **skills** and nothing else. Memory, governed
-MCP and governed websearch exist as libraries with passing tests, but no
-operator-facing configuration constructs them, so an autonomous run cannot use
-them. Their library tests prove the components; they do not prove a product.
+The unattended runtime can turn on **skills** and **memory**. Governed MCP and
+governed websearch exist as libraries with passing tests, but no operator-facing
+configuration constructs them, so an autonomous run cannot use them. Their
+library tests prove the components; they do not prove a product.
+
+MCP needs a supervised subprocess transport and a pinned catalog snapshot;
+websearch needs an enforced per-hop egress policy and is the one path where an
+unattended agent reaches the public network. Both are more than a configuration
+flag, which is why they are named here rather than quietly listed as available.
 
 This is visible rather than implied: `tamoz status --json` reports
 `capability_sources` (what the operator asked for) separately from
 `capability_catalog` (what the agent can actually dispatch), and the two differ
 whenever a source is configured but unwired.
 
-If you need an autonomous run to search the web, call an MCP server, or carry
-memory between occurrences, Tamoz cannot do it yet.
+If you need an autonomous run to search the web or call an MCP server, Tamoz
+cannot do it yet.
 
 ### Cron and civil-time scheduling (invariant 39)
 

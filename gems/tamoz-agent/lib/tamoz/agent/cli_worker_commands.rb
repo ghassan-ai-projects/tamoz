@@ -236,6 +236,7 @@ module Tamoz
           # whenever a source is configured but not yet wired, which is a state an
           # operator must be able to see rather than infer.
           "capability_catalog" => runtime.capability_catalog,
+          "memory" => runtime.memory_summary,
           "safety_counters" => safety_counters(effects),
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }

@@ -38,11 +38,24 @@ class AuditMismatchError < StandardError; end
 
 # The product-behavior tests whose execution exercises the graph through the
 # runtime (the agent session is the graph's product consumer).
+#
+# The unattended path is included deliberately. A worker cannot complete a task
+# without compiling and executing a graph, so it was always structurally a graph
+# consumer — but "structurally true" is not this project's standard for a claim.
+# Measuring the autonomous path is what turns "the worker must be using the
+# graph" into evidence that it does, and it is the path that will exercise
+# recovery and interrupt entry points the interactive tests never reach.
+#
+# The autonomy scorecard is deliberately NOT here: it is a milestone gate whose
+# unmet cases fail on purpose, and this audit requires its inputs to pass.
 PRODUCT_TESTS = %w[
   test/agent_session_test.rb
   test/agent_runtime_test.rb
   test/agent_cli_test.rb
   test/agent_session_effect_test.rb
+  test/agent_worker_test.rb
+  test/agent_schedule_test.rb
+  test/agent_unattended_policy_test.rb
 ].freeze
 
 LIB_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent

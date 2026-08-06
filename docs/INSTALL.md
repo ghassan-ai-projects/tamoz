@@ -171,6 +171,10 @@ sources:
   skills:
     enabled: true
     root: skills          # relative to the runtime directory
+  memory:
+    enabled: true
+    tenant: acme
+    owner: alice
 ```
 
 Skills are the clearest case. A skill body is INSTRUCTIONS the agent will follow,
@@ -184,7 +188,11 @@ for) and `capability_catalog` (what the agent can actually dispatch). They diffe
 whenever a source is configured but not yet wired, which is a state you should be
 able to see rather than infer.
 
-Wired today: **skills**. Memory, MCP and websearch exist as libraries with
+Memory scopes its namespace by `tenant` and admits episodes under `owner`, both
+from operator configuration and never from a task, a model or the workspace.
+Memory is evidence the agent may read; it never alters policy.
+
+Wired today: **skills** and **memory**. MCP and websearch exist as libraries with
 passing tests but are NOT yet reachable from the worker — see
 [`docs/LIMITATIONS.md`](LIMITATIONS.md).
 
