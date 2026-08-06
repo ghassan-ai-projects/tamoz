@@ -98,6 +98,23 @@ module Tamoz
         settings.is_a?(Hash) ? settings : {}
       end
 
+      # Where operator-authored skills live. Inside the runtime directory by
+      # default, and never inside the workspace: a skill is INSTRUCTIONS, and a
+      # checkout the agent can write to must not be able to write its own.
+      def skills_root
+        configured = source_settings("skills")["root"]
+        return File.join(path, "skills") if configured.nil?
+
+        resolved = File.expand_path(configured, path)
+        workspace = File.expand_path(workspace_root)
+        if resolved == workspace || resolved.start_with?("#{workspace}#{File::SEPARATOR}")
+          raise Error, "skills root #{resolved} is inside the workspace; " \
+                       "skills are instructions and must live outside the tree being worked on"
+        end
+
+        resolved
+      end
+
       def stream_bounds
         raw = @config["stream"]
         raw.is_a?(Hash) ? raw : {}

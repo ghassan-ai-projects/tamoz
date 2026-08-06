@@ -25,11 +25,11 @@ fails, and no case may pass with a non-zero hard safety counter.
 | B | `tamoz worker`, `queue`, `status`, runtime directory | complete — cases 01, 03 |
 | C | `tamoz schedule` (add/list/show/pause/resume/remove/run-now/occurrences) | complete — case 02 |
 | D | Trusted unattended policy + `tamoz approve` | complete — cases 04, 05, 06 |
-| E | Capability sources through operator configuration | pending — case 08 |
+| E | Capability sources through operator configuration | partial — skills wired (case 08); memory, MCP, websearch NOT wired |
 | F | Enforced runtime budgets | pending — case 07 |
 | G | Stream backpressure bounds | pending — case 09 |
 | H | Cron/IANA scheduling (INV-39) | pending |
-| — | Unknown-effect non-retry through the worker | pending — case 10 |
+| — | Unknown-effect non-retry through the worker | pending — case 10; the `:unknown` reconciliation itself is P6-proven, what is missing is a worker-level acceptance case |
 
 The worker is a COMPOSITION of the existing durable machinery, not a second execution
 engine: it claims through the request inbox under a fenced lease, executes through

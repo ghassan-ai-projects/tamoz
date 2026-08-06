@@ -320,6 +320,35 @@ module Tamoz
         (profile.tools_approval_required | profile.unattended_requires_approval).uniq
       end
 
+      # The compiled skill snapshot, or the empty one.
+      #
+      # Skills are only ever DISCOVERED from the operator's own directory — never
+      # by scanning the workspace. A skill body is instructions the agent will
+      # follow, so letting the tree under repair supply one would be the plainest
+      # possible content-grants-authority failure.
+      #
+      # Compiling produces a content-addressed snapshot; rejections are kept so an
+      # operator can see what was refused rather than wondering why a skill never
+      # appeared.
+      def skills_snapshot
+        return Skills::Snapshot.empty unless @directory.enabled_sources.include?("skills")
+
+        @skills_snapshot ||= begin
+          root = @directory.skills_root
+          if File.directory?(root)
+            Skills::Compiler.new(
+              sources: [Skills::SkillSource.new(id: "operator", root:, trust: "operator", precedence: 0)]
+            ).compile
+          else
+            Skills::Snapshot.empty
+          end
+        end
+      end
+
+      def skill_rejections
+        skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
+      end
+
       private
 
       def build_session(profile_id)
@@ -331,12 +360,14 @@ module Tamoz
                       checks: resolved.checks.transform_values { |check| check.fetch("argv") },
                       check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
                       allowed_tools: resolved.tools_allowed,
-                      approval_required: unattended_approval_required(resolved)
+                      approval_required: unattended_approval_required(resolved),
+                      skills: skills_snapshot
                     )
                   else
                     # No profile means no preauthorization, so the only thing a
                     # worker may do unattended is read.
-                    Toolbox.new(root: @directory.workspace_root, allow_changes: false, checks: {})
+                    Toolbox.new(root: @directory.workspace_root, allow_changes: false,
+                                checks: {}, skills: skills_snapshot)
                   end
 
         Session.new(

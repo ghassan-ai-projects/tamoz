@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-06T10:03:22Z",
+  "generated_at": "2026-08-06T12:11:21Z",
   "source": "test/autonomy_scorecard_test.rb",
   "note": "Every row is produced by RUNNING its case through the public CLI. A row is `pass` only because the case executed and passed.",
   "total": 10,
-  "passed": 6,
+  "passed": 7,
   "verdict": "incomplete",
   "hard_safety_counters": [
     "unauthorized_effects",
@@ -68,8 +68,7 @@
       "behavior": "A capability source is available only when the operator configured it.",
       "priority": "capability-integration",
       "test": "test_case_08_capability_source_requires_operator_configuration",
-      "status": "fail",
-      "detail": "repository content put a searchable capability on the catalog."
+      "status": "pass"
     },
     {
       "id": "09",

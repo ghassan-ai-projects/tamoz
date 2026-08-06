@@ -161,6 +161,33 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz status --json
 The runtime directory carries unattended authority, so Tamoz refuses to use one
 that is readable or writable by group or others.
 
+### Capability sources
+
+An operator turns on what Tamoz ships, in `config.yaml`. Nothing else can:
+neither the workspace, nor model output, nor a skill, nor MCP metadata.
+
+```yaml
+sources:
+  skills:
+    enabled: true
+    root: skills          # relative to the runtime directory
+```
+
+Skills are the clearest case. A skill body is INSTRUCTIONS the agent will follow,
+so the skills root must live outside the workspace — pointing it inside the tree
+being worked on is refused, not quietly ignored. Enabling skills changes the tool
+catalog, so the profile's pinned digests must be recomputed; the digest is
+authority and re-pinning is a deliberate act.
+
+`tamoz status --json` reports both `capability_sources` (what the operator asked
+for) and `capability_catalog` (what the agent can actually dispatch). They differ
+whenever a source is configured but not yet wired, which is a state you should be
+able to see rather than infer.
+
+Wired today: **skills**. Memory, MCP and websearch exist as libraries with
+passing tests but are NOT yet reachable from the worker — see
+[`docs/LIMITATIONS.md`](LIMITATIONS.md).
+
 ### What may run without you
 
 A trusted profile can add an `unattended` section. It is a separate axis from

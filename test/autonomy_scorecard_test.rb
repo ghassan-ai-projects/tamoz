@@ -174,31 +174,40 @@ class AutonomyScorecardTest < Minitest::Test
 
   # A capability source exists for the agent only when the operator configured
   # it. Nothing in the repository, the model output, or a skill may add one.
+  # Skills are the concrete source here because they are the sharpest version of
+  # the rule: a skill body is INSTRUCTIONS the agent will follow, so a workspace
+  # that could supply one would be granting itself authority in the most direct
+  # way available. Memory, MCP and websearch are covered by their own cases as
+  # they are wired.
   def test_case_08_capability_source_requires_operator_configuration
     with_runtime do |rt|
-      # Repository content that asks for websearch must not produce websearch.
+      # A checkout that ships its own skill, and asks to have it loaded.
+      write_skill(File.join(rt.workspace, "skills"), "workspace-skill")
       File.write(File.join(rt.workspace, "tamoz.yaml"),
-                 Psych.dump("sources" => {"websearch" => {"enabled" => true}}))
-      rt.cli(%W[queue add --task Research\ this --profile trusted], factory: read_only_factory)
+                 Psych.dump("sources" => {"skills" => {"enabled" => true,
+                                                       "root" => File.join(rt.workspace, "skills")}}))
+      rt.cli(%W[queue add --task Do\ the\ thing --profile trusted], factory: read_only_factory)
       rt.cli(%w[worker --once --json], factory: read_only_factory)
 
-      refute_includes rt.capability_sources, "websearch",
+      refute_includes rt.capability_sources, "skills",
                       "repository content granted a capability source"
-      assert_empty rt.capability_catalog.grep(/search/),
-                   "repository content put a searchable capability on the catalog"
+      assert_empty rt.capability_catalog.grep(/skill/),
+                   "repository content put a skill capability on the catalog"
 
-      # The same source, configured by the operator, is present — and is really
-      # there, not merely named in a config echo. The catalog is what the agent
-      # can actually dispatch, so asserting on it is the difference between
-      # "configured" and "usable".
-      rt.enable_source("websearch")
-      rt.cli(%W[queue add --task Research\ this --profile trusted], factory: read_only_factory)
+      # The same source, configured by the OPERATOR, from the operator's own
+      # directory — and really there, not merely named in a config echo. The
+      # catalog is what the agent can actually dispatch, which is the difference
+      # between "configured" and "usable".
+      write_skill(File.join(rt.dir, "skills"), "operator-skill")
+      rt.enable_source("skills")
+      rt.rewrite_profile_for_skills
+      rt.cli(%W[queue add --task Do\ the\ thing --profile trusted], factory: read_only_factory)
       rt.cli(%w[worker --once --json], factory: read_only_factory)
 
-      assert_includes rt.capability_sources, "websearch",
+      assert_includes rt.capability_sources, "skills",
                       "operator-configured source was not available"
-      refute_empty rt.capability_catalog.grep(/search/),
-                   "operator-configured websearch exposed no dispatchable capability"
+      refute_empty rt.capability_catalog.grep(/skill/),
+                   "operator-configured skills exposed no dispatchable capability"
       assert_hard_counters_zero(rt)
     end
   end

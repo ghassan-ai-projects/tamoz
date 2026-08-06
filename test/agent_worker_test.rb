@@ -117,6 +117,24 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # A skill body is instructions the agent will follow. Pointing the skills root
+  # at the tree under repair would let that tree write its own instructions, so
+  # the configuration itself is refused rather than quietly loading nothing.
+  def test_skills_root_inside_the_workspace_is_refused
+    with_runtime do |rt|
+      path = File.join(rt.dir, "config.yaml")
+      document = Psych.safe_load_file(path)
+      document["sources"] = {"skills" => {"enabled" => true,
+                                          "root" => File.join(rt.workspace, "skills")}}
+      File.write(path, Psych.dump(document))
+
+      status = rt.cli(%w[status --json])
+
+      assert_equal 1, status
+      assert_match(/inside the workspace/, rt.err)
+    end
+  end
+
   def test_unknown_capability_source_in_operator_config_is_refused
     with_runtime do |rt|
       rt.enable_source("definitely_not_a_source")

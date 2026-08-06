@@ -150,6 +150,33 @@ module AutonomyCase
       cli(%W[stream publish --channel probe --count #{count} --bytes #{bytes}])
     end
 
+    # Enabling skills changes the tool catalog (the skill verbs join it), and a
+    # profile pins the exact catalog. Re-pinning is what an operator does after
+    # changing the surface; the digest is authority, so it must be recomputed
+    # deliberately rather than drift.
+    def rewrite_profile_for_skills
+      path = File.join(dir, "profiles", "trusted.yaml")
+      document = Psych.safe_load_file(path)
+      snapshot = Tamoz::Tools::Skills::Compiler.new(
+        sources: [Tamoz::Tools::Skills::SkillSource.new(
+          id: "operator", root: File.join(dir, "skills"), trust: "operator", precedence: 0
+        )]
+      ).compile
+      tools = document.fetch("tools").fetch("allowed")
+      preauthorized = document.dig("unattended", "read_only").to_a +
+                      document.dig("unattended", "reconcilable").to_a
+      document["policy"]["tool_catalog_digest"] = Tamoz::Agent::Toolbox.new(
+        root: workspace, allow_changes: true, checks: {},
+        allowed_tools: tools, approval_required: [], skills: snapshot
+      ).catalog_digest
+      document["policy"]["unattended_catalog_digest"] = Tamoz::Agent::Toolbox.new(
+        root: workspace, allow_changes: true, checks: {},
+        allowed_tools: tools, approval_required: (tools - preauthorized), skills: snapshot
+      ).catalog_digest
+      File.write(path, Psych.dump(document))
+      File.chmod(0o600, path)
+    end
+
     # Operator turns a shipped capability source on. Only this may grant it.
     def enable_source(name)
       path = File.join(dir, "config.yaml")
@@ -190,6 +217,24 @@ module AutonomyCase
 
       yield Runtime.new(dir: runtime_dir, workspace:)
     end
+  end
+
+  # A minimal, valid operator skill on disk.
+  def write_skill(root, name)
+    directory = File.join(root, name)
+    FileUtils.mkdir_p(directory)
+    front = <<~YAML
+      name: #{name}
+      description: A skill used to prove where skills may come from.
+      allowed-tools: [read_file]
+      metadata:
+        version: "1.0.0"
+        tamoz.risk: guarded
+    YAML
+    File.write(File.join(directory, "SKILL.md"),
+               "---\n#{front}---\n\nRead note.txt and report what it says.\n",
+               encoding: Encoding::UTF_8)
+    directory
   end
 
   def write_config(runtime_dir, workspace, stream: nil)
