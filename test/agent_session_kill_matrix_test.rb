@@ -597,18 +597,41 @@ class AgentSessionKillMatrixTest < Minitest::Test
   # A killed process can orphan its *private* temporary file: `atomic_replace` and
   # `atomic_create` publish by rename/link and only unlink the temporary name
   # afterwards. P5 guarantees no public partial file and no overwrite, and that is
-  # what is asserted here. Reclaiming an orphaned temporary would require an unlink
-  # capability the agent deliberately does not have; it is recorded as residual risk.
+  # what is asserted here.
+  #
+  # P15-C closed the reclamation half: `Toolbox#reap_stale_staging` sweeps stale
+  # `.tamoz-*.tmp` files at action-capable construction. It deliberately does NOT
+  # fire here — the orphans these kills produce are seconds old, and the sweep's
+  # 60-second staleness floor exists so a sibling session mid-publication is never
+  # disturbed. The orphan is therefore expected to survive THIS assertion and to
+  # be reclaimed by the next action-capable session that starts later, which
+  # `test/toolbox_staging_reaper_test.rb` proves directly.
   def assert_no_public_partial(context, expected, label)
     workspace = context.fetch(:workspace)
     surviving = Dir.children(workspace) - expected
     unexpected = surviving.reject { |entry| entry.start_with?(".tamoz-") }
 
     assert_empty unexpected, "#{label}: unexpected public workspace entries"
-    surviving.grep(/\A\.tamoz-/).each do |orphan|
+    orphans = surviving.grep(/\A\.tamoz-/)
+    orphans.each do |orphan|
       path = File.join(workspace, orphan)
       assert File.file?(path), "#{label}: orphan #{orphan} is not a regular file"
       refute_includes expected, orphan, "#{label}: an orphan took a public name"
+      # Whatever survives must be reclaimable by the sweep once it is stale:
+      # an orphan the reaper's own pattern cannot match would be permanent.
+      assert_match Tamoz::Tools::Toolbox::STAGING_PATTERN, orphan,
+                   "#{label}: orphan #{orphan} is unreclaimable by the P15-C sweep"
+    end
+    # …and the sweep really does reclaim them once they age past the floor.
+    unless orphans.empty?
+      aged = Time.now - (Tamoz::Tools::Toolbox::STAGING_STALE_SECONDS + 60)
+      orphans.each do |orphan|
+        File.utime(aged, aged, File.join(workspace, orphan))
+      end
+      reaped = Tamoz::Tools::Toolbox.new(root: workspace, allow_changes: true).reaped_staging
+
+      assert_equal orphans.sort, reaped.sort,
+                   "#{label}: the sweep must reclaim every orphan this kill left"
     end
   end
 

@@ -1864,9 +1864,16 @@ behaviour-neutrality proof.
 4. **P6-F operational durability is partial:** disk-full injection, lock saturation under
    load, unresolved-effect deletion guard through a session, thread-leak measurement, and
    soak are not done.
-5. **SIGKILL can orphan private `.tamoz-*` staging files.** Toolbox and SQLite atomic
-   publishing rely on ensure cleanup that cannot run after SIGKILL; startup/reaper cleanup
-   or a bounded private staging area remains required.
+5. ~~**SIGKILL can orphan private `.tamoz-*` staging files.**~~ **Closed in Round 29**:
+   `Toolbox#reap_stale_staging` sweeps them at ACTION-CAPABLE construction, before any
+   tool runs. The rule is deliberately narrow — inside the root only, the exact staging
+   basename shape, regular files only (a symlink wearing the name is skipped, never
+   followed), owned by this uid, stale by at least 60 seconds so a sibling
+   mid-publication is never disturbed, bounded at 200 per sweep, and never fatal. A
+   read-only toolbox never sweeps. The 60-second floor means the orphans a kill just
+   created survive that run by design and are reclaimed by the next action-capable
+   session; the kill matrix now asserts every orphan it leaves MATCHES the sweep's
+   pattern and is reclaimed once aged, so an unreclaimable orphan is a failure.
 6. **Evaluation corpus comparability is incomplete.** P4/P5/P7 case definitions changed
    without `case_version` bumps. P15-F must pin corrected versions and evidence digests.
 7. **P10 has explicit and implicit product gaps.** D2/H/full-E conformance remain deferred;

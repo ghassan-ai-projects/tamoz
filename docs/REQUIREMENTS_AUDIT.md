@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 351 | 230 | 3 | **no** |
+| 351 | 231 | 3 | **no** |
 
 ## Status counts
 

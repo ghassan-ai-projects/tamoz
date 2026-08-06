@@ -212,7 +212,9 @@ EVIDENCE = {
     test: "test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once",
     supporting: [
       "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
-      "test/sqlite_effect_journal_test.rb#test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth"
+      "test/sqlite_effect_journal_test.rb#test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth",
+      "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
+      "test/toolbox_staging_reaper_test.rb#test_a_stale_orphan_is_removed_at_action_capable_construction"
     ]
   },
   "INV-22" => {

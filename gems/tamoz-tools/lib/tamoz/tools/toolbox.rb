@@ -122,7 +122,8 @@ module Tamoz
         check_safeties: {},
         allowed_tools: nil,
         approval_required: nil,
-        skills: Skills::Snapshot.empty
+        skills: Skills::Snapshot.empty,
+        reap_staging: true
       )
         @root = Pathname.new(root).expand_path.realpath.freeze
         raise ToolError, "workspace root is not a directory" unless @root.directory?
@@ -182,9 +183,18 @@ module Tamoz
         @prompt_surface_digest = "sha256:#{Digest::SHA256.hexdigest(
           PROMPT_SURFACE_DOMAIN + JSON.generate([@catalog_digest, @skills.catalog_digest])
         )}".freeze
+        # P15-C: the crash-leftover sweep runs at construction, before any tool
+        # can execute, and only for an action-capable toolbox — a read-only
+        # session never stages anything, so it has nothing of its own to clean
+        # and no business deleting files.
+        @reaped_staging = @allow_changes && reap_staging ? reap_stale_staging : [].freeze
       rescue SystemCallError
         raise ToolError, "workspace root is unavailable"
       end
+
+      # The staging files this toolbox removed at construction, relative to the
+      # root. Empty on a clean workspace, and on every read-only toolbox.
+      attr_reader :reaped_staging
 
       # Environment delta that unsets every credential-shaped variable for a child
       # check process. A `nil` value tells `Process.spawn` to remove the name, so
@@ -490,6 +500,81 @@ module Tamoz
         else
           raise ToolError, "tool #{normalized_name.inspect} does not require approval"
         end
+      end
+
+      # P15-C (ledger §5.5) — the stale staging reaper.
+      #
+      # Atomic publication stages content in a private `.tamoz-*.tmp` file beside
+      # its target and unlinks it in an `ensure`. SIGKILL runs no `ensure`, so a
+      # crash between "staged" and "published" leaves the file behind. The kill
+      # matrix has always tolerated these and recorded them as residual risk;
+      # this is the sweep that removes them.
+      #
+      # The rule is deliberately narrow, because an agent that deletes files is
+      # the thing this project spends most of its effort preventing:
+      #
+      #   * only inside the workspace root, and only where the toolbox itself
+      #     stages (the same traversal `search_text` uses, minus the same
+      #     ignored directories);
+      #   * only a basename matching the exact staging shape Tempfile produces;
+      #   * only a REGULAR file — never a symlink, never a directory, so a
+      #     planted `.tamoz-*.tmp -> ~/.ssh/id_rsa` is skipped, not followed;
+      #   * only when owned by this process's uid;
+      #   * only when STALE, so a sibling session mid-publication is never
+      #     touched (publication takes milliseconds; the floor is 60 seconds);
+      #   * bounded, and never fatal — a file that vanishes underneath the sweep
+      #     or refuses to unlink is skipped, not raised.
+      #
+      # Unlinking a file another process still holds open is harmless on POSIX:
+      # its descriptor stays valid, and its `rename` would fail with a typed
+      # `ToolError` rather than corrupt anything.
+      STAGING_PATTERN = /\A\.tamoz-(?:create-)?[A-Za-z0-9_.-]+\.tmp\z/
+      STAGING_STALE_SECONDS = 60.0
+      MAX_REAPED_STAGING_FILES = 200
+
+      def reap_stale_staging(older_than: STAGING_STALE_SECONDS, now: Time.now)
+        removed = []
+        stale_staging_files(older_than:, now:).each do |path|
+          break if removed.length >= MAX_REAPED_STAGING_FILES
+
+          begin
+            File.unlink(path.to_s)
+            removed << path.relative_path_from(root).to_s
+          rescue SystemCallError
+            next
+          end
+        end
+        removed.freeze
+      end
+
+      def stale_staging_files(older_than: STAGING_STALE_SECONDS, now: Time.now)
+        found = []
+        Find.find(root.to_s) do |entry|
+          path = Pathname.new(entry)
+          begin
+            stat = File.lstat(entry)
+          rescue SystemCallError
+            next
+          end
+          if stat.symlink?
+            Find.prune if path.directory?
+            next
+          end
+          if stat.directory?
+            Find.prune if %w[.git vendor node_modules].include?(path.basename.to_s)
+            next
+          end
+          next unless stat.file?
+          next unless STAGING_PATTERN.match?(path.basename.to_s)
+          next unless stat.uid == Process.uid
+          next unless now - stat.mtime >= older_than
+
+          found << path
+          break if found.length >= MAX_REAPED_STAGING_FILES
+        end
+        found.sort_by(&:to_s)
+      rescue SystemCallError
+        []
       end
 
       private
