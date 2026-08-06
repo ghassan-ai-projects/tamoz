@@ -53,26 +53,36 @@ module Tamoz
           run_one_shot(options, sub_argv)
         end
       rescue OptionParser::ParseError, ArgumentError => error
-        @err.puts "tamoz: #{error.message}"
-        @err.puts "Try 'tamoz --help'."
-        USAGE_ERROR
+        handle_usage_error(error)
       rescue Tamoz::Agent::Error => error
-        @err.puts "tamoz: #{error.message}"
-        1
+        handle_fatal_error(error)
       # P16: the D-7 taxonomy moved to tamoz-core (`Tamoz::Core::ToolError` family),
       # so it no longer subclasses `Tamoz::Agent::Error`. Catch it EXPLICITLY here —
       # never widen to `Tamoz::Error`, which would also swallow StoreError,
       # LeaseLostError, ConfigurationError, and the Checkpoint* classes, converting
       # their backtraces into clean "tamoz: …" exit-1 output.
       rescue Tamoz::Core::ToolError => error
-        @err.puts "tamoz: #{error.message}"
-        1
+        handle_fatal_error(error)
       rescue Tamoz::CheckpointConflictError => error
-        @err.puts "tamoz: #{error.message}"
-        1
+        handle_fatal_error(error)
       end
 
       private
+
+      # Error policy (Q3): a raised error becomes one terminal report and one
+      # exit code. Usage errors additionally hint at --help; every other error
+      # class in the taxonomy exits 1 with a "tamoz: " message. Pinned by the
+      # error-taxonomy tests in test/agent_cli_test.rb.
+      def handle_usage_error(error)
+        @err.puts "tamoz: #{error.message}"
+        @err.puts "Try 'tamoz --help'."
+        USAGE_ERROR
+      end
+
+      def handle_fatal_error(error)
+        @err.puts "tamoz: #{error.message}"
+        1
+      end
 
       def parse(argv)
         options = {
