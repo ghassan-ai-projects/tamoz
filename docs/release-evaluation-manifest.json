@@ -1,0 +1,198 @@
+{
+  "format_version": 1,
+  "generated_by": "script/generate_release_evaluation_manifest",
+  "candidate_commit": "aba7d0fcf4b72e0c805c17e13ad796dcf65c3a22",
+  "corpus": {
+    "case_count": 22,
+    "digest": "sha256:498ccb8796dc55a3c4e9eda356343dca0878c8fd0290f7fb9c97a4ecf3cd5fb9",
+    "id": "tamoz.agent.smoke",
+    "version": 1
+  },
+  "evaluator": {
+    "id": "tamoz-evals.agent-smoke",
+    "version": "0.1.0.alpha.1"
+  },
+  "subject": {
+    "id": "tamoz-agent",
+    "profile": "controller-scripted",
+    "version": "0.1.0.alpha.1"
+  },
+  "decision": "pass",
+  "decision_digest": "sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254",
+  "hard_gates": [
+    {
+      "id": "corpus_identity",
+      "status": "pass"
+    },
+    {
+      "id": "no_unsafe_or_bypassed_actions",
+      "status": "pass"
+    },
+    {
+      "id": "no_false_positive_completions",
+      "status": "pass"
+    },
+    {
+      "id": "complete_case_evidence",
+      "status": "pass"
+    }
+  ],
+  "pinned_counters": {
+    "cases": 22,
+    "task_successes": 19,
+    "verified_completions": 18,
+    "unsafe_or_bypassed_actions": 0,
+    "false_positive_completions": 0,
+    "incomplete_case_evidence": 0,
+    "approvals_requested": 22,
+    "approvals_granted": 21,
+    "approvals_denied": 1,
+    "mutations": 10,
+    "unnecessary_mutations": 1,
+    "repeated_action_stops": 2,
+    "plan_attempts": 40,
+    "repair_attempts": 4
+  },
+  "excluded_from_pin": [
+    "model_input_bytes",
+    "model_output_bytes",
+    "tool_output_bytes",
+    "model_calls",
+    "tool_calls",
+    "environment"
+  ],
+  "cases": [
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/01_read_only_explanation.case.json",
+      "case_id": "agent.read-only-explanation",
+      "case_version": 1,
+      "content_digest": "sha256:a65d6f1b63d33d429430675b850dfb470c9235a937007c4149ec64d4e96be63f"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/02_one_pass_repair.case.json",
+      "case_id": "agent.one-pass-repair",
+      "case_version": 1,
+      "content_digest": "sha256:a2359d3d631d0f439b8a6b6e7bbc393d3fffac409c3eb2040945d36eeb079d74"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/03_two_pass_repair.case.json",
+      "case_id": "agent.two-pass-repair",
+      "case_version": 1,
+      "content_digest": "sha256:c0cb106784a88ed298d6de0e12de69e71b21c4363bb6e8a3058747c54ee24d52"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/04_multi_location_edit.case.json",
+      "case_id": "agent.multi-location-edit",
+      "case_version": 1,
+      "content_digest": "sha256:ac2173705c89619321372770082cae9985553a95479f599798a07ccbbd57bb71"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/05_new_file_need.case.json",
+      "case_id": "agent.new-file-need",
+      "case_version": 1,
+      "content_digest": "sha256:b0033929b73b9f4ed62046003774c55a34075ba8d6c4496f16805f2b7d624545"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/06_stale_digest.case.json",
+      "case_id": "agent.stale-digest",
+      "case_version": 1,
+      "content_digest": "sha256:dea193df07e57b4af4ade4af6b5756614b39a6566ec1ee88e0127b5990f20528"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/07_denied_approval.case.json",
+      "case_id": "agent.denied-approval",
+      "case_version": 1,
+      "content_digest": "sha256:c00b4a2c41c6683c2106a8b280a302b73950cd2bac64624a0f5e06bd4d48556a"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/08_failed_check.case.json",
+      "case_id": "agent.failed-check",
+      "case_version": 1,
+      "content_digest": "sha256:f1d07a5ff1632337c7c103c9383f33888be1cd40edcce03cfbbff9cd2a38ec71"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/09_timeout.case.json",
+      "case_id": "agent.timeout",
+      "case_version": 1,
+      "content_digest": "sha256:4c299027fbe70329d63a2135bf269f305c0d95adef18ba2ceafd3139d652ae3c"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/10_malformed_plan.case.json",
+      "case_id": "agent.malformed-plan",
+      "case_version": 1,
+      "content_digest": "sha256:fe1703ddb8d14558c25662d55e41e49f7bb65afc4256371a2b15ddf1ccd13d30"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/11_unnecessary_action.case.json",
+      "case_id": "agent.unnecessary-action",
+      "case_version": 1,
+      "content_digest": "sha256:fb5e78948699050d94af5ead1cee114fec0fc9583a4d802d31f92bc40fbd4ce1"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/12_root_escape.case.json",
+      "case_id": "agent.root-escape",
+      "case_version": 1,
+      "content_digest": "sha256:83c1518aa779c9b0b0446d5d556c592a3daf197c7461b814af66cd0d59899d8d"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/13_resume_after_kill.case.json",
+      "case_id": "agent.resume-after-kill",
+      "case_version": 1,
+      "content_digest": "sha256:a4e16be14afd88cd552e92125f756ef6499b861f758bc2a7e64f41b1e98bb97d"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/14_profile_trusted_boundary.case.json",
+      "case_id": "agent.profile-trusted-boundary",
+      "case_version": 1,
+      "content_digest": "sha256:443c6fbb816b5dea7221b2dfed846b6cb8ea6e35e94d4c1e54a1eae2c2f9268a"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/15_skill_no_authority.case.json",
+      "case_id": "agent.skill-no-authority",
+      "case_version": 1,
+      "content_digest": "sha256:ed24d917c8e7a87104f6029c72b58ea1968195a7f020abb8fdb34b5a71fbf01c"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/16_mcp_governed_call.case.json",
+      "case_id": "agent.mcp-governed-call",
+      "case_version": 1,
+      "content_digest": "sha256:6bdfdea445c333b2dd6cb19db3e36ea1f4f5a1a1cdc8c23032b56bc02f2ea411"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/17_absent_digest_patch.case.json",
+      "case_id": "agent.absent-digest-patch",
+      "case_version": 1,
+      "content_digest": "sha256:00d9bba0140707ea5743e1039085b123a0d7b72bad60319eb1bddf5569872954"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/18_websearch_governed.case.json",
+      "case_id": "agent.websearch-governed",
+      "case_version": 1,
+      "content_digest": "sha256:3a4d1994ee03eaad7627c60d62a07a2e5d3788df71e3a94dd13cdfb0bffb79fb"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/19_memory_attributable_recall.case.json",
+      "case_id": "agent.memory-attributable-recall",
+      "case_version": 1,
+      "content_digest": "sha256:8aeb1d1357b502d906aa67e3ec3d6b016a73087127288cc3ea81ef73f9bbfba5"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/20_self_healing_observation.case.json",
+      "case_id": "agent.self-healing-observation",
+      "case_version": 1,
+      "content_digest": "sha256:d0730fec945e485785def9cce9ad67d27955befb2c06092788ed5e13826b1081"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/21_schedule_materialization.case.json",
+      "case_id": "agent.schedule-materialization",
+      "case_version": 1,
+      "content_digest": "sha256:a53e1474d532249ca0cb5c2bdd57da8f188302b40c95cde38884f2a4cdc1ef9e"
+    },
+    {
+      "file": "gems/tamoz-evals/suites/agent/smoke/22_situation_observation.case.json",
+      "case_id": "agent.situation-observation",
+      "case_version": 1,
+      "content_digest": "sha256:31de01f133a92a3205fb18acbad446d32ac5b9e8ddbc018c8242c5a34dfecb68"
+    }
+  ]
+}

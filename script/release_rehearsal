@@ -48,6 +48,16 @@ require "tmpdir"
 require "fileutils"
 
 ROOT = File.expand_path("..", __dir__)
+
+# The steps this rehearsal performs, declared once. The run asserts that the
+# steps it actually recorded equal this list, so a step that stops running —
+# or one added without declaring it — fails the rehearsal instead of quietly
+# shrinking what a release candidate was checked against.
+STEP_NAMES = %w[
+  provisioning clean-clone bundle-install gate-lc-c gate-lc-utf8
+  gate-locale-agreement scorecard packaged-gem-isolation durable-kill-resume
+  backup-restore session-operations release-evaluation-pin requirements-audit
+].freeze
 LOG_JSON = File.join(ROOT, "docs", "release-rehearsal.json")
 LOG_MD = File.join(ROOT, "docs", "RELEASE_REHEARSAL.md")
 UTF8_LOCALE = "en_US.UTF-8"
@@ -205,6 +215,20 @@ end
   end
 end
 
+# --- 7b. the release evaluation pin -----------------------------------------
+
+record(steps, failures, "release-evaluation-pin") do
+  ok, stdout, stderr, = run(
+    [RbConfig.ruby, "-S", "bundle", "exec", "ruby",
+     "script/generate_release_evaluation_manifest"],
+    chdir: clone, env: bundle_env.merge("LC_ALL" => UTF8_LOCALE, "LANG" => UTF8_LOCALE)
+  )
+  # The generator RE-RUNS the harness and compares; without `--accept` it
+  # verifies rather than re-pinning, so a drifted corpus fails here instead of
+  # quietly re-pinning itself inside a rehearsal.
+  [ok, ok ? stdout.strip.lines.last.to_s.strip : stderr.lines.last(3).join.strip]
+end
+
 # --- 8. requirements audit (recorded, not gating) ---------------------------
 
 audit_summary = nil
@@ -229,6 +253,13 @@ rescue Errno::ENOENT, JSON::ParserError => error
 end
 
 puts
+
+recorded = steps.map { |step| step.fetch("step") }
+unless recorded == STEP_NAMES
+  failures << "step declaration drift: recorded #{recorded.inspect}, declared #{STEP_NAMES.inspect}"
+  steps << {"step" => "step-declaration", "ok" => false, "seconds" => 0.0,
+            "note" => "recorded steps do not match STEP_NAMES"}
+end
 
 # --- evidence ----------------------------------------------------------------
 

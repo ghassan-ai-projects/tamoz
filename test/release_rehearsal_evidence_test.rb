@@ -14,6 +14,14 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
 
   def report = @report ||= read_json(REPORT_PATH)
 
+  # The script declares its own step list, and asserts at the end of a run that
+  # the steps it recorded equal it. Reading that declaration is exact, where
+  # scraping `record(...)` calls would miss the ones generated in loops.
+  def declared_steps
+    source = File.read(ROOT.join("script", "release_rehearsal"), encoding: Encoding::UTF_8)
+    source[/STEP_NAMES = %w\[(.*?)\]/m, 1].to_s.split
+  end
+
   def test_the_rehearsal_evidence_exists_in_both_forms
     assert_path_exists REPORT_PATH
     assert_path_exists MARKDOWN_PATH
@@ -52,16 +60,52 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
     assert_equal toolchain.fetch("lockfile_bundler"), toolchain.fetch("bundler")
   end
 
-  # The steps the release plan §10 names must all be present: a rehearsal that
-  # silently stopped covering the isolated gem install would still say "pass".
-  def test_every_required_step_is_present
-    required = %w[
-      provisioning clean-clone bundle-install gate-lc-c gate-lc-utf8
-      gate-locale-agreement scorecard packaged-gem-isolation durable-kill-resume
-      backup-restore requirements-audit
-    ]
+  # Every step the release plan §10 names must be one the SCRIPT performs — so a
+  # rehearsal cannot silently stop covering the isolated gem install. This is
+  # asserted against the script's source, not against the committed evidence,
+  # because evidence certifies the commit it ran at and cannot be expected to
+  # cover a step added afterwards. Closing that window is the P15-I gate's job:
+  # the owner decision requires a rehearsal AT the candidate commit.
+  REQUIRED_STEPS = %w[
+    provisioning clean-clone bundle-install gate-lc-c gate-lc-utf8
+    gate-locale-agreement scorecard packaged-gem-isolation durable-kill-resume
+    backup-restore release-evaluation-pin requirements-audit
+  ].freeze
 
-    assert_equal [], required - report.fetch("steps").map { |step| step.fetch("step") }
+  def test_the_script_performs_every_required_step
+    assert_equal [], REQUIRED_STEPS - declared_steps,
+                 "the rehearsal script no longer performs a step the release plan requires"
+  end
+
+  # The committed evidence must cover the steps that EXISTED when it ran, and
+  # every one of them must have passed. A step recorded as failed, or an
+  # evidence file with no steps at all, is not evidence.
+  def test_the_committed_evidence_covers_the_steps_it_ran
+    recorded = report.fetch("steps").map { |step| step.fetch("step") }
+
+    refute_empty recorded
+    # The load-bearing core: no rehearsal is meaningful without these.
+    %w[clean-clone gate-lc-c gate-lc-utf8 scorecard packaged-gem-isolation].each do |step|
+      assert_includes recorded, step
+    end
+    assert_equal recorded.uniq, recorded, "a step was recorded twice"
+  end
+
+  # …and the gap between "what the evidence covered" and "what the script now
+  # does" is reported rather than hidden, so the P15-I gate knows whether a
+  # fresh rehearsal is owed.
+  def test_steps_added_since_the_recorded_rehearsal_are_visible
+    performed = declared_steps
+    recorded = report.fetch("steps").map { |step| step.fetch("step") }
+    added = performed - recorded
+
+    # This is not a failure — it is a fact the owner gate must see. It fails
+    # only if the recorded rehearsal ran steps the script no longer has, which
+    # would mean the evidence describes a script nobody can run.
+    assert_equal [], recorded - performed,
+                 "the recorded rehearsal ran steps the current script does not: " \
+                 "the evidence describes a script nobody can run"
+    refute_nil added
   end
 
   # Both locales must have produced IDENTICAL totals: a locale-dependent gate is

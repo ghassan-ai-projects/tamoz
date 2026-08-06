@@ -1,9 +1,9 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T06:44:57Z",
+  "generated_at": "2026-08-06T07:06:07Z",
   "manifest_requirements": 351,
-  "named_cases_run": 241,
+  "named_cases_run": 243,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
@@ -5381,6 +5381,8 @@
       "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
+        "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
+        "test/release_evaluation_manifest_test.rb#test_an_edited_case_without_a_version_bump_is_caught",
         "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
         "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution"
       ],

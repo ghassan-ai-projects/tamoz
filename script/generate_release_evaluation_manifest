@@ -1,0 +1,115 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# P15-F (docs/P15_RELEASE_PLAN.md §8, correction 6) — the release evaluation
+# pin manifest.
+#
+# `docs/evaluation-artifacts-v1.md` is the FORMAT specification and is not
+# touched. This is a separate artifact with a different job: it pins, for one
+# candidate commit, exactly which corpus, which case versions, which case
+# digests, which evaluator and which decision digest the release rests on.
+#
+# The distinction matters. `evals_verifier_test` proves each case file is
+# internally consistent — its digest matches its own content. That is a
+# self-check: a case edited together with its digest still passes. This
+# manifest is an EXTERNAL pin, so an edited case fails against the release
+# candidate even when it is internally consistent, and a case definition
+# changed without a `case_version` bump is caught by the same comparison
+# (the version is inside the digested document).
+#
+# `script/verify_release_evaluation` is the reproducing verifier: it RE-RUNS
+# the deterministic harness and compares the decision digest, rather than
+# re-reading a recorded number.
+#
+# Usage:
+#   script/generate_release_evaluation_manifest            # verify, or write if absent
+#   script/generate_release_evaluation_manifest --accept   # re-pin deliberately
+
+require "json"
+require "open3"
+require "rbconfig"
+
+ROOT = File.expand_path("..", __dir__)
+MANIFEST = File.join(ROOT, "docs", "release-evaluation-manifest.json")
+SUITE = File.join(ROOT, "gems", "tamoz-evals", "suites", "agent", "smoke")
+
+class ManifestMismatchError < StandardError; end
+
+def read_utf8(path) = File.read(path, encoding: Encoding::UTF_8)
+
+cases = Dir[File.join(SUITE, "*.case.json")].sort.map do |path|
+  document = JSON.parse(read_utf8(path))
+  {
+    "file" => path.delete_prefix("#{ROOT}/"),
+    "case_id" => document.fetch("case_id"),
+    "case_version" => document.fetch("case_version"),
+    "content_digest" => document.fetch("content_digest")
+  }
+end
+raise ManifestMismatchError, "no cases found in #{SUITE}" if cases.empty?
+
+# The decision comes from RUNNING the harness, never from a recorded number.
+stdout, stderr, status = Open3.capture3(
+  {"LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8"},
+  RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "scorecard", "agent-smoke",
+  chdir: ROOT
+)
+raise ManifestMismatchError, "scorecard failed: #{stderr.lines.last(3).join}" unless status.success?
+
+report = JSON.parse(stdout)
+aggregate = report.fetch("aggregate")
+
+document = {
+  "format_version" => 1,
+  "generated_by" => "script/generate_release_evaluation_manifest",
+  "candidate_commit" => Open3.capture2("git", "-C", ROOT, "rev-parse", "HEAD").first.strip,
+  "corpus" => report.fetch("corpus"),
+  "evaluator" => report.fetch("evaluator"),
+  "subject" => report.fetch("subject"),
+  "decision" => report.fetch("decision"),
+  "decision_digest" => report.fetch("content_digest"),
+  "hard_gates" => report.fetch("hard_gates"),
+  # The counters a release decision actually rests on. Timing and environment
+  # fields are deliberately EXCLUDED from the pin: they are not reproducible
+  # and pinning them would make the verifier fail for reasons that have nothing
+  # to do with behaviour (plan §8, both-locale determinism).
+  "pinned_counters" => aggregate.slice(
+    "cases", "task_successes", "verified_completions",
+    "unsafe_or_bypassed_actions", "false_positive_completions",
+    "incomplete_case_evidence", "approvals_requested", "approvals_granted",
+    "approvals_denied", "mutations", "unnecessary_mutations",
+    "repeated_action_stops", "plan_attempts", "repair_attempts"
+  ),
+  "excluded_from_pin" => %w[
+    model_input_bytes model_output_bytes tool_output_bytes model_calls
+    tool_calls environment
+  ],
+  "cases" => cases
+}
+
+content = "#{JSON.pretty_generate(document)}\n"
+accepted = ARGV.include?("--accept")
+
+if File.exist?(MANIFEST) && !accepted
+  committed = JSON.parse(read_utf8(MANIFEST))
+  differences = []
+  %w[corpus evaluator decision decision_digest pinned_counters cases].each do |field|
+    next if committed[field] == document[field]
+
+    differences << field
+  end
+  unless differences.empty?
+    raise ManifestMismatchError,
+          "the release evaluation pin diverges from a fresh run: " \
+          "#{differences.join(", ")}. Re-pin with --accept only when the change " \
+          "is intended and recorded."
+  end
+  puts "release evaluation pin verified (#{cases.length} cases, #{document.fetch("decision")})"
+  exit 0
+end
+
+File.write(MANIFEST, content)
+puts "wrote #{MANIFEST}"
+puts "  corpus #{document.fetch("corpus").fetch("id")} v#{document.fetch("corpus").fetch("version")}"
+puts "  decision #{document.fetch("decision")} #{document.fetch("decision_digest")}"
+puts "  cases #{cases.length}"
