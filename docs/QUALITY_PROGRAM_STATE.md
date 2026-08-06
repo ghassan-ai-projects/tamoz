@@ -89,7 +89,7 @@ every slice and whenever the phase table changes.
 | Tool | Needed | Status |
 |---|---|---|
 | RuboCop + performance + minitest | gate at 0 | **done** — locked; `plugins:` form; Minitest cops active (raw debt 42,378, debted per-file) |
-| Reek | design smells | **done (user-installed 6.5.0)** — `.reek.yml` isolates repo content; raw baseline 4,588 smells / 202 files (below); untuned by design until Q0-5 |
+| Reek | design smells | **done (user-installed 6.5.0)** — `.reek.yml` isolates repo content; raw baseline 4,588 smells / 202 files (below); untuned by design until Q0-5; `IrresponsibleModule` explicitly pinned ON (default) per `docs/CODING_STANDARD.md` §11 (public API docs required) |
 | SimpleCov | branch + subprocess collation | locked 0.22.0; **not yet wired** (Q0-4) |
 | Enola CLI | manual baseline/check gate | **done** — `~/.local/bin/enola`; mcp-arch.yaml; baseline pinned |
 | RubyCritic | optional aggregator | evaluate after core tools calibrated |

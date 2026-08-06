@@ -7,9 +7,12 @@
 # not part of this project — the same isolation mcp-arch.yaml applies to the
 # Enola snapshot, for the same reason.
 #
-# Deliberately absent: detector tuning and a debt baseline. Both are judgement
-# calls that belong to the quality program (Q0-5), not to installing the tool.
-# Until they exist, `reek` reports the RAW smell count and does not gate.
+# Deliberately absent: detector thresholds and a debt baseline. Both are
+# judgement calls that belong to the quality program (Q0-5), not to installing
+# the tool. Until they exist, `reek` reports the RAW smell count and does not
+# gate. One detector is named below deliberately: the coding standard
+# (docs/CODING_STANDARD.md §11) requires public API documentation, and
+# IrresponsibleModule enforces it.
 #
 # Current raw baseline, for reference when that work starts:
 #
@@ -31,3 +34,11 @@ exclude_paths:
   - .worktrees
   - agenteval
   - tmp
+
+detectors:
+  # Public API documentation is REQUIRED (docs/CODING_STANDARD.md §11): every
+  # public class and module says what it is, before how it works. This is
+  # reek's default; the entry exists to pin the intent — a future tuning pass
+  # must not silently silence the documentation requirement.
+  IrresponsibleModule:
+    enabled: true
