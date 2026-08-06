@@ -44,10 +44,27 @@ arriving silently.
 
 | Gem | Version | Licence |
 |---|---|---|
+| `ast` | 2.4.3 | MIT |
+| `docile` | 1.4.1 | MIT |
 | `drb` | 2.2.3 | Ruby, BSD-2-Clause |
+| `language_server-protocol` | 3.17.0.5 | MIT |
+| `lint_roller` | 1.1.0 | MIT |
 | `minitest` | 6.0.6 | MIT |
+| `parallel` | 2.1.0 | MIT |
+| `parser` | 3.3.11.1 | MIT |
 | `prism` | 1.9.0 | MIT |
+| `racc` | 1.8.1 | Ruby, BSD-2-Clause |
+| `rainbow` | 3.1.1 | MIT |
 | `rake` | 13.4.2 | MIT |
+| `rubocop` | 1.87.0 | MIT |
+| `rubocop-ast` | 1.49.1 | MIT |
+| `rubocop-performance` | 1.26.1 | MIT |
+| `ruby-progressbar` | 1.13.0 | MIT |
+| `simplecov` | 0.22.0 | MIT |
+| `simplecov-html` | 0.13.2 | MIT |
+| `simplecov_json_formatter` | 0.1.4 | MIT |
+| `unicode-display_width` | 3.2.0 | MIT |
+| `unicode-emoji` | 4.2.0 | MIT |
 
 `tamoz-evals` is a development-time gem by contract: no production gemspec may
 depend on it, enforced by `test/dependency_isolation_test.rb`.

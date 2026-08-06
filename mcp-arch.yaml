@@ -1,0 +1,86 @@
+# Repository-owned Enola configuration (quality program Q0).
+# A config file's `ignore` REPLACES config.Default().Ignore (override-not-merge),
+# so the full built-in default set is mirrored below to stay in sync with the
+# enola binary (see internal/config/config.go in enola-labs/enola).
+
+repo: "."
+
+ignore:
+  # --- enola defaults (mirror of config.Default().Ignore) ---
+  # Any-depth dependency/build/cache output must never enter the graph.
+  - "**/vendor/**"
+  - "**/node_modules/**"
+  - "**/.git/**"
+  - "**/dist/**"
+  - "**/build/**"
+  - "**/tmp/**"
+  - "**/public/assets/**"
+  - "**/testdata/**"
+  - "**/*_test.go"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "**/*.spec.ts"
+  - "**/*.spec.tsx"
+  - "**/tests/**/*-test.js"
+  - "**/tests/**/*-test.ts"
+  - "**/tests/**/*-test.gjs"
+  - "**/tests/**/*-test.gts"
+  - "**/spec/**/*_spec.rb"
+  - "**/test/**/*_test.rb"
+  - "**/conftest.py"
+  - "**/test_*.py"
+  - "**/tests/**/*.py"
+  - "**/test/**/*.py"
+  # enola's own output (default location; a custom output.dir is derived in Normalize).
+  - ".enola/**"
+  # Build / cache artifacts.
+  - ".next/**"
+  - "dist/**"
+  - "out/**"
+  - ".vercel/**"
+  - ".turbo/**"
+  - "coverage/**"
+  - ".nuxt/**"
+  - ".svelte-kit/**"
+  - "**/__pycache__/**"
+  # Python virtual environments and tool caches.
+  - "**/.venv/**"
+  - "**/venv/**"
+  - "**/site-packages/**"
+  - "**/.tox/**"
+  - "**/.nox/**"
+  - "**/.eggs/**"
+  - "**/.mypy_cache/**"
+  - "**/.pytest_cache/**"
+  - "**/.ruff_cache/**"
+  - "**/Pods/**"
+  - "**/.gradle/**"
+  - "**/target/**"
+  - "**/*.min.js"
+  - "**/*.bundle.js"
+
+  # --- Tamoz-specific ---
+  # Agent-tool state and worktrees are NOT repository content (all gitignored).
+  # Nested `.qwen/worktrees/agent-*` / `.claude/worktrees/agent-*` trees must never
+  # appear as Tamoz modules in the graph (the pre-Q0 snapshot was polluted by them).
+  - ".qwen/**"
+  - ".claude/**"
+  - ".cursor/**"
+  - ".worktrees/**"
+  # User-owned evaluation workspace; out of scope unless the owner opts it in.
+  - "agenteval/**"
+  # Bundler's local install cache.
+  - ".bundle/**"
+  # Documentation and data (the Ruby extractor parses .rb only; keep files_seen
+  # focused on code and scripts).
+  - "**/*.md"
+  - "**/*.json"
+  - "**/*.yml"
+  - "**/*.yaml"
+
+output:
+  dir: ".enola"
+  max_context_tokens: 4000
+
+# extractors / explainers / renderers are deliberately ABSENT: a listed key
+# REPLACES the built-in list, so omitting them picks up new built-ins automatically.

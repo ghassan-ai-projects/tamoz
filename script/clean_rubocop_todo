@@ -1,0 +1,40 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Charter rule enforcement for .rubocop_todo.yml (docs/QUALITY_PROGRAM.md):
+# the TODO may list CURRENT files only — no directory exclusions, no file-type
+# globs, no patterns that would cover files added later. This post-processes
+# `rubocop --auto-gen-config` output so a regeneration cannot reintroduce a
+# prohibited pattern. Conventions that legitimately span directories (e.g.
+# Style/Documentation for test files) live in .rubocop.yml, not here.
+
+ROOT = File.expand_path("..", __dir__)
+TODO = File.join(ROOT, ".rubocop_todo.yml")
+
+GEMSPECS = Dir[File.join(ROOT, "gems", "*", "*.gemspec")]
+            .map { |path| path.delete_prefix("#{ROOT}/") }
+            .sort
+            .freeze
+
+lines = File.readlines(TODO)
+out = []
+in_exclude = false
+
+lines.each do |line|
+  if in_exclude && (match = line.match(/^\s+-\s+'([^']+)'\s*$/))
+    entry = match[1]
+    if entry.match?(/[*?]/)
+      # Prohibited: a glob (directory or file-type) exclusion. Expand the
+      # gemspec pattern to the current gemspecs; drop everything else.
+      GEMSPECS.each { |gemspec| out << "    - '#{gemspec}'\n" } if entry == "**/*.gemspec"
+      next
+    end
+    out << line
+  else
+    in_exclude = line.match?(/^\s+Exclude:\s*$/)
+    out << line
+  end
+end
+
+File.write(TODO, out.join)
+STDERR.puts "clean_rubocop_todo: #{lines.size} -> #{out.size} lines"

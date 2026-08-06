@@ -64,9 +64,8 @@ module Tamoz
 
         module_function
 
-        # rubocop:disable Metrics/ParameterLists -- the protocol's inputs are the
-        # design's inputs; collapsing them into an options hash would hide the
-        # contract this method exists to enforce.
+        # The protocol's inputs are the design's inputs; collapsing them into an
+        # options hash would hide the contract this method exists to enforce.
         def run(
           record:,
           rule:,
@@ -112,7 +111,6 @@ module Tamoz
           )
           Scope.in_band { session.call }
         end
-        # rubocop:enable Metrics/ParameterLists
 
         # One remediation attempt. Instantiated per `run`, never reused, so the
         # transition log cannot be shared between attempts.

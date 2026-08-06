@@ -249,6 +249,26 @@
   ],
   "development": [
     {
+      "name": "ast",
+      "version": "2.4.3",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://whitequark.github.io/ast/",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "docile",
+      "version": "1.4.1",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://ms-ati.github.io/docile/",
+      "required_by": [],
+      "direct": false
+    },
+    {
       "name": "drb",
       "version": "2.2.3",
       "licenses": [
@@ -256,6 +276,26 @@
         "BSD-2-Clause"
       ],
       "homepage": "https://github.com/ruby/drb",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "language_server-protocol",
+      "version": "3.17.0.5",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/mtsmfm/language_server-protocol-ruby",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "lint_roller",
+      "version": "1.1.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/standardrb/lint_roller",
       "required_by": [],
       "direct": false
     },
@@ -270,6 +310,26 @@
       "direct": false
     },
     {
+      "name": "parallel",
+      "version": "2.1.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/grosser/parallel",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "parser",
+      "version": "3.3.11.1",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/whitequark/parser",
+      "required_by": [],
+      "direct": false
+    },
+    {
       "name": "prism",
       "version": "1.9.0",
       "licenses": [
@@ -280,12 +340,123 @@
       "direct": false
     },
     {
+      "name": "racc",
+      "version": "1.8.1",
+      "licenses": [
+        "Ruby",
+        "BSD-2-Clause"
+      ],
+      "homepage": "https://github.com/ruby/racc",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "rainbow",
+      "version": "3.1.1",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/sickill/rainbow",
+      "required_by": [],
+      "direct": false
+    },
+    {
       "name": "rake",
       "version": "13.4.2",
       "licenses": [
         "MIT"
       ],
       "homepage": "https://github.com/ruby/rake",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "rubocop",
+      "version": "1.87.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/rubocop/rubocop",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "rubocop-ast",
+      "version": "1.49.1",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/rubocop/rubocop-ast",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "rubocop-performance",
+      "version": "1.26.1",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/rubocop/rubocop-performance",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "ruby-progressbar",
+      "version": "1.13.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/jfelchner/ruby-progressbar",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "simplecov",
+      "version": "0.22.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/simplecov-ruby/simplecov",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "simplecov-html",
+      "version": "0.13.2",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/simplecov-ruby/simplecov-html",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "simplecov_json_formatter",
+      "version": "0.1.4",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/fede-moya/simplecov_json_formatter",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "unicode-display_width",
+      "version": "3.2.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/janlelis/unicode-display_width",
+      "required_by": [],
+      "direct": false
+    },
+    {
+      "name": "unicode-emoji",
+      "version": "4.2.0",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/janlelis/unicode-emoji",
       "required_by": [],
       "direct": false
     }

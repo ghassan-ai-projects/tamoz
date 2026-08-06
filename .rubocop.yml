@@ -1,0 +1,57 @@
+# RuboCop configuration (quality program Q0/Q1).
+# Legacy debt lives in .rubocop_todo.yml (generated, committed, reviewed); every
+# refactoring slice removes entries. Never add an exclusion merely to pass CI.
+
+inherit_from: .rubocop_todo.yml
+
+# Merge (not replace) Exclude lists between this file and the inherited TODO:
+# a convention here must combine with per-file debt, never wipe it.
+inherit_mode:
+  merge:
+    - Exclude
+
+plugins:
+  - rubocop-performance
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.3
+  Exclude:
+    # Non-repository or generated content only. Production Ruby is never excluded.
+    - "agenteval/**/*"
+    - ".enola/**/*"
+    - ".qwen/**/*"
+    - ".claude/**/*"
+    - ".cursor/**/*"
+    - ".worktrees/**/*"
+    - "vendor/**/*"
+    - "tmp/**/*"
+    - "coverage/**/*"
+
+# Q6 diagnostic ceilings for hand-maintained production code. These are targets
+# recorded as debt in .rubocop_todo.yml (per-file Exclude / Enabled: false);
+# exceptions must name why the code stays together (see docs/QUALITY_PROGRAM.md).
+# The TODO was generated with these absent so auto-gen writes Exclude debt
+# instead of Max overrides (a main-config Max would otherwise override the TODO).
+Metrics/AbcSize:
+  Max: 20
+Metrics/CyclomaticComplexity:
+  Max: 8
+Metrics/PerceivedComplexity:
+  Max: 8
+Metrics/MethodLength:
+  Max: 20
+Metrics/ClassLength:
+  Max: 250
+Metrics/ParameterLists:
+  Max: 5
+Metrics/BlockNesting:
+  Max: 3
+
+# Test files are not API documentation surface (Ruby community convention);
+# Style/Documentation applies to production code only. Named convention, not
+# TODO debt: new test files must not need class documentation.
+Style/Documentation:
+  Exclude:
+    - "test/**/*"
+    - "spec/**/*"
