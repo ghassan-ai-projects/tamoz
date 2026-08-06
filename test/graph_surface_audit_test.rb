@@ -20,18 +20,20 @@ class GraphSurfaceAuditTest < Minitest::Test
   end
 
   def test_audit_generator_regenerates_the_table
+    manifest = ROOT.join("docs", "public-api.json")
+    before = Digest::SHA256.hexdigest(File.binread(manifest))
     stdout, stderr, status = run_generator
     assert status.success?, "audit generator failed: #{stderr.to_s.lines.last(6).join}"
 
     assert_match(/wrote .*GRAPH_SURFACE_AUDIT\.md \(\d+ entries\)/, stdout)
     # The generator confirms the inventory and rewrites it only when the bytes
     # would change. Re-stamping on every run made `rake ci` dirty the worktree,
-    # which P15 §12 counts as a release stopper.
+    # which P15 §12 counts as a release stopper. The comparison is against the
+    # file as it was BEFORE this run — not against git HEAD, which would also
+    # fail for an uncommitted edit the generator had nothing to do with.
     assert_match(%r{docs/public-api\.json (confirmed unchanged|rewrote)}, stdout)
-    assert_empty(
-      Open3.capture2("git", "status", "--porcelain", "docs/public-api.json", chdir: ROOT.to_s).first,
-      "running the audit generator must leave docs/public-api.json unchanged"
-    )
+    assert_equal before, Digest::SHA256.hexdigest(File.binread(manifest)),
+                 "running the audit generator must not change docs/public-api.json"
 
     audit = File.read(AUDIT_PATH)
     # The table reconciles every graph manifest entry: 27 entries, no

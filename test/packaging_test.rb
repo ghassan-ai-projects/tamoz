@@ -379,6 +379,103 @@ class PackagingTest < Minitest::Test
     end
   end
 
+  # P15-H (c)/(d): `tamoz-scheduler` and `tamoz-stream` ship as release gems but
+  # had no isolated install proof — the workspace Gemfile resolves all nine gems
+  # via `path:`, which masks a gemspec dependency error, and every other test
+  # loads them through that Gemfile. Each is installed into its own GEM_HOME
+  # with ONLY its declared dependency (`tamoz-core`) and exercised by a named
+  # example task in a clean subprocess.
+  def test_packaged_scheduler_runs_with_only_core_installed
+    with_isolated_install(%w[tamoz-core tamoz-scheduler], "scheduler") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/scheduler"
+        anchor = 1_785_000_000
+        schedule = Tamoz::Scheduler::Schedule.new(
+          id: "nightly", owner: "human:op", kind: :interval, expression: "3600",
+          start_at: anchor, payload_ref: "sha256:#{"0" * 64}",
+          thread_policy: "thread.default",
+          capability_grant: {"scopes" => ["read"]},
+          behavior_version: "tamoz.agent.session/1",
+          approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
+          delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
+          created_by: "human:op", created_at: anchor
+        )
+        occurrence = Tamoz::Scheduler::Occurrence.new(
+          schedule_id: schedule.id, schedule_revision: schedule.revision,
+          nominal_fire_at_utc: anchor, created_at: anchor
+        )
+        puts JSON.generate(
+          "digest" => schedule.definition_digest,
+          "occurrence_id" => occurrence.occurrence_id,
+          "request_id" => occurrence.request_id,
+          "kinds" => Tamoz::Scheduler::KINDS.map(&:to_s),
+          "sqlite_defined" => defined?(Tamoz::SQLite).inspect,
+          "agent_defined" => defined?(Tamoz::Agent).inspect
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+
+      assert result.fetch("digest").start_with?("sha256:")
+      refute_empty result.fetch("occurrence_id")
+      refute_empty result.fetch("request_id")
+      assert_equal %w[at interval], result.fetch("kinds")
+      # The scheduler gem is a VALUES gem: it must not drag the durable store
+      # or the agent in behind it.
+      assert_equal "nil", result.fetch("sqlite_defined")
+      assert_equal "nil", result.fetch("agent_defined")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_stream_runs_with_only_core_installed
+    with_isolated_install(%w[tamoz-core tamoz-stream], "stream") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/stream"
+        descriptor = Tamoz::Stream::ChannelDescriptor.new(
+          channel_id: "factory-1.temperature", revision: 7, transport: "mqtt",
+          source_identity: "sensor-ca:device-428", schema: "temperature.v2",
+          partition_by: %w[tenant_id device_id],
+          time: {"field" => "measured_at", "max_clock_skew_s" => 30},
+          units: {"value" => "Cel"}
+        )
+        envelope = Tamoz::Stream::EventEnvelope.new(
+          event_id: "evt-1", event_type: "temperature", schema_id: "temperature.v2",
+          payload: {"measured_at" => 1_700_000_000, "value" => 21.5},
+          tenant_id: "tenant-1", source_id: "device-428",
+          channel_id: descriptor.channel_id, channel_revision: descriptor.revision,
+          partition_key: "tenant-1:device-428", entity_id: "device-428",
+          event_time: 1_700_000_000, observed_time: 1_700_000_001,
+          ingestion_time: 1_700_000_002
+        )
+        replay = Tamoz::Stream::ReplayClock.new(start: 100)
+        replay.advance(5)
+        puts JSON.generate(
+          "channel_digest" => descriptor.definition_digest,
+          "payload_hash" => envelope.payload_hash,
+          "replay_now" => replay.now_processing,
+          "sqlite_defined" => defined?(Tamoz::SQLite).inspect,
+          "agent_defined" => defined?(Tamoz::Agent).inspect
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+
+      assert result.fetch("channel_digest").start_with?("sha256:")
+      assert result.fetch("payload_hash").start_with?("sha256:")
+      assert_equal 105, result.fetch("replay_now")
+      assert_equal "nil", result.fetch("sqlite_defined")
+      assert_equal "nil", result.fetch("agent_defined")
+      assert_empty stderr
+    end
+  end
+
   def test_packaged_graph_runs_m2_without_repository_load_paths
     core_root = GEM_ROOTS.fetch("tamoz-core")
     graph_root = GEM_ROOTS.fetch("tamoz-graph")
@@ -457,6 +554,42 @@ class PackagingTest < Minitest::Test
       assert_equal({"events" => ["ok"]}, result.fetch("state"))
       assert_equal "completed", result.fetch("status")
       assert_empty stderr
+    end
+  end
+
+  private
+
+  # Build the named gems, install them into their OWN GEM_HOME with
+  # `--ignore-dependencies` (so a missing gemspec dependency shows up as a load
+  # failure rather than being satisfied by a sibling), and yield an environment
+  # that can see nothing but that install root.
+  def with_isolated_install(names, label)
+    Dir.mktmpdir("tamoz-installed-#{label}") do |directory|
+      install_root = File.join(directory, "install")
+      names.each do |name|
+        root = GEM_ROOTS.fetch(name)
+        specification = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+        package = File.join(directory, "#{name}.gem")
+        Dir.chdir(root) { Gem::Package.build(specification, false, true, package) }
+        _stdout, stderr, status = Open3.capture3(
+          ENV.each_key.grep(/\A(?:BUNDLE|BUNDLER)/).to_h { |key| [key, nil] },
+          RbConfig.ruby, "-S", "gem", "install", "--no-document",
+          "--ignore-dependencies", "--install-dir", install_root, package
+        )
+        assert status.success?, "#{name}: #{stderr}"
+      end
+
+      yield(
+        ENV.each_key
+           .grep(/\A(?:BUNDLE|BUNDLER)/)
+           .to_h { |key| [key, nil] }
+           .merge(
+             "GEM_HOME" => install_root,
+             "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+             "RUBYLIB" => nil,
+             "RUBYOPT" => nil
+           )
+      )
     end
   end
 end

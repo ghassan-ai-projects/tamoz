@@ -159,8 +159,54 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Mcp::VERSION" => {},
           "Tamoz::Mcp::ValidationError" => {}
         },
+        "tamoz-scheduler" => {
+          "Tamoz::Scheduler::ClockRollbackError" => {},
+          "Tamoz::Scheduler::GrantIntersector" => {},
+          "Tamoz::Scheduler::KINDS" => {},
+          "Tamoz::Scheduler::LeaseLostError" => {},
+          "Tamoz::Scheduler::MISFIRE_POLICIES" => {},
+          "Tamoz::Scheduler::MisfireLimitReachedError" => {},
+          "Tamoz::Scheduler::OVERLAP_POLICIES" => {},
+          "Tamoz::Scheduler::Occurrence" => {},
+          "Tamoz::Scheduler::STATES" => {},
+          "Tamoz::Scheduler::Schedule" => {},
+          "Tamoz::Scheduler::ScheduleStore" => {},
+          "Tamoz::Scheduler::SchedulerError" => {},
+          "Tamoz::Scheduler::ScorecardSummaryConsumer" => {},
+          "Tamoz::Scheduler::StoreConflictError" => {},
+          "Tamoz::Scheduler::TERMINAL" => {},
+          "Tamoz::Scheduler::VERSION" => {}
+        },
         "tamoz-sqlite" => {
           "Tamoz::SQLite::VERSION" => {}
+        },
+        "tamoz-stream" => {
+          "Tamoz::Stream::ActionBoundary" => {},
+          "Tamoz::Stream::AuthenticationError" => {},
+          "Tamoz::Stream::CLASSIFICATIONS" => {},
+          "Tamoz::Stream::ChannelConnector" => {},
+          "Tamoz::Stream::ChannelDescriptor" => {},
+          "Tamoz::Stream::CognitionAdmission" => {},
+          "Tamoz::Stream::DELIVERY_MODES" => {},
+          "Tamoz::Stream::EventEnvelope" => {},
+          "Tamoz::Stream::InterlockReader" => {},
+          "Tamoz::Stream::InterlockUnavailableError" => {},
+          "Tamoz::Stream::LATE_DATA_POLICIES" => {},
+          "Tamoz::Stream::QuarantineOverflowError" => {},
+          "Tamoz::Stream::RISK_CLASSES" => {},
+          "Tamoz::Stream::ReplayClock" => {},
+          "Tamoz::Stream::ReplayRuntime" => {},
+          "Tamoz::Stream::RequestIdTooLongError" => {},
+          "Tamoz::Stream::SituationSnapshot" => {},
+          "Tamoz::Stream::SituationSpec" => {},
+          "Tamoz::Stream::SourceSession" => {},
+          "Tamoz::Stream::StreamClock" => {},
+          "Tamoz::Stream::StreamClockError" => {},
+          "Tamoz::Stream::StreamError" => {},
+          "Tamoz::Stream::StreamStore" => {},
+          "Tamoz::Stream::VERSION" => {},
+          "Tamoz::Stream::WallClock" => {},
+          "Tamoz::Stream::WatermarkRegressionError" => {}
         },
         "tamoz-tools" => {
           "Tamoz::Tools::CheckReceipt" => {},
@@ -207,15 +253,24 @@ class PublicAPITest < Minitest::Test
   end
 
   def test_package_versions_are_valid_and_begin_in_prerelease
+    # P15-G: every SHIPPED gem's version is pinned here. tamoz-scheduler and
+    # tamoz-stream ship in the release surface and were absent, so a version
+    # skew in either could not have been caught by this gate.
     versions = [
       Tamoz::Core::VERSION,
       Tamoz::Graph::VERSION,
       Tamoz::SQLite::VERSION,
+      Tamoz::Scheduler::VERSION,
+      Tamoz::Stream::VERSION,
       Tamoz::Tools::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION
     ]
+
+    assert_equal GEM_ROOTS.keys.sort,
+                 read_json(ROOT.join("docs", "public-api.json")).fetch("packages").keys.sort,
+                 "every packaged gem must have a documented public surface"
 
     assert_equal 1, versions.uniq.length
     assert Gem::Version.new(versions.first).prerelease?
