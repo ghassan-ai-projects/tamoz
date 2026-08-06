@@ -19,21 +19,42 @@ RUBY_SOURCES = FileList[
 # what does not work yet. Both must pass to close the milestone.
 AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 
-Rake::TestTask.new(:test) do |task|
-  task.libs << "test"
-  task.test_files = FileList["test/**/*_test.rb"].reject { |path| AUTONOMY_TESTS.include?(path) }
-  task.warning = true
-end
+# The slow set: every file measured at >= 5 seconds, plus everything in
+# SERIAL_TESTS. They are slow for real reasons — spawning MCP server
+# subprocesses, SIGKILLing children at each durable seam, building all nine
+# gems, verifying SQLite against a raw oracle — so there is nothing to trim, only
+# a decision about WHEN to pay for them.
+#
+# They are excluded from `rake test` and `rake ci` and run explicitly:
+#
+#   rake test_slow    just this set
+#   rake ci_full      the whole gate, nothing skipped
+#
+# Run `ci_full` before committing anything that touches durability, MCP,
+# packaging or the committed evidence artifacts. `ci` alone does not cover them,
+# and it says so when it finishes.
+SLOW_TESTS = %w[
+  test/sqlite_raw_oracle_test.rb
+  test/mcp_invocation_test.rb
+  test/agent_session_kill_matrix_test.rb
+  test/sqlite_convergence_probe_test.rb
+  test/mcp_supervisor_test.rb
+  test/sqlite_scenario_driver_test.rb
+  test/m2_evidence_test.rb
+].freeze
 
 # Tests that must NOT share a process pool with anything else. They build gems
 # into shared paths, regenerate committed artifacts, or spawn their own test
 # subprocesses, so running two of them at once makes them fail on each other
 # rather than on the code. Everything else shards freely.
+# `agent_mcp_adversarial_test` asserts a GLOBAL property of the process table —
+# that no mcp_test_server survives teardown. Any other MCP test running
+# concurrently owns legitimately live servers it cannot distinguish from
+# orphans, so it can only be trusted when nothing else is running.
+#
+# NOTE: %w[] does not honour `#` as a comment — every word inside becomes an
+# element. Keep prose out of the literal.
 SERIAL_TESTS = %w[
-  # Asserts a GLOBAL property of the process table — that no mcp_test_server
-  # survives teardown. Any other MCP test running concurrently owns legitimately
-  # live servers that this one cannot distinguish from orphans, so it can only be
-  # trusted when nothing else is running.
   test/agent_mcp_adversarial_test.rb
   test/packaging_test.rb
   test/dependency_isolation_test.rb
@@ -41,6 +62,24 @@ SERIAL_TESTS = %w[
   test/requirements_manifest_test.rb
   test/release_rehearsal_evidence_test.rb
 ].freeze
+
+EXCLUDED_FROM_DEFAULT = (AUTONOMY_TESTS + SLOW_TESTS + SERIAL_TESTS).freeze
+
+Rake::TestTask.new(:test) do |task|
+  task.libs << "test"
+  task.test_files = FileList["test/**/*_test.rb"].reject do |path|
+    EXCLUDED_FROM_DEFAULT.include?(path)
+  end
+  task.warning = true
+end
+
+desc "The slow set: subprocess, crash-matrix, packaging and evidence tests"
+Rake::TestTask.new(:test_slow) do |task|
+  task.libs << "test"
+  task.test_files = (SLOW_TESTS + SERIAL_TESTS).select { |path| File.file?(path) }
+  task.warning = true
+end
+
 
 LIB_FLAGS = %w[
   tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent
@@ -82,7 +121,7 @@ TEST_WEIGHTS = {
 # around. Use `test_fast` in a refactor loop and `rake ci` before committing.
 desc "Behaviour tests only, across processes (tightest refactor loop)"
 task :test_fast do
-  Rake::Task[:test_parallel].invoke(:skip_serial)
+  Rake::Task[:test_parallel].invoke(:skip_slow)
 end
 
 desc "Run the test suite across processes (fast; use for a refactor loop)"
@@ -90,8 +129,11 @@ task :test_parallel, [:mode] do |_task, args|
   require "etc"
   require "open3"
 
-  all = FileList["test/**/*_test.rb"].reject { |path| AUTONOMY_TESTS.include?(path) }
-  serial = args[:mode] == :skip_serial ? [] : (SERIAL_TESTS & all)
+  include_slow = args[:mode] != :skip_slow
+  all = FileList["test/**/*_test.rb"].reject do |path|
+    AUTONOMY_TESTS.include?(path) || (!include_slow && SLOW_TESTS.include?(path))
+  end
+  serial = include_slow ? (SERIAL_TESTS & all) : []
   parallel = all - (SERIAL_TESTS & all)
 
   workers = [Etc.nprocessors - 1, 1].max
@@ -192,14 +234,22 @@ namespace :fixtures do
   end
 end
 
-desc "Run every implemented milestone quality gate"
-task ci: ["design:validate", :syntax, :test]
+desc "The everyday gate — fast, and honest about what it skips"
+task ci: ["design:validate", :syntax, :test_fast] do
+  skipped = (SLOW_TESTS + SERIAL_TESTS).length
+  warn ""
+  warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"
+  warn "    evidence). Run `rake ci_full` before committing anything touching"
+  warn "    durability, MCP, packaging or the committed evidence artifacts."
+end
 
-# The authoritative gate stays SERIAL. `ci_fast` runs the same files sharded
-# across processes and is for the edit loop, not for a release decision: a
-# parallel run is one contended process table away from a false failure, and the
-# gate that decides whether something ships should not have that property.
-desc "The full gate with the test phase sharded across processes"
+# The complete gate. Stays SERIAL for the test phase: a parallel run is one
+# contended process table away from a false failure, and the gate that decides
+# whether something ships should not have that property.
+desc "The complete gate — nothing skipped (use before committing)"
+task ci_full: ["design:validate", :syntax, :test, :test_slow]
+
+desc "The complete gate with the test phase sharded across processes"
 task ci_fast: ["design:validate", :syntax, :test_parallel]
 
 task default: :ci
