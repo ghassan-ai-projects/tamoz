@@ -17,6 +17,7 @@ require_relative "profile/adoption_registry"
 require_relative "profile/transition"
 require_relative "profile/transition_document"
 require_relative "profile/transition_registry"
+require_relative "profile/egress_validator"
 
 module Tamoz
   module Agent
@@ -1050,139 +1051,12 @@ module Tamoz
       # declaration"; present means every field is exact and bounded. The
       # declaration is part of the canonical digest, so any edit is a new
       # profile version that the session-authority machinery re-pins.
+      # The egress declaration is one cohesive, fail-closed check with its own
+      # vocabulary, so it lives in EgressValidator. Kept as a class method here
+      # because both callers — the file loader and the pinned-authority replay —
+      # read as a list of validators.
       def self.validate_egress!(hash, path)
-        egress = hash["egress"]
-        return nil if egress.nil?
-
-        unless egress.is_a?(Hash)
-          raise ValidationError, "#{path}: egress must be a mapping"
-        end
-
-        unknown = egress.keys - EGRESS_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown egress fields #{unknown.sort.inspect}"
-        end
-
-        hosts = egress["allowlisted_hosts"]
-        unless hosts.is_a?(Array) && !hosts.empty? &&
-               hosts.all? { |host| host.is_a?(String) } && hosts.uniq == hosts
-          raise ValidationError,
-                "#{path}: egress.allowlisted_hosts must be a non-empty array of distinct strings"
-        end
-        hosts.each do |host|
-          field = "egress.allowlisted_hosts entry #{host.inspect}"
-          if EGRESS_CREDENTIAL_NAME_PATTERN.match?(host)
-            raise ValidationError,
-                  "#{path}: #{field} is credential-shaped; names belong in " \
-                  "egress.credential_refs only (values never enter a profile)"
-          end
-          validate_egress_host!(host, path, field)
-        end
-
-        schemes = egress["schemes"]
-        unless schemes == EGRESS_SCHEMES
-          raise ValidationError, "#{path}: egress.schemes must be exactly #{EGRESS_SCHEMES.inspect} in v1"
-        end
-
-        deny = egress["deny_private_ranges"]
-        unless deny == true || deny == false
-          raise ValidationError, "#{path}: egress.deny_private_ranges must be true or false"
-        end
-
-        validate_egress_integer!(
-          egress["max_request_bytes"], path, "egress.max_request_bytes",
-          1, EGRESS_MAX_REQUEST_BYTES
-        )
-        validate_egress_integer!(
-          egress["max_response_bytes"], path, "egress.max_response_bytes",
-          1, EGRESS_MAX_RESPONSE_BYTES
-        )
-        timeout = egress["connect_timeout_s"]
-        unless timeout.is_a?(Numeric) && timeout.finite? && timeout.positive? &&
-               timeout <= EGRESS_MAX_CONNECT_TIMEOUT_S
-          raise ValidationError,
-                "#{path}: egress.connect_timeout_s must be a positive finite number " \
-                "of at most #{EGRESS_MAX_CONNECT_TIMEOUT_S}"
-        end
-        validate_egress_integer!(
-          egress["redirect_max_hops"], path, "egress.redirect_max_hops",
-          1, EGRESS_MAX_REDIRECT_HOPS
-        )
-
-        circuit = egress["circuit"]
-        unless circuit.is_a?(Hash)
-          raise ValidationError, "#{path}: egress.circuit must be a mapping"
-        end
-        unknown_circuit = circuit.keys - EGRESS_CIRCUIT_KEYS
-        unless unknown_circuit.empty?
-          raise ValidationError,
-                "#{path}: unknown egress.circuit fields #{unknown_circuit.sort.inspect}"
-        end
-        unless circuit["scope_type"] == EGRESS_SCOPE_TYPE
-          raise ValidationError,
-                "#{path}: egress.circuit.scope_type must be #{EGRESS_SCOPE_TYPE.inspect}"
-        end
-        validate_egress_integer!(
-          circuit["threshold"], path, "egress.circuit.threshold",
-          1, EGRESS_MAX_CIRCUIT_THRESHOLD
-        )
-        budget_breach = circuit["budget_breach"]
-        unless budget_breach == true || budget_breach == false
-          raise ValidationError, "#{path}: egress.circuit.budget_breach must be true or false"
-        end
-
-        refs = egress["credential_refs"]
-        unless refs.is_a?(Array) && refs.uniq == refs &&
-               refs.all? { |name| name.is_a?(String) && CREDENTIAL_REF_PATTERN.match?(name) }
-          raise ValidationError,
-                "#{path}: egress.credential_refs must be distinct names matching " \
-                "#{CREDENTIAL_REF_PATTERN.inspect}; names only, values never enter a profile"
-        end
-
-        egress
-      end
-
-      # Exact absolute DNS FQDN: lowercase, at least two dot-separated labels,
-      # no wildcard, no IP literal in any spelling, no scheme/port/path/
-      # userinfo. v1 deliberately has no wildcards or IP-literal allowlisting;
-      # the per-hop adapter check is the second layer (P17 §4).
-      def self.validate_egress_host!(host, path, field)
-        if host.bytesize > 253 || host.empty?
-          raise ValidationError, "#{path}: #{field} must be an absolute DNS name of at most 253 bytes"
-        end
-        if host.include?("*")
-          raise ValidationError, "#{path}: #{field} contains a wildcard; v1 allows exact FQDNs only"
-        end
-        if host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/)
-          raise ValidationError,
-                "#{path}: #{field} must be a bare hostname with no scheme, port, path, or userinfo"
-        end
-        unless host == host.downcase
-          raise ValidationError, "#{path}: #{field} must be lowercase"
-        end
-        if EGRESS_IPV4_PATTERN.match?(host) || EGRESS_IPV6_PATTERN.match?(host) ||
-           EGRESS_NUMERIC_IP_PATTERN.match?(host)
-          raise ValidationError, "#{path}: #{field} is an IP literal; v1 allows exact FQDNs only"
-        end
-        labels = host.split(".")
-        unless labels.length >= 2 && labels.none?(&:empty?) &&
-               labels.all? { |label| label.bytesize <= 63 && EGRESS_HOST_LABEL_PATTERN.match?(label) }
-          raise ValidationError, "#{path}: #{field} is not a valid absolute DNS name"
-        end
-        if labels.last.match?(/\A\d+\z/)
-          raise ValidationError, "#{path}: #{field} must not end in a numeric label"
-        end
-
-        host
-      end
-
-      def self.validate_egress_integer!(value, path, field, minimum, maximum)
-        unless value.is_a?(Integer) && value.between?(minimum, maximum)
-          raise ValidationError,
-                "#{path}: #{field} must be an integer between #{minimum} and #{maximum}"
-        end
-
-        value
+        EgressValidator.call(hash, path)
       end
 
       def self.canonical_digest(hash)
