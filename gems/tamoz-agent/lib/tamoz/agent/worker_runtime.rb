@@ -381,6 +381,14 @@ module Tamoz
         {"enabled" => false, "error" => error.message}
       end
 
+      # The governed MCP source (which is also how websearch arrives), built once
+      # per runtime because each server is a supervised subprocess.
+      def mcp_source
+        return @mcp_source if defined?(@mcp_source)
+
+        @mcp_source = McpSourceBuilder.new(@directory).build
+      end
+
       def skill_rejections
         skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
@@ -414,7 +422,8 @@ module Tamoz
           profile: resolved,
           profile_budgets: resolved && resolved.budgets,
           memory: engine,
-          memory_owner: engine && memory_owner
+          memory_owner: engine && memory_owner,
+          mcp: mcp_source
         )
       end
     end

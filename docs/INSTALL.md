@@ -192,9 +192,39 @@ Memory scopes its namespace by `tenant` and admits episodes under `owner`, both
 from operator configuration and never from a task, a model or the workspace.
 Memory is evidence the agent may read; it never alters policy.
 
-Wired today: **skills** and **memory**. MCP and websearch exist as libraries with
-passing tests but are NOT yet reachable from the worker — see
-[`docs/LIMITATIONS.md`](LIMITATIONS.md).
+An MCP server is a supervised subprocess, so its configuration is explicit and
+nothing is inferred from the environment:
+
+```yaml
+sources:
+  mcp:
+    enabled: true
+    servers:
+      - id: notes
+        command: /usr/bin/ruby
+        arguments: [/opt/notes-mcp/server.rb]
+        env_allowlist: [PATH, HOME]
+        read_only_tools: [search_notes]
+  websearch:
+    enabled: true
+    command: /opt/websearch/adapter
+    env_allowlist: [PATH, HOME]
+```
+
+Websearch is not a separate mechanism: it is an MCP server whose id is the
+reserved `websearch`, which is what keeps it one of the four closed-world sources
+rather than a fifth. A generic server may not claim that id.
+
+Three rules hold for every server. The catalog is **pinned** at construction, so
+a server that grows a tool later cannot silently widen what the agent may do.
+Risk classification is **operator policy**: a server describes its tools but does
+not get to say how dangerous they are, and any tool not named in
+`read_only_tools` is treated as unknown-effects. And the server's working
+directory is never the agent's workspace, so it cannot run inside the tree under
+repair.
+
+Wired today: **skills**, **memory**, **MCP** and **websearch**. Streaming input
+is NOT reachable from the worker — see [`docs/LIMITATIONS.md`](LIMITATIONS.md).
 
 ### What may run without you
 
