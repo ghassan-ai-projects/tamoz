@@ -84,13 +84,29 @@ every slice and whenever the phase table changes.
     PASS; coverage 87.73/68.60; tests 1,150/13,786. Branch totals are computed
     directly from the SimpleCov resultset (can differ by 1 branch from SimpleCov's
     printed summary — definitional edge, documented in the script).
+12. **Q1 ratcheting gates (2026-08-06):** `rake quality:*` namespace in the Rakefile —
+    `quality:rubocop` (gate + TODO-drift probe that restores the committed TODO even on
+    failure), `quality:rubocop_gate` (fast), `quality:reek` (per-file drift vs the
+    committed baseline — **it caught the new shared module's 8 smells on first run**,
+    fixed to zero), `quality:coverage` (RUN_COVERAGE run, no-decrease), 
+    `quality:architecture` (enola check), `quality` aggregate. `rake ci` now includes
+    the three fast gates (rubocop_gate + reek + architecture) — one command, one gate
+    (CODING_STANDARD §1). Coverage is made deterministic by pinning `MT_SEED=1` in both
+    the generator and the gate (seed variance of ±0.01pp would false-fail the ratchet).
+    Shared coverage math lives in `script/quality/coverage_totals.rb` (2 consumers).
+    Baseline regenerated: **raw RuboCop debt net-zero** (42,378 → 42,378: the Rakefile
+    block's +1 BlockLength / +3 StringLiterals offset by the generator refactor);
+    LOC 49,992 / 250 files (new module). Known limitation (documented, inherent to the
+    per-file TODO model): a new offense in an already-excluded (cop, file) pair is not
+    caught by the drift probe — reek's context ratchet partially covers it, and Q2+
+    slices remove the underlying debt.
 
 ## Phase status
 
 | Phase | Status | Acceptance (abridged) |
 |---|---|---|
 | Q0 Measure honestly | **COMPLETE** (2026-08-06) | `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md` committed; deterministic regeneration script; prod vs tests vs generated classified separately |
-| Q1 Ratcheting gates | pending | `rake quality:*` + wiring into `ci`; ratchet policy; committed RuboCop TODO (no exclusions for CI) |
+| Q1 Ratcheting gates | **COMPLETE** (2026-08-06) | `rake quality:*` + `quality` aggregate; ci includes the fast ratchets (rubocop gate, reek drift, enola); ratchet verified live (reek caught 8 new smells); net-zero RuboCop debt added |
 | Q2 Characterize hotspots | pending | characterization + failure-path tests per hotspot; mutation-proven |
 | Q3 Extract by responsibility | pending | one responsibility per slice; target architectures in charter |
 | Q4 Remove accidental complexity | pending | Data values, codec centralization, no banned abstractions |
@@ -127,21 +143,24 @@ slice touches durability, MCP, packaging, or committed evidence artifacts** (the
 Rakefile's own hint), never speculatively. Scorecards and the release benchmark run when
 the slice touches agent/autonomy/worker or persistence/planning/effects respectively.
 
+**Code review after every change (owner, 2026-08-06, part of the loop):** before a
+slice is committed, its diff is code-reviewed against `docs/CODING_STANDARD.md` §12 and
+the charter's review protocol (correctness, security, quality, performance; transaction/
+durability/authority deltas; abstraction leakage; API growth). Every critical and high
+finding is fixed before the commit. Major hotspot extractions additionally get a
+fresh-context critic.
+
 ## Next actions (ordered)
 
-1. **Q1:** `quality:rubocop` (gate + TODO drift check), `quality:reek` (raw drift vs
-   committed per-context counts), `quality:coverage` (RUN_COVERAGE run vs committed
-   numbers, no decrease), `quality:architecture` (enola check), `quality`; wire blocking
-   tasks into `ci`/`ci_full` without slowing the everyday gate.
-2. **Q2:** first hotspot = CLI (`gems/tamoz-agent/lib/tamoz/agent/cli.rb`, 217 reek
+1. **Q2:** first hotspot = CLI (`gems/tamoz-agent/lib/tamoz/agent/cli.rb`, 217 reek
    smells, top complexity file) — Enola impact analysis, callers, characterization +
    failure-path tests, mutation-proven. Then session_nodes.rb (113), profile.rb (126),
    toolbox.rb (140), checkpoint_store.rb (173), compiled.rb (139).
-3. **Q3+:** one responsibility per slice along the charter target architectures.
-4. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
+2. **Q3+:** one responsibility per slice along the charter target architectures.
+3. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
    process, merged at the end; killed processes documented as blind seams with a
    non-killed control path), test_slow measurement, then the coverage targets.
-5. When network returns: re-lock the bundle cleanly (`bundle lock --add-platform ruby`).
+4. When network returns: re-lock the bundle cleanly (`bundle lock --add-platform ruby`).
    Update this table after every slice.
 
 ## Slice ledger
@@ -151,7 +170,8 @@ the slice touches agent/autonomy/worker or persistence/planning/effects respecti
 | 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22); full gate 130/24,970 both locales | 8ce5581 + 4f49a4f + dbf2848 |
 | 2 | 2026-08-06 | — (Q0 tooling) | reek + rubocop-minitest + coding standard | — | — | rubocop gate 0/391 (raw 42,378); reek raw 4,588/202 | unchanged | no production behavior change | f1bcf8e (owner) + e5802f8 |
 | 3 | 2026-08-06 | — (Q0-4) | SimpleCov coverage wiring | — | line 87.73 / branch 68.59 (before) | rubocop gate 0 | unchanged | no production behavior change; 1,150 runs 0 failures | b6f611e |
-| 4 | 2026-08-06 | — (Q0-5) | deterministic baseline script + artifacts | — | line 87.73 / branch 68.60 | rubocop gate 0; raw 42,378; reek 4,588 | 5,387 facts / PASS | no production behavior change | pending |
+| 4 | 2026-08-06 | — (Q0-5) | deterministic baseline script + artifacts | — | line 87.73 / branch 68.60 | rubocop gate 0; raw 42,378; reek 4,588 | 5,387 facts / PASS | no production behavior change | 1ce3e68 |
+| 5 | 2026-08-06 | — (Q1) | quality:* rake gates + ci wiring | — | 87.73 / 68.60 (deterministic) | gate 0; raw 42,378 (net zero); reek 4,588 | unchanged (re-pin after commit) | no production behavior change; ci = one gate, one command | pending |
 
 ## Owner-decision queue
 

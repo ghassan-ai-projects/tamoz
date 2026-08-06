@@ -25,6 +25,7 @@ require 'fileutils'
 require 'json'
 require 'open3'
 require 'rbconfig'
+require_relative 'quality/coverage_totals'
 
 ROOT = File.expand_path('..', __dir__)
 DOCS = File.join(ROOT, 'docs')
@@ -130,76 +131,14 @@ end
 # --- SimpleCov coverage (RUN_COVERAGE=1 rake test) ---
 
 def coverage_run
-  out, err, status = Open3.capture3({ 'RUN_COVERAGE' => '1' }, RbConfig.ruby, '-S',
+  # MT_SEED is pinned so the coverage measurement is reproducible: a random
+  # seed moves a line or two between runs, which would make the Q1 ratchet
+  # ("coverage may never decrease") fail on noise instead of regressions.
+  out, err, status = Open3.capture3({ 'RUN_COVERAGE' => '1', 'MT_SEED' => '1' }, RbConfig.ruby, '-S',
                                     'bundle', 'exec', 'rake', 'test', chdir: ROOT)
   raise "coverage run failed: #{err}" unless status.success?
 
   [out, err]
-end
-
-def merge_line_arrays(left, right)
-  longer, shorter = left.size > right.size ? [left, right] : [right, left]
-  longer.zip(shorter).map { |a, b| [a, b].compact.max }
-end
-
-def merge_branch_trees(left, right)
-  case right
-  when Hash
-    right.each_with_object(left.dup) do |(key, value), merged|
-      merged[key] = left.key?(key) ? merge_branch_trees(left.fetch(key), value) : value
-    end
-  when Numeric
-    left.is_a?(Numeric) ? [left, right].max : right
-  else
-    left
-  end
-end
-
-def merged_resultset
-  resultset = JSON.parse(File.read(File.join(ROOT, 'coverage', '.resultset.json')))
-  merged = {}
-  resultset.each_value do |command|
-    command.fetch('coverage').each do |path, data|
-      entry = (merged[path] ||= { 'lines' => [], 'branches' => {} })
-      entry['lines'] = merge_line_arrays(entry.fetch('lines'), data.fetch('lines'))
-      entry['branches'] = merge_branch_trees(entry.fetch('branches'), data.fetch('branches', {}))
-    end
-  end
-  merged
-end
-
-def branch_counts(node, counts)
-  case node
-  when Hash
-    node.each_value { |value| branch_counts(value, counts) }
-  when Numeric
-    counts[:total] += 1
-    counts[:covered] += 1 if node.positive?
-  end
-end
-
-def accumulate_file(path, data, totals)
-  relevant = data.fetch('lines').compact
-  covered = relevant.count { |value| value.to_i.positive? }
-  totals[:line_hit] += covered
-  totals[:line_total] += relevant.size
-  totals[:uncovered] << path if relevant.size.positive? && covered.zero?
-  branch_counts(data.fetch('branches'), totals[:branches])
-end
-
-def coverage_totals(merged)
-  totals = { line_hit: 0, line_total: 0, branches: { covered: 0, total: 0 }, uncovered: [] }
-  merged.each { |path, data| accumulate_file(path, data, totals) }
-  branches = totals[:branches]
-  {
-    'line_percent' => percent(totals[:line_hit], totals[:line_total]),
-    'line_covered' => totals[:line_hit],
-    'line_total' => totals[:line_total],
-    'branch_percent' => percent(branches[:covered], branches[:total]),
-    'branch_covered' => branches[:covered],
-    'branch_total' => branches[:total],
-    'uncovered_files' => totals[:uncovered].sort
-  }
 end
 
 def test_summary(output)
@@ -209,7 +148,7 @@ end
 
 def coverage_stats
   out, err = coverage_run
-  totals = coverage_totals(merged_resultset)
+  totals = QualityCoverage.totals(File.join(ROOT, 'coverage', '.resultset.json'))
   totals.merge('tests' => test_summary("#{out}\n#{err}"))
 end
 
@@ -265,12 +204,7 @@ def loc_stats
     'by_directory' => by_directory.sort.to_h }
 end
 
-def percent(hit, total)
-  total.zero? ? 0.0 : (hit.to_f / total * 100).round(2)
-end
-
 # --- Assembly ---
-
 def summary_of(path)
   full = File.join(DOCS, path)
   return { 'present' => false } unless File.exist?(full)
@@ -355,7 +289,9 @@ def render_markdown(data)
   lines.join("\n")
 end
 
-data = assemble
-File.write(BASELINE_JSON, "#{JSON.pretty_generate(data)}\n")
-File.write(CODE_QUALITY_MD, render_markdown(data))
-warn "baseline written: #{BASELINE_JSON}"
+if $PROGRAM_NAME == __FILE__
+  data = assemble
+  File.write(BASELINE_JSON, "#{JSON.pretty_generate(data)}\n")
+  File.write(CODE_QUALITY_MD, render_markdown(data))
+  warn "baseline written: #{BASELINE_JSON}"
+end

@@ -234,8 +234,100 @@ namespace :fixtures do
   end
 end
 
+# --- Quality gates (Q1 of the quality program; charter docs/QUALITY_PROGRAM.md) ---
+# Ratchet, not big-bang: these tasks fail when the committed baseline would have
+# to grow. The committed baseline is docs/code-quality-baseline.json, regenerated
+# by script/regenerate_quality_baseline after every slice that moves the numbers.
+
+QUALITY_ROOT = File.expand_path(__dir__)
+ENOLA_BIN = ENV.fetch('ENOLA_BIN', File.join(Dir.home, '.local', 'bin', 'enola'))
+QUALITY_BASELINE = File.join(QUALITY_ROOT, 'docs', 'code-quality-baseline.json')
+QUALITY_RESULTSET = File.join(QUALITY_ROOT, 'coverage', '.resultset.json')
+QUALITY_REPORT_DIRS = %w[gems script bin apps].freeze
+QUALITY_TODO = File.join(QUALITY_ROOT, '.rubocop_todo.yml')
+
+def quality_exclude_entries(content)
+  content.scan(/^\s+-\s+'([^']+)'$/).flatten
+end
+
+namespace :quality do
+  desc 'RuboCop: zero offenses + the committed TODO must not grow'
+  task :rubocop do
+    sh 'rubocop', '--format', 'simple'
+    before = File.read(QUALITY_TODO)
+    begin
+      sh 'rubocop', '--auto-gen-config', '--no-auto-gen-timestamp',
+         '--auto-gen-only-exclude', '--exclude-limit', '500'
+      ruby 'script/clean_rubocop_todo'
+      added = quality_exclude_entries(File.read(QUALITY_TODO)) - quality_exclude_entries(before)
+    ensure
+      # The regeneration is a probe: restore the committed TODO even if the
+      # probe fails, so a broken regen cannot leave the working tree mutated.
+      File.write(QUALITY_TODO, before)
+    end
+    unless added.empty?
+      added.first(10).each { |entry| warn "  + #{entry}" }
+      raise "quality:rubocop failed: the TODO grew by #{added.size} exclusion(s) — fix the offenses"
+    end
+    puts 'rubocop: 0 offenses; TODO stable'
+  end
+
+  desc 'RuboCop: zero-offense gate only (the fast everyday check)'
+  task :rubocop_gate do
+    sh 'rubocop', '--format', 'simple'
+  end
+
+  desc 'Reek: no new smell in any production file vs the committed baseline'
+  task :reek do
+    require 'json'
+    require 'open3'
+    baseline = JSON.parse(File.read(QUALITY_BASELINE)).fetch('reek').fetch('by_file')
+    bin = Gem.bin_path('reek', 'reek')
+    out, = Open3.capture3(RbConfig.ruby, bin, '--format', 'json', *QUALITY_REPORT_DIRS, chdir: QUALITY_ROOT)
+    by_file = Hash.new(0)
+    JSON.parse(out).each { |smell| by_file[smell.fetch('source')] += 1 }
+    regressed = by_file.select { |file, count| count > baseline.fetch(file, 0) }
+    unless regressed.empty?
+      regressed.each { |file, count| warn "  #{file}: baseline #{baseline.fetch(file, 0)} -> #{count}" }
+      raise 'quality:reek failed: new smell(s) in production code'
+    end
+    puts "reek: #{by_file.values.sum} smells; none new vs the committed baseline"
+  end
+
+  desc 'Coverage: RUN_COVERAGE=1 run must not fall below the committed baseline'
+  task :coverage do
+    require 'json'
+    require 'open3'
+    require_relative 'script/quality/coverage_totals'
+    baseline = JSON.parse(File.read(QUALITY_BASELINE)).fetch('coverage')
+    # MT_SEED pinned (same as the baseline generator) so the comparison is
+    # exact — a random seed would move a line or two and false-fail the ratchet.
+    _out, err, status = Open3.capture3(
+      { 'RUN_COVERAGE' => '1', 'MT_SEED' => '1' }, RbConfig.ruby, '-S', 'bundle', 'exec', 'rake', 'test',
+      chdir: QUALITY_ROOT
+    )
+    raise "quality:coverage failed: coverage run failed: #{err}" unless status.success?
+
+    totals = QualityCoverage.totals(QUALITY_RESULTSET)
+    %w[line_percent branch_percent].each do |key|
+      next unless totals.fetch(key) < baseline.fetch(key)
+
+      raise "quality:coverage failed: #{key} fell below baseline (#{totals.fetch(key)} < #{baseline.fetch(key)})"
+    end
+    puts "coverage: line #{totals.fetch('line_percent')}% / branch #{totals.fetch('branch_percent')}% — no decrease"
+  end
+
+  desc 'Enola: no cycles, layer violations, or unexplained spillover'
+  task :architecture do
+    sh ENOLA_BIN, 'check', '--fail-on=cycles,layers', '--min-confidence=0.8', '.'
+  end
+end
+
+desc 'The full quality gate: rubocop (with TODO drift), reek, coverage, architecture'
+task quality: ['quality:rubocop', 'quality:reek', 'quality:coverage', 'quality:architecture']
+
 desc "The everyday gate — fast, and honest about what it skips"
-task ci: ["design:validate", :syntax, :test_fast] do
+task ci: ['design:validate', :syntax, :test_fast, 'quality:rubocop_gate', 'quality:reek', 'quality:architecture'] do
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"

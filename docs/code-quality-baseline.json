@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "b6f611e",
+    "commit": "1ce3e68",
     "dirty": true
   },
   "toolchain": {
@@ -10,8 +10,8 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 249,
-    "total_code_lines": 49971,
+    "files": 250,
+    "total_code_lines": 49992,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
@@ -41,7 +41,8 @@
       "script/generate_requirements_audit": 214,
       "script/generate_requirements_manifest": 930,
       "script/mcp_test_server": 183,
-      "script/regenerate_quality_baseline": 286,
+      "script/quality": 80,
+      "script/regenerate_quality_baseline": 227,
       "script/release_rehearsal": 255,
       "script/run_m1_conformance": 365,
       "script/run_m2_conformance": 371,
@@ -51,9 +52,9 @@
   },
   "rubocop": {
     "total": 42378,
-    "files_inspected": 393,
+    "files_inspected": 394,
     "by_cop": {
-      "Style/StringLiterals": 30336,
+      "Style/StringLiterals": 30335,
       "Layout/SpaceInsideHashLiteralBraces": 3704,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
       "Metrics/AbcSize": 936,
@@ -64,7 +65,7 @@
       "Layout/EmptyLineAfterGuardClause": 304,
       "Minitest/AssertPredicate": 275,
       "Metrics/CyclomaticComplexity": 270,
-      "Metrics/BlockLength": 266,
+      "Metrics/BlockLength": 267,
       "Metrics/PerceivedComplexity": 263,
       "Naming/RescuedExceptionsVariableName": 189,
       "Metrics/ParameterLists": 161,
@@ -253,7 +254,7 @@
     "metrics_over_ceiling": {
       "Metrics/BlockLength": {
         "max": 173,
-        "count": 266
+        "count": 267
       },
       "Metrics/MethodLength": {
         "max": 240,
