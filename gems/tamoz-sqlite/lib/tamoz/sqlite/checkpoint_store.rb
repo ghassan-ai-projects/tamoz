@@ -9,9 +9,6 @@ module Tamoz
       CHECKPOINT_PROTOCOL_VERSION = 1
       REQUEST_PROTOCOL_VERSION = 1
       MAX_HISTORY_LIMIT = 100_000
-      REQUEST_STATUSES = %w[
-        queued claimed running redirecting completed failed
-      ].freeze
       REQUEST_OPERATIONS = %w[
         turn resume retry continue fork redirect
       ].freeze
@@ -36,6 +33,7 @@ module Tamoz
 
         @adapter = adapter
         @checkpoint_codec = checkpoint_codec
+        @wire = CheckpointWire.new(checkpoint_codec:)
         freeze
       end
 
@@ -230,12 +228,12 @@ module Tamoz
           name: "request id",
           max_bytes: Wire::MAX_REQUEST_ID_BYTES
         )
-        operation_text = enum_text!(
+        operation_text = @wire.enum_text(
           operation,
           REQUEST_OPERATIONS,
           "request operation"
         )
-        delivery_text = enum_text!(
+        delivery_text = @wire.enum_text(
           delivery,
           DELIVERY_MODES,
           "request delivery mode"
@@ -1331,13 +1329,6 @@ module Tamoz
         )
       end
 
-      def enum_text!(value, allowed, name)
-        text = value.to_s
-        return text if allowed.include?(text)
-
-        raise ConfigurationError, "#{name} is invalid"
-      end
-
       def request_row(tx, thread_id, namespace, request_id, label)
         tx.first(
           label,
@@ -1356,12 +1347,12 @@ module Tamoz
           row.fetch(9),
           domain: "tamoz.sqlite.request_payload"
         )
-        operation = persisted_enum_symbol!(
+        operation = @wire.persisted_enum_symbol(
           row.fetch(5),
           REQUEST_OPERATIONS,
           "request operation"
         )
-        delivery_mode = persisted_enum_symbol!(
+        delivery_mode = @wire.persisted_enum_symbol(
           row.fetch(6),
           DELIVERY_MODES,
           "request delivery mode"
@@ -1412,46 +1403,19 @@ module Tamoz
           input_digest: row.fetch(4).dup.freeze,
           operation:,
           delivery_mode:,
-          status: request_status!(row.fetch(7)),
+          status: @wire.request_status(row.fetch(7)),
           payload: decoded_payload,
           execution_id: row.fetch(10)&.dup&.freeze,
           target_execution_id: row.fetch(11)&.dup&.freeze,
           cancellation_generation: row.fetch(12),
           checkpoint_id: row.fetch(13)&.dup&.freeze,
-          response: response && canonical_state_value(response, "request response"),
+          response: response && @wire.canonical_state_value(response, "request response"),
           terminal_error: terminal_error &&
-                          canonical_state_value(terminal_error, "request terminal error"),
+                          @wire.canonical_state_value(terminal_error, "request terminal error"),
           retryable: row.fetch(18).nil? ? nil : row.fetch(18) == 1,
           created_at_ms: row.fetch(19),
           updated_at_ms: row.fetch(20)
         )
-      end
-
-      def canonical_state_value(bytes, name)
-        value = checkpoint_codec.state_codec.load(bytes)
-        # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
-        # EffectJournal#decode_receipt).
-        unless checkpoint_codec.state_codec.dump(value).b == bytes.b
-          raise CheckpointCorruptionError, "#{name} is not canonical"
-        end
-
-        value
-      end
-
-      def request_status!(value)
-        unless REQUEST_STATUSES.include?(value)
-          raise CheckpointCorruptionError, "request status is invalid"
-        end
-
-        value.to_sym
-      end
-
-      def persisted_enum_symbol!(value, allowed, name)
-        unless value.is_a?(String) && allowed.include?(value)
-          raise CheckpointCorruptionError, "stored #{name} is invalid"
-        end
-
-        value.to_sym
       end
 
       def active_execution_id!(tx, lease, label)
@@ -2062,7 +2026,7 @@ module Tamoz
       end
 
       private_constant :CHECKPOINT_PROTOCOL_VERSION, :REQUEST_PROTOCOL_VERSION,
-                       :MAX_HISTORY_LIMIT, :REQUEST_STATUSES,
+                       :MAX_HISTORY_LIMIT,
                        :REQUEST_OPERATIONS, :DELIVERY_MODES, :REQUEST_SELECT,
                        :Writer
     end

@@ -179,7 +179,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   # verified by reverting its `.b` comparison and watching this file go red.
   #
   #   checkpoint_store#decode_request      — a non-ASCII TASK is a request payload
-  #   checkpoint_store#canonical_state_value — durable state read back
+  #   checkpoint_wire#canonical_state_value — durable state read back
   #   Store#get                            — the application store's own values
   #   CheckpointCodec#canonical_value_bytes / #load_value — the checkpoint itself
   def test_a_non_ascii_task_round_trips_through_the_durable_request_payload
@@ -243,7 +243,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   #   checkpoint_codec#load_value            COVERED (durable state values)
   #   checkpoint_codec#canonical_value_bytes shadowed — `load_value` performs the
   #     identical check first, so this one can never be the site that fires
-  #   checkpoint_store#canonical_state_value unreachable — it guards a request's
+  #   checkpoint_wire#canonical_state_value  unreachable — it guards a request's
   #     `response` and `terminal_error`, whose vocabularies are ASCII by
   #     construction (`{"graph_status" => …}`, the typed DR-4 payloads)
   #   wire#decode_namespace                  unreachable — namespace parts are
@@ -255,7 +255,8 @@ class AgentNonAsciiSessionTest < Minitest::Test
     "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb" => 1,
-    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb" => 2,
+    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb" => 1,
+    "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/store.rb" => 1
   }.freeze
 
