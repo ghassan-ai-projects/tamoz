@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `cc1b9d3` (main) — "Q2 giant #2: characterize the adoption-registry authority seams"
+- **HEAD:** `f5def65` (main) — "Q3 profile.rb slice 1: lift the registries out, split storage from codec"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -193,7 +193,11 @@ target either: file size (extract a responsibility into its own file) and method
 (a method over the Q6 20-line ceiling split into named steps). Do not re-run a
 standalone characterization pass on a file already covered at its extraction seam.
 
-1. **Q3 profile.rb slice 1 — lift the two registries out of the file.**
+1. ~~**Q3 profile.rb slice 1 — lift the two registries out of the file.**~~ **DONE (slice
+   18).** profile.rb 1,547 → 1,232; five files under `profile/`; both registries now
+   split storage/locking from document validation. Next up is item 2.
+
+   Original plan, kept for the record:
    `AdoptionRegistry` (1,224–1,285), `Transition` (1,293–1,319), and
    `TransitionRegistry` (1,334–1,544) are ~320 lines of nested classes at the bottom of
    `profile.rb` (1,547 lines) with no dependency on the loader above them. Move them to
@@ -233,8 +237,65 @@ standalone characterization pass on a file already covered at its extraction sea
 | 15 | 2026-08-06 | checkpoint_store (Q3 slice 4, giant #1) | fenced writer facade (nested Writer → Tamoz::SQLite::CheckpointWriter, 16 guarded delegations) | checkpoint_store.rb 1,886 → 1,760 + checkpoint_writer.rb 150 | 90.5% (unchanged) | reek 4,548 → 4,536 (nested class's baselined smells left the store; writer smell-free — disables exactly cover TooManyMethods/MissingSafeMethod/2×ManualDispatch/2×FeatureEnvy/2×LongParameterList, critic strip-verified) | PASS | method-for-method identical (critic: 16 delegations + lease usage verified; structural fixes lease/adapter locals behavior-neutral; callers duck-typed unaffected; lease-arg store methods zero hunks); **ci_full both locales** 130/24,970; critic verdict **PASS** (0 fixes; Q4 note: merge accepts_effects?/accepts_store? duplication) | fc919b3 |
 | 16 | 2026-08-06 | profile.rb (Q2, giant #2) | characterization tests — schema-validation seams (YAML safety, profile/roots/model_roles/credential_ref/checks validation) | — (tests only) | 90.9% line before (672/739) | gate 0; reek 4,536 unchanged | PASS | +11 tests (33 assertions): YAML merge keys + nesting limit → ValidationError; profile_id pattern + legacy-reserved; unknown profile/roots fields; invalid model role name; unknown provider; credential_ref kind; invalid check name; check argv non-string; **mutation-proven** (removing the merge-key rejection failed the test); 13 previously-untested validation branches now pinned | 8ca17c2 |
 | 17 | 2026-08-07 | profile.rb (Q2, giant #2) | characterization tests — adoption-registry authority seams (codec fail-closed, unreadable bytes, owner-only storage, activate's write contract) | — (tests only) | 87.95 line / 68.92 branch (whole suite, measured BEFORE this slice — it is the tree at 8ca17c2, and supersedes the Q0-4 87.73/68.60 figure taken before slice 16; this slice only adds tests, so production coverage can rise but not fall. Re-measure belongs to the next slice) | gate 0; reek drift matches baseline | PASS (new edges are the test file's own) | +15 tests (42 assertions): no test in the suite had asserted either adoption-registry error message — the transition registry beside it had exactly these. Foreign schema_version / non-digest token / short digest / non-mapping document / non-mapping `activated` / non-array list / non-string id → "invalid"; unparseable YAML + alias expansion → "unreadable"; group-readable refused on read AND before `activate` writes; activate 0600-in-0700, idempotent, appends per digest. **Mutation-proven** (drop DIGEST_PATTERN → 2 fail; drop schema_version equality → 1 fail) | cc1b9d3 |
+| 18 | 2026-08-07 | profile.rb (Q3 slice 1, giant #2) | the two operator-side registries lifted out, and storage/locking split from document validation | profile.rb 1,547 → 1,232; + adoption_document 47, adoption_registry 79, transition 45, transition_document 76, transition_registry 253 | not re-measured this slice (no test added; production lines moved, not removed) | rubocop raw 42,338 → 42,269; **reek 4,536 → 4,494**; new files 51 → **0** smells | **PASS** — no structural regression, zero layer violations; advisory coupled-cluster finding moved 20 → 21 modules (the file count of this split, not new coupling) | behavior-identical: every moved string literal diffed against HEAD (only the rubocop-required rescue rename + the field_rules table differ) and the four AdoptionError messages verified byte-identical at runtime; two redundant branches removed (`document` already returns empty when absent; `activate`'s pre-verify subsumed by `document`'s). **ci_full BOTH locales 130/24,970**. Owner option 2 applied — predicates got a home (AdoptionDocument/TransitionDocument, mirroring CheckpointWire) instead of a suppression; `consume_if_candidate!` kept whole with an inline disable naming the exception | f5def65 |
 
 ## Owner-decision queue
 
-- (none — the reek / rubocop-minitest installation blocker was resolved by the owner
-  installing both gems on 2026-08-06)
+- **RESOLVED (2026-08-07) — owner chose option 2 (design out), applied in slice 18.**
+  The stateless validation predicates got a home: `AdoptionDocument` and
+  `TransitionDocument`, mirroring `Tamoz::SQLite::CheckpointWire` — parsed bytes in, one
+  believability question out. `consume_if_candidate!` was kept whole per the paired
+  recommendation (option 4 for that path): find/guard/mark/write/return is one atomic
+  decision against one read, and splitting it had produced helpers that took the identity
+  triple loose and made it possible to call the mark without the guard. It carries an
+  inline `rubocop:disable` naming that exception at the site, per CODING_STANDARD §1.
+  Result: the three extracted files went 51 → 0 reek smells and the repo ledger FELL
+  (reek 4,536 → 4,494; rubocop raw 42,338 → 42,269).
+
+  **Standing rule for the rest of the program** (do not re-decide per slice): when an
+  extraction surfaces a debted file's baselined smells in its new home, design them out
+  first — a stateless document/wire object is the shape this repo already uses — and
+  carry a documented site-level `:reek:` disable only where the smell is irreducible
+  (pure predicates, deliberate bangs, a locked critical section, a rubocop/reek conflict).
+  Never add the new file to `.rubocop_todo.yml`. Regenerate the quality baseline as part
+  of the slice; the drift gate will demand it. Note: `script/regenerate_quality_baseline`
+  needs a UTF-8 locale — run it with `LANG=en_US.UTF-8`, or it dies on `US-ASCII`.
+
+- ~~OPEN (2026-08-07) — how method-splitting interacts with the reek ratchet.~~ Raised by
+  the profile.rb slice 1 attempt, which is IN THE WORKING TREE, UNCOMMITTED, gate red on
+  reek only. What was done: `AdoptionRegistry`, `Transition`, and `TransitionRegistry`
+  moved to `profile/{adoption_registry,transition,transition_registry}.rb`; profile.rb
+  **1,547 → 1,222** lines; the four methods that broke Q6 ceilings in their new home
+  (`consume_if_candidate!`, `validate!`, `valid_document?`, `valid_entry?`, plus
+  `AdoptionRegistry#document`) split into named steps. rubocop **0**; all 113 profile
+  tests green (42+24+11+15+11+10), including flock/concurrency and the v1/v2 codec.
+
+  The measured effect on reek: profile.rb **126 → 84** (−42), new files **0 → 51**, repo
+  total **4,536 → 4,545**. So the *extraction* is smell-neutral — 42 smells relocated
+  with the code they describe — and the **+9 are the method splits' own**: the small
+  private helpers are stateless (`UtilityFunction` ×5) and take the (profile_id, from,
+  to) and (thread_id, consumed_by) clumps as parameters (`LongParameterList`,
+  `DataClump`, one `TooManyStatements`).
+
+  This is CODING_STANDARD §4 in the concrete: splitting to satisfy a line-count ceiling
+  bought indirection that reek correctly flags. It will recur on every remaining
+  extraction slice, so it is a program decision, not a slice decision. Options:
+  1. **Suppress** — documented site-level `:reek:` disables on the 9, as slices 8–15 did
+     (they carried 10–12 each). Cheapest; grows the suppression habit.
+  2. **Design out** — give the stateless validation predicates a home, mirroring
+     `Tamoz::SQLite::CheckpointWire` (the precedent in this repo): a small stateless
+     wire/validator object per registry. Kills UtilityFunction and the clumps honestly,
+     but is a second abstraction and a larger slice.
+  3. **Accept the +9** and re-baseline, recording that the ratchet cannot distinguish a
+     relocated smell from a new one. Honest only if the baseline note says so explicitly.
+  4. **Do not split** — keep the moved methods whole, and add per-file Q6 exceptions
+     naming why (the standard permits this; it is the "limits are diagnostic" clause).
+
+  Recommendation: **2 for the validators, 4 for `consume_if_candidate!`.** The predicates
+  genuinely belong to a wire object and the repo already has that shape; the consume path
+  is one atomic locked read-modify-write whose cohesion is the point, and splitting it was
+  the least defensible part of the attempt.
+
+  Note for whoever resumes: the reek baseline is per-file, so ANY extraction out of a
+  debted file surfaces that file's baselined smells in the new file. Whatever is chosen
+  here should be written into the loop's slice recipe, not re-decided per slice.
