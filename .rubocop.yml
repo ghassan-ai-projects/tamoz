@@ -11,6 +11,7 @@ inherit_mode:
     - Exclude
 
 plugins:
+  - rubocop-minitest
   - rubocop-performance
 
 AllCops:

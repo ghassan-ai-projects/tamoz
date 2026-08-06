@@ -36,6 +36,10 @@ Never absorb `.claude`, `.cursor`, `.github/instructions`, `AGENTS.md`, `.enola`
 
 ## Quality principles
 
+The repository's Ruby/Rails best-practice contract is
+[`docs/CODING_STANDARD.md`](CODING_STANDARD.md) — every refactoring slice follows it.
+The principles below are its backbone:
+
 - Behavior before structure: characterization tests precede extraction.
 - Cohesion over file-size cosmetics.
 - Composition over inheritance.

@@ -6,6 +6,16 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tam
 - Tests: `test/` (Minitest), run via `rake`.
 - Ask before changing cross-gem interfaces; most bugs live at gem boundaries.
 
+## Quality gates and coding standard
+
+- Follow `docs/CODING_STANDARD.md` for every code change — it is the repo's Ruby/Rails
+  best-practice contract and is enforced by the quality gates.
+- The quality program (RuboCop, Reek, SimpleCov, Enola) is chartered in
+  `docs/QUALITY_PROGRAM.md`; live state and the resume point live in
+  `docs/QUALITY_PROGRAM_STATE.md`.
+- Everyday gate: `rake ci` + `rubocop` + `enola check` (see the state doc's gate
+  policy — `ci_full` both locales only for durability/MCP/packaging/evidence slices).
+
 <!-- enola:begin -->
 ## enola — architecture before and after a change
 

@@ -88,12 +88,21 @@ every slice and whenever the phase table changes.
 
 | Tool | Needed | Status |
 |---|---|---|
-| RuboCop + performance | gate at 0 | **done** — locked, `.rubocop.yml` + committed TODO, `plugins:` form |
-| RuboCop-minitest | optional | **blocked** — rubygems.org unreachable; add `~> 0.38` later |
-| Reek | design smells | **blocked** — rubygems.org unreachable; add `~> 6.4` later |
+| RuboCop + performance + minitest | gate at 0 | **done** — locked; `plugins:` form; Minitest cops active (raw debt 42,378, debted per-file) |
+| Reek | design smells | **done (user-installed 6.5.0)** — `.reek.yml` isolates repo content; raw baseline 4,588 smells / 202 files (below); untuned by design until Q0-5 |
 | SimpleCov | branch + subprocess collation | locked 0.22.0; **not yet wired** (Q0-4) |
 | Enola CLI | manual baseline/check gate | **done** — `~/.local/bin/enola`; mcp-arch.yaml; baseline pinned |
 | RubyCritic | optional aggregator | evaluate after core tools calibrated |
+
+**Reek raw baseline (2026-08-06, reek 6.5.0, JSON run over gems/ script/ bin/ apps/,**
+**no tuning):** 4,588 smells across 202 files. Top types: DuplicateMethodCall 1,302,
+TooManyStatements 793, FeatureEnvy 394, LongParameterList 309, MissingSafeMethod 260,
+IrresponsibleModule 242, UtilityFunction 214, DataClump 187, NilCheck 156,
+ControlParameter 148. Top files (validate the Q2 hotspot list): agent_smoke_corpus.rb
+248 (evals corpus — classify separately per Q0), cli.rb 217, checkpoint_store.rb 173,
+toolbox.rb 140, compiled.rb 139, profile.rb 126, skills.rb 113, session_nodes.rb 113,
+effect_journal.rb 73. Reek's ratchet is context-named (stricter than per-file
+excludes): the Q0-5 baseline stores per-context counts.
 
 ## Gate policy (owner-confirmed 2026-08-06)
 
@@ -124,10 +133,10 @@ the slice touches agent/autonomy/worker or persistence/planning/effects respecti
 
 | # | Date | Hotspot | Responsibility | LOC b/a | Cov b/a | RuboCop/Reek | Enola delta | Behavior | Commit |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22); full gate 130/24,970 both locales | 8ce5581 + Q0 lockfile fix |
+| 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22); full gate 130/24,970 both locales | 8ce5581 + 4f49a4f + dbf2848 |
+| 2 | 2026-08-06 | — (Q0 tooling) | reek + rubocop-minitest + coding standard | — | — | rubocop gate 0/391 (raw 42,378); reek raw 4,588/202 | unchanged | no production behavior change | pending |
 
 ## Owner-decision queue
 
-- **Reek / rubocop-minitest installation** — blocked on rubygems.org reachability; no
-  policy decision needed, just network. Re-add to the dev group when reachable.
-- (none else)
+- (none — the reek / rubocop-minitest installation blocker was resolved by the owner
+  installing both gems on 2026-08-06)

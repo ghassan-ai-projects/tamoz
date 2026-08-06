@@ -1883,6 +1883,502 @@ Metrics/PerceivedComplexity:
 
 # Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertEmpty:
+  Exclude:
+    - 'test/graph_execution_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertEqual:
+  Exclude:
+    - 'test/memory_engine_test.rb'
+
+# Offense count: 14
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertInDelta:
+  Exclude:
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_matrix_test.rb'
+    - 'test/improvement_candidate_test.rb'
+    - 'test/mcp_server_config_test.rb'
+    - 'test/mcp_supervisor_test.rb'
+    - 'test/websearch_egress_test.rb'
+    - 'test/websearch_invocation_test.rb'
+
+# Offense count: 5
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertIncludes:
+  Exclude:
+    - 'test/improvement_candidate_test.rb'
+    - 'test/websearch_invocation_test.rb'
+
+# Offense count: 5
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertKindOf:
+  Exclude:
+    - 'test/memory_engine_test.rb'
+    - 'test/memory_session_integration_test.rb'
+    - 'test/public_api_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+    - 'test/stream_connector_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertOperator:
+  Exclude:
+    - 'test/memory_engine_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertPathExists:
+  Exclude:
+    - 'test/agent_profile_machinery_test.rb'
+
+# Offense count: 275
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertPredicate:
+  Exclude:
+    - 'test/agent_acceptance_workflow_test.rb'
+    - 'test/agent_capability_binding_test.rb'
+    - 'test/agent_digest_resolution_test.rb'
+    - 'test/agent_mcp_adversarial_test.rb'
+    - 'test/agent_mcp_capability_source_test.rb'
+    - 'test/agent_non_ascii_session_test.rb'
+    - 'test/agent_profile_test.rb'
+    - 'test/agent_profile_transition_test.rb'
+    - 'test/agent_scorecard_test.rb'
+    - 'test/agent_session_kill_matrix_test.rb'
+    - 'test/agent_session_records_test.rb'
+    - 'test/agent_skills_test.rb'
+    - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/agent_toolbox_test.rb'
+    - 'test/capability_host_test.rb'
+    - 'test/capability_registry_test.rb'
+    - 'test/core_context_test.rb'
+    - 'test/core_instrumentation_test.rb'
+    - 'test/core_pool_test.rb'
+    - 'test/core_state_codec_test.rb'
+    - 'test/core_stream_test.rb'
+    - 'test/dependency_isolation_test.rb'
+    - 'test/dependency_review_test.rb'
+    - 'test/documentation_test.rb'
+    - 'test/evals_verifier_test.rb'
+    - 'test/evidence_artifact_test.rb'
+    - 'test/graph_checkpoint_codec_test.rb'
+    - 'test/graph_definition_test.rb'
+    - 'test/graph_determinism_property_test.rb'
+    - 'test/graph_execution_test.rb'
+    - 'test/graph_history_test.rb'
+    - 'test/graph_identity_test.rb'
+    - 'test/graph_interrupt_test.rb'
+    - 'test/graph_state_manager_test.rb'
+    - 'test/graph_stream_test.rb'
+    - 'test/graph_subgraph_test.rb'
+    - 'test/graph_surface_audit_test.rb'
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_matrix_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/improvement_candidate_test.rb'
+    - 'test/m1_evidence_test.rb'
+    - 'test/m2_evidence_test.rb'
+    - 'test/mcp_elicitation_test.rb'
+    - 'test/mcp_invocation_test.rb'
+    - 'test/mcp_supervisor_test.rb'
+    - 'test/memory_engine_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_session_integration_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+    - 'test/public_api_test.rb'
+    - 'test/release_rehearsal_evidence_test.rb'
+    - 'test/requirements_manifest_test.rb'
+    - 'test/scheduler_values_test.rb'
+    - 'test/sqlite_boundary_registry_test.rb'
+    - 'test/sqlite_boundary_source_audit_test.rb'
+    - 'test/sqlite_checkpoint_test.rb'
+    - 'test/sqlite_circuit_store_test.rb'
+    - 'test/sqlite_convergence_probe_test.rb'
+    - 'test/sqlite_crash_recovery_test.rb'
+    - 'test/sqlite_deletion_test.rb'
+    - 'test/sqlite_kernel_test.rb'
+    - 'test/sqlite_request_inbox_test.rb'
+    - 'test/sqlite_scenario_driver_test.rb'
+    - 'test/sqlite_scenario_registry_test.rb'
+    - 'test/sqlite_selector_control_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+    - 'test/sqlite_trace_recorder_test.rb'
+    - 'test/subprocess_runner_test.rb'
+    - 'test/websearch_circuit_test.rb'
+    - 'test/websearch_invocation_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertRespondTo:
+  Exclude:
+    - 'test/healing_failure_contract_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/AssertSame:
+  Exclude:
+    - 'test/p16_tools_gem_test.rb'
+
+# Offense count: 71
+# This cop supports unsafe autocorrection (--autocorrect-all).
+Minitest/AssertTruthy:
+  Exclude:
+    - 'test/agent_scorecard_test.rb'
+    - 'test/ci_configuration_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/memory_engine_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_repository_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+    - 'test/public_api_test.rb'
+    - 'test/scheduler_consumer_test.rb'
+    - 'test/sqlite_deletion_test.rb'
+    - 'test/sqlite_scenario_driver_test.rb'
+    - 'test/stream_action_boundary_test.rb'
+
+# Offense count: 31
+Minitest/AssertWithExpectedArgument:
+  Exclude:
+    - 'test/agent_session_kill_matrix_test.rb'
+    - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/agent_toolbox_test.rb'
+    - 'test/dependency_isolation_test.rb'
+    - 'test/evals_verifier_test.rb'
+    - 'test/graph_subgraph_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+
+# Offense count: 1011
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/EmptyLineBeforeAssertionMethods:
+  Exclude:
+    - 'test/agent_budget_test.rb'
+    - 'test/agent_change_evaluation_test.rb'
+    - 'test/agent_cli_profile_test.rb'
+    - 'test/agent_cli_test.rb'
+    - 'test/agent_digest_resolution_test.rb'
+    - 'test/agent_mcp_adversarial_test.rb'
+    - 'test/agent_mcp_capability_source_test.rb'
+    - 'test/agent_non_ascii_session_test.rb'
+    - 'test/agent_profile_machinery_test.rb'
+    - 'test/agent_profile_test.rb'
+    - 'test/agent_profile_transition_test.rb'
+    - 'test/agent_repair_evaluation_test.rb'
+    - 'test/agent_runtime_test.rb'
+    - 'test/agent_schedule_test.rb'
+    - 'test/agent_scorecard_test.rb'
+    - 'test/agent_session_effect_test.rb'
+    - 'test/agent_session_kill_matrix_test.rb'
+    - 'test/agent_session_operations_test.rb'
+    - 'test/agent_session_test.rb'
+    - 'test/agent_skills_adversarial_test.rb'
+    - 'test/agent_skills_toolbox_test.rb'
+    - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/agent_toolbox_invariant17_test.rb'
+    - 'test/agent_toolbox_test.rb'
+    - 'test/agent_unattended_policy_test.rb'
+    - 'test/agent_worker_mcp_test.rb'
+    - 'test/agent_worker_test.rb'
+    - 'test/autonomy_scorecard_test.rb'
+    - 'test/capability_host_test.rb'
+    - 'test/capability_registry_test.rb'
+    - 'test/ci_configuration_test.rb'
+    - 'test/core_context_test.rb'
+    - 'test/core_instrumentation_test.rb'
+    - 'test/core_pool_test.rb'
+    - 'test/core_state_codec_test.rb'
+    - 'test/core_stream_test.rb'
+    - 'test/dependency_isolation_test.rb'
+    - 'test/documentation_surface_test.rb'
+    - 'test/duplicate_key_detector_test.rb'
+    - 'test/evals_verifier_test.rb'
+    - 'test/evidence_artifact_test.rb'
+    - 'test/graph_checkpoint_codec_test.rb'
+    - 'test/graph_execution_test.rb'
+    - 'test/graph_history_test.rb'
+    - 'test/graph_identity_test.rb'
+    - 'test/graph_interrupt_test.rb'
+    - 'test/graph_reducer_test.rb'
+    - 'test/graph_state_manager_test.rb'
+    - 'test/graph_stream_test.rb'
+    - 'test/graph_subgraph_test.rb'
+    - 'test/graph_surface_audit_test.rb'
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_matrix_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/improvement_candidate_test.rb'
+    - 'test/m1_evidence_test.rb'
+    - 'test/m2_evidence_test.rb'
+    - 'test/mcp_elicitation_test.rb'
+    - 'test/mcp_invocation_test.rb'
+    - 'test/mcp_server_config_test.rb'
+    - 'test/mcp_supervisor_test.rb'
+    - 'test/memory_engine_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_repository_test.rb'
+    - 'test/memory_session_integration_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+    - 'test/public_api_test.rb'
+    - 'test/release_evaluation_manifest_test.rb'
+    - 'test/scheduler_consumer_test.rb'
+    - 'test/scheduler_values_test.rb'
+    - 'test/sqlite_backup_test.rb'
+    - 'test/sqlite_boundary_registry_test.rb'
+    - 'test/sqlite_boundary_source_audit_test.rb'
+    - 'test/sqlite_checkpoint_test.rb'
+    - 'test/sqlite_circuit_store_test.rb'
+    - 'test/sqlite_convergence_probe_test.rb'
+    - 'test/sqlite_crash_recovery_test.rb'
+    - 'test/sqlite_deletion_test.rb'
+    - 'test/sqlite_effect_journal_test.rb'
+    - 'test/sqlite_kernel_test.rb'
+    - 'test/sqlite_raw_oracle_test.rb'
+    - 'test/sqlite_request_inbox_test.rb'
+    - 'test/sqlite_scenario_driver_test.rb'
+    - 'test/sqlite_scenario_registry_test.rb'
+    - 'test/sqlite_schedule_determinism_test.rb'
+    - 'test/sqlite_schedule_store_test.rb'
+    - 'test/sqlite_selector_control_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+    - 'test/sqlite_store_test.rb'
+    - 'test/sqlite_stream_critic_fix_test.rb'
+    - 'test/sqlite_stream_golden_trace_test.rb'
+    - 'test/sqlite_stream_process_partition_test.rb'
+    - 'test/sqlite_stream_store_test.rb'
+    - 'test/sqlite_trace_recorder_test.rb'
+    - 'test/stream_action_boundary_test.rb'
+    - 'test/stream_cognition_test.rb'
+    - 'test/stream_connector_test.rb'
+    - 'test/stream_replay_isolation_test.rb'
+    - 'test/stream_values_test.rb'
+    - 'test/subprocess_runner_test.rb'
+    - 'test/support/autonomy_case.rb'
+    - 'test/websearch_adapter_test.rb'
+    - 'test/websearch_circuit_test.rb'
+    - 'test/websearch_egress_test.rb'
+    - 'test/websearch_invocation_test.rb'
+
+# Offense count: 593
+# Configuration parameters: Max.
+Minitest/MultipleAssertions:
+  Exclude:
+    - 'test/agent_acceptance_workflow_test.rb'
+    - 'test/agent_capability_binding_test.rb'
+    - 'test/agent_change_evaluation_test.rb'
+    - 'test/agent_cli_profile_test.rb'
+    - 'test/agent_cli_test.rb'
+    - 'test/agent_digest_resolution_test.rb'
+    - 'test/agent_mcp_adversarial_test.rb'
+    - 'test/agent_mcp_capability_source_test.rb'
+    - 'test/agent_non_ascii_session_test.rb'
+    - 'test/agent_profile_machinery_test.rb'
+    - 'test/agent_profile_test.rb'
+    - 'test/agent_profile_transition_test.rb'
+    - 'test/agent_repair_evaluation_test.rb'
+    - 'test/agent_ruby_llm_model_test.rb'
+    - 'test/agent_runtime_test.rb'
+    - 'test/agent_schedule_test.rb'
+    - 'test/agent_scorecard_test.rb'
+    - 'test/agent_session_effect_test.rb'
+    - 'test/agent_session_kill_matrix_test.rb'
+    - 'test/agent_session_operations_test.rb'
+    - 'test/agent_session_test.rb'
+    - 'test/agent_skills_adversarial_test.rb'
+    - 'test/agent_skills_test.rb'
+    - 'test/agent_skills_toolbox_test.rb'
+    - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/agent_toolbox_invariant17_test.rb'
+    - 'test/agent_toolbox_test.rb'
+    - 'test/agent_unattended_policy_test.rb'
+    - 'test/agent_worker_test.rb'
+    - 'test/autonomy_scorecard_test.rb'
+    - 'test/benchmark_report_test.rb'
+    - 'test/capability_closed_world_test.rb'
+    - 'test/capability_host_test.rb'
+    - 'test/capability_registry_test.rb'
+    - 'test/ci_configuration_test.rb'
+    - 'test/core_context_test.rb'
+    - 'test/core_instrumentation_test.rb'
+    - 'test/core_pool_test.rb'
+    - 'test/core_state_codec_test.rb'
+    - 'test/core_stream_test.rb'
+    - 'test/dependency_isolation_test.rb'
+    - 'test/documentation_surface_test.rb'
+    - 'test/evals_verifier_test.rb'
+    - 'test/evidence_artifact_test.rb'
+    - 'test/graph_checkpoint_codec_test.rb'
+    - 'test/graph_definition_test.rb'
+    - 'test/graph_execution_test.rb'
+    - 'test/graph_history_test.rb'
+    - 'test/graph_identity_test.rb'
+    - 'test/graph_interrupt_test.rb'
+    - 'test/graph_reducer_test.rb'
+    - 'test/graph_state_manager_test.rb'
+    - 'test/graph_stream_test.rb'
+    - 'test/graph_subgraph_test.rb'
+    - 'test/graph_surface_audit_test.rb'
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_matrix_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/improvement_candidate_test.rb'
+    - 'test/legacy_session_resume_test.rb'
+    - 'test/m1_evidence_test.rb'
+    - 'test/m2_evidence_test.rb'
+    - 'test/mcp_catalog_test.rb'
+    - 'test/mcp_elicitation_test.rb'
+    - 'test/mcp_invocation_test.rb'
+    - 'test/mcp_server_config_test.rb'
+    - 'test/mcp_supervisor_test.rb'
+    - 'test/memory_engine_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_repository_test.rb'
+    - 'test/memory_session_integration_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+    - 'test/public_api_test.rb'
+    - 'test/release_evaluation_manifest_test.rb'
+    - 'test/release_rehearsal_evidence_test.rb'
+    - 'test/requirements_manifest_test.rb'
+    - 'test/scheduler_consumer_test.rb'
+    - 'test/scheduler_values_test.rb'
+    - 'test/sqlite_backup_test.rb'
+    - 'test/sqlite_boundary_registry_test.rb'
+    - 'test/sqlite_boundary_source_audit_test.rb'
+    - 'test/sqlite_checkpoint_test.rb'
+    - 'test/sqlite_circuit_store_test.rb'
+    - 'test/sqlite_convergence_probe_test.rb'
+    - 'test/sqlite_crash_recovery_test.rb'
+    - 'test/sqlite_deletion_test.rb'
+    - 'test/sqlite_effect_journal_test.rb'
+    - 'test/sqlite_kernel_test.rb'
+    - 'test/sqlite_raw_oracle_test.rb'
+    - 'test/sqlite_request_inbox_test.rb'
+    - 'test/sqlite_scenario_driver_test.rb'
+    - 'test/sqlite_scenario_registry_test.rb'
+    - 'test/sqlite_schedule_determinism_test.rb'
+    - 'test/sqlite_schedule_store_test.rb'
+    - 'test/sqlite_selector_control_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+    - 'test/sqlite_store_test.rb'
+    - 'test/sqlite_stream_store_test.rb'
+    - 'test/sqlite_trace_recorder_test.rb'
+    - 'test/stream_action_boundary_test.rb'
+    - 'test/stream_cognition_test.rb'
+    - 'test/stream_connector_test.rb'
+    - 'test/stream_replay_isolation_test.rb'
+    - 'test/stream_values_test.rb'
+    - 'test/subprocess_runner_test.rb'
+    - 'test/toolbox_staging_reaper_test.rb'
+    - 'test/websearch_adapter_test.rb'
+    - 'test/websearch_circuit_test.rb'
+    - 'test/websearch_egress_test.rb'
+    - 'test/websearch_invocation_test.rb'
+
+# Offense count: 2
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefuteEmpty:
+  Exclude:
+    - 'test/agent_mcp_capability_source_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+
+# Offense count: 43
+# This cop supports unsafe autocorrection (--autocorrect-all).
+Minitest/RefuteFalse:
+  Exclude:
+    - 'test/agent_scorecard_test.rb'
+    - 'test/capability_closed_world_test.rb'
+    - 'test/ci_configuration_test.rb'
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/mcp_elicitation_test.rb'
+    - 'test/mcp_invocation_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_repository_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/p16_tools_gem_test.rb'
+    - 'test/packaging_test.rb'
+    - 'test/scheduler_consumer_test.rb'
+    - 'test/sqlite_store_test.rb'
+    - 'test/stream_action_boundary_test.rb'
+
+# Offense count: 3
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefuteIncludes:
+  Exclude:
+    - 'test/graph_stream_test.rb'
+    - 'test/mcp_elicitation_test.rb'
+    - 'test/mcp_server_config_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefuteNil:
+  Exclude:
+    - 'test/sqlite_circuit_store_test.rb'
+
+# Offense count: 12
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefutePathExists:
+  Exclude:
+    - 'test/agent_digest_resolution_test.rb'
+    - 'test/agent_profile_machinery_test.rb'
+    - 'test/agent_profile_transition_test.rb'
+    - 'test/agent_toolbox_invariant17_test.rb'
+    - 'test/sqlite_backup_test.rb'
+    - 'test/sqlite_scenario_driver_test.rb'
+    - 'test/sqlite_selector_control_test.rb'
+
+# Offense count: 66
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefutePredicate:
+  Exclude:
+    - 'test/agent_acceptance_workflow_test.rb'
+    - 'test/agent_capability_binding_test.rb'
+    - 'test/agent_mcp_adversarial_test.rb'
+    - 'test/agent_mcp_capability_source_test.rb'
+    - 'test/agent_profile_machinery_test.rb'
+    - 'test/agent_profile_test.rb'
+    - 'test/agent_scorecard_test.rb'
+    - 'test/agent_skills_adversarial_test.rb'
+    - 'test/agent_skills_toolbox_test.rb'
+    - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/core_context_test.rb'
+    - 'test/core_state_codec_test.rb'
+    - 'test/core_stream_test.rb'
+    - 'test/graph_surface_audit_test.rb'
+    - 'test/healing_failure_contract_test.rb'
+    - 'test/healing_remediation_test.rb'
+    - 'test/improvement_candidate_test.rb'
+    - 'test/mcp_invocation_test.rb'
+    - 'test/mcp_supervisor_test.rb'
+    - 'test/memory_repository_adapter_test.rb'
+    - 'test/memory_treatment_profile_test.rb'
+    - 'test/scheduler_values_test.rb'
+    - 'test/sqlite_circuit_store_test.rb'
+    - 'test/sqlite_convergence_probe_test.rb'
+    - 'test/sqlite_stale_request_test.rb'
+    - 'test/sqlite_trace_recorder_test.rb'
+    - 'test/subprocess_runner_test.rb'
+    - 'test/websearch_circuit_test.rb'
+
+# Offense count: 1
+# This cop supports safe autocorrection (--autocorrect).
+Minitest/RefuteRespondTo:
+  Exclude:
+    - 'test/agent_skills_adversarial_test.rb'
+
+# Offense count: 4
+# This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, BlockForwardingName.
 # SupportedStyles: anonymous, explicit
 Naming/BlockForwarding:
@@ -3161,7 +3657,7 @@ Style/StringConcatenation:
     - 'test/agent_tool_error_recovery_test.rb'
     - 'test/duplicate_key_detector_test.rb'
 
-# Offense count: 30332
+# Offense count: 30336
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ConsistentQuotesInMultiline.
 # SupportedStyles: single_quotes, double_quotes
