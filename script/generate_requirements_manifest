@@ -584,6 +584,60 @@ EVIDENCE = {
   "ADR-039" => {test: "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides"},
   "ADR-040" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"},
 
+  # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
+  "OBJ-1" => {
+    test: nil, classification: "indirect",
+    rationale: "An aggregate of the PHASE-* rows in this manifest; it has no " \
+               "behaviour of its own to test. Each phase row carries its own " \
+               "direct evidence, and a deferred scope is named on the row it " \
+               "belongs to."
+  },
+  "OBJ-2" => {
+    test: "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
+    supporting: [
+      "test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation",
+      "test/agent_cli_test.rb#test_resume_collects_interrupt_answers"
+    ]
+  },
+  "OBJ-3" => {
+    test: "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
+    supporting: [
+      "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
+      "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution"
+    ]
+  },
+  "OBJ-4" => {
+    test: "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
+    supporting: [
+      "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
+      "test/agent_session_kill_matrix_test.rb#test_a_kill_during_a_check_pauses_the_session_and_never_repeats_the_command"
+    ]
+  },
+  "OBJ-5" => {
+    test: "test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface",
+    supporting: [
+      "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+      "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
+      "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
+      "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode"
+    ]
+  },
+  "OBJ-6" => {
+    test: "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
+    supporting: [
+      "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only",
+      "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"
+    ]
+  },
+  "OBJ-7" => {
+    test: nil,
+    rationale: "Not yet evidenced: the release-evidence objective is produced by " \
+               "P15-G (docs checked against the real surface) and P15-H (the " \
+               "pinned-toolchain clean-clone rehearsal with the isolated " \
+               "packaged-gem install). It stays a release-blocking gap until " \
+               "that rehearsal runs and its log is committed."
+  },
+
   # ---- CLI verbs (one behavioral assertion per verb; ledger gap 12) -------
   "CLI-ask" => {test: "test/agent_cli_test.rb#test_ask_creates_session_file"},
   "CLI-resume" => {test: "test/agent_cli_test.rb#test_resume_collects_interrupt_answers",
@@ -706,6 +760,25 @@ def parse_phases
   rows
 end
 
+# The product objectives: the roadmap's own definition of "finalize Tamoz"
+# (§6). These are the OUTCOME rows — what the product must do — as distinct
+# from the phase rows, which are how it got there.
+def parse_objectives
+  text = read_utf8(File.join(ROOT, "docs", "PRODUCT_EXECUTION_ROADMAP.md"))
+  section = text[/^## 6\..*?(?=^## |\z)/m]
+  raise EvidenceError, "roadmap §6 not found" unless section
+
+  bullets = []
+  section.each_line(chomp: true) do |line|
+    if line.start_with?("- ")
+      bullets << line.delete_prefix("- ").strip
+    elsif !bullets.empty? && line.start_with?("  ") && !line.strip.empty?
+      bullets[-1] = "#{bullets.last} #{line.strip}"
+    end
+  end
+  bullets.map { |bullet| bullet.delete_suffix(";").delete_suffix(".") }
+end
+
 def parse_public_api
   JSON.parse(read_utf8(File.join(ROOT, "docs", "public-api.json"))).fetch("packages")
 end
@@ -799,6 +872,15 @@ end
 
 def row(id:, source:, title:, category:, release_blocking:, default_test: nil, extra: {})
   evidence = evidence_for(id, default_test:)
+  # A release-blocking row with no evidence is allowed — the phase is not
+  # finished — but it must NAME the work that will close it. A bare `missing`
+  # on a blocking row is how a release audit quietly loses a requirement.
+  if release_blocking && evidence.fetch("classification") == "missing" &&
+     evidence["rationale"].nil?
+    raise EvidenceError,
+          "#{id}: a release-blocking row without evidence must state which work " \
+          "package closes it"
+  end
   {
     "id" => id,
     "category" => category,
@@ -868,6 +950,18 @@ parse_phases.each do |phase|
     category: "phase_exit_criterion",
     release_blocking: true,
     default_test: PHASE_EVIDENCE[id]
+  )
+end
+
+parse_objectives.each_with_index do |objective, index|
+  id = "OBJ-#{index + 1}"
+  requirements << row(
+    id:,
+    source: "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+    title: objective,
+    category: "objective",
+    # OBJ-1 aggregates the phase rows and has no behaviour of its own.
+    release_blocking: id != "OBJ-1"
   )
 end
 

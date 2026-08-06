@@ -1,18 +1,19 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T00:42:47Z",
-  "manifest_requirements": 302,
-  "named_cases_run": 224,
+  "generated_at": "2026-08-06T00:50:25Z",
+  "manifest_requirements": 309,
+  "named_cases_run": 227,
   "counts": {
     "deferred-by-contract": 11,
-    "indirect": 3,
-    "missing": 2,
-    "pass": 286
+    "indirect": 4,
+    "missing": 3,
+    "pass": 291
   },
   "release_blocking_gaps": [
     "INV-39",
-    "INV-48"
+    "INV-48",
+    "OBJ-7"
   ],
   "failing": [],
   "definition_of_done_met": false,
@@ -4654,6 +4655,128 @@
       "rationale": null,
       "promotion_exclusion": null,
       "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-1",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "P0–P18 and their required DR implementations are complete, or a documented promotion gate explicitly defers a non-security extension",
+      "release_blocking": false,
+      "status": "indirect",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "indirect",
+      "rationale": "An aggregate of the PHASE-* rows in this manifest; it has no behaviour of its own to test. Each phase row carries its own direct evidence, and a deferred scope is named on the row it belongs to.",
+      "promotion_exclusion": null,
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-2",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "the CLI completes, repairs, resumes, and verifies real tasks without private RubyLLM APIs",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
+      "supporting_tests": [
+        "test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation",
+        "test/agent_cli_test.rb#test_resume_collects_interrupt_answers"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-3",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
+      "supporting_tests": [
+        "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
+        "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-4",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "durable effects stop or reconcile ambiguity without guessing",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
+      "supporting_tests": [
+        "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
+        "test/agent_session_kill_matrix_test.rb#test_a_kill_during_a_check_pauses_the_session_and_never_repeats_the_command"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-5",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "memory, skills, MCP, scheduling, and streaming cannot widen authority",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface",
+      "supporting_tests": [
+        "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
+        "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
+        "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
+        "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-6",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "physical-world output remains supervisory, typed, current-state checked, simulated first, and externally interlocked",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
+      "supporting_tests": [
+        "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only",
+        "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "OBJ-7",
+      "category": "objective",
+      "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
+      "title": "the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "missing",
+      "rationale": "Not yet evidenced: the release-evidence objective is produced by P15-G (docs checked against the real surface) and P15-H (the pinned-toolchain clean-clone rehearsal with the isolated packaged-gem install). It stays a release-blocking gap until that rehearsal runs and its log is committed.",
+      "promotion_exclusion": null,
+      "evidence_result": null,
       "owner_signature": null
     },
     {

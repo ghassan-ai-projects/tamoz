@@ -7,16 +7,16 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 302 | 224 | 2 | **no** |
+| 309 | 227 | 3 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
-| indirect | 3 |
-| missing | 2 |
-| pass | 286 |
+| indirect | 4 |
+| missing | 3 |
+| pass | 291 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -24,6 +24,7 @@ generating run.
 |---|---|---|
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-48` — Backpressure and evidence gaps are bounded and visible | missing | The durable-admission, quarantine, typed-rejection and never-silent halves are directly evidenced. The backpressure half is NOT implemented: `ChannelDescriptor` validates and digests `queue_capacity`, `spool_capacity_bytes` and `overflow` (block/retry/spill_then_reject/sample/coalesce/reject), but no code outside the descriptor reads any of the three — measured at the release head by searching gems/tamoz-stream and gems/tamoz-sqlite. The declaration is recorded, never enforced, so no saturation test can exist yet. Owner decision required at P15-I: implement enforcement, or exclude the backpressure clause from the v0.1 surface. |
+| `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Not yet evidenced: the release-evidence objective is produced by P15-G (docs checked against the real surface) and P15-H (the pinned-toolchain clean-clone rehearsal with the isolated packaged-gem install). It stays a release-blocking gap until that rehearsal runs and its log is committed. |
 
 ## Full audit
 
@@ -309,6 +310,13 @@ generating run.
 | `NG-real-actuator` | non_goal | yes | pass | `test/stream_replay_isolation_test.rb#test_deliver_command_requires_counterfactual_mode_and_a_simulator` |
 | `NG-second-ui` | non_goal | no | indirect | `—` |
 | `NG-self-promotion` | non_goal | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
+| `OBJ-1` | objective | no | indirect | `—` |
+| `OBJ-2` | objective | yes | pass | `test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound` |
+| `OBJ-3` | objective | yes | pass | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
+| `OBJ-4` | objective | yes | pass | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
+| `OBJ-5` | objective | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
+| `OBJ-6` | objective | yes | pass | `test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides` |
+| `OBJ-7` | objective | yes | missing | `—` |
 | `PHASE-DR-2` | phase_exit_criterion | yes | pass | `test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask` |
 | `PHASE-DR-3` | phase_exit_criterion | yes | pass | `test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution` |
 | `PHASE-DR-4` | phase_exit_criterion | yes | pass | `test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim` |

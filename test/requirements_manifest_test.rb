@@ -112,22 +112,24 @@ class RequirementsManifestTest < Minitest::Test
     end
   end
 
-  # A release-blocking row must carry direct evidence, or state exactly why it
-  # cannot (the P15-I owner list). `indirect` is never allowed to carry a
-  # release-blocking row.
-  def test_release_blocking_rows_are_direct_or_explicitly_pending_owner_decision
+  # A release-blocking row carries direct evidence, or names the gap. Two kinds
+  # of gap are legitimate while the phase runs: one the owner must decide
+  # (`pending-owner-residual`) and one a named work package will close
+  # (`missing` with a rationale). `indirect` never carries a release-blocking
+  # row — "no direct proof is available" cannot be a release position.
+  def test_release_blocking_rows_are_direct_or_name_their_gap
     requirements.each do |row|
       next unless row.fetch("release_blocking")
 
       classification = row.fetch("classification")
 
-      assert_includes %w[direct pending-owner-residual], classification,
+      assert_includes %w[direct pending-owner-residual missing], classification,
                       "#{row.fetch("id")} is release-blocking with classification " \
                       "#{classification.inspect}"
       next if classification == "direct"
 
       refute_nil row["rationale"],
-                 "#{row.fetch("id")} must state the exact gap it asks the owner to decide"
+                 "#{row.fetch("id")} must state the exact gap and what closes it"
     end
   end
 
