@@ -23,7 +23,7 @@ module Tamoz
       BEHAVIOR_VERSION = "tamoz.agent.session/1"
 
       attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety,
-                  :profile, :mcp
+                  :profile, :mcp, :capabilities
 
       def initialize(
         model:,
@@ -63,6 +63,12 @@ module Tamoz
         @profile_roles = profile_roles
         @profile_budgets = profile_budgets
         verify_profile_roles!(profile_roles)
+        # P15-W: the P18 capability host, bound ONCE at session construction.
+        # The registry is built from the four built-in sources and sealed here;
+        # every tool-facing decision below routes through the per-source
+        # dispatcher for the descriptor's source, so the session holds no
+        # source-typed branch of its own.
+        @capabilities = CapabilityBinding.build(toolbox:, mcp:)
         freeze
       end
 
@@ -388,7 +394,7 @@ module Tamoz
             phase:,
             allowed_tools:,
             toolbox:,
-            mcp: @mcp
+            capabilities:
           )
           reviews << SessionRecords.build(
             "review",
@@ -886,11 +892,10 @@ module Tamoz
           # journal's, exactly as for a local tool (invariant 21). The source's
           # executor raises the agent ToolError taxonomy; the journal maps
           # repairable rejections to evidence and everything else propagates.
-          result = if mcp_tool?(tool)
-                     mcp.execute(context, tool, arguments)
-                   else
-                     toolbox.execute(tool, arguments)
-                   end
+          # P15-W: one uniform dispatch. The host looks the descriptor up in the
+          # sealed registry and runs its source's dispatcher (validate, then
+          # execute) — the session names no source.
+          result = capabilities.execute(context, tool, arguments)
           if result.is_a?(CheckReceipt)
             {
               "output" => result.to_s,
@@ -951,11 +956,7 @@ module Tamoz
           safety: tool_safety(tool, arguments).to_s,
           arguments_digest: SessionRecords.digest(Deliberation.canonical(arguments))
         }
-        effect_intent = if mcp_tool?(tool)
-                          mcp.effect_intent(tool, arguments)
-                        else
-                          toolbox.effect_intent(tool, arguments)
-                        end
+        effect_intent = capabilities.effect_intent(tool, arguments)
         effect_intent.each do |key, value|
           fields[key.to_sym] = value
         end
@@ -1002,13 +1003,7 @@ module Tamoz
       end
 
       def tool_safety(tool, arguments)
-        return mcp.read_only?(tool) ? :read_only : :unsafe if mcp_tool?(tool)
-
-        case tool
-        when "apply_patch", "create_file" then :reconcilable
-        when "run_check" then toolbox.check_safety(arguments.fetch("name"))
-        else :read_only
-        end
+        capabilities.safety(tool, arguments)
       end
 
       # --- MCP capability surface glue (P10 §3) --------------------------------
@@ -1018,8 +1013,13 @@ module Tamoz
       # The source never widens the toolbox — the two surfaces are merged only in
       # the planning prompt and the structural review, and only by name.
 
+      # P15-W: "is this capability owned by the MCP source?" is now a property
+      # of the sealed registry's descriptor, not a re-query of the caller's
+      # source object. It survives only for the two MCP-catalog RENDERINGS
+      # below (the planning descriptions and the source-qualified surface),
+      # which are catalog properties rather than dispatch decisions.
       def mcp_tool?(tool)
-        !!(mcp && mcp.name?(tool))
+        capabilities.mcp_capability?(tool)
       end
 
       # P10 §3 planning surface: merge the source-qualified MCP capability names
@@ -1050,24 +1050,24 @@ module Tamoz
         text.gsub(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/, "")
       end
 
+      # The model-visible surface IS the sealed registry's intersection,
+      # rendered in the pinned catalog order (invariant 16: the prompt bytes
+      # must not move). A capability the registry does not admit can never be
+      # named to the model.
       def allowed_tool_names(phase)
-        base = phase == :discovery ? toolbox.read_only_names : toolbox.names
-        return base unless mcp
-
-        extra = phase == :discovery ? mcp.read_only_names : mcp.names
-        (base + extra).uniq
+        capabilities.names(phase)
       end
 
       def approval_required?(tool)
-        mcp_tool?(tool) ? mcp.approval_required?(tool) : toolbox.approval_required?(tool)
+        capabilities.approval_required?(tool)
       end
 
       def maximum_effect_output_bytes(tool)
-        mcp_tool?(tool) ? mcp.maximum_effect_output_bytes(tool) : toolbox.maximum_effect_output_bytes(tool)
+        capabilities.maximum_effect_output_bytes(tool)
       end
 
       def preview_for(tool, arguments)
-        mcp_tool?(tool) ? mcp.preview(tool, arguments) : toolbox.preview(tool, arguments)
+        capabilities.preview(tool, arguments)
       end
 
       def find_intent(state, accepted, step)

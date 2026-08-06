@@ -326,10 +326,13 @@ EVIDENCE = {
 
   # ---- Capability and MCP boundaries (35-37) ------------------------------
   "INV-35" => {
-    test: "test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable",
+    test: "test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface",
     supporting: [
+      "test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable",
       "test/capability_registry_test.rb#test_cross_source_id_collision_is_refused",
-      "test/agent_skills_toolbox_test.rb#test_load_skill_reports_the_honest_intersection_and_widens_nothing"
+      "test/agent_capability_binding_test.rb#test_a_live_session_registry_refuses_a_forged_registration",
+      "test/agent_skills_toolbox_test.rb#test_load_skill_reports_the_honest_intersection_and_widens_nothing",
+      "test/agent_toolbox_test.rb#test_read_only_names_are_bounded_by_allowed_tools_without_a_skill_catalog"
     ]
   },
   "INV-36" => {
@@ -556,8 +559,12 @@ EVIDENCE = {
   "ADR-028" => {test: "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle"},
   "ADR-029" => {test: "test/mcp_catalog_test.rb#test_compile_produces_immutable_catalog_with_exact_digests",
                 supporting: ["test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk"]},
-  "ADR-030" => {test: "test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol",
-                supporting: ["test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable"]},
+  "ADR-030" => {test: "test/agent_capability_binding_test.rb#test_every_decision_routes_to_the_owning_sources_dispatcher",
+                supporting: [
+                  "test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol",
+                  "test/agent_capability_binding_test.rb#test_local_decisions_never_reach_the_mcp_source",
+                  "test/agent_capability_binding_test.rb#test_websearch_registers_under_the_websearch_built_in_source"
+                ]},
   "ADR-031" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
                 supporting: ["test/scheduler_consumer_test.rb#test_consumer_runs_the_scorecard_and_extracts_the_summary"]},
   "ADR-032" => {test: "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule"},
@@ -643,7 +650,7 @@ PHASE_EVIDENCE = {
   "PHASE-P14" => "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic",
   "PHASE-P16" => "test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent",
   "PHASE-P17" => "test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic",
-  "PHASE-P18" => "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture",
+  "PHASE-P18" => "test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture",
   "PHASE-DR-2" => "test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask",
   "PHASE-DR-3" => "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution",
   "PHASE-DR-4" => "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",

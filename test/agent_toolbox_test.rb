@@ -1188,6 +1188,27 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
+  # Invariant 35: the DISCOVERY surface is the intersection too. `read_only_names`
+  # early-returned the full read catalog whenever the toolbox carried no skill
+  # snapshot, so a profile that withheld `list_directory`/`search_text` still
+  # advertised them to the model in the discovery phase. Execution was refused
+  # (`validate` reads the filtered `names`), so this was a surface defect rather
+  # than an authority escape — but a plan drafted against a withheld tool is a
+  # wasted attempt against a surface the profile did not grant.
+  def test_read_only_names_are_bounded_by_allowed_tools_without_a_skill_catalog
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(
+        root:,
+        allow_changes: true,
+        allowed_tools: %w[read_file apply_patch]
+      )
+
+      assert_equal %w[read_file], toolbox.read_only_names
+      assert(toolbox.read_only_names.all? { |name| toolbox.allowed_tools.include?(name) })
+      assert(toolbox.read_only_names.all? { |name| toolbox.names.include?(name) })
+    end
+  end
+
   def test_allowed_tools_rejects_unavailable_unknown_and_duplicate_names
     Dir.mktmpdir("tamoz-toolbox") do |root|
       assert_raises(ArgumentError) do

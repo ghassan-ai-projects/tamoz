@@ -504,9 +504,11 @@
       "title": "One local capability catalog governs local tools, MCP, and skills",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol",
+      "named_test": "test/agent_capability_binding_test.rb#test_every_decision_routes_to_the_owning_sources_dispatcher",
       "supporting_tests": [
-        "test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable"
+        "test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol",
+        "test/agent_capability_binding_test.rb#test_local_decisions_never_reach_the_mcp_source",
+        "test/agent_capability_binding_test.rb#test_websearch_registers_under_the_websearch_built_in_source"
       ],
       "classification": "direct",
       "rationale": null,
@@ -3633,10 +3635,13 @@
       "title": "Capability authority is local, intersected, and content-addressed",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable",
+      "named_test": "test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface",
       "supporting_tests": [
+        "test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable",
         "test/capability_registry_test.rb#test_cross_source_id_collision_is_refused",
-        "test/agent_skills_toolbox_test.rb#test_load_skill_reports_the_honest_intersection_and_widens_nothing"
+        "test/agent_capability_binding_test.rb#test_a_live_session_registry_refuses_a_forged_registration",
+        "test/agent_skills_toolbox_test.rb#test_load_skill_reports_the_honest_intersection_and_widens_nothing",
+        "test/agent_toolbox_test.rb#test_read_only_names_are_bounded_by_allowed_tools_without_a_skill_catalog"
       ],
       "classification": "direct",
       "rationale": null,
@@ -4314,7 +4319,7 @@
       "title": "Capability host + graph audit — four closed built-in sources share one host; graph surface measured and documented",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture",
+      "named_test": "test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

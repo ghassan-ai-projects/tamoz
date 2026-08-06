@@ -33,18 +33,66 @@ module Tamoz
 
       # Bind a per-source dispatcher (validate/execute). The host protocol
       # dispatches through the registry's sources uniformly.
+      # A dispatcher may be bound to a registered source exactly once. Both
+      # halves matter: binding an UNREGISTERED source would give a capability
+      # the sealed registry never admitted a way in, and REBINDING a bound
+      # source would let a later caller swap out the code that executes an
+      # already-published capability — a sealed surface with a swappable
+      # implementation is not sealed.
       def bind_dispatcher(source_id, dispatcher)
+        unless @registry.sources.any? { |source| source.source_id == source_id }
+          raise Tamoz::Core::Capability::DescriptorConflictError,
+                "no registered capability source #{source_id.inspect}; the " \
+                "registry is sealed at session construction"
+        end
+        if @dispatchers.key?(source_id)
+          raise Tamoz::Core::Capability::DescriptorConflictError,
+                "capability source #{source_id.inspect} already has a bound " \
+                "dispatcher; a bound source is never re-implemented"
+        end
+
         @dispatchers[source_id] = dispatcher
         self
+      end
+
+      # The dispatcher bound to one source. The session's tool-facing decisions
+      # (approval, preview, effect intent, safety) run through the same
+      # per-source dispatcher that executes the capability, so no decision can
+      # be answered by a different source than the one that will act.
+      def dispatcher_for(source_id)
+        @dispatchers.fetch(source_id) do
+          raise Tamoz::Core::Capability::DescriptorConflictError,
+                "capability source #{source_id.inspect} has no bound dispatcher"
+        end
+      end
+
+      # Resolve a model-visible id to its descriptor and the dispatcher of the
+      # source that owns it. This is the routing itself — zero source-typed
+      # branches — and it raises nothing but the host's own typed errors.
+      #
+      # Callers that must preserve the exact exception semantics of the code
+      # they route (the durable session: invariant 17 requires storage failures
+      # and programmer bugs to PROPAGATE rather than become tool evidence) use
+      # `route` and call the dispatcher themselves. `dispatch` adds the D-7
+      # boundary wrap on top for callers that want a typed result for every
+      # outcome.
+      def route(descriptor_id)
+        descriptor = @registry.descriptors.fetch(descriptor_id) do
+          # The message is `Toolbox#validate`'s, byte for byte, and must stay
+          # that way: structural review feeds a rejection reason back into the
+          # planning prompt, so changing this text changes the model's input
+          # bytes and the cache epoch with them (invariant 16, P18 C7).
+          raise ToolError, "unknown tool #{descriptor_id.inspect}"
+        end
+        source = @registry.source_for(descriptor_id)
+        [descriptor, dispatcher_for(source.source_id)]
       end
 
       # The uniform dispatch protocol. Zero source-typed branches: the source
       # is looked up by the descriptor id, its dispatcher runs validate then
       # execute.
       def dispatch(descriptor_id, arguments, context: {})
-        descriptor = @registry.descriptors.fetch(descriptor_id)
-        source = @registry.source_for(descriptor_id)
-        dispatcher = @dispatchers.fetch(source.source_id)
+        descriptor, dispatcher = route(descriptor_id)
         dispatcher.validate(descriptor, arguments)
         dispatcher.execute(descriptor, arguments, context:)
       rescue Tamoz::Error, Tamoz::Core::ToolError => error

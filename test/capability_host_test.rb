@@ -157,12 +157,19 @@ class CapabilityHostTest < Minitest::Test
       host = host_from_toolbox(toolbox)
       host.bind_dispatcher("local", dispatcher_stub)
 
-      # An unknown descriptor id is an untyped fetch failure, wrapped at the
-      # boundary as a ToolError (invariant 17 — no raw KeyError escapes).
+      # An unknown descriptor id never reaches a dispatcher: routing refuses it
+      # with the host's OWN typed error, so no raw KeyError escapes (invariant
+      # 17) and the message names the capability rather than the Ruby fault
+      # that used to surface it. The wrap path itself is still covered, by
+      # `test_real_host_wraps_untyped_errors` below.
       error = assert_raises(Tamoz::Tools::ToolError) do
         host.dispatch("nonexistent", {}, context: {})
       end
-      assert_includes error.message, "capability host wrapped"
+      # The text is `Toolbox#validate`'s, byte for byte: structural review
+      # feeds a rejection reason into the planning prompt, so this string is
+      # part of the model-visible surface (invariant 16, C7).
+      assert_equal 'unknown tool "nonexistent"', error.message
+      refute_kind_of KeyError, error
     end
   end
 

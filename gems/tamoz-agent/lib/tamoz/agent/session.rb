@@ -52,6 +52,11 @@ module Tamoz
 
       attr_reader :app, :definition, :toolbox
 
+      # P15-W: the sealed P18 capability host this session was constructed
+      # with. Exposed read-only so an operator (and the audit) can inspect the
+      # exact surface a thread is bound to without reaching into the nodes.
+      def capabilities = @nodes.capabilities
+
       def initialize(
         model:,
         toolbox:,

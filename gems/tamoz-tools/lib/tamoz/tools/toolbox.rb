@@ -228,10 +228,16 @@ module Tamoz
 
       # Read-only names include the skill tools when a catalog exists, so the
       # discovery phase can consult skills before an action plan is drafted.
+      #
+      # The admission filter applies in BOTH cases (invariant 35). A skill-free
+      # toolbox used to early-return the whole read catalog, so a profile that
+      # withheld `list_directory`/`search_text` still advertised them in the
+      # discovery phase — a surface wider than the granted authority, even
+      # though `validate` refused to run them.
       def read_only_names
-        return READ_DESCRIPTIONS.keys if @skills.empty?
-
-        (READ_DESCRIPTIONS.keys + SKILL_DESCRIPTIONS.keys).select { |name| @allowed_tools.include?(name) }
+        candidates = READ_DESCRIPTIONS.keys
+        candidates += SKILL_DESCRIPTIONS.keys unless @skills.empty?
+        candidates.select { |name| @allowed_tools.include?(name) }
       end
 
       def skill_catalog_digest = @skills.catalog_digest

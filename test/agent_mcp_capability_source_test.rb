@@ -546,8 +546,10 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
                      "arguments" => {"value" => "x"}, "verification" => "v"}]
       )
     )
+    capabilities = Tamoz::Agent::CapabilityBinding.build(toolbox:, mcp: source)
     issues = Tamoz::Agent::Deliberation.structural_issues(
-      plan, phase: :discovery, allowed_tools: %w[read_file mcp:test-server/echo], toolbox:, mcp: source
+      plan, phase: :discovery, allowed_tools: %w[read_file mcp:test-server/echo],
+      toolbox:, capabilities:
     )
     assert_equal ["step \"s\" is invalid: the arguments are invalid"], issues
 
@@ -561,7 +563,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     )
     issues = Tamoz::Agent::Deliberation.structural_issues(
       bare_plan, phase: :discovery,
-      allowed_tools: %w[read_file mcp:test-server/echo], toolbox:, mcp: source
+      allowed_tools: %w[read_file mcp:test-server/echo], toolbox:, capabilities:
     )
     assert_includes issues, 'step "s" uses unavailable tool "echo"'
   end

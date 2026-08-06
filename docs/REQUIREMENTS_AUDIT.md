@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 302 | 218 | 2 | **no** |
+| 302 | 224 | 2 | **no** |
 
 ## Status counts
 
@@ -58,7 +58,7 @@ generating run.
 | `ADR-027` | adr | yes | pass | `test/memory_engine_test.rb#test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge` |
 | `ADR-028` | adr | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
 | `ADR-029` | adr | yes | pass | `test/mcp_catalog_test.rb#test_compile_produces_immutable_catalog_with_exact_digests` |
-| `ADR-030` | adr | yes | pass | `test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol` |
+| `ADR-030` | adr | yes | pass | `test/agent_capability_binding_test.rb#test_every_decision_routes_to_the_owning_sources_dispatcher` |
 | `ADR-031` | adr | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `ADR-032` | adr | yes | pass | `test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule` |
 | `ADR-033` | adr | yes | pass | `test/agent_skills_test.rb#test_compiles_a_portable_skill_into_an_immutable_content_addressed_record` |
@@ -277,7 +277,7 @@ generating run.
 | `INV-32` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_scope_intersection_refuses_a_target_outside_authorized_resources` |
 | `INV-33` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_recovered_always_carries_a_passing_oracle_result` |
 | `INV-34` | invariant | no | deferred-by-contract | `test/healing_matrix_test.rb#test_promotion_gate_rejects_total_abstention_and_never_mutate_leak` |
-| `INV-35` | invariant | yes | pass | `test/capability_registry_test.rb#test_intersection_is_admission_set_bounded_and_immutable` |
+| `INV-35` | invariant | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
 | `INV-36` | invariant | yes | pass | `test/agent_mcp_capability_source_test.rb#test_session_resume_guard_accepts_the_identical_source_and_fails_closed_on_mismatch` |
 | `INV-37` | invariant | yes | pass | `test/agent_mcp_adversarial_test.rb#test_crash_mid_call_is_typed_unknown_and_never_retried` |
 | `INV-38` | invariant | yes | pass | `test/sqlite_schedule_determinism_test.rb#test_concurrent_owners_materialize_exactly_one_occurrence` |
@@ -322,7 +322,7 @@ generating run.
 | `PHASE-P14` | phase_exit_criterion | yes | pass | `test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic` |
 | `PHASE-P16` | phase_exit_criterion | yes | pass | `test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent` |
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
-| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |
+| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture` |
 | `PHASE-P2` | phase_exit_criterion | yes | pass | `test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes` |
 | `PHASE-P3` | phase_exit_criterion | yes | pass | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
 | `PHASE-P4` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements` |
