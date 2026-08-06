@@ -1,0 +1,37 @@
+{
+  "format_version": 1,
+  "generated_by": "script/benchmark_release",
+  "model": "offline scripted (no provider, no network, no seed dependence)",
+  "gated": {
+    "repetitions": 20,
+    "warmup": 3,
+    "model_calls_per_ephemeral_turn": 3,
+    "model_calls_per_durable_turn": 3,
+    "durable_checkpoints_per_turn": 8,
+    "file_descriptor_growth": 0,
+    "thread_growth": 0
+  },
+  "measured": {
+    "ephemeral_turn_ms": {
+      "p50": 0.1,
+      "p95": 0.23,
+      "p99": 1.32
+    },
+    "durable_turn_ms": {
+      "p50": 40.99,
+      "p95": 43.72,
+      "p99": 43.79
+    },
+    "durability_overhead_ratio": 243.89
+  },
+  "environment": {
+    "ruby": "3.3.11",
+    "platform": "arm64-darwin25",
+    "measured_at": "2026-08-06T07:07:59Z"
+  },
+  "not_attempted": [
+    "plain RubyLLM script comparison",
+    "external job-queue comparison",
+    "live-provider latency (not seed-controlled; would not be reproducible)"
+  ]
+}

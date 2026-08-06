@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T07:06:07Z",
+  "generated_at": "2026-08-06T07:18:00Z",
   "manifest_requirements": 351,
   "named_cases_run": 243,
   "counts": {

@@ -69,7 +69,7 @@ class ReleaseRehearsalEvidenceTest < Minitest::Test
   REQUIRED_STEPS = %w[
     provisioning clean-clone bundle-install gate-lc-c gate-lc-utf8
     gate-locale-agreement scorecard packaged-gem-isolation durable-kill-resume
-    backup-restore release-evaluation-pin requirements-audit
+    backup-restore release-evaluation-pin benchmark requirements-audit
   ].freeze
 
   def test_the_script_performs_every_required_step

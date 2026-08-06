@@ -1,0 +1,316 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# P15-E (docs/P15_RELEASE_PLAN.md §7, correction 8) — the performance and value
+# benchmark.
+#
+# The hard part of a release benchmark is not measuring; it is deciding what
+# may be GATED. Wall-clock latency on a developer laptop is not reproducible:
+# gating it produces a benchmark that fails for reasons that have nothing to do
+# with the code, and a gate that fails for noise is a gate people learn to
+# ignore. So this separates the two honestly:
+#
+#   GATED     deterministic counters (model calls, tool calls, durable commits)
+#             and resource behaviour (no file-descriptor or thread growth
+#             across repetitions). These are exact and reproducible.
+#   REPORTED  p50/p95/p99 wall-clock and the durability overhead ratio, with
+#             the machine they were measured on recorded. Environment-
+#             dependent, therefore measured and published, never gated.
+#
+# Every number here comes from an OFFLINE scripted model. No provider is
+# called, no network is touched, and the scenario is seed-free by construction:
+# the model returns the same bytes every time. A live-model number would not be
+# seed-controlled and is not claimed.
+#
+# What is NOT attempted, stated rather than faked: a comparison against a plain
+# RubyLLM script or an external job queue. Those are different products with
+# different guarantees, and a synthetic race between them would measure the
+# harness, not the systems. The value number this DOES produce is the honest
+# one: what durability costs, measured as the same scripted turn through the
+# ephemeral `Runtime` and the durable `Session`.
+#
+# Usage:
+#   script/benchmark_release             # measure, compare against the pin
+#   script/benchmark_release --accept    # re-pin the gated counters
+
+require "json"
+require "fileutils"
+require "tmpdir"
+require "time"
+require "digest"
+
+ROOT = File.expand_path("..", __dir__)
+%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite
+   tamoz-tools tamoz-agent].each do |gem|
+  $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
+end
+require "tamoz/sqlite"
+require "tamoz/agent"
+
+REPORT_JSON = File.join(ROOT, "docs", "benchmark.json")
+REPORT_MD = File.join(ROOT, "docs", "BENCHMARK.md")
+WARMUP = 3
+REPETITIONS = 20
+
+class ScriptedModel
+  attr_reader :calls
+
+  def initialize = @calls = 0
+
+  def generate(stage:, system:, prompt:)
+    @calls += 1
+    case stage
+    when :plan
+      JSON.generate(
+        "goal" => "read the note", "done_when" => ["note.txt has been read"],
+        "steps" => [{"id" => "s1", "purpose" => "read", "tool" => "read_file",
+                     "arguments" => {"path" => "note.txt"},
+                     "verification" => "the content is returned"}]
+      )
+    when :review
+      JSON.generate("decision" => "accept", "issues" => [], "rationale" => "bounded")
+    else
+      JSON.generate("answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"])
+    end
+  end
+end
+
+def open_descriptors
+  Dir.children("/dev/fd").length
+rescue SystemCallError
+  -1
+end
+
+def percentile(sorted, fraction)
+  return 0.0 if sorted.empty?
+
+  index = [(sorted.length * fraction).ceil - 1, 0].max
+  (sorted[index] * 1000).round(2)
+end
+
+def measure(repetitions)
+  samples = []
+  repetitions.times { samples << time_one { yield } }
+  samples.sort
+end
+
+def time_one
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  yield
+  Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+end
+
+def with_workspace
+  Dir.mktmpdir("tamoz-benchmark") do |directory|
+    root = File.join(directory, "workspace")
+    FileUtils.mkdir_p(root)
+    File.write(File.join(root, "note.txt"), "hello\n", encoding: Encoding::UTF_8)
+    yield root, directory
+  end
+end
+
+# --- scenario 1: the ephemeral runtime (no durability) ----------------------
+
+ephemeral_model = ScriptedModel.new
+ephemeral = with_workspace do |root, _directory|
+  runtime = Tamoz::Agent::Runtime.new(
+    model: ephemeral_model,
+    toolbox: Tamoz::Tools::Toolbox.new(root:)
+  )
+  WARMUP.times { runtime.run("read the note") }
+  measure(REPETITIONS) { runtime.run("read the note") }
+end
+
+# --- scenario 2: the durable session (checkpointed, resumable) --------------
+
+durable_model = ScriptedModel.new
+durable_commits = 0
+descriptors_before = nil
+descriptors_after = nil
+threads_before = nil
+threads_after = nil
+
+durable = with_workspace do |root, directory|
+  index = 0
+  run_turn = lambda do
+    index += 1
+    adapter = Tamoz::SQLite::Adapter.new(
+      path: File.join(directory, "bench-#{index}.sqlite3")
+    )
+    begin
+      session = Tamoz::Agent::Session.new(
+        model: durable_model,
+        toolbox: Tamoz::Tools::Toolbox.new(root:),
+        checkpointer: adapter
+      )
+      session.start("read the note", thread: "bench", request_id: "r0")
+      durable_commits += session.app.history(thread: "bench", limit: 100).length
+    ensure
+      adapter.close
+    end
+  end
+
+  WARMUP.times { run_turn.call }
+  durable_commits = 0
+  descriptors_before = open_descriptors
+  threads_before = Thread.list.length
+  samples = measure(REPETITIONS) { run_turn.call }
+  GC.start
+  descriptors_after = open_descriptors
+  threads_after = Thread.list.length
+  samples
+end
+
+overhead_ratio = (durable.sum / ephemeral.sum).round(2)
+
+measured = {
+  "ephemeral_turn_ms" => {
+    "p50" => percentile(ephemeral, 0.50),
+    "p95" => percentile(ephemeral, 0.95),
+    "p99" => percentile(ephemeral, 0.99)
+  },
+  "durable_turn_ms" => {
+    "p50" => percentile(durable, 0.50),
+    "p95" => percentile(durable, 0.95),
+    "p99" => percentile(durable, 0.99)
+  },
+  "durability_overhead_ratio" => overhead_ratio
+}
+
+# The GATED half: exact, reproducible, and meaningful.
+gated = {
+  "repetitions" => REPETITIONS,
+  "warmup" => WARMUP,
+  # Three model calls per turn — plan, review, verify — in both modes. A change
+  # here means the agent started talking to the model more, which is a cost
+  # regression a byte counter would not surface.
+  "model_calls_per_ephemeral_turn" => ephemeral_model.calls / (WARMUP + REPETITIONS),
+  "model_calls_per_durable_turn" => durable_model.calls / (WARMUP + REPETITIONS),
+  "durable_checkpoints_per_turn" => durable_commits / REPETITIONS,
+  # Resource behaviour: repetition must not grow the process.
+  "file_descriptor_growth" => descriptors_after - descriptors_before,
+  "thread_growth" => threads_after - threads_before
+}
+
+document = {
+  "format_version" => 1,
+  "generated_by" => "script/benchmark_release",
+  "model" => "offline scripted (no provider, no network, no seed dependence)",
+  "gated" => gated,
+  "measured" => measured,
+  "environment" => {
+    "ruby" => RUBY_VERSION,
+    "platform" => RUBY_PLATFORM,
+    "measured_at" => Time.now.utc.iso8601
+  },
+  "not_attempted" => [
+    "plain RubyLLM script comparison",
+    "external job-queue comparison",
+    "live-provider latency (not seed-controlled; would not be reproducible)"
+  ]
+}
+
+accepted = ARGV.include?("--accept")
+failures = []
+if File.exist?(REPORT_JSON) && !accepted
+  committed = JSON.parse(File.read(REPORT_JSON, encoding: Encoding::UTF_8)).fetch("gated")
+  committed.each do |key, value|
+    next if gated[key] == value
+
+    failures << "#{key}: #{gated[key].inspect} != pinned #{value.inspect}"
+  end
+end
+
+# Resource growth is gated absolutely, not only against the pin: a leak is a
+# defect whatever the pin says.
+failures << "file descriptors grew by #{gated.fetch("file_descriptor_growth")}" if
+  gated.fetch("file_descriptor_growth") > 0
+failures << "threads grew by #{gated.fetch("thread_growth")}" if
+  gated.fetch("thread_growth") > 0
+
+File.write(REPORT_JSON, "#{JSON.pretty_generate(document)}\n")
+
+lines = []
+lines << "# Performance and value benchmark (P15-E)"
+lines << ""
+lines << "Generated by `script/benchmark_release` against an OFFLINE scripted model: no"
+lines << "provider is called, no network is touched, and the scenario is seed-free by"
+lines << "construction. A live-provider number would not be seed-controlled and is not"
+lines << "claimed."
+lines << ""
+lines << "## What is gated, and what is only reported"
+lines << ""
+lines << "Wall-clock latency on a developer machine is not reproducible. Gating it would"
+lines << "produce a benchmark that fails for reasons unrelated to the code, and a gate"
+lines << "that fails for noise is a gate people learn to ignore. So:"
+lines << ""
+lines << "| Class | Metrics | Behaviour |"
+lines << "|---|---|---|"
+lines << "| **Gated** | model calls per turn, durable checkpoints per turn, file-descriptor growth, thread growth | exact; a change fails the benchmark |"
+lines << "| Reported | p50/p95/p99 wall clock, durability overhead ratio | environment-dependent; measured and published, never gated |"
+lines << ""
+lines << "## Gated counters"
+lines << ""
+lines << "| Counter | Value |"
+lines << "|---|---:|"
+gated.each { |key, value| lines << "| `#{key}` | #{value} |" }
+lines << ""
+lines << "File-descriptor and thread growth are gated ABSOLUTELY, not merely against the"
+lines << "pin: a leak is a defect whatever the pin says."
+lines << ""
+lines << "## Measured latency"
+lines << ""
+lines << "| Scenario | p50 (ms) | p95 (ms) | p99 (ms) |"
+lines << "|---|---:|---:|---:|"
+%w[ephemeral_turn_ms durable_turn_ms].each do |scenario|
+  row = measured.fetch(scenario)
+  lines << "| #{scenario.delete_suffix("_ms").tr("_", " ")} | #{row.fetch("p50")} | " \
+           "#{row.fetch("p95")} | #{row.fetch("p99")} |"
+end
+lines << ""
+lines << "**Durability overhead: #{overhead_ratio}x** — and that number needs its context or"
+lines << "it will mislead. The ephemeral turn calls an in-process scripted model and"
+lines << "touches no disk, so it costs almost nothing; the ratio is therefore close to"
+lines << "\"durable commits versus doing nothing\", not \"Tamoz versus another agent"
+lines << "framework\". Against a REAL provider, a turn spends hundreds of milliseconds to"
+lines << "seconds waiting on the network, and the same durable overhead"
+lines << "(#{measured.dig("durable_turn_ms", "p50")}ms here) is a small fraction of it."
+lines << ""
+lines << "What the number honestly says: the same scripted turn through the ephemeral"
+lines << "`Runtime` and the durable `Session` differs by checkpointing, the request inbox,"
+lines << "the lease and the effect journal, and nothing else — and that costs roughly"
+lines << "#{measured.dig("durable_turn_ms", "p50")}ms per turn on this machine. Whether that"
+lines << "is worth surviving `kill -9` is the reader\'s call, but it is the real price."
+lines << ""
+lines << "Measured on Ruby #{RUBY_VERSION} / #{RUBY_PLATFORM} at"
+lines << "#{document.fetch("environment").fetch("measured_at")}. Latency numbers from a"
+lines << "different machine are expected to differ and are not a regression."
+lines << ""
+lines << "## Not attempted"
+lines << ""
+document.fetch("not_attempted").each { |item| lines << "- #{item}" }
+lines << ""
+lines << "A synthetic race against a plain RubyLLM script or an external job queue would"
+lines << "measure the harness rather than the systems: they are different products with"
+lines << "different guarantees. Claiming such a number would be worse than omitting it."
+lines << ""
+unless failures.empty?
+  lines << "## Failures"
+  lines << ""
+  failures.each { |failure| lines << "- #{failure}" }
+  lines << ""
+end
+File.write(REPORT_MD, lines.join("\n"))
+
+puts "wrote #{REPORT_MD} and #{REPORT_JSON}"
+gated.each { |key, value| puts "  #{key}: #{value}" }
+puts "  durability overhead: #{overhead_ratio}x " \
+     "(ephemeral p50 #{measured.dig("ephemeral_turn_ms", "p50")}ms, " \
+     "durable p50 #{measured.dig("durable_turn_ms", "p50")}ms)"
+if failures.empty?
+  puts "benchmark PASSED"
+  exit 0
+end
+warn "benchmark FAILED:"
+failures.each { |failure| warn "  #{failure}" }
+exit 1
