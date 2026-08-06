@@ -1,11 +1,13 @@
 # Tamoz product execution roadmap
 
 Status: active
-Current phase: P18 — capability host unification + graph surface audit
-Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12, P13, P14
-all closed; scorecard 22 cases / 19 successes / pass / 4/4 hard gates / safety 0
-Canonical next action: implement P18 per docs/P18_CAPABILITY_HOST_PLAN.md, then P15
-(release hardening); single-active-phase order
+Current phase: P15 — release hardening (the completion audit)
+Last completed product checkpoints: P10, D-8, DR-4, DR-5, P16, evals, P17, P11, P12, P13,
+P14, P18 all closed; scorecard 22 cases / 19 successes / pass / 4/4 hard gates / safety 0
+Canonical next action: finish P15 per docs/P15_RELEASE_PLAN.md. Release status is
+machine-readable in docs/requirements-manifest.json and docs/REQUIREMENTS_AUDIT.md; the
+open release-blocking gaps are INV-39 (cron/IANA civil time not implemented), INV-48
+(channel backpressure declared but never enforced) and OBJ-7 (release evidence).
 
 Detailed continuation tracker: [`PROJECT_HANDOVER_PLAN.md`](PROJECT_HANDOVER_PLAN.md).
 
@@ -56,13 +58,13 @@ plan/correct scope → implement → focused tests/evaluation → deep review/co
 | DR-4 | Stale request framework | high | medium | complete `c627aec` | stale requests terminal-fail atomically; thread continues |
 | DR-5 | Profile machinery | high | medium | complete `be84e8e` | roles/transitions/credential-ref replay are durable and critic-proven |
 | P16 | Tools gem extraction | medium | medium | complete `38d2e94` | tamoz-tools loads/runs with core only and preserves behavior byte-for-byte |
-| P17 | Governed websearch | high | high | implemented `78041fc` (critic round) | one bounded attributed search path with enforced per-hop egress policy |
+| P17 | Governed websearch | high | high | closed (`78041fc`, critic fix `3fe4d43`) | one bounded attributed search path with enforced per-hop egress policy |
 | P11 | Three-layer memory | high | high | closed (`0531bee`, critic fixes `5cdf17f`) | Experience → Knowledge → Wisdom treatment beats no-memory with deletion and provenance safety |
 | P12 | Bounded self-healing and improvement | high | high | closed (Round 24) | one typed recovery and one candidate promotion pass holdout, circuit, rollback, and human gates; observation/shadow-only disclosed; DR-2 durable circuit on one record type |
 | P13 | Durable scheduler | medium | high | closed (Round 25) | tamoz-scheduler gem (at/interval); atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
 | P14 | Streaming physical-world input | strategic | very high | closed (Round 26) | tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval) |
-| P18 | Capability host + graph audit | high | high | pending | four closed built-in sources share one host; graph surface measured and documented |
-| P15 | Release hardening | very high | high | pending | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
+| P18 | Capability host + graph audit | high | high | closed (Round 27); session wiring landed in P15 `13ea8fd` | four closed built-in sources share one host; graph surface measured and documented |
+| P15 | Release hardening | very high | high | implementing (`d37ba24`, `13ea8fd`, `d36d0c6`, `848c28f`) | public API/docs, migrations, restore, security, benchmarks, signed eval decision, release candidate |
 
 P2–P10 plus P16/P17 are the current usable alpha path. P11–P14/P18 are promoted only after the preceding product
 path is reliable and their design promotion evidence exists. P15 closes the release; it does

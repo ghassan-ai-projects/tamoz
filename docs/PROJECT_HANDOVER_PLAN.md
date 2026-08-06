@@ -1,13 +1,18 @@
 # Tamoz implementation handover plan
 
 Status: active handover tracker
-Implementation baseline: P0–P14, P18 all closed (scorecard 22/19/pass; P12, P13, P14, P18
-critic rounds PASS-WITH-GAPS, all findings closed with committed tests)
+Implementation baseline: P0–P14 and P16–P18 all closed. P15 is IMPLEMENTING: P15-A
+(requirements manifest + executed-evidence audit), the deferred P18 capability-host
+wiring, the end-to-end acceptance workflow, and the scheduler/stream public surface have
+landed.
 Current phase: `P15` — release hardening (the completion audit)
-Next action: implement P15 per `docs/P15_RELEASE_PLAN.md` — requirements, compatibility,
-operations, security, performance, evaluation, product/docs, release rehearsal, owner
-gate; the graph surface audit (docs/GRAPH_SURFACE_AUDIT.md) supplies the graph's
-documented public API input.
+Release status is machine-readable: `docs/requirements-manifest.json` (351 rows) and the
+regenerated `docs/REQUIREMENTS_AUDIT.md`. At `848c28f`: 333 pass with executed evidence,
+11 deferred-by-contract, 4 indirect, and three release-blocking gaps — INV-39 (cron/IANA
+civil time is not implemented), INV-48 (channel backpressure is declared and never
+enforced), OBJ-7 (release evidence, closed by P15-G/P15-H).
+Next action: P15-B/C/D/E/F and the P15-H clean-clone rehearsal, then the P15-I owner
+gate. Do NOT claim a release before that gate.
 
 This is the execution document for another agent continuing Tamoz from the current state.
 It expands the product roadmap into trackable work packages. The authoritative semantics
@@ -22,13 +27,15 @@ At the implementation baseline:
 - P0–P3 are complete;
 - Tamoz Agent supports reviewed read/change/check/repair, durable multi-turn resume,
   trusted profiles, evaluated skills, governed MCP, and real-model read-only/action paths;
-- `tamoz-eval scorecard agent-smoke` runs 20 deterministic cases: 17 successes,
-  decision pass, 4/4 hard gates, safety counters zero;
-- last committed full gate: 1020 runs / zero failures under both locales at `c044dee`;
-- eight gems package successfully: tamoz-core, tamoz-graph, tamoz-sqlite,
-  tamoz-scheduler, tamoz-tools, tamoz-agent, tamoz-mcp, tamoz-evals;
-- P6-F operations, several independent legacy critics, and release evidence remain open.
-  P12 (bounded self-healing + DR-2 durable circuit) is closed; P13 is the current phase.
+- `tamoz-eval scorecard agent-smoke` runs 22 deterministic cases: 19 successes,
+  decision pass, 4/4 hard gates, safety counters zero,
+  `content_digest sha256:08a7a526…`;
+- last committed full gate: 1156 runs / 37,827 assertions / zero failures under both
+  locales at `848c28f`;
+- nine gems package successfully: tamoz-core, tamoz-graph, tamoz-sqlite,
+  tamoz-scheduler, tamoz-stream, tamoz-tools, tamoz-agent, tamoz-mcp, tamoz-evals;
+- P6-F operations, several independent legacy critics, and the remaining release
+  evidence (P15-B/C/D/E/F/H) are open. P15 is the current phase.
 
 The handover-plan commit will be newer than `c72f2b3`; use `git log` for its hash. Do not
 push, publish gems, create releases, rewrite history, or merge external changes unless the
@@ -75,10 +82,10 @@ Allowed status values: `pending`, `designing`, `implementing`, `reviewing`, `com
 | P12 | closed | bounded healing and improvement | Round 24 | observation/shadow-only disclosed; DR-2 durable circuit on one record type; critic PASS-WITH-GAPS, both gaps closed |
 | P13 | closed | durable scheduling | Round 25 | tamoz-scheduler gem (at/interval, cron deferred); MIGRATION_3; atomic materialize_due; misfire/overlap/not_before; claim-time grant intersection; scorecard case 21; critic PASS-WITH-GAPS, all findings closed |
 | P14 | closed | Situation streaming and simulated physical action | Round 26 | tamoz-stream gem; MIGRATION_4/5; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed |
-| P15 | pending | release hardening and independent completion audit | — | — |
+| P15 | implementing | release hardening and independent completion audit | `6ff0d40` | `d37ba24` (A: manifest + audit), `13ea8fd` (W: capability-host wiring), `d36d0c6` (E2E: acceptance workflow), `848c28f` (G/H: scheduler+stream API + isolation) |
 | P16 | complete | tools gem extraction, behavior-neutral | `6ff0d40`, `999b5c9` | `8f6b893`, `38d2e94` (merge), `2ae9e60` |
-| P17 | reviewing | governed websearch + egress policy | `6ff0d40`, `999b5c9` | `78041fc` (in critic round) |
-| P18 | pending | capability host + graph surface audit | `6ff0d40` (revised by checkpoint deep review) | — |
+| P17 | complete | governed websearch + egress policy | `6ff0d40`, `999b5c9` | `78041fc`, critic fix `3fe4d43` |
+| P18 | complete | capability host + graph surface audit | `6ff0d40` (revised by checkpoint deep review) | `a8811dc`, `1bfa89a`, `21bbaf6`, `a2eb5bc`; session-construction wiring deferred to P15 and landed in `13ea8fd` |
 
 Update this table and `docs/PRODUCT_EXECUTION_ROADMAP.md` in the final commit of each phase.
 Never mark a phase complete based only on unit tests or an implementation claim.
@@ -119,7 +126,8 @@ P4 → P5 → P6 → P7 → P8 → P9 → P10 → DR-3/DR-4/DR-5 → P16 → P17
                                      P11[DR-1] → P12[DR-2 record] → P13 → P14 → P18 → P15
 ```
 
-The remaining single-active-phase order is P17 (critic) → P11 (implementing DR-1
+The remaining single-active-phase order is P15 alone; everything before it is closed.
+The historical order was P17 (critic) → P11 (implementing DR-1
 before Wisdom activation) → P12 (incl. the DR-2 supervisor-scope durable record) → P13 →
 P14 → P18 → P15. P6, P8, P10, and P12 are hard prerequisites
 for any physical action path. P14 follows P13

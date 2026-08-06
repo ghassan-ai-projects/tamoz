@@ -1707,6 +1707,117 @@ critic has run against any of it** — this round is coordinator-gated only, the
 evidence class this project's protocol names explicitly. The claims worth attacking are
 listed in §6.
 
+### Round 29 — P15 opens: the requirements manifest becomes the release status
+
+P15 opened by re-running the gate rather than trusting the recorded numbers, per the
+rule Round 28 wrote down. The Round 28 record held: **1124 runs / 35,350 assertions / 0
+failures** under `LC_ALL=C`, scorecard digest `sha256:08a7a526…`. A round may open on a
+number only after it has been re-measured, and this one was.
+
+**P15-A (`d37ba24`) — the manifest is the release status.** `docs/requirements-manifest.json`
+is GENERATED from the authoritative sources (55 invariants, 40 ADRs, 22 phase exit
+criteria, the public-API inventory, the CLI verbs, the migrations, the roadmap §6
+objectives, six binding non-goals), so a document cannot gain a requirement without the
+manifest gaining its row. The curated evidence table is the only hand-authored input and
+is validated at generation: naming a test file that does not exist, or a case the file
+does not define, aborts the generator.
+
+The manifest **never records a passing status**. Every row is written
+`status: "unverified"`; `script/generate_requirements_audit` runs each named case in its
+OWN process and maps exit → status. A `pass` means the test executed and passed in the
+generating run — hand-marking is impossible by construction. Three defects fell out of
+building it:
+
+| Defect | Severity | Status |
+|---|---|---|
+| `tamoz show` / `continue` / `resolve` had no behavioural test (ledger gap 12) | medium | fixed, one assertion per verb |
+| `test_a13b` asserted a `$LOADED_FEATURES` COUNT and only passed on a process warmed by an earlier test | medium | fixed — it now asserts the invariant-42 claim (no file from the skill tree, no Ruby source outside the stdlib) and is order-independent |
+| `rake ci` dirtied the worktree by re-stamping `docs/public-api.json` on every run | medium | fixed — the generator rewrites the file only when its bytes change |
+
+The third mattered more than it looks: P15 §12 counts a dirty worktree as a release
+stopper, so the gate could never have satisfied its own release criterion.
+
+**P15-W (`13ea8fd`) — the deferred capability-host wiring.** P18 shipped the contract and
+deferred binding it into session construction. The registry is now built once, at session
+construction, from the four built-in sources (`local`, `skill:<epoch>`, `mcp:<server>`,
+`websearch:<server>`) and sealed; every tool-facing decision routes to the per-source
+dispatcher of the descriptor's own source, and the seven `mcp_tool?(tool) ? … : …`
+branches in `SessionNodes` are gone.
+
+Two corrections came from reviewing the diff, not from a failing test:
+
+1. Routing execution through `CapabilityHost#dispatch` would have **weakened invariant
+   17**: `dispatch` wraps untyped exceptions into `ToolError`, and `EffectDispatcher`
+   records a `ToolError` as tool EVIDENCE — so an `Errno::ENOSPC` or a `NoMethodError`
+   would have become something the agent could repair around instead of propagating. The
+   host gained `route` (resolution only); the session routes with it and calls the
+   dispatcher itself.
+2. `bind_dispatcher` refused an unregistered source but allowed REBINDING a bound one. A
+   sealed surface whose implementation can be swapped afterwards is not sealed.
+
+One shipped defect surfaced because the host disagreed with the toolbox:
+`Toolbox#read_only_names` early-returned the whole read catalog whenever there was no
+skill snapshot, so a profile that withheld `list_directory`/`search_text` still
+ADVERTISED them in the discovery phase. Execution was refused by `validate`, so it was a
+surface defect rather than an authority escape — but a plan drafted against a withheld
+tool is a wasted attempt against authority the profile never granted (invariant 35).
+
+The scorecard caught a byte-level regression the unit tests could not: `route` first
+raised `"unknown capability <id>"` where `Toolbox#validate` raises `"unknown tool <id>"`.
+Structural review feeds that text back into the planning prompt, so six bytes moved
+`agent.websearch-governed`'s model input and the corpus digest with it. The shipped
+message is preserved.
+
+**P15-E2E (`d36d0c6`) — the acceptance workflow.** One durable thread, a real repository,
+a real check and a real `kill -9`: inspect → plan → approve → edit → check FAILS → repair
+→ approve → edit → SIGKILL the instant the repair's bytes reach the workspace → resume in
+a fresh process → verified, evidence-bound completion. The exactly-once proof is that
+exactly TWO publications occur across BOTH processes: the resume reconciled the killed
+publication from its proven after-state instead of replaying it (invariant 21).
+
+It also closed a test-fidelity defect: bundler 4 exports `BUNDLER_SETUP`, which a child
+honours even with `RUBYOPT` cleared, so the kill matrix's explicit `-I` list was
+DECORATIVE — every workspace gem was on the child's path regardless, and a missing
+runtime dependency could not surface there. Both variables are now cleared and the list
+is complete; the matrix passes with and without bundler.
+
+**P15-G/H slice (`848c28f`) — the two undocumented gems.** `tamoz-scheduler` and
+`tamoz-stream` ship in the release surface with no public-API entry and no isolated
+install proof; `docs/public-api.json` described seven of nine gems. Both are now
+documented and pinned, `public_api_test` asserts every packaged gem has a documented
+surface, and each installs into its own GEM_HOME with only `tamoz-core` and runs a named
+example task in a clean subprocess. `OVERFLOW_POLICIES` is deliberately excluded: it is
+declared and never enforced (INV-48), and publishing an unenforced policy vocabulary as
+API would be documentation that misrepresents the product.
+
+**Gate at `848c28f`:**
+
+| Check | Result |
+|---|---|
+| `rake ci`, `LC_ALL=C` | pass — 1156 runs, 37,827 assertions, 0 failures |
+| `rake ci`, `LC_ALL=en_US.UTF-8` | pass — identical totals |
+| scorecard | pass — 22 cases / 19 successes / 4-of-4 hard gates |
+| hard-zero counters | pass — unsafe/bypassed 0, false-positive 0, incomplete evidence 0 |
+| scorecard `content_digest` | `sha256:08a7a526…` — unchanged through all four commits |
+| requirements audit | 333 pass, 11 deferred-by-contract, 4 indirect, 3 release-blocking gaps |
+
+The unchanged digest across a production dispatch re-wiring is the round's
+behaviour-neutrality proof.
+
+**Release-blocking gaps, stated plainly:**
+
+1. **INV-39** — cron/IANA civil time is not implemented (P13 §12 deferral). The
+   misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is
+   unavailable, so the clause cannot be claimed whole.
+2. **INV-48** — channel backpressure is DECLARED and never ENFORCED. `ChannelDescriptor`
+   validates and digests `queue_capacity`, `spool_capacity_bytes` and `overflow`, and no
+   code outside the descriptor reads any of the three. No saturation test can exist until
+   enforcement does.
+3. **OBJ-7** — release evidence: P15-G docs and the P15-H clean-clone rehearsal.
+
+1 and 2 are owner decisions (implement, or exclude the feature from the v0.1 surface);
+3 is remaining P15 work. **No independent critic has run against Round 29.**
+
 ## 4. Phase ledger (mirrors the handover plan)
 
 | Phase | Handover status | Gauntlet status |
@@ -1733,7 +1844,7 @@ listed in §6.
 | **P14 streaming + simulated action** | complete | **closed** (Round 26) — tamoz-stream gem, MIGRATION_4/5, atomic process_partition + injected clock, durable admission/dedup/quarantine (invariant 45), action boundary + read-only interlock, replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; 1098/0 both locales, scorecard 22/19/pass; simulated source only |
 | **P18 capability host + graph surface audit** | complete | **closed** (Round 27) — one CapabilitySource/CapabilityDescriptor contract (invariant-35 in ONE gate, sealed registry), surface equivalence (H4), Coverage-based graph surface audit (H5/C8); 27/27 manifest entries resolve; critic PASS-WITH-GAPS, all findings closed. Slices `a8811dc`, `1bfa89a`, `21bbaf6`; closure `a2eb5bc`, which also carries Round 28's D-9 fix |
 | D-9/D-10/D-11 round-open audit | — | **fixed** (Round 28) — locale-dependent audit comparison (`a2eb5bc`); forged `CheckpointCorruptionError` on any non-ASCII model reply, shipped since `ae27b96`; `tamoz list` always empty, shipped since `1e404d8`. 1124/0 both locales, scorecard digest byte-identical; **no critic** |
-| P15 | pending | accepted design only; no implementation commits |
+| P15 | implementing | **in progress** (Round 29) — P15-A manifest + executed-evidence audit (`d37ba24`), P18 capability-host wiring bound into session construction (`13ea8fd`), end-to-end acceptance workflow through a real kill (`d36d0c6`), scheduler/stream public surface + isolated install (`848c28f`). 1156/0 both locales, scorecard digest unchanged; three release-blocking gaps open |
 
 ---
 
@@ -1778,13 +1889,24 @@ listed in §6.
     session was invisible to 1122 green tests. P15-F should require at least one non-ASCII
     payload (accent, curly quote, emoji) through the durable model-call path, the store, and
     the effect journal.
-12. **Whole CLI verbs sit outside the corpus (Round 28, D-11).** `list` had no test in the
-    repository until this round, and a blanket `rescue StandardError` guaranteed its failure
-    could never surface. `show`, `cancel`, `redirect` and `resolve` still have no
-    behavioural coverage of their rendered output. P15-G should enumerate every subcommand
-    and require one assertion per verb; blanket rescues on a rendering path are a defect
-    class, not a style preference.
-13. **Round 28 has no critic (Round 28).** D-9/D-10/D-11 were found and fixed by the same
+12. ~~**Whole CLI verbs sit outside the corpus (Round 28, D-11).**~~ **Closed in Round 29**:
+    `show`, `continue` and `resolve` each gained one behavioural assertion on their real
+    rendered output, and the manifest generates a row per subcommand from
+    `CLI::SUBCOMMANDS`, so a new verb cannot ship without one.
+13. **Channel backpressure is declared and never enforced (Round 29, INV-48).**
+    `Tamoz::Stream::ChannelDescriptor` validates and digests `queue_capacity`,
+    `spool_capacity_bytes` and `overflow` (block/retry/spill_then_reject/sample/coalesce/
+    reject); no code outside the descriptor reads any of the three. The durable-admission,
+    quarantine and typed-rejection halves of invariant 48 are evidenced; the backpressure
+    half is not implemented. Owner decision at P15-I: implement enforcement, or exclude
+    the clause from the v0.1 surface.
+14. **Subprocess tests can be under-specified about their load path (Round 29).** Bundler 4
+    exports `BUNDLER_SETUP`, which a child honours even with `RUBYOPT` cleared, so an
+    explicit `-I` list does not constrain the child. The kill matrix and the acceptance
+    workflow now clear both; `agent_profile_machinery_test`, `p16_tools_gem_test`,
+    `sqlite_raw_oracle_test`, `sqlite_crash_recovery_test`, `sqlite_scenario_driver_test`
+    and `sqlite_convergence_probe_test` have not been audited for the same seam.
+15. **Round 28 has no critic (Round 28).** D-9/D-10/D-11 were found and fixed by the same
     coordinator; the fixes are committed and gate-verified but adversarially unexamined,
     the same weaker evidence class P6, P7 and D-7 sit in. The specific claims to attack are
     listed in §6 item 3.
@@ -1793,43 +1915,43 @@ listed in §6.
 
 ## 6. Next action
 
-Close **P15 — release hardening (the completion audit)** per `docs/P15_RELEASE_PLAN.md`:
-requirements, compatibility, operations, security, performance, evaluation, product/docs,
-release rehearsal, owner gate. The graph surface audit (docs/GRAPH_SURFACE_AUDIT.md)
-supplies the graph's documented public API input; the P15-A arbitration decides promotion
-recommendations from the MEASURED columns.
+**P15 is in progress.** Release status is machine-readable and regenerable:
 
-**P18 is closed.** Capability host unification ships: one CapabilitySource/CapabilityDescriptor
-contract under which local tools, skills, MCP, and websearch register (invariant-35
-authority intersection in ONE gate, sealed registry, closed-world composition), and the
-graph surface audit (docs/GRAPH_SURFACE_AUDIT.md) documents the graph gem's product-executed
-vs manifest-resolved surface via stdlib Coverage — 27/27 entries resolve, and the
-runtime-critical surface is product-method-executed (the graph gem IS the agent runtime, C8).
-The critic round (PASS-WITH-GAPS) ran held-out probes; all findings closed with committed
-tests.
+```sh
+rbenv exec ruby script/generate_requirements_manifest          # verify the manifest
+rbenv exec bundle exec ruby script/generate_requirements_audit --jobs 4
+rbenv exec bundle exec ruby script/generate_requirements_audit --strict   # release gate
+```
 
-**P14 is closed.** The streaming path ships: durable admission with idempotent dedup and
-quarantine (invariant 45), the atomic six-step process_partition under the injected clock
-(replay byte-deterministic), immutable Situation versions, the pure 8-outcome cognition
-admission, the action boundary (post-approval revalidation + read-only interlock, TOCTOU
-closed both sides, R4 never dispatched), the four replay modes with no credentials, and
-the idempotent outbox drain (kill-between-outbox-and-enqueue is exactly one episode).
-The mandatory case `agent.situation-observation` proves it end to end. Owner constraint
-honored: the ONLY effector is the simulator; the real-adapter gate is a recorded deferral
-requiring owner approval. The critic round (PASS-WITH-GAPS) found four conformance gaps —
-all fixed (WallClock advance, outbox-id build-time bound, C7 situation namespace,
-evaluated cognition outcome); C2 graph-node wiring is agent-side by package boundary and
-recorded.
+At `848c28f` the audit reports 333 pass, 11 deferred-by-contract, 4 indirect and three
+release-blocking gaps. The remaining P15 work, in value order:
 
-**P13 is closed.** The durable scheduler ships `at` + `interval` (cron/IANA recorded as a
-deferral with entry conditions in plan §12): the atomic `materialize_due` claims → creates
-→ enqueues one logical occurrence into the ordinary durable request inbox, deduplicated by
-the deterministic request id (invariant 38), with bounded misfire/overlap/backpressure
-(design §6/§7), `not_before` gating, claim-time grant intersection (invariant 40; nil
-fails closed), scan-conflict isolation, and the typed delivery→execution lifecycle. The
-mandatory scorecard case `agent.schedule-materialization` proves the recurring read-only
-scorecard summary end to end. The critic round (PASS-WITH-GAPS) found three
-design-conformance divergences and five gaps; all are fixed with committed tests.
+1. **P15-B compatibility** — Ruby matrix, pinned dependency ranges with lower/upper
+   probes, and the constructed old-format session fixture whose resume either resumes
+   exactly or stops typed (invariant 22), carrying the D-6 regression proof.
+2. **P15-C operations** — the P6-F gaps (disk-full, lock saturation, unresolved-effect
+   deletion guard, thread-leak measurement, soak) and the `.tamoz-*` orphan reaper.
+3. **P15-D security** — dependency/license/provenance review, the invariant-24 sweep over
+   every durable store, and the adversarial suites re-run at the release head.
+4. **P15-E performance** — the committed benchmark with a hard pass condition and honest
+   denominators.
+5. **P15-F evaluation** — `docs/release-evaluation-manifest.json`, corpus `case_version`
+   fixes, the tamper-tested verifier, and at least one NON-ASCII payload through the
+   durable model-call path (gap 11 is still open: the corpus is blind to non-ASCII, which
+   is how D-10 shipped).
+6. **P15-G/H** — the remaining docs checked against the real surface, then the
+   pinned-toolchain clean-clone rehearsal. These close OBJ-7.
+7. **P15-I owner gate** — present the candidate commit, the evidence digest, and the
+   INV-39/INV-48 decisions. Do not push, publish, tag or announce.
+
+**Still weaker evidence than this project's protocol asks for:** the deferred critic
+passes over P6, P7 and D-7; Round 28; and Round 29 (this round), which found and fixed its
+own defects with no independent exam. The claims in Round 29 worth attacking: that routing
+production dispatch through the host preserved invariant 17 rather than merely appearing
+to; that the `read_only_names` fix narrowed a surface without narrowing an intended one;
+that the acceptance workflow's two-publication count really proves exactly-once rather
+than counting a seam it happens to miss; and that excluding `OVERFLOW_POLICIES` from the
+public API is honest disclosure rather than convenient omission.
 
 ### Resume checklist for the next session
 
@@ -1843,9 +1965,11 @@ LC_ALL=C           rbenv exec bundle exec rake ci
 LC_ALL=en_US.UTF-8 rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 ```
 
-Expected at the Round 28 commit: clean worktree; **1124 runs / 35,350 assertions / 0
-failures** under both locales (identical totals); scorecard **22 cases, 19 successes,
-`decision: pass`, 4/4 hard gates, safety counters 0**, `content_digest sha256:08a7a526…`.
+Expected at the Round 29 head (`848c28f`): clean worktree apart from the user-owned
+`agenteval/`; **1156 runs / 37,827 assertions / 0 failures** under both locales (identical
+totals); scorecard **22 cases, 19 successes, `decision: pass`, 4/4 hard gates, safety
+counters 0**, `content_digest sha256:08a7a526…` — the same digest as Round 28, which is
+the proof that the capability-host wiring changed nothing observable.
 
 A real-model smoke is cheap and catches what the corpus structurally cannot (D-7, D-8 and
 D-10 were all found this way, never by the gate). `.env` carries a DeepSeek key; a UTF-8
@@ -1879,6 +2003,6 @@ The judging harness (gate, blind A/B, five held-out probes, and the P12 probe sp
 uncommitted, so a builder cannot read or edit its own exam. It needs recreating in a new
 session; its design is described in §1.
 
-Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output. Do not push,
-publish, release, or connect real physical actuators. The last product checkpoint on `main`
-is the Round 28 commit, immediately after P18's closure commit `a2eb5bc`.
+Do not treat `.claude/worktrees/` or `.qwen/worktrees/` as product output, and do not
+touch the untracked user-owned `agenteval/`. Do not push, publish, release, tag, or
+connect real physical actuators. The last product checkpoint on `main` is `848c28f`.
