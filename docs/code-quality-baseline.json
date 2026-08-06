@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "1ce3e68",
+    "commit": "d10e945",
     "dirty": true
   },
   "toolchain": {
@@ -10,12 +10,12 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 250,
-    "total_code_lines": 49992,
+    "files": 251,
+    "total_code_lines": 50025,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
-      "gems/tamoz-agent": 11952,
+      "gems/tamoz-agent": 11956,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4367,
@@ -26,6 +26,7 @@
       "gems/tamoz-tools": 1883,
       "script/autonomy_scorecard": 99,
       "script/benchmark_release": 245,
+      "script/check_baseline_drift": 29,
       "script/clean_rubocop_todo": 24,
       "script/coverage_hook.rb": 20,
       "script/generate_agent_memory_fixtures": 99,
@@ -51,15 +52,15 @@
     }
   },
   "rubocop": {
-    "total": 42378,
-    "files_inspected": 394,
+    "total": 42421,
+    "files_inspected": 395,
     "by_cop": {
-      "Style/StringLiterals": 30335,
+      "Style/StringLiterals": 30376,
       "Layout/SpaceInsideHashLiteralBraces": 3704,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
       "Metrics/AbcSize": 936,
       "Metrics/MethodLength": 927,
-      "Minitest/MultipleAssertions": 593,
+      "Minitest/MultipleAssertions": 595,
       "Style/IfUnlessModifier": 434,
       "Style/StringLiteralsInInterpolation": 399,
       "Layout/EmptyLineAfterGuardClause": 304,
@@ -248,7 +249,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41894,
+      "convention": 41937,
       "warning": 484
     },
     "metrics_over_ceiling": {
@@ -286,14 +287,14 @@
       },
       "Minitest/MultipleAssertions": {
         "max": 150,
-        "count": 593
+        "count": 595
       }
     }
   },
   "reek": {
-    "total": 4588,
+    "total": 4587,
     "by_type": {
-      "DuplicateMethodCall": 1302,
+      "DuplicateMethodCall": 1301,
       "TooManyStatements": 793,
       "FeatureEnvy": 394,
       "LongParameterList": 309,
@@ -319,7 +320,7 @@
     },
     "by_file": {
       "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb": 248,
-      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 217,
+      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 216,
       "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb": 173,
       "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb": 140,
       "gems/tamoz-graph/lib/tamoz/graph/compiled.rb": 139,
@@ -523,7 +524,7 @@
     }
   },
   "enola": {
-    "facts": 5387,
+    "facts": 5456,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -534,11 +535,11 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 87.73,
-    "line_covered": 17897,
-    "line_total": 20399,
-    "branch_percent": 68.6,
-    "branch_covered": 5198,
+    "line_percent": 87.81,
+    "line_covered": 17915,
+    "line_total": 20401,
+    "branch_percent": 68.76,
+    "branch_covered": 5210,
     "branch_total": 7577,
     "uncovered_files": [
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-agent/lib/tamoz/agent/version.rb",
@@ -552,8 +553,8 @@
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-tools/lib/tamoz/tools/version.rb"
     ],
     "tests": {
-      "runs": 1150,
-      "assertions": 13786
+      "runs": 1159,
+      "assertions": 13824
     }
   },
   "documents": {

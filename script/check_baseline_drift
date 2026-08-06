@@ -1,0 +1,46 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Q1 — baseline drift gate (quality-program review, 2026-08-06).
+#
+# The committed docs/code-quality-baseline.json must reflect the CURRENT tree:
+# a slice that moves the raw ledgers regenerates it in the same commit. This
+# checker regenerates the FAST raw ledgers (rubocop + reek; no coverage/enola
+# runs) and fails when the committed baseline is stale. It is what makes the
+# reek ratchet airtight — without it, every smell reduction creates one unit of
+# slack that a later slice could silently re-introduce.
+#
+# Exit 0 = fresh, 1 = stale (message lists the drifted fields).
+
+require 'json'
+load File.expand_path('regenerate_quality_baseline', __dir__)
+
+def drift_problems(current, committed)
+  problems = []
+  %w[rubocop reek].each do |key|
+    by_key = key == 'rubocop' ? 'by_cop' : 'by_file'
+    totals = [current.fetch(key).fetch('total'), committed.fetch(key).fetch('total')]
+    problems << "#{key}.total: committed #{totals[1]} != actual #{totals[0]}" unless totals[0] == totals[1]
+    current.fetch(key).fetch(by_key).each do |name, count|
+      baseline = committed.dig(key, by_key, name) || 0
+      problems << "#{key}.#{by_key}.#{name}: committed #{baseline} < actual #{count}" if count > baseline
+    end
+  end
+  problems
+end
+
+def main
+  committed = JSON.parse(File.read(BASELINE_JSON))
+  problems = drift_problems({ 'rubocop' => rubocop_ledger, 'reek' => reek_ledger }, committed)
+  if problems.empty?
+    puts 'baseline drift: rubocop and reek raw ledgers match the committed baseline'
+    0
+  else
+    problems.each { |problem| warn "  stale: #{problem}" }
+    warn 'run `bundle exec ruby script/regenerate_quality_baseline` and commit the ' \
+         'regenerated baseline with this slice'
+    1
+  end
+end
+
+exit(main)

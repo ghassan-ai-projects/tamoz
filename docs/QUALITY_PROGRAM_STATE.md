@@ -9,9 +9,10 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-06
-- **HEAD:** `d9d156b` (main, ahead of origin by 4) — "Slow tests behind an explicit task"
-- **Tree:** clean (after slice 1 commit)
+- **HEAD:** `d10e945` (main) — "Q3 slice 1: extract the CLI error-taxonomy policy from run()"
+- **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite.
+- **Quality commits so far:** 12 (`8ce5581` Q0 toolchain → `d10e945` Q3 slice 1)
 
 ## Precondition verdict
 
@@ -124,8 +125,8 @@ every slice and whenever the phase table changes.
 |---|---|---|
 | Q0 Measure honestly | **COMPLETE** (2026-08-06) | `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md` committed; deterministic regeneration script; prod vs tests vs generated classified separately |
 | Q1 Ratcheting gates | **COMPLETE** (2026-08-06) | `rake quality:*` + `quality` aggregate; ci includes the fast ratchets (rubocop gate, reek drift, enola); ratchet verified live (reek caught 8 new smells); net-zero RuboCop debt added |
-| Q2 Characterize hotspots | pending | characterization + failure-path tests per hotspot; mutation-proven |
-| Q3 Extract by responsibility | pending | one responsibility per slice; target architectures in charter |
+| Q2 Characterize hotspots | **CLI COMPLETE** (dea4396); remaining: session_nodes, profile, toolbox, checkpoint_store, compiled | characterization + failure-path tests per hotspot; mutation-proven |
+| Q3 Extract by responsibility | **IN PROGRESS** — CLI slice 1 done (d10e945); next: approval adapter, then parser/commands/factory/renderer | one responsibility per slice; target architectures in charter |
 | Q4 Remove accidental complexity | pending | Data values, codec centralization, no banned abstractions |
 | Q5 Coverage quality | pending | ≥90/80 overall, ≥95/90 critical paths, subprocess collation |
 | Q6 Ruby quality targets | pending | method/class/ABC/cyclomatic/params/nesting limits |
@@ -169,12 +170,15 @@ fresh-context critic.
 
 ## Next actions (ordered)
 
-1. **Q3 CLI slice 1:** extract one cohesive responsibility from the CLI with
-   characterization tests in place — start with the error-taxonomy/exit-code policy or
-   the parser (argv → typed command); run Enola impact analysis + the 17-step loop;
-   commit the extraction alone. Then continue per-hotspot: characterize next hotspot
-   (session_nodes 113, profile 126, toolbox 140, checkpoint_store 173, compiled 139)
-   before extracting from it.
+1. **Q3 CLI slice 2:** extract the INTERACTIVE APPROVAL ADAPTER from
+   `gems/tamoz-agent/lib/tamoz/agent/cli.rb` (charter-named component): the prompt/answer
+   seam — prompt_approve_tool, prompt_clarify, prompt_for_interrupt, answer_for,
+   collect_answers, map_answer (~lines 685-800). Smallest extraction naming the
+   responsibility; prompt text byte-identical; `map_answer` stays pinned by the Q2
+   vocabulary tests. Then continue: parser (argv → typed command), commands, session
+   factory, renderer — one responsibility per slice. Then remaining hotspots
+   (session_nodes 113, profile 126, toolbox 140, checkpoint_store 173, compiled 139):
+   characterize then extract per hotspot.
 2. **Q3+:** one responsibility per slice along the charter target architectures.
 3. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
    process, merged at the end; killed processes documented as blind seams with a
@@ -192,7 +196,7 @@ fresh-context critic.
 | 4 | 2026-08-06 | — (Q0-5) | deterministic baseline script + artifacts | — | line 87.73 / branch 68.60 | rubocop gate 0; raw 42,378; reek 4,588 | 5,387 facts / PASS | no production behavior change | 1ce3e68 |
 | 5 | 2026-08-06 | — (Q1) | quality:* rake gates + ci wiring | — | 87.73 / 68.60 (deterministic) | gate 0; raw 42,378 (net zero); reek 4,588 | unchanged (re-pin after commit) | no production behavior change; ci = one gate, one command | d499f53 |
 | 6 | 2026-08-06 | CLI (Q2) | characterization tests (error taxonomy, --check validation, answer vocabulary) | — | 81% line before (674/832) | gate 0 | unchanged | no production behavior change; +9 tests (30 runs/216 assertions), mutation-proven | dea4396 |
-| 7 | 2026-08-06 | CLI (Q3 slice 1) | error-taxonomy/exit-code policy (run() rescue chain → handle_usage_error / handle_fatal_error) | cli.rb 1,610 → 1,620 | 81% (unchanged) | reek 4,588 → 4,587 (one DuplicateMethodCall removed); gate 0 | PASS (no regression) | behavior byte-identical — Q2 taxonomy tests pass unchanged (4/10 + 30/216); exit codes + "tamoz: " messages pinned | pending |
+| 7 | 2026-08-06 | CLI (Q3 slice 1) | error-taxonomy/exit-code policy (run() rescue chain → handle_usage_error / handle_fatal_error) | cli.rb 1,610 → 1,620 | 81% (unchanged) | reek 4,588 → 4,587 (one DuplicateMethodCall removed); gate 0 | PASS (no regression) | behavior byte-identical — Q2 taxonomy tests pass unchanged (4/10 + 30/216); exit codes + "tamoz: " messages pinned | d10e945 |
 
 ## Owner-decision queue
 

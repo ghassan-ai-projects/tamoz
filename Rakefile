@@ -321,13 +321,19 @@ namespace :quality do
   task :architecture do
     sh ENOLA_BIN, 'check', '--fail-on=cycles,layers', '--min-confidence=0.8', '.'
   end
+
+  desc 'Baseline drift: the committed code-quality-baseline.json must match the raw ledgers'
+  task :baseline_drift do
+    ruby 'script/check_baseline_drift'
+  end
 end
 
-desc 'The full quality gate: rubocop (with TODO drift), reek, coverage, architecture'
-task quality: ['quality:rubocop', 'quality:reek', 'quality:coverage', 'quality:architecture']
+desc 'The full quality gate: rubocop (with TODO drift), reek, coverage, architecture, baseline drift'
+task quality: ['quality:rubocop', 'quality:reek', 'quality:coverage', 'quality:architecture', 'quality:baseline_drift']
 
 desc "The everyday gate — fast, and honest about what it skips"
-task ci: ['design:validate', :syntax, :test_fast, 'quality:rubocop_gate', 'quality:reek', 'quality:architecture'] do
+task ci: ['design:validate', :syntax, :test_fast, 'quality:rubocop_gate', 'quality:reek',
+          'quality:architecture', 'quality:baseline_drift'] do
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"
