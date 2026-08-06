@@ -9,10 +9,10 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-06
-- **HEAD:** `8ba3616` (main) — "Q3 slice 3: extract the argument parser (ArgumentParser)"
+- **HEAD:** `ea6268c` (main) — "Q0: state — giants-first priority queue recorded" (next: checkpoint_store characterization)
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
-- **Quality commits so far:** 17 (`8ce5581` Q0 toolchain → `8ba3616` Q3 slice 3)
+- **Quality commits so far:** 19 (`8ce5581` Q0 toolchain → `ea6268c` giants-first queue)
 
 ## Precondition verdict
 
@@ -202,7 +202,8 @@ characterize-then-extract treatment.
 | 7 | 2026-08-06 | CLI (Q3 slice 1) | error-taxonomy/exit-code policy (run() rescue chain → handle_usage_error / handle_fatal_error) | cli.rb 1,610 → 1,620 | 81% (unchanged) | reek 4,588 → 4,587 (one DuplicateMethodCall removed); gate 0 | PASS (no regression) | behavior byte-identical — Q2 taxonomy tests pass unchanged (4/10 + 30/216); exit codes + "tamoz: " messages pinned | d10e945 |
 | 8 | 2026-08-06 | CLI (Q3 slice 2) | interactive approval adapter (PromptAdapter: approve_tool/clarify/interrupt prompt loops) | cli.rb 1,620 → 1,577 + cli_prompt_adapter.rb 80 | 81% (unchanged) | reek 4,587 → 4,577 (−10: baselined prompt-method smells left cli.rb; new file 0 smells with site-level disables for the EOF-abort loop contract) | PASS | prompt text byte-identical (resume/interrupt tests + 30/216 unchanged); answer POLICY (answer_for/map_answer/approve-all) stays on the CLI; no public API change | a126fda |
 | 9 | 2026-08-06 | CLI (Q3 slice 3) | argument parser (ArgumentParser: OptionParser grammar, defaults, --check validation, --version/--help) | cli.rb 1,578 → 1,503 + cli_argument_parser.rb 113 | 81% (unchanged) | reek 4,577 → 4,571 (parse's baselined smells left cli.rb; new file 0 smells — declarative-registry disables per CODING_STANDARD §6) | PASS | behavior byte-identical (critic: 8/8 probes SAME, 31/227 tests); fresh-context critic verdict **PASS-WITH-GAPS**, both LOW findings fixed (help-text regression test added; SUBCOMMANDS passed explicitly to the parser) | 8ba3616 |
-| 10 | 2026-08-06 | CLI (Q3 slice 4) | option policy (OptionPolicy: profile/check capability-surface validation, renamed without ! per CODING_STANDARD §3) | cli.rb 1,503 → 1,481 + cli_option_policy.rb 43 | 81% (unchanged) | reek 4,571 → 4,567 (validators' baselined smells left cli.rb; policy clean via documented :reek:FeatureEnvy suppressions — stateless hash-validator, rationale in-file) | PASS | messages byte-identical (critic verified all three + exception class + truth tables); 5 call sites consistent; fresh-context critic verdict **PASS** (2 MINOR fixed/noted); later slice: drop validate_thread_id! bang for consistency | pending |
+| 10 | 2026-08-06 | CLI (Q3 slice 4) | option policy (OptionPolicy: profile/check capability-surface validation, renamed without ! per CODING_STANDARD §3) | cli.rb 1,503 → 1,481 + cli_option_policy.rb 43 | 81% (unchanged) | reek 4,571 → 4,567 (validators' baselined smells left cli.rb; policy clean via documented :reek:FeatureEnvy suppressions — stateless hash-validator, rationale in-file) | PASS | messages byte-identical (critic verified all three + exception class + truth tables); 5 call sites consistent; fresh-context critic verdict **PASS** (2 MINOR fixed/noted); later slice: drop validate_thread_id! bang for consistency | 98c17ac |
+| 11 | 2026-08-06 | checkpoint_store (Q2, giant #1) | characterization tests — validation seams of history/open_writer (before_sequence, limit, ttl) | — (tests only) | 90.5% line before (503/556) | gate 0; reek 4,567 unchanged | PASS | +7 tests (12 assertions): bad before_sequence/limit/ttl → ConfigurationError; ttl boundary (0.1/lease_ttl) accepted; **mutation-proven** (removing the before_sequence validation failed 2 tests); uncovered branches mapped to methods (the remaining gaps are corruption/conflict raise-branches for the extraction slices) | pending |
 
 ## Owner-decision queue
 
