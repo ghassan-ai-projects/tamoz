@@ -660,6 +660,134 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  # --- Error taxonomy (characterization of the run() rescue chain, Q2) ---
+  # Each error class has a pinned exit code and "tamoz: " message prefix; a
+  # generic error must NOT be swallowed into a clean exit — it propagates so
+  # the operator sees the backtrace. Mutating any exit code or removing a
+  # rescue here must fail the corresponding test.
+
+  def test_tool_error_exits_one_with_message
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(
+      ["read note.txt"],
+      out:, err:, env: {},
+      model_factory: raising_factory(Tamoz::Core::ToolError.new("boom"))
+    )
+
+    assert_equal 1, status
+    assert_match(/tamoz: boom/, err.string)
+  end
+
+  def test_checkpoint_conflict_exits_one_with_message
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(
+      ["read note.txt"],
+      out:, err:, env: {},
+      model_factory: raising_factory(Tamoz::CheckpointConflictError.new("conflict"))
+    )
+
+    assert_equal 1, status
+    assert_match(/tamoz: conflict/, err.string)
+  end
+
+  def test_approval_denied_exits_one_with_message
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(
+      ["edit app.rb"],
+      out:, err:, env: {},
+      model_factory: raising_factory(Tamoz::Agent::ApprovalDeniedError.new("nope"))
+    )
+
+    assert_equal 1, status
+    assert_match(/tamoz: approval denied/, err.string)
+  end
+
+  def test_unexpected_error_propagates_instead_of_clean_exit
+    out = StringIO.new
+    err = StringIO.new
+
+    assert_raises(RuntimeError) do
+      Tamoz::Agent::CLI.run(
+        ["read note.txt"],
+        out:, err:, env: {},
+        model_factory: raising_factory(RuntimeError.new("boom"))
+      )
+    end
+  end
+
+  # --- --check argument validation (parse seam) ---
+
+  def test_check_with_empty_name_is_usage_error
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(["--check", "=ruby -c app.rb", "inspect"], out:, err:, env: {})
+
+    assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
+    assert_match(/check must be NAME=COMMAND/, err.string)
+  end
+
+  def test_check_with_empty_command_is_usage_error
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(["--check", "lint=", "inspect"], out:, err:, env: {})
+
+    assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
+    assert_match(/check must be NAME=COMMAND/, err.string)
+  end
+
+  def test_duplicate_check_is_usage_error
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(
+      ["--check", "lint=ruby -c app.rb", "--check", "lint=ruby -w app.rb", "inspect"],
+      out:, err:, env: {}
+    )
+
+    assert_equal Tamoz::Agent::CLI::USAGE_ERROR, status
+    assert_match(/duplicate check/, err.string)
+  end
+
+  # --- Interactive answer vocabulary (map_answer contract) ---
+  # The words an operator types at an approval/clarify/resolve prompt are a
+  # stable user-facing contract. These pin the mapping through the CLI's own
+  # private seam (send) because the vocabulary is exactly what a full-flow test
+  # would exercise, at a fraction of the fixture cost.
+
+  def test_approve_tool_answer_vocabulary
+    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+
+    assert cli.send(:map_answer, "approve_tool", "y")
+    assert cli.send(:map_answer, "approve_tool", "yes")
+    assert cli.send(:map_answer, "approve_tool", "a")
+    assert cli.send(:map_answer, "approve_tool", "approve")
+    refute cli.send(:map_answer, "approve_tool", "n")
+    refute cli.send(:map_answer, "approve_tool", "deny")
+    assert_raises(ArgumentError) { cli.send(:map_answer, "approve_tool", "maybe") }
+  end
+
+  def test_resolve_effect_answer_vocabulary
+    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+
+    %w[fixed approve ok succeeded yes].each do |word|
+      assert_equal :succeeded, cli.send(:map_answer, "resolve_effect", word), word
+    end
+    %w[skipped deny no abandoned].each do |word|
+      assert_equal :abandoned, cli.send(:map_answer, "resolve_effect", word), word
+    end
+    assert_equal :failed, cli.send(:map_answer, "resolve_effect", "failed")
+    assert_equal :unknown, cli.send(:map_answer, "resolve_effect", "?")
+    assert_raises(ArgumentError) { cli.send(:map_answer, "resolve_effect", "maybe") }
+  end
+
   private
 
   def with_cli_workspace
@@ -684,6 +812,20 @@ class AgentCLITest < Minitest::Test
 
   def repair_factory(digest)
     ->(_options) { repair_model(digest) }
+  end
+
+  class RaisingModel
+    def initialize(error)
+      @error = error
+    end
+
+    def generate(**)
+      raise @error
+    end
+  end
+
+  def raising_factory(error)
+    ->(_options) { RaisingModel.new(error) }
   end
 
   def repair_model(digest)

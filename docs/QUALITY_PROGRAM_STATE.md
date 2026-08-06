@@ -100,6 +100,23 @@ every slice and whenever the phase table changes.
     per-file TODO model): a new offense in an already-excluded (cop, file) pair is not
     caught by the drift probe — reek's context ratchet partially covers it, and Q2+
     slices remove the underlying debt.
+13. **Q2 CLI characterization (2026-08-06):** `cli.rb` (1,610 lines, 217 reek smells,
+    81% line coverage before). Callers: `gems/tamoz-agent/exe/tamoz` (production
+    entrypoint), the evals smoke corpus (prepends a module to the CLI), loaded by
+    `tamoz/agent.rb`. Authority seam (`resolve_session_authority`/`pinned_authority`)
+    already covered by `test/agent_cli_profile_test.rb` (10 tests). Gaps found and
+    filled in `test/agent_cli_test.rb` (+9 tests, 30 runs / 216 assertions):
+    error-taxonomy rescue chain (ToolError / CheckpointConflictError / ApprovalDenied →
+    exit 1 + "tamoz: " message; a generic RuntimeError must NOT be swallowed — it
+    propagates), the three `--check` parse validations (empty name / empty command /
+    duplicate → USAGE_ERROR), and the interactive answer vocabulary (`map_answer`:
+    approve_tool + resolve_effect words — pinned via send as a documented contract
+    characterization). **Mutation-proven:** dropping the "approve" word from
+    `map_answer` made the vocabulary test fail (restored after). MCP Enola store
+    divergence noted: `generate_snapshot` via MCP produces a 42k-fact polluted store
+    (does not apply mcp-arch.yaml) while the CLI store is the clean 5,387-fact graph —
+    the CLI store is authoritative for gates; the MCP-side divergence is a tooling
+    wrinkle for a later slice.
 
 ## Phase status
 
@@ -152,10 +169,12 @@ fresh-context critic.
 
 ## Next actions (ordered)
 
-1. **Q2:** first hotspot = CLI (`gems/tamoz-agent/lib/tamoz/agent/cli.rb`, 217 reek
-   smells, top complexity file) — Enola impact analysis, callers, characterization +
-   failure-path tests, mutation-proven. Then session_nodes.rb (113), profile.rb (126),
-   toolbox.rb (140), checkpoint_store.rb (173), compiled.rb (139).
+1. **Q3 CLI slice 1:** extract one cohesive responsibility from the CLI with
+   characterization tests in place — start with the error-taxonomy/exit-code policy or
+   the parser (argv → typed command); run Enola impact analysis + the 17-step loop;
+   commit the extraction alone. Then continue per-hotspot: characterize next hotspot
+   (session_nodes 113, profile 126, toolbox 140, checkpoint_store 173, compiled 139)
+   before extracting from it.
 2. **Q3+:** one responsibility per slice along the charter target architectures.
 3. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
    process, merged at the end; killed processes documented as blind seams with a
@@ -171,7 +190,8 @@ fresh-context critic.
 | 2 | 2026-08-06 | — (Q0 tooling) | reek + rubocop-minitest + coding standard | — | — | rubocop gate 0/391 (raw 42,378); reek raw 4,588/202 | unchanged | no production behavior change | f1bcf8e (owner) + e5802f8 |
 | 3 | 2026-08-06 | — (Q0-4) | SimpleCov coverage wiring | — | line 87.73 / branch 68.59 (before) | rubocop gate 0 | unchanged | no production behavior change; 1,150 runs 0 failures | b6f611e |
 | 4 | 2026-08-06 | — (Q0-5) | deterministic baseline script + artifacts | — | line 87.73 / branch 68.60 | rubocop gate 0; raw 42,378; reek 4,588 | 5,387 facts / PASS | no production behavior change | 1ce3e68 |
-| 5 | 2026-08-06 | — (Q1) | quality:* rake gates + ci wiring | — | 87.73 / 68.60 (deterministic) | gate 0; raw 42,378 (net zero); reek 4,588 | unchanged (re-pin after commit) | no production behavior change; ci = one gate, one command | pending |
+| 5 | 2026-08-06 | — (Q1) | quality:* rake gates + ci wiring | — | 87.73 / 68.60 (deterministic) | gate 0; raw 42,378 (net zero); reek 4,588 | unchanged (re-pin after commit) | no production behavior change; ci = one gate, one command | d499f53 |
+| 6 | 2026-08-06 | CLI (Q2) | characterization tests (error taxonomy, --check validation, answer vocabulary) | — | 81% line before (674/832) | gate 0 | unchanged | no production behavior change; +9 tests (30 runs/216 assertions), mutation-proven | pending |
 
 ## Owner-decision queue
 
