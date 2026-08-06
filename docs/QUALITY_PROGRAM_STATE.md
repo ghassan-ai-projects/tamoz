@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `f5def65` (main) — "Q3 profile.rb slice 1: lift the registries out, split storage from codec"
+- **HEAD:** `d3c4fad` (main) — "Q3 profile.rb slice 2: extract the egress declaration validator"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -208,9 +208,15 @@ standalone characterization pass on a file already covered at its extraction sea
    not a rewrite. Expect profile.rb ≈ 1,230 lines after.
 2. **Q3 profile.rb slices 2+ — the loader**, along the charter's target architecture:
    schema/constants, safe document loader, structural validator, semantic validator,
-   canonicalizer/digester, authority projection. `validate_egress!` (1,043–1,138, ~95
-   lines) and `scan_yaml!` (531–631, ~100 lines) are the two worst methods in the file
-   and are method-split candidates in their own right.
+   canonicalizer/digester, authority projection.
+   - ~~`validate_egress!`~~ **DONE (slice 19)** → `Profile::EgressValidator`.
+   - **NEXT: `scan_yaml!`** (~100 lines, the YAML-safety pre-parse: merge keys, aliases,
+     tags, interpolation, nesting, embedded-secret heuristics). It is the loader's other
+     worst method and a security seam — already characterized by
+     agent_profile_schema_seams_test + agent_profile_test. Extract as
+     `Profile::YamlScanner` holding (text, path), same shape as EgressValidator.
+   - Then the remaining `validate_*!` family (~13 methods, roughly lines 651–1050) as a
+     structural/semantic validator pair, and the canonicalizer/digester.
 3. Then session_nodes.rb 1,450, toolbox.rb 1,213, compiled.rb 1,152, skills.rb 1,063,
    effect_journal.rb 950 — extract-first, characterizing only the seam being moved.
 4. CLI completion (session factory, renderer, command objects, validate_thread_id!
@@ -238,6 +244,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 16 | 2026-08-06 | profile.rb (Q2, giant #2) | characterization tests — schema-validation seams (YAML safety, profile/roots/model_roles/credential_ref/checks validation) | — (tests only) | 90.9% line before (672/739) | gate 0; reek 4,536 unchanged | PASS | +11 tests (33 assertions): YAML merge keys + nesting limit → ValidationError; profile_id pattern + legacy-reserved; unknown profile/roots fields; invalid model role name; unknown provider; credential_ref kind; invalid check name; check argv non-string; **mutation-proven** (removing the merge-key rejection failed the test); 13 previously-untested validation branches now pinned | 8ca17c2 |
 | 17 | 2026-08-07 | profile.rb (Q2, giant #2) | characterization tests — adoption-registry authority seams (codec fail-closed, unreadable bytes, owner-only storage, activate's write contract) | — (tests only) | 87.95 line / 68.92 branch (whole suite, measured BEFORE this slice — it is the tree at 8ca17c2, and supersedes the Q0-4 87.73/68.60 figure taken before slice 16; this slice only adds tests, so production coverage can rise but not fall. Re-measure belongs to the next slice) | gate 0; reek drift matches baseline | PASS (new edges are the test file's own) | +15 tests (42 assertions): no test in the suite had asserted either adoption-registry error message — the transition registry beside it had exactly these. Foreign schema_version / non-digest token / short digest / non-mapping document / non-mapping `activated` / non-array list / non-string id → "invalid"; unparseable YAML + alias expansion → "unreadable"; group-readable refused on read AND before `activate` writes; activate 0600-in-0700, idempotent, appends per digest. **Mutation-proven** (drop DIGEST_PATTERN → 2 fail; drop schema_version equality → 1 fail) | cc1b9d3 |
 | 18 | 2026-08-07 | profile.rb (Q3 slice 1, giant #2) | the two operator-side registries lifted out, and storage/locking split from document validation | profile.rb 1,547 → 1,232; + adoption_document 47, adoption_registry 79, transition 45, transition_document 76, transition_registry 253 | not re-measured this slice (no test added; production lines moved, not removed) | rubocop raw 42,338 → 42,269; **reek 4,536 → 4,494**; new files 51 → **0** smells | **PASS** — no structural regression, zero layer violations; advisory coupled-cluster finding moved 20 → 21 modules (the file count of this split, not new coupling) | behavior-identical: every moved string literal diffed against HEAD (only the rubocop-required rescue rename + the field_rules table differ) and the four AdoptionError messages verified byte-identical at runtime; two redundant branches removed (`document` already returns empty when absent; `activate`'s pre-verify subsumed by `document`'s). **ci_full BOTH locales 130/24,970**. Owner option 2 applied — predicates got a home (AdoptionDocument/TransitionDocument, mirroring CheckpointWire) instead of a suppression; `consume_if_candidate!` kept whole with an inline disable naming the exception | f5def65 |
+| 19 | 2026-08-07 | profile.rb (Q3 slice 2, giant #2) | the egress declaration validator (P17 §4) — `validate_egress!` + `validate_egress_host!` + `validate_egress_integer!` → `Profile::EgressValidator` | profile.rb 1,232 → 1,106; + egress_validator 228. **`validate_egress!` 91 lines → a 3-line delegation; zero Metrics/MethodLength offenses in the new file** (every step ≤ 20) | not re-measured (no test added; lines moved) | rubocop raw 42,269 → 42,227; reek 4,494 → 4,490; new file **0** smells | **PASS** — no structural regression, zero layer violations | behavior-identical: literals diffed against HEAD (differences are `path`→`@path`, the two booleans routed through one field-parameterised message, and `minimum/maximum`→`bounds.min/max`) and **all 20 egress error messages verified byte-identical at runtime**, plus valid-doc-returns-mapping and absent-returns-nil. Stateful validator holds (egress, path) so steps read as questions instead of threading two args; bounds travel as a Range so they cannot be passed in the wrong order. **ci_full BOTH locales 130/24,970** | d3c4fad |
 
 ## Owner-decision queue
 
