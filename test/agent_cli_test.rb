@@ -32,6 +32,20 @@ class AgentCLITest < Minitest::Test
     assert_empty err.string
   end
 
+  def test_help_output_is_stable
+    out = StringIO.new
+    err = StringIO.new
+
+    status = Tamoz::Agent::CLI.run(["--help"], out:, err:, env: {})
+
+    assert_equal 0, status
+    assert_includes out.string, "Usage: tamoz [global-options] [subcommand] [options] [ARGS]"
+    assert_includes out.string, "Interactive:  ask, resume, continue, list, show, follow-up, redirect,"
+    assert_includes out.string, "--profile PROFILE"
+    assert_includes out.string, "--check NAME=COMMAND"
+    assert_includes out.string, "--non-interactive"
+  end
+
   def test_missing_task_is_a_usage_error
     out = StringIO.new
     err = StringIO.new
