@@ -24,6 +24,7 @@ require_relative "agent/worker_runtime"
 require_relative "agent/worker"
 require_relative "agent/cli_worker_commands"
 require_relative "agent/cli_schedule_commands"
+require_relative "agent/cli_prompt_adapter"
 require_relative "agent/cli"
 
 module Tamoz

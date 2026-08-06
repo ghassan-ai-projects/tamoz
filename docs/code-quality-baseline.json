@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "d10e945",
+    "commit": "69ff807",
     "dirty": true
   },
   "toolchain": {
@@ -10,12 +10,12 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 251,
-    "total_code_lines": 50025,
+    "files": 252,
+    "total_code_lines": 50043,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
-      "gems/tamoz-agent": 11956,
+      "gems/tamoz-agent": 11974,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4367,
@@ -52,17 +52,17 @@
     }
   },
   "rubocop": {
-    "total": 42421,
-    "files_inspected": 395,
+    "total": 42399,
+    "files_inspected": 396,
     "by_cop": {
-      "Style/StringLiterals": 30376,
+      "Style/StringLiterals": 30358,
       "Layout/SpaceInsideHashLiteralBraces": 3704,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
       "Metrics/AbcSize": 936,
       "Metrics/MethodLength": 927,
       "Minitest/MultipleAssertions": 595,
       "Style/IfUnlessModifier": 434,
-      "Style/StringLiteralsInInterpolation": 399,
+      "Style/StringLiteralsInInterpolation": 396,
       "Layout/EmptyLineAfterGuardClause": 304,
       "Minitest/AssertPredicate": 275,
       "Metrics/CyclomaticComplexity": 270,
@@ -102,13 +102,13 @@
       "Style/HashExcept": 21,
       "Performance/RedundantEqualityComparisonBlock": 19,
       "Style/PredicateWithKind": 18,
-      "Style/SafeNavigation": 18,
       "Lint/UselessConstantScoping": 18,
+      "Style/SafeNavigation": 17,
       "Layout/FirstArgumentIndentation": 17,
       "Style/MultilineTernaryOperator": 17,
       "Style/SymbolProc": 16,
-      "Style/BitwisePredicate": 14,
       "Style/RegexpLiteral": 14,
+      "Style/BitwisePredicate": 14,
       "Minitest/AssertInDelta": 14,
       "Lint/DuplicateBranch": 13,
       "Style/Lambda": 13,
@@ -249,7 +249,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41937,
+      "convention": 41915,
       "warning": 484
     },
     "metrics_over_ceiling": {
@@ -292,20 +292,20 @@
     }
   },
   "reek": {
-    "total": 4587,
+    "total": 4577,
     "by_type": {
-      "DuplicateMethodCall": 1301,
-      "TooManyStatements": 793,
+      "DuplicateMethodCall": 1299,
+      "TooManyStatements": 790,
       "FeatureEnvy": 394,
       "LongParameterList": 309,
       "MissingSafeMethod": 260,
       "IrresponsibleModule": 242,
       "UtilityFunction": 214,
       "DataClump": 187,
-      "NilCheck": 156,
+      "NilCheck": 153,
       "ControlParameter": 148,
       "NestedIterators": 108,
-      "RepeatedConditional": 72,
+      "RepeatedConditional": 70,
       "UnusedParameters": 70,
       "ManualDispatch": 69,
       "BooleanParameter": 52,
@@ -320,7 +320,7 @@
     },
     "by_file": {
       "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb": 248,
-      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 216,
+      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 206,
       "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb": 173,
       "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb": 140,
       "gems/tamoz-graph/lib/tamoz/graph/compiled.rb": 139,
@@ -535,9 +535,9 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 87.81,
-    "line_covered": 17915,
-    "line_total": 20401,
+    "line_percent": 87.84,
+    "line_covered": 17932,
+    "line_total": 20415,
     "branch_percent": 68.76,
     "branch_covered": 5210,
     "branch_total": 7577,

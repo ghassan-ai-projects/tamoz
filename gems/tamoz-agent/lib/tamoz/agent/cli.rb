@@ -41,6 +41,7 @@ module Tamoz
         @model_factory = model_factory
         @stream_error = nil
         @rendered_stale_request_ids = {}
+        @prompts = PromptAdapter.new(input:, err:)
       end
 
       def run(argv)
@@ -730,53 +731,9 @@ module Tamoz
 
       def prompt_for_interrupt(descriptor)
         case descriptor["kind"]
-        when "approve_tool"
-          prompt_approve_tool(descriptor)
-        when "clarify"
-          prompt_clarify(descriptor)
-        else
-          @err.puts "Interrupt: #{descriptor["kind"]}"
-          @err.print "Answer: "
-          @err.flush
-          line = @input.gets
-          line.nil? ? nil : line.strip
-        end
-      end
-
-      def prompt_approve_tool(descriptor)
-        @err.puts "Approval required for #{descriptor["tool"]}:"
-        @err.puts descriptor["preview"]
-        loop do
-          @err.print "Approve #{descriptor["tool"]}? [y/N/?] "
-          @err.flush
-          line = @input.gets
-          return nil if line.nil?
-
-          answer = line.strip.downcase
-          case answer
-          when "y", "yes", "a", "approve" then return true
-          when "n", "no", "d", "deny" then return false
-          when "?", "h", "help"
-            @err.puts "y/yes/a/approve: approve the operation"
-            @err.puts "n/no/d/deny: deny the operation"
-          else
-            @err.puts "Invalid answer. Enter y/yes, n/no, a/approve, d/deny, or ? for help."
-          end
-        end
-      end
-
-      def prompt_clarify(descriptor)
-        @err.puts descriptor["question"]
-        loop do
-          @err.print "Answer: "
-          @err.flush
-          line = @input.gets
-          return nil if line.nil?
-
-          answer = line.strip
-          return answer unless answer.empty?
-
-          @err.puts "Answer must be non-empty."
+        when "approve_tool" then @prompts.approve_tool(descriptor)
+        when "clarify" then @prompts.clarify(descriptor)
+        else @prompts.interrupt(descriptor)
         end
       end
 
