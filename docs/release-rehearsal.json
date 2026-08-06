@@ -1,0 +1,107 @@
+{
+  "format_version": 1,
+  "generated_by": "script/release_rehearsal",
+  "generated_at": "2026-08-06T02:00:33Z",
+  "candidate_commit": "41e0f0afabbd9db2d003774eeed5563fbcebeeb2",
+  "toolchain": {
+    "ruby": "3.3.11",
+    "pinned_ruby": "3.3.11",
+    "bundler": "4.0.12",
+    "lockfile_bundler": "4.0.12",
+    "platform": "arm64-darwin25"
+  },
+  "gate_totals": {
+    "C": "1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips",
+    "en_US.UTF-8": "1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips"
+  },
+  "scorecard_content_digest": "sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254",
+  "requirements_audit": {
+    "counts": {
+      "deferred-by-contract": 11,
+      "indirect": 4,
+      "missing": 3,
+      "pass": 333
+    },
+    "release_blocking_gaps": [
+      "INV-39",
+      "INV-48",
+      "OBJ-7"
+    ],
+    "definition_of_done_met": false
+  },
+  "steps": [
+    {
+      "step": "provisioning",
+      "ok": true,
+      "seconds": 0.0,
+      "note": "ruby 3.3.11, bundler 4.0.12"
+    },
+    {
+      "step": "clean-clone",
+      "ok": true,
+      "seconds": 1.42,
+      "note": "cloned 41e0f0afabbd"
+    },
+    {
+      "step": "bundle-install",
+      "ok": true,
+      "seconds": 0.19,
+      "note": "resolved offline from the local gem cache"
+    },
+    {
+      "step": "gate-lc-c",
+      "ok": true,
+      "seconds": 217.74,
+      "note": "1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "gate-lc-utf8",
+      "ok": true,
+      "seconds": 215.62,
+      "note": "1172 runs, 37923 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "gate-locale-agreement",
+      "ok": true,
+      "seconds": 0.0,
+      "note": "identical totals in both locales"
+    },
+    {
+      "step": "scorecard",
+      "ok": true,
+      "seconds": 6.31,
+      "note": "22 cases / 19 successes / sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254"
+    },
+    {
+      "step": "packaged-gem-isolation",
+      "ok": true,
+      "seconds": 10.44,
+      "note": "8 runs, 207 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "durable-kill-resume",
+      "ok": true,
+      "seconds": 1.39,
+      "note": "1 runs, 33 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "backup-restore",
+      "ok": true,
+      "seconds": 0.42,
+      "note": "3 runs, 16 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "session-operations",
+      "ok": true,
+      "seconds": 2.84,
+      "note": "6 runs, 36 assertions, 0 failures, 0 errors, 0 skips"
+    },
+    {
+      "step": "requirements-audit",
+      "ok": true,
+      "seconds": 74.54,
+      "note": "{\"deferred-by-contract\"=>11, \"indirect\"=>4, \"missing\"=>3, \"pass\"=>333}, gaps: [\"INV-39\", \"INV-48\", \"OBJ-7\"]"
+    }
+  ],
+  "ok": true
+}

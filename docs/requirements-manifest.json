@@ -4839,9 +4839,13 @@
       "release_blocking": true,
       "status": "unverified",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+        "test/release_rehearsal_evidence_test.rb#test_the_recorded_rehearsal_passed",
+        "test/release_rehearsal_evidence_test.rb#test_the_candidate_commit_is_resolvable",
+        "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"
+      ],
       "classification": "missing",
-      "rationale": "Not yet evidenced: the release-evidence objective is produced by P15-G (docs checked against the real surface) and P15-H (the pinned-toolchain clean-clone rehearsal with the isolated packaged-gem install). It stays a release-blocking gap until that rehearsal runs and its log is committed.",
+      "rationale": "Partly evidenced. The REPRODUCIBILITY half is done: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout (docs/RELEASE_REHEARSAL.md), covering both locales, the scorecard, the isolated packaged-gem install with per-gem example tasks, and durable restore/resume. The DOCUMENTATION half is not: the install guide, tutorial, operations runbook and limitations page do not exist yet (P15-G). The row stays a release-blocking gap until they do.",
       "promotion_exclusion": null
     },
     {
