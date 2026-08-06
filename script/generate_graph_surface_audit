@@ -230,9 +230,24 @@ end
 File.write(AUDIT_PATH, content)
 puts "wrote #{AUDIT_PATH} (#{rows.length} entries)"
 
-# --- regenerate public-api.json (stamp only; the graph entries are stable) ---
+# --- regenerate public-api.json ---------------------------------------------
+#
+# The stamp moves ONLY when the inventory content moves. Stamping every run
+# made `rake ci` dirty the worktree (the audit test runs this generator), and a
+# gate that cannot leave a clean tree fails P15's own release criterion — the
+# rehearsal would report a dirty checkout on a repository nobody edited.
+
+# Every manifest entry this run probed resolved (an unresolved entry is already
+# a `manifest_unresolved` row above), so the inventory content is confirmed, not
+# recomputed. The file is rewritten only when its bytes would actually change;
+# the stamp is not touched otherwise.
 
 inventory = JSON.parse(File.read(MANIFEST_PATH, encoding: Encoding::UTF_8))
-inventory["generated_at"] = Time.now.utc.iso8601
-File.write(MANIFEST_PATH, JSON.pretty_generate(inventory) + "\n")
-puts "regenerated docs/public-api.json"
+inventory["generated_at"] ||= Time.now.utc.iso8601
+serialized = "#{JSON.pretty_generate(inventory)}\n"
+if File.read(MANIFEST_PATH, encoding: Encoding::UTF_8) == serialized
+  puts "docs/public-api.json confirmed unchanged"
+else
+  File.write(MANIFEST_PATH, serialized)
+  puts "rewrote docs/public-api.json"
+end

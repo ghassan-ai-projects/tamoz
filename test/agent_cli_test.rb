@@ -122,6 +122,195 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  # P15-A/P15-G (ledger gap 12): every subcommand needs one behavioural
+  # assertion on its RENDERED output. `show` was only ever exercised inside the
+  # redaction test, which asserts what is *absent* — a `show` that printed
+  # nothing at all would have passed it.
+  def test_show_renders_the_thread_state_in_both_modes
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+          review: [accepted_review],
+          verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+        )
+      end
+      assert_equal 0, run_cli(
+        ["ask", "read note.txt"],
+        session: "shown", workspace:, session_dir:, factory:
+      )
+
+      json_out = StringIO.new
+      err = StringIO.new
+      status = run_cli(
+        ["--json", "show", "shown"],
+        workspace:, session_dir:, out: json_out, err:, factory:
+      )
+      assert_equal 0, status, err.string
+      document = JSON.parse(json_out.string)
+      assert_equal "shown", document.fetch("thread_id")
+      assert_equal "completed", document.fetch("status")
+      refute_nil document.fetch("checkpoint_id")
+      assert_operator document.fetch("sequence"), :>, 0
+      assert_equal "completed_without_check", document.fetch("terminal").fetch("reason")
+
+      human_out = StringIO.new
+      status = run_cli(
+        ["show", "shown"],
+        workspace:, session_dir:, out: human_out, factory:
+      )
+      assert_equal 0, status
+      assert_match(/\AThread: shown$/, human_out.string)
+      assert_match(/^Status: completed$/, human_out.string)
+      assert_match(/^Terminal: completed_without_check/, human_out.string)
+    end
+  end
+
+  # `continue` drives a paused thread forward with no new input. Without a test
+  # the verb could stop resolving its thread, or silently start a second turn,
+  # and nothing in the corpus would notice.
+  def test_continue_advances_a_paused_thread_without_new_input
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      digest = Digest::SHA256.hexdigest("value = 1\n")
+      factory = repair_factory(digest)
+      checks = {"answer" => check_argv}
+
+      assert_equal Tamoz::Agent::CLI::EXIT_PAUSED, run_cli(
+        ["ask", "set value to 2"],
+        session: "th", workspace:, session_dir:, input: StringIO.new, factory:, checks:
+      )
+      paused = latest_request_record(session_dir, "th")
+
+      err = StringIO.new
+      status = run_cli(
+        ["--non-interactive", "continue", "th"],
+        workspace:, session_dir:, input: StringIO.new, err:, factory:, checks:
+      )
+
+      # The approval interrupt is still outstanding and `continue` supplies no
+      # answers, so the thread stays paused rather than acting unreviewed.
+      assert_equal Tamoz::Agent::CLI::EXIT_PAUSED, status, err.string
+      assert_equal "value = 1\n", File.read(File.join(workspace, "app.rb"))
+      continued = latest_request_record(session_dir, "th")
+      refute_equal paused.request_id, continued.request_id,
+                   "continue must enqueue its own request, not reuse the paused one"
+    end
+  end
+
+  # `resolve` is the ONLY way an `:unknown` effect leaves that state. It had no
+  # test: a change that made the human resolution a no-op would have been
+  # invisible.
+  def test_resolve_records_a_human_effect_resolution
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "app.rb"), "value = 1\n")
+      digest = Digest::SHA256.hexdigest("value = 1\n")
+      factory = repair_factory(digest)
+      checks = {"answer" => check_argv}
+
+      run_cli(
+        ["ask", "set value to 2"],
+        session: "th", workspace:, session_dir:, input: StringIO.new, factory:, checks:
+      )
+
+      # An `:unknown` effect is the only state human resolution exists for, so
+      # the fixture reproduces one the way the runtime does: an unsafe attempt
+      # whose lease expires while it is running.
+      effect_key = nil
+      decision = nil
+      database_path = File.join(session_dir, "th.sqlite3")
+      with_thread_session(session_dir, workspace, digest) do |session|
+        store = session.app.checkpointer
+        execution_id = session.view(thread: "th").execution_id
+        store.open_writer(
+          thread_id: "th", namespace: [], owner_id: SecureRandom.uuid, ttl: store.writer_ttl
+        ) do |writer|
+          decision = writer.effects.prepare(
+            execution_id:,
+            task_id: "task.resolve_probe",
+            call_index: 0,
+            operation: "tool.apply_patch",
+            safety: :unsafe,
+            request: {"tool" => "apply_patch"}
+          )
+          effect_key = decision.record.key
+          writer.effects.start(key: effect_key, attempt_token: decision.attempt_token)
+        end
+        expire_effect_attempt(database_path, decision.attempt_token)
+        store.open_writer(
+          thread_id: "th", namespace: [], owner_id: SecureRandom.uuid, ttl: store.writer_ttl
+        ) do |writer|
+          recovery = writer.effects.prepare(
+            execution_id:,
+            task_id: "task.resolve_probe",
+            call_index: 0,
+            operation: "tool.apply_patch",
+            safety: :unsafe,
+            request: {"tool" => "apply_patch"}
+          )
+          assert_equal :unknown, recovery.record.status
+        end
+      end
+      refute_nil effect_key
+
+      out = StringIO.new
+      err = StringIO.new
+      status = run_cli(
+        ["resolve", "th", effect_key, "abandoned"],
+        workspace:, session_dir:, out:, err:, factory:, checks:
+      )
+
+      assert_equal 0, status, err.string
+      assert_match(/Resolved #{Regexp.escape(effect_key)} as abandoned\./, out.string)
+
+      # The resolution is a durable audited transition, not a silent status
+      # flip: the CLI's actor is on the thread's transition log.
+      actors = effect_transition_actors(database_path, effect_key)
+      assert_includes actors, "tamoz.cli"
+
+      with_thread_session(session_dir, workspace, digest) do |session|
+        record = session.effect(thread: "th", effect_key:)
+        assert_equal :abandoned, record.status
+      end
+    end
+  end
+
+  def effect_transition_actors(path, effect_key)
+    database = SQLite3::Database.new(path)
+    database.execute(
+      "SELECT actor FROM tamoz_effect_transitions WHERE effect_key = ?",
+      [effect_key]
+    ).flatten.compact
+  ensure
+    database&.close
+  end
+
+  def expire_effect_attempt(path, token)
+    database = SQLite3::Database.new(path)
+    database.execute(
+      "UPDATE tamoz_effect_attempts SET deadline_ms = 0 WHERE attempt_token = ?",
+      [token]
+    )
+  ensure
+    database&.close
+  end
+
+  def with_thread_session(session_dir, workspace, digest)
+    adapter = Tamoz::SQLite::Adapter.new(
+      path: File.join(session_dir, "th.sqlite3"),
+      limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0)
+    )
+    begin
+      yield build_session(
+        model: repair_model(digest), root: workspace, adapter:,
+        allow_changes: true, checks: {"answer" => check_argv}
+      )
+    ensure
+      adapter.close
+    end
+  end
+
   def test_resume_collects_interrupt_answers
     with_cli_workspace do |workspace, session_dir|
       File.write(File.join(workspace, "app.rb"), "value = 1\n")

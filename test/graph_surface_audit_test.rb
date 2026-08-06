@@ -24,7 +24,14 @@ class GraphSurfaceAuditTest < Minitest::Test
     assert status.success?, "audit generator failed: #{stderr.to_s.lines.last(6).join}"
 
     assert_match(/wrote .*GRAPH_SURFACE_AUDIT\.md \(\d+ entries\)/, stdout)
-    assert_match(/regenerated docs\/public-api\.json/, stdout)
+    # The generator confirms the inventory and rewrites it only when the bytes
+    # would change. Re-stamping on every run made `rake ci` dirty the worktree,
+    # which P15 §12 counts as a release stopper.
+    assert_match(%r{docs/public-api\.json (confirmed unchanged|rewrote)}, stdout)
+    assert_empty(
+      Open3.capture2("git", "status", "--porcelain", "docs/public-api.json", chdir: ROOT.to_s).first,
+      "running the audit generator must leave docs/public-api.json unchanged"
+    )
 
     audit = File.read(AUDIT_PATH)
     # The table reconciles every graph manifest entry: 27 entries, no

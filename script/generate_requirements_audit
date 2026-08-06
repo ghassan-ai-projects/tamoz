@@ -1,0 +1,291 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# P15-A (docs/P15_RELEASE_PLAN.md §3, correction 2) — the requirement -> direct
+# evidence audit.
+#
+# The audit does NOT read a status from the manifest. It RUNS every named test
+# and maps exit -> status, so a row can only be `pass` because a test that
+# proves it passed in this run:
+#
+#   pass                    every named + supporting case ran and passed
+#   failing                 a named case ran and failed (a release stopper)
+#   missing                 no direct evidence exists (or the row is a
+#                           pending-owner-residual with no owner decision yet)
+#   indirect                no direct proof is available; the row states why
+#   deferred-by-contract    the invariants assign the clause to v0.2/v0.3
+#   owner-signed-residual   a recorded owner decision carries the gap
+#                           (docs/release-owner-decision.json; absent -> missing)
+#
+# Definition of done (plan §3): every applicable `release_blocking: true` row is
+# `pass` with direct evidence. `--strict` exits non-zero when that is not true;
+# without it the audit reports the verdict and writes the table, which is how
+# the phase tracks its own remaining work.
+#
+# Usage:
+#   script/generate_requirements_audit            # run, write, report
+#   script/generate_requirements_audit --jobs 4   # bounded parallel test runs
+#   script/generate_requirements_audit --strict   # release gate (exit 1 on gap)
+
+require "json"
+require "open3"
+require "rbconfig"
+require "time"
+
+ROOT = File.expand_path("..", __dir__)
+MANIFEST_PATH = File.join(ROOT, "docs", "requirements-manifest.json")
+AUDIT_JSON_PATH = File.join(ROOT, "docs", "requirements-audit.json")
+AUDIT_MD_PATH = File.join(ROOT, "docs", "REQUIREMENTS_AUDIT.md")
+OWNER_DECISION_PATH = File.join(ROOT, "docs", "release-owner-decision.json")
+
+def read_utf8(path) = File.read(path, encoding: Encoding::UTF_8)
+
+jobs = 1
+if (index = ARGV.index("--jobs"))
+  jobs = Integer(ARGV[index + 1])
+end
+strict = ARGV.include?("--strict")
+
+manifest = JSON.parse(read_utf8(MANIFEST_PATH))
+requirements = manifest.fetch("requirements")
+
+# --- collect the distinct test cases the manifest names ----------------------
+
+by_file = Hash.new { |hash, key| hash[key] = [] }
+requirements.each do |requirement|
+  references = [requirement["named_test"], *requirement.fetch("supporting_tests", [])].compact
+  references.each do |reference|
+    file, _separator, case_name = reference.partition("#")
+    by_file[file] << case_name
+  end
+end
+by_file.each_value(&:uniq!)
+
+puts "running #{by_file.values.sum(&:length)} named cases across #{by_file.length} files " \
+     "(jobs=#{jobs})"
+
+# --- run them ----------------------------------------------------------------
+
+# Minitest's summary line: "1 runs, 4 assertions, 0 failures, 0 errors, 0 skips".
+# Each named case runs in its OWN process so the mapping from exit status to
+# requirement status is unambiguous — a test's own stdout can never be confused
+# with the runner's report, and one case cannot be masked by another's state.
+SUMMARY_LINE = /(?<runs>\d+) runs?, \d+ assertions?, (?<failures>\d+) failures?, (?<errors>\d+) errors?, (?<skips>\d+) skips?/
+
+def run_case(file, case_name)
+  pattern = "/\\A#{Regexp.escape(case_name)}\\z/"
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  stdout, stderr, status = Open3.capture3(
+    RbConfig.ruby, "-Itest", File.join(ROOT, file), "-n", pattern,
+    chdir: ROOT
+  )
+  duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+  summary = SUMMARY_LINE.match(stdout)
+  outcome =
+    if summary.nil?
+      "not-run"
+    elsif summary[:runs].to_i.zero?
+      # The filter matched nothing: the case name is stale. That is a manifest
+      # defect, never a pass.
+      "not-run"
+    elsif summary[:failures].to_i.positive? || summary[:errors].to_i.positive?
+      "fail"
+    elsif summary[:skips].to_i.positive?
+      # A skipped case proves nothing.
+      "not-run"
+    elsif status.success?
+      "pass"
+    else
+      "fail"
+    end
+  {
+    reference: "#{file}##{case_name}",
+    outcome:,
+    seconds: duration.round(2),
+    exit_status: status.exitstatus,
+    detail: outcome == "pass" ? nil : (stdout.to_s.lines.last(20).join + stderr.to_s.lines.last(6).join)
+  }
+end
+
+queue = by_file.flat_map { |file, cases| cases.map { |name| [file, name] } }
+outcomes = []
+queue.each_slice(jobs) do |slice|
+  threads = slice.map { |file, name| Thread.new { run_case(file, name) } }
+  threads.each do |thread|
+    result = thread.value
+    outcomes << result
+    print(result.fetch(:outcome) == "pass" ? "." : "x")
+    $stdout.flush
+  end
+end
+puts
+
+case_status = {}
+run_failures = []
+details = {}
+outcomes.each do |result|
+  reference = result.fetch(:reference)
+  case_status[reference] = result.fetch(:outcome)
+  next if result.fetch(:outcome) == "pass"
+
+  details[reference] = result[:detail]
+  run_failures << "#{reference}: #{result.fetch(:outcome)} (exit #{result.fetch(:exit_status)})"
+end
+
+# --- owner decision record (P15-I). Absent is the normal state before the gate.
+owner_decision =
+  if File.exist?(OWNER_DECISION_PATH)
+    JSON.parse(read_utf8(OWNER_DECISION_PATH))
+  else
+    {"signed_residuals" => {}, "candidate_commit" => nil, "acknowledged" => false}
+  end
+signed_residuals = owner_decision.fetch("signed_residuals", {})
+
+# --- map each requirement to a status ---------------------------------------
+
+def evidence_status(requirement, case_status)
+  references = [requirement["named_test"], *requirement.fetch("supporting_tests", [])].compact
+  return nil if references.empty?
+
+  statuses = references.map { |reference| case_status.fetch(reference, "not-run") }
+  return "failing" if statuses.include?("fail")
+  return "failing" if statuses.include?("not-run")
+
+  "pass"
+end
+
+audited = requirements.map do |requirement|
+  id = requirement.fetch("id")
+  classification = requirement.fetch("classification")
+  proven = evidence_status(requirement, case_status)
+
+  status =
+    case classification
+    when "direct"
+      proven || "missing"
+    when "deferred-by-contract"
+      # A deferred clause with evidence still reports the evidence honestly:
+      # a failing test is a defect regardless of the release contract.
+      proven == "failing" ? "failing" : "deferred-by-contract"
+    when "indirect"
+      proven == "failing" ? "failing" : "indirect"
+    when "pending-owner-residual"
+      if proven == "failing"
+        "failing"
+      elsif signed_residuals.key?(id)
+        "owner-signed-residual"
+      else
+        "missing"
+      end
+    else
+      "missing"
+    end
+
+  requirement.merge(
+    "status" => status,
+    "evidence_result" => proven,
+    "owner_signature" => signed_residuals[id]
+  )
+end
+
+blocking_gaps = audited.select do |requirement|
+  requirement.fetch("release_blocking") && requirement.fetch("status") != "pass"
+end
+failing = audited.select { |requirement| requirement.fetch("status") == "failing" }
+
+# --- write the machine-readable audit ---------------------------------------
+
+audit = {
+  "format_version" => 1,
+  "generated_by" => "script/generate_requirements_audit",
+  "generated_at" => Time.now.utc.iso8601,
+  "manifest_requirements" => requirements.length,
+  "named_cases_run" => case_status.length,
+  "counts" => audited.group_by { |requirement| requirement.fetch("status") }
+                     .transform_values(&:length).sort.to_h,
+  "release_blocking_gaps" => blocking_gaps.map { |requirement| requirement.fetch("id") },
+  "failing" => failing.map { |requirement| requirement.fetch("id") },
+  "definition_of_done_met" => blocking_gaps.empty?,
+  "requirements" => audited
+}
+File.write(AUDIT_JSON_PATH, "#{JSON.pretty_generate(audit)}\n")
+
+# --- write the human-readable table -----------------------------------------
+
+lines = []
+lines << "# Requirements audit (P15-A)"
+lines << ""
+lines << "Generated by `script/generate_requirements_audit`, which RUNS every named test"
+lines << "in `docs/requirements-manifest.json` and maps exit → status. No row is marked"
+lines << "`pass` by hand: a `pass` means the named case executed and passed in the"
+lines << "generating run."
+lines << ""
+lines << "| Requirements | Named cases run | Release-blocking gaps | DoD met |"
+lines << "|---|---:|---:|---|"
+lines << "| #{requirements.length} | #{case_status.length} | #{blocking_gaps.length} | " \
+         "#{blocking_gaps.empty? ? "yes" : "**no**"} |"
+lines << ""
+lines << "## Status counts"
+lines << ""
+lines << "| Status | Rows |"
+lines << "|---|---:|"
+audit.fetch("counts").each { |status, count| lines << "| #{status} | #{count} |" }
+lines << ""
+
+unless blocking_gaps.empty?
+  lines << "## Release-blocking gaps (the DoD list)"
+  lines << ""
+  lines << "| Requirement | Status | Why |"
+  lines << "|---|---|---|"
+  blocking_gaps.each do |requirement|
+    why = requirement["rationale"] || requirement["promotion_exclusion"] ||
+          "no direct evidence names this requirement"
+    lines << "| `#{requirement.fetch("id")}` — #{requirement.fetch("title")} | " \
+             "#{requirement.fetch("status")} | #{why.gsub("\n", " ")} |"
+  end
+  lines << ""
+end
+
+unless failing.empty?
+  lines << "## Failing evidence (release stopper)"
+  lines << ""
+  failing.each do |requirement|
+    lines << "- `#{requirement.fetch("id")}` — #{requirement["named_test"]}"
+  end
+  lines << ""
+end
+
+lines << "## Full audit"
+lines << ""
+lines << "| Requirement | Category | Blocking | Status | Direct evidence |"
+lines << "|---|---|---|---|---|"
+audited.each do |requirement|
+  evidence = requirement["named_test"] || "—"
+  lines << "| `#{requirement.fetch("id")}` | #{requirement.fetch("category")} | " \
+           "#{requirement.fetch("release_blocking") ? "yes" : "no"} | " \
+           "#{requirement.fetch("status")} | `#{evidence}` |"
+end
+lines << ""
+
+File.write(AUDIT_MD_PATH, lines.join("\n"))
+
+puts "wrote #{AUDIT_MD_PATH} and #{AUDIT_JSON_PATH}"
+audit.fetch("counts").each { |status, count| puts "  #{status}: #{count}" }
+unless run_failures.empty?
+  puts "named cases that did not pass:"
+  run_failures.each { |line| puts "  #{line}" }
+  details.each do |reference, detail|
+    next unless detail
+
+    puts "--- #{reference} ---"
+    puts detail
+  end
+end
+puts "release-blocking gaps: #{blocking_gaps.length}"
+blocking_gaps.each { |requirement| puts "  #{requirement.fetch("id")} (#{requirement.fetch("status")})" }
+
+if strict && !blocking_gaps.empty?
+  warn "P15-A definition of done NOT met: #{blocking_gaps.length} release-blocking rows are not pass"
+  exit 1
+end
+exit(failing.empty? ? 0 : 1)

@@ -412,7 +412,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
     # internal name collision, not a `Kernel#load`, so the owner is checked too.
     owners = [Kernel, Object, Process, IO, Module, BasicObject].freeze
     observed = []
-    features = $LOADED_FEATURES.length
+    features = $LOADED_FEATURES.dup
     snapshot = nil
     trace = TracePoint.new(:c_call, :call) do |point|
       next unless watched.include?(point.method_id)
@@ -423,7 +423,20 @@ class AgentSkillsAdversarialTest < Minitest::Test
     trace.enable { snapshot = compile }
 
     assert_empty observed.uniq, "compilation must invoke no execution verb"
-    assert_equal features, $LOADED_FEATURES.length, "compilation must load no file"
+    # The invariant-42 claim is that no file FROM THE TREE (or anywhere the
+    # skill author controls) is loaded — not that the Ruby VM performs zero
+    # lazy loads of its own. Ruby loads `enc/utf_16*.bundle` the first time a
+    # UTF-16 encoding is named, which the compiler's encoding validation does;
+    # a counted assertion only passed here because an earlier test in the same
+    # process had already warmed those bundles, so it proved nothing in a cold
+    # process. The path assertion is order-independent AND stronger: it names
+    # the thing that must never happen.
+    loaded = $LOADED_FEATURES - features
+    author_controlled = loaded.select { |path| path.start_with?(@dir) }
+    assert_empty author_controlled,
+                 "compilation must load no file from the skill tree"
+    refute(loaded.any? { |path| path.end_with?(".rb") && !path.start_with?(RbConfig::CONFIG.fetch("rubylibdir"))},
+           "compilation must load no Ruby source outside the stdlib: #{loaded.inspect}")
     assert_equal ["operator/hostile"], snapshot.records.keys
   end
 
