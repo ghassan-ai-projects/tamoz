@@ -1,8 +1,8 @@
 {
   "format_version": 1,
   "generated_by": "script/release_rehearsal",
-  "generated_at": "2026-08-06T07:28:15Z",
-  "candidate_commit": "56f9e984f25577c1ffffcca10c5a8f73988d7f7f",
+  "generated_at": "2026-08-06T07:47:44Z",
+  "candidate_commit": "66bc81938aaaad8c3070efe53338f71c0c39a4e9",
   "toolchain": {
     "ruby": "3.3.11",
     "pinned_ruby": "3.3.11",
@@ -11,8 +11,8 @@
     "platform": "arm64-darwin25"
   },
   "gate_totals": {
-    "C": "1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips",
-    "en_US.UTF-8": "1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips"
+    "C": "1233 runs, 38397 assertions, 0 failures, 0 errors, 0 skips",
+    "en_US.UTF-8": "1233 runs, 38397 assertions, 0 failures, 0 errors, 0 skips"
   },
   "scorecard_content_digest": "sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254",
   "requirements_audit": {
@@ -39,26 +39,26 @@
     {
       "step": "clean-clone",
       "ok": true,
-      "seconds": 1.71,
-      "note": "cloned 56f9e984f255"
+      "seconds": 1.62,
+      "note": "cloned 66bc81938aaa"
     },
     {
       "step": "bundle-install",
       "ok": true,
-      "seconds": 0.24,
+      "seconds": 0.22,
       "note": "resolved offline from the local gem cache"
     },
     {
       "step": "gate-lc-c",
       "ok": true,
-      "seconds": 232.07,
-      "note": "1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips"
+      "seconds": 231.7,
+      "note": "1233 runs, 38397 assertions, 0 failures, 0 errors, 0 skips"
     },
     {
       "step": "gate-lc-utf8",
       "ok": true,
-      "seconds": 232.98,
-      "note": "1233 runs, 38389 assertions, 0 failures, 0 errors, 0 skips"
+      "seconds": 233.63,
+      "note": "1233 runs, 38397 assertions, 0 failures, 0 errors, 0 skips"
     },
     {
       "step": "gate-locale-agreement",
@@ -69,19 +69,19 @@
     {
       "step": "scorecard",
       "ok": true,
-      "seconds": 6.85,
+      "seconds": 6.83,
       "note": "22 cases / 19 successes / sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254"
     },
     {
       "step": "packaged-gem-isolation",
       "ok": true,
-      "seconds": 11.39,
+      "seconds": 11.41,
       "note": "8 runs, 207 assertions, 0 failures, 0 errors, 0 skips"
     },
     {
       "step": "durable-kill-resume",
       "ok": true,
-      "seconds": 1.47,
+      "seconds": 1.52,
       "note": "1 runs, 33 assertions, 0 failures, 0 errors, 0 skips"
     },
     {
@@ -93,25 +93,25 @@
     {
       "step": "session-operations",
       "ok": true,
-      "seconds": 3.21,
+      "seconds": 3.22,
       "note": "6 runs, 36 assertions, 0 failures, 0 errors, 0 skips"
     },
     {
       "step": "release-evaluation-pin",
       "ok": true,
-      "seconds": 7.11,
+      "seconds": 7.08,
       "note": "release evaluation pin verified (22 cases, pass)"
     },
     {
       "step": "benchmark",
       "ok": true,
-      "seconds": 1.36,
-      "note": "durability overhead: 255.86x (ephemeral p50 0.11ms, durable p50 42.33ms)"
+      "seconds": 1.38,
+      "note": "durability overhead: 432.43x (ephemeral p50 0.1ms, durable p50 43.06ms)"
     },
     {
       "step": "requirements-audit",
       "ok": true,
-      "seconds": 78.78,
+      "seconds": 77.83,
       "note": "{\"deferred-by-contract\"=>11, \"indirect\"=>4, \"missing\"=>3, \"pass\"=>333}, gaps: [\"INV-39\", \"INV-48\", \"OBJ-7\"]"
     }
   ],
