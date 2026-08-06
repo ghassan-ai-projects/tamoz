@@ -191,8 +191,11 @@ correct; unstable bidirectional coupling is the real risk.
 → 4. one responsibility in one hotspot → 5. impact analysis + callers → 6.
 characterization + failure-path tests → 7. smallest cohesive extraction → 8. RuboCop,
 Reek, coverage, focused tests → 9. `enola check --fail-on=cycles,layers --min-confidence=0.8 .`
-→ 10. inspect every dependency/coupling delta → 11. full gate both locales → 12. agent +
-autonomy scorecards → 13. release benchmark (persistence/planning/effects/worker changes)
+→ 10. inspect every dependency/coupling delta → 11. full gate under both locales — but
+only when the slice touches durability, MCP, packaging, or committed evidence artifacts
+(the Rakefile's own hint); `ci_full` is ~145s per locale, never run speculatively;
+otherwise `rake ci` (fast gate) + `rubocop` + `enola check` is the everyday gate
+→ 12. agent + autonomy scorecards → 13. release benchmark (persistence/planning/effects/worker changes)
 → 14. review diff (semantic drift; lost validation; changed error identity/message bytes;
 event ordering; canonical digest; transaction boundary; authority widening; perf
 regression; unnecessary abstraction) → 15. commit only that slice → 16. regenerate

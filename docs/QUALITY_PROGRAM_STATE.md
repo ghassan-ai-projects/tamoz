@@ -60,6 +60,15 @@ every slice and whenever the phase table changes.
    `.cursor/`, `.worktrees/`, `/coverage/`, `agenteval/` all in `.gitignore`.
 8. **docs/ convention:** `P##_*_PLAN.md` + machine-readable JSON results. Quality
    artifacts: `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md` (Q0-5).
+9. **Lockfile portability (offline machine):** bundler 4.0.12 on this machine prunes the
+   `ruby` platform from Gemfile.lock whenever it re-resolves (sqlite3's ruby variant is
+   not installed locally) — HEAD's committed lock had already lost it, making
+   `CIConfigurationTest#test_lockfile_has_a_portable_platform` red BEFORE this program.
+   **Fixed by completing the CHECKSUMS section** from the local `.gem` cache
+   (`~/.rbenv/versions/3.3.11/lib/ruby/gems/3.3.0/cache`, digest of the `.gem` file —
+   validated against sqlite3's known checksum): with complete checksums, `bundle exec`
+   no longer re-resolves and the portable lock survives. Do NOT use `bundle install
+   --local` and commit its output; re-lock with network when available.
 
 ## Phase status
 
@@ -86,6 +95,14 @@ every slice and whenever the phase table changes.
 | Enola CLI | manual baseline/check gate | **done** — `~/.local/bin/enola`; mcp-arch.yaml; baseline pinned |
 | RubyCritic | optional aggregator | evaluate after core tools calibrated |
 
+## Gate policy (owner-confirmed 2026-08-06)
+
+`rake ci` (fast gate, ~49s) + `rubocop` + `enola check` is the everyday gate for every
+slice. `rake ci_full` under BOTH locales is ~145s per locale — run it **only when the
+slice touches durability, MCP, packaging, or committed evidence artifacts** (the
+Rakefile's own hint), never speculatively. Scorecards and the release benchmark run when
+the slice touches agent/autonomy/worker or persistence/planning/effects respectively.
+
 ## Next actions (ordered)
 
 1. **Q0-4:** Wire SimpleCov (branch coverage) into the test entrypoints (root `test/`,
@@ -107,7 +124,7 @@ every slice and whenever the phase table changes.
 
 | # | Date | Hotspot | Responsibility | LOC b/a | Cov b/a | RuboCop/Reek | Enola delta | Behavior | Commit |
 |---|---|---|---|---|---|---|---|---|---|
-| 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22) | pending |
+| 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22); full gate 130/24,970 both locales | 8ce5581 + Q0 lockfile fix |
 
 ## Owner-decision queue
 
