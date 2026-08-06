@@ -131,11 +131,55 @@ module Tamoz
       end
       # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
-      # :reek:FeatureEnvy
-      # rubocop:disable Metrics/MethodLength, Metrics/AbcSize
       # A declarative row->Checkpoint mapping; the column cross-check is the
       # wire contract (columns and payload must agree).
       def decode_checkpoint_row(row)
+        attributes = verified_attributes(row)
+        checkpoint(row, attributes, attributes.fetch(:pending))
+      end
+
+      # The active-checkpoint mapper: decode plus the durable pending merge.
+      # The caller provides pending outcomes only for the active checkpoint;
+      # the merge is the wire's reconciliation contract (checkpoint and
+      # pending activation must agree byte-for-byte).
+      # :reek:TooManyStatements :reek:NilCheck -- the active-checkpoint decode +
+      # reconcile flow is one contract; the nil-check is the fail-closed
+      # precondition (an active checkpoint without pending outcomes is a bug).
+      def materialize(row, durable_pending: nil)
+        checkpoint_id = row.fetch(0)
+        attributes = verified_attributes(row)
+        pending = attributes.fetch(:pending)
+        if checkpoint_id == row.fetch(13)
+          raise ArgumentError, 'materialize of the active checkpoint requires durable_pending' if durable_pending.nil?
+
+          pending = merge_pending(pending, durable_pending)
+        end
+        checkpoint(row, attributes, pending)
+      end
+
+      # :reek:TooManyStatements
+      # Reconciliation of the checkpoint's declared pending outcomes with the
+      # durable pending activations; a disagreement is corruption.
+      def merge_pending(checkpoint_pending, durable_pending)
+        merged = checkpoint_pending.dup
+        durable_pending.each do |task_id, outcome|
+          existing = merged[task_id]
+          if existing && @checkpoint_codec.dump_outcome(existing) != @checkpoint_codec.dump_outcome(outcome)
+            raise CheckpointCorruptionError,
+                  "checkpoint and pending activation disagree for #{task_id}"
+          end
+          merged[task_id] = outcome
+        end
+        merged.freeze
+      end
+
+      private
+
+      # Payload digest + column cross-check: the wire contract for any
+      # tamoz_checkpoints row. Returns the loaded (unverified) attributes.
+      # :reek:FeatureEnvy -- verifying the row IS this helper's entire purpose;
+      # the digest and column contract cannot move to the row or the codec.
+      def verified_attributes(row)
         payload = row.fetch(11)
         Wire.verify_digest!(
           payload,
@@ -151,6 +195,12 @@ module Tamoz
           raise CheckpointCorruptionError,
                 'checkpoint columns and payload disagree'
         end
+        attributes
+      end
+
+      # :reek:UtilityFunction -- the row->Checkpoint field mapping is a pure
+      # declarative contract with no instance state to move it to.
+      def checkpoint(row, attributes, pending)
         Tamoz::Graph::Checkpoint.new(
           format_version: row.fetch(5),
           id: Wire.identity(row.fetch(0), name: 'stored checkpoint id'),
@@ -158,11 +208,9 @@ module Tamoz
           thread_id: Wire.identity(row.fetch(2), name: 'stored thread id'),
           namespace: Wire.decode_namespace(row.fetch(3)),
           parent_id: row.fetch(4)&.dup&.freeze,
-          **attributes
+          **attributes.merge(pending:)
         )
       end
-
-      # rubocop:enable Metrics/MethodLength, Metrics/AbcSize
     end
   end
 end

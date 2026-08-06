@@ -1704,43 +1704,18 @@ module Tamoz
         value
       end
 
+      # The active-checkpoint mapper: the wire decodes and reconciles; the
+      # store supplies the durable pending outcomes (querying them only when
+      # the row IS the active checkpoint, so the query count is unchanged).
       def materialize(row)
-        payload = row.fetch(11)
-        Wire.verify_digest!(
-          payload,
-          row.fetch(12),
-          domain: "tamoz.sqlite.checkpoint_payload"
-        )
-        attributes = checkpoint_codec.load(payload)
-        unless attributes.fetch(:execution_id) == row.fetch(6) &&
-               attributes.fetch(:graph_name) == row.fetch(7) &&
-               attributes.fetch(:graph_version) == row.fetch(8) &&
-               attributes.fetch(:definition_digest) == row.fetch(9) &&
-               attributes.fetch(:status).to_s == row.fetch(10)
-          raise CheckpointCorruptionError,
-                "checkpoint columns and payload disagree"
-        end
-
-        pending = attributes.fetch(:pending)
-        if row.fetch(0) == row.fetch(13)
-          pending = merge_pending(
-            pending,
-            pending_outcomes(
-              thread_id: row.fetch(2),
-              namespace: row.fetch(3),
-              execution_id: row.fetch(6)
-            )
-          )
-        end
-        Tamoz::Graph::Checkpoint.new(
-          format_version: row.fetch(5),
-          id: Wire.identity(row.fetch(0), name: "stored checkpoint id"),
-          sequence: row.fetch(1),
-          thread_id: Wire.identity(row.fetch(2), name: "stored thread id"),
-          namespace: Wire.decode_namespace(row.fetch(3)),
-          parent_id: row.fetch(4)&.dup&.freeze,
-          **attributes.merge(pending:)
-        )
+        durable_pending = if row.fetch(0) == row.fetch(13)
+                            pending_outcomes(
+                              thread_id: row.fetch(2),
+                              namespace: row.fetch(3),
+                              execution_id: row.fetch(6)
+                            )
+                          end
+        @wire.materialize(row, durable_pending:)
       end
 
       def pending_outcomes(thread_id:, namespace:, execution_id:)
@@ -1807,20 +1782,6 @@ module Tamoz
           )
           [task_id, outcome]
         end.freeze
-      end
-
-      def merge_pending(checkpoint_pending, durable_pending)
-        merged = checkpoint_pending.dup
-        durable_pending.each do |task_id, outcome|
-          existing = merged[task_id]
-          if existing && checkpoint_codec.dump_outcome(existing) !=
-                         checkpoint_codec.dump_outcome(outcome)
-            raise CheckpointCorruptionError,
-                  "checkpoint and pending activation disagree for #{task_id}"
-          end
-          merged[task_id] = outcome
-        end
-        merged.freeze
       end
 
       def verify_existing_writes!(tx, lease:, execution_id:, task_id:, writes:)
