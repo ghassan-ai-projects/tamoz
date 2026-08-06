@@ -3949,7 +3949,9 @@
       "named_test": "test/agent_session_records_test.rb#test_newer_version_fails_before_any_field_is_read",
       "supporting_tests": [
         "test/core_state_codec_test.rb#test_unknown_registration_is_rejected_before_any_decoder_runs",
-        "test/graph_checkpoint_codec_test.rb#test_unknown_persisted_node_is_rejected_without_symbol_interning"
+        "test/graph_checkpoint_codec_test.rb#test_unknown_persisted_node_is_rejected_without_symbol_interning",
+        "test/agent_non_ascii_session_test.rb#test_every_canonicality_comparison_site_is_accounted_for",
+        "test/agent_non_ascii_session_test.rb#test_a_non_ascii_model_reply_survives_the_durable_round_trip"
       ],
       "classification": "direct",
       "rationale": null,
@@ -4786,7 +4788,8 @@
       "named_test": "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
       "supporting_tests": [
         "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
-        "test/agent_session_kill_matrix_test.rb#test_a_kill_during_a_check_pauses_the_session_and_never_repeats_the_command"
+        "test/agent_session_kill_matrix_test.rb#test_a_kill_during_a_check_pauses_the_session_and_never_repeats_the_command",
+        "test/agent_non_ascii_session_test.rb#test_a_reviewed_patch_writes_non_ascii_bytes_and_the_receipt_round_trips"
       ],
       "classification": "direct",
       "rationale": null,

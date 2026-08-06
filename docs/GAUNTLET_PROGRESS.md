@@ -1883,12 +1883,16 @@ behaviour-neutrality proof.
     DR-4/DR-5/P16 merged before their independent closure evidence was complete. Later
     evidence closed those implementations, but the single-active-phase protocol was not
     followed literally.
-11. **The corpus cannot see non-ASCII content (Round 28, D-10).** Every scripted case and
-    every SQLite suite uses ASCII fixtures, so canonicality, digest and encoding paths are
-    exercised only on their passing branch — a defect that crashed every real durable
-    session was invisible to 1122 green tests. P15-F should require at least one non-ASCII
-    payload (accent, curly quote, emoji) through the durable model-call path, the store, and
-    the effect journal.
+11. ~~**The corpus cannot see non-ASCII content (Round 28, D-10).**~~ **Closed in Round 29**:
+    `test/agent_non_ascii_session_test.rb` drives an accent, an em dash, a curly quote, an
+    emoji and a CJK ideograph through the durable model reply, the request payload, the
+    application store, the effect path, the check receipt and a fresh-session reopen.
+    Coverage was MEASURED, not assumed: reverting each of the seven `.b` canonicality
+    comparisons in turn shows four are now exercised (effect journal — the D-10 crash site,
+    request payload, application store, checkpoint state value). The remaining three are
+    named as unreachable-by-construction with their reasons, and the whole set is pinned by
+    `test_every_canonicality_comparison_site_is_accounted_for`, so a new comparison cannot
+    be added without deciding whether the corpus can see it.
 12. ~~**Whole CLI verbs sit outside the corpus (Round 28, D-11).**~~ **Closed in Round 29**:
     `show`, `continue` and `resolve` each gained one behavioural assertion on their real
     rendered output, and the manifest generates a row per subcommand from
