@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "98606fb",
+    "commit": "7735ea9",
     "dirty": true
   },
   "toolchain": {
@@ -52,8 +52,8 @@
     }
   },
   "rubocop": {
-    "total": 42332,
-    "files_inspected": 401,
+    "total": 42338,
+    "files_inspected": 402,
     "by_cop": {
       "Style/StringLiterals": 30311,
       "Layout/SpaceInsideHashLiteralBraces": 3704,
@@ -86,9 +86,9 @@
       "Style/RedundantFreeze": 48,
       "Style/FormatStringToken": 47,
       "Naming/PredicateMethod": 45,
+      "Layout/FirstHashElementIndentation": 44,
       "Minitest/RefuteFalse": 43,
       "Layout/MultilineOperationIndentation": 39,
-      "Layout/FirstHashElementIndentation": 38,
       "Naming/MethodParameterName": 38,
       "Performance/CollectionLiteralInLoop": 34,
       "Minitest/AssertWithExpectedArgument": 31,
@@ -249,7 +249,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41848,
+      "convention": 41854,
       "warning": 484
     },
     "metrics_over_ceiling": {
@@ -524,7 +524,7 @@
     }
   },
   "enola": {
-    "facts": 5498,
+    "facts": 5501,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -535,11 +535,11 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 87.94,
-    "line_covered": 17990,
+    "line_percent": 87.95,
+    "line_covered": 17991,
     "line_total": 20457,
-    "branch_percent": 68.83,
-    "branch_covered": 5214,
+    "branch_percent": 68.92,
+    "branch_covered": 5221,
     "branch_total": 7575,
     "uncovered_files": [
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-agent/lib/tamoz/agent/version.rb",
@@ -553,8 +553,8 @@
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-tools/lib/tamoz/tools/version.rb"
     ],
     "tests": {
-      "runs": 1167,
-      "assertions": 13849
+      "runs": 1178,
+      "assertions": 13882
     }
   },
   "documents": {
