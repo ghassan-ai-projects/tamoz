@@ -42,6 +42,7 @@ module Tamoz
         @rendered_stale_request_ids = {}
         @prompts = PromptAdapter.new(input:, err:)
         @parser = ArgumentParser.new(out:, subcommands: SUBCOMMANDS)
+        @policy = OptionPolicy.new
       end
 
       def run(argv)
@@ -86,8 +87,8 @@ module Tamoz
       end
 
       def dispatch_subcommand(subcommand, options, argv)
-        validate_check_config!(options)
-        validate_profile_usage!(options, subcommand)
+        @policy.validate_check_config(options)
+        @policy.validate_profile_usage(options, subcommand)
 
         case subcommand
         when "ask" then cmd_ask(options, argv)
@@ -118,32 +119,15 @@ module Tamoz
         end
       end
 
-      # A profile is session authority: it only makes sense on the durable,
-      # profile-aware commands, and it replaces the flag-driven capability
-      # surface, so combining it with --allow-changes/--check is an error.
-      def validate_profile_usage!(options, subcommand)
-        return unless options[:profile]
-
-        unless %w[ask resume continue follow-up follow_up followup redirect profile].include?(subcommand)
-          raise OptionParser::InvalidArgument,
-                "--profile is not supported for #{subcommand}"
-        end
-        if options[:allow_changes] || !options[:checks].empty?
-          raise OptionParser::InvalidArgument,
-                "--profile sets the capability surface; do not combine it with " \
-                "--allow-changes or --check"
-        end
-      end
-
       def run_one_shot(options, argv)
         if options[:session]
-          validate_profile_usage!(options, "ask")
+          @policy.validate_profile_usage(options, "ask")
           options[:explicit_session] = options[:session]
           return cmd_ask(options, argv)
         end
 
-        validate_profile_usage!(options, "one-shot")
-        validate_check_config!(options)
+        @policy.validate_profile_usage(options, "one-shot")
+        @policy.validate_check_config(options)
         task = argv.join(" ").strip
         raise OptionParser::MissingArgument, "TASK" if task.empty?
 
@@ -1337,12 +1321,6 @@ module Tamoz
         end
 
         ttl
-      end
-
-      def validate_check_config!(options)
-        if !options[:allow_changes] && !options[:checks].empty?
-          raise OptionParser::InvalidArgument, "--check requires --allow-changes"
-        end
       end
 
       # DR-5 D1: ONE shared resolution path for both `build_model` and the recorded

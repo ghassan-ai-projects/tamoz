@@ -26,6 +26,7 @@ require_relative "agent/cli_worker_commands"
 require_relative "agent/cli_schedule_commands"
 require_relative "agent/cli_prompt_adapter"
 require_relative "agent/cli_argument_parser"
+require_relative "agent/cli_option_policy"
 require_relative "agent/cli"
 
 module Tamoz
