@@ -72,16 +72,24 @@ every slice and whenever the phase table changes.
 10. **Coverage baseline (Q0-4):** SimpleCov 0.22.0 wired in `test/support/simplecov_setup.rb`,
     loaded first in test_helper when `RUN_COVERAGE=1` (branch coverage, production-only
     via track_files gems/*/lib). `RUN_COVERAGE=1 rake test` (1,150 runs / 13,786
-    assertions, 0 failures): **line 87.73% (17,897/20,399), branch 68.59% (5,197/7,577)**.
+    assertions, 0 failures): **line 87.73% (17,897/20,399), branch 68.60% (5,198/7,577)**.
     This is the fast serial subset only — subprocess children and test_slow are not yet
     measured (Q5 collation), so the real full-suite number is higher. Targets: ≥90/80
     overall, ≥95/90 on security/authority/durability paths (Q5).
+11. **Baseline artifacts (Q0-5):** `script/regenerate_quality_baseline` (deterministic,
+    no timestamps) + committed `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md`.
+    Key numbers (2026-08-06, git b6f611e dirty): LOC 49,968 code lines / 249 files;
+    RuboCop raw debt 42,378 / 393 files (convention 41,894 + warning 484; top:
+    Style/StringLiterals 30,336); Reek 4,588; Enola 5,387 facts / 43 insights, check
+    PASS; coverage 87.73/68.60; tests 1,150/13,786. Branch totals are computed
+    directly from the SimpleCov resultset (can differ by 1 branch from SimpleCov's
+    printed summary — definitional edge, documented in the script).
 
 ## Phase status
 
 | Phase | Status | Acceptance (abridged) |
 |---|---|---|
-| Q0 Measure honestly | **IN PROGRESS** (rubocop + enola + coverage done; baseline docs pending) | `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md` committed; deterministic regeneration script; prod vs tests vs generated classified separately |
+| Q0 Measure honestly | **COMPLETE** (2026-08-06) | `docs/code-quality-baseline.json` + `docs/CODE_QUALITY.md` committed; deterministic regeneration script; prod vs tests vs generated classified separately |
 | Q1 Ratcheting gates | pending | `rake quality:*` + wiring into `ci`; ratchet policy; committed RuboCop TODO (no exclusions for CI) |
 | Q2 Characterize hotspots | pending | characterization + failure-path tests per hotspot; mutation-proven |
 | Q3 Extract by responsibility | pending | one responsibility per slice; target architectures in charter |
@@ -121,25 +129,19 @@ the slice touches agent/autonomy/worker or persistence/planning/effects respecti
 
 ## Next actions (ordered)
 
-1. **Q0-5:** Write `script/regenerate_quality_baseline` — deterministic: RuboCop raw
-   ledger (config without `inherit_from`), reek raw ledger (JSON), coverage numbers
-   (`RUN_COVERAGE=1 rake test`), Enola facts + `check`, dependency-review + public-api +
-   scorecard + benchmark results; generate + commit `docs/code-quality-baseline.json`
-   and `docs/CODE_QUALITY.md`. Reek baseline stores per-context counts (context-named
-   ratchet).
-2. **Q1:** `quality:rubocop` (gate + TODO drift check), `quality:reek` (raw drift vs
+1. **Q1:** `quality:rubocop` (gate + TODO drift check), `quality:reek` (raw drift vs
    committed per-context counts), `quality:coverage` (RUN_COVERAGE run vs committed
    numbers, no decrease), `quality:architecture` (enola check), `quality`; wire blocking
    tasks into `ci`/`ci_full` without slowing the everyday gate.
-3. **Q2:** first hotspot = CLI (`gems/tamoz-agent/lib/tamoz/agent/cli.rb`, 217 reek
+2. **Q2:** first hotspot = CLI (`gems/tamoz-agent/lib/tamoz/agent/cli.rb`, 217 reek
    smells, top complexity file) — Enola impact analysis, callers, characterization +
    failure-path tests, mutation-proven. Then session_nodes.rb (113), profile.rb (126),
    toolbox.rb (140), checkpoint_store.rb (173), compiled.rb (139).
-4. **Q3+:** one responsibility per slice along the charter target architectures.
-5. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
+3. **Q3+:** one responsibility per slice along the charter target architectures.
+4. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
    process, merged at the end; killed processes documented as blind seams with a
    non-killed control path), test_slow measurement, then the coverage targets.
-6. When network returns: re-lock the bundle cleanly (`bundle lock --add-platform ruby`).
+5. When network returns: re-lock the bundle cleanly (`bundle lock --add-platform ruby`).
    Update this table after every slice.
 
 ## Slice ledger
@@ -148,7 +150,8 @@ the slice touches agent/autonomy/worker or persistence/planning/effects respecti
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 2026-08-06 | — (Q0 tooling) | toolchain + honest baseline | — | — | gate 0/391; raw debt 40,232 | 42,241 → 5,378 facts (worktree pollution removed) | no production behavior change; dependency review runtime closure unchanged (22); full gate 130/24,970 both locales | 8ce5581 + 4f49a4f + dbf2848 |
 | 2 | 2026-08-06 | — (Q0 tooling) | reek + rubocop-minitest + coding standard | — | — | rubocop gate 0/391 (raw 42,378); reek raw 4,588/202 | unchanged | no production behavior change | f1bcf8e (owner) + e5802f8 |
-| 3 | 2026-08-06 | — (Q0-4) | SimpleCov coverage wiring | — | line 87.73 / branch 68.59 (before) | rubocop gate 0 | unchanged | no production behavior change; 1,150 runs 0 failures | pending |
+| 3 | 2026-08-06 | — (Q0-4) | SimpleCov coverage wiring | — | line 87.73 / branch 68.59 (before) | rubocop gate 0 | unchanged | no production behavior change; 1,150 runs 0 failures | b6f611e |
+| 4 | 2026-08-06 | — (Q0-5) | deterministic baseline script + artifacts | — | line 87.73 / branch 68.60 | rubocop gate 0; raw 42,378; reek 4,588 | 5,387 facts / PASS | no production behavior change | pending |
 
 ## Owner-decision queue
 
