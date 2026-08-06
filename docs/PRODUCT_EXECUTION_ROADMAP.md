@@ -27,14 +27,31 @@ fails, and no case may pass with a non-zero hard safety counter.
 | D | Trusted unattended policy + `tamoz approve` | complete — cases 04, 05, 06 |
 | E | Capability sources through operator configuration | complete — skills (case 08), memory, MCP and websearch all operator-configurable and reaching the worker |
 | F | Enforced runtime budgets | partial — `model_calls` and `wall_clock_seconds` enforced (case 07); cost/token budgets recorded only |
-| G | Stream backpressure bounds | pending — case 09 |
-| H | Cron/IANA scheduling (INV-39) | pending |
+| G | Stream backpressure bounds | pending — case 09. NOT a wiring job: `tamoz_stream_events.outcome` already permits `'rejected'` (the record type exists and is never written), but there is NO consumed/processed marker on admitted events, so "queue depth" has no existing definition. Counting admitted rows would reject everything after N permanently. The defensible definition is likely "admitted beyond the partition watermark", since `process_partition` already advances one — but that is a design decision touching a P14 component with committed golden traces (`test/sqlite_stream_golden_trace_test.rb`). |
+| H | Cron/IANA scheduling (INV-39) | pending — `at` and `interval` are proven end to end; cron expressions and IANA civil time are absent. |
+| — | Operator visibility | partial — pending work, paused approvals, blocked effects, budget exhaustions, sources, catalog, memory and safety counters are reported; recent completions and circuit state are not (no cross-cutting query exists for either) |
 | — | Unknown-effect non-retry through the worker | pending — case 10; the `:unknown` reconciliation itself is P6-proven, what is missing is a worker-level acceptance case |
 
 The worker is a COMPOSITION of the existing durable machinery, not a second execution
 engine: it claims through the request inbox under a fenced lease, executes through
 `DurableRunner`, and deliberates through the same `Session` that `tamoz ask` drives. It has
 no code path that answers an approval, and must never grow one.
+
+### What the scorecard does NOT cover
+
+Three gaps outrank the two remaining scorecard cases, and none of them move by adding
+features:
+
+1. **No real-model run has ever happened.** Every case is proven against `ScriptedModel`.
+   `docs/LIMITATIONS.md` records that three classes of defect in this project's history
+   were found only by running against a real model and never by the corpus.
+2. **No independent critic review.** The owner direction requires a fresh-context harsh
+   review of each boundary — worker, unattended policy, backpressure, cron — attempting
+   authority escalation, duplicate execution and unbounded growth. Zero have run.
+3. **The flagship benchmark is not started** (20 variants, 10 held out).
+
+The clean-clone rehearsal (`docs/RELEASE_REHEARSAL.md`) pins commit `66bc819` and is now
+stale relative to the autonomy work.
 
 ### Previous phase
 

@@ -11,6 +11,18 @@ Read it before deciding whether Tamoz fits your problem.
 
 ## Not implemented
 
+### Operator visibility is partial
+
+`tamoz status --json` reports pending work, paused approvals, blocked (`:unknown`)
+effects, budget exhaustions, capability sources, the dispatchable capability
+catalog, memory configuration, and evidence-derived safety counters. Schedule
+occurrences are on `tamoz schedule occurrences`.
+
+**Not reported:** recent completions, and circuit state. Neither has a
+cross-cutting query today — the circuit store is per scope and scope id with no
+enumeration, and terminal requests leave the pending view by design. Both need a
+new read-only storage query and a boundary-registry entry.
+
 ### Streaming input is not reachable from the worker, and its bounds are not enforced
 
 All four capability sources — skills, memory, MCP and websearch — are now

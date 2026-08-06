@@ -65,3 +65,13 @@ build-iPhoneSimulator/
 
 # Qwen Code tool artifacts (agent worktrees, sessions)
 .qwen/
+.enola/
+
+# Agent tool state (settings, rules, worktrees) — local to each machine, not
+# repository content. `.qwen/` and `.enola/` above are the same category.
+.claude/
+.cursor/
+
+# User-owned evaluation workspace. Not repository content; kept out of git so a
+# clean checkout and `git status` stay meaningful.
+agenteval/
