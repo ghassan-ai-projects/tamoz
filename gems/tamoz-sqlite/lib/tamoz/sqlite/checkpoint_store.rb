@@ -883,7 +883,7 @@ module Tamoz
           ttl: normalized_ttl
         )
         guard = LeaseGuard.new(adapter:, lease:).start
-        writer = Writer.new(store: self, guard:)
+        writer = CheckpointWriter.new(store: self, guard:)
         primary_error = nil
         begin
           yield writer
@@ -1157,131 +1157,6 @@ module Tamoz
       end
 
       private
-
-      class Writer
-        def initialize(store:, guard:)
-          @store = store
-          @guard = guard
-          @effects = EffectJournal.new(
-            store:,
-            guard:,
-            attempt_ttl: store.adapter.limits.effect_attempt_ttl
-          )
-          @application_store = store.adapter.store
-          freeze
-        end
-
-        def fence = @guard.lease.fence
-        def check! = @guard.check!
-        attr_reader :effects
-
-        def store = @application_store
-
-        def accepts_effects?(value)
-          value.respond_to?(:storage_identity) &&
-            value.storage_identity.equal?(@store.adapter)
-        end
-
-        def accepts_store?(value)
-          value.respond_to?(:storage_identity) &&
-            value.storage_identity.equal?(@store.adapter)
-        end
-
-        def latest
-          @store.latest(
-            thread_id: @guard.lease.thread_id,
-            namespace: Wire.decode_namespace(@guard.lease.namespace)
-          )
-        end
-
-        def find(checkpoint_id:)
-          @store.find(
-            thread_id: @guard.lease.thread_id,
-            namespace: Wire.decode_namespace(@guard.lease.namespace),
-            checkpoint_id:
-          )
-        end
-
-        def append_writes(task:, outcome:)
-          @store.append_writes(
-            lease: @guard.lease,
-            task:,
-            outcome:
-          )
-        end
-
-        def append_checkpoint(
-          expected_base_id:,
-          mode:,
-          attributes:,
-          consumed_task_ids: [],
-          request_transition: nil
-        )
-          @store.append_checkpoint(
-            lease: @guard.lease,
-            expected_base_id:,
-            mode:,
-            attributes:,
-            consumed_task_ids:,
-            request_transition:
-          )
-        end
-
-        def claim_next_request(validator: nil)
-          @store.claim_next_request(lease: @guard.lease, validator:)
-        end
-
-        def recover_request(request_id:, validator: nil)
-          @store.recover_request(
-            lease: @guard.lease,
-            request_id:,
-            validator:
-          )
-        end
-
-        # Public fenced terminal-fail for the post-claim execution backstop (DR-4 D2):
-        # opens its own fenced transaction and fails a claimed/running request with the
-        # canonical stale payload.
-        def terminal_fail(request_id:, operation:, reason:)
-          @store.terminal_fail(
-            lease: @guard.lease,
-            request_id:,
-            operation:,
-            reason:
-          )
-        end
-
-        def mark_request_running(request_id:, execution_id:)
-          @store.mark_request_running(
-            lease: @guard.lease,
-            request_id:,
-            execution_id:
-          )
-        end
-
-        def request_transition(
-          request_id:,
-          execution_id:,
-          action:,
-          graph_status:,
-          retryable: nil
-        )
-          @store.request_transition(
-            request_id:,
-            execution_id:,
-            action:,
-            graph_status:,
-            retryable:
-          )
-        end
-
-        def redirect_ready?(target_execution_id:)
-          @store.redirect_ready?(
-            lease: @guard.lease,
-            target_execution_id:
-          )
-        end
-      end
 
       def normalize_address(thread_id, namespace)
         [
@@ -1878,8 +1753,7 @@ module Tamoz
       end
 
       private_constant :CHECKPOINT_PROTOCOL_VERSION, :REQUEST_PROTOCOL_VERSION,
-                       :MAX_HISTORY_LIMIT, :REQUEST_SELECT,
-                       :Writer
+                       :MAX_HISTORY_LIMIT, :REQUEST_SELECT
     end
   end
 end

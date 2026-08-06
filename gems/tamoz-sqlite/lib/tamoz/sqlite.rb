@@ -27,6 +27,7 @@ require_relative "sqlite/stream_store"
 require_relative "sqlite/memory_repository"
 require_relative "sqlite/effect_journal"
 require_relative "sqlite/checkpoint_wire"
+require_relative "sqlite/checkpoint_writer"
 require_relative "sqlite/checkpoint_store"
 require_relative "sqlite/adapter"
 
