@@ -170,21 +170,24 @@ fresh-context critic.
 
 ## Next actions (ordered)
 
-1. **Q3 CLI slice 2:** extract the INTERACTIVE APPROVAL ADAPTER from
-   `gems/tamoz-agent/lib/tamoz/agent/cli.rb` (charter-named component): the prompt/answer
-   seam — prompt_approve_tool, prompt_clarify, prompt_for_interrupt, answer_for,
-   collect_answers, map_answer (~lines 685-800). Smallest extraction naming the
-   responsibility; prompt text byte-identical; `map_answer` stays pinned by the Q2
-   vocabulary tests. Then continue: parser (argv → typed command), commands, session
-   factory, renderer — one responsibility per slice. Then remaining hotspots
-   (session_nodes 113, profile 126, toolbox 140, checkpoint_store 173, compiled 139):
-   characterize then extract per hotspot.
-2. **Q3+:** one responsibility per slice along the charter target architectures.
-3. **Q5:** SimpleCov subprocess result collation (children: unique command_name per
-   process, merged at the end; killed processes documented as blind seams with a
-   non-killed control path), test_slow measurement, then the coverage targets.
-4. When network returns: re-lock the bundle cleanly (`bundle lock --add-platform ruby`).
-   Update this table after every slice.
+**GIANTS-FIRST (owner 2026-08-06):** slice selection targets the largest production
+files first (measured 2026-08-06, after 4 CLI slices): checkpoint_store.rb 2,070 (173
+reek) > profile.rb 1,547 (126) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450
+(113) > toolbox.rb 1,213 (140) > compiled.rb 1,152 (139) > skills.rb 1,063 >
+effect_journal.rb 950. (agent_smoke_corpus.rb 3,287 is the evals corpus driver —
+classified separately per Q0; handle after the production giants.) Each giant gets the
+characterize-then-extract treatment.
+
+1. **Q2/Q3 checkpoint_store:** characterize `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb`
+   (2,070 lines, 173 smells — durability-critical: checkpoint persistence, leases,
+   effect journal access). Enola impact analysis + callers; responsibility map; add
+   characterization + failure-path + adversarial tests at natural seams;
+   mutation-prove; commit tests only. Then extraction slices along the charter's SQLite
+   target architecture (checkpoint persistence, leases/fencing, effect journal access).
+2. Then profile.rb (authority-critical), session_nodes.rb (session graph), toolbox.rb
+   (path confinement), compiled.rb (graph runtime) — each characterize-then-extract.
+3. CLI completion (session factory, renderer, command objects, validate_thread_id!
+   bang cleanup) interleaved when a giant is mid-flight and no larger file is waiting.
 
 ## Slice ledger
 
