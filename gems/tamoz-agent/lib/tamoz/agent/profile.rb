@@ -19,6 +19,7 @@ require_relative "profile/transition_document"
 require_relative "profile/transition_registry"
 require_relative "profile/egress_validator"
 require_relative "profile/yaml_scanner"
+require_relative "profile/check_spec_validator"
 
 module Tamoz
   module Agent
@@ -753,97 +754,10 @@ module Tamoz
         end
       end
 
+      # A configured check is the profile's execution surface, with its own
+      # anti-injection rules; CheckSpecValidator owns them.
       def self.validate_checks!(hash, path)
-        checks = hash["checks"] || {}
-        raise ValidationError, "#{path}: checks must be a mapping" unless checks.is_a?(Hash)
-
-        checks.each do |name, check|
-          unless name.is_a?(String) && PROFILE_ID_PATTERN.match?(name)
-            raise ValidationError, "#{path}: invalid check name #{name.inspect}"
-          end
-          raise ValidationError, "#{path}: check #{name.inspect} must be a mapping" unless check.is_a?(Hash)
-
-          unknown = check.keys - CHECK_KEYS
-          unless unknown.empty?
-            raise ValidationError, "#{path}: unknown check fields #{unknown.sort.inspect}"
-          end
-          argv = check["argv"]
-          unless argv.is_a?(Array) && !argv.empty? && argv.all? { |entry| entry.is_a?(String) && !entry.empty? }
-            raise ValidationError, "#{path}: check #{name.inspect} argv must be a non-empty string array"
-          end
-          argv.each do |element|
-            if element.include?("\0")
-              raise ValidationError, "#{path}: check #{name.inspect} argv contains a NUL byte"
-            end
-            if CONTROL_CHARACTER_PATTERN.match?(element)
-              raise ValidationError,
-                    "#{path}: check #{name.inspect} argv contains a control character"
-            end
-            if element.bytesize > 4096
-              raise ValidationError,
-                    "#{path}: check #{name.inspect} argv element exceeds 4096 bytes"
-            end
-            if SHELL_METACHARACTER_PATTERN.match?(element)
-              raise ValidationError,
-                    "#{path}: check #{name.inspect} argv element #{element.inspect} " \
-                    "contains shell metacharacters"
-            end
-          end
-          validate_argv0!(argv.first, name, path)
-          unless SAFETIES.include?(check["safety"])
-            raise ValidationError, "#{path}: check #{name.inspect} safety must be one of #{SAFETIES.inspect}"
-          end
-        end
-      end
-
-      # argv[0] names the program that will actually run. A shell, an interpreter
-      # that takes inline source, or a wrapper that re-executes another argv turns
-      # the rest of argv into a program, which is exactly the injection the plan
-      # forbids. Leading dashes are rejected so argv[0] cannot be smuggled as an
-      # option to a downstream launcher.
-      def self.validate_argv0!(program, name, path)
-        unless program.is_a?(String) && !program.empty?
-          raise ValidationError, "#{path}: check #{name.inspect} argv[0] must be a program name"
-        end
-        if program.start_with?("-")
-          raise ValidationError,
-                "#{path}: check #{name.inspect} argv[0] #{program.inspect} must not start with '-'"
-        end
-        if program.end_with?(File::SEPARATOR)
-          raise ValidationError,
-                "#{path}: check #{name.inspect} argv[0] #{program.inspect} must not be a directory"
-        end
-        # P8-E: a configured check runs with the *untrusted workspace* as its working
-        # directory, so a relative argv[0] that contains a separator ("bin/check",
-        # "./tools/run") names a file the repository supplies. That is content
-        # granting itself execution, which invariant 35 forbids. A bare program name
-        # is resolved through PATH (which never contains the workspace) and an
-        # absolute path names an operator-chosen program, so both remain allowed.
-        if separator?(program) && !program.start_with?(File::SEPARATOR)
-          raise ValidationError,
-                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a relative path; " \
-                "it would resolve inside the untrusted workspace. Use an absolute path or a " \
-                "bare program name resolved through PATH"
-        end
-
-        basename = File.basename(program).downcase.sub(/\.(exe|bat|cmd|com)\z/, "")
-        if [".", ".."].include?(basename)
-          raise ValidationError,
-                "#{path}: check #{name.inspect} argv[0] #{program.inspect} is not a program"
-        end
-        return unless ARGV0_DENYLIST.include?(basename)
-
-        raise ValidationError,
-              "#{path}: check #{name.inspect} argv[0] #{program.inspect} is a shell or " \
-              "interpreter wrapper; a profile check names a program, not a command string"
-      end
-
-      # True when the value carries a path separator for this platform.
-      def self.separator?(value)
-        return true if value.include?(File::SEPARATOR)
-
-        alternate = File::ALT_SEPARATOR
-        !alternate.nil? && value.include?(alternate)
+        CheckSpecValidator.call(hash, path)
       end
 
       def self.validate_tools!(hash, path)
