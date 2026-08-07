@@ -21,6 +21,7 @@ require_relative "profile/egress_validator"
 require_relative "profile/yaml_scanner"
 require_relative "profile/check_spec_validator"
 require_relative "profile/authority_validator"
+require_relative "profile/document_validator"
 
 module Tamoz
   module Agent
@@ -633,126 +634,26 @@ module Tamoz
         end
       end
 
+      # The declared sections' shapes live in DocumentValidator; these stay as
+      # named steps so validate_schema! still reads as the list of checks it runs.
       def self.validate_profile_fields!(profile, path)
-        id = profile["profile_id"]
-        unless id.is_a?(String) && PROFILE_ID_PATTERN.match?(id)
-          raise ValidationError, "#{path}: profile.profile_id must match #{PROFILE_ID_PATTERN.inspect}"
-        end
-        # DR-5 RC3: "legacy" is the session-record sentinel for sessions that
-        # predate trusted profiles (SessionRecords::LEGACY_PROFILE_ID). A real
-        # profile named "legacy" would be misclassified by the shipped cli.rb
-        # sentinel guard and silently destroy the sentinel semantics, so the id
-        # is reserved and refused here, at load.
-        if id == SessionRecords::LEGACY_PROFILE_ID
-          raise ValidationError,
-                "#{path}: profile.profile_id \"legacy\" is reserved for sessions that " \
-                "predate trusted profiles; choose another profile id"
-        end
-        version = profile["profile_version"]
-        unless version.is_a?(String) && PROFILE_VERSION_PATTERN.match?(version)
-          raise ValidationError,
-                "#{path}: profile.profile_version must match #{PROFILE_VERSION_PATTERN.inspect}"
-        end
-        root = profile["canonical_root"]
-        validate_root!(root, path, "profile.canonical_root")
-        description = profile["description"]
-        if description && (!description.is_a?(String) || description.bytesize > 1024)
-          raise ValidationError, "#{path}: profile.description must be a string of at most 1024 bytes"
-        end
+        DocumentValidator.profile_fields!(profile, path)
       end
 
       def self.validate_root!(root, path, field)
-        unless root.is_a?(String) && !root.empty? && root.start_with?(File::SEPARATOR) &&
-               root.bytesize <= 4096 && !root.include?("\0")
-          raise ValidationError, "#{path}: #{field} must be an absolute path"
-        end
-        if TIMEZONE_WORDS.include?(root.downcase)
-          raise ValidationError, "#{path}: #{field} must not be an implicit host reference"
-        end
-
-        expanded = File.expand_path(root)
-        if File.lstat(expanded).symlink?
-          raise ValidationError, "#{path}: #{field} must not end in a symlink"
-        end
-        unless File.directory?(expanded)
-          raise ValidationError, "#{path}: #{field} must be an existing directory"
-        end
-      rescue SystemCallError
-        raise ValidationError, "#{path}: #{field} is unavailable"
+        DocumentValidator.root!(root, path, field)
       end
 
       def self.validate_roots!(hash, profile, path)
-        roots = required_hash(hash, "roots", path)
-        unknown = roots.keys - ROOTS_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown roots fields #{unknown.sort.inspect}"
-        end
-
-        workspace = roots["workspace"]
-        validate_root!(workspace, path, "roots.workspace")
-        unless File.expand_path(workspace) == File.expand_path(profile.fetch("canonical_root"))
-          raise ValidationError,
-                "#{path}: roots.workspace must equal profile.canonical_root in schema v1"
-        end
+        DocumentValidator.roots!(hash, profile, path)
       end
 
       def self.validate_model_roles!(hash, path)
-        roles = hash["model_roles"] || {}
-        raise ValidationError, "#{path}: model_roles must be a mapping" unless roles.is_a?(Hash)
-
-        roles.each do |name, role|
-          unless name.is_a?(String) && PROFILE_ID_PATTERN.match?(name)
-            raise ValidationError, "#{path}: invalid model role name #{name.inspect}"
-          end
-          raise ValidationError, "#{path}: model role #{name.inspect} must be a mapping" unless role.is_a?(Hash)
-
-          unknown = role.keys - MODEL_ROLE_KEYS
-          unless unknown.empty?
-            raise ValidationError, "#{path}: unknown model role fields #{unknown.sort.inspect}"
-          end
-          provider = role["provider"]
-          unless provider.is_a?(String) &&
-                 (KNOWN_PROVIDERS.include?(provider) || provider == "assume_model_exists")
-            raise ValidationError, "#{path}: unknown provider #{provider.inspect} for role #{name.inspect}"
-          end
-          model = role["model"]
-          unless model.is_a?(String) && !model.empty? && model.bytesize <= 256
-            raise ValidationError, "#{path}: invalid model identifier for role #{name.inspect}"
-          end
-          validate_credential_ref!(role["credential_ref"], name, path) if role.key?("credential_ref")
-        end
-      end
-
-      def self.validate_credential_ref!(ref, role, path)
-        raise ValidationError, "#{path}: credential_ref for #{role.inspect} must be a mapping" unless ref.is_a?(Hash)
-
-        unknown = ref.keys - CREDENTIAL_REF_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown credential_ref fields #{unknown.sort.inspect}"
-        end
-        unless ref["kind"] == "env"
-          raise ValidationError, "#{path}: credential_ref kind must be \"env\" for role #{role.inspect}"
-        end
-        unless ref["name"].is_a?(String) && CREDENTIAL_REF_PATTERN.match?(ref["name"])
-          raise ValidationError,
-                "#{path}: credential_ref name for role #{role.inspect} must match " \
-                "#{CREDENTIAL_REF_PATTERN.inspect}"
-        end
+        DocumentValidator.model_roles!(hash, path)
       end
 
       def self.validate_budgets!(hash, path)
-        budgets = hash["budgets"] || {}
-        raise ValidationError, "#{path}: budgets must be a mapping" unless budgets.is_a?(Hash)
-
-        unknown = budgets.keys - BUDGET_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown budget fields #{unknown.sort.inspect}"
-        end
-        budgets.each do |key, value|
-          unless value.is_a?(Numeric) && value.finite? && !value.negative?
-            raise ValidationError, "#{path}: budgets.#{key} must be a non-negative finite number"
-          end
-        end
+        DocumentValidator.budgets!(hash, path)
       end
 
       # A configured check is the profile's execution surface, with its own
