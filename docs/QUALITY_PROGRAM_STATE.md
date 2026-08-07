@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `c709ed0` (main) — "Q3 tier-1 slice 1: extract Mcp::CanonicalJSON from the catalog"
+- **HEAD:** `061d720` (main) — "Q3 tier-1 slice 2: extract MemoryCheckpointer::Writer"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -196,7 +196,7 @@ and several hits were a file's own namespace rather than a nested extra.
 qualify any outer constants, match visibility, done.
 
 1. ~~`tamoz-mcp/lib/tamoz/mcp/catalog.rb` — `CanonicalJSON`~~ **DONE (slice 31)**, 291 → 243.
-2. `tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb` (318) — `Writer` class, ~69.
+2. ~~`tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb` — `Writer`~~ **DONE (slice 32)**, 318 → 250.
 3. `tamoz-agent/lib/tamoz/agent/healing/classification.rb` (395) — `Matrix` ~72 and
    `LegacyTextAdapter` ~51; two slices or one, whichever keeps the diff honest.
 
@@ -301,6 +301,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 29 | 2026-08-07 | cli.rb (Q3 slice 6) | the session AUTHORITY resolver → `Agent::CLIAuthority` | cli.rb 1,253 → 1,105; + cli_authority 195 | not re-measured (no test added; lines moved) | rubocop raw 41,988 → 41,979; reek 4,410 → 4,396; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private, matching HEAD. Puts the security asymmetry in one place: a NEW session takes authority from the loaded profile, an EXISTING one replays what its own checkpoint pinned, so editing a profile file cannot widen a session in flight. `resolve_session_authority` deliberately KEPT WHOLE with an inline disable — every split point needed the same six values as loose parameters, the failure mode documented on `consume_if_candidate!` in slice 18; the 7 repeated `profile.canonical_digest` reads were hoisted to one local instead, removing the duplication without loosening anything. Baseline regenerated LAST per the slice-28 rule, new file verified absent | 98e58ce |
 | 30 | 2026-08-07 | cli.rb (Q3 slice 7) | session rendering + exit codes → `Agent::CLIRendering` | cli.rb 1,105 → 989; + cli_rendering 197 | not re-measured (no test added; lines moved) | rubocop raw 41,979 → 41,926; reek 4,396 → 4,376; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private. **A module does not share the class's lexical scope** — the bare `EXIT_PAUSED`/`EXIT_SIGINT`/`EXIT_SIGTERM`/`THREAD_ID_PATTERN` that resolved inside `class CLI` raised NameError from the module. Thirteen tests caught it; rubocop and reek could not. Now `CLI::EXIT_PAUSED` etc. `render_final_view` and `render_show_human` split with refusal order preserved; `exit_for_view`'s duplicate branches merged (:paused/:blocked share a code, :failed was already `else`) | 51d1652 |
 | 31 | 2026-08-07 | mcp/catalog.rb (Tier 1.1) | the deterministic JSON canonicalizer → `Tamoz::Mcp::CanonicalJSON` | catalog.rb 291 → 243; + canonical_json 59 | not re-measured (no test added; lines moved) | rubocop raw 41,926 → 41,923; reek 4,376 → 4,374; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. FIRST slice of the easy-first queue and it validated the ordering — a fraction of the effort of a profile.rb design slice for a comparable reduction. **FINDING: CanonicalJSON never belonged to Catalog.** It is written inside `Catalog = Data.define(...) do ... end`, but constants assigned in a BLOCK belong to the enclosing lexical scope, so its name has always been `Tamoz::Mcp::CanonicalJSON` — which is why invocation.rb references it bare. Verified before moving (`Catalog.const_get(:CanonicalJSON, false)` raises NameError). CLIENT_INFO, DIGEST_DOMAIN, ENTRY_DIGEST_DOMAIN, TOOL_NAME_PATTERN and Entry sit in the same position and were left alone. normalize_object feeds a digest, so rubocop's each_with_object→to_h rewrite was checked BY BYTES: same SHA-256 `5205938d936e8c8e47978b4334dfde45b1cab4b05f80bbfe0379e3b18b6290a5` | c709ed0 |
+| 32 | 2026-08-07 | graph/memory_checkpointer.rb (Tier 1.2) | the fenced write side → `MemoryCheckpointer::Writer` | memory_checkpointer.rb 318 → 250; + writer 96 | not re-measured (no test added; lines moved) | rubocop raw 41,923 → 41,918; reek 4,374 → 4,368; new file **0** smells (the parent's 27 are pre-existing debt) | **PASS** | **ci_full BOTH locales 130/24,970**. `private_constant :Writer` verified still raising NameError from outside after the move. **One rubocop finding deliberately NOT applied**: Naming/PredicateMethod wanted `def check! = true` renamed, but check! is a COMMAND in a duck-typed interface implemented by MemoryCheckpointer::Writer, SQLite::CheckpointWriter and Tamoz::Context, called as `context.check!`/`writer.check!` on adjacent lines in executor.rb — renaming would break three implementations to satisfy a naming cop. Inline disable with that reasoning at the site | 061d720 |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -312,6 +313,17 @@ standalone characterization pass on a file already covered at its extraction sea
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
+- **Do not rename a method to satisfy a naming cop without checking for a duck
+  type.** Grep for other implementations and call sites first; when several classes
+  share the name, an inline disable naming the interface is the right answer
+  (slice 32: `check!` across Writer, CheckpointWriter and Context).
+- **Preserve `private_constant` across a move** and verify it still raises from
+  outside afterwards; put the require above the class body so the constant exists
+  by the time the `private_constant` line runs.
+- **Move scripts half-apply in three distinct ways**: a stale boundary assertion,
+  wiring added before the extraction succeeded, and writing into a directory that
+  does not exist yet. `mkdir -p` first, assert boundaries, and on any failure
+  `git checkout` the touched files and redo rather than patching forward.
 - **Check where a nested constant actually LIVES before moving it.** Constants
   assigned inside a `do...end` block belong to the ENCLOSING lexical scope, not the
   class the block builds, so a definition that reads as `Outer::Inner` may really be
