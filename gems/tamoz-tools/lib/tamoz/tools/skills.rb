@@ -5,6 +5,8 @@ require "json"
 require "psych"
 
 require_relative "skills/catalog"
+require_relative "skills/frontmatter_scanner"
+require_relative "skills/frontmatter"
 require_relative "skills/walk"
 require_relative "skills/snapshot"
 
@@ -86,6 +88,8 @@ module Tamoz
       MAX_CATALOG_BYTES = 4096
       MAX_CATALOG_DESCRIPTION_BYTES = 320
       MAX_DETAIL_BYTES = 200
+
+      private_constant :FrontmatterScanner
 
       SkillSource = Data.define(:id, :root, :trust, :precedence) do
         def initialize(id:, root:, trust:, precedence: 0)
@@ -567,189 +571,6 @@ module Tamoz
 
         def source_precedence(record)
           @sources.find { |source| source.id == record.source_id }&.precedence || 0
-        end
-      end
-
-      # =========================================================================
-      # Frontmatter
-      # =========================================================================
-      class Frontmatter
-        PORTABLE_KEYS = %w[name description license compatibility metadata allowed-tools].freeze
-        KNOWN_EXTENSIONS = %w[tamoz.risk tamoz.eval-suite].freeze
-
-        def initialize(text, label, limits)
-          @text = text
-          @label = label
-          @limits = limits
-        end
-
-        def call
-          scan!
-          data = parse
-          unless data.is_a?(Hash) && data.keys.all?(String)
-            reject!("skill_frontmatter_invalid", "frontmatter must be a mapping with string keys")
-          end
-
-          {
-            "name" => string!(data, "name", required: true, limit: 64),
-            "description" => description(data),
-            "license" => string!(data, "license", required: false, limit: 128),
-            "compatibility" => string!(data, "compatibility", required: false, limit: 512),
-            "metadata" => metadata(data),
-            "allowed-tools" => requested_capabilities(data),
-            "extra" => extra(data),
-            "raw" => data
-          }
-        end
-
-        private
-
-        # Pass one: reject the load-time execution vectors before a data model
-        # exists. Skills allow *zero* aliases (profiles allow 32) because a skill has
-        # no legitimate use for indirection.
-        def scan!
-          label = @label
-          reject = ->(code, detail) { raise Rejected.new(code, label, detail) }
-          stack = []
-          note_slot = lambda do |key|
-            frame = stack.last
-            next unless frame && frame[0] == :mapping
-
-            if frame[2]
-              reject.call("skill_frontmatter_duplicate_key", "duplicate key") if key && frame[1].include?(key)
-              frame[1] << key if key
-            end
-            frame[2] = !frame[2]
-          end
-          check_tag = lambda do |tag|
-            next unless tag && !tag.start_with?("tag:yaml.org,2002:")
-
-            reject.call("skill_frontmatter_tag", "YAML tags are not allowed")
-          end
-          handler = Class.new(Psych::Handler) do
-            define_method(:scalar) do |value, _anchor, tag, _plain, _quoted, _style|
-              check_tag.call(tag)
-              note_slot.call(value)
-            end
-            define_method(:alias) do |_anchor|
-              reject.call("skill_frontmatter_alias", "YAML aliases are not allowed")
-            end
-            define_method(:start_mapping) do |_anchor, tag, _implicit, _style|
-              check_tag.call(tag)
-              note_slot.call(nil)
-              stack << [:mapping, [], true]
-            end
-            define_method(:end_mapping) { stack.pop }
-            define_method(:start_sequence) do |_anchor, tag, _implicit, _style|
-              check_tag.call(tag)
-              note_slot.call(nil)
-              stack << [:sequence]
-            end
-            define_method(:end_sequence) { stack.pop }
-          end
-          Psych::Parser.new(handler.new).parse(@text)
-        rescue Psych::SyntaxError => error
-          reject!("skill_frontmatter_invalid", "invalid YAML: #{error.problem}")
-        end
-
-        # Pass two. An empty permitted-class list cannot materialize a non-core
-        # object; `aliases: false` is belt to pass one's braces.
-        def parse
-          Psych.safe_load(@text, permitted_classes: [], permitted_symbols: [], aliases: false)
-        rescue Psych::Exception => error
-          reject!("skill_frontmatter_invalid", "invalid YAML: #{error.class}")
-        end
-
-        def description(data)
-          value = string!(data, "description", required: true, limit: @limits.fetch(:max_description_bytes))
-          if value.match?(/[[:cntrl:]]/) && !value.match?(/\A[^ --]*\z/)
-            reject!("skill_description_invalid", "description contains control characters")
-          end
-
-          value
-        end
-
-        def string!(data, key, required:, limit:)
-          value = data[key]
-          if value.nil?
-            reject!("skill_field_invalid", "#{key} is required") if required
-            return nil
-          end
-          unless value.is_a?(String) && !value.empty? && value.bytesize <= limit &&
-                 value.valid_encoding? && !value.include?("\0")
-            reject!("skill_field_invalid", "#{key} must be a string of at most #{limit} bytes")
-          end
-          if key == "name" && !NAME_PATTERN.match?(value)
-            reject!("skill_name_invalid", "name is not a valid skill name")
-          end
-
-          value
-        end
-
-        def metadata(data)
-          value = data.fetch("metadata", {})
-          return {} if value.nil?
-          unless value.is_a?(Hash) && value.length <= @limits.fetch(:max_metadata_pairs)
-            reject!("skill_metadata_invalid", "metadata must be a mapping of at most 32 pairs")
-          end
-
-          value.each do |key, entry|
-            unless key.is_a?(String) && METADATA_KEY_PATTERN.match?(key)
-              reject!("skill_metadata_invalid", "invalid metadata key")
-            end
-            unless entry.is_a?(String) && entry.bytesize <= @limits.fetch(:max_metadata_value_bytes) &&
-                   entry.valid_encoding? && !entry.include?("\0")
-              reject!("skill_metadata_invalid", "metadata values must be short strings")
-            end
-            next unless key.start_with?("tamoz.")
-            unless KNOWN_EXTENSIONS.include?(key)
-              reject!("skill_metadata_unknown_extension", "unknown extension key #{key}")
-            end
-            if key == "tamoz.risk" && !DECLARED_RISKS.include?(entry)
-              reject!("skill_metadata_invalid", "tamoz.risk must be one of #{DECLARED_RISKS.join(", ")}")
-            end
-          end
-          value
-        end
-
-        # The author's requested upper bound and nothing else. It is recorded and
-        # rendered; it never reaches Toolbox's tool set.
-        def requested_capabilities(data)
-          value = data["allowed-tools"]
-          return [] if value.nil?
-
-          list = case value
-                 when String then value.split(",").map(&:strip).reject(&:empty?)
-                 when Array then value
-                 else reject!("skill_field_invalid", "allowed-tools must be a list or comma-separated string")
-                 end
-          unless list.length <= @limits.fetch(:max_requested_capabilities) &&
-                 list.all? { |name| name.is_a?(String) && TOOL_PATTERN.match?(name) }
-            reject!("skill_field_invalid", "allowed-tools entries must be tool names")
-          end
-
-          list.uniq.sort
-        end
-
-        # Unknown portable fields are retained for round-trip compatibility and
-        # ignored for authority (SKILLS_DESIGN §2).
-        def extra(data)
-          unknown = data.reject { |key, _| PORTABLE_KEYS.include?(key) }
-          if unknown.length > @limits.fetch(:max_extra_keys)
-            reject!("skill_field_invalid", "too many unknown frontmatter fields")
-          end
-          serialized = JSON.generate(Skills.canonical(unknown))
-          if serialized.bytesize > @limits.fetch(:max_extra_bytes)
-            reject!("skill_extra_bytes_exceeded", "unknown frontmatter fields exceed the byte limit")
-          end
-
-          unknown
-        rescue JSON::GeneratorError
-          reject!("skill_field_invalid", "unknown frontmatter fields are not serializable")
-        end
-
-        def reject!(code, detail)
-          raise Rejected.new(code, @label, detail)
         end
       end
     end
