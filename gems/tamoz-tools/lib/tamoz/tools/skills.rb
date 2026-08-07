@@ -4,6 +4,7 @@ require "digest"
 require "json"
 require "psych"
 
+require_relative "skills/catalog"
 require_relative "skills/snapshot"
 
 module Tamoz
@@ -897,120 +898,6 @@ module Tamoz
 
         def reject!(code, detail)
           raise Rejected.new(code, @label, detail)
-        end
-      end
-
-      # =========================================================================
-      # Catalog — stage 1 of progressive disclosure
-      # =========================================================================
-      class Catalog
-        attr_reader :snapshot
-
-        def initialize(snapshot)
-          unless snapshot.is_a?(SkillSnapshot)
-            raise Error, "catalog requires a Tamoz::Agent::Skills::SkillSnapshot"
-          end
-
-          @snapshot = snapshot
-          @bound = snapshot.collisions.to_h { |entry| [entry.name, entry.bound_to] }.freeze
-          @by_name = snapshot.records.values.group_by(&:name).freeze
-          freeze
-        end
-
-        def empty? = @snapshot.empty?
-
-        # A bare name resolves only when it is unambiguous or explicitly bound.
-        # Ambiguity is a typed, visible error naming every candidate: never a
-        # silent pick (invariant 41).
-        def resolve(reference)
-          text = String(reference)
-          record = @snapshot.records[text]
-          return record if record
-          if text.include?("/")
-            raise ToolArgumentError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
-          end
-
-          candidates = @by_name.fetch(text, [])
-          case candidates.length
-          when 0
-            raise ToolArgumentError, "skill_unknown: no skill #{Skills.describe(text)} in this catalog"
-          when 1
-            candidates.first
-          else
-            bound = @bound[text]
-            return @snapshot.records.fetch(bound) if bound
-
-            raise ToolArgumentError,
-                  "skill_name_ambiguous: #{Skills.describe(text)} is provided by " \
-                  "#{candidates.map(&:id).sort.join(", ")}; load it by source-qualified id"
-          end
-        end
-
-        # Deterministic bytes, stable id order, and explicit truncation. No absolute
-        # path may appear here (plan §3), and `declared_risk` is labelled as the
-        # author's claim, never as a Tamoz classification (plan §3.1).
-        def render(budget_bytes: MAX_CATALOG_BYTES)
-          lines = @snapshot.records.map { |_, record| record_line(record) }
-          lines.concat(@snapshot.collisions.map { |entry| collision_line(entry) })
-          rendered = []
-          used = 0
-          shown = 0
-          lines.each do |line|
-            if used + line.bytesize + 1 > budget_bytes
-              break
-            end
-
-            rendered << line
-            used += line.bytesize + 1
-            shown += 1
-          end
-          if shown < lines.length
-            rendered << "- ... #{lines.length - shown} more entries not shown " \
-                        "(catalog budget #{budget_bytes} bytes exceeded)"
-          end
-          summary = rejection_summary
-          rendered << summary if summary
-          rendered.join("\n")
-        end
-
-        private
-
-        def record_line(record)
-          version = record.version ? " v#{clip(record.version, 32)}" : ""
-          "- #{record.id} [#{record.source_trust}, declared-risk #{record.declared_risk}]" \
-            "#{version}: #{clip(record.description, MAX_CATALOG_DESCRIPTION_BYTES)}"
-        end
-
-        def collision_line(entry)
-          if entry.bound_to
-            "- ! #{entry.name} is ambiguous (#{entry.candidates.join(", ")}); " \
-              "operator bound it to #{entry.bound_to}"
-          else
-            "- ! #{entry.name} is ambiguous (#{entry.candidates.join(", ")}); " \
-              "load it by source-qualified id"
-          end
-        end
-
-        def rejection_summary
-          return nil if @snapshot.rejections.empty?
-
-          counts = @snapshot.rejections.group_by(&:code).transform_values(&:length).sort
-          "- ! #{@snapshot.rejections.length} skill(s) rejected: " \
-            "#{counts.map { |code, count| "#{code} x#{count}" }.join(", ")}"
-        end
-
-        # Byte budget, character boundary: never cuts a UTF-8 sequence in half.
-        def clip(value, limit)
-          text = String(value).gsub(/[[:cntrl:]]/, " ").strip
-          return text if text.bytesize <= limit
-
-          truncated = +""
-          text.each_char do |char|
-            break if truncated.bytesize + char.bytesize > limit
-
-            truncated << char
-          end
-          "#{truncated} …(truncated)"
         end
       end
     end
