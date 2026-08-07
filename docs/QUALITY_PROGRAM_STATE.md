@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `8151cc7` (main) — "Q3 profile.rb slice 5: extract the tools/unattended/policy authority triad"
+- **HEAD:** `f91969c` (main) — "Q3 profile.rb slice 6: extract the declared sections' shape validator"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -253,8 +253,32 @@ standalone characterization pass on a file already covered at its extraction sea
 | 20 | 2026-08-07 | profile.rb (Q3 slice 3, giant #2) | the pre-parse YAML safety scan (P8-E) → `Profile::YamlScanner`, a real Psych::Handler subclass | profile.rb 1,106 → 1,006; + yaml_scanner 167. **`scan_yaml!` 100 lines → gone**; zero Metrics/MethodLength, AbcSize or Cyclomatic offenses in the new file | not re-measured (no test added; lines moved) | rubocop raw 42,227 → 42,214; reek 4,490 → 4,480; new file **0** smells | **PASS** — no structural regression, zero layer violations | behavior-identical: literals diffed against HEAD (`path`→`@path`, `max_aliases`→`MAX_ALIASES`, `error`→`e`) and **all 8 YAML refusals verified byte-identical at runtime** (foreign tag, two documents, merge key, duplicate key, alias-in-key-position, complex key, alias limit, nesting limit) plus syntax-error wrapping and a clean scan of a valid profile. The old shape was an anonymous `Class.new(Psych::Handler)` over five lambdas closing on mutable locals; state now lives in ivars so each refusal is a named method, and the `[kind, keys, expecting]` array with magic indexes became a `Frame` Struct with `key_slot?`/`advance!`/`seen?`/`record!`. **ci_full BOTH locales 130/24,970** | b51fab8 |
 | 21 | 2026-08-07 | profile.rb (Q3 slice 4, giant #2) | the configured-check specification validator (the profile's EXECUTION surface) → `Profile::CheckSpecValidator` | profile.rb 1,006 → 920; + check_spec_validator 169. `validate_checks!` 42 lines + `validate_argv0!` 36 + `separator?` → one object per check, every method ≤ 20 | not re-measured (no test added; lines moved) | rubocop raw 42,214 → 42,190; reek 4,480 → 4,473; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 15 check-spec messages verified byte-identical at runtime** (checks-not-mapping, bad name, check-not-mapping, unknown field, argv shape, NUL, control char, 4096 bytes, shell metacharacters, leading dash, directory, workspace-relative, dot program, shell wrapper, safety) plus valid-returns-mapping and absent-accepted. NOTE: the literal diff alone could NOT prove this slice — message construction moved into `problem`/`program_problem` helpers so the prefix cannot drift — so the runtime harness is the real evidence (kept at scratchpad/check_spec_messages.rb). One dead branch found and left alone: `argv[0] must be a program name` is unreachable through `call` because the argv shape check already requires all-strings; it stays as a defensive guard on the private method. **ci_full BOTH locales 130/24,970** | 5af810e |
 | 22 | 2026-08-07 | profile.rb (Q3 slice 5, giant #2) | the tools/unattended/policy authority triad → `Profile::AuthorityValidator` | profile.rb 920 → 836; + authority_validator 187 | not re-measured (no test added; lines moved) | rubocop raw 42,190 → 42,146; reek 4,473 → 4,464; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 17 authority messages verified byte-identical at runtime**, plus tools! returning the normalized mapping, approval_required defaulting to [], absent unattended returning nil, and the optional unattended digest. **Kept THREE entry points rather than one `call`**: the loader runs `unattended!` early in validate_schema! against the RAW document while `tools!`/`policy!` run later and policy consumes tools' return — collapsing them would have changed which error an operator sees first. Two rubocop rewrites applied deliberately rather than by blanket `-A` (`all?(String)`, `intersect?`), both semantically identical for string arrays. **ci_full BOTH locales 130/24,970** | 8151cc7 |
+| 23 | 2026-08-07 | profile.rb (Q3 slice 6, giant #2) | the declared sections' shape rules (profile fields, root, roots, model roles, credential refs, budgets) → `Profile::DocumentValidator` | profile.rb 836 → 737; + document_validator 220 | not re-measured (no test added; lines moved) | rubocop raw 42,146 → 42,103; reek 4,464 → 4,455; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 22 document messages verified byte-identical at runtime** plus valid-fields / absent-model_roles / absent-budgets accepted. Holds only `@path` (the one thing every refusal shares; the data is handed in already-fetched). `root!` split into spelling vs target, which named a real distinction and removed the complexity offense rather than suppressing it. **ci_full BOTH locales 130/24,970** | f91969c |
 
 ## Owner-decision queue
+
+- **FINDING (2026-08-07, slice 23) — a security guard that has never been able to
+  fire.** `Profile::DocumentValidator#validate_root_spelling!` (was
+  `Profile.validate_root!`) refuses a root that names a host implicitly:
+
+      raise "... must not be an implicit host reference" if TIMEZONE_WORDS.include?(root.downcase)
+
+  `TIMEZONE_WORDS` is `%w[local system host]`, but the guard immediately above it
+  requires `root.start_with?(File::SEPARATOR)`. Every string that reaches the
+  timezone check therefore begins with `/`, so `root.downcase` can never equal a
+  bare word and the branch is **unreachable**. Verified against HEAD: the shipped
+  code behaves identically (`/UTC` reports "is unavailable", not "implicit host
+  reference"), so this is pre-existing and slice 23 preserved it byte-for-byte.
+
+  Left in place deliberately — changing what a security guard rejects is a
+  behaviour decision, not a refactor. It needs an OWNER decision because it is
+  unlike the other dead branch found in slice 21: `argv[0] must be a program
+  name` is harmless redundancy (an earlier check already covers it), whereas this
+  one means the INTENDED protection is not achieved at all. Either the check
+  should compare the basename / expanded final component, or the intent was
+  already covered elsewhere and the guard should go with a note saying so.
+  Suggest a small characterization test either way, so whatever is decided is
+  pinned.
 
 - **RESOLVED (2026-08-07) — owner chose option 2 (design out), applied in slice 18.**
   The stateless validation predicates got a home: `AdoptionDocument` and
