@@ -3,6 +3,9 @@
 require "digest"
 require "json"
 
+require_relative "classification/legacy_text_adapter"
+require_relative "classification/matrix"
+
 module Tamoz
   module Agent
     module Healing
@@ -249,145 +252,6 @@ module Tamoz
             "pre_dispatch" => signal.dig("retryability", "pre_dispatch") == true,
             "capability_absent" => signal.fetch("capability_absent")
           }
-        end
-
-        # P12 §3: "Legacy regex adapters may propose typed classification with
-        # confidence; low confidence abstains. No new regex adapter ships without a
-        # defined measured precision gate with a numeric threshold."
-        #
-        # Two hard properties:
-        # * the adapter refuses to CONSTRUCT unless its measured precision meets its
-        #   declared numeric gate;
-        # * a text-derived proposal is capped at `:observe` — it can never by itself
-        #   put a failure on a mutating family. It must be corroborated by typed
-        #   evidence, which is what `Classification.classify` consumes.
-        class LegacyTextAdapter
-          attr_reader :adapter_id, :measured_precision, :precision_gate
-
-          Proposal = Data.define(:category, :confidence, :action_family, :adapter_id, :matched) do
-            def mutating? = false
-          end
-
-          def initialize(adapter_id:, patterns:, measured_precision:, precision_gate:)
-            unless measured_precision.is_a?(Numeric) && measured_precision.between?(0.0, 1.0)
-              raise HealingPolicyError,
-                    "a legacy text adapter requires a measured precision in 0.0..1.0"
-            end
-            unless precision_gate.is_a?(Numeric) && precision_gate.between?(0.0, 1.0)
-              raise HealingPolicyError,
-                    "a legacy text adapter requires a numeric precision gate in 0.0..1.0"
-            end
-            if measured_precision < precision_gate
-              raise HealingPolicyError,
-                    "legacy text adapter #{adapter_id.inspect} measured precision " \
-                    "#{measured_precision} is below its gate #{precision_gate}"
-            end
-            unless patterns.is_a?(Hash) && !patterns.empty?
-              raise HealingPolicyError, "a legacy text adapter requires patterns"
-            end
-            patterns.each_key do |category|
-              unless FailureRecord::CATEGORIES.include?(category)
-                raise HealingPolicyError, "unknown proposed category #{category.inspect}"
-              end
-            end
-
-            @adapter_id = String(adapter_id).dup.freeze
-            @patterns = patterns.freeze
-            @measured_precision = measured_precision.to_f
-            @precision_gate = precision_gate.to_f
-            freeze
-          end
-
-          # Returns a NON-MUTATING proposal, or nil when nothing matched. The
-          # caller must still build a typed `FailureRecord`; the proposal is
-          # evidence toward that, never a remediation authorization.
-          def propose(raw_message)
-            text = String(raw_message)
-            category, = @patterns.find { |_name, pattern| pattern.match?(text) }
-            return nil unless category
-
-            Proposal.new(
-              category:, confidence: @measured_precision,
-              action_family: :observe, adapter_id: @adapter_id, matched: true
-            )
-          end
-        end
-
-        # P12 §3 proof surface: the classification matrix with DENOMINATORS per
-        # class. `cases` is [{record:, expected_family:}]; the report is pure data
-        # so `tamoz-evals` (builder B/the matrix owner) can consume it without a
-        # second implementation.
-        module Matrix
-          module_function
-
-          def run(cases:, rule:)
-            per_category = FailureRecord::CATEGORIES.to_h do |category|
-              [category.to_s, {
-                "denominator" => 0, "classified" => 0, "abstained" => 0,
-                "correct" => 0, "mutating" => 0, "never_mutate" => 0
-              }]
-            end
-
-            cases.each do |entry|
-              record = entry.fetch(:record)
-              expected = entry.fetch(:expected_family)
-              result = Classification.classify(record, rule:)
-              bucket = per_category.fetch(record.category.to_s)
-              bucket["denominator"] += 1
-              if result.abstained
-                bucket["abstained"] += 1
-              else
-                bucket["classified"] += 1
-              end
-              bucket["correct"] += 1 if result.action_family == expected
-              bucket["mutating"] += 1 if result.mutating?
-              bucket["never_mutate"] += 1 if result.never_mutate
-            end
-
-            denominator = per_category.values.sum { |bucket| bucket["denominator"] }
-            abstained = per_category.values.sum { |bucket| bucket["abstained"] }
-            correct = per_category.values.sum { |bucket| bucket["correct"] }
-
-            {
-              "per_category" => per_category,
-              "denominator" => denominator,
-              "abstained" => abstained,
-              "correct" => correct,
-              "abstention_rate" => denominator.zero? ? 0.0 : abstained.fdiv(denominator),
-              "precision" => denominator.zero? ? 0.0 : correct.fdiv(denominator),
-              "abstention_quality" => abstention_quality(per_category, rule:),
-              "rule_id" => rule.rule_id,
-              "rule_version" => rule.version
-            }
-          end
-
-          # C9: correct abstention on never-mutate classes MINUS over-abstention on
-          # the classes the rule must handle. In -1.0..1.0; only the components are
-          # claimed, and both denominators are reported.
-          def abstention_quality(per_category, rule:)
-            handled = rule.trigger_categories.map(&:to_s)
-            never = FailureRecord::NEVER_MUTATE_CATEGORIES.map(&:to_s)
-
-            never_denominator = never.sum { |name| per_category.fetch(name)["denominator"] }
-            # A never-mutate class is handled CORRECTLY when it never reaches a
-            # mutating family — abstention is one acceptable form of that.
-            never_correct = never.sum do |name|
-              bucket = per_category.fetch(name)
-              bucket["denominator"] - bucket["mutating"]
-            end
-            handled_denominator = handled.sum { |name| per_category.fetch(name)["denominator"] }
-            over_abstained = handled.sum { |name| per_category.fetch(name)["abstained"] }
-
-            correct_rate = never_denominator.zero? ? 0.0 : never_correct.fdiv(never_denominator)
-            over_rate = handled_denominator.zero? ? 0.0 : over_abstained.fdiv(handled_denominator)
-            {
-              "score" => correct_rate - over_rate,
-              "correct_abstention_rate" => correct_rate,
-              "correct_abstention_denominator" => never_denominator,
-              "over_abstention_rate" => over_rate,
-              "over_abstention_denominator" => handled_denominator
-            }
-          end
         end
       end
     end
