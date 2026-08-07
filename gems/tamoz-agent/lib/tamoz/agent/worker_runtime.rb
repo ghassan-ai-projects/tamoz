@@ -2,6 +2,8 @@
 
 require "time"
 
+require_relative "worker_runtime/deferred_model"
+
 module Tamoz
   module Agent
     # The opened form of a runtime directory: one SQLite adapter, the stores bound
@@ -16,31 +18,6 @@ module Tamoz
     # enqueue its request in a single transaction.
     class WorkerRuntime
       class Error < Tamoz::Agent::Error; end
-
-      # A model that is not built until something actually asks it to generate.
-      #
-      # `tamoz status` and `tamoz queue list` read durable state and never call a
-      # model. Constructing sessions eagerly would make them fail on a machine
-      # with no provider configured, which is exactly the machine an operator is
-      # most likely to be debugging on. Deferring construction keeps inspection
-      # working without giving the inspection path a second, weaker code path of
-      # its own.
-      class DeferredModel
-        def initialize(&build)
-          @build = build
-          @monitor = Mutex.new
-        end
-
-        def generate(...)
-          model.generate(...)
-        end
-
-        private
-
-        def model
-          @monitor.synchronize { @model ||= @build.call }
-        end
-      end
 
       attr_reader :directory, :adapter
 

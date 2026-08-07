@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "8bb07d6",
+    "commit": "336b35a",
     "dirty": true
   },
   "toolchain": {
@@ -10,12 +10,12 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 285,
-    "total_code_lines": 50639,
+    "files": 286,
+    "total_code_lines": 50646,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
-      "gems/tamoz-agent": 12456,
+      "gems/tamoz-agent": 12463,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4372,
@@ -53,10 +53,10 @@
     }
   },
   "rubocop": {
-    "total": 41644,
-    "files_inspected": 432,
+    "total": 41645,
+    "files_inspected": 433,
     "by_cop": {
-      "Style/StringLiterals": 29900,
+      "Style/StringLiterals": 29901,
       "Layout/SpaceInsideHashLiteralBraces": 3680,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
       "Metrics/MethodLength": 897,
@@ -247,7 +247,7 @@
       "Style/RedundantArgument": 1
     },
     "by_severity": {
-      "convention": 41166,
+      "convention": 41167,
       "warning": 478
     },
     "metrics_over_ceiling": {
@@ -522,7 +522,7 @@
     }
   },
   "enola": {
-    "facts": 5854,
+    "facts": 5873,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -534,8 +534,8 @@
   },
   "coverage": {
     "line_percent": 88.32,
-    "line_covered": 18473,
-    "line_total": 20917,
+    "line_covered": 18477,
+    "line_total": 20921,
     "branch_percent": 68.98,
     "branch_covered": 5203,
     "branch_total": 7543,
