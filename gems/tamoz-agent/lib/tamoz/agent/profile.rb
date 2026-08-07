@@ -23,6 +23,7 @@ require_relative "profile/check_spec_validator"
 require_relative "profile/authority_validator"
 require_relative "profile/document_validator"
 require_relative "profile/content_scanner"
+require_relative "profile/fields"
 require_relative "profile/secure_file"
 
 module Tamoz
@@ -163,38 +164,6 @@ module Tamoz
       PermissionError = Class.new(ProfileError)
       ValidationError = Class.new(ProfileError)
       AdoptionError = Class.new(ProfileError)
-
-      Fields = Data.define(
-        :profile_id, :profile_version, :canonical_root, :description,
-        :model_roles, :budgets, :checks, :tools_allowed, :tools_approval_required,
-        :policy, :canonical_digest, :suggestion, :pinned, :egress, :unattended
-      ) do
-        def initialize(pinned: false, **members)
-          members[:egress] = nil unless members.key?(:egress)
-          members[:unattended] = nil unless members.key?(:unattended)
-          super(pinned:, **Profile.deep_freeze(members))
-        end
-
-        def allow_changes? = policy.fetch("allow_changes")
-
-        # The tools a worker may use with nobody watching. Absent section means
-        # NOTHING is preauthorized — a profile that has never thought about
-        # unattended execution does not accidentally authorize it.
-        #
-        # `forbidden` is subtracted last so it cannot be overridden.
-        def unattended_preauthorized
-          return [] if unattended.nil?
-
-          preauthorized = Array(unattended["read_only"]) + Array(unattended["reconcilable"])
-          (preauthorized - Array(unattended["forbidden"])).uniq.freeze
-        end
-
-        # Everything else the profile allows: possible, but only with a human.
-        def unattended_requires_approval
-          (tools_allowed - unattended_preauthorized).uniq.freeze
-        end
-        def high_risk? = model_roles.values.any? { |role| role.key?("credential_ref") }
-      end
 
       attr_reader :fields
 
@@ -614,30 +583,9 @@ module Tamoz
         value.freeze
       end
 
+      # Fields owns the mapping from validated document to immutable value.
       def self.build_fields(hash, digest:, suggestion:, pinned: false)
-        profile = hash.fetch("profile")
-        tools = hash.fetch("tools")
-        checks = (hash["checks"] || {}).transform_values do |check|
-          {"argv" => check.fetch("argv"), "safety" => check.fetch("safety")}
-        end
-        new_fields = {
-          profile_id: profile.fetch("profile_id"),
-          profile_version: profile.fetch("profile_version"),
-          canonical_root: File.realpath(File.expand_path(profile.fetch("canonical_root"))),
-          description: profile["description"],
-          model_roles: hash["model_roles"] || {},
-          budgets: hash["budgets"] || {},
-          checks:,
-          tools_allowed: tools.fetch("allowed"),
-          tools_approval_required: tools["approval_required"] || [],
-          policy: hash.fetch("policy"),
-          canonical_digest: digest,
-          suggestion:,
-          pinned:,
-          egress: hash["egress"],
-          unattended: hash["unattended"]
-        }
-        Fields.new(**new_fields)
+        Fields.build(hash, digest:, suggestion:, pinned:)
       end
     end
   end
