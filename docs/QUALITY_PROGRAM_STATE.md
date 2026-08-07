@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `98e58ce` (main) — "Q3 cli.rb slice 6: extract the session authority resolver"
+- **HEAD:** `51d1652` (main) — "Q3 cli.rb slice 7: extract the session rendering and exit codes"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -184,6 +184,45 @@ critical) > cli.rb 1,481 (mid-flight) > session_nodes.rb 1,450 (113) > toolbox.r
 (140) > compiled.rb 1,152 (139) > skills.rb 1,063 > effect_journal.rb 950.
 (agent_smoke_corpus.rb 3,287 is the evals corpus driver — classified separately.)
 
+**EASY-FIRST (owner 2026-08-07, replaces giants-first):** slice selection is now
+ordered by EXTRACTION COST, not by file size. The survey
+(`script/survey_extractions.rb`, re-runnable) scored the largest 50 production files
+for nested class/module definitions — the signal that has predicted a cheap slice every
+time so far (the profile.rb registries, CheckpointWire, CheckpointWriter). False
+positives were filtered by hand: `migrator.rb`'s "TEXT class" is a SQL heredoc column,
+and several hits were a file's own namespace rather than a nested extra.
+
+**Tier 1 — trivial moves.** One small self-contained nested definition; move verbatim,
+qualify any outer constants, match visibility, done.
+
+1. `tamoz-mcp/lib/tamoz/mcp/catalog.rb` (291) — `CanonicalJSON` module, ~43 lines.
+2. `tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb` (318) — `Writer` class, ~69.
+3. `tamoz-agent/lib/tamoz/agent/healing/classification.rb` (395) — `Matrix` ~72 and
+   `LegacyTextAdapter` ~51; two slices or one, whichever keeps the diff honest.
+
+**Tier 2 — one substantial nested class.**
+
+4. `tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb` (487) —
+   `TransitionRegistry` ~312, leaving the module at ~180.
+5. `tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb` (614) — `Auditor` ~553,
+   leaving a thin module. Check first whether the module/class pair is worth splitting
+   at all, or whether the file is already one cohesive unit under a namespace.
+
+**Tier 3 — the big structural win: `tools/skills.rb` (1,063).** SEVENTY PERCENT of it is
+five nested classes, and this is the highest value-per-risk in the repo. One slice each,
+largest last so the pattern is proven on the small ones first:
+`Snapshot` (~43) → `Catalog` (~110) → `Walk` (~142) → `Frontmatter` (~179) →
+`Compiler` (~264). Expect skills.rb ≈ 325 lines when done.
+**`Skills::Compiler` and `Skills::Catalog` are PUBLIC API pinned in
+`docs/public-api.json`** — moving them to `skills/<name>.rb` preserves the constant path
+exactly, so `public_api_test` stays green; verify it does rather than assuming.
+
+**Tier 4 — hard, no nested structure; every extraction is a design decision** like the
+profile.rb validators were. Only after Tiers 1-3:
+`session_nodes.rb` 1,450, `toolbox.rb` 1,213, `compiled.rb` 1,152, `effect_journal.rb`
+950, and the rest of `cli.rb` (session factory, stream rendering).
+`checkpoint_store.rb` 1,759 stays together BY DESIGN (charter: atomic transactions).
+
 **EXTRACTION-FIRST (owner 2026-08-07):** the priority is breaking large files into
 small ones and large methods into small ones. Q3 extraction is the DEFAULT slice type
 from here. Characterization is still the precondition for touching a seam (charter:
@@ -260,11 +299,15 @@ standalone characterization pass on a file already covered at its extraction sea
 | 27 | 2026-08-07 | profile.rb (Q3 slice 10, giant #2) | the operator config tree and profile-path resolution → `Profile::Locations` | profile.rb 592 → 575; + locations 116 | not re-measured (no test added; lines moved) | rubocop raw 42,058 → 42,047; reek 4,439 → 4,437; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 17 location behaviours verified identical against a stashed HEAD**: the config tree (override honoured and expanded, profiles/adoption/transitions paths, EMPTY override falling through to the platform default, XDG honoured off darwin), the full precedence chain (explicit flag > TAMOZ_PROFILE > profile_id arg > TAMOZ_PROFILE_ID > nil), and resolve_explicit's three branches — including the security-relevant one, that a bare id NEVER resolves to a file in the working directory. Holds `env` because every answer is a function of it. `RUBY_PLATFORM.match?(/darwin/)` → `include?('darwin')` per Performance/StringInclude, equivalent for a literal. **ci_full BOTH locales 130/24,970** | 9078677 |
 | 28 | 2026-08-07 | cli.rb (Q3 slice 5) | the `tamoz profile` subcommand → `Agent::CLIProfileCommands` | cli.rb 1,480 → 1,253; + cli_profile_commands 340. profile_activate 53 lines → 5 named steps, profile_import 42 → 3, plus the list and render splits; every method now inside the Q6 ceilings | not re-measured (no test added; lines moved) | rubocop raw 42,047 → 41,988; reek 4,437 → 4,410; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. TWO MISTAKES CAUGHT, both invisible to the gates: (1) module methods are PUBLIC by default, so extracting ten private CLI methods widened the surface by ten verbs — compared against HEAD method-by-method and made the whole module private, 10/10 matching HEAD, `dispatch_subcommand` reaches `cmd_profile` by implicit receiver; (2) the quality baseline was regenerated while reek smells remained, silently ABSORBING 16 of them while the gate stayed green — the ratchet's failure mode, caught by grepping the new file's entry, then driven 16→6→4→1→absent | b3113d5 |
 | 29 | 2026-08-07 | cli.rb (Q3 slice 6) | the session AUTHORITY resolver → `Agent::CLIAuthority` | cli.rb 1,253 → 1,105; + cli_authority 195 | not re-measured (no test added; lines moved) | rubocop raw 41,988 → 41,979; reek 4,410 → 4,396; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private, matching HEAD. Puts the security asymmetry in one place: a NEW session takes authority from the loaded profile, an EXISTING one replays what its own checkpoint pinned, so editing a profile file cannot widen a session in flight. `resolve_session_authority` deliberately KEPT WHOLE with an inline disable — every split point needed the same six values as loose parameters, the failure mode documented on `consume_if_candidate!` in slice 18; the 7 repeated `profile.canonical_digest` reads were hoisted to one local instead, removing the duplication without loosening anything. Baseline regenerated LAST per the slice-28 rule, new file verified absent | 98e58ce |
+| 30 | 2026-08-07 | cli.rb (Q3 slice 7) | session rendering + exit codes → `Agent::CLIRendering` | cli.rb 1,105 → 989; + cli_rendering 197 | not re-measured (no test added; lines moved) | rubocop raw 41,979 → 41,926; reek 4,396 → 4,376; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private. **A module does not share the class's lexical scope** — the bare `EXIT_PAUSED`/`EXIT_SIGINT`/`EXIT_SIGTERM`/`THREAD_ID_PATTERN` that resolved inside `class CLI` raised NameError from the module. Thirteen tests caught it; rubocop and reek could not. Now `CLI::EXIT_PAUSED` etc. `render_final_view` and `render_show_human` split with refusal order preserved; `exit_for_view`'s duplicate branches merged (:paused/:blocked share a code, :failed was already `else`) | 51d1652 |
 
 ## Standing rules learned in flight (2026-08-07)
 
 - **Regenerate the quality baseline LAST**, after reek is already 0 on the new file,
-  then VERIFY the new file is absent from `docs/code-quality-baseline.json`.
+  then VERIFY the new file is absent from the **`reek.by_file`** ledger specifically —
+  NOT by grepping the whole JSON. Every file legitimately appears in `loc.by_directory`,
+  and a raw `grep <file> docs/code-quality-baseline.json` hit there reads as smells and
+  costs a false alarm (slice 30: a "38" that was 38 lines of code).
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
