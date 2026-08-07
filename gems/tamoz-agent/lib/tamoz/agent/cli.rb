@@ -20,6 +20,7 @@ module Tamoz
       include CLIScheduleCommands
       include CLIProfileCommands
       include CLIAuthority
+      include CLIRendering
 
       SUBCOMMANDS = %w[
         ask resume continue list show follow-up follow_up followup
@@ -672,123 +673,6 @@ module Tamoz
         else
           raw
         end
-      end
-
-      def render_final_view(view, options:)
-        if options[:json]
-          emit_cli_event("cli.session", {
-            "thread_id" => view.thread_id,
-            "request_id" => view.execution_id,
-            "status" => view.status.to_s
-          })
-        else
-          case view.status
-          when :completed
-            verification = view.state&.fetch(:verification, nil)
-            if verification
-              @out.puts verification.fetch("answer", "")
-              @out.puts("\nVerification: #{verification.fetch("satisfied", false) ? "satisfied" : "not satisfied"}")
-            end
-          when :failed
-            @err.puts(@stream_error ? "tamoz: session failed: #{@stream_error}" : "tamoz: session failed")
-          when :blocked
-            @err.puts "tamoz: session is blocked"
-          end
-        end
-      end
-
-      def exit_for_view(view)
-        case view.status
-        when :completed then view.terminal&.fetch("satisfied", false) ? 0 : 2
-        when :paused then EXIT_PAUSED
-        when :blocked then EXIT_PAUSED
-        when :failed then 1
-        else 1
-        end
-      end
-
-      def exit_for_cancellation
-        case @cancellation&.reason
-        when "sigint" then EXIT_SIGINT
-        when "sigterm" then EXIT_SIGTERM
-        else 1
-        end
-      end
-
-      def render_show(view, thread_id:, transcript:, json:)
-        if json
-          @out.puts JSON.generate(show_document(view, thread_id:, transcript:))
-        else
-          render_show_human(view, thread_id:, transcript:)
-        end
-      end
-
-      def show_document(view, thread_id:, transcript:)
-        receipts = view.effect_receipts.last(transcript).map(&:to_h)
-        {
-          "thread_id" => thread_id,
-          "checkpoint_id" => view.checkpoint_id,
-          "sequence" => view.sequence,
-          "status" => view.status.to_s,
-          "accepted_plan_digest" => view.accepted_plan&.fetch("plan_digest", nil),
-          "interrupts" => view.interrupts.map { |i| {"task_id" => i.task_id, "call_index" => i.call_index, "descriptor" => i.descriptor} },
-          "effect_receipts" => receipts,
-          "terminal" => view.terminal
-        }
-      end
-
-      def render_show_human(view, thread_id:, transcript:)
-        @out.puts "Thread: #{thread_id}"
-        @out.puts "Checkpoint: #{view.checkpoint_id} (sequence #{view.sequence})"
-        @out.puts "Status: #{view.status}"
-        if view.accepted_plan
-          @out.puts "Accepted plan digest: #{view.accepted_plan.fetch("plan_digest", "unknown")}"
-        end
-        unless view.interrupts.empty?
-          @out.puts "Pending interrupts:"
-          view.interrupts.each do |interrupt|
-            @out.puts "  - #{interrupt.descriptor["kind"]} #{interrupt.task_id}/#{interrupt.call_index}"
-          end
-        end
-        receipts = view.effect_receipts.last(transcript)
-        unless receipts.empty?
-          @out.puts "Recent effect receipts:"
-          receipts.each { |receipt| @out.puts "  - #{receipt.fetch("operation", "unknown")}" }
-        end
-        if view.terminal
-          @out.puts "Terminal: #{view.terminal.fetch("reason", "unknown")} (satisfied: #{view.terminal.fetch("satisfied", false)})"
-        end
-      end
-
-      def list_entry(path, options)
-        thread_id = File.basename(path, ".sqlite3")
-        return nil unless THREAD_ID_PATTERN.match?(thread_id)
-
-        adapter = Tamoz::SQLite::Adapter.new(path:)
-        begin
-          session = build_list_session(adapter, options)
-          snapshot = session.app.checkpointer.latest(thread_id:, namespace: [])
-          return nil unless snapshot
-
-          view = session.view(thread: thread_id)
-          summary = view.state ? view.state[:task].to_s[0, 40] : ""
-
-          {
-            "thread_id" => thread_id,
-            "status" => view.status.to_s,
-            # No checkpoint value carries a wall-clock stamp, so the session
-            # file's last write is the honest last-activity signal here.
-            "updated_at_ms" => (File.mtime(path).to_f * 1000).round,
-            "summary" => summary
-          }
-        ensure
-          adapter.close
-        end
-      # Skip a file that is not a readable Tamoz thread. This rescue used to
-      # catch StandardError, which hid a NoMethodError (`updated_at_ms` is not
-      # a Checkpoint member) and made every `list` report nothing at all.
-      rescue Tamoz::Error, SQLite3::Exception
-        nil
       end
 
       def build_list_session(adapter, options)
