@@ -225,23 +225,22 @@ profile.rb validators were. Only after Tiers 1-3:
 950, and the rest of `cli.rb` (session factory, stream rendering).
 `checkpoint_store.rb` 1,759 stays together BY DESIGN (charter: atomic transactions).
 
-### Top-50 rapid decomposition audit (2026-08-07)
+### Top-50 rapid decomposition audit (refreshed 2026-08-08)
 
-Regenerated after Tier 3 with `script/survey_extractions.rb`; LOC is the audit-time
-ranking. The survey's only apparent new nested candidate, `WorkerRuntime::Error`, was a
-one-line false positive; the adjacent `DeferredModel` was the actual mechanical seam.
-No remaining file exposed a cost-B split that met the fast decision rule without design
-reasoning. C is the handoff queue for the next architectural loop; X is excluded or a
-recorded cohesion exception.
+The rank remains the original audit order so completed work stays traceable; LOC and
+results are refreshed as slices land. The AST survey misses small `Data.define` families:
+slice 44 found and moved the Skills values and `CheckReceipt` by inspecting ownership,
+not by trusting the nested-line threshold. C is the architectural handoff queue; X is
+excluded or a recorded cohesion exception.
 
 | Rank | File | LOC | Easy seam | Cost | Decision | Result |
 |---:|---|---:|---|---|---|---|
 | 1 | `evals/harness/agent_smoke_corpus.rb` | 3,287 | declarative evaluation corpus | X | Exclude | Not production refactoring |
 | 2 | `sqlite/checkpoint_store.rb` | 1,759 | atomic checkpoint transactions | X | Keep cohesive | Documented exception |
 | 3 | `agent/session_nodes.rb` | 1,450 | graph/session orchestration | C | Defer | Cross-state design required |
-| 4 | `tools/toolbox.rb` | 1,213 | authority-bearing tool dispatch | C | Defer | Coupled policy and effects |
+| 4 | `tools/toolbox.rb` | 1,166 | authority-bearing tool dispatch | C | Next round | `CheckReceipt` extracted; path/check/reaper seams now characterized |
 | 5 | `graph/compiled.rb` | 1,152 | compiled graph runtime | C | Defer | No isolated existing unit |
-| 6 | `agent/cli.rb` | 989 | remaining session/stream orchestration | C | Defer | Ownership decision required |
+| 6 | `agent/cli.rb` | 799 | remaining session/stream orchestration | B | Continue | Private session commands extracted; lifecycle driver remains |
 | 7 | `sqlite/effect_journal.rb` | 950 | durable effect transactions | C | Defer | Transaction boundary |
 | 8 | `sqlite/adapter.rb` | 774 | storage composition facade | C | Defer | Cross-store interface |
 | 9 | `sqlite/migrator.rb` | 742 | schema migration sequence | C | Defer | `TEXT` hit is SQL, not a class |
@@ -262,11 +261,11 @@ recorded cohesion exception.
 | 24 | `evals/harness/subprocess_runner.rb` | 548 | subprocess harness | C | Defer | Process/error semantics |
 | 25 | `evals/harness/sqlite_trace_recorder.rb` | 544 | durable trace recording | C | Defer | Evidence/event ordering |
 | 26 | `agent/runtime.rb` | 537 | runtime composition | C | Defer | Cross-gem wiring |
-| 27 | `agent/healing/remediation.rb` | 532 | primary remediation unit | C | Keep for now | Survey hit is owning module/class |
+| 27 | `agent/healing/remediation.rb` | 112 | bounded remediation facade | B | Complete | Session 249; protocol collaborators extracted in slices 41–43 |
 | 28 | `mcp/supervisor.rb` | 512 | MCP concurrency supervisor | C | Defer | Concurrency/lifecycle |
 | 29 | `agent/healing/rule.rb` | 506 | primary rule value/behavior | C | Keep for now | Survey hit is owning class |
 | 30 | `graph/executor.rb` | 492 | graph execution transaction | C | Defer | Effect ordering |
-| 31 | `agent/worker_runtime.rb` | 490 | lazy model adapter | A | Extract | `DeferredModel` → mapped file |
+| 31 | `agent/worker_runtime.rb` | 467 | lazy model adapter | A | Complete | `DeferredModel` extracted in slice 40 |
 | 32 | `agent/worker.rb` | 473 | worker loop | C | Defer | Concurrency/lifecycle |
 | 33 | `core/state_codec.rb` | 466 | durable state codec | C | Defer | Wire/error contract |
 | 34 | `agent/session_records.rb` | 460 | session record family | C | Keep cohesive | Related durable values |
@@ -373,10 +372,11 @@ standalone characterization pass on a file already covered at its extraction sea
 | 37 | 2026-08-07 | tools/skills.rb (Tier 3.3) | canonical filesystem traversal → `Skills::Walk` | skills.rb 905 → 757; + skills/walk 192; `descend` 25 lines → ordered traversal phases under the Q6 ceilings | not re-measured | rubocop raw 41,819 → 41,789; reek 4,312 → **4,291**; new file **0** smells and parent **93 → 72** | **PASS** — no structural regression | **ci_full BOTH locales 130/24,970**; 37 adversarial tests / 252 assertions green. Preserved `Dir.children` + `File.lstat`, type-before-layout refusal order, and no-open-before-type-check. Reconciled from HEAD `1333e6b` before slice 38 | 1333e6b |
 | 38 | 2026-08-07 | tools/skills.rb (Tier 3.4) | YAML frontmatter parser/validator → `Skills::Frontmatter`; event scan → private `Skills::FrontmatterScanner` | skills.rb 757 → 578; + frontmatter 181, scanner 85; `scan!` 40 lines → 1-line delegation and callbacks/validators under Q6 ceilings | not re-measured | rubocop raw 41,789 → **41,719**; reek 4,291 → **4,271**; both new files **0** smells and parent **72 → 52** | **PASS** — no structural regression, zero layer violations | everyday gate PASS; adversarial 37/252, skills 18/96, tools isolation 15/130, public API 3/633. `Frontmatter` remains public at the identical constant path; scanner is private. Validation and first-error order preserved; no new tests needed | 8bb07d6 |
 | 39 | 2026-08-07 | tools/skills.rb (Tier 3.5) | configured source/tree compilation → `Skills::Compiler` | skills.rb 578 → 311; + skills/compiler 317; largest orchestration 41 lines → named source, directory, manifest, record, and collision phases, all within Q6 ceilings | not re-measured | rubocop raw 41,719 → **41,644**; reek 4,271 → **4,242**; new file **0** smells and parent **52 → 23** | **PASS** — no structural regression, zero layer violations | everyday gate PASS; adversarial 37/252, skills 18/96, tools isolation 15/130, public API 3/633. Public readers + `compile` unchanged. Preserved source/skill validation, first-error order, final realpath recheck, digest inputs, collision ordering, and rejection ordering | 336b35a |
-| 40 | 2026-08-07 | agent/worker_runtime.rb (top-50 cost A) | lazy model adapter → `WorkerRuntime::DeferredModel` | worker_runtime.rb 490 → 467; + deferred_model 32 | not re-measured | rubocop raw 41,644 → **41,645** (one relocated historical quote count); reek **4,242 unchanged**; new file **0** smells | **PASS** — no structural regression, zero layer violations | everyday gate PASS; worker 18/80 and worker MCP 8/25. Constant path, public `generate`, monitor synchronization, and lazy one-time construction unchanged. `WorkerRuntime::Error` audited and retained: it is a one-line owner-specific subclass, not an extraction | this commit |
+| 40 | 2026-08-07 | agent/worker_runtime.rb (top-50 cost A) | lazy model adapter → `WorkerRuntime::DeferredModel` | worker_runtime.rb 490 → 467; + deferred_model 32 | not re-measured | rubocop raw 41,644 → **41,645** (one relocated historical quote count); reek **4,242 unchanged**; new file **0** smells | **PASS** — no structural regression, zero layer violations | everyday gate PASS; worker 18/80 and worker MCP 8/25. Constant path, public `generate`, monitor synchronization, and lazy one-time construction unchanged. `WorkerRuntime::Error` audited and retained: it is a one-line owner-specific subclass, not an extraction | b71fc3a |
 | 41 | 2026-08-07 | healing/remediation.rb (architectural round 1) | immutable terminal result → `Remediation::Outcome` | remediation.rb 532 → 518; + outcome 28 | not re-measured | rubocop raw 41,645 → **41,646**; reek 4,242 → **4,240**; new file **0** smells and parent **56 → 54** | **PASS** — no structural regression | healing remediation 13/74 and failure contract 35/264. Constant path and all three predicates unchanged | 9e4d043 |
 | 42 | 2026-08-07 | healing/remediation.rb (architectural round 2) | deterministic plan construction + invariant validation → `Remediation::PlanBuilder` | remediation.rb 518 → 482; + plan_builder 80 | not re-measured | rubocop raw 41,646 → **41,627**; reek 4,240 → **4,237**; new file **0** smells and parent **54 → 51** | **PASS** — no structural regression | healing remediation 13/74 and failure contract 35/264. Preserved validation order, exception text, plan key order, authorization shape, and deep-freeze boundary | 94c4b89 |
-| 43 | 2026-08-07 | healing/remediation.rb (architectural round 3) | critic review, effect execution, preflight, evidence, compensation, escalation rendering, and attempt orchestration split into named protocol owners | remediation.rb 482 → **112**; + session **249**; all extracted support files ≤ 84 | not re-measured | rubocop raw 41,627 → **41,467**; reek 4,237 → **4,190**; every new file **0** smells and facade **51 → 4** | **PASS** — no structural regression | focused remediation 13/74 and failure contract 35/264; RuboCop clean; preserved effect-journal dispatch, performed timing, transition/digest wire shape, terminal payload order, compensation/circuit ordering, and public constant paths | this commit |
+| 43 | 2026-08-07 | healing/remediation.rb (architectural round 3) | critic review, effect execution, preflight, evidence, compensation, escalation rendering, and attempt orchestration split into named protocol owners | remediation.rb 482 → **112**; + session **249**; all extracted support files ≤ 84 | not re-measured | rubocop raw 41,627 → **41,467**; reek 4,237 → **4,190**; every new file **0** smells and facade **51 → 4** | **PASS** — no structural regression | focused remediation 13/74 and failure contract 35/264; RuboCop clean; preserved effect-journal dispatch, performed timing, transition/digest wire shape, terminal payload order, compensation/circuit ordering, and public constant paths | 139098e |
+| 44 | 2026-08-08 | Skills values + Toolbox receipt + CLI session commands (Round 1) | overlooked immutable values and established private command family moved to their owners | skills.rb 311 → **237**; toolbox.rb 1,213 → **1,166**; cli.rb 989 → **799**; new files 82/59/248 | not re-measured | rubocop raw 41,467 → **41,386**; reek 4,190 → **4,166**; all three new files **0** smells; parents −24 | **PASS** — no structural regression or layer violation | skills adversarial 37/252, toolbox 59/304, CLI 31/227, session operations 6/36, public API 3/633. Constant paths and nine CLI methods' private visibility verified; list rendering bytes preserved. **ci_full BOTH locales** 130/24,970 | this commit |
 
 ## Standing rules learned in flight (2026-08-07)
 

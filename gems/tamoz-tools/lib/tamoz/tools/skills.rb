@@ -10,6 +10,7 @@ require_relative "skills/frontmatter_scanner"
 require_relative "skills/frontmatter"
 require_relative "skills/walk"
 require_relative "skills/snapshot"
+require_relative "skills/values"
 
 module Tamoz
   module Tools
@@ -34,10 +35,6 @@ module Tamoz
     # `docs/reviews/P9_EVALUATED_SKILLS_PLAN_REVIEW.md` for the findings that shaped it.
     module Skills
       SNAPSHOT_FORMAT_VERSION = 1
-
-      # The base is the core taxonomy, never an agent constant: the whole module
-      # runs in the clean environment with only tamoz-core loaded (P16-05).
-      Error = Class.new(Tamoz::Core::ToolError)
 
       TRUSTS = %w[bundled operator workspace].freeze
       DECLARED_RISKS = %w[elevated guarded read_only].freeze
@@ -91,77 +88,6 @@ module Tamoz
       MAX_DETAIL_BYTES = 200
 
       private_constant :FrontmatterScanner
-
-      SkillSource = Data.define(:id, :root, :trust, :precedence) do
-        def initialize(id:, root:, trust:, precedence: 0)
-          unless id.is_a?(String) && SOURCE_ID_PATTERN.match?(id)
-            raise Error, "skill source id must match #{SOURCE_ID_PATTERN.inspect}"
-          end
-          unless TRUSTS.include?(trust.to_s)
-            raise Error, "skill source trust must be one of #{TRUSTS.join(", ")}"
-          end
-          unless precedence.is_a?(Integer) && !precedence.negative?
-            raise Error, "skill source precedence must be a non-negative Integer"
-          end
-
-          super(
-            id: id.dup.freeze,
-            root: String(root).dup.freeze,
-            trust: trust.to_s.dup.freeze,
-            precedence:
-          )
-        end
-      end
-
-      SkillResource = Data.define(:path, :area, :bytes, :digest, :executable) do
-        def initialize(path:, area:, bytes:, digest:, executable:)
-          super(
-            path: path.dup.freeze, area: area.dup.freeze, bytes:,
-            digest: digest.dup.freeze, executable:
-          )
-        end
-      end
-
-      SkillRecord = Data.define(
-        :id, :name, :source_id, :source_trust, :source_root, :directory,
-        :version, :description, :license, :compatibility,
-        :declared_risk, :metadata, :extra, :requested_capabilities,
-        :body, :manifest_digest, :description_digest, :tree_digest, :resource_index
-      ) do
-        def readable_resources
-          resource_index.values.select { |entry| READABLE_AREAS.include?(entry.area) }
-        end
-
-        # Deterministic, unguessable-in-advance attribution fence (see DELIMITER_SENTINEL).
-        def delimiter_token = tree_digest.delete_prefix("sha256:")[0, 16]
-      end
-
-      SkillCollision = Data.define(:name, :candidates, :bound_to, :reason)
-      SkillRejection = Data.define(:source_id, :entry, :code, :detail)
-
-      SkillSnapshot = Data.define(
-        :records, :collisions, :rejections, :bindings, :sources, :catalog_digest, :epoch
-      ) do
-        def empty? = records.empty?
-        def size = records.length
-      end
-
-      # Raised internally by the per-skill compile path; converted to a
-      # `SkillRejection` so one bad tree never aborts a snapshot and never vanishes.
-      class Rejected < Error
-        attr_reader :code, :entry
-
-        def initialize(code, entry, detail = nil)
-          @code = code.to_s.freeze
-          @entry = entry.to_s.freeze
-          super(detail ? "#{@code}: #{detail}" : @code)
-        end
-
-        def detail
-          text = message.sub(/\A#{Regexp.escape(@code)}: ?/, "")
-          text.empty? ? @code : text.byteslice(0, MAX_DETAIL_BYTES).scrub
-        end
-      end
 
       module_function
 
