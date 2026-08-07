@@ -204,9 +204,7 @@ qualify any outer constants, match visibility, done.
 **Tier 2 — one substantial nested class.**
 
 4. ~~`tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb` — `TransitionRegistry`~~ **DONE (slice 34)**, 487 → 172. It was a SIBLING, not nested.
-5. `tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb` (614) — `Auditor` ~553,
-   leaving a thin module. Check first whether the module/class pair is worth splitting
-   at all, or whether the file is already one cohesive unit under a namespace.
+5. ~~`tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb` — `Auditor`~~ **SKIPPED (2026-08-07), deliberately.** The check the queue asked for came back negative: this file is ONE cohesive private unit, not a module/class pair worth separating. `BoundarySourceAudit` is itself `private_constant` on `SQLite`; its only public method is a three-line `audit!` delegating to `Auditor.new(...).audit!`; and all eleven constants (DYNAMIC_EXECUTION, FILE_MUTATIONS, STATEMENT_ACCESS, TRANSACTION_METHODS, MethodDefinition, Call, …) are `private_constant` AND used only by `Auditor`. Extracting it would move everything except those three lines into a sibling file and drag every constant along — file-count cosmetics, not a responsibility split. Left as is.
 
 **Tier 3 — the big structural win: `tools/skills.rb` (1,063).** SEVENTY PERCENT of it is
 five nested classes, and this is the highest value-per-risk in the repo. One slice each,
