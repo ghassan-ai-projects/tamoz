@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `b3113d5` (main) — "Q3 cli.rb slice 5: extract the `tamoz profile` subcommand"
+- **HEAD:** `98e58ce` (main) — "Q3 cli.rb slice 6: extract the session authority resolver"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -259,6 +259,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 26 | 2026-08-07 | profile.rb (Q3 slice 9, giant #2) | the immutable profile VALUE and its construction (`Fields` + `build_fields` → `Fields.build`) → `Profile::Fields` | profile.rb 644 → 592; + fields 103 | not re-measured (no test added; lines moved) | rubocop raw 42,085 → 42,058; reek 4,444 → 4,439; new file **0** smells | **PASS** — no structural regression, zero layer violations | **DURABLE CONTRACT PINNED BY BYTES**: the canonical digest for a fixed document is `sha256:909ef526e74ced422ce58608a81731351078e45b2a87497e58a1a0e52344a8d8` BEFORE and AFTER the extraction (harness run against a stashed HEAD, then against the working tree), plus digest stability, key-order insensitivity, content sensitivity, adoption-not-in-digest, and 22 Fields behaviours (realpath'd root, checks reduced to argv+safety, deep freeze, absent egress/unattended → nil, forbidden-wins in unattended_preauthorized, pinned honoured). `canonical_digest`/`deep_freeze` stay on Profile — they are general helpers and `Fields#initialize` calls `Profile.deep_freeze`. `pinned:`/`suggestion:` booleans documented as a **Q4 candidate** (a named provenance is the honest fix). **ci_full BOTH locales 130/24,970** | 53c9cc8 |
 | 27 | 2026-08-07 | profile.rb (Q3 slice 10, giant #2) | the operator config tree and profile-path resolution → `Profile::Locations` | profile.rb 592 → 575; + locations 116 | not re-measured (no test added; lines moved) | rubocop raw 42,058 → 42,047; reek 4,439 → 4,437; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 17 location behaviours verified identical against a stashed HEAD**: the config tree (override honoured and expanded, profiles/adoption/transitions paths, EMPTY override falling through to the platform default, XDG honoured off darwin), the full precedence chain (explicit flag > TAMOZ_PROFILE > profile_id arg > TAMOZ_PROFILE_ID > nil), and resolve_explicit's three branches — including the security-relevant one, that a bare id NEVER resolves to a file in the working directory. Holds `env` because every answer is a function of it. `RUBY_PLATFORM.match?(/darwin/)` → `include?('darwin')` per Performance/StringInclude, equivalent for a literal. **ci_full BOTH locales 130/24,970** | 9078677 |
 | 28 | 2026-08-07 | cli.rb (Q3 slice 5) | the `tamoz profile` subcommand → `Agent::CLIProfileCommands` | cli.rb 1,480 → 1,253; + cli_profile_commands 340. profile_activate 53 lines → 5 named steps, profile_import 42 → 3, plus the list and render splits; every method now inside the Q6 ceilings | not re-measured (no test added; lines moved) | rubocop raw 42,047 → 41,988; reek 4,437 → 4,410; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. TWO MISTAKES CAUGHT, both invisible to the gates: (1) module methods are PUBLIC by default, so extracting ten private CLI methods widened the surface by ten verbs — compared against HEAD method-by-method and made the whole module private, 10/10 matching HEAD, `dispatch_subcommand` reaches `cmd_profile` by implicit receiver; (2) the quality baseline was regenerated while reek smells remained, silently ABSORBING 16 of them while the gate stayed green — the ratchet's failure mode, caught by grepping the new file's entry, then driven 16→6→4→1→absent | b3113d5 |
+| 29 | 2026-08-07 | cli.rb (Q3 slice 6) | the session AUTHORITY resolver → `Agent::CLIAuthority` | cli.rb 1,253 → 1,105; + cli_authority 195 | not re-measured (no test added; lines moved) | rubocop raw 41,988 → 41,979; reek 4,410 → 4,396; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private, matching HEAD. Puts the security asymmetry in one place: a NEW session takes authority from the loaded profile, an EXISTING one replays what its own checkpoint pinned, so editing a profile file cannot widen a session in flight. `resolve_session_authority` deliberately KEPT WHOLE with an inline disable — every split point needed the same six values as loose parameters, the failure mode documented on `consume_if_candidate!` in slice 18; the 7 repeated `profile.canonical_digest` reads were hoisted to one local instead, removing the duplication without loosening anything. Baseline regenerated LAST per the slice-28 rule, new file verified absent | 98e58ce |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -270,6 +271,16 @@ standalone characterization pass on a file already covered at its extraction sea
 - **Module methods are public by default.** When extracting private methods into a
   module, compare visibility against HEAD with `public_method_defined?` /
   `private_method_defined?` and match it exactly, or the move widens the class's API.
+- **Re-check assertion boundaries after any edit shifts line numbers.** Slice 29's
+  first attempt asserted a stale line, so the removal no-opped while the require and
+  include were already applied, breaking the load. The fix is `git checkout` the
+  touched files and redo, not patch forward from a half-applied state.
+- **Splitting is not always the answer.** Where every split point would force the
+  same 5-6 values through loose parameters, keep the method whole and name the
+  exception at the site (CODING_STANDARD §4). Precedent now in three places:
+  `consume_if_candidate!` (18), `resolve_session_authority` (29), and the
+  ModuleLength disables on the two CLI modules. Hoist duplicated reads into locals
+  instead — that removes the real smell without loosening a contract.
 - **Check the harness against HEAD before believing a diff.** Four times now a harness
   disagreement was the harness being wrong, and twice that check surfaced a real
   finding instead of a false alarm.
