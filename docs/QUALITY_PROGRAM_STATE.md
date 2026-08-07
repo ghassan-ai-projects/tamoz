@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `0e3b25c` (main) — "Q3 tier-3 slice 1: extract Skills::Snapshot"
+- **HEAD:** `25011d3` (main) — "Q3 tier-3 slice 2: extract Skills::Catalog"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -209,10 +209,11 @@ qualify any outer constants, match visibility, done.
 **Tier 3 — the big structural win: `tools/skills.rb` (1,063).** SEVENTY PERCENT of it is
 five nested classes, and this is the highest value-per-risk in the repo. One slice each,
 largest last so the pattern is proven on the small ones first:
-~~`Snapshot` (~43)~~ **DONE (slice 35)** → `Catalog` (~110) → `Walk` (~142) →
-`Frontmatter` (~179) → `Compiler` (~264). skills.rb 1,063 → 1,018 so far; expect ≈ 325
-when done. The parent still carries 111 reek smells, so the four remaining slices
-should move the ledger far more than Snapshot's −2 did.
+~~`Snapshot` (~43)~~ **DONE (35)** → ~~`Catalog` (~110)~~ **DONE (36)** → `Walk` (~142) →
+`Frontmatter` (~179) → `Compiler` (~264). skills.rb 1,063 → **905** so far; expect ≈ 325
+when done. Parent reek debt 111 → **93**, concentrated in the three remaining classes.
+`Walk` is the filesystem traversal (lstat + Dir.children only, never Find.find, no
+symlink following) — agent_skills_adversarial_test is the suite that matters for it.
 **`Skills::Compiler` and `Skills::Catalog` are PUBLIC API pinned in
 `docs/public-api.json`** — moving them to `skills/<name>.rb` preserves the constant path
 exactly, so `public_api_test` stays green; verify it does rather than assuming.
@@ -305,6 +306,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 33 | 2026-08-07 | healing/classification.rb (Tier 1.3) | the proof matrix and the text-proposal adapter → `Classification::Matrix` + `Classification::LegacyTextAdapter` | classification.rb 395 → 259; + matrix 96, legacy_text_adapter 88 | not re-measured | rubocop raw 41,918 → 41,871; reek 4,368 → **4,355** (biggest single-slice drop of the easy tier); both new files **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Constant paths verified unchanged at runtime (healing_matrix_test calls `Classification::Matrix.run` directly). **A genuine SPLIT, not a pure move** — the nested definitions carried three methods over the Q6 ceilings: `Matrix.run` (35 lines, ABC 42) → empty_tally/tally!/report + a shared `rate`; `abstention_quality` (ABC 27) → sum_field + quality with the original fetch ORDER preserved (fetch can raise, and order decides which missing key reports first); `LegacyTextAdapter#initialize` (26 lines) → validate_precision!/validate_patterns!. The (per_category, rule) DataClump was documented rather than designed away: the pair lives for exactly one `run` | 4d9c98d |
 | 34 | 2026-08-07 | memory/behavior_transition.rb (Tier 2.4) | the behaviour transition registry → `Memory::TransitionRegistry` | behavior_transition.rb 487 → 172; + transition_registry 376 | not re-measured | rubocop raw 41,871 → 41,837; reek 4,355 → **4,332**; new file **0** smells and the parent fell **25 → 2** | **PASS** | **ci_full BOTH locales 130/24,970**. The survey called it a nested class; it is a SIBLING of BehaviorTransition — verified at runtime — so the file held two independent things. `record` got validate_kind!/validate_snapshot! extracted (ABC 31 → 23, 56 → 46 lines), both firing before any control state is read so a rejected snapshot never reserves a version; the remainder kept whole under §4 (one ordered transaction threading the same five values). **SURFACED A REAL FINDING** — see the owner-decision queue | 03c841c |
 | 35 | 2026-08-07 | tools/skills.rb (Tier 3.1) | snapshot assembly + catalog digest → `Skills::Snapshot` | skills.rb 1,063 → 1,018; + skills/snapshot 62 | not re-measured | rubocop raw 41,837 → 41,832; reek 4,332 → 4,330; new file **0** smells (parent still carries **111**) | **PASS** | **ci_full BOTH locales 130/24,970**. First of five, smallest first so the pattern is proven before Compiler. Constant path unchanged and **public_api_test green (633 assertions)** — Skills::Compiler and Skills::Catalog are pinned in docs/public-api.json, so the paths under skills/ matter. **Empty-snapshot catalog digest byte-identical against a stashed HEAD**: `sha256:182a16f232863f7bd66e70dabb20b53bc2562762113c4acd35f78016bb6e5f3c` — that digest is what a session pins. The two 5-parameter signatures documented rather than bundled: they are the five parts a snapshot IS, and the digest is computed over exactly those five | 0e3b25c |
+| 36 | 2026-08-07 | tools/skills.rb (Tier 3.2) | stage-1 progressive disclosure → `Skills::Catalog` | skills.rb 1,018 → 905; + skills/catalog 133 | not re-measured | rubocop raw 41,832 → 41,819; reek 4,330 → **4,312** (−18, against −2 for Snapshot); new file **0** smells and the parent fell **111 → 93** | **PASS** | **ci_full BOTH locales 130/24,970**. Public API: constant path unchanged, public_api_test green (633 assertions), catalog digest still `sha256:182a16f2…`, 37 adversarial tests green (catalog rendering is where a hostile skill would smuggle text). **`resolve`'s duplicated raise removed by reasoning, not by a helper**: a source-qualified id either matches exactly or has NO candidates, because only a bare name can be ambiguous — so the qualified case falls through to `when 0` and one shared message remains, with the many-candidates branch becoming `resolve_ambiguous`. `render` gained `within_budget`, whose contract is that the rendered catalog is always a PREFIX of what exists: never reordered, never a partial line | 25011d3 |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -316,6 +318,11 @@ standalone characterization pass on a file already covered at its extraction sea
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
+- **Prefer removing a duplicate by understanding it to extracting a helper for
+  it.** Slice 36's two identical raises vanished once it was clear a
+  source-qualified id cannot be ambiguous, so the qualified case is simply "zero
+  candidates". A helper called twice would have preserved the redundancy behind a
+  name; the reasoning removed the branch and got written down instead.
 - **Answering "no, this is not worth splitting" is a legitimate slice outcome.**
   Tier 2.5 asked the question before acting and the honest answer was no:
   boundary_source_audit.rb is one private unit (the module is `private_constant`, its
