@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "memory_checkpointer/writer"
+
 module Tamoz
   module Graph
     class MemoryCheckpointer
@@ -134,76 +136,6 @@ module Tamoz
       end
 
       private
-
-      class Writer
-        attr_reader :fence
-
-        def initialize(checkpointer, address)
-          @checkpointer = checkpointer
-          @thread_id, @namespace = address
-          @fence = nil
-          freeze
-        end
-
-        def check! = true
-
-        def latest
-          @checkpointer.latest(thread_id: @thread_id, namespace: @namespace)
-        end
-
-        def find(checkpoint_id:)
-          @checkpointer.find(
-            thread_id: @thread_id,
-            namespace: @namespace,
-            checkpoint_id:
-          )
-        end
-
-        def history(limit:, before_sequence: nil)
-          entries = @checkpointer.history(
-            thread_id: @thread_id,
-            namespace: @namespace,
-            limit:
-          )
-          return entries unless before_sequence
-
-          entries.select { |checkpoint| checkpoint.sequence < before_sequence }.first(limit).freeze
-        end
-
-        def append_writes(task:, outcome:)
-          unless task.id == outcome.task_id &&
-                 task.attempt_id == outcome.attempt_id &&
-                 task.base_checkpoint_id == outcome.base_checkpoint_id
-            raise CheckpointConflictError, "task outcome identity is stale or mismatched"
-          end
-
-          :ephemeral
-        end
-
-        def append_checkpoint(
-          expected_base_id:,
-          mode:,
-          attributes:,
-          consumed_task_ids: [],
-          request_transition: nil
-        )
-          unless consumed_task_ids.is_a?(Array)
-            raise ConfigurationError, "consumed_task_ids must be an Array"
-          end
-          if request_transition
-            raise ConfigurationError,
-                  "memory checkpointer does not implement durable request transitions"
-          end
-
-          @checkpointer.append(
-            thread_id: @thread_id,
-            namespace: @namespace,
-            expected_base_id:,
-            mode:,
-            attributes:
-          )
-        end
-      end
 
       def normalize_address(thread_id, namespace)
         thread_value = SafeText.normalize(
