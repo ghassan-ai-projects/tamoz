@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `9078677` (main) — "Q3 profile.rb slice 10: extract the operator config tree and path resolution"
+- **HEAD:** `b3113d5` (main) — "Q3 cli.rb slice 5: extract the `tamoz profile` subcommand"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -258,6 +258,24 @@ standalone characterization pass on a file already covered at its extraction sea
 | 25 | 2026-08-07 | profile.rb (Q3 slice 8, giant #2) | the safe file-access layer (open_verified, verify_permissions!, verify_handle!, verify_parents!, read_bytes) → `Profile::SecureFile` | profile.rb 716 → 644; + secure_file 159 | not re-measured (no test added; lines moved) | rubocop raw 42,099 → 42,085; reek 4,451 → 4,444; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 8 secure-file messages verified byte-identical at runtime** (symlink, missing, directory, mode≠0600, oversized, non-UTF-8, world-writable parent, world-readable parent) plus the happy paths: good file verifies, handle yielded, UTF-8 text returned, `permissions: false` skipping the checks, and the descriptor closed after the block. Two genuine improvements beyond the move: `File.open` now uses the BLOCK form (same close-on-exception semantics as the manual begin/ensure, one less way to leak a descriptor), and the mode bit tests became `nobits?`/`anybits?`. NOTE: `permissions:` is a BooleanParameter that CODING_STANDARD §4 forbids; it is documented and left because its value is computed at the call site (`permissions: !suggestion`) so splitting the method would only push the conditional up — a named policy is the honest fix and is a **Q4 candidate**, not a move. **ci_full BOTH locales 130/24,970** | 4907504 |
 | 26 | 2026-08-07 | profile.rb (Q3 slice 9, giant #2) | the immutable profile VALUE and its construction (`Fields` + `build_fields` → `Fields.build`) → `Profile::Fields` | profile.rb 644 → 592; + fields 103 | not re-measured (no test added; lines moved) | rubocop raw 42,085 → 42,058; reek 4,444 → 4,439; new file **0** smells | **PASS** — no structural regression, zero layer violations | **DURABLE CONTRACT PINNED BY BYTES**: the canonical digest for a fixed document is `sha256:909ef526e74ced422ce58608a81731351078e45b2a87497e58a1a0e52344a8d8` BEFORE and AFTER the extraction (harness run against a stashed HEAD, then against the working tree), plus digest stability, key-order insensitivity, content sensitivity, adoption-not-in-digest, and 22 Fields behaviours (realpath'd root, checks reduced to argv+safety, deep freeze, absent egress/unattended → nil, forbidden-wins in unattended_preauthorized, pinned honoured). `canonical_digest`/`deep_freeze` stay on Profile — they are general helpers and `Fields#initialize` calls `Profile.deep_freeze`. `pinned:`/`suggestion:` booleans documented as a **Q4 candidate** (a named provenance is the honest fix). **ci_full BOTH locales 130/24,970** | 53c9cc8 |
 | 27 | 2026-08-07 | profile.rb (Q3 slice 10, giant #2) | the operator config tree and profile-path resolution → `Profile::Locations` | profile.rb 592 → 575; + locations 116 | not re-measured (no test added; lines moved) | rubocop raw 42,058 → 42,047; reek 4,439 → 4,437; new file **0** smells | **PASS** — no structural regression, zero layer violations | **all 17 location behaviours verified identical against a stashed HEAD**: the config tree (override honoured and expanded, profiles/adoption/transitions paths, EMPTY override falling through to the platform default, XDG honoured off darwin), the full precedence chain (explicit flag > TAMOZ_PROFILE > profile_id arg > TAMOZ_PROFILE_ID > nil), and resolve_explicit's three branches — including the security-relevant one, that a bare id NEVER resolves to a file in the working directory. Holds `env` because every answer is a function of it. `RUBY_PLATFORM.match?(/darwin/)` → `include?('darwin')` per Performance/StringInclude, equivalent for a literal. **ci_full BOTH locales 130/24,970** | 9078677 |
+| 28 | 2026-08-07 | cli.rb (Q3 slice 5) | the `tamoz profile` subcommand → `Agent::CLIProfileCommands` | cli.rb 1,480 → 1,253; + cli_profile_commands 340. profile_activate 53 lines → 5 named steps, profile_import 42 → 3, plus the list and render splits; every method now inside the Q6 ceilings | not re-measured (no test added; lines moved) | rubocop raw 42,047 → 41,988; reek 4,437 → 4,410; new file **0** smells and ABSENT from the baseline | **PASS** — no structural regression, zero layer violations | **ci_full BOTH locales 130/24,970**. TWO MISTAKES CAUGHT, both invisible to the gates: (1) module methods are PUBLIC by default, so extracting ten private CLI methods widened the surface by ten verbs — compared against HEAD method-by-method and made the whole module private, 10/10 matching HEAD, `dispatch_subcommand` reaches `cmd_profile` by implicit receiver; (2) the quality baseline was regenerated while reek smells remained, silently ABSORBING 16 of them while the gate stayed green — the ratchet's failure mode, caught by grepping the new file's entry, then driven 16→6→4→1→absent | b3113d5 |
+
+## Standing rules learned in flight (2026-08-07)
+
+- **Regenerate the quality baseline LAST**, after reek is already 0 on the new file,
+  then VERIFY the new file is absent from `docs/code-quality-baseline.json`.
+  Regenerating while smells remain absorbs them into the baseline and the gate still
+  passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
+  This cost 16 absorbed smells in slice 28 before it was noticed.
+- **Module methods are public by default.** When extracting private methods into a
+  module, compare visibility against HEAD with `public_method_defined?` /
+  `private_method_defined?` and match it exactly, or the move widens the class's API.
+- **Check the harness against HEAD before believing a diff.** Four times now a harness
+  disagreement was the harness being wrong, and twice that check surfaced a real
+  finding instead of a false alarm.
+- **A durable-contract slice is verified by BYTES against a stashed HEAD**, with fully
+  constant harness input — a temp path leaking into a digested document produced a
+  false regression in slice 26.
 
 ## Owner-decision queue
 
