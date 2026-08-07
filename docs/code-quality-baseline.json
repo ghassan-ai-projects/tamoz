@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "5ac5801",
+    "commit": "21ec842",
     "dirty": true
   },
   "toolchain": {
@@ -10,12 +10,12 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 270,
-    "total_code_lines": 50398,
+    "files": 271,
+    "total_code_lines": 50437,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
-      "gems/tamoz-agent": 12336,
+      "gems/tamoz-agent": 12375,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4367,
@@ -52,22 +52,22 @@
     }
   },
   "rubocop": {
-    "total": 42047,
-    "files_inspected": 417,
+    "total": 41988,
+    "files_inspected": 418,
     "by_cop": {
-      "Style/StringLiterals": 30163,
-      "Layout/SpaceInsideHashLiteralBraces": 3694,
+      "Style/StringLiterals": 30128,
+      "Layout/SpaceInsideHashLiteralBraces": 3692,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
-      "Metrics/AbcSize": 914,
-      "Metrics/MethodLength": 912,
+      "Metrics/AbcSize": 910,
+      "Metrics/MethodLength": 909,
       "Minitest/MultipleAssertions": 596,
       "Style/IfUnlessModifier": 400,
-      "Style/StringLiteralsInInterpolation": 395,
+      "Style/StringLiteralsInInterpolation": 385,
       "Layout/EmptyLineAfterGuardClause": 289,
       "Minitest/AssertPredicate": 275,
       "Metrics/BlockLength": 264,
-      "Metrics/CyclomaticComplexity": 252,
-      "Metrics/PerceivedComplexity": 245,
+      "Metrics/CyclomaticComplexity": 251,
+      "Metrics/PerceivedComplexity": 244,
       "Naming/RescuedExceptionsVariableName": 186,
       "Metrics/ParameterLists": 160,
       "Layout/LineLength": 130,
@@ -84,31 +84,31 @@
       "Lint/ConstantDefinitionInBlock": 57,
       "Style/RedundantFreeze": 48,
       "Style/FormatStringToken": 47,
-      "Style/GuardClause": 46,
+      "Style/GuardClause": 45,
       "Naming/PredicateMethod": 45,
       "Layout/FirstHashElementIndentation": 44,
       "Minitest/RefuteFalse": 43,
-      "Naming/MethodParameterName": 38,
       "Layout/MultilineOperationIndentation": 38,
+      "Naming/MethodParameterName": 38,
       "Performance/CollectionLiteralInLoop": 34,
       "Minitest/AssertWithExpectedArgument": 31,
       "Lint/UselessAssignment": 29,
       "Style/ArgumentsForwarding": 28,
-      "Layout/FirstArrayElementIndentation": 26,
       "Style/ExplicitBlockArgument": 26,
       "Metrics/ModuleLength": 26,
+      "Layout/FirstArrayElementIndentation": 26,
       "Layout/MultilineMethodCallIndentation": 24,
       "Style/MultipleComparison": 24,
       "Style/HashExcept": 21,
       "Lint/UselessConstantScoping": 18,
-      "Performance/RedundantEqualityComparisonBlock": 17,
-      "Style/SafeNavigation": 17,
-      "Style/MultilineTernaryOperator": 17,
       "Layout/FirstArgumentIndentation": 17,
-      "Style/SymbolProc": 16,
+      "Style/MultilineTernaryOperator": 17,
+      "Style/SafeNavigation": 17,
+      "Performance/RedundantEqualityComparisonBlock": 17,
       "Style/PredicateWithKind": 16,
-      "Minitest/AssertInDelta": 14,
+      "Style/SymbolProc": 15,
       "Style/RegexpLiteral": 14,
+      "Minitest/AssertInDelta": 14,
       "Style/TrivialAccessors": 13,
       "Lint/DuplicateBranch": 13,
       "Style/KeywordArgumentsMerging": 13,
@@ -120,15 +120,15 @@
       "Style/RedundantBegin": 11,
       "Lint/ScriptPermission": 10,
       "Style/RedundantHeredocDelimiterQuotes": 10,
-      "Lint/RedundantDirGlobSort": 10,
+      "Lint/RedundantDirGlobSort": 9,
       "Style/FormatString": 9,
       "Gemspec/RequiredRubyVersion": 9,
       "Style/FetchEnvVar": 9,
       "Lint/ShadowedException": 8,
       "Performance/TimesMap": 8,
       "Style/StringConcatenation": 8,
-      "Style/SoleNestedConditional": 7,
       "Style/MultilineBlockChain": 7,
+      "Style/SoleNestedConditional": 7,
       "Style/MultilineIfModifier": 7,
       "Style/SymbolArray": 7,
       "Layout/LineEndStringConcatenationIndentation": 6,
@@ -248,8 +248,8 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41563,
-      "warning": 484
+      "convention": 41505,
+      "warning": 483
     },
     "metrics_over_ceiling": {
       "Metrics/BlockLength": {
@@ -258,7 +258,7 @@
       },
       "Metrics/MethodLength": {
         "max": 240,
-        "count": 912
+        "count": 909
       },
       "Metrics/ParameterLists": {
         "max": 29,
@@ -270,11 +270,11 @@
       },
       "Metrics/CyclomaticComplexity": {
         "max": 43,
-        "count": 252
+        "count": 251
       },
       "Metrics/PerceivedComplexity": {
         "max": 39,
-        "count": 245
+        "count": 244
       },
       "Layout/LineLength": {
         "max": 454,
@@ -291,22 +291,22 @@
     }
   },
   "reek": {
-    "total": 4437,
+    "total": 4410,
     "by_type": {
-      "DuplicateMethodCall": 1254,
-      "TooManyStatements": 759,
-      "FeatureEnvy": 379,
+      "DuplicateMethodCall": 1244,
+      "TooManyStatements": 750,
+      "FeatureEnvy": 375,
       "LongParameterList": 304,
-      "MissingSafeMethod": 252,
+      "MissingSafeMethod": 251,
       "IrresponsibleModule": 240,
       "UtilityFunction": 213,
       "DataClump": 187,
       "NilCheck": 145,
       "ControlParameter": 138,
-      "NestedIterators": 102,
+      "NestedIterators": 100,
       "UnusedParameters": 70,
       "ManualDispatch": 67,
-      "RepeatedConditional": 66,
+      "RepeatedConditional": 65,
       "BooleanParameter": 51,
       "TooManyInstanceVariables": 51,
       "InstanceVariableAssumption": 46,
@@ -319,7 +319,7 @@
     },
     "by_file": {
       "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb": 248,
-      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 196,
+      "gems/tamoz-agent/lib/tamoz/agent/cli.rb": 169,
       "gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb": 142,
       "gems/tamoz-tools/lib/tamoz/tools/toolbox.rb": 140,
       "gems/tamoz-graph/lib/tamoz/graph/compiled.rb": 139,
@@ -523,7 +523,7 @@
     }
   },
   "enola": {
-    "facts": 5700,
+    "facts": 5721,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -534,9 +534,9 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 88.16,
-    "line_covered": 18280,
-    "line_total": 20736,
+    "line_percent": 88.18,
+    "line_covered": 18317,
+    "line_total": 20773,
     "branch_percent": 68.95,
     "branch_covered": 5205,
     "branch_total": 7549,
