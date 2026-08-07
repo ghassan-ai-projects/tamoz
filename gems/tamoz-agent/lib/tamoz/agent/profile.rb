@@ -23,6 +23,7 @@ require_relative "profile/check_spec_validator"
 require_relative "profile/authority_validator"
 require_relative "profile/document_validator"
 require_relative "profile/content_scanner"
+require_relative "profile/secure_file"
 
 module Tamoz
   module Agent
@@ -451,93 +452,20 @@ module Tamoz
         new(fields)
       end
 
+      # Opening and reading an operator-owned file safely — O_NOFOLLOW, fstat on
+      # the open descriptor, size and encoding limits, and the parent-directory
+      # permission walk — is SecureFile's. These stay as class methods because
+      # both operator-side registries call verify_permissions! through Profile.
       def self.read_bytes(handle, path)
-        stat = handle.stat
-        raise ValidationError, "#{path}: not a regular file" unless stat.file?
-        if stat.size > MAX_BYTES
-          raise ValidationError, "#{path}: profile exceeds #{MAX_BYTES} bytes"
-        end
-
-        bytes = handle.read(MAX_BYTES + 1) || +""
-        if bytes.bytesize > MAX_BYTES
-          raise ValidationError, "#{path}: profile exceeds #{MAX_BYTES} bytes"
-        end
-
-        text = bytes.dup.force_encoding(Encoding::UTF_8)
-        unless text.valid_encoding?
-          raise ValidationError, "#{path}: profile is not valid UTF-8"
-        end
-
-        text
+        SecureFile.read_bytes(handle, path)
       end
 
-      # Opens the profile without following a final symlink and verifies the
-      # permission rules against the *open descriptor* (fstat), not against a
-      # path that could be re-pointed afterwards.
-      def self.open_verified(path, permissions: true)
-        handle = File.open(path, File::RDONLY | NOFOLLOW | NONBLOCK)
-        begin
-          unless handle.stat.file?
-            raise PermissionError, "#{path}: profile must be a regular file"
-          end
-
-          verify_handle!(handle, path) if permissions
-          yield handle
-        ensure
-          handle.close
-        end
-      rescue Errno::ELOOP, Errno::EMLINK, Errno::EOPNOTSUPP
-        raise PermissionError, "#{path}: profile must not be a symlink"
-      rescue Errno::ENOENT
-        raise ValidationError, "#{path}: profile file does not exist"
-      rescue Errno::EISDIR
-        raise ValidationError, "#{path}: profile must be a regular file"
-      rescue Errno::EACCES, Errno::EPERM
-        raise PermissionError, "#{path}: profile is not readable"
+      def self.open_verified(path, permissions: true, &)
+        SecureFile.open_verified(path, permissions:, &)
       end
 
       def self.verify_permissions!(path)
-        open_verified(path) { nil }
-        nil
-      end
-
-      def self.verify_handle!(handle, path)
-        stat = handle.stat
-        unless stat.file?
-          raise PermissionError, "#{path}: profile must be a regular file"
-        end
-        unless stat.owned?
-          raise PermissionError, "#{path}: profile must be owned by the effective user"
-        end
-        unless (stat.mode & 0o777) == 0o600
-          raise PermissionError, "#{path}: profile mode must be exactly 0600"
-        end
-
-        verify_parents!(path)
-      end
-
-      def self.verify_parents!(path)
-        directory = File.dirname(path)
-        immediate = true
-        loop do
-          stat = File.stat(directory)
-          mode = stat.mode
-          sticky = (mode & 0o1000) != 0
-          if (mode & 0o022) != 0 && !sticky
-            raise PermissionError,
-                  "#{directory}: profile directory must not be writable by group or other"
-          end
-          if immediate && (mode & 0o004) != 0 && !sticky && stat.owned?
-            raise PermissionError,
-                  "#{directory}: profile directory must not be readable by other"
-          end
-
-          parent = File.dirname(directory)
-          break if parent == directory || !stat.owned?
-
-          directory = parent
-          immediate = false
-        end
+        SecureFile.verify_permissions!(path)
       end
 
       # Single parser pass that rejects load-time code execution vectors before
