@@ -9,6 +9,7 @@ require_relative "memory/retrieval"
 require_relative "memory/lifecycle"
 require_relative "memory/consolidation"
 require_relative "memory/behavior_transition"
+require_relative "memory/transition_registry"
 require_relative "memory/wisdom"
 
 module Tamoz
