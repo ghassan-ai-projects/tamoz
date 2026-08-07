@@ -22,6 +22,7 @@ require_relative "profile/yaml_scanner"
 require_relative "profile/check_spec_validator"
 require_relative "profile/authority_validator"
 require_relative "profile/document_validator"
+require_relative "profile/content_scanner"
 
 module Tamoz
   module Agent
@@ -606,32 +607,10 @@ module Tamoz
         value
       end
 
+      # The value-level content scan (secrets, interpolation, entropy) is
+      # ContentScanner's; YamlScanner is its companion at the event-stream level.
       def self.validate_strings!(value, path, key_path = [])
-        case value
-        when Hash
-          value.each do |key, entry|
-            SECRET_KEY_DENYLIST.each do |denied|
-              next unless key == denied
-
-              raise ValidationError, "#{path}: key #{denied.inspect} is not allowed in profiles"
-            end
-            validate_strings!(entry, path, key_path + [key])
-          end
-        when Array
-          value.each { |entry| validate_strings!(entry, path, key_path) }
-        when String
-          if INTERPOLATION_PATTERN.match?(value)
-            raise ValidationError,
-                  "#{path}: interpolation is not allowed (at #{key_path.join(".").inspect})"
-          end
-          if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
-            raise ValidationError, "#{path}: embedded secret material is not allowed"
-          end
-          if ENTROPY_PATTERN.match?(value) &&
-             !ENTROPY_EXEMPT_KEYS.include?(key_path.last.to_s)
-            raise ValidationError, "#{path}: high-entropy value rejected as candidate secret"
-          end
-        end
+        ContentScanner.call(value, path, key_path)
       end
 
       # The declared sections' shapes live in DocumentValidator; these stay as

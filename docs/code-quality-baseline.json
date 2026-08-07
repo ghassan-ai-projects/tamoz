@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "d2d7739",
+    "commit": "a8174a9",
     "dirty": true
   },
   "toolchain": {
@@ -10,12 +10,12 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 266,
-    "total_code_lines": 50281,
+    "files": 267,
+    "total_code_lines": 50306,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
-      "gems/tamoz-agent": 12219,
+      "gems/tamoz-agent": 12244,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4367,
@@ -52,22 +52,22 @@
     }
   },
   "rubocop": {
-    "total": 42103,
-    "files_inspected": 413,
+    "total": 42099,
+    "files_inspected": 414,
     "by_cop": {
-      "Style/StringLiterals": 30194,
+      "Style/StringLiterals": 30195,
       "Layout/SpaceInsideHashLiteralBraces": 3696,
       "Minitest/EmptyLineBeforeAssertionMethods": 1011,
-      "Metrics/AbcSize": 917,
-      "Metrics/MethodLength": 914,
+      "Metrics/AbcSize": 916,
+      "Metrics/MethodLength": 913,
       "Minitest/MultipleAssertions": 596,
       "Style/IfUnlessModifier": 407,
-      "Style/StringLiteralsInInterpolation": 396,
+      "Style/StringLiteralsInInterpolation": 395,
       "Layout/EmptyLineAfterGuardClause": 289,
       "Minitest/AssertPredicate": 275,
       "Metrics/BlockLength": 264,
-      "Metrics/CyclomaticComplexity": 254,
-      "Metrics/PerceivedComplexity": 247,
+      "Metrics/CyclomaticComplexity": 253,
+      "Metrics/PerceivedComplexity": 246,
       "Naming/RescuedExceptionsVariableName": 186,
       "Metrics/ParameterLists": 160,
       "Layout/LineLength": 130,
@@ -249,7 +249,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 41619,
+      "convention": 41615,
       "warning": 484
     },
     "metrics_over_ceiling": {
@@ -259,7 +259,7 @@
       },
       "Metrics/MethodLength": {
         "max": 240,
-        "count": 914
+        "count": 913
       },
       "Metrics/ParameterLists": {
         "max": 29,
@@ -271,11 +271,11 @@
       },
       "Metrics/CyclomaticComplexity": {
         "max": 43,
-        "count": 254
+        "count": 253
       },
       "Metrics/PerceivedComplexity": {
         "max": 39,
-        "count": 247
+        "count": 246
       },
       "Layout/LineLength": {
         "max": 454,
@@ -292,10 +292,10 @@
     }
   },
   "reek": {
-    "total": 4455,
+    "total": 4451,
     "by_type": {
-      "DuplicateMethodCall": 1258,
-      "TooManyStatements": 764,
+      "DuplicateMethodCall": 1257,
+      "TooManyStatements": 763,
       "FeatureEnvy": 380,
       "LongParameterList": 304,
       "MissingSafeMethod": 252,
@@ -304,10 +304,10 @@
       "DataClump": 187,
       "NilCheck": 146,
       "ControlParameter": 141,
-      "NestedIterators": 103,
+      "NestedIterators": 102,
       "UnusedParameters": 70,
       "ManualDispatch": 67,
-      "RepeatedConditional": 67,
+      "RepeatedConditional": 66,
       "BooleanParameter": 52,
       "TooManyInstanceVariables": 51,
       "InstanceVariableAssumption": 46,
@@ -347,58 +347,58 @@
       "gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb": 47,
       "gems/tamoz-agent/lib/tamoz/agent/runtime.rb": 46,
       "gems/tamoz-agent/lib/tamoz/agent/worker.rb": 45,
-      "gems/tamoz-agent/lib/tamoz/agent/profile.rb": 45,
       "gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb": 44,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_registry.rb": 42,
+      "gems/tamoz-agent/lib/tamoz/agent/profile.rb": 41,
       "gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb": 40,
       "gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb": 39,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb": 38,
       "gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb": 38,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb": 34,
-      "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb": 33,
-      "gems/tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb": 33,
       "gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb": 33,
       "gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb": 33,
-      "gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb": 32,
-      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb": 32,
+      "gems/tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb": 33,
+      "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb": 33,
       "gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb": 32,
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb": 32,
+      "gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb": 32,
       "gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb": 31,
       "gems/tamoz-evals/lib/tamoz/evals/schema.rb": 30,
-      "gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb": 30,
       "gems/tamoz-evals/lib/tamoz/evals/harness/memory_treatment_profile.rb": 30,
+      "gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb": 30,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_intervention.rb": 29,
       "gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb": 29,
       "gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb": 29,
       "gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb": 28,
-      "gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb": 27,
       "gems/tamoz-agent/lib/tamoz/agent/memory/record.rb": 27,
+      "gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb": 27,
       "gems/tamoz-graph/lib/tamoz/graph/compiler.rb": 26,
-      "gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb": 25,
       "gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb": 25,
+      "gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb": 25,
       "gems/tamoz-agent/lib/tamoz/agent/deliberation.rb": 24,
       "gems/tamoz-evals/lib/tamoz/evals/harness/memory_repository_adapter.rb": 24,
       "gems/tamoz-agent/lib/tamoz/agent/session_records.rb": 24,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_stopper.rb": 23,
-      "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule_store.rb": 22,
-      "gems/tamoz-graph/lib/tamoz/graph/route_planner.rb": 22,
       "gems/tamoz-graph/lib/tamoz/graph/subgraph_runtime.rb": 22,
+      "gems/tamoz-graph/lib/tamoz/graph/route_planner.rb": 22,
       "gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb": 22,
-      "gems/tamoz-core/lib/tamoz/immutable.rb": 21,
+      "gems/tamoz-scheduler/lib/tamoz/scheduler/schedule_store.rb": 22,
       "gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb": 21,
       "gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb": 21,
+      "gems/tamoz-core/lib/tamoz/immutable.rb": 21,
       "gems/tamoz-mcp/lib/tamoz/mcp/elicitation.rb": 20,
       "gems/tamoz-core/lib/tamoz/stream_sink.rb": 19,
-      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_manifest_verifier.rb": 18,
       "gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb": 18,
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_manifest_verifier.rb": 18,
       "gems/tamoz-core/lib/tamoz/error.rb": 18,
       "gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb": 18,
-      "gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb": 17,
       "gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb": 17,
+      "gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb": 17,
       "gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb": 17,
       "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_selector_deriver.rb": 16,
-      "gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb": 16,
       "gems/tamoz-core/lib/tamoz/configuration.rb": 16,
       "gems/tamoz-core/lib/tamoz/cancellation_token.rb": 16,
+      "gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb": 16,
       "gems/tamoz-graph/lib/tamoz/graph/builder.rb": 15,
       "gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb": 15,
       "gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb": 15,
@@ -524,7 +524,7 @@
     }
   },
   "enola": {
-    "facts": 5635,
+    "facts": 5665,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -535,12 +535,12 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 88.11,
-    "line_covered": 18194,
-    "line_total": 20649,
-    "branch_percent": 68.93,
-    "branch_covered": 5202,
-    "branch_total": 7547,
+    "line_percent": 88.12,
+    "line_covered": 18214,
+    "line_total": 20669,
+    "branch_percent": 68.94,
+    "branch_covered": 5204,
+    "branch_total": 7549,
     "uncovered_files": [
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-agent/lib/tamoz/agent/version.rb",
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-core/lib/tamoz/core/version.rb",
