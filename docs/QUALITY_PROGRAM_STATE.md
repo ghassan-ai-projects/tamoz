@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `03c841c` (main) — "Q3 tier-2 slice 1: split the behaviour transition registry out"
+- **HEAD:** `0e3b25c` (main) — "Q3 tier-3 slice 1: extract Skills::Snapshot"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -209,8 +209,10 @@ qualify any outer constants, match visibility, done.
 **Tier 3 — the big structural win: `tools/skills.rb` (1,063).** SEVENTY PERCENT of it is
 five nested classes, and this is the highest value-per-risk in the repo. One slice each,
 largest last so the pattern is proven on the small ones first:
-`Snapshot` (~43) → `Catalog` (~110) → `Walk` (~142) → `Frontmatter` (~179) →
-`Compiler` (~264). Expect skills.rb ≈ 325 lines when done.
+~~`Snapshot` (~43)~~ **DONE (slice 35)** → `Catalog` (~110) → `Walk` (~142) →
+`Frontmatter` (~179) → `Compiler` (~264). skills.rb 1,063 → 1,018 so far; expect ≈ 325
+when done. The parent still carries 111 reek smells, so the four remaining slices
+should move the ledger far more than Snapshot's −2 did.
 **`Skills::Compiler` and `Skills::Catalog` are PUBLIC API pinned in
 `docs/public-api.json`** — moving them to `skills/<name>.rb` preserves the constant path
 exactly, so `public_api_test` stays green; verify it does rather than assuming.
@@ -302,6 +304,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 32 | 2026-08-07 | graph/memory_checkpointer.rb (Tier 1.2) | the fenced write side → `MemoryCheckpointer::Writer` | memory_checkpointer.rb 318 → 250; + writer 96 | not re-measured (no test added; lines moved) | rubocop raw 41,923 → 41,918; reek 4,374 → 4,368; new file **0** smells (the parent's 27 are pre-existing debt) | **PASS** | **ci_full BOTH locales 130/24,970**. `private_constant :Writer` verified still raising NameError from outside after the move. **One rubocop finding deliberately NOT applied**: Naming/PredicateMethod wanted `def check! = true` renamed, but check! is a COMMAND in a duck-typed interface implemented by MemoryCheckpointer::Writer, SQLite::CheckpointWriter and Tamoz::Context, called as `context.check!`/`writer.check!` on adjacent lines in executor.rb — renaming would break three implementations to satisfy a naming cop. Inline disable with that reasoning at the site | 061d720 |
 | 33 | 2026-08-07 | healing/classification.rb (Tier 1.3) | the proof matrix and the text-proposal adapter → `Classification::Matrix` + `Classification::LegacyTextAdapter` | classification.rb 395 → 259; + matrix 96, legacy_text_adapter 88 | not re-measured | rubocop raw 41,918 → 41,871; reek 4,368 → **4,355** (biggest single-slice drop of the easy tier); both new files **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Constant paths verified unchanged at runtime (healing_matrix_test calls `Classification::Matrix.run` directly). **A genuine SPLIT, not a pure move** — the nested definitions carried three methods over the Q6 ceilings: `Matrix.run` (35 lines, ABC 42) → empty_tally/tally!/report + a shared `rate`; `abstention_quality` (ABC 27) → sum_field + quality with the original fetch ORDER preserved (fetch can raise, and order decides which missing key reports first); `LegacyTextAdapter#initialize` (26 lines) → validate_precision!/validate_patterns!. The (per_category, rule) DataClump was documented rather than designed away: the pair lives for exactly one `run` | 4d9c98d |
 | 34 | 2026-08-07 | memory/behavior_transition.rb (Tier 2.4) | the behaviour transition registry → `Memory::TransitionRegistry` | behavior_transition.rb 487 → 172; + transition_registry 376 | not re-measured | rubocop raw 41,871 → 41,837; reek 4,355 → **4,332**; new file **0** smells and the parent fell **25 → 2** | **PASS** | **ci_full BOTH locales 130/24,970**. The survey called it a nested class; it is a SIBLING of BehaviorTransition — verified at runtime — so the file held two independent things. `record` got validate_kind!/validate_snapshot! extracted (ABC 31 → 23, 56 → 46 lines), both firing before any control state is read so a rejected snapshot never reserves a version; the remainder kept whole under §4 (one ordered transaction threading the same five values). **SURFACED A REAL FINDING** — see the owner-decision queue | 03c841c |
+| 35 | 2026-08-07 | tools/skills.rb (Tier 3.1) | snapshot assembly + catalog digest → `Skills::Snapshot` | skills.rb 1,063 → 1,018; + skills/snapshot 62 | not re-measured | rubocop raw 41,837 → 41,832; reek 4,332 → 4,330; new file **0** smells (parent still carries **111**) | **PASS** | **ci_full BOTH locales 130/24,970**. First of five, smallest first so the pattern is proven before Compiler. Constant path unchanged and **public_api_test green (633 assertions)** — Skills::Compiler and Skills::Catalog are pinned in docs/public-api.json, so the paths under skills/ matter. **Empty-snapshot catalog digest byte-identical against a stashed HEAD**: `sha256:182a16f232863f7bd66e70dabb20b53bc2562762113c4acd35f78016bb6e5f3c` — that digest is what a session pins. The two 5-parameter signatures documented rather than bundled: they are the five parts a snapshot IS, and the digest is computed over exactly those five | 0e3b25c |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -313,6 +316,14 @@ standalone characterization pass on a file already covered at its extraction sea
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
+- **Answering "no, this is not worth splitting" is a legitimate slice outcome.**
+  Tier 2.5 asked the question before acting and the honest answer was no:
+  boundary_source_audit.rb is one private unit (the module is `private_constant`, its
+  only public method is a 3-line delegation, and all eleven constants are private and
+  read only by `Auditor`). Splitting would have produced a 550-line file and a
+  60-line stub holding one method — good line counts, bad everything else.
+- **Use a quoted heredoc for commit messages, never `-m` with backticks.** The shell
+  ate a word from slice 34's state commit, and the charter forbids amending.
 - **Never let an autocorrect disguise a finding.** If a cop's fix would hide a
   possible bug — renaming an unused parameter, deleting a dead branch — run
   rubocop with `--except <Cop>` and document at the site instead (slice 34).
