@@ -23,6 +23,7 @@ require_relative "profile/check_spec_validator"
 require_relative "profile/authority_validator"
 require_relative "profile/document_validator"
 require_relative "profile/content_scanner"
+require_relative "profile/locations"
 require_relative "profile/fields"
 require_relative "profile/secure_file"
 
@@ -346,50 +347,32 @@ module Tamoz
         nil
       end
 
-      # §3.3 search precedence: explicit flag > TAMOZ_PROFILE (path | id | cwd
-      # relative) > TAMOZ_PROFILE_ID > XDG profile dir. Returns nil when nothing
-      # was requested; the caller then proceeds without a profile.
+      # Where the operator config tree is, and how a requested profile resolves
+      # inside it, are Locations' — every answer is a function of the environment.
+      # These stay as class methods because the CLI, the evals harness and both
+      # registries reach them through Profile.
       def self.resolve_path(profile: nil, profile_id: nil, env: ENV)
-        explicit = profile || env["TAMOZ_PROFILE"]
-        id = profile_id || env["TAMOZ_PROFILE_ID"]
-        return resolve_explicit(explicit, env:) if explicit
-        return File.join(profiles_dir(env:), "#{id}.yaml") if id
-
-        nil
+        Locations.resolve_path(profile:, profile_id:, env:)
       end
 
       def self.resolve_explicit(value, env: ENV)
-        text = String(value)
-        return text if text.start_with?(File::SEPARATOR)
-        return File.join(profiles_dir(env:), "#{text}.yaml") if PROFILE_ID_PATTERN.match?(text)
-
-        File.expand_path(text, Dir.pwd)
+        Locations.resolve_explicit(value, env:)
       end
 
       def self.config_dir(env: ENV)
-        # TAMOZ_CONFIG_HOME redirects the whole operator config tree (profiles,
-        # adoption registry); it exists for sandboxed runs and tests.
-        override = env["TAMOZ_CONFIG_HOME"]
-        return File.expand_path(override) if override.to_s != ""
-
-        if RUBY_PLATFORM.match?(/darwin/)
-          File.expand_path("~/Library/Application Support/tamoz")
-        else
-          base = env["XDG_CONFIG_HOME"] || File.expand_path("~/.config")
-          File.join(base, "tamoz")
-        end
+        Locations.config_dir(env:)
       end
 
       def self.profiles_dir(env: ENV)
-        File.join(config_dir(env:), "profiles")
+        Locations.profiles_dir(env:)
       end
 
       def self.adoption_path(env: ENV)
-        File.join(config_dir(env:), "adoption.yaml")
+        Locations.adoption_path(env:)
       end
 
       def self.transitions_path(env: ENV)
-        File.join(config_dir(env:), "transitions.yaml")
+        Locations.transitions_path(env:)
       end
 
       def self.load_document(expanded_path, suggestion:)
