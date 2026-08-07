@@ -18,6 +18,7 @@ require_relative "profile/transition"
 require_relative "profile/transition_document"
 require_relative "profile/transition_registry"
 require_relative "profile/egress_validator"
+require_relative "profile/yaml_scanner"
 
 module Tamoz
   module Agent
@@ -431,7 +432,7 @@ module Tamoz
           read_bytes(handle, expanded_path)
         end
         yield bytes if block_given?
-        scan_yaml!(bytes, expanded_path)
+        YamlScanner.call(bytes, expanded_path)
         data = safe_parse(bytes, expanded_path)
         unless data.is_a?(Hash)
           raise ValidationError, "#{expanded_path}: profile must be a YAML mapping"
@@ -539,107 +540,6 @@ module Tamoz
       # the data model is materialized: tags, excess aliases, duplicate keys.
       # Key/value position inside a mapping is tracked by alternating a flag;
       # containers and aliases also consume a slot in the enclosing mapping.
-      def self.scan_yaml!(text, path)
-        aliases = 0
-        documents = 0
-        max_aliases = MAX_ALIASES
-        stack = [] # [:mapping, seen_keys, expecting_key] or [:sequence]
-        check_tag = lambda do |tag|
-          if tag && !tag.start_with?("tag:yaml.org,2002:")
-            raise ValidationError, "#{path}: YAML tags are not allowed in profiles"
-          end
-        end
-        # A collection opened in key position is a YAML complex key. Nothing in the
-        # schema has one, and it defeats the literal-key duplicate scan, so it is a
-        # typed rejection rather than something the key allowlist happens to catch.
-        reject_complex_key = lambda do
-          frame = stack.last
-          next unless frame && frame[0] == :mapping && frame[2]
-
-          raise ValidationError, "#{path}: YAML complex (collection) keys are not allowed"
-        end
-        note_slot = lambda do |key|
-          frame = stack.last
-          next unless frame && frame[0] == :mapping
-
-          if frame[2]
-            # YAML merge keys splice one mapping into another after parsing, which
-            # would let an anchor introduce keys the duplicate scan never saw.
-            if key == "<<"
-              raise ValidationError, "#{path}: YAML merge keys are not allowed in profiles"
-            end
-            if key && frame[1].include?(key)
-              raise ValidationError, "#{path}: duplicate key #{key.inspect}"
-            end
-
-            frame[1] << key if key
-          end
-          frame[2] = !frame[2]
-        end
-        push = lambda do |frame|
-          if stack.length >= MAX_NESTING
-            raise ValidationError, "#{path}: YAML nesting exceeds #{MAX_NESTING}"
-          end
-
-          stack << frame
-        end
-        handler = Class.new(Psych::Handler) do
-          define_method(:scalar) do |value, _anchor, tag, _plain, _quoted, _style|
-            check_tag.call(tag)
-            note_slot.call(value)
-          end
-
-          define_method(:start_document) do |_version, _tags, _implicit|
-            documents += 1
-            if documents > 1
-              raise ValidationError,
-                    "#{path}: a profile is exactly one YAML document; trailing documents " \
-                    "are silently ignored by the loader and are therefore refused"
-            end
-          end
-
-          define_method(:alias) do |_anchor|
-            aliases += 1
-            if aliases > max_aliases
-              raise ValidationError, "#{path}: too many YAML aliases (limit #{max_aliases})"
-            end
-
-            # P8-E: an alias in *key* position resolves to whatever the anchor holds,
-            # so the duplicate-key and merge-key scans below never see the real key.
-            # `policy: {allow_changes: false, *k: true}` with `&k "allow_changes"`
-            # read as a denial but loaded as a grant. A key is a literal scalar.
-            frame = stack.last
-            if frame && frame[0] == :mapping && frame[2]
-              raise ValidationError,
-                    "#{path}: YAML aliases are not allowed in mapping key position"
-            end
-
-            note_slot.call(nil)
-          end
-
-          define_method(:start_mapping) do |_anchor, tag, _implicit, _style|
-            check_tag.call(tag)
-            reject_complex_key.call
-            note_slot.call(nil)
-            push.call([:mapping, [], true])
-          end
-
-          define_method(:end_mapping) { stack.pop }
-
-          define_method(:start_sequence) do |_anchor, tag, _implicit, _style|
-            check_tag.call(tag)
-            reject_complex_key.call
-            note_slot.call(nil)
-            push.call([:sequence])
-          end
-
-          define_method(:end_sequence) { stack.pop }
-        end
-        Psych::Parser.new(handler.new).parse(text)
-      rescue Psych::SyntaxError => error
-        raise ValidationError, "#{path}: invalid YAML: #{error.message}"
-      end
-
       def self.safe_parse(text, path)
         Psych.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: true)
       rescue Psych::Exception => error
