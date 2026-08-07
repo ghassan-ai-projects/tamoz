@@ -4,6 +4,7 @@ require "digest"
 require "json"
 
 require_relative "remediation/outcome"
+require_relative "remediation/plan_builder"
 
 module Tamoz
   module Agent
@@ -129,7 +130,10 @@ module Tamoz
               return terminate(:escalated, classification:, failure:)
             end
 
-            plan = build_plan(classification)
+            plan = PlanBuilder.new(
+              record: @record, rule: @rule, original_invariant: @original_invariant,
+              minimal_change: @minimal_change, stop_conditions: @stop_conditions
+            ).call(classification)
             @plan_digest = digest_of(plan, "plan")
             transition(:planned, evidence: {"plan_digest" => @plan_digest})
 
@@ -243,46 +247,6 @@ module Tamoz
             terminate(
               :escalated, classification:, plan:, review:, effect_identity: identity,
               failure:, extra_escalation: {"reconciliation" => reconciliation}
-            )
-          end
-
-          # Invariants 25–27. The plan is BUILT deterministically from the typed
-          # failure and the immutable rule; the caller supplies only the prose the
-          # design requires it to name. A missing element is a contract error, not
-          # a silently defaulted plan.
-          def build_plan(classification)
-            %i[original_invariant minimal_change stop_conditions].each do |name|
-              value = instance_variable_get(:"@#{name}")
-              if value.nil? || (value.respond_to?(:empty?) && value.empty?)
-                raise HealingContractError,
-                      "a remediation plan must name #{name} (invariant 25)"
-              end
-            end
-            unless @rule.plan_review_policy.fetch("plan_required") == true
-              raise HealingContractError, "rule #{@rule.rule_id} does not require a plan"
-            end
-
-            Tamoz::Core.deep_freeze(
-              {
-                "original_invariant" => @original_invariant,
-                "minimal_change" => @minimal_change,
-                "effect_class" => @rule.effect_class.to_s,
-                "authorization" => {
-                  "rule_id" => @rule.rule_id,
-                  "rule_version" => @rule.version,
-                  "rule_digest" => @rule.digest,
-                  "authorized_scopes" => @rule.authorized_scopes,
-                  "authorized_resources" => @rule.authorized_resources,
-                  "original_operation_authorized" =>
-                    @record.trusted_context["original_operation_authorized"] == true
-                },
-                "verification" => @rule.verification_oracle,
-                "compensation" => @rule.compensation,
-                "stop_conditions" => Array(@stop_conditions),
-                "form" => classification.action_family.to_s,
-                "failure_fingerprint" => @record.fingerprint,
-                "budgets" => @rule.budgets
-              }
             )
           end
 
