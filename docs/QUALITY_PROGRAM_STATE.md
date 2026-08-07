@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `4d9c98d` (main) — "Q3 tier-1 slice 3: extract Classification::Matrix and LegacyTextAdapter"
+- **HEAD:** `03c841c` (main) — "Q3 tier-2 slice 1: split the behaviour transition registry out"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -203,8 +203,7 @@ qualify any outer constants, match visibility, done.
 
 **Tier 2 — one substantial nested class.**
 
-4. `tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb` (487) —
-   `TransitionRegistry` ~312, leaving the module at ~180.
+4. ~~`tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb` — `TransitionRegistry`~~ **DONE (slice 34)**, 487 → 172. It was a SIBLING, not nested.
 5. `tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb` (614) — `Auditor` ~553,
    leaving a thin module. Check first whether the module/class pair is worth splitting
    at all, or whether the file is already one cohesive unit under a namespace.
@@ -304,6 +303,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 31 | 2026-08-07 | mcp/catalog.rb (Tier 1.1) | the deterministic JSON canonicalizer → `Tamoz::Mcp::CanonicalJSON` | catalog.rb 291 → 243; + canonical_json 59 | not re-measured (no test added; lines moved) | rubocop raw 41,926 → 41,923; reek 4,376 → 4,374; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. FIRST slice of the easy-first queue and it validated the ordering — a fraction of the effort of a profile.rb design slice for a comparable reduction. **FINDING: CanonicalJSON never belonged to Catalog.** It is written inside `Catalog = Data.define(...) do ... end`, but constants assigned in a BLOCK belong to the enclosing lexical scope, so its name has always been `Tamoz::Mcp::CanonicalJSON` — which is why invocation.rb references it bare. Verified before moving (`Catalog.const_get(:CanonicalJSON, false)` raises NameError). CLIENT_INFO, DIGEST_DOMAIN, ENTRY_DIGEST_DOMAIN, TOOL_NAME_PATTERN and Entry sit in the same position and were left alone. normalize_object feeds a digest, so rubocop's each_with_object→to_h rewrite was checked BY BYTES: same SHA-256 `5205938d936e8c8e47978b4334dfde45b1cab4b05f80bbfe0379e3b18b6290a5` | c709ed0 |
 | 32 | 2026-08-07 | graph/memory_checkpointer.rb (Tier 1.2) | the fenced write side → `MemoryCheckpointer::Writer` | memory_checkpointer.rb 318 → 250; + writer 96 | not re-measured (no test added; lines moved) | rubocop raw 41,923 → 41,918; reek 4,374 → 4,368; new file **0** smells (the parent's 27 are pre-existing debt) | **PASS** | **ci_full BOTH locales 130/24,970**. `private_constant :Writer` verified still raising NameError from outside after the move. **One rubocop finding deliberately NOT applied**: Naming/PredicateMethod wanted `def check! = true` renamed, but check! is a COMMAND in a duck-typed interface implemented by MemoryCheckpointer::Writer, SQLite::CheckpointWriter and Tamoz::Context, called as `context.check!`/`writer.check!` on adjacent lines in executor.rb — renaming would break three implementations to satisfy a naming cop. Inline disable with that reasoning at the site | 061d720 |
 | 33 | 2026-08-07 | healing/classification.rb (Tier 1.3) | the proof matrix and the text-proposal adapter → `Classification::Matrix` + `Classification::LegacyTextAdapter` | classification.rb 395 → 259; + matrix 96, legacy_text_adapter 88 | not re-measured | rubocop raw 41,918 → 41,871; reek 4,368 → **4,355** (biggest single-slice drop of the easy tier); both new files **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Constant paths verified unchanged at runtime (healing_matrix_test calls `Classification::Matrix.run` directly). **A genuine SPLIT, not a pure move** — the nested definitions carried three methods over the Q6 ceilings: `Matrix.run` (35 lines, ABC 42) → empty_tally/tally!/report + a shared `rate`; `abstention_quality` (ABC 27) → sum_field + quality with the original fetch ORDER preserved (fetch can raise, and order decides which missing key reports first); `LegacyTextAdapter#initialize` (26 lines) → validate_precision!/validate_patterns!. The (per_category, rule) DataClump was documented rather than designed away: the pair lives for exactly one `run` | 4d9c98d |
+| 34 | 2026-08-07 | memory/behavior_transition.rb (Tier 2.4) | the behaviour transition registry → `Memory::TransitionRegistry` | behavior_transition.rb 487 → 172; + transition_registry 376 | not re-measured | rubocop raw 41,871 → 41,837; reek 4,355 → **4,332**; new file **0** smells and the parent fell **25 → 2** | **PASS** | **ci_full BOTH locales 130/24,970**. The survey called it a nested class; it is a SIBLING of BehaviorTransition — verified at runtime — so the file held two independent things. `record` got validate_kind!/validate_snapshot! extracted (ABC 31 → 23, 56 → 46 lines), both firing before any control state is read so a rejected snapshot never reserves a version; the remainder kept whole under §4 (one ordered transaction threading the same five values). **SURFACED A REAL FINDING** — see the owner-decision queue | 03c841c |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -315,6 +315,14 @@ standalone characterization pass on a file already covered at its extraction sea
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
+- **Never let an autocorrect disguise a finding.** If a cop's fix would hide a
+  possible bug — renaming an unused parameter, deleting a dead branch — run
+  rubocop with `--except <Cop>` and document at the site instead (slice 34).
+- **An extraction SURFACES the parent's baselined debt, and that is the point.**
+  Read what appears with fresh eyes rather than reflexively silencing it: twice
+  now it has been a real finding (slice 23's unreachable guard, slice 34's CAS).
+- **A "nested" class may be a SIBLING.** Verify the constant's real parent at
+  runtime before deciding what the file contains (slice 34).
 - **A nested definition that carries oversized methods is a SPLIT, not a move.**
   "Nested class" predicts a CHEAP slice, not a free one. Tier 1.1 and 1.2 lifted out
   verbatim; 1.3 carried three methods over the Q6 ceilings. Budget the same for
@@ -364,6 +372,33 @@ standalone characterization pass on a file already covered at its extraction sea
   against HEAD, which behaves identically. Recorded for completeness only — unlike the
   slice-23 finding, the protection IS achieved, just by the earlier check, so this is
   defensive redundancy like the slice-21 argv[0] branch. No decision needed.
+
+- **OPEN (2026-08-07, slice 34) — a compare-and-swap that ignores what it compares.**
+  `Memory::TransitionRegistry#cas_control(expected, replacement)` accepts `expected`
+  and never reads it:
+
+      def cas_control(expected, replacement)
+        version = @store.head_version(CONTROL_NAMESPACE, CONTROL_KEY)   # re-read
+        @store.put(CONTROL_NAMESPACE, CONTROL_KEY, replacement.to_h, if_version: version || nil)
+      end
+
+  The swap is guarded against the version this method RE-READS, not against the
+  control record the caller already read. Between a caller's `control = read_control`
+  and this re-read, another writer can change the control record and the swap will not
+  detect it. All three call sites (`record`, `apply`, `release_or_finalize`) pass the
+  control they read, so the intent to compare is explicit in every one.
+
+  **Pre-existing and preserved byte-for-byte** — identical at HEAD, previously hidden
+  inside this file's 25 baselined reek smells and its `.rubocop_todo.yml` exclusions.
+  The extraction surfaced it. Left alone because whether the class's documented
+  "singly-writer" discipline makes this safe is a concurrency-correctness question
+  about a DURABLE registry, which is an owner decision, not a refactoring one.
+
+  Note for whoever resolves it: rubocop's autocorrect renames the parameter to
+  `_expected`, which silences both linters and disguises the question. Do not take it.
+  If the answer is "single-writer makes it safe", the honest fix is to drop the
+  parameter and say so in a comment; if not, the swap should use the caller's version.
+  Either way it wants a characterization test.
 
 - **FINDING (2026-08-07, slice 23) — a security guard that has never been able to
   fire.** `Profile::DocumentValidator#validate_root_spelling!` (was
