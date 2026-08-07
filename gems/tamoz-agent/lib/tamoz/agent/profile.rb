@@ -20,6 +20,7 @@ require_relative "profile/transition_registry"
 require_relative "profile/egress_validator"
 require_relative "profile/yaml_scanner"
 require_relative "profile/check_spec_validator"
+require_relative "profile/authority_validator"
 
 module Tamoz
   module Agent
@@ -760,104 +761,19 @@ module Tamoz
         CheckSpecValidator.call(hash, path)
       end
 
+      # `tools`, `unattended` and `policy` constrain each other, so AuthorityValidator
+      # owns all three. They stay three entry points because the loader calls them at
+      # different points and the ORDER decides which error an operator sees first.
       def self.validate_tools!(hash, path)
-        tools = required_hash(hash, "tools", path)
-        unknown = tools.keys - TOOLS_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown tools fields #{unknown.sort.inspect}"
-        end
-
-        allowed = tools["allowed"]
-        unless allowed.is_a?(Array) && !allowed.empty? &&
-               allowed.all? { |name| name.is_a?(String) && KNOWN_TOOLS.include?(name) } &&
-               allowed.uniq == allowed
-          raise ValidationError, "#{path}: tools.allowed must be distinct known tool names"
-        end
-        required = tools["approval_required"] || []
-        unless required.is_a?(Array) &&
-               required.all? { |name| name.is_a?(String) && allowed.include?(name) } &&
-               required.uniq == required
-          raise ValidationError, "#{path}: tools.approval_required must be a subset of tools.allowed"
-        end
-
-        {"allowed" => allowed, "approval_required" => required}
+        AuthorityValidator.tools!(hash, path)
       end
 
-      # The unattended section names tools by RISK CLASS. Every name must be a
-      # tool this profile allows: preauthorizing something the profile does not
-      # permit is a contradiction, and silently ignoring it would let a profile
-      # look more permissive than it is.
-      #
-      # `forbidden` wins over every other list. A tool named there can never run
-      # unattended no matter what else claims it — a deny must not be defeatable
-      # by adding the same name somewhere more permissive.
       def self.validate_unattended!(hash, path)
-        section = hash["unattended"]
-        return if section.nil?
-
-        unless section.is_a?(Hash)
-          raise ValidationError, "#{path}: unattended must be a mapping"
-        end
-
-        unknown = section.keys - UNATTENDED_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown unattended fields #{unknown.sort.inspect}"
-        end
-
-        allowed = hash.dig("tools", "allowed") || []
-        UNATTENDED_KEYS.each do |key|
-          names = section[key]
-          next if names.nil?
-
-          unless names.is_a?(Array) && names.all? { |name| name.is_a?(String) } &&
-                 names.uniq == names
-            raise ValidationError, "#{path}: unattended.#{key} must be distinct tool names"
-          end
-          outside = names - allowed
-          unless outside.empty?
-            raise ValidationError,
-                  "#{path}: unattended.#{key} names #{outside.sort.inspect}, which " \
-                  "tools.allowed does not permit"
-          end
-        end
+        AuthorityValidator.unattended!(hash, path)
       end
 
       def self.validate_policy!(hash, tools, path)
-        policy = required_hash(hash, "policy", path)
-        unknown = policy.keys - POLICY_KEYS
-        unless unknown.empty?
-          raise ValidationError, "#{path}: unknown policy fields #{unknown.sort.inspect}"
-        end
-        unless policy["allow_changes"] == true || policy["allow_changes"] == false
-          raise ValidationError, "#{path}: policy.allow_changes must be true or false"
-        end
-        if policy["allow_changes"] == false
-          action = tools.fetch("allowed") & %w[apply_patch create_file run_check]
-          unless action.empty?
-            raise ValidationError,
-                  "#{path}: policy.allow_changes is false but action tools are allowed"
-          end
-        end
-        unless SAFETIES.include?(policy["default_check_safety"])
-          raise ValidationError, "#{path}: policy.default_check_safety must be one of #{SAFETIES.inspect}"
-        end
-        unless policy["graph_version"] == Tamoz::Agent::Session::GRAPH_VERSION
-          raise ValidationError,
-                "#{path}: policy.graph_version must equal #{Tamoz::Agent::Session::GRAPH_VERSION.inspect}"
-        end
-        behavior = policy["behavior_version"]
-        unless behavior.is_a?(String) && !behavior.empty? && behavior.bytesize <= 64
-          raise ValidationError, "#{path}: policy.behavior_version must be a string of at most 64 bytes"
-        end
-        unattended_digest = policy["unattended_catalog_digest"]
-        if !unattended_digest.nil? && !DIGEST_PATTERN.match?(unattended_digest)
-          raise ValidationError,
-                "#{path}: policy.unattended_catalog_digest must be a sha256: digest"
-        end
-        digest = policy["tool_catalog_digest"]
-        unless digest.is_a?(String) && DIGEST_PATTERN.match?(digest)
-          raise ValidationError, "#{path}: policy.tool_catalog_digest must be a sha256: digest"
-        end
+        AuthorityValidator.policy!(hash, tools, path)
       end
 
       # P17 §3: the operator-declared egress policy, validated fail-closed.
