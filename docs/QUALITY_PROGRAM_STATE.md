@@ -9,7 +9,7 @@ every slice and whenever the phase table changes.
 ## Checkpoint
 
 - **Date:** 2026-08-07
-- **HEAD:** `061d720` (main) — "Q3 tier-1 slice 2: extract MemoryCheckpointer::Writer"
+- **HEAD:** `4d9c98d` (main) — "Q3 tier-1 slice 3: extract Classification::Matrix and LegacyTextAdapter"
 - **Tree:** clean
 - **Branch:** main. Never push/tag/release/rewrite. (origin was externally updated to `a126fda` — local commits stay local.)
 - **Quality commits so far:** 26, counted as `git rev-list --count 8ce5581..HEAD` + 1
@@ -197,8 +197,9 @@ qualify any outer constants, match visibility, done.
 
 1. ~~`tamoz-mcp/lib/tamoz/mcp/catalog.rb` — `CanonicalJSON`~~ **DONE (slice 31)**, 291 → 243.
 2. ~~`tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb` — `Writer`~~ **DONE (slice 32)**, 318 → 250.
-3. `tamoz-agent/lib/tamoz/agent/healing/classification.rb` (395) — `Matrix` ~72 and
-   `LegacyTextAdapter` ~51; two slices or one, whichever keeps the diff honest.
+3. ~~`tamoz-agent/lib/tamoz/agent/healing/classification.rb` — `Matrix` + `LegacyTextAdapter`~~ **DONE (slice 33)**, 395 → 259.
+
+**TIER 1 COMPLETE (slices 31-33):** four new files; catalog.rb −48, memory_checkpointer.rb −68, classification.rb −136; reek 4,376 → 4,355.
 
 **Tier 2 — one substantial nested class.**
 
@@ -302,6 +303,7 @@ standalone characterization pass on a file already covered at its extraction sea
 | 30 | 2026-08-07 | cli.rb (Q3 slice 7) | session rendering + exit codes → `Agent::CLIRendering` | cli.rb 1,105 → 989; + cli_rendering 197 | not re-measured (no test added; lines moved) | rubocop raw 41,979 → 41,926; reek 4,396 → 4,376; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Visibility 7/7 private. **A module does not share the class's lexical scope** — the bare `EXIT_PAUSED`/`EXIT_SIGINT`/`EXIT_SIGTERM`/`THREAD_ID_PATTERN` that resolved inside `class CLI` raised NameError from the module. Thirteen tests caught it; rubocop and reek could not. Now `CLI::EXIT_PAUSED` etc. `render_final_view` and `render_show_human` split with refusal order preserved; `exit_for_view`'s duplicate branches merged (:paused/:blocked share a code, :failed was already `else`) | 51d1652 |
 | 31 | 2026-08-07 | mcp/catalog.rb (Tier 1.1) | the deterministic JSON canonicalizer → `Tamoz::Mcp::CanonicalJSON` | catalog.rb 291 → 243; + canonical_json 59 | not re-measured (no test added; lines moved) | rubocop raw 41,926 → 41,923; reek 4,376 → 4,374; new file **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. FIRST slice of the easy-first queue and it validated the ordering — a fraction of the effort of a profile.rb design slice for a comparable reduction. **FINDING: CanonicalJSON never belonged to Catalog.** It is written inside `Catalog = Data.define(...) do ... end`, but constants assigned in a BLOCK belong to the enclosing lexical scope, so its name has always been `Tamoz::Mcp::CanonicalJSON` — which is why invocation.rb references it bare. Verified before moving (`Catalog.const_get(:CanonicalJSON, false)` raises NameError). CLIENT_INFO, DIGEST_DOMAIN, ENTRY_DIGEST_DOMAIN, TOOL_NAME_PATTERN and Entry sit in the same position and were left alone. normalize_object feeds a digest, so rubocop's each_with_object→to_h rewrite was checked BY BYTES: same SHA-256 `5205938d936e8c8e47978b4334dfde45b1cab4b05f80bbfe0379e3b18b6290a5` | c709ed0 |
 | 32 | 2026-08-07 | graph/memory_checkpointer.rb (Tier 1.2) | the fenced write side → `MemoryCheckpointer::Writer` | memory_checkpointer.rb 318 → 250; + writer 96 | not re-measured (no test added; lines moved) | rubocop raw 41,923 → 41,918; reek 4,374 → 4,368; new file **0** smells (the parent's 27 are pre-existing debt) | **PASS** | **ci_full BOTH locales 130/24,970**. `private_constant :Writer` verified still raising NameError from outside after the move. **One rubocop finding deliberately NOT applied**: Naming/PredicateMethod wanted `def check! = true` renamed, but check! is a COMMAND in a duck-typed interface implemented by MemoryCheckpointer::Writer, SQLite::CheckpointWriter and Tamoz::Context, called as `context.check!`/`writer.check!` on adjacent lines in executor.rb — renaming would break three implementations to satisfy a naming cop. Inline disable with that reasoning at the site | 061d720 |
+| 33 | 2026-08-07 | healing/classification.rb (Tier 1.3) | the proof matrix and the text-proposal adapter → `Classification::Matrix` + `Classification::LegacyTextAdapter` | classification.rb 395 → 259; + matrix 96, legacy_text_adapter 88 | not re-measured | rubocop raw 41,918 → 41,871; reek 4,368 → **4,355** (biggest single-slice drop of the easy tier); both new files **0** smells | **PASS** | **ci_full BOTH locales 130/24,970**. Constant paths verified unchanged at runtime (healing_matrix_test calls `Classification::Matrix.run` directly). **A genuine SPLIT, not a pure move** — the nested definitions carried three methods over the Q6 ceilings: `Matrix.run` (35 lines, ABC 42) → empty_tally/tally!/report + a shared `rate`; `abstention_quality` (ABC 27) → sum_field + quality with the original fetch ORDER preserved (fetch can raise, and order decides which missing key reports first); `LegacyTextAdapter#initialize` (26 lines) → validate_precision!/validate_patterns!. The (per_category, rule) DataClump was documented rather than designed away: the pair lives for exactly one `run` | 4d9c98d |
 
 ## Standing rules learned in flight (2026-08-07)
 
@@ -313,6 +315,10 @@ standalone characterization pass on a file already covered at its extraction sea
   Regenerating while smells remain absorbs them into the baseline and the gate still
   passes — the ratchet cannot distinguish "no new smells" from "new smells baselined".
   This cost 16 absorbed smells in slice 28 before it was noticed.
+- **A nested definition that carries oversized methods is a SPLIT, not a move.**
+  "Nested class" predicts a CHEAP slice, not a free one. Tier 1.1 and 1.2 lifted out
+  verbatim; 1.3 carried three methods over the Q6 ceilings. Budget the same for
+  skills.rb's Compiler (264 lines).
 - **Do not rename a method to satisfy a naming cop without checking for a duck
   type.** Grep for other implementations and call sites first; when several classes
   share the name, an inline disable naming the interface is the right answer
