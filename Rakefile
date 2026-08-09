@@ -319,7 +319,11 @@ namespace :quality do
 
   desc 'Enola: no cycles, layer violations, or unexplained spillover'
   task :architecture do
-    sh ENOLA_BIN, 'check', '--fail-on=cycles,layers', '--min-confidence=0.8', '.'
+    if File.executable?(ENOLA_BIN)
+      sh ENOLA_BIN, 'check', '--fail-on=cycles,layers', '--min-confidence=0.8', '.'
+    else
+      warn "architecture: skipped — no enola at #{ENOLA_BIN} (set ENOLA_BIN to run it)"
+    end
   end
 
   desc 'Baseline drift: the committed code-quality-baseline.json must match the raw ledgers'

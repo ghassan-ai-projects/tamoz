@@ -249,8 +249,10 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     assert_equal [["mcp:test-server/set_answer", {"answer" => "42"}]],
                  calls.map { |call| [call.fetch(:descriptor).id, call.fetch(:arguments)] }
 
-    assert_equal 'preview mcp:test-server/set_answer {"answer"=>"42"}',
-                 source.preview("mcp:test-server/set_answer", {"answer" => "42"})
+    arguments = {"answer" => "42"}
+
+    assert_equal "preview mcp:test-server/set_answer #{arguments.inspect}",
+                 source.preview("mcp:test-server/set_answer", arguments)
     assert_equal({"caller_key" => "x"},
                  source.effect_intent("mcp:test-server/set_answer", {"answer" => "42"}))
 
