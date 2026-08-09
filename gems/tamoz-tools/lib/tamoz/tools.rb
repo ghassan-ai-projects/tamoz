@@ -3,6 +3,7 @@
 require "tamoz/core"
 require_relative "tools/version"
 require_relative "tools/skills"
+require_relative "tools/path_resolver"
 require_relative "tools/toolbox"
 require_relative "tools/capability_host"
 require_relative "tools/local_dispatcher"

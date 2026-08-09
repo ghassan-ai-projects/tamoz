@@ -84,6 +84,7 @@ module Tamoz
       )
         @root = Pathname.new(root).expand_path.realpath.freeze
         raise ToolError, "workspace root is not a directory" unless @root.directory?
+        @path_resolver = PathResolver.new(@root)
         unless allow_changes == true || allow_changes == false
           raise ArgumentError, "allow_changes must be true or false"
         end
@@ -892,23 +893,7 @@ module Tamoz
       end
 
       def validate_create_path!(raw_path)
-        text = String(raw_path)
-        raise ToolArgumentError, "path must name a file" if text.empty? || text == "." || text.end_with?("/")
-
-        lexical = @root.join(text).cleanpath
-        raise ToolArgumentError, "path must name a file" if lexical == @root
-        prefix = "#{@root}#{File::SEPARATOR}"
-        raise ToolPolicyError, "path escapes the workspace root" unless lexical.to_s.start_with?(prefix)
-        raise ToolArgumentError, "file already exists" if File.exist?(lexical)
-
-        parent = lexical.dirname
-        raise ToolArgumentError, "parent directory does not exist" unless parent.exist?
-        raise ToolArgumentError, "parent is not a directory" unless parent.directory?
-        raise ToolPolicyError, "parent path must not contain symlinks" unless parent.realpath.to_s == parent.to_s
-
-        lexical
-      rescue SystemCallError
-        raise ToolError, "path is unavailable"
+        @path_resolver.validate_create_path!(raw_path)
       end
 
       def validate_file_text!(value)
@@ -1107,49 +1092,15 @@ module Tamoz
       end
 
       def resolve(raw_path, type:, allow_symlinks: true)
-        text = String(raw_path)
-        raise ToolPolicyError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
-
-        lexical = root.join(text).cleanpath
-        prefix = "#{root}#{File::SEPARATOR}"
-        # Lexical containment is checked before the filesystem is touched. `realpath`
-        # raises ENOENT for a missing component, and that rescue classifies the failure
-        # as a repairable argument mistake; without this check an escape attempt at a
-        # path that happens not to exist would be misclassified as recoverable.
-        unless lexical == root || lexical.to_s.start_with?(prefix)
-          raise ToolPolicyError, "path escapes the workspace root"
+        if allow_symlinks
+          @path_resolver.resolve(raw_path, type:)
+        else
+          @path_resolver.resolve_without_symlinks(raw_path, type:)
         end
-
-        path = lexical.realpath
-        unless path == root || path.to_s.start_with?(prefix)
-          raise ToolPolicyError, "path escapes the workspace root"
-        end
-        if !allow_symlinks && lexical.to_s != path.to_s
-          raise ToolPolicyError, "patch path must not contain symlinks"
-        end
-        if type == :file && !path.file?
-          raise ToolArgumentError, "path is not a file"
-        elsif type == :directory && !path.directory?
-          raise ToolArgumentError, "path is not a directory"
-        end
-
-        path
-      rescue Errno::ENOENT, Errno::ENOTDIR
-        # `realpath` reports a missing component before the `path.file?` test can, so a
-        # target the planner simply got wrong arrives here rather than at "path is not a
-        # file". It is an argument mistake, not an environment failure.
-        raise ToolArgumentError, "path does not exist"
-      rescue SystemCallError
-        raise ToolError, "path is unavailable"
       end
 
       def validate_path_argument!(raw_path)
-        raise ToolArgumentError, "path must be a string" unless raw_path.is_a?(String)
-
-        text = raw_path
-        raise ToolPolicyError, "path contains a null byte" if text.include?("\0")
-        raise ToolArgumentError, "path exceeds 4096 bytes" if text.bytesize > 4096
-        raise ToolPolicyError, "path must be relative to the workspace root" if Pathname.new(text).absolute?
+        @path_resolver.validate_path_argument!(raw_path)
       end
 
       def validate_patch_text!(value, name:, empty:)
