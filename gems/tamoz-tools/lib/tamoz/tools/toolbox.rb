@@ -124,6 +124,12 @@ module Tamoz
         end
         @descriptions.keep_if { |name, _| @allowed_tools.include?(name) }
         @descriptions.freeze
+        @argument_validator = ToolArgumentValidator.new(
+          names: @descriptions.keys,
+          checks: @checks,
+          path_resolver: @path_resolver,
+          skill_catalog: @skill_catalog
+        )
         @catalog_digest = "sha256:#{Digest::SHA256.hexdigest(
           JSON.generate(
             [
@@ -249,129 +255,7 @@ module Tamoz
       end
 
       def validate(name, arguments)
-        normalized_name = String(name)
-        unless names.include?(normalized_name)
-          raise ToolError, "unknown tool #{normalized_name.inspect}"
-        end
-        raise ToolArgumentError, "tool arguments must be an object" unless arguments.is_a?(Hash)
-
-        normalized_arguments = arguments.transform_keys(&:to_s)
-        case normalized_name
-        when "read_file"
-          reject_unknown!(normalized_arguments, %w[path])
-          validate_path_argument!(normalized_arguments.fetch("path"))
-        when "list_directory"
-          reject_unknown!(normalized_arguments, %w[path])
-          validate_path_argument!(normalized_arguments.fetch("path", "."))
-        when "search_text"
-          reject_unknown!(normalized_arguments, %w[path query])
-          validate_path_argument!(normalized_arguments.fetch("path", "."))
-          query = normalized_arguments.fetch("query")
-          raise ToolArgumentError, "query must be a string" unless query.is_a?(String)
-          raise ToolArgumentError, "query must not be empty" if query.empty?
-          raise ToolArgumentError, "query exceeds 256 bytes" if query.bytesize > 256
-          raise ToolPolicyError, "query must not contain a null byte" if query.include?("\0")
-          raise ToolArgumentError, "query must be UTF-8 encoded" unless query.encoding == Encoding::UTF_8
-          raise ToolArgumentError, "query must be valid UTF-8" unless query.valid_encoding?
-        when "apply_patch"
-          validate_path_argument!(normalized_arguments.fetch("path"))
-          # D-8 Fix A: `expected_sha256` is optional at the toolbox boundary. A real
-          # model cannot know a target's digest before a read executes, so the plan
-          # leaves it out and the driver resolves it from observation exactly once,
-          # injecting it into both preview and execute. When PRESENT the check is
-          # unchanged: a stale or malformed digest is still a repairable rejection
-          # (the stale-digest refusal at `prepare_patch` is the live second binding).
-          if normalized_arguments.key?("expected_sha256")
-            digest = normalized_arguments.fetch("expected_sha256")
-            unless digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
-              raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
-            end
-          end
-
-          has_legacy = normalized_arguments.key?("before") || normalized_arguments.key?("after")
-          has_compound = normalized_arguments.key?("replacements")
-          if has_legacy && has_compound
-            raise ToolArgumentError, "apply_patch accepts either before/after or replacements, not both"
-          end
-
-          if has_compound
-            reject_unknown!(normalized_arguments, %w[expected_sha256 path replacements])
-            replacements = normalized_arguments.fetch("replacements")
-            unless replacements.is_a?(Array) && !replacements.empty?
-              raise ToolArgumentError, "replacements must be a non-empty array"
-            end
-            if replacements.length > MAX_REPLACEMENTS
-              raise ToolArgumentError, "replacements exceeds #{MAX_REPLACEMENTS}"
-            end
-            replacements.each_with_index do |entry, index|
-              unless entry.is_a?(Hash)
-                raise ToolArgumentError, "replacements[#{index}] must be an object"
-              end
-              unless entry.key?("before") && entry.key?("after")
-                raise ToolArgumentError, "replacements[#{index}] must contain before and after keys"
-              end
-              validate_patch_text!(entry.fetch("before"), name: "replacements[#{index}].before", empty: false)
-              validate_patch_text!(entry.fetch("after"), name: "replacements[#{index}].after", empty: true)
-              unknown = entry.keys - %w[before after]
-              unless unknown.empty?
-                raise ToolArgumentError, "replacements[#{index}] has unknown keys: #{unknown.sort.join(", ")}"
-              end
-            end
-          else
-            reject_unknown!(normalized_arguments, %w[after before expected_sha256 path])
-            validate_patch_text!(normalized_arguments.fetch("before"), name: "before", empty: false)
-            validate_patch_text!(normalized_arguments.fetch("after"), name: "after", empty: true)
-          end
-        when "run_check"
-          reject_unknown!(normalized_arguments, %w[name])
-          check_name = normalized_arguments.fetch("name")
-          raise ToolArgumentError, "check name must be a string" unless check_name.is_a?(String)
-          raise ToolArgumentError, "unknown configured check #{check_name.inspect}" unless checks.key?(check_name)
-        when "load_skill"
-          reject_unknown!(normalized_arguments, %w[skill])
-          validate_skill_reference!(normalized_arguments.fetch("skill"))
-        when "read_skill_resource"
-          reject_unknown!(normalized_arguments, %w[skill path])
-          record = validate_skill_reference!(normalized_arguments.fetch("skill"))
-          path = normalized_arguments.fetch("path")
-          raise ToolArgumentError, "path must be a string" unless path.is_a?(String)
-          raise ToolArgumentError, "path exceeds 1024 bytes" if path.bytesize > 1024
-          # Resolving here means an unreadable or unknown resource is a plan review
-          # issue, not a surprise at execution time.
-          Skills.read_resource_entry!(record, path)
-        when "create_file"
-          reject_unknown!(normalized_arguments, %w[path content expected_sha256 mode])
-          validate_path_argument!(normalized_arguments.fetch("path"))
-          validate_file_text!(normalized_arguments.fetch("content"))
-          # D-8 Fix A / RC-6: the content digest is deterministic (`hexdigest(content)`,
-          # no observation), so an absent digest is resolved right here and the whole
-          # create_file surface (effect_intent, preview, prepare_create_file,
-          # render_create_preview) consumes the computed value. A PRESENT digest is
-          # checked against the content unchanged, so a wrong explicit digest is still
-          # refused.
-          if normalized_arguments.key?("expected_sha256")
-            expected = normalized_arguments.fetch("expected_sha256")
-            unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
-              raise ToolArgumentError, "expected_sha256 must be 64 lowercase hex characters"
-            end
-            actual = Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
-            raise ToolArgumentError,
-                  "content digest mismatch: expected #{expected}, computed #{actual}" unless actual == expected
-          else
-            normalized_arguments = normalized_arguments.merge(
-              "expected_sha256" => Digest::SHA256.hexdigest(normalized_arguments.fetch("content"))
-            )
-          end
-          mode = normalized_arguments.fetch("mode", "0644")
-          validate_mode!(mode)
-          validate_create_path!(normalized_arguments.fetch("path"))
-          unless normalized_arguments.key?("mode")
-            normalized_arguments = normalized_arguments.merge("mode" => mode)
-          end
-        end
-        normalized_arguments.freeze
-      rescue KeyError => error
-        raise ToolArgumentError, "missing tool argument #{error.key.inspect}"
+        @argument_validator.validate(name, arguments)
       end
 
       def execute(name, arguments)
@@ -549,13 +433,6 @@ module Tamoz
 
         state = self.class.observe(@root.join(arguments.fetch("path"))).fetch("state")
         arguments.merge("expected_sha256" => state)
-      end
-
-      def validate_skill_reference!(reference)
-        raise ToolArgumentError, "skill must be a string" unless reference.is_a?(String)
-        raise ToolArgumentError, "skill exceeds 256 bytes" if reference.bytesize > 256
-
-        @skill_catalog.resolve(reference)
       end
 
       # Loading returns text. It adds no tool, root, credential, environment value,
@@ -896,19 +773,6 @@ module Tamoz
         @path_resolver.validate_create_path!(raw_path)
       end
 
-      def validate_file_text!(value)
-        raise ToolArgumentError, "content must be a string" unless value.is_a?(String)
-        raise ToolArgumentError, "content exceeds #{MAX_FILE_BYTES} bytes" if value.bytesize > MAX_FILE_BYTES
-        raise ToolPolicyError, "content must not contain a null byte" if value.include?("\0")
-        raise ToolArgumentError, "content must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
-        raise ToolArgumentError, "content must be valid UTF-8" unless value.valid_encoding?
-      end
-
-      def validate_mode!(value)
-        raise ToolArgumentError, "mode must be a string" unless value.is_a?(String)
-        raise ToolArgumentError, "mode must be an octal permission string (e.g. \"0644\")" unless value.match?(/\A0[0-7]{3}\z/)
-      end
-
       def build_compound_replacements(content, replacements)
         content_bytes = content.b
         canonical = []
@@ -1097,24 +961,6 @@ module Tamoz
         else
           @path_resolver.resolve_without_symlinks(raw_path, type:)
         end
-      end
-
-      def validate_path_argument!(raw_path)
-        @path_resolver.validate_path_argument!(raw_path)
-      end
-
-      def validate_patch_text!(value, name:, empty:)
-        raise ToolArgumentError, "#{name} must be a string" unless value.is_a?(String)
-        raise ToolArgumentError, "#{name} must not be empty" if !empty && value.empty?
-        raise ToolArgumentError, "#{name} exceeds #{MAX_PATCH_BYTES} bytes" if value.bytesize > MAX_PATCH_BYTES
-        raise ToolPolicyError, "#{name} must not contain a null byte" if value.include?("\0")
-        raise ToolArgumentError, "#{name} must be UTF-8 encoded" unless value.encoding == Encoding::UTF_8
-        raise ToolArgumentError, "#{name} must be valid UTF-8" unless value.valid_encoding?
-      end
-
-      def reject_unknown!(arguments, allowed)
-        unknown = arguments.keys - allowed
-        raise ToolArgumentError, "unknown tool arguments: #{unknown.sort.join(", ")}" unless unknown.empty?
       end
     end
   end
