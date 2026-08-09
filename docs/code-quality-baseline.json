@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "92ef134",
+    "commit": "6cf078a",
     "dirty": true
   },
   "toolchain": {
@@ -11,7 +11,7 @@
   },
   "loc": {
     "files": 300,
-    "total_code_lines": 50930,
+    "total_code_lines": 50952,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
@@ -32,7 +32,7 @@
       "script/generate_agent_memory_fixtures": 99,
       "script/generate_agent_memory_repository_fixtures": 99,
       "script/generate_agent_smoke_fixtures": 99,
-      "script/generate_dependency_review": 124,
+      "script/generate_dependency_review": 146,
       "script/generate_graph_surface_audit": 157,
       "script/generate_legacy_session_fixture": 99,
       "script/generate_m0_fixtures": 379,
@@ -53,14 +53,14 @@
     }
   },
   "rubocop": {
-    "total": 41437,
+    "total": 41459,
     "files_inspected": 453,
     "by_cop": {
-      "Style/StringLiterals": 29778,
+      "Style/StringLiterals": 29799,
       "Layout/SpaceInsideHashLiteralBraces": 3646,
       "Minitest/EmptyLineBeforeAssertionMethods": 1014,
+      "Metrics/AbcSize": 886,
       "Metrics/MethodLength": 885,
-      "Metrics/AbcSize": 885,
       "Minitest/MultipleAssertions": 597,
       "Style/IfUnlessModifier": 388,
       "Style/StringLiteralsInInterpolation": 368,
@@ -246,7 +246,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 40956,
+      "convention": 40978,
       "warning": 481
     },
     "metrics_over_ceiling": {
@@ -521,7 +521,7 @@
     }
   },
   "enola": {
-    "facts": 6000,
+    "facts": 6011,
     "insights": 43,
     "insights_by_explainer": {
       "complexity-outliers": 15,
@@ -535,8 +535,8 @@
     "line_percent": 88.66,
     "line_covered": 18712,
     "line_total": 21105,
-    "branch_percent": 69.2,
-    "branch_covered": 5233,
+    "branch_percent": 69.19,
+    "branch_covered": 5232,
     "branch_total": 7562,
     "uncovered_files": [
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-agent/lib/tamoz/agent/version.rb",
@@ -551,7 +551,7 @@
     ],
     "tests": {
       "runs": 1260,
-      "assertions": 14120
+      "assertions": 14121
     }
   },
   "documents": {

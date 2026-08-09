@@ -7,6 +7,15 @@ class SQLiteSelectorControlTest < Minitest::Test
   CONTROL = Tamoz::Evals::Harness.const_get(:SQLiteSelectorControl, false)
   REGISTRY = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
 
+  CHILD_TIMEOUT_MS = 30_000
+
+  # The runner clears everything it is not given, and the child requires the
+  # gems. CI installs them into vendor/bundle, reachable only through these.
+  CHILD_ENV = ENV.slice(
+    "BUNDLE_APP_CONFIG", "BUNDLE_GEMFILE", "BUNDLE_PATH", "GEM_HOME", "GEM_PATH",
+    "HOME", "PATH", "RUBYOPT"
+  ).freeze
+
   def test_control_protocol_definition_is_immutable_and_digest_pinned
     assert_equal(
       "sha256:9ced1a4a060c6d5de21f523b9594747c8a4017e482ab7b8086de412218d098f1",
@@ -160,11 +169,12 @@ class SQLiteSelectorControlTest < Minitest::Test
       )
       result = build_runner.capture(
         child_command(layout, scenario, selector),
-        timeout_ms: 2_000,
+        timeout_ms: CHILD_TIMEOUT_MS,
         command: "test.selector-control",
         intervention:
       )
 
+      assert_equal "", result.stderr.text, "the child failed before its stop point"
       assert intervention.verify_result!(result)
       assert_equal "kill", result.termination
       assert_equal "intervention", result.termination_reason
@@ -204,7 +214,7 @@ class SQLiteSelectorControlTest < Minitest::Test
       )
       result = build_runner.capture(
         child_command(layout, scenario, selected, calls: 2),
-        timeout_ms: 2_000,
+        timeout_ms: CHILD_TIMEOUT_MS,
         command: "test.selector-occurrence",
         intervention:
       )
@@ -787,7 +797,7 @@ class SQLiteSelectorControlTest < Minitest::Test
   def build_runner(termination_grace_ms: 200)
     Tamoz::Evals::Harness::SubprocessRunner.new(
       root: ROOT,
-      environment: {},
+      environment: CHILD_ENV,
       output_limit_bytes: 4_096,
       termination_grace_ms:
     )

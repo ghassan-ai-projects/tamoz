@@ -148,6 +148,16 @@
       "direct": true
     },
     {
+      "name": "mini_portile2",
+      "version": "2.8.9",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/flavorjones/mini_portile",
+      "required_by": [],
+      "direct": false
+    },
+    {
       "name": "multipart-post",
       "version": "2.4.1",
       "licenses": [
@@ -376,16 +386,6 @@
         "MIT"
       ],
       "homepage": "https://github.com/standardrb/lint_roller",
-      "required_by": [],
-      "direct": false
-    },
-    {
-      "name": "mini_portile2",
-      "version": "2.8.9",
-      "licenses": [
-        "UNDECLARED"
-      ],
-      "homepage": null,
       "required_by": [],
       "direct": false
     },
