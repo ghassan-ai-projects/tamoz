@@ -467,7 +467,7 @@ class SQLiteStaleRequestTest < Minitest::Test
       )
       begin
         error = assert_raises(Tamoz::CheckpointConflictError) do
-          store.__send__(
+          store.requests.__send__(
             :transition_request_without_checkpoint!,
             lease:,
             request_id: "request.resume",
