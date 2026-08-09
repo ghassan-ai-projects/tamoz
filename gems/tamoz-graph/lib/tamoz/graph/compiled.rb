@@ -227,6 +227,7 @@ module Tamoz
       end
 
       def state_manager = @state_manager
+      def resume_answers = @resume_answers
       def planner = @planner
       def route_planner = @route_planner
 
@@ -429,27 +430,15 @@ module Tamoz
       end
 
       def compatible_latest!(thread, namespace: [], writer: nil)
-        checkpoint = if writer
-                       writer.latest
-                     else
-                       checkpointer.latest(thread_id: thread, namespace:)
-                     end
-        raise CheckpointConflictError, "thread does not exist" unless checkpoint
-
-        compatible!(checkpoint)
-        checkpoint
+        ExecutionSupport.new(self).compatible_latest!(thread, namespace:, writer:)
       end
 
       def compatible!(checkpoint)
-        return checkpoint if checkpoint.graph_name == name &&
-                             checkpoint.graph_version == version &&
-                             checkpoint.definition_digest == definition_digest
-
-        raise CheckpointVersionError, "checkpoint graph identity is incompatible"
+        ExecutionSupport.new(self).compatible!(checkpoint)
       end
 
       def stale_status_reason(checkpoint, required, reason)
-        checkpoint&.status == required ? nil : reason
+        ExecutionSupport.new(self).stale_status_reason(checkpoint, required, reason)
       end
 
       # Refactored from `merge_resume_values`' task/call-index matching plus the
@@ -457,94 +446,42 @@ module Tamoz
       # match the current interrupts, (c) no answer index already merged into
       # `resume_values`. Returns a typed reason string or nil.
       def stale_resume_reason(checkpoint, request)
-        @resume_answers.stale_reason(checkpoint, request)
+        ExecutionSupport.new(self).stale_resume_reason(checkpoint, request)
       end
 
       def merge_resume_values(checkpoint, answers)
-        @resume_answers.merge(checkpoint, answers)
+        ExecutionSupport.new(self).merge_resume_values(checkpoint, answers)
       end
 
       def build_context(base, thread:, request_id:, execution_id:, cancellation:, emitter:)
-        if base
-          return base.with(
-            execution_id:,
-            request_id:,
-            thread_id: thread,
-            cancellation:,
-            emitter:
-          )
-        end
-
-        Context.new(
-          run_id: SecureRandom.uuid,
-          execution_id:,
+        ExecutionSupport.new(self).build_context(
+          base,
+          thread:,
           request_id:,
-          thread_id: thread,
+          execution_id:,
           cancellation:,
           emitter:
         )
       end
 
       def bind_writer_context(context, writer)
-        return context unless writer.respond_to?(:effects)
-        if context.effects &&
-           (!writer.respond_to?(:accepts_effects?) ||
-            !writer.accepts_effects?(context.effects))
-          raise ConfigurationError,
-                "durable execution rejects an unbound effect journal"
-        end
-
-        if context.store &&
-           (!writer.respond_to?(:accepts_store?) ||
-            !writer.accepts_store?(context.store))
-          raise ConfigurationError,
-                "durable execution rejects an unbound Store"
-        end
-
-        context.with(effects: writer.effects, store: writer.store)
+        ExecutionSupport.new(self).bind_writer_context(context, writer)
       end
 
       def open_writer(thread, namespace, owner_id: SecureRandom.uuid, ttl: nil, &block)
-        actual_ttl = ttl ||
-                     if checkpointer.respond_to?(:writer_ttl)
-                       checkpointer.writer_ttl
-                     else
-                       DEFAULT_WRITER_TTL
-                     end
-        checkpointer.open_writer(
-          thread_id: thread,
-          namespace:,
-          owner_id:,
-          ttl: actual_ttl,
-          &block
-        )
+        ExecutionSupport.new(self).open_writer(thread, namespace, owner_id:, ttl:, &block)
       end
 
       def ensure_ephemeral_public!
-        return unless checkpointer.durable?
-
-        raise ConfigurationError,
-              "durable graph mutations require Tamoz::Graph::DurableRunner"
+        ExecutionSupport.new(self).ensure_ephemeral_public!
       end
 
       def stream_error_data(error)
-        {
-          "graph" => name,
-          "error_class" => error.class.name.to_s,
-          "category" => error.respond_to?(:category) ? error.category : "internal",
-          "safe_message" => if error.respond_to?(:safe_message)
-                              error.safe_message
-                            else
-                              "The graph stream failed."
-                            end
-        }.freeze
+        ExecutionSupport.new(self).stream_error_data(error)
       end
 
       def validate_concurrency!(value)
-        return if %i[inline threads].include?(value)
-        return if %w[inline threads].include?(value)
-
-        raise ConfigurationError, "concurrency must be inline or threads"
+        ExecutionSupport.new(self).validate_concurrency!(value)
       end
 
       private_constant :DEFAULT_WRITER_TTL
