@@ -16,10 +16,9 @@ module Tamoz
         FROM tamoz_requests
       SQL
 
-      MAX_STALE_REASON_BYTES = 512
-
       def initialize(store)
         @store = store
+        @staleness = RequestStaleness.new(store.checkpoint_codec.state_codec)
         freeze
       end
 
@@ -281,7 +280,7 @@ module Tamoz
               lease.namespace,
               'request.claim.latest_checkpoint'
             )
-            reason = invoke_stale_validator!(
+            reason = staleness.reason_for(
               validator,
               wire.materialize_request(row),
               checkpoint
@@ -436,7 +435,7 @@ module Tamoz
               lease.namespace,
               'request.recover.latest_checkpoint'
             )
-            reason = invoke_stale_validator!(
+            reason = staleness.reason_for(
               validator,
               wire.materialize_request(row),
               checkpoint
@@ -544,14 +543,14 @@ module Tamoz
             tx,
             lease:,
             checkpoint_id: nil,
-            transition: stale_terminal_transition(
+            transition: staleness.terminal_transition(
               request_id: id,
               execution_id: row.fetch(10),
               operation:,
               reason:
             ),
             now:,
-            evidence_override: stale_transition_evidence(
+            evidence_override: staleness.transition_evidence(
               operation:,
               reason:,
               checkpoint_id: nil
@@ -643,62 +642,12 @@ module Tamoz
         evidence_override: nil
       )
         request_id = transition.fetch('request_id')
-        row = request_row(
-          tx,
-          lease.thread_id,
-          lease.namespace,
-          request_id,
-          'request.commit.row'
-        )
+        row = request_row(tx, lease.thread_id, lease.namespace, request_id, 'request.commit.row')
         raise CheckpointConflictError, 'request does not exist' unless row
-        unless row.fetch(10) == transition.fetch('execution_id')
-          raise CheckpointConflictError, 'request execution identity is mismatched'
-        end
-        unless %w[claimed running redirecting].include?(row.fetch(7))
-          raise CheckpointConflictError,
-                "request status #{row.fetch(7)} cannot transition"
-        end
-        unless row.fetch(18).nil? || row.fetch(18).is_a?(Integer)
-          raise CheckpointCorruptionError, 'request retryable flag is invalid'
-        end
 
-        action = transition.fetch('action')
-        to_status = case action
-                    when 'running' then 'running'
-                    when 'completed' then 'completed'
-                    when 'failed' then 'failed'
-                    else
-                      raise ConfigurationError, 'request transition action is invalid'
-                    end
-        if action == 'running' && !%w[claimed redirecting].include?(row.fetch(7))
-          raise CheckpointConflictError,
-                'only a claimed or redirecting request can start'
-        end
-        if %w[completed failed].include?(action) &&
-           !%w[running claimed].include?(row.fetch(7))
-          raise CheckpointConflictError,
-                'only a running request or atomic claimed operation can become terminal'
-        end
-        if evidence_override &&
-           !evidence_override.is_a?(Hash)
-          raise ConfigurationError, 'request transition evidence override is invalid'
-        end
-
-        response = transition.fetch('response')
-        response_digest = transition.fetch('response_digest')
-        retryable = transition.fetch('retryable')
-        retryable_integer = if retryable.nil?
-                              nil
-                            else
-                              (retryable ? 1 : 0)
-                            end
-        terminal_error = action == 'failed' ? response : nil
-        terminal_error_digest = if terminal_error
-                                  Wire.digest(
-                                    terminal_error,
-                                    domain: 'tamoz.sqlite.request_error'
-                                  )
-                                end
+        plan = RequestTransitionPlan.for(
+          row:, transition:, checkpoint_id:, evidence_override:
+        )
         tx.execute(
           'request.commit.update',
           <<~SQL,
@@ -712,12 +661,11 @@ module Tamoz
               AND status = ?
           SQL
           [
-            to_status, checkpoint_id,
-            action == 'failed' ? nil : Wire.blob(response),
-            action == 'failed' ? nil : response_digest,
-            terminal_error && Wire.blob(terminal_error),
-            terminal_error_digest, retryable_integer, lease.fence, now,
-            lease.thread_id, lease.namespace, request_id, row.fetch(7)
+            plan.to_status, checkpoint_id,
+            plan.response_blob, plan.response_digest,
+            plan.terminal_error_blob, plan.terminal_error_digest,
+            plan.retryable_integer, lease.fence, now,
+            lease.thread_id, lease.namespace, request_id, plan.from_status
           ]
         )
         raise CheckpointConflictError, 'request transition lost' unless tx.changes == 1
@@ -727,18 +675,17 @@ module Tamoz
           thread_id: lease.thread_id,
           namespace: lease.namespace,
           request_id:,
-          from_status: row.fetch(7),
-          to_status:,
+          from_status: plan.from_status,
+          to_status: plan.to_status,
           fence: lease.fence,
-          evidence: evidence_override || {
-            'kind' => action,
-            'checkpoint_id' => checkpoint_id
-          },
+          evidence: plan.evidence,
           now:
         )
       end
 
       private
+
+      attr_reader :staleness
 
       def wire = @store.wire
       def adapter = @store.adapter
@@ -793,59 +740,6 @@ module Tamoz
         )
       end
 
-      # Invokes the graph-owned staleness predicate with the materialized request and
-      # the decoded checkpoint, enforcing the validator return contract (DR-4 13):
-      # nil, or a non-empty bounded string without control characters. Any other
-      # return (or a raising validator) fails closed before any write is issued.
-      def invoke_stale_validator!(validator, request, checkpoint)
-        reason = begin
-          validator.call(request, checkpoint)
-        rescue ConfigurationError
-          raise
-        rescue StandardError => e
-          raise ConfigurationError.new(
-            'request staleness validation failed'
-          ), cause: e
-        end
-        validate_stale_reason!(reason)
-      end
-
-      def validate_stale_reason!(reason)
-        return nil if reason.nil?
-
-        unless reason.is_a?(String) &&
-               reason.valid_encoding? &&
-               !reason.empty? &&
-               reason.bytesize <= MAX_STALE_REASON_BYTES &&
-               reason !~ /[[:cntrl:]]/
-          raise ConfigurationError,
-                'request staleness validator returned an invalid reason'
-        end
-        reason
-      end
-
-      def stale_transition_evidence(operation:, reason:, checkpoint_id:)
-        {
-          'kind' => 'claim_validation',
-          'operation' => operation.to_s,
-          'reason' => reason,
-          'checkpoint_id' => checkpoint_id
-        }
-      end
-
-      # Canonical terminal-error payload for a stale-fail (DR-4 C5): graph_status
-      # failed plus the typed reason and framework-authored evidence. Shared by the
-      # claim/recover in-transaction path and the runner's post-claim backstop so
-      # both serialize byte-identical payloads for the same cause (DR-4 16).
-      def stale_terminal_payload(operation:, reason:)
-        payload = {
-          'graph_status' => 'failed',
-          'reason' => reason,
-          'evidence' => { 'kind' => 'claim_validation', 'operation' => operation.to_s }
-        }
-        checkpoint_codec.state_codec.dump(payload)
-      end
-
       # Single atomic queued/claimed/running -> failed write INSIDE an open claim or
       # recover transaction. This is the only writer that can move a request directly
       # from `queued` to `failed`; the public fenced APIs still reject that edge
@@ -861,7 +755,7 @@ module Tamoz
         checkpoint_id:,
         now:
       )
-        payload = stale_terminal_payload(operation:, reason:)
+        payload = staleness.terminal_payload(operation:, reason:)
         tx.execute(
           'request.terminal_fail',
           <<~SQL,
@@ -894,33 +788,13 @@ module Tamoz
           from_status: row.fetch(7),
           to_status: 'failed',
           fence: lease.fence,
-          evidence: stale_transition_evidence(
+          evidence: staleness.transition_evidence(
             operation:,
             reason:,
             checkpoint_id:
           ),
           now:
         )
-      end
-
-      # Public fenced terminal-fail reserved for the post-claim execution backstop
-      # (DR-4 D2): opens its own transaction, validates the lease, and fails a
-      # claimed/running request with the same canonical stale payload. Never called
-      # from inside the claim transaction. (Defined in the public section above;
-      # this is the shared payload constructor.)
-      def stale_terminal_transition(request_id:, execution_id:, operation:, reason:)
-        response = stale_terminal_payload(operation:, reason:)
-        {
-          'request_id' => request_id,
-          'execution_id' => execution_id,
-          'action' => 'failed',
-          'response' => response,
-          'response_digest' => Wire.digest(
-            response,
-            domain: 'tamoz.sqlite.request_response'
-          ),
-          'retryable' => nil
-        }.freeze
       end
 
       def transition_request_without_checkpoint!(
@@ -1000,7 +874,7 @@ module Tamoz
         )
       end
 
-      private_constant :REQUEST_SELECT, :MAX_STALE_REASON_BYTES
+      private_constant :REQUEST_SELECT
     end
   end
 end
