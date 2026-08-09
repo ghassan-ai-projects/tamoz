@@ -20,7 +20,11 @@ module Tamoz
       MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
       MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
       GRAPH_VERSION = "1"
-      BEHAVIOR_VERSION = "tamoz.agent.session/1"
+      # Rebinding, not a second definition: the value is owned by
+      # `Tamoz::Agent` so the memory layer can read it without depending
+      # upward on this class. Kept under this name because durable records and
+      # profiles were written against this spelling.
+      BEHAVIOR_VERSION = Tamoz::Agent::BEHAVIOR_VERSION
 
       attr_reader :toolbox, :max_plan_attempts, :max_repair_attempts, :model_call_safety,
                   :profile, :mcp, :capabilities

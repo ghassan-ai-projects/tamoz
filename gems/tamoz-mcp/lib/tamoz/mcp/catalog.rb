@@ -21,7 +21,6 @@ module Tamoz
       DIGEST_DOMAIN = "tamoz.mcp.catalog.v1\n"
       ENTRY_DIGEST_DOMAIN = "tamoz.mcp.catalog.entry.v1\n"
       TOOL_NAME_PATTERN = /\A[A-Za-z\d_\-.]{1,128}\z/
-      CLIENT_INFO = { name: "tamoz-mcp", version: VERSION }.freeze
 
       # One catalogued capability. `annotations` (when present) are parsed but
       # are always author-claimed server metadata — never local policy.

@@ -114,7 +114,7 @@ module Tamoz
           :active_transition_id, :pending_transition_id
         ) do
           def initialize(
-            next_version: 1, active_version: SessionNodes::BEHAVIOR_VERSION,
+            next_version: 1, active_version: BEHAVIOR_VERSION,
             active_snapshot_digest: nil, active_transition_id: nil,
             pending_transition_id: nil
           )

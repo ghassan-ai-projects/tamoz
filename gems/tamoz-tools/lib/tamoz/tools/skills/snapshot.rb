@@ -16,9 +16,15 @@ module Tamoz
       module Snapshot
         module_function
 
-        def empty
-          @empty ||= Compiler.new(sources: []).compile
-        end
+        # The snapshot a toolbox gets when nobody configured skills.
+        #
+        # Computed once, at load, into a constant rather than memoized into a
+        # module instance variable: `@empty ||=` on a singleton is hidden
+        # global state that two threads can race to build. The result is
+        # frozen either way, so the race was harmless — but "harmless race"
+        # is not a property worth maintaining when a constant says it can't
+        # happen.
+        def empty = EMPTY
 
         def build(records:, collisions:, rejections:, bindings:, sources:)
           ordered = records.sort.to_h

@@ -254,7 +254,7 @@ module Tamoz
             confidence_method: "consolidation",
             contradiction_set_id: proposal.fetch("contradictions").empty? ? nil : Digest::SHA256.hexdigest(proposal.fetch("contradictions").join("\0")),
             created_by: {"surface" => "consolidation"},
-            compatibility: {"graph_version" => "1", "behavior_version" => SessionNodes::BEHAVIOR_VERSION},
+            compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
             transition: {
               "actor" => owner.to_s,
               "authority" => "consolidation",

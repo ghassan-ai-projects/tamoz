@@ -657,11 +657,6 @@ Lint/DuplicateBranch:
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/generate_requirements_audit'
 
-# Offense count: 1
-Lint/DuplicateMethods:
-  Exclude:
-    - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
-
 # Offense count: 2
 # Configuration parameters: AllowComments, AllowEmptyLambdas.
 Lint/EmptyBlock:

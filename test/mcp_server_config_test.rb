@@ -331,4 +331,49 @@ class McpServerConfigTest < Minitest::Test
     assert_predicate error, :user_visible?
     refute_predicate error, :retryable?
   end
+
+  # --- where the gem's constants actually live -----------------------------
+  #
+  # `Data.define(...) do … end` is instance_exec'd, so a constant assigned in
+  # that block does NOT land on the Data class: it lands on the enclosing
+  # lexical scope, `Tamoz::Mcp`. Four files across the gem read such constants
+  # bare and resolved through that accident, and two blocks assigning the same
+  # name would have silently overwritten each other module-wide with no warning
+  # at either site.
+  #
+  # The shared ones now have an explicit home. This pins that they are there,
+  # and that nothing re-introduces a block-local twin under the same name.
+  def test_the_shared_constants_have_an_explicit_home
+    assert_equal(/[\x00-\x1f\x7f]/, Tamoz::Mcp::CONTROL_CHARACTER_PATTERN)
+    assert_equal({name: "tamoz-mcp", version: Tamoz::Mcp::VERSION}, Tamoz::Mcp::CLIENT_INFO)
+
+    refute ServerConfig.const_defined?(:CONTROL_CHARACTER_PATTERN, false),
+           "the pattern is shared; a config-local twin would shadow it for this file only"
+    refute Tamoz::Mcp::Catalog.const_defined?(:CLIENT_INFO, false),
+           "client info is shared; a catalog-local twin would shadow it for this file only"
+  end
+
+  # Every constant a Data.define block in this gem writes ends up on
+  # `Tamoz::Mcp`. That is tolerable when it is deliberate and unique; it is a
+  # silent overwrite when two blocks pick the same name. This is the check that
+  # says which.
+  def test_no_two_data_define_blocks_claim_the_same_constant_name
+    sources = Dir.glob(File.expand_path("../gems/tamoz-mcp/lib/**/*.rb", __dir__))
+    claims = Hash.new { |store, key| store[key] = [] }
+    sources.each do |path|
+      inside = false
+      File.readlines(path).each do |line|
+        inside = true if line.match?(/Data\.define\(.*\) do|^\s+\) do\s*$/)
+        next unless inside
+
+        name = line[/^\s+([A-Z][A-Z0-9_]*)\s*=/, 1]
+        claims[name] << File.basename(path) if name
+      end
+    end
+
+    collisions = claims.select { |_name, files| files.uniq.length > 1 }
+    assert_empty collisions,
+                 "these constant names are claimed by blocks in more than one file, " \
+                 "and the later load silently wins on Tamoz::Mcp"
+  end
 end

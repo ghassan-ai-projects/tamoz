@@ -64,7 +64,11 @@ module Tamoz
         OPENAI_API_KEY OPENROUTER_API_KEY PERPLEXITY_API_KEY XAI_API_KEY
       ].freeze
 
-      attr_reader :root, :checks, :check_timeout, :check_safeties, :allowed_tools,
+      # `allowed_tools` is deliberately NOT here: it has a real reader below
+      # (with the contract comment that explains what the set means), and
+      # listing it here as well defined the method twice — the attr_reader
+      # version was dead the moment the file was loaded.
+      attr_reader :root, :checks, :check_timeout, :check_safeties,
                   :approval_required, :skills, :skill_catalog
 
       def initialize(
