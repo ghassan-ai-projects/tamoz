@@ -232,6 +232,17 @@ module Tamoz
       def format_list(values)
         values.empty? ? "(none)" : values.join(", ")
       end
+
+      # The empty snapshot, built once at load rather than memoized into a
+      # module instance variable on first use. `@empty ||=` on a singleton is
+      # hidden global state two threads can race to build; the result is frozen
+      # either way, so the race was harmless — but a constant makes it
+      # impossible rather than harmless.
+      #
+      # It is assigned here rather than in `snapshot.rb` because building it
+      # runs the compiler, which needs `values.rb` — everything this file has
+      # already required above.
+      Snapshot::EMPTY = Compiler.new(sources: []).compile
     end
   end
 end

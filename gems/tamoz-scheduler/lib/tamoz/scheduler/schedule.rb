@@ -166,7 +166,6 @@ module Tamoz
           return [] if end_at && start > end_at
           return [] if start > now
 
-          first = start
           count = ((now - start) / duration) + 1
           (0...[count, limit].min).map { |ordinal| start + (ordinal * duration) }
         end

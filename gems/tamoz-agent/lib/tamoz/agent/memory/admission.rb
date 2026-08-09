@@ -119,7 +119,7 @@ module Tamoz
             disclosure_policy: "default",
             valid_from: (now || Time.now).to_i,
             created_by: {"surface" => "owner_fast_path"},
-            compatibility: {"graph_version" => "1", "behavior_version" => SessionNodes::BEHAVIOR_VERSION},
+            compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
             transition: transition("owner", "owner fast path admission", evidence: {"authority" => authority.to_s}),
             created_at_ms: @engine.now_ms
           )
@@ -313,7 +313,7 @@ module Tamoz
             valid_from: episode.fetch(:completed_at, Time.now.to_i),
             valid_until: episode[:valid_until],
             created_by: {"surface" => "episode_admission", "session_id" => episode.fetch(:session_id)},
-            compatibility: {"graph_version" => "1", "behavior_version" => SessionNodes::BEHAVIOR_VERSION},
+            compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
             transition: transition(actor || owner, "episode admission", evidence: {"session_id" => episode.fetch(:session_id)}),
             created_at_ms: @engine.now_ms
           )

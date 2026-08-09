@@ -33,9 +33,6 @@ module Tamoz
       # must not depend on `tamoz-agent`, so the patterns are repeated here
       # instead of imported (see docs/P10_MCP_PLAN.md §3).
       SHELL_METACHARACTER_PATTERN = /[$;|><`*&]/
-      # C0 controls plus DEL. Newlines in argv corrupt every downstream log,
-      # prompt, and receipt that renders the command.
-      CONTROL_CHARACTER_PATTERN = /[\x00-\x1f\x7f]/
 
       # Deliberate duplication of the P8-E credential-env rule from
       # `Tamoz::Agent::Toolbox` (see docs/P10_MCP_PLAN.md §3): an inherited

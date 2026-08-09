@@ -111,7 +111,7 @@ module Tamoz
             project:,
             sensitivity:,
             compatibility_graph: compatibility.fetch(:graph_version, "1"),
-            compatibility_behavior: compatibility.fetch(:behavior_version, SessionNodes::BEHAVIOR_VERSION)
+            compatibility_behavior: compatibility.fetch(:behavior_version, BEHAVIOR_VERSION)
           }
         end
 
@@ -131,7 +131,7 @@ module Tamoz
             sensitivity: record.sensitivity.to_s,
             valid_until_ms: record.valid_until && (record.valid_until.to_i * 1000),
             compatibility_graph: record.compatibility.fetch("graph_version", "1"),
-            compatibility_behavior: record.compatibility.fetch("behavior_version", SessionNodes::BEHAVIOR_VERSION),
+            compatibility_behavior: record.compatibility.fetch("behavior_version", BEHAVIOR_VERSION),
             statement_search: record.sensitive? ? nil : searchable_text(record),
             searchable: !record.sensitive?
           )
