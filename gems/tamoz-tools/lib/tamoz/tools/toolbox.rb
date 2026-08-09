@@ -31,6 +31,18 @@ module Tamoz
       MAX_PATCH_BYTES = 64 * 1024
       MAX_CHECK_OUTPUT_BYTES = 64 * 1024
       DEFAULT_CHECK_TIMEOUT = 60.0
+      READ_DESCRIPTIONS = ToolCatalog::READ_DESCRIPTIONS
+      ACTION_DESCRIPTIONS = ToolCatalog::ACTION_DESCRIPTIONS
+      SKILL_DESCRIPTIONS = ToolCatalog::SKILL_DESCRIPTIONS
+      PROMPT_SURFACE_DOMAIN = ToolCatalog::PROMPT_SURFACE_DOMAIN
+      CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
+      DEFAULT_CHECK_SAFETY = :unsafe
+      DEFAULT_APPROVAL_REQUIRED = ToolCatalog::DEFAULT_APPROVAL_REQUIRED
+      CREDENTIAL_ENV_PATTERN = CheckRunner::ENV_PATTERN
+      CREDENTIAL_ENV_NAMES = CheckRunner::ENV_NAMES
+      STAGING_PATTERN = StagingReaper::PATTERN
+      STAGING_STALE_SECONDS = StagingReaper::DEFAULT_AGE
+      MAX_REAPED_STAGING_FILES = StagingReaper::MAX_FILES
 
       attr_reader :root, :checks, :check_timeout, :check_safeties, :approval_required, :skills, :skill_catalog, :reaped_staging, :catalog_digest, :prompt_surface_digest
 
@@ -154,8 +166,12 @@ module Tamoz
         end
       end
 
-      def reap_stale_staging(older_than: StagingReaper::DEFAULT_AGE, now: Time.now)
+      def reap_stale_staging(older_than: STAGING_STALE_SECONDS, now: Time.now)
         StagingReaper.new(@root).reap(older_than:, now:)
+      end
+
+      def stale_staging_files(older_than: STAGING_STALE_SECONDS, now: Time.now)
+        StagingReaper.new(@root).stale_files(older_than:, now:)
       end
 
       private

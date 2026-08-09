@@ -67,7 +67,7 @@ module Tamoz
         ensure
           begin
             temp&.close!
-          rescue StandardError
+          rescue SystemCallError
             nil
           end
           toolbox.__send__(:fsync_directory, parent) if published

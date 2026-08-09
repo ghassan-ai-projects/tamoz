@@ -35,10 +35,6 @@ module Tamoz
         removed.freeze
       end
 
-      private
-
-      attr_reader :root
-
       def stale_files(older_than:, now:)
         found = []
         Find.find(root.to_s) do |entry|
@@ -53,6 +49,10 @@ module Tamoz
       rescue SystemCallError
         []
       end
+
+      private
+
+      attr_reader :root
 
       def collect(path, stat, found, older_than:, now:)
         if stat.symlink?

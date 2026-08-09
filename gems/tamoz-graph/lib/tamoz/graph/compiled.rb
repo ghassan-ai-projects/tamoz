@@ -183,7 +183,6 @@ module Tamoz
       end
 
       def state_manager = @state_manager
-      def resume_answers = @resume_answers
       def planner = @planner
       def route_planner = @route_planner
 
@@ -191,6 +190,7 @@ module Tamoz
 
       private
 
+      def resume_answers = @resume_answers
       def invoke_at(...) = RunCoordinator.new(self).invoke(...)
       def resume_at(...) = RunCoordinator.new(self).resume(...)
       def retry_failed_at(...) = RunCoordinator.new(self).retry_failed(...)

@@ -100,7 +100,7 @@ module Tamoz
           context: execution.context,
           writer: execution.writer,
           durable_request_id: request.request_id,
-          mark_request_running: true
+          mark_request_running: request.status == :claimed
         )
       end
 
@@ -167,7 +167,7 @@ module Tamoz
       end
 
       def latest_status(execution)
-        compiled.__send__(:latest_status, execution.request, writer: execution.writer).status
+        compiled.__send__(:latest_status, execution.request, writer: execution.writer)
       end
 
       def validate_redirect!(execution)
