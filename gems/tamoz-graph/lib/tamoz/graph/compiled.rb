@@ -23,6 +23,7 @@ module Tamoz
         @codec = codec
         @limits = limits
         @state_manager = StateManager.new(channels: definition.channels, codec:)
+        @resume_answers = ResumeAnswers.new(codec:)
         @checkpoint_codec = CheckpointCodec.new(
           definition:,
           definition_digest: @definition_digest,
@@ -692,154 +693,9 @@ module Tamoz
         concurrency:,
         context: nil
       )
-        unless request.is_a?(RequestRecord) &&
-               request.thread_id &&
-               request.execution_id &&
-               %i[claimed running redirecting].include?(request.status)
-          raise ConfigurationError, "durable request is not executable"
-        end
-        validate_concurrency!(concurrency)
-        case request.operation
-        when :turn
-          if request.status == :claimed
-            run_context = build_context(
-              context,
-              thread: request.thread_id,
-              request_id: request.request_id,
-              execution_id: request.execution_id,
-              cancellation: context&.cancellation || CancellationToken.new,
-              emitter: context&.emitter || Emitter::Null::INSTANCE
-            )
-            invoke_with_writer(
-              request.payload,
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              execution_id: request.execution_id,
-              concurrency:,
-              new_execution: true,
-              run_context:,
-              writer:,
-              durable_request_id: request.request_id
-            )
-          else
-            continue_with_writer(
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              concurrency:,
-              context:,
-              writer:,
-              durable_request_id: request.request_id,
-              mark_request_running: false
-            )
-          end
-        when :resume
-          # A resume request that is already `running` was interrupted after its
-          # answers were merged and at least one barrier committed. Its checkpoint is
-          # no longer paused, so recovery continues the interrupted execution rather
-          # than replaying the resume. A resume killed before its first barrier still
-          # has a paused checkpoint and takes the ordinary path, so no answer is lost.
-          if request.status == :running &&
-             latest_status(request, writer:) == :running
-            continue_with_writer(
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              concurrency:,
-              context:,
-              writer:,
-              durable_request_id: request.request_id,
-              mark_request_running: false
-            )
-          else
-            resume_with_writer(
-              request.payload,
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              concurrency:,
-              context:,
-              writer:,
-              durable_request_id: request.request_id,
-              mark_request_running: request.status == :claimed
-            )
-          end
-        when :retry
-          retry_failed_with_writer(
-            thread: request.thread_id,
-            namespace: request.namespace,
-            request_id: request.request_id,
-            concurrency:,
-            context:,
-            writer:,
-            durable_request_id: request.request_id,
-            mark_request_running: request.status == :claimed
-          )
-        when :continue
-          continue_with_writer(
-            thread: request.thread_id,
-            namespace: request.namespace,
-            request_id: request.request_id,
-            concurrency:,
-            context:,
-            writer:,
-            durable_request_id: request.request_id,
-            mark_request_running: request.status == :claimed
-          )
-        when :fork
-          fork_with_writer(
-            request,
-            writer:,
-            concurrency:,
-            context:
-          )
-        when :redirect
-          unless request.target_execution_id &&
-                 request.cancellation_generation &&
-                 writer.redirect_ready?(
-                   target_execution_id: request.target_execution_id
-                 )
-            raise CheckpointConflictError,
-                  "redirect is waiting for target effects to become terminal"
-          end
-          if request.status == :running
-            continue_with_writer(
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              concurrency:,
-              context:,
-              writer:,
-              durable_request_id: request.request_id,
-              mark_request_running: false
-            )
-          else
-            run_context = build_context(
-              context,
-              thread: request.thread_id,
-              request_id: request.request_id,
-              execution_id: request.execution_id,
-              cancellation: context&.cancellation || CancellationToken.new,
-              emitter: context&.emitter || Emitter::Null::INSTANCE
-            )
-            invoke_with_writer(
-              request.payload,
-              thread: request.thread_id,
-              namespace: request.namespace,
-              request_id: request.request_id,
-              execution_id: request.execution_id,
-              concurrency:,
-              new_execution: true,
-              run_context:,
-              writer:,
-              durable_request_id: request.request_id
-            )
-          end
-        else
-          raise ConfigurationError,
-                "durable request operation #{request.operation.inspect} is not executable yet"
-        end
+        DurableRequestExecutor.new(self).execute(
+          DurableRequestExecution.new(request, writer, concurrency, context)
+        )
       end
 
       def latest_status(request, writer:)
@@ -988,79 +844,11 @@ module Tamoz
       # match the current interrupts, (c) no answer index already merged into
       # `resume_values`. Returns a typed reason string or nil.
       def stale_resume_reason(checkpoint, request)
-        unless checkpoint && checkpoint.status == :paused
-          return "latest checkpoint is not paused"
-        end
-
-        answers = request.payload
-        return "resume answers must be a Hash" unless answers.is_a?(Hash)
-        return "resume answers cannot be empty" if answers.empty?
-
-        expected = checkpoint.interrupts.to_h do |interrupt|
-          [[interrupt.task_id, interrupt.call_index], true]
-        end
-        answers.each do |raw_task_id, raw_indices|
-          task_id = String(raw_task_id)
-          return "resume task answers must be a Hash" unless raw_indices.is_a?(Hash)
-
-          raw_indices.each_key do |raw_index|
-            index = Integer(raw_index, exception: false)
-            unless index && index >= 0 && expected.key?([task_id, index])
-              return "resume answer does not match an outstanding task/call index"
-            end
-          end
-        end
-        answers.each do |raw_task_id, raw_indices|
-          task_id = String(raw_task_id)
-          raw_indices.each_key do |raw_index|
-            index = Integer(raw_index, exception: false)
-            next unless index && index >= 0
-
-            values = checkpoint.resume_values.fetch(task_id, nil)
-            if values && values.key?(index)
-              return "resume answer already exists for call index #{index}"
-            end
-          end
-        end
-        nil
+        @resume_answers.stale_reason(checkpoint, request)
       end
 
       def merge_resume_values(checkpoint, answers)
-        raise InvalidUpdateError, "resume answers must be a Hash" unless answers.is_a?(Hash)
-
-        expected = checkpoint.interrupts.to_h do |interrupt|
-          [[interrupt.task_id, interrupt.call_index], true]
-        end
-        additions = {}
-        answers.each do |raw_task_id, raw_indices|
-          task_id = String(raw_task_id)
-          raise InvalidUpdateError, "resume task answers must be a Hash" unless raw_indices.is_a?(Hash)
-
-          raw_indices.each do |raw_index, value|
-            index = Integer(raw_index, exception: false)
-            unless index && index >= 0 && expected.key?([task_id, index])
-              raise InvalidUpdateError,
-                    "resume answer does not match an outstanding task/call index"
-            end
-            additions[task_id] ||= {}
-            additions[task_id][index] = codec.normalize(value)
-          end
-        end
-        raise InvalidUpdateError, "resume answers cannot be empty" if additions.empty?
-
-        merged = checkpoint.resume_values.to_h do |task_id, values|
-          [task_id, values.dup]
-        end
-        additions.each do |task_id, values|
-          merged[task_id] ||= {}
-          values.each do |index, value|
-            if merged.fetch(task_id).key?(index)
-              raise InvalidUpdateError, "resume answer already exists for #{task_id}/#{index}"
-            end
-            merged.fetch(task_id)[index] = value
-          end
-        end
-        merged.transform_values { |values| values.freeze }.freeze
+        @resume_answers.merge(checkpoint, answers)
       end
 
       def build_context(base, thread:, request_id:, execution_id:, cancellation:, emitter:)
