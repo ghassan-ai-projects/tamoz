@@ -510,48 +510,17 @@ module Tamoz
         prepared_frontier: nil,
         durable_request_id: nil
       )
-        latest = writer.latest
-        if latest && !new_execution
-          raise StaleRequestError,
-                "thread already exists; use resume, retry_failed, or new_execution: true"
-        end
-        mode = latest ? :turn : :start
-        state = prepared_state ||
-                @state_manager.initial(input || {}, remaining_steps: limits.max_steps)
-        frontier = prepared_frontier || @route_planner.initial_frontier
-        request_transition = if durable_request_id
-                               writer.request_transition(
-                                 request_id: durable_request_id,
-                                 execution_id:,
-                                 action: :running,
-                                 graph_status: :running
-                               )
-                             end
-        checkpoint = append_checkpoint(
-          writer:,
+        WriterRunExecutor.new(self).invoke(
+          input,
           thread:,
           namespace:,
-          expected_base_id: latest&.id,
-          mode:,
           execution_id:,
-          state:,
-          status: :running,
-          logical_step: 0,
-          frontier:,
-          pending: {},
-          interrupts: [],
-          resume_values: {},
-          attempts: {},
-          failure: nil,
-          total_tasks: 0,
-          request_transition:
-        )
-        run_context = bind_writer_context(run_context, writer)
-        Executor.new(self).run(
-          checkpoint,
-          writer:,
-          context: run_context,
           concurrency:,
+          new_execution:,
+          run_context:,
+          writer:,
+          prepared_state:,
+          prepared_frontier:,
           durable_request_id:
         )
       end
@@ -567,47 +536,16 @@ module Tamoz
         durable_request_id: nil,
         mark_request_running: true
       )
-        checkpoint = compatible_latest!(thread, namespace:, writer:)
-        unless checkpoint.status == :paused
-          raise StaleRequestError, "latest checkpoint is not paused"
-        end
-        resume_values = begin
-          merge_resume_values(checkpoint, answers)
-        rescue InvalidUpdateError => error
-          # DR-4 critic hardening: in the DURABLE claim→execute window the
-          # checkpoint can change between claim and merge (lease expiry + an
-          # owner-B write), so an answer/index mismatch here is a STALE request —
-          # the same class the claim-time validator catches. Surface it as
-          # StaleRequestError so the runner's backstop terminal-fails it, never
-          # an escaping InvalidUpdateError (the D-6 signature). The EPHEMERAL
-          # path (durable_request_id nil) keeps InvalidUpdateError for direct
-          # caller bugs (pinned by graph_interrupt_test).
-          raise StaleRequestError, error.message if durable_request_id
-
-          raise
-        end
-        if durable_request_id && mark_request_running
-          writer.mark_request_running(
-            request_id: durable_request_id,
-            execution_id: checkpoint.execution_id
-          )
-        end
-        run_context = build_context(
-          context,
+        WriterRunExecutor.new(self).resume(
+          answers,
           thread:,
+          namespace:,
           request_id:,
-          execution_id: checkpoint.execution_id,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
-        )
-        run_context = bind_writer_context(run_context, writer)
-        Executor.new(self).run(
-          checkpoint,
-          writer:,
-          context: run_context,
           concurrency:,
-          resume_values:,
-          durable_request_id:
+          context:,
+          writer:,
+          durable_request_id:,
+          mark_request_running:
         )
       end
 
@@ -621,31 +559,15 @@ module Tamoz
         durable_request_id: nil,
         mark_request_running: true
       )
-        checkpoint = compatible_latest!(thread, namespace:, writer:)
-        unless checkpoint.status == :failed
-          raise StaleRequestError, "latest checkpoint is not failed"
-        end
-        if durable_request_id && mark_request_running
-          writer.mark_request_running(
-            request_id: durable_request_id,
-            execution_id: checkpoint.execution_id
-          )
-        end
-        run_context = build_context(
-          context,
+        WriterRunExecutor.new(self).retry_failed(
           thread:,
+          namespace:,
           request_id:,
-          execution_id: checkpoint.execution_id,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
-        )
-        run_context = bind_writer_context(run_context, writer)
-        Executor.new(self).run(
-          checkpoint,
-          writer:,
-          context: run_context,
           concurrency:,
-          durable_request_id:
+          context:,
+          writer:,
+          durable_request_id:,
+          mark_request_running:
         )
       end
 
@@ -659,31 +581,15 @@ module Tamoz
         durable_request_id: nil,
         mark_request_running: true
       )
-        checkpoint = compatible_latest!(thread, namespace:, writer:)
-        unless checkpoint.status == :running
-          raise StaleRequestError, "latest checkpoint has no runnable frontier"
-        end
-        if durable_request_id && mark_request_running
-          writer.mark_request_running(
-            request_id: durable_request_id,
-            execution_id: checkpoint.execution_id
-          )
-        end
-        run_context = build_context(
-          context,
+        WriterRunExecutor.new(self).continue(
           thread:,
+          namespace:,
           request_id:,
-          execution_id: checkpoint.execution_id,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
-        )
-        run_context = bind_writer_context(run_context, writer)
-        Executor.new(self).run(
-          checkpoint,
-          writer:,
-          context: run_context,
           concurrency:,
-          durable_request_id:
+          context:,
+          writer:,
+          durable_request_id:,
+          mark_request_running:
         )
       end
 
