@@ -427,73 +427,49 @@ module Tamoz
         prepared_state: nil,
         prepared_frontier: nil
       )
-        unless new_execution == true || new_execution == false
-          raise ConfigurationError, "new_execution must be true or false"
-        end
-        validate_concurrency!(concurrency)
-        run_context = build_context(
-          context,
+        RunCoordinator.new(self).invoke(
+          input,
           thread:,
+          namespace:,
           request_id:,
           execution_id:,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
+          concurrency:,
+          new_execution:,
+          context:,
+          prepared_state:,
+          prepared_frontier:
         )
-        open_writer(thread, namespace) do |writer|
-          invoke_with_writer(
-            input,
-            thread:,
-            namespace:,
-            request_id:,
-            execution_id:,
-            concurrency:,
-            new_execution:,
-            run_context:,
-            writer:,
-            prepared_state:,
-            prepared_frontier:
-          )
-        end
       end
 
       def resume_at(answers, thread:, namespace:, request_id:, concurrency:, context:)
-        open_writer(thread, namespace) do |writer|
-          resume_with_writer(
-            answers,
-            thread:,
-            namespace:,
-            request_id:,
-            concurrency:,
-            context:,
-            writer:
-          )
-        end
+        RunCoordinator.new(self).resume(
+          answers,
+          thread:,
+          namespace:,
+          request_id:,
+          concurrency:,
+          context:
+        )
       end
 
       def retry_failed_at(thread:, namespace:, request_id:, concurrency:, context:)
-        open_writer(thread, namespace) do |writer|
-          retry_failed_with_writer(
-            thread:,
-            namespace:,
-            request_id:,
-            concurrency:,
-            context:,
-            writer:
-          )
-        end
+        RunCoordinator.new(self).retry_failed(
+          thread:,
+          namespace:,
+          request_id:,
+          concurrency:,
+          context:
+        )
       end
 
       def continue_at(thread:, namespace:, request_id:, concurrency:, context:)
-        open_writer(thread, namespace) do |writer|
-          continue_with_writer(
-            thread:,
-            namespace:,
-            request_id:,
-            concurrency:,
-            context:,
-            writer:
-          )
-        end
+        RunCoordinator.new(self).continue(
+          thread:,
+          namespace:,
+          request_id:,
+          concurrency:,
+          context:
+        )
       end
 
       def invoke_with_writer(
