@@ -16,6 +16,8 @@ module Tamoz
         FROM tamoz_requests
       SQL
 
+      FRESH_EXECUTION_OPERATIONS = %w[turn fork redirect].freeze
+
       def initialize(store)
         @store = store
         @staleness = RequestStaleness.new(store.checkpoint_codec.state_codec)
@@ -273,69 +275,22 @@ module Tamoz
           next unless row
           next unless row.fetch(7) == 'queued'
 
-          if validator
-            checkpoint = latest_checkpoint_in_transaction(
-              tx,
-              lease.thread_id,
-              lease.namespace,
-              'request.claim.latest_checkpoint'
-            )
-            reason = staleness.reason_for(
-              validator,
-              wire.materialize_request(row),
-              checkpoint
-            )
-            if reason
-              terminal_fail_in_transaction!(
-                tx,
-                lease:,
-                row:,
-                operation: row.fetch(5).to_sym,
-                reason:,
-                execution_id:,
-                checkpoint_id: checkpoint&.id,
-                now:
-              )
-              row = request_row(
-                tx,
-                lease.thread_id,
-                lease.namespace,
-                row.fetch(2),
-                'request.claim.result'
-              )
-              next
-            end
+          stale = fail_if_stale!(
+            tx,
+            lease:, row:, validator:, now:,
+            execution_id:,
+            checkpoint_label: 'request.claim.latest_checkpoint',
+            result_label: 'request.claim.result'
+          )
+          if stale
+            row = stale
+            next
           end
 
-          operation = row.fetch(5)
-          bound_execution = if %w[turn fork redirect].include?(operation)
-                              execution_id
-                            else
-                              active_execution_id!(
-                                tx,
-                                lease,
-                                'request.claim.active_execution'
-                              )
-                            end
-          claimed_status = operation == 'redirect' ? 'redirecting' : 'claimed'
-          target_execution = nil
-          cancellation_generation = nil
-          if operation == 'redirect'
-            target_execution = active_execution_id!(
-              tx,
-              lease,
-              'request.claim.redirect_target'
-            )
-            cancellation_generation = tx.scalar(
-              'request.claim.cancellation_generation',
-              <<~SQL,
-                SELECT COALESCE(MAX(cancellation_generation), 0) + 1
-                FROM tamoz_requests
-                WHERE thread_id = ? AND namespace = ?
-              SQL
-              [lease.thread_id, lease.namespace]
-            )
-          end
+          binding = claim_binding(tx, lease:, operation: row.fetch(5), execution_id:)
+          claimed_status = binding.status
+          target_execution = binding.target_execution_id
+          cancellation_generation = binding.cancellation_generation
           tx.execute(
             'request.claim.update',
             <<~SQL,
@@ -347,7 +302,7 @@ module Tamoz
                 AND status = 'queued'
             SQL
             [
-              claimed_status, bound_execution, target_execution,
+              claimed_status, binding.execution_id, target_execution,
               cancellation_generation, lease.fence, now, lease.thread_id,
               lease.namespace, row.fetch(2)
             ]
@@ -428,38 +383,16 @@ module Tamoz
             raise CheckpointConflictError,
                   'request recovery would skip an earlier nonterminal request'
           end
-          if validator
-            checkpoint = latest_checkpoint_in_transaction(
-              tx,
-              lease.thread_id,
-              lease.namespace,
-              'request.recover.latest_checkpoint'
-            )
-            reason = staleness.reason_for(
-              validator,
-              wire.materialize_request(row),
-              checkpoint
-            )
-            if reason
-              terminal_fail_in_transaction!(
-                tx,
-                lease:,
-                row:,
-                operation: row.fetch(5).to_sym,
-                reason:,
-                execution_id: row.fetch(10),
-                checkpoint_id: checkpoint&.id,
-                now:
-              )
-              row = request_row(
-                tx,
-                lease.thread_id,
-                lease.namespace,
-                id,
-                'request.recover.result'
-              )
-              next
-            end
+          stale = fail_if_stale!(
+            tx,
+            lease:, row:, validator:, now:,
+            execution_id: row.fetch(10),
+            checkpoint_label: 'request.recover.latest_checkpoint',
+            result_label: 'request.recover.result'
+          )
+          if stale
+            row = stale
+            next
           end
           tx.execute(
             'request.recover.update',
@@ -738,6 +671,63 @@ module Tamoz
           SQL
           [thread_id, namespace, request_id]
         )
+      end
+
+      # A turn, fork or redirect starts a new execution; a resume, retry or
+      # continue joins the thread's active one. A redirect additionally pins
+      # the execution it is cancelling and takes the next generation.
+      def claim_binding(tx, lease:, operation:, execution_id:)
+        redirect = operation == 'redirect'
+        RequestClaimBinding.new(
+          status: redirect ? 'redirecting' : 'claimed',
+          execution_id: if FRESH_EXECUTION_OPERATIONS.include?(operation)
+                          execution_id
+                        else
+                          active_execution_id!(tx, lease, 'request.claim.active_execution')
+                        end,
+          target_execution_id: redirect ? active_execution_id!(tx, lease, 'request.claim.redirect_target') : nil,
+          cancellation_generation: redirect ? next_cancellation_generation(tx, lease) : nil
+        )
+      end
+
+      def next_cancellation_generation(tx, lease)
+        tx.scalar(
+          'request.claim.cancellation_generation',
+          <<~SQL,
+            SELECT COALESCE(MAX(cancellation_generation), 0) + 1
+            FROM tamoz_requests
+            WHERE thread_id = ? AND namespace = ?
+          SQL
+          [lease.thread_id, lease.namespace]
+        )
+      end
+
+      # The claim-time staleness gate, shared by claim and recover. Returns the
+      # re-read row when the request was failed as stale, nil when it stands.
+      def fail_if_stale!(tx, lease:, row:, validator:, now:, execution_id:,
+                         checkpoint_label:, result_label:)
+        return nil unless validator
+
+        checkpoint = latest_checkpoint_in_transaction(
+          tx,
+          lease.thread_id,
+          lease.namespace,
+          checkpoint_label
+        )
+        reason = staleness.reason_for(validator, wire.materialize_request(row), checkpoint)
+        return nil unless reason
+
+        terminal_fail_in_transaction!(
+          tx,
+          lease:,
+          row:,
+          operation: row.fetch(5).to_sym,
+          reason:,
+          execution_id:,
+          checkpoint_id: checkpoint&.id,
+          now:
+        )
+        request_row(tx, lease.thread_id, lease.namespace, row.fetch(2), result_label)
       end
 
       # Single atomic queued/claimed/running -> failed write INSIDE an open claim or
