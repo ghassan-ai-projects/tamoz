@@ -19,13 +19,14 @@ class DependencyReviewTest < Minitest::Test
     )
 
     assert status.success?, "#{stdout}#{stderr}"
-    assert_empty(
-      Open3.capture2(
-        "git", "status", "--porcelain", "docs/dependency-review.json",
-        "docs/DEPENDENCY_REVIEW.md", chdir: ROOT.to_s
-      ).first.lines.reject { |line| line.start_with?("A ", "??") }.join,
-      "the committed dependency review is out of date; regenerate it"
-    )
+    dirty = Open3.capture2(
+      "git", "status", "--porcelain", "docs/dependency-review.json",
+      "docs/DEPENDENCY_REVIEW.md", chdir: ROOT.to_s
+    ).first.lines.reject { |line| line.start_with?("A ", "??") }.join
+    diff = dirty.empty? ? "" : Open3.capture2("git", "diff", "--", "docs/", chdir: ROOT.to_s).first
+
+    assert_empty dirty,
+                 "the committed dependency review is out of date; regenerate it\n#{diff}"
   end
 
   # No copyleft dependency may enter a production process without an explicit

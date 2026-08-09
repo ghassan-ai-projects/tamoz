@@ -39,7 +39,30 @@ PERMISSIVE = [
 ].freeze
 
 lock = Bundler::LockfileParser.new(File.read(File.join(ROOT, "Gemfile.lock")))
-locked = lock.specs.to_h { |spec| [spec.name, spec] }
+
+# A gem with a precompiled variant appears twice in the lockfile, and the two
+# entries carry DIFFERENT dependencies (`sqlite3 (2.9.5)` needs mini_portile2;
+# `sqlite3 (2.9.5-arm64-darwin)` does not). Taking whichever came last made the
+# runtime closure depend on the machine that generated the report. The generic
+# spec is the superset, so it is the one this gate asks about.
+locked = lock.specs.each_with_object({}) do |spec, store|
+  current = store[spec.name]
+  store[spec.name] = spec if current.nil? || spec.platform.to_s == "ruby"
+end
+
+# Licence and homepage can only be read from an installed gem, and a precompiled
+# variant means a gem in the lockfile may be installed on one platform and not
+# another. Carrying the committed value forward keeps the report identical
+# everywhere instead of blanking rows the local machine happens to lack.
+PREVIOUS = if File.exist?(REPORT_JSON)
+             JSON.parse(File.read(REPORT_JSON))
+                 .values_at("runtime", "development")
+                 .compact
+                 .flatten
+                 .to_h { |row| [row.fetch("name"), row] }
+           else
+             {}
+           end
 
 def spec_for(name, version)
   Gem::Specification.find_by_name(name, version.to_s)
@@ -75,14 +98,26 @@ end
 
 development = locked.reject { |name, spec| runtime.key?(name) || spec.source.is_a?(Bundler::Source::Path) }
 
+def carried_row(name, version)
+  row = PREVIOUS[name]
+  row if row && row["version"] == version
+end
+
+def licences_for(installed, carried)
+  declared = installed&.licenses.to_a
+  declared = carried["licenses"].to_a if declared.empty? && carried
+  declared.empty? ? ["UNDECLARED"] : declared
+end
+
 def describe(name, locked_spec, declared)
-  installed = spec_for(name, locked_spec.version)
-  licenses = installed&.licenses.to_a
+  version = locked_spec.version.to_s
+  installed = spec_for(name, version)
+  carried = carried_row(name, version)
   {
     "name" => name,
-    "version" => locked_spec.version.to_s,
-    "licenses" => licenses.empty? ? ["UNDECLARED"] : licenses,
-    "homepage" => installed&.homepage,
+    "version" => version,
+    "licenses" => licences_for(installed, carried),
+    "homepage" => installed&.homepage || carried&.[]("homepage"),
     "required_by" => (declared[name] || []).map { |gem_name, requirement| "#{gem_name} #{requirement}" },
     "direct" => declared.key?(name)
   }

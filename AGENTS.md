@@ -16,6 +16,16 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tam
 - Everyday gate: `rake ci` + `rubocop` + `enola check` (see the state doc's gate
   policy — `ci_full` both locales only for durability/MCP/packaging/evidence slices).
 
+## Comments
+
+Default to none. Name things so the code reads without them; if it does not read,
+fix the code, not the comment. Never restate what the line below does.
+
+When a comment is genuinely needed (§11's "why": a safety invariant, a non-obvious
+failure model, a rejected alternative), write one or two lines. Not a paragraph, not
+a narrative of the bug it replaced, not a rationale for a decision the diff already
+shows. Commit messages and PR bodies carry history; source files do not.
+
 <!-- enola:begin -->
 ## enola — architecture before and after a change
 

@@ -7,6 +7,11 @@ class SQLiteSelectorControlTest < Minitest::Test
   CONTROL = Tamoz::Evals::Harness.const_get(:SQLiteSelectorControl, false)
   REGISTRY = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
 
+  # The child loads nine gems before it reaches the stop point. This bounds a
+  # hang, not the happy path — the intervention kills as soon as it authorizes,
+  # so a generous ceiling costs nothing and a tight one fails under CI load.
+  CHILD_TIMEOUT_MS = 30_000
+
   def test_control_protocol_definition_is_immutable_and_digest_pinned
     assert_equal(
       "sha256:9ced1a4a060c6d5de21f523b9594747c8a4017e482ab7b8086de412218d098f1",
@@ -160,7 +165,7 @@ class SQLiteSelectorControlTest < Minitest::Test
       )
       result = build_runner.capture(
         child_command(layout, scenario, selector),
-        timeout_ms: 2_000,
+        timeout_ms: CHILD_TIMEOUT_MS,
         command: "test.selector-control",
         intervention:
       )
@@ -204,7 +209,7 @@ class SQLiteSelectorControlTest < Minitest::Test
       )
       result = build_runner.capture(
         child_command(layout, scenario, selected, calls: 2),
-        timeout_ms: 2_000,
+        timeout_ms: CHILD_TIMEOUT_MS,
         command: "test.selector-occurrence",
         intervention:
       )

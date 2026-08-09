@@ -23,6 +23,7 @@ until this file is regenerated.
 | `logger` | 1.7.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/logger |
 | `marcel` | 1.2.1 | MIT, Apache-2.0 | transitive |  | https://github.com/rails/marcel |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
+| `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
 | `multipart-post` | 2.4.1 | MIT | transitive |  | https://github.com/socketry/multipart-post |
 | `net-http` | 0.9.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/net-http |
 | `regexp_parser` | 2.12.0 | MIT | transitive |  | https://github.com/ammar/regexp_parser |
@@ -57,7 +58,6 @@ arriving silently.
 | `dry-types` | 1.9.1 | MIT |
 | `language_server-protocol` | 3.17.0.5 | MIT |
 | `lint_roller` | 1.1.0 | MIT |
-| `mini_portile2` | 2.8.9 | UNDECLARED |
 | `minitest` | 6.0.6 | MIT |
 | `parallel` | 2.1.0 | MIT |
 | `parser` | 3.3.11.1 | MIT |
