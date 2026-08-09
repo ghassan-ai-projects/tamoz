@@ -96,8 +96,6 @@ module Tamoz
         end
 
         @allow_changes = allow_changes
-        @checks = normalize_checks(checks)
-        @check_safeties = normalize_check_safeties(check_safeties)
         @check_timeout = check_timeout.to_f
         # The snapshot is frozen at construction and never reloaded. A recompiled
         # snapshot is a *candidate*: it takes effect only by building a new toolbox
@@ -108,10 +106,22 @@ module Tamoz
         available.concat(SKILL_DESCRIPTIONS.keys) unless @skills.empty?
         if @allow_changes
           available << "apply_patch" << "create_file"
-          available << "run_check" unless @checks.empty?
         end
-        @allowed_tools = normalize_allowed_tools(allowed_tools, available)
-        @approval_required = normalize_approval_required(approval_required, @allowed_tools)
+        policy = ToolPolicyNormalizer.new(
+          policy: {
+            checks:,
+            check_safeties:,
+            allowed_tools:,
+            approval_required:,
+            base_available_tools: available,
+            allow_changes: @allow_changes,
+            default_approval_required: DEFAULT_APPROVAL_REQUIRED
+          }
+        )
+        @checks = policy.checks
+        @check_safeties = policy.check_safeties
+        @allowed_tools = policy.allowed_tools
+        @approval_required = policy.approval_required
         @descriptions = READ_DESCRIPTIONS.dup
         @descriptions.merge!(SKILL_DESCRIPTIONS) unless @skills.empty?
         if @allow_changes
@@ -448,91 +458,6 @@ module Tamoz
         record = @skill_catalog.resolve(arguments.fetch("skill"))
         path = arguments.fetch("path")
         Skills.render_resource(record, path, Skills.read_resource(record, path))
-      end
-
-      def normalize_checks(value)
-        raise ArgumentError, "checks must be a Hash" unless value.is_a?(Hash)
-
-        value.to_h do |raw_name, raw_argv|
-          name = String(raw_name)
-          unless name.match?(/\A[a-z][a-z0-9_-]{0,63}\z/)
-            raise ArgumentError, "invalid check name #{name.inspect}"
-          end
-          unless raw_argv.is_a?(Array) && !raw_argv.empty? &&
-                 raw_argv.all? { |entry| entry.is_a?(String) && !entry.empty? && !entry.include?("\0") }
-            raise ArgumentError, "check #{name.inspect} must be a non-empty argv Array"
-          end
-
-          validate_check_program!(name, raw_argv.first)
-          [name.freeze, raw_argv.map { |entry| entry.dup.freeze }.freeze]
-        end.freeze
-      end
-
-      # P8-E: `run_check` spawns with the workspace as the working directory, so a
-      # relative argv[0] carrying a separator names a file the workspace supplies.
-      # Whatever surface configured the check — profile, `--check`, or a caller —
-      # the narrow waist refuses to execute repository content. Bare names go
-      # through PATH and absolute paths name an operator-chosen program.
-      def validate_check_program!(name, program)
-        return unless program.include?(File::SEPARATOR) ||
-                      (File::ALT_SEPARATOR && program.include?(File::ALT_SEPARATOR))
-        return if program.start_with?(File::SEPARATOR)
-
-        raise ArgumentError,
-              "check #{name.inspect} argv[0] #{program.inspect} is a relative path and would " \
-              "resolve inside the workspace; use an absolute path or a bare program name"
-      end
-
-      def normalize_check_safeties(value)
-        raise ArgumentError, "check_safeties must be a Hash" unless value.is_a?(Hash)
-
-        value.to_h do |raw_name, raw_safety|
-          name = String(raw_name)
-          unless @checks.key?(name)
-            raise ArgumentError, "check_safeties names unconfigured check #{name.inspect}"
-          end
-
-          safety = raw_safety.to_sym
-          unless CHECK_SAFETIES.include?(safety)
-            raise ArgumentError,
-                  "check #{name.inspect} safety must be one of #{CHECK_SAFETIES.join(", ")}"
-          end
-
-          [name.freeze, safety]
-        end.freeze
-      end
-
-      def normalize_allowed_tools(value, available)
-        return available.freeze if value.nil?
-        unless value.is_a?(Array) && !value.empty? &&
-               value.all? { |name| name.is_a?(String) } && value.uniq == value
-          raise ArgumentError, "allowed_tools must be a non-empty Array of distinct tool names"
-        end
-
-        unknown = value - available
-        unless unknown.empty?
-          raise ArgumentError,
-                "allowed_tools names unavailable tools: #{unknown.sort.join(", ")} " \
-                "(available: #{available.sort.join(", ")})"
-        end
-
-        value.map { |name| name.dup.freeze }.freeze
-      end
-
-      def normalize_approval_required(value, allowed)
-        return DEFAULT_APPROVAL_REQUIRED if value.nil?
-        unless value.is_a?(Array) &&
-               value.all? { |name| name.is_a?(String) } && value.uniq == value
-          raise ArgumentError, "approval_required must be an Array of distinct tool names"
-        end
-
-        unknown = value - allowed
-        unless unknown.empty?
-          raise ArgumentError,
-                "approval_required must be a subset of allowed_tools: #{unknown.sort.join(", ")}"
-        end
-
-        value.map { |name| name.dup.freeze }.freeze
       end
 
       def read_file(arguments)
