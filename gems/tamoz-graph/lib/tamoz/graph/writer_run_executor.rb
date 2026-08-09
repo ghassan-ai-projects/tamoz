@@ -12,6 +12,7 @@ module Tamoz
     # :reek:TooManyStatements :reek:RepeatedConditional -- the durable request
     # transition is intentionally kept adjacent to the execution it protects.
     # :reek:MissingSafeMethod -- execution methods enforce state transitions.
+    # rubocop:disable Lint/UnusedMethodArgument
     # rubocop:disable Metrics/ParameterLists
     class WriterRunExecutor
       def initialize(compiled)
@@ -30,7 +31,8 @@ module Tamoz
         writer:,
         prepared_state: nil,
         prepared_frontier: nil,
-        durable_request_id: nil
+        durable_request_id: nil,
+        request_id: nil
       )
         checkpoint = InitialCheckpointBuilder.new(compiled).build(
           input,
@@ -189,5 +191,6 @@ module Tamoz
       end
     end
     # rubocop:enable Metrics/ParameterLists
+    # rubocop:enable Lint/UnusedMethodArgument
   end
 end

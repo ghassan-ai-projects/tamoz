@@ -141,10 +141,8 @@ module Tamoz
       def call(input, context)
         runtime = context&.graph_runtime
         unless runtime&.respond_to?(:call)
-          raise ConfigurationError,
-                "compiled graph invocation requires a parent graph task Context"
+          raise ConfigurationError, "compiled graph invocation requires a parent graph task Context"
         end
-
         runtime.call(self, input, context)
       end
 
@@ -156,52 +154,10 @@ module Tamoz
         StateOperations.new(self).history(thread:, namespace:, limit:)
       end
 
-      def durable_runner
-        DurableRunner.new(self)
-      end
+      def durable_runner = DurableRunner.new(self)
 
-      # Pure staleness predicate for a durable request against the thread's latest
-      # checkpoint (DR-4). The graph owns this predicate; callers (the claim
-      # transaction, the recover transaction, and the runner backstop) supply nothing.
-      # Returns nil when the request is still applicable, or a bounded, typed reason
-      # string when it can no longer run. `:redirect` is deliberately NOT validated —
-      # its wait condition is legitimate and must retry, never terminal-fail.
-      #
-      # The reason strings are framework-authored and never interpolate untrusted
-      # payload content (only bounded numeric indices), so they are safe to persist in
-      # `terminal_error` (invariant 24).
       def stale_request_reason(checkpoint, request)
-        case request.operation
-        when :redirect
-          nil
-        when :resume
-          # A resume already `running` after a barrier commit continues the
-          # interrupted execution (invariant 52); only the full validation applies to
-          # claim-time and recovered-but-unstarted requests.
-          if request.status == :running && checkpoint&.status == :running
-            nil
-          else
-            stale_resume_reason(checkpoint, request)
-          end
-        when :retry
-          stale_status_reason(checkpoint, :failed, "latest checkpoint is not failed")
-        when :continue
-          stale_status_reason(
-            checkpoint,
-            :running,
-            "latest checkpoint has no runnable frontier"
-          )
-        when :turn, :fork
-          if request.status == :running
-            stale_status_reason(
-              checkpoint,
-              :running,
-              "latest checkpoint has no runnable frontier"
-            )
-          elsif checkpoint && !%i[completed failed].include?(checkpoint.status)
-            "latest checkpoint is not terminal"
-          end
-        end
+        RequestStaleness.new(self).reason(checkpoint, request)
       end
 
       def update_state(
@@ -231,189 +187,32 @@ module Tamoz
       def planner = @planner
       def route_planner = @route_planner
 
-      def pool_for(concurrency)
-        @pools.fetch(concurrency.to_sym)
-      end
+      def pool_for(concurrency) = @pools.fetch(concurrency.to_sym)
 
       private
 
-      def invoke_at(
-        input,
-        thread:,
-        namespace:,
-        request_id:,
-        execution_id:,
-        concurrency:,
-        new_execution:,
-        context:,
-        prepared_state: nil,
-        prepared_frontier: nil
-      )
-        RunCoordinator.new(self).invoke(
-          input,
-          thread:,
-          namespace:,
-          request_id:,
-          execution_id:,
-          concurrency:,
-          new_execution:,
-          context:,
-          prepared_state:,
-          prepared_frontier:
-        )
-      end
+      def invoke_at(...) = RunCoordinator.new(self).invoke(...)
+      def resume_at(...) = RunCoordinator.new(self).resume(...)
+      def retry_failed_at(...) = RunCoordinator.new(self).retry_failed(...)
+      def continue_at(...) = RunCoordinator.new(self).continue(...)
+      def invoke_with_writer(...) = WriterRunExecutor.new(self).invoke(...)
+      def resume_with_writer(...) = WriterRunExecutor.new(self).resume(...)
+      def retry_failed_with_writer(...) = WriterRunExecutor.new(self).retry_failed(...)
+      def continue_with_writer(...) = WriterRunExecutor.new(self).continue(...)
 
-      def resume_at(answers, thread:, namespace:, request_id:, concurrency:, context:)
-        RunCoordinator.new(self).resume(
-          answers,
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:
-        )
-      end
-
-      def retry_failed_at(thread:, namespace:, request_id:, concurrency:, context:)
-        RunCoordinator.new(self).retry_failed(
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:
-        )
-      end
-
-      def continue_at(thread:, namespace:, request_id:, concurrency:, context:)
-        RunCoordinator.new(self).continue(
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:
-        )
-      end
-
-      def invoke_with_writer(
-        input,
-        thread:,
-        namespace:,
-        request_id:,
-        execution_id:,
-        concurrency:,
-        new_execution:,
-        run_context:,
-        writer:,
-        prepared_state: nil,
-        prepared_frontier: nil,
-        durable_request_id: nil
-      )
-        WriterRunExecutor.new(self).invoke(
-          input,
-          thread:,
-          namespace:,
-          execution_id:,
-          concurrency:,
-          new_execution:,
-          run_context:,
-          writer:,
-          prepared_state:,
-          prepared_frontier:,
-          durable_request_id:
-        )
-      end
-
-      def resume_with_writer(
-        answers,
-        thread:,
-        namespace:,
-        request_id:,
-        concurrency:,
-        context:,
-        writer:,
-        durable_request_id: nil,
-        mark_request_running: true
-      )
-        WriterRunExecutor.new(self).resume(
-          answers,
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:,
-          writer:,
-          durable_request_id:,
-          mark_request_running:
-        )
-      end
-
-      def retry_failed_with_writer(
-        thread:,
-        namespace:,
-        request_id:,
-        concurrency:,
-        context:,
-        writer:,
-        durable_request_id: nil,
-        mark_request_running: true
-      )
-        WriterRunExecutor.new(self).retry_failed(
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:,
-          writer:,
-          durable_request_id:,
-          mark_request_running:
-        )
-      end
-
-      def continue_with_writer(
-        thread:,
-        namespace:,
-        request_id:,
-        concurrency:,
-        context:,
-        writer:,
-        durable_request_id: nil,
-        mark_request_running: true
-      )
-        WriterRunExecutor.new(self).continue(
-          thread:,
-          namespace:,
-          request_id:,
-          concurrency:,
-          context:,
-          writer:,
-          durable_request_id:,
-          mark_request_running:
-        )
-      end
-
-      def execute_durable_request(
-        request,
-        writer:,
-        concurrency:,
-        context: nil
-      )
+      def execute_durable_request(request, writer:, concurrency:, context: nil)
         DurableRequestExecutor.new(self).execute(
           DurableRequestExecution.new(request, writer, concurrency, context)
         )
       end
 
       def latest_status(request, writer:)
-        compatible_latest!(
-          request.thread_id,
-          namespace: request.namespace,
-          writer:
-        ).status
+        compatible_latest!(request.thread_id, namespace: request.namespace, writer:).status
       end
 
       def fork_with_writer(request, writer:, concurrency:, context:)
-        ForkExecutor.new(self).execute(
-          DurableRequestExecution.new(request, writer, concurrency, context)
-        )
+        execution = DurableRequestExecution.new(request, writer, concurrency, context)
+        ForkExecutor.new(self).execute(execution)
       end
 
       def with_checkpointer(value)
@@ -429,60 +228,17 @@ module Tamoz
         )
       end
 
-      def compatible_latest!(thread, namespace: [], writer: nil)
-        ExecutionSupport.new(self).compatible_latest!(thread, namespace:, writer:)
-      end
-
-      def compatible!(checkpoint)
-        ExecutionSupport.new(self).compatible!(checkpoint)
-      end
-
-      def stale_status_reason(checkpoint, required, reason)
-        ExecutionSupport.new(self).stale_status_reason(checkpoint, required, reason)
-      end
-
-      # Refactored from `merge_resume_values`' task/call-index matching plus the
-      # pre-merge duplicate check (DR-4 C3): (a) status paused, (b) answers' indices
-      # match the current interrupts, (c) no answer index already merged into
-      # `resume_values`. Returns a typed reason string or nil.
-      def stale_resume_reason(checkpoint, request)
-        ExecutionSupport.new(self).stale_resume_reason(checkpoint, request)
-      end
-
-      def merge_resume_values(checkpoint, answers)
-        ExecutionSupport.new(self).merge_resume_values(checkpoint, answers)
-      end
-
-      def build_context(base, thread:, request_id:, execution_id:, cancellation:, emitter:)
-        ExecutionSupport.new(self).build_context(
-          base,
-          thread:,
-          request_id:,
-          execution_id:,
-          cancellation:,
-          emitter:
-        )
-      end
-
-      def bind_writer_context(context, writer)
-        ExecutionSupport.new(self).bind_writer_context(context, writer)
-      end
-
-      def open_writer(thread, namespace, owner_id: SecureRandom.uuid, ttl: nil, &block)
-        ExecutionSupport.new(self).open_writer(thread, namespace, owner_id:, ttl:, &block)
-      end
-
-      def ensure_ephemeral_public!
-        ExecutionSupport.new(self).ensure_ephemeral_public!
-      end
-
-      def stream_error_data(error)
-        ExecutionSupport.new(self).stream_error_data(error)
-      end
-
-      def validate_concurrency!(value)
-        ExecutionSupport.new(self).validate_concurrency!(value)
-      end
+      def compatible_latest!(...) = ExecutionSupport.new(self).compatible_latest!(...)
+      def compatible!(...) = ExecutionSupport.new(self).compatible!(...)
+      def stale_status_reason(...) = ExecutionSupport.new(self).stale_status_reason(...)
+      def stale_resume_reason(...) = ExecutionSupport.new(self).stale_resume_reason(...)
+      def merge_resume_values(...) = ExecutionSupport.new(self).merge_resume_values(...)
+      def build_context(...) = ExecutionSupport.new(self).build_context(...)
+      def bind_writer_context(...) = ExecutionSupport.new(self).bind_writer_context(...)
+      def open_writer(...) = ExecutionSupport.new(self).open_writer(...)
+      def ensure_ephemeral_public!(...) = ExecutionSupport.new(self).ensure_ephemeral_public!(...)
+      def stream_error_data(...) = ExecutionSupport.new(self).stream_error_data(...)
+      def validate_concurrency!(...) = ExecutionSupport.new(self).validate_concurrency!(...)
 
       private_constant :DEFAULT_WRITER_TTL
     end
