@@ -1,8 +1,8 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "fdc7275",
-    "dirty": false
+    "commit": "6cf078a",
+    "dirty": true
   },
   "toolchain": {
     "rubocop": "1.87.0",
@@ -53,10 +53,10 @@
     }
   },
   "rubocop": {
-    "total": 41449,
+    "total": 41459,
     "files_inspected": 453,
     "by_cop": {
-      "Style/StringLiterals": 29789,
+      "Style/StringLiterals": 29799,
       "Layout/SpaceInsideHashLiteralBraces": 3646,
       "Minitest/EmptyLineBeforeAssertionMethods": 1014,
       "Metrics/AbcSize": 886,
@@ -246,7 +246,7 @@
       "Style/PerlBackrefs": 1
     },
     "by_severity": {
-      "convention": 40968,
+      "convention": 40978,
       "warning": 481
     },
     "metrics_over_ceiling": {
@@ -551,7 +551,7 @@
     ],
     "tests": {
       "runs": 1260,
-      "assertions": 14120
+      "assertions": 14121
     }
   },
   "documents": {

@@ -7,10 +7,14 @@ class SQLiteSelectorControlTest < Minitest::Test
   CONTROL = Tamoz::Evals::Harness.const_get(:SQLiteSelectorControl, false)
   REGISTRY = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
 
-  # The child loads nine gems before it reaches the stop point. This bounds a
-  # hang, not the happy path — the intervention kills as soon as it authorizes,
-  # so a generous ceiling costs nothing and a tight one fails under CI load.
   CHILD_TIMEOUT_MS = 30_000
+
+  # The runner clears everything it is not given, and the child requires the
+  # gems. CI installs them into vendor/bundle, reachable only through these.
+  CHILD_ENV = ENV.slice(
+    "BUNDLE_APP_CONFIG", "BUNDLE_GEMFILE", "BUNDLE_PATH", "GEM_HOME", "GEM_PATH",
+    "HOME", "PATH", "RUBYOPT"
+  ).freeze
 
   def test_control_protocol_definition_is_immutable_and_digest_pinned
     assert_equal(
@@ -170,6 +174,7 @@ class SQLiteSelectorControlTest < Minitest::Test
         intervention:
       )
 
+      assert_equal "", result.stderr.text, "the child failed before its stop point"
       assert intervention.verify_result!(result)
       assert_equal "kill", result.termination
       assert_equal "intervention", result.termination_reason
@@ -792,7 +797,7 @@ class SQLiteSelectorControlTest < Minitest::Test
   def build_runner(termination_grace_ms: 200)
     Tamoz::Evals::Harness::SubprocessRunner.new(
       root: ROOT,
-      environment: {},
+      environment: CHILD_ENV,
       output_limit_bytes: 4_096,
       termination_grace_ms:
     )
