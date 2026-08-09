@@ -61,7 +61,7 @@ tamoz [global-options] show THREAD [--transcript N]
 tamoz [global-options] follow-up THREAD TASK
 tamoz [global-options] redirect THREAD "new task"
 tamoz [global-options] cancel THREAD [--force]
-tamoz [global-options] resolve THREAD EFFECT_KEY {succeeded|abandoned|unknown}
+tamoz [global-options] resolve THREAD EFFECT_KEY {succeeded|failed|abandoned}
 tamoz --version
 tamoz --help
 ```
@@ -219,7 +219,7 @@ This reuse avoids inventing a parallel event source and keeps the CLI a consumer
 4. If status is `:running`:
    - Call `session.continue(thread:, request_id:, owner_id:, emitter:)`.
 5. If status is `:blocked`:
-   - Print the blocked effect and tell the user to run `tamoz resolve THREAD EFFECT_KEY {succeeded|abandoned|unknown}`; exit `3`.
+   - Print the blocked effect and tell the user to run `tamoz resolve THREAD EFFECT_KEY {succeeded|failed|abandoned}`; exit `3`.
 6. If status is `:completed`/`:failed`, `show` a summary and exit accordingly.
 7. Loop while new interrupts appear.
 8. After the resumed/continued request finishes terminal, drain the queue as in §4.1 step 10.

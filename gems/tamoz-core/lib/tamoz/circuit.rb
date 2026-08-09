@@ -10,7 +10,6 @@ module Tamoz
   # this repository; four scopes (`server`, `rule_target`, `schedule`, `egress`)
   # instantiate it. Persistence is a thin adapter over the same engine:
   #
-  #   * `Tamoz::Circuit::MemoryStore`   — process-local read/write of the record;
   #   * `Tamoz::SQLite::CircuitStore`   — the durable record in the Store
   #     (namespace `tamoz.circuit.<scope_type>`, key `<scope_digest>`).
   #

@@ -29,6 +29,8 @@ module Tamoz
       # The only approved operation: run the deterministic scorecard, read the
       # report, return a summary. `allowlist` is asserted by the consumer
       # grant-allowlist test — this surface has NO mutation tool.
+      # :reek:UncommunicativeVariableName -- `e` is the rescue-variable name the
+      # linter enforces repository-wide.
       def run(scorecard_command: nil)
         command = scorecard_command || ["tamoz-eval", "scorecard", "agent-smoke"]
         stdout, stderr, status = Open3.capture3(*command)
@@ -67,6 +69,13 @@ module Tamoz
           if summary["decision"].nil? || summary["hard_gates_total"].nil?
 
         summary
+      rescue SystemCallError => e
+        # The binary is not on PATH, or is not executable. Every other failure
+        # in this method is a fail-closed hash; a missing command is no
+        # different, and letting Errno::ENOENT escape would make it the one
+        # failure mode that takes the consumer's caller down with it.
+        {"ok" => false, "reason" => "scorecard command unavailable",
+         "stderr_tail" => e.message.byteslice(0, 4_096)}
       end
 
       def self.grant = READ_ONLY_GRANT

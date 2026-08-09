@@ -16,6 +16,12 @@ module Tamoz
     # rubocop:disable Metrics/ModuleLength -- one private command family; every
     # command and helper stays within the method ceilings.
     module CLISessionCommands
+      # The `tamoz resolve` vocabulary: exactly the three states the effect
+      # journal can be resolved into (`effect_journal.rb:630-636`). Public
+      # because it is the module's one piece of shared vocabulary, not a
+      # helper — the private section below starts after it.
+      RESOLUTIONS = %w[succeeded failed abandoned].freeze
+
       # These methods were private on CLI and remain private after inclusion.
 
       private
@@ -229,18 +235,28 @@ module Tamoz
         end
       end
 
+      # The word an operator types IS the state that gets recorded.
+      #
+      # This used to accept `unknown` and durably record `:failed`, which is one
+      # word meaning two different things depending on which entry path you came
+      # in through — and worse, it recorded a verdict the operator did not give.
+      # `unknown` is the state an effect is being resolved OUT of; it is not one
+      # of the three the journal can be resolved INTO
+      # (`effect_journal.rb:630-636`), so it is refused with the vocabulary that
+      # works instead of being silently translated.
       def parse_resolution(argv)
         effect_key = argv.shift
         status = argv.shift
         raise OptionParser::MissingArgument, 'EFFECT_KEY' if effect_key.to_s.empty?
         raise OptionParser::MissingArgument, 'STATUS' if status.to_s.empty?
-        unless %w[succeeded abandoned unknown].include?(status)
+
+        unless RESOLUTIONS.include?(status)
+          hint = status == 'unknown' ? ' (`unknown` is the state being resolved, not a resolution)' : ''
           raise OptionParser::InvalidArgument,
-                'status must be succeeded, abandoned, or unknown'
+                "status must be #{RESOLUTIONS.join(', ')}#{hint}"
         end
 
-        status_symbol = status == 'unknown' ? :failed : status.to_sym
-        [effect_key, status, status_symbol]
+        [effect_key, status, status.to_sym]
       end
     end
     # rubocop:enable Metrics/ModuleLength

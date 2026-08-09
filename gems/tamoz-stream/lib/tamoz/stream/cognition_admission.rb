@@ -67,9 +67,14 @@ module Tamoz
         freshness = trigger.fetch("freshness")
         return :ignored if freshness > spec.freshness_seconds
 
-        # Confidence ceiling: the trigger exceeded the spec's risk ceiling.
-        score = trigger.fetch("scores").values.max.to_f
-        return :rejected if score > spec.max_confidence
+        # Confidence ceiling: the trigger's strongest score exceeded the spec's
+        # ceiling. An admission gate fails CLOSED on absent evidence — with no
+        # scores there is nothing to be confident about, so `{}` is rejected
+        # rather than scoring 0.0 and sailing under the ceiling.
+        scores = trigger.fetch("scores")
+        return :rejected if scores.empty?
+
+        return :rejected if scores.values.max.to_f > spec.max_confidence
 
         :admitted
       end

@@ -18,7 +18,7 @@ module Tamoz
       def initialize(now: nil)
         @epoch = now || Time.now.to_i
         @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        @last = @epoch
+        guard_monotonic!(:processing, @epoch)
       end
 
       # Live-mode processing time: the epoch anchor plus the elapsed monotonic
@@ -26,26 +26,15 @@ module Tamoz
       # idle-watermark mechanism depends on it — a frozen clock would never
       # fire idleness, freezing global progress, design §7/P4).
       def now_processing
-        current = @epoch + (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started_at).to_i
-        guard!(current)
-        @last = current
-        current
+        guard_monotonic!(:processing, @epoch + (Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started_at).to_i)
       end
 
       def now_event(watermark)
-        watermark
+        guard_monotonic!(:event, watermark)
       end
 
       def advance(delta)
         raise StreamClockError, "a wall clock cannot be advanced"
-      end
-
-      private
-
-      def guard!(value)
-        return if value >= @last
-
-        raise StreamClockError, "stream clock regressed from #{@last} to #{value}"
       end
     end
 
@@ -54,17 +43,15 @@ module Tamoz
 
       def initialize(start: 0)
         @virtual = Integer(start)
-        @last = @virtual
+        guard_monotonic!(:processing, @virtual)
       end
 
       def now_processing
-        guard!(@virtual)
-        @virtual
+        guard_monotonic!(:processing, @virtual)
       end
 
       def now_event(watermark)
-        guard!(watermark)
-        watermark
+        guard_monotonic!(:event, watermark)
       end
 
       def advance(delta)
@@ -72,14 +59,6 @@ module Tamoz
 
         @virtual += delta
         @virtual
-      end
-
-      private
-
-      def guard!(value)
-        return if value >= @last
-
-        raise StreamClockError, "stream clock regressed from #{@last} to #{value}"
       end
     end
   end

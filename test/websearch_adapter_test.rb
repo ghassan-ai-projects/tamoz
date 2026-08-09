@@ -37,7 +37,7 @@ class WebsearchAdapterTest < Minitest::Test
     EgressClient.new(
       policy:,
       resolver: resolver || ->(host) { resolver_map.fetch(host, []) },
-      connector: connector || lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+      connector: connector || lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
         dials << [pinned_ip, host, headers] if dials
         {"status" => 200, "headers" => {}, "body" => "answer 42"}
       end
@@ -156,7 +156,7 @@ class WebsearchAdapterTest < Minitest::Test
       {"status" => 302, "headers" => {"location" => "https://cdn.search.example/next"}, "body" => ""},
       {"status" => 200, "headers" => {}, "body" => "final"}
     ]
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       dials << [pinned_ip, host]
       sequence.shift
     end
@@ -174,7 +174,7 @@ class WebsearchAdapterTest < Minitest::Test
   # the refused hop.
   def test_off_allowlist_redirect_is_refused_typed
     dials = []
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       dials << pinned_ip
       {"status" => 302, "headers" => {"location" => "https://evil.example/x"}, "body" => ""}
     end
@@ -188,7 +188,7 @@ class WebsearchAdapterTest < Minitest::Test
   # W4 / P17-11: the redirect hop bound is enforced, not advisory.
   def test_redirect_hop_bound_is_enforced
     hops = 0
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       hops += 1
       {"status" => 302, "headers" => {"location" => "https://cdn.search.example/h#{hops}"}, "body" => ""}
     end
@@ -206,7 +206,7 @@ class WebsearchAdapterTest < Minitest::Test
       {"status" => 302, "headers" => {"location" => "https://cdn.search.example/next"}, "body" => ""},
       {"status" => 200, "headers" => {}, "body" => "ok"}
     ]
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       seen << [host, headers]
       sequence.shift
     end
@@ -225,7 +225,7 @@ class WebsearchAdapterTest < Minitest::Test
   # exotic spelling is refused with zero dials to any spelling of that address.
   def test_metadata_ssrf_via_exotic_redirect_spellings_is_refused
     dials = []
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       dials << pinned_ip
       {"status" => 302, "headers" => {"location" => "https://0x7f000001/x"}, "body" => ""}
     end
@@ -235,7 +235,7 @@ class WebsearchAdapterTest < Minitest::Test
     end
     assert dials.none? { |ip| ip.include?("127") || ip.include?("169.254") }
 
-    connector2 = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector2 = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       dials << pinned_ip
       {"status" => 302, "headers" => {"location" => "https://2130706433/x"}, "body" => ""}
     end
@@ -249,7 +249,7 @@ class WebsearchAdapterTest < Minitest::Test
   # W2: an oversize response body is bounded to max_response_bytes and marked
   # truncated (the caller turns that into the budget-breach circuit record).
   def test_response_is_bounded_to_max_response_bytes
-    connector = lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+    connector = lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
       {"status" => 200, "headers" => {}, "body" => "x" * 20_000}
     end
     client = client_with(egress, connector: connector)

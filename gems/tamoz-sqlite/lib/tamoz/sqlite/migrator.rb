@@ -642,15 +642,7 @@ module Tamoz
                 "SQLite schema version #{version} is newer than #{CURRENT_VERSION}"
         end
 
-        case version
-        when 0
-          apply_migrations(connection, from: 0, set_application_id: true)
-        when 1
-          self.class.verify_migration_row!(connection, 1)
-          apply_migrations(connection, from: 1, set_application_id: false)
-        else
-          self.class.verify_connection!(connection)
-        end
+        bring_forward(connection, application_id:, version:)
         true
       rescue ::SQLite3::Exception => error
         ExceptionMapper.raise_mapped(error, operation: "schema migration")
@@ -659,6 +651,23 @@ module Tamoz
       end
 
       private
+
+      # One rule for every version below the current one, rather than a branch
+      # per ordinal. The old `when 0` / `when 1` pair meant versions 2, 3 and 4
+      # fell through to `verify_connection!` — which demands `version ==
+      # CURRENT_VERSION` — so a database created at any of them could never
+      # migrate forward; it raised `MigrationError` on every open instead.
+      #
+      # The invariant an in-place upgrade needs is that everything already
+      # applied is intact: each ordinal up to `version` must still be recorded
+      # with its registered checksum before pending ones are layered on top.
+      def bring_forward(connection, application_id:, version:)
+        return self.class.verify_connection!(connection) if version == CURRENT_VERSION
+
+        (1..version).each { |ordinal| self.class.verify_migration_row!(connection, ordinal) }
+        apply_migrations(connection, from: version,
+                                     set_application_id: application_id != APPLICATION_ID)
+      end
 
       # All pending migrations (from + 1 .. CURRENT_VERSION) apply in ONE
       # transaction: a failure rolls back every statement, so a fresh database

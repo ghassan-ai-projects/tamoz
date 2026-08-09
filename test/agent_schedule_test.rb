@@ -57,6 +57,31 @@ class AgentScheduleTest < Minitest::Test
     end
   end
 
+  # The reason the tombstone exists: a later `schedule add` reusing the id must
+  # not inherit the removed schedule's stored task.
+  #
+  # It did not hold. `tombstone_schedule` deleted the payload with a blind
+  # write, which the versioned store refuses, and a blanket rescue swallowed
+  # the refusal — so the tombstone was written and the retired task text stayed
+  # in the store on every single removal.
+  def test_removing_a_schedule_retires_its_stored_task
+    with_runtime do |rt|
+      rt.cli(%W[schedule add --id nightly --interval 3600 --task Secret\ task])
+      assert_equal 0, rt.cli(%w[schedule remove nightly --json]), rt.err
+
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        assert_nil runtime.schedule_payload("nightly"),
+                   "the removed schedule's task survived its tombstone"
+      ensure
+        runtime.close
+      end
+    end
+  end
+
   # Pausing must survive an edit. Otherwise "pause it while I look into this"
   # silently un-pauses the next time anyone touches the schedule.
   def test_pause_survives_a_redefinition

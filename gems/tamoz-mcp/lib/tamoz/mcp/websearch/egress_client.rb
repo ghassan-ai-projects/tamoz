@@ -53,9 +53,12 @@ module Tamoz
 
         # `resolver:` resolves a hostname to candidate address strings
         # (`call(host) -> Array<String>`). `connector:` performs the exchange
-        # against the PINNED address (`call(pinned_ip:, host:, port:, timeout:,
-        # headers:, body:) -> {status:, headers:, body:}`) and is the dial-spy
-        # seam the W3 suite records. Both default to real implementations.
+        # against the PINNED address (`call(pinned_ip:, host:, path:, port:,
+        # timeout:, headers:, body:) -> {status:, headers:, body:}`) and is the
+        # dial-spy seam the W3 suite records. `path` carries the request path
+        # AND its query — it is the request, so a connector that ignores it is
+        # asking a different question than the caller asked. Both default to
+        # real implementations.
         def initialize(policy:, resolver: nil, connector: nil)
           unless policy.is_a?(EgressPolicy)
             raise ValidationError, "policy must be a Tamoz::Mcp::Websearch::EgressPolicy"
@@ -81,6 +84,11 @@ module Tamoz
             response = @connector.call(
               pinned_ip: pinned,
               host: target.fetch(:host),
+              # The path (and its query) is part of the request, not decoration:
+              # without it the connector had nothing to ask for and dialed "/"
+              # on every fetch, so the live provider path answered a different
+              # question than the caller asked. Every hop recomputes it.
+              path: target.fetch(:path),
               port: DEFAULT_PORT,
               timeout: policy.connect_timeout_s,
               headers: target.fetch(:headers),
@@ -256,14 +264,18 @@ module Tamoz
         # validated IP is what is dialed and certificate verification still
         # checks the hostname the operator allowlisted.
         def default_connector
-          lambda do |pinned_ip:, host:, port:, timeout:, headers:, body:|
+          lambda do |pinned_ip:, host:, path:, port:, timeout:, headers:, body:|
             http = Net::HTTP.new(host, port)
             http.ipaddr = pinned_ip
             http.use_ssl = true
             http.verify_mode = OpenSSL::SSL::VERIFY_PEER
             http.open_timeout = timeout
             http.read_timeout = timeout
-            request = Net::HTTP::Get.new("/")
+            # A body decides the verb. `Net::HTTP::Get` does not permit one
+            # (`request_body_permitted?` is false), so assigning `request.body`
+            # on a GET dropped it silently — the query never reached the
+            # provider. A request that carries a body is a POST.
+            request = (body ? Net::HTTP::Post : Net::HTTP::Get).new(path)
             headers.each { |name, value| request[name] = value }
             request.body = body if body
             response = http.start { |connection| connection.request(request) }

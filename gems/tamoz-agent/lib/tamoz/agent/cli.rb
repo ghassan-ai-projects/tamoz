@@ -184,7 +184,7 @@ module Tamoz
             emit_cli_event("cli.paused", {"reason" => "blocked", "thread_id" => thread_id, "blocked" => blocked})
           else
             @err.puts "Thread is blocked on effect #{blocked.fetch("effect_key", "unknown")}."
-            @err.puts "Resolve it with: tamoz resolve #{thread_id} EFFECT_KEY {succeeded|abandoned|unknown}"
+            @err.puts "Resolve it with: tamoz resolve #{thread_id} EFFECT_KEY {succeeded|failed|abandoned}"
           end
           return EXIT_PAUSED
         else
