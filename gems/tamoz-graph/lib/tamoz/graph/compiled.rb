@@ -57,33 +57,14 @@ module Tamoz
         new_execution: false,
         context: nil
       )
-        ensure_ephemeral_public!
-        unless new_execution == true || new_execution == false
-          raise ConfigurationError, "new_execution must be true or false"
-        end
-        validate_concurrency!(concurrency)
-        run_context = build_context(
-          context,
-          thread:,
-          request_id:,
-          execution_id:,
-          cancellation: context&.cancellation || CancellationToken.new,
-          emitter: context&.emitter || Emitter::Null::INSTANCE
-        )
-        state = @state_manager.initial(input || {}, remaining_steps: limits.max_steps)
-        frontier = @route_planner.initial_frontier
-
-        invoke_at(
+        LifecycleExecutor.new(self).invoke(
           input,
           thread:,
-          namespace: [],
           request_id:,
           execution_id:,
           concurrency:,
           new_execution:,
-          context: run_context,
-          prepared_state: state,
-          prepared_frontier: frontier
+          context:
         )
       end
 
@@ -99,71 +80,18 @@ module Tamoz
         capacity: Tamoz.configuration.stream_buffer,
         join_grace: 1.0
       )
-        StreamEmitter.validate_mode!(mode)
-        sink = nil
-        cancellation = context&.cancellation || CancellationToken.new
-        run_id = context&.run_id || SecureRandom.uuid
-        sink = StreamSink.new(
+        LifecycleExecutor.new(self).stream(
+          input,
+          thread:,
+          request_id:,
+          execution_id:,
+          concurrency:,
+          new_execution:,
+          context:,
+          mode:,
           capacity:,
-          cancellation:,
-          clock: context&.clock || Clock.monotonic,
-          run_id:
+          join_grace:
         )
-        emitter = StreamEmitter.new(sink:, mode:)
-        stream_context = if context
-                           context.with(
-                             execution_id:,
-                             request_id:,
-                             thread_id: thread,
-                             cancellation:,
-                             emitter:
-                           )
-                         else
-                           Context.new(
-                             run_id:,
-                             execution_id:,
-                             request_id:,
-                             thread_id: thread,
-                             cancellation:,
-                             emitter:
-                           )
-                         end
-
-        EventStream.new(sink:, join_grace:) do
-          emitter.emit(
-            :run_start,
-            stream_context.namespace,
-            {"graph" => name, "execution_id" => execution_id},
-            run_id:
-          )
-          result = invoke(
-            input,
-            thread:,
-            request_id:,
-            execution_id:,
-            concurrency:,
-            new_execution:,
-            context: stream_context
-          )
-          emitter.emit(
-            :run_end,
-            stream_context.namespace,
-            {"graph" => name, "status" => result.status.to_s},
-            run_id:
-          )
-          result
-        rescue StandardError => error
-          emitter.emit(
-            :error,
-            stream_context.namespace,
-            stream_error_data(error),
-            run_id:
-          )
-          raise
-        end
-      rescue StandardError
-        sink&.finish
-        raise
       end
 
       def resume(
@@ -173,11 +101,9 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
-        ensure_ephemeral_public!
-        resume_at(
+        LifecycleExecutor.new(self).resume(
           answers,
           thread:,
-          namespace: [],
           request_id:,
           concurrency:,
           context:
@@ -190,10 +116,8 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
-        ensure_ephemeral_public!
-        retry_failed_at(
+        LifecycleExecutor.new(self).retry_failed(
           thread:,
-          namespace: [],
           request_id:,
           concurrency:,
           context:
@@ -206,10 +130,8 @@ module Tamoz
         concurrency: Tamoz.configuration.concurrency,
         context: nil
       )
-        ensure_ephemeral_public!
-        continue_at(
+        LifecycleExecutor.new(self).continue(
           thread:,
-          namespace: [],
           request_id:,
           concurrency:,
           context:
