@@ -125,6 +125,16 @@ class ToolboxStagingReaperTest < Minitest::Test
     end
   end
 
+  def test_stale_staging_files_inspects_without_removing
+    with_workspace do |root|
+      orphan = plant(root, ".tamoz-inspect.tmp", mtime: ANCIENT)
+      toolbox = Tamoz::Tools::Toolbox.new(root:, allow_changes: true, reap_staging: false)
+
+      assert_equal [Pathname.new(orphan)], toolbox.stale_staging_files
+      assert_path_exists orphan
+    end
+  end
+
   def test_the_sweep_is_bounded
     with_workspace do |root|
       total = Tamoz::Tools::Toolbox::MAX_REAPED_STAGING_FILES + 25
