@@ -57,4 +57,17 @@ class SchedulerConsumerTest < Minitest::Test
     assert_equal false, bad.fetch("ok")
     assert_equal "scorecard output is not JSON", bad.fetch("reason")
   end
+
+  # The default command is `tamoz-eval`, which is not on PATH in every
+  # deployment. `Open3.capture3` answers that with Errno::ENOENT — the one
+  # failure in this method that used to escape as an exception while every
+  # other one returned a fail-closed hash.
+  def test_consumer_fails_closed_when_the_scorecard_binary_is_missing
+    summary = Scheduler::ScorecardSummaryConsumer.new.run(
+      scorecard_command: ["definitely-not-a-real-binary-8f3a", "scorecard"]
+    )
+
+    assert_equal false, summary.fetch("ok")
+    assert_equal "scorecard command unavailable", summary.fetch("reason")
+  end
 end

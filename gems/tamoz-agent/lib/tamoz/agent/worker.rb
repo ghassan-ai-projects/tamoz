@@ -144,7 +144,11 @@ module Tamoz
                request_id: occurrence.request_id)
         end
         claimed.length
-      rescue Tamoz::Scheduler::SchedulerError => error
+      rescue Tamoz::Scheduler::SchedulerError, WorkerRuntime::StoreUnavailableError => error
+        # A store that cannot answer materializes NOTHING this pass. The pass is
+        # reported and retried, which is the honest shape: the alternative — the
+        # old swallow-to-nil in the runtime — enqueued an occurrence with no
+        # task behind it.
         emit("schedule.error", reason: error.message)
         0
       end
@@ -164,7 +168,15 @@ module Tamoz
       # ------------------------------------------------------------------ inbox
 
       def advance_pending_threads
-        actionable = work_list.reject { |entry| parked?(entry) }
+        actionable = begin
+          work_list.reject { |entry| parked?(entry) }
+        rescue WorkerRuntime::StoreUnavailableError => error
+          # The work list could not be read. That is reported and retried on the
+          # next poll — it is NOT an empty inbox, and the difference has to be
+          # visible or a sick store looks exactly like a quiet one.
+          emit("worker.error", reason: error.message)
+          []
+        end
         return 0 if actionable.empty?
 
         pool = Tamoz::Pool.for(

@@ -53,6 +53,34 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal ANCHOR, schedule.next_fire_at(ANCHOR - 500)
   end
 
+  # An `at` expression that matches the SHAPE but is not a time.
+  #
+  # The regex only pinned `\d{2}` groups, so these were accepted at
+  # `schedule add` and blew up at poll time with a raw ArgumentError from
+  # `Time.utc` — the poller crashing on a schedule typed weeks earlier. The
+  # contract is a typed failure, at validation.
+  def test_an_impossible_at_expression_is_refused_at_validation
+    ["2026-13-01T12:00:00Z", "2026-01-01T25:00:00Z", "2026-01-01T12:61:00Z",
+     "2026-01-01T12:00:61Z", "2026-01-00T12:00:00Z"].each do |expression|
+      error = assert_raises(Tamoz::ConfigurationError, expression) { at_schedule(expression) }
+
+      assert_match(/not a real UTC instant/, error.message, expression)
+    end
+  end
+
+  # `Time.utc` does not raise for a day past the end of the month: it rolls
+  # forward. A schedule for a date that does not exist would have fired on a
+  # different day, silently.
+  def test_an_at_expression_naming_a_nonexistent_date_is_refused
+    ["2026-02-30T12:00:00Z", "2026-04-31T12:00:00Z", "2025-02-29T12:00:00Z"].each do |expression|
+      assert_raises(Tamoz::ConfigurationError, expression) { at_schedule(expression) }
+    end
+
+    # The leap day that DOES exist still works.
+    assert_equal Time.utc(2028, 2, 29, 12, 0, 0).to_i,
+                 Scheduler::Schedule.at_instant("2028-02-29T12:00:00Z")
+  end
+
   def test_at_schedule_is_one_shot_utc
     instant = Time.utc(2026, 8, 3, 12, 0, 0).to_i
     schedule = at_schedule

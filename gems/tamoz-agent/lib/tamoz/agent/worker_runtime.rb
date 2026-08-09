@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "digest"
+require "monitor"
 require "time"
 
 require_relative "worker_runtime/deferred_model"
@@ -18,6 +20,14 @@ module Tamoz
     # enqueue its request in a single transaction.
     class WorkerRuntime
       class Error < Tamoz::Agent::Error; end
+
+      # A durable read or write this runtime could not complete.
+      #
+      # Separate from `Error` (which means "the operator configured something
+      # impossible" and is permanent) because callers must treat the two
+      # differently: an unavailable store is precisely the situation in which a
+      # gate has to REFUSE rather than guess, and it may clear on the next poll.
+      class StoreUnavailableError < Error; end
 
       attr_reader :directory, :adapter
 
@@ -43,7 +53,10 @@ module Tamoz
         )
         @sessions = {}
         @profiles = {}
-        @monitor = Mutex.new
+        # A Monitor, not a Mutex: `build_session` runs under this lock and asks
+        # for `profile`, which takes it again. Ruby's Mutex is not reentrant, so
+        # that same-thread re-entry would deadlock the worker outright.
+        @monitor = Monitor.new
       end
 
       def path = @directory.path
@@ -108,19 +121,29 @@ module Tamoz
       end
 
       def schedule_payload(schedule_id)
-        entry = @adapter.store.get(SCHEDULE_PAYLOADS, schedule_id)
-        entry && entry.value["task"]
-      rescue StandardError
-        nil
+        durable("schedule payload #{schedule_id.inspect}") do
+          record(SCHEDULE_PAYLOADS, schedule_id)&.fetch("task", nil)
+        end
       end
 
       # A removed schedule is disabled AND tombstoned, so a later `schedule add`
       # with the same id cannot silently inherit the removed one's stored task.
+      #
+      # The delete is the half that matters and its failure is NOT swallowed: a
+      # tombstone written over a surviving payload is exactly the state this
+      # method exists to prevent.
       def tombstone_schedule(schedule_id)
-        upsert(SCHEDULE_TOMBSTONES, schedule_id, {"removed_at" => Time.now.utc.iso8601})
-        @adapter.store.delete(SCHEDULE_PAYLOADS, schedule_id)
-      rescue StandardError
-        nil
+        durable("schedule tombstone #{schedule_id.inspect}") do
+          upsert(SCHEDULE_TOMBSTONES, schedule_id, {"removed_at" => Time.now.utc.iso8601})
+          # The store is versioned: a delete without the head version is a
+          # blind write and the CAS refuses it. This delete therefore failed on
+          # EVERY removal, and the blanket rescue that used to sit here turned
+          # that into silence — the tombstone was written and the task text it
+          # was supposed to retire stayed in the store.
+          store = @adapter.store
+          version = store.head_version(SCHEDULE_PAYLOADS, schedule_id)
+          store.delete(SCHEDULE_PAYLOADS, schedule_id, if_version: version) if version
+        end
       end
 
       # The occurrence a thread is currently working on.
@@ -142,25 +165,24 @@ module Tamoz
       end
 
       def close_occurrence(thread_id)
-        @adapter.store.delete(OPEN_OCCURRENCES, thread_id,
-                              if_version: @adapter.store.head_version(OPEN_OCCURRENCES, thread_id))
-      rescue StandardError
-        nil
+        durable("open occurrence for #{thread_id.inspect}") do
+          @adapter.store.delete(OPEN_OCCURRENCES, thread_id,
+                                if_version: @adapter.store.head_version(OPEN_OCCURRENCES, thread_id))
+        end
       end
 
       def occurrence_for(thread_id)
-        entry = @adapter.store.get(OPEN_OCCURRENCES, thread_id)
-        entry && entry.value["occurrence_id"]
-      rescue StandardError
-        nil
+        durable("open occurrence for #{thread_id.inspect}") do
+          record(OPEN_OCCURRENCES, thread_id)&.fetch("occurrence_id", nil)
+        end
       end
 
       def open_occurrences(limit: 500)
-        @adapter.store.each(OPEN_OCCURRENCES, limit:).map do |entry|
-          {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"]}
+        durable("open occurrences") do
+          @adapter.store.each(OPEN_OCCURRENCES, limit:).map do |entry|
+            {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"]}
+          end
         end
-      rescue StandardError
-        []
       end
 
       # How much of a thread's budget has been spent, measured from durable
@@ -176,30 +198,33 @@ module Tamoz
       # "the agent may never widen its own budget" has to mean structurally.
       # The budgets governing a thread, from the profile bound to it. Operator
       # authority, resolved the same way every other authority decision is.
+      # `nil` here means one thing only: this profile asked for no ceiling. It
+      # must never mean "the profile could not be read" — that answer would
+      # convert a bounded thread into an unbounded one at the moment the store
+      # got sick, which is precisely when a ceiling matters most.
       def thread_budgets(thread_id)
-        resolved = profile(thread_profile(thread_id))
-        resolved && resolved.budgets
-      rescue StandardError
-        nil
+        durable("budgets for #{thread_id.inspect}") do
+          resolved = profile(thread_profile(thread_id))
+          resolved && resolved.budgets
+        end
       end
 
       def budget_usage(thread_id)
-        model_calls = checkpoints.effect_census.count do |row|
-          row[:thread_id] == thread_id && row[:operation].to_s.start_with?("model.generate")
+        durable("budget usage for #{thread_id.inspect}") do
+          model_calls = checkpoints.effect_census.count do |row|
+            row[:thread_id] == thread_id && row[:operation].to_s.start_with?("model.generate")
+          end
+          {"model_calls" => model_calls, "wall_clock_seconds" => occurrence_age_seconds(thread_id)}
         end
-        {"model_calls" => model_calls, "wall_clock_seconds" => occurrence_age_seconds(thread_id)}
-      rescue StandardError
-        {"model_calls" => 0, "wall_clock_seconds" => 0.0}
       end
 
       def occurrence_age_seconds(thread_id)
-        entry = @adapter.store.get(OPEN_OCCURRENCES, thread_id)
-        opened = entry && entry.value["opened_at"]
-        return 0.0 unless opened
+        durable("occurrence age for #{thread_id.inspect}") do
+          opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+          next 0.0 unless opened
 
-        (Time.now.utc - Time.parse(opened)).to_f
-      rescue StandardError
-        0.0
+          (Time.now.utc - Time.parse(opened)).to_f
+        end
       end
 
       # A stop caused by a spent budget. Durable so `tamoz status` can report it
@@ -215,9 +240,9 @@ module Tamoz
       end
 
       def budget_exhaustions(limit: 500)
-        @adapter.store.each(BUDGET_EXHAUSTIONS, limit:).map { |entry| entry.value }
-      rescue StandardError
-        []
+        durable("budget exhaustions") do
+          @adapter.store.each(BUDGET_EXHAUSTIONS, limit:).map { |entry| entry.value }
+        end
       end
 
       # Human decisions about paused work, recorded by `tamoz approve` and
@@ -242,11 +267,13 @@ module Tamoz
                {"granted" => granted, "recorded_at" => Time.now.utc.iso8601})
       end
 
+      # `nil` means "no human has answered yet" and nothing else. A read error
+      # must not borrow that meaning: it would make a recorded approval
+      # invisible and leave the work parked forever with no signal anywhere.
       def decision_for(thread_id, request_id)
-        entry = @adapter.store.get(DECISIONS, decision_key(thread_id, request_id))
-        entry && entry.value["granted"]
-      rescue StandardError
-        nil
+        durable("decision for #{thread_id.inspect}/#{request_id.inspect}") do
+          record(DECISIONS, decision_key(thread_id, request_id))&.fetch("granted", nil)
+        end
       end
 
       # The runtime store is versioned and refuses a blind second write. These
@@ -258,11 +285,53 @@ module Tamoz
                            if_version: @adapter.store.head_version(namespace, key))
       end
 
+      # Every durable read and write in this file goes through here.
+      #
+      # The rule this replaces a set of blanket rescues with: a gate that cannot
+      # reach its evidence REFUSES; it never assumes the permissive answer.
+      # Returning `nil`/`[]`/zeros on a storage failure turned "we do not know
+      # what this thread has spent" into "it has spent nothing" — the one answer
+      # that lets an unattended run spend without a ceiling — and turned "the
+      # human's approval could not be read" into "no human has answered".
+      #
+      # So the failure keeps an identity and reaches the caller. The worker's
+      # per-thread containment parks that thread, the schedule pass reports a
+      # `schedule.error`, and an operator sees a real error instead of a
+      # healthy-looking zero. Configuration errors (`Error`, e.g. an unknown
+      # profile) pass through unchanged: they are already the right answer.
+      def durable(what)
+        yield
+      rescue Error
+        raise
+      rescue StandardError => error
+        raise StoreUnavailableError, "#{what} is unavailable: #{error.class}: #{error.message}"
+      end
+
+      # The record at (namespace, key), or nil when there is none.
+      #
+      # `Store#get` does NOT return nil for a deleted key: the head row
+      # survives as a tombstone and the entry comes back with `deleted` set and
+      # a nil value. Every reader here wants "is there a record", so the check
+      # lives once instead of six `entry && entry.value["x"]` chains that all
+      # raise NoMethodError the moment their key is deleted.
+      # :reek:FeatureEnvy :reek:NilCheck -- reading a StoreEntry's liveness IS
+      # this method's entire job, and collapsing "absent" and "deleted" into one
+      # nil is the point: no caller distinguishes them.
+      def record(namespace, key)
+        entry = @adapter.store.get(namespace, key)
+        return nil if entry.nil? || entry.deleted
+
+        entry.value
+      end
+
+      # `nil` means "this thread is bound to no profile", which the session
+      # builder reads as read-only authority. An unreadable binding is NOT that:
+      # silently downgrading it would run the work under the wrong authority
+      # rather than refusing to run it.
       def thread_profile(thread_id)
-        entry = @adapter.store.get(THREAD_BINDINGS, thread_id)
-        entry && entry.value["profile"]
-      rescue StandardError
-        nil
+        durable("profile binding for #{thread_id.inspect}") do
+          record(THREAD_BINDINGS, thread_id)&.fetch("profile", nil)
+        end
       end
 
       # The session that will drive `thread_id`, under the authority bound to it.
@@ -283,9 +352,7 @@ module Tamoz
       # websearch really available?", and it is deliberately not the same value as
       # `RuntimeDirectory#enabled_sources`.
       def capability_catalog
-        canonical_session.capabilities.names(:action).sort
-      rescue StandardError
-        []
+        durable("capability catalog") { canonical_session.capabilities.names(:action).sort }
       end
 
       def head_request(thread_id)
@@ -306,26 +373,33 @@ module Tamoz
       # A profile named by a request must exist in the runtime directory. An
       # unknown name is refused rather than silently downgraded to "no profile" —
       # a typo must not quietly become weaker authority that still runs.
+      #
+      # Memoized under the same monitor as `session_for_profile`, because
+      # `Profile.load` WRITES the adoption registry: with `concurrency > 1` an
+      # unguarded memo is two threads writing one file, not merely duplicated
+      # work.
       def profile(profile_id)
         return nil if profile_id.nil?
 
-        @profiles[profile_id] ||= begin
-          path = profile_path(profile_id)
-          unless File.exist?(path)
-            raise Error, "profile #{profile_id.inspect} is not in #{@directory.profiles_path}"
-          end
+        @monitor.synchronize { @profiles[profile_id] ||= load_profile(profile_id) }
+      end
 
-          # Auto-adopted, and only because of where it lives. `Profile.load`
-          # still enforces private permissions, a symlink-safe read, and that the
-          # profile sits OUTSIDE the workspace it grants authority over. On top of
-          # that, this file is inside a 0700 runtime directory that only the
-          # operator can write. The interactive adoption prompt exists to stop an
-          # untrusted CHECKOUT from supplying authority; nothing here came from a
-          # checkout. A worker has no terminal to prompt at, and prompting is not
-          # something to fake.
-          Profile.load(path, env: {"TAMOZ_CONFIG_HOME" => @directory.path},
-                             confirm_adoption: ->(_document) { true })
+      def load_profile(profile_id)
+        path = profile_path(profile_id)
+        unless File.exist?(path)
+          raise Error, "profile #{profile_id.inspect} is not in #{@directory.profiles_path}"
         end
+
+        # Auto-adopted, and only because of where it lives. `Profile.load`
+        # still enforces private permissions, a symlink-safe read, and that the
+        # profile sits OUTSIDE the workspace it grants authority over. On top of
+        # that, this file is inside a 0700 runtime directory that only the
+        # operator can write. The interactive adoption prompt exists to stop an
+        # untrusted CHECKOUT from supplying authority; nothing here came from a
+        # checkout. A worker has no terminal to prompt at, and prompting is not
+        # something to fake.
+        Profile.load(path, env: {"TAMOZ_CONFIG_HOME" => @directory.path},
+                           confirm_adoption: ->(_document) { true })
       end
 
       def profile_path(profile_id)

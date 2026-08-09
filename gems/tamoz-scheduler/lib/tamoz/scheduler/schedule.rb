@@ -237,13 +237,31 @@ module Tamoz
         (digest.to_i(16) % jitter_window)
       end
 
-      # Parse the canonical `at` expression to a UTC epoch second. Validation
-      # already pinned the shape; this converts exactly that shape.
+      # Parse the canonical `at` expression to a UTC epoch second.
+      #
+      # This is the only place the expression becomes a time, so it is also the
+      # only place that can tell a real instant from one that merely matches the
+      # shape. `Time.utc` alone is not that check: it raises for month 13, but
+      # it rolls 2024-02-30 forward to March 1 — a schedule for a date that does
+      # not exist would fire on a different day, silently. Both are the same
+      # operator mistake and both get the same typed answer, raised at
+      # validation time (`validate_times!` calls this) rather than at poll time,
+      # because the poller's contract is typed failures, never a crash.
+      # :reek:TooManyStatements -- parse, calendar round-trip, and the one typed
+      # failure are the whole method; splitting them would put the rollover
+      # check somewhere other than the only place that knows the parsed fields.
       def self.at_instant(expression)
-        Time.utc(
-          expression[0, 4].to_i, expression[5, 2].to_i, expression[8, 2].to_i,
-          expression[11, 2].to_i, expression[14, 2].to_i, expression[17, 2].to_i
-        ).to_i
+        fields = [[0, 4], [5, 2], [8, 2], [11, 2], [14, 2], [17, 2]]
+                 .map { |offset, length| expression[offset, length].to_i }
+        instant = Time.utc(*fields)
+        return instant.to_i if [instant.year, instant.month, instant.day] == fields.first(3)
+
+        # A rolled-over date IS an out-of-range argument; Ruby just does not
+        # say so for the day field, so both failures answer through one clause.
+        raise ArgumentError, "the date does not exist"
+      rescue ArgumentError
+        raise Tamoz::ConfigurationError,
+              "at expression #{expression.inspect} is not a real UTC instant"
       end
 
       def to_h
@@ -337,12 +355,21 @@ module Tamoz
           raise Tamoz::ConfigurationError, "start_at must not exceed end_at"
         end
 
+        validate_expression!(kind, expression)
+      end
+
+      def validate_expression!(kind, expression)
         case kind
         when :at
           unless expression.match?(/\A\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\z/)
             raise Tamoz::ConfigurationError,
                   "at expression must be an ISO-8601 UTC instant (YYYY-MM-DDTHH:MM:SSZ)"
           end
+
+          # The shape is not the instant: `2024-13-99T25:61:61Z` matches the
+          # pattern and is not a time. Resolving it here means the operator
+          # learns at `schedule add`, not the poller at fire time.
+          self.class.at_instant(expression)
         when :interval
           unless expression.match?(/\A\d+\z/) && expression.to_i.positive?
             raise Tamoz::ConfigurationError,

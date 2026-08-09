@@ -213,7 +213,14 @@ module Tamoz
 
       def initialize(scope:, payload:, now_ms:)
         @scope = scope
-        @payload = payload
+        # `freeze` on the record alone froze the reference, not the state. The
+        # payload arrived from the caller (`load` handed it straight through)
+        # and `owners`/`conditions_met` return the live containers, so anything
+        # holding a loaded record could mutate "durable" circuit state in place
+        # — the exact opposite of "every transition returns a NEW record".
+        # `to_payload` already deep-copies on the way out; this is the same
+        # discipline on the way in.
+        @payload = Tamoz::Core.deep_freeze(payload)
         @created_now_ms = now_ms
         freeze
       end
