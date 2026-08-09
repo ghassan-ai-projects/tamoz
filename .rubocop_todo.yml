@@ -44,16 +44,14 @@ Layout/CommentIndentation:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/preflight.rb'
     - 'script/generate_legacy_session_fixture'
 
-# Offense count: 304
+# Offense count: 280
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLineAfterGuardClause:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
@@ -115,20 +113,18 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/replay_runtime.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'script/websearch_adapter'
     - 'test/capability_host_test.rb'
 
-# Offense count: 3
+# Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EmptyLineBetweenMethodDefs, EmptyLineBetweenClassDefs, EmptyLineBetweenModuleDefs, DefLikeMacros, AllowAdjacentOneLineDefs, NumberOfEmptyLines.
 Layout/EmptyLineBetweenDefs:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/errors.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -184,14 +180,14 @@ Layout/FirstArgumentIndentation:
 Layout/FirstArrayElementIndentation:
   EnforcedStyle: consistent
 
-# Offense count: 38
+# Offense count: 44
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: IndentationWidth.
 # SupportedStyles: special_inside_parentheses, consistent, align_braces
 Layout/FirstHashElementIndentation:
   EnforcedStyle: consistent
 
-# Offense count: 66
+# Offense count: 58
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AllowMultipleStyles, EnforcedHashRocketStyle, EnforcedColonStyle, EnforcedLastArgumentHashStyle.
 # SupportedHashRocketStyles: key, separator, table
@@ -200,7 +196,6 @@ Layout/FirstHashElementIndentation:
 Layout/HashAlignment:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
@@ -238,7 +233,7 @@ Layout/LineEndStringConcatenationIndentation:
     - 'script/release_rehearsal'
     - 'script/websearch_adapter'
 
-# Offense count: 130
+# Offense count: 127
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: Max, AllowHeredoc, AllowURI, AllowQualifiedName, URISchemes, AllowRBSInlineAnnotation, AllowCopDirectives, AllowedPatterns, SplitStrings.
 # URISchemes: http, https
@@ -247,7 +242,6 @@ Layout/LineLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
@@ -315,7 +309,7 @@ Layout/MultilineMethodCallIndentation:
     - 'test/sqlite_scenario_driver_test.rb'
     - 'test/sqlite_schedule_store_test.rb'
 
-# Offense count: 39
+# Offense count: 38
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, IndentationWidth.
 # SupportedStyles: aligned, indented
@@ -323,7 +317,6 @@ Layout/MultilineOperationIndentation:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
@@ -358,7 +351,7 @@ Layout/SpaceInsideBlockBraces:
   Exclude:
     - 'test/agent_skills_adversarial_test.rb'
 
-# Offense count: 3704
+# Offense count: 3638
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, EnforcedStyleForEmptyBraces.
 # SupportedStyles: space, no_space, compact
@@ -372,12 +365,10 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/seams.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
@@ -419,14 +410,12 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/action_boundary.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/autonomy_scorecard'
     - 'script/benchmark_release'
@@ -628,7 +617,7 @@ Lint/AmbiguousRange:
   Exclude:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
 
-# Offense count: 57
+# Offense count: 54
 # Configuration parameters: AllowedMethods.
 # AllowedMethods: enums
 Lint/ConstantDefinitionInBlock:
@@ -645,7 +634,7 @@ Lint/ConstantDefinitionInBlock:
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
 
-# Offense count: 13
+# Offense count: 11
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
   Exclude:
@@ -699,18 +688,16 @@ Lint/LiteralInInterpolation:
   Exclude:
     - 'test/agent_skills_adversarial_test.rb'
 
-# Offense count: 3
+# Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
     - 'gems/tamoz-core/lib/tamoz/pool.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
 
-# Offense count: 10
+# Offense count: 8
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Lint/RedundantDirGlobSort:
   Exclude:
     - 'docs/design-v0.1/validate_design.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_repository_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
@@ -788,7 +775,7 @@ Lint/UnreachableLoop:
     - 'test/core_pool_test.rb'
     - 'test/sqlite_store_test.rb'
 
-# Offense count: 68
+# Offense count: 76
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: IgnoreEmptyBlocks, AllowUnusedKeywordArguments.
 Lint/UnusedBlockArgument:
@@ -808,7 +795,7 @@ Lint/UnusedBlockArgument:
     - 'test/websearch_adapter_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 93
+# Offense count: 92
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AllowUnusedKeywordArguments, IgnoreEmptyMethods, IgnoreNotImplementedMethods, NotImplementedExceptions.
 # NotImplementedExceptions: NotImplementedError
@@ -817,7 +804,6 @@ Lint/UnusedMethodArgument:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
@@ -860,14 +846,13 @@ Lint/UselessAccessModifier:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
 
-# Offense count: 29
+# Offense count: 28
 # This cop supports safe autocorrection (--autocorrect).
 Lint/UselessAssignment:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
-    - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'test/agent_session_operations_test.rb'
     - 'test/agent_session_test.rb'
@@ -881,7 +866,7 @@ Lint/UselessAssignment:
     - 'test/websearch_adapter_test.rb'
     - 'test/websearch_egress_test.rb'
 
-# Offense count: 18
+# Offense count: 17
 Lint/UselessConstantScoping:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
@@ -889,7 +874,6 @@ Lint/UselessConstantScoping:
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'test/mcp_supervisor_test.rb'
     - 'test/sqlite_stale_request_test.rb'
 
@@ -900,7 +884,7 @@ Lint/UselessMethodDefinition:
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
 
-# Offense count: 936
+# Offense count: 887
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes, Max.
 Metrics/AbcSize:
   Exclude:
@@ -915,7 +899,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
@@ -1010,6 +993,7 @@ Metrics/AbcSize:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1130,7 +1114,7 @@ Metrics/AbcSize:
     - 'test/websearch_circuit_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 266
+# Offense count: 264
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
 # AllowedMethods: refine
 Metrics/BlockLength:
@@ -1141,7 +1125,6 @@ Metrics/BlockLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
@@ -1163,6 +1146,7 @@ Metrics/BlockLength:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
     - 'script/benchmark_release'
@@ -1222,19 +1206,12 @@ Metrics/BlockLength:
     - 'test/sqlite_stale_request_test.rb'
     - 'test/sqlite_store_test.rb'
 
-# Offense count: 1
-# Configuration parameters: CountBlocks, CountModifierForms, Max.
-Metrics/BlockNesting:
-  Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-
 # Offense count: 91
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ClassLength:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
@@ -1267,6 +1244,7 @@ Metrics/ClassLength:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1323,7 +1301,7 @@ Metrics/ClassLength:
     - 'test/subprocess_runner_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 270
+# Offense count: 234
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/CyclomaticComplexity:
   Exclude:
@@ -1331,7 +1309,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
@@ -1405,7 +1382,7 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1413,7 +1390,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-stream/lib/tamoz/stream/cognition_admission.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/generate_requirements_manifest'
     - 'script/tamoz_sqlite_oracle'
@@ -1426,7 +1402,7 @@ Metrics/CyclomaticComplexity:
     - 'test/sqlite_selector_control_test.rb'
     - 'test/sqlite_store_test.rb'
 
-# Offense count: 927
+# Offense count: 885
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
   Exclude:
@@ -1440,7 +1416,6 @@ Metrics/MethodLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
@@ -1452,7 +1427,6 @@ Metrics/MethodLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
@@ -1535,6 +1509,7 @@ Metrics/MethodLength:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/limits.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1685,7 +1660,7 @@ Metrics/ModuleLength:
     - 'test/healing_fixtures.rb'
     - 'test/support/autonomy_case.rb'
 
-# Offense count: 161
+# Offense count: 154
 # Configuration parameters: Max, CountKeywordArgs, MaxOptionalParameters.
 Metrics/ParameterLists:
   Exclude:
@@ -1708,7 +1683,6 @@ Metrics/ParameterLists:
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
@@ -1750,6 +1724,7 @@ Metrics/ParameterLists:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/limits.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1758,7 +1733,6 @@ Metrics/ParameterLists:
     - 'gems/tamoz-stream/lib/tamoz/stream/cognition_admission.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/generate_m0_fixtures'
     - 'script/generate_m1_fixtures'
@@ -1774,7 +1748,7 @@ Metrics/ParameterLists:
     - 'test/healing_remediation_test.rb'
     - 'test/improvement_candidate_test.rb'
 
-# Offense count: 263
+# Offense count: 230
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/PerceivedComplexity:
   Exclude:
@@ -1782,7 +1756,6 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
@@ -1855,6 +1828,7 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
@@ -1862,7 +1836,6 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-stream/lib/tamoz/stream/cognition_admission.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/generate_requirements_audit'
     - 'script/generate_requirements_manifest'
@@ -2051,7 +2024,7 @@ Minitest/AssertWithExpectedArgument:
     - 'test/p16_tools_gem_test.rb'
     - 'test/packaging_test.rb'
 
-# Offense count: 1011
+# Offense count: 1014
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/EmptyLineBeforeAssertionMethods:
   Exclude:
@@ -2163,7 +2136,7 @@ Minitest/EmptyLineBeforeAssertionMethods:
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 593
+# Offense count: 597
 # Configuration parameters: Max.
 Minitest/MultipleAssertions:
   Exclude:
@@ -2287,7 +2260,7 @@ Minitest/RefuteEmpty:
     - 'test/agent_mcp_capability_source_test.rb'
     - 'test/sqlite_stale_request_test.rb'
 
-# Offense count: 43
+# Offense count: 44
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/RefuteFalse:
   Exclude:
@@ -2402,12 +2375,13 @@ Naming/MethodParameterName:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb'
+    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/stream_store.rb'
     - 'test/agent_worker_mcp_test.rb'
 
-# Offense count: 45
+# Offense count: 44
 # Configuration parameters: Mode, AllowedMethods, AllowedPatterns, AllowBangMethods, WaywardPredicates.
 # AllowedMethods: call
 # WaywardPredicates: infinite?, nonzero?
@@ -2426,7 +2400,6 @@ Naming/PredicateMethod:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/schema.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/stream_emitter.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_registry.rb'
@@ -2437,7 +2410,7 @@ Naming/PredicateMethod:
     - 'script/tamoz_sqlite_oracle'
     - 'test/core_context_test.rb'
 
-# Offense count: 189
+# Offense count: 183
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: PreferredName.
 Naming/RescuedExceptionsVariableName:
@@ -2503,7 +2476,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/wire.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/capability_host.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/release_rehearsal'
     - 'script/tamoz_sqlite_oracle'
@@ -2525,7 +2497,7 @@ Naming/VariableNumber:
   Exclude:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
 
-# Offense count: 34
+# Offense count: 33
 # Configuration parameters: MinSize.
 Performance/CollectionLiteralInLoop:
   Exclude:
@@ -2538,7 +2510,6 @@ Performance/CollectionLiteralInLoop:
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/duplicate_key_detector.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'test/agent_repair_evaluation_test.rb'
@@ -2561,17 +2532,9 @@ Performance/Detect:
     - 'test/agent_tool_error_recovery_test.rb'
 
 # Offense count: 1
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: IncludeActiveSupportAliases.
-Performance/DoubleStartEndWith:
-  Exclude:
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
-
-# Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/MapCompact:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
 
 # Offense count: 6
@@ -2585,12 +2548,11 @@ Performance/RedundantBlockCall:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb'
     - 'test/core_instrumentation_test.rb'
 
-# Offense count: 19
+# Offense count: 17
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: AllowRegexpMatch.
 Performance/RedundantEqualityComparisonBlock:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
@@ -2608,12 +2570,11 @@ Performance/RegexpMatch:
   Exclude:
     - 'Rakefile'
 
-# Offense count: 2
+# Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/StringInclude:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
@@ -2665,17 +2626,15 @@ Style/ArgumentsForwarding:
     - 'test/memory_session_integration_test.rb'
     - 'test/sqlite_raw_oracle_test.rb'
 
-# Offense count: 14
+# Offense count: 10
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/BitwisePredicate:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'script/tamoz_sqlite_oracle'
 
 # Offense count: 5
@@ -2750,7 +2709,7 @@ Style/DataInheritance:
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
 
-# Offense count: 131
+# Offense count: 129
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
   Exclude:
@@ -2863,7 +2822,7 @@ Style/DoubleNegation:
   Exclude:
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
 
-# Offense count: 6
+# Offense count: 5
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, AllowedParentClasses.
 # SupportedStyles: class_keyword, class_new, class_definition
@@ -2871,7 +2830,6 @@ Style/EmptyClassDefinition:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
 
 # Offense count: 26
 # This cop supports safe autocorrection (--autocorrect).
@@ -2902,30 +2860,23 @@ Style/FileNull:
   Exclude:
     - 'test/sqlite_selector_control_test.rb'
 
-# Offense count: 1
-Style/FileOpen:
-  Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
-
-# Offense count: 9
+# Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle.
 # SupportedStyles: format, sprintf, percent
 Style/FormatString:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
     - 'script/run_m1_conformance'
 
-# Offense count: 47
+# Offense count: 39
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, MaxUnannotatedPlaceholdersAllowed, Mode, AllowedMethods, AllowedPatterns.
 # SupportedStyles: annotated, template, unannotated
 Style/FormatStringToken:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
     - 'script/generate_agent_memory_fixtures'
@@ -2942,18 +2893,16 @@ Style/GlobalStdStream:
   Exclude:
     - 'script/clean_rubocop_todo'
 
-# Offense count: 53
+# Offense count: 43
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: MinBodyLength, AllowConsecutiveConditionals.
 Style/GuardClause:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
@@ -2969,7 +2918,6 @@ Style/GuardClause:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'test/agent_session_kill_matrix_test.rb'
     - 'test/documentation_surface_test.rb'
@@ -2984,7 +2932,7 @@ Style/HashEachMethods:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/elicitation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
 
-# Offense count: 21
+# Offense count: 20
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashExcept:
   Exclude:
@@ -3000,7 +2948,6 @@ Style/HashExcept:
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/channel_descriptor.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_spec.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'test/agent_profile_test.rb'
     - 'test/release_evaluation_manifest_test.rb'
@@ -3035,7 +2982,7 @@ Style/IdenticalConditionalBranches:
   Exclude:
     - 'script/clean_rubocop_todo'
 
-# Offense count: 434
+# Offense count: 388
 # This cop supports safe autocorrection (--autocorrect).
 Style/IfUnlessModifier:
   Exclude:
@@ -3134,7 +3081,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-stream/lib/tamoz/stream/cognition_admission.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/event_envelope.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/replay_runtime.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/generate_requirements_manifest'
     - 'script/mcp_test_server'
@@ -3165,11 +3111,10 @@ Style/InverseMethods:
   Exclude:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
 
-# Offense count: 13
+# Offense count: 12
 # This cop supports safe autocorrection (--autocorrect).
 Style/KeywordArgumentsMerging:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -3180,7 +3125,7 @@ Style/KeywordArgumentsMerging:
     - 'test/mcp_invocation_test.rb'
     - 'test/mcp_supervisor_test.rb'
 
-# Offense count: 85
+# Offense count: 83
 # This cop supports safe autocorrection (--autocorrect).
 Style/KeywordParametersOrder:
   Exclude:
@@ -3266,7 +3211,7 @@ Style/MultilineTernaryOperator:
     - 'script/tamoz_sqlite_oracle'
     - 'test/agent_scorecard_test.rb'
 
-# Offense count: 27
+# Offense count: 24
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: AllowMethodComparison, ComparisonsThreshold.
 Style/MultipleComparison:
@@ -3274,7 +3219,6 @@ Style/MultipleComparison:
     - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
@@ -3302,24 +3246,22 @@ Style/MutableConstant:
     - 'test/sqlite_schedule_determinism_test.rb'
     - 'test/sqlite_schedule_store_test.rb'
 
-# Offense count: 5
+# Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
 Style/NestedTernaryOperator:
   Exclude:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
-    - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 8
+# Offense count: 6
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, MinBodyLength, AllowConsecutiveConditionals.
 # SupportedStyles: skip_modifier_ifs, always
 Style/Next:
   Exclude:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/verifier.rb'
@@ -3371,11 +3313,10 @@ Style/PerlBackrefs:
   Exclude:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch.rb'
 
-# Offense count: 18
+# Offense count: 16
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/PredicateWithKind:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
@@ -3393,13 +3334,12 @@ Style/PredicateWithKind:
 Style/QuotedSymbols:
   EnforcedStyle: double_quotes
 
-# Offense count: 3
+# Offense count: 2
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/ReduceToHash:
   Exclude:
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -3452,11 +3392,10 @@ Style/RedundantConditional:
   Exclude:
     - 'test/memory_treatment_profile_test.rb'
 
-# Offense count: 6
+# Offense count: 5
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantDoubleSplatHashBraces:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
     - 'test/agent_mcp_adversarial_test.rb'
     - 'test/agent_mcp_capability_source_test.rb'
     - 'test/mcp_catalog_test.rb'
@@ -3546,7 +3485,7 @@ Style/RedundantStringEscape:
   Exclude:
     - 'script/benchmark_release'
 
-# Offense count: 14
+# Offense count: 13
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, AllowInnerSlashes.
 # SupportedStyles: slashes, percent_r, mixed
@@ -3562,7 +3501,7 @@ Style/RegexpLiteral:
     - 'test/sqlite_raw_oracle_test.rb'
     - 'test/sqlite_stale_request_test.rb'
 
-# Offense count: 18
+# Offense count: 17
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: ConvertCodeThatCanStartToReturnNil, AllowedMethods, MaxChainLength.
 # AllowedMethods: present?, blank?, presence, try, try!
@@ -3652,7 +3591,7 @@ Style/StringConcatenation:
     - 'test/agent_tool_error_recovery_test.rb'
     - 'test/duplicate_key_detector_test.rb'
 
-# Offense count: 30336
+# Offense count: 29642
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ConsistentQuotesInMultiline.
 # SupportedStyles: single_quotes, double_quotes
@@ -4021,7 +3960,7 @@ Style/StringLiterals:
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 399
+# Offense count: 368
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle.
 # SupportedStyles: single_quotes, double_quotes
@@ -4046,7 +3985,6 @@ Style/StringLiteralsInInterpolation:
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
@@ -4073,7 +4011,6 @@ Style/StringLiteralsInInterpolation:
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_repository.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/cognition_admission.rb'
-    - 'gems/tamoz-tools/lib/tamoz/tools/skills.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/toolbox.rb'
     - 'script/autonomy_scorecard'
     - 'script/benchmark_release'
@@ -4154,13 +4091,12 @@ Style/SymbolArray:
     - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
     - 'test/healing_failure_contract_test.rb'
 
-# Offense count: 16
+# Offense count: 15
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: AllowMethodsWithArguments, AllowedMethods, AllowedPatterns, AllowComments.
 # AllowedMethods: define_method
 Style/SymbolProc:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
@@ -4211,7 +4147,6 @@ Style/WhileUntilModifier:
 # SupportedStyles: percent, brackets
 Style/WordArray:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb'
     - 'script/release_rehearsal'

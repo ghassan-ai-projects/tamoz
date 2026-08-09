@@ -6,6 +6,7 @@ require_relative "../gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit"
 class SQLiteBoundarySourceAuditTest < Minitest::Test
   SOURCE_PATHS = %w[
     checkpoint_store.rb
+    request_inbox.rb
     lease_operations.rb
   ].map do |name|
     ROOT.join("gems", "tamoz-sqlite", "lib", "tamoz", "sqlite", name).to_s
