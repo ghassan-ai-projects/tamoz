@@ -149,33 +149,11 @@ module Tamoz
       end
 
       def state(thread:, checkpoint_id: nil, namespace: [])
-        checkpoint = if checkpoint_id
-                       checkpointer.find(
-                         thread_id: thread,
-                         namespace:,
-                         checkpoint_id:
-                       )
-                     else
-                       checkpointer.latest(thread_id: thread, namespace:)
-                     end
-        raise CheckpointConflictError, "checkpoint not found" unless checkpoint
-
-        compatible!(checkpoint)
-        snapshot(checkpoint)
+        StateOperations.new(self).state(thread:, checkpoint_id:, namespace:)
       end
 
       def history(thread:, namespace: [], limit: limits.history_limit)
-        unless limit.is_a?(Integer) && limit.positive?
-          raise ConfigurationError, "history limit must be a positive integer"
-        end
-        if limit > limits.history_limit
-          raise StateLimitError, "history limit exceeds #{limits.history_limit}"
-        end
-
-        checkpointer.history(thread_id: thread, namespace:, limit:).map do |checkpoint|
-          compatible!(checkpoint)
-          snapshot(checkpoint)
-        end.freeze
+        StateOperations.new(self).history(thread:, namespace:, limit:)
       end
 
       def durable_runner
@@ -232,99 +210,20 @@ module Tamoz
         checkpoint_id: nil,
         execution_id: SecureRandom.uuid
       )
-        ensure_ephemeral_public!
-        open_writer(thread, []) do |writer|
-          latest = compatible_latest!(thread, writer:)
-          source = checkpoint_id ? writer.find(checkpoint_id:) : latest
-          raise CheckpointConflictError, "checkpoint not found" unless source
-
-          compatible!(source)
-          normalized = @state_manager.normalize_update(update)
-          manual = Outcome.new(
-            task_id: "manual.update",
-            attempt_id: "manual.attempt",
-            base_checkpoint_id: source.id,
-            node: definition.nodes.keys.first,
-            path: %w[manual update],
-            update: normalized,
-            goto: nil
-          )
-          remaining = [limits.max_steps - source.logical_step, 0].max
-          candidate = @state_manager.apply_outcomes(
-            source.state,
-            [manual],
-            remaining_steps: remaining
-          )
-          historical = source.id != latest.id
-          frontier = source.frontier.map do |entry|
-            historical ? entry.with(activation_checkpoint_id: nil) : entry
-          end.freeze
-          checkpoint = append_checkpoint(
-            writer:,
-            thread:,
-            namespace: [],
-            expected_base_id: source.id,
-            mode: historical ? :fork : :advance,
-            execution_id: historical ? execution_id : source.execution_id,
-            state: candidate,
-            status: frontier.empty? ? :completed : :running,
-            logical_step: source.logical_step,
-            frontier:,
-            pending: {},
-            interrupts: [],
-            resume_values: {},
-            attempts: historical ? {} : source.attempts,
-            failure: nil,
-            total_tasks: historical ? 0 : source.total_tasks
-          )
-          snapshot(checkpoint)
-        end
+        StateOperations.new(self).update(
+          update,
+          thread:,
+          checkpoint_id:,
+          execution_id:
+        )
       end
 
       def append_checkpoint(writer:, **attributes)
-        state = attributes.fetch(:state)
-        attributes[:execution_id] = SafeText.normalize(
-          attributes.fetch(:execution_id),
-          name: "execution id",
-          max_bytes: 256,
-          error_class: ConfigurationError
-        )
-        attributes.delete(:thread)
-        attributes.delete(:namespace)
-        consumed_task_ids = attributes.delete(:consumed_task_ids) || []
-        request_transition = attributes.delete(:request_transition)
-        writer.append_checkpoint(
-          expected_base_id: attributes.delete(:expected_base_id),
-          mode: attributes.delete(:mode),
-          attributes: {
-            graph_name: name,
-            graph_version: version,
-            definition_digest:,
-            state_bytes: @state_manager.state_bytes(state),
-            **attributes
-          },
-          consumed_task_ids:,
-          request_transition:
-        )
+        StateOperations.new(self).append_checkpoint(writer:, **attributes)
       end
 
       def snapshot(checkpoint)
-        Snapshot.new(
-          checkpoint_id: checkpoint.id,
-          parent_checkpoint_id: checkpoint.parent_id,
-          sequence: checkpoint.sequence,
-          thread_id: checkpoint.thread_id,
-          namespace: checkpoint.namespace,
-          execution_id: checkpoint.execution_id,
-          status: checkpoint.status,
-          logical_step: checkpoint.logical_step,
-          state: checkpoint.state,
-          next: checkpoint.frontier.map(&:node).uniq.freeze,
-          pending_task_ids: checkpoint.pending.keys.sort.freeze,
-          interrupts: checkpoint.interrupts,
-          failure: checkpoint.failure,
-          definition_digest: checkpoint.definition_digest
-        )
+        StateOperations.new(self).snapshot(checkpoint)
       end
 
       def state_manager = @state_manager
