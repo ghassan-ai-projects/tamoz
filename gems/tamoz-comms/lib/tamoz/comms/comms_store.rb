@@ -16,6 +16,8 @@ module Tamoz
     # The signatures below ARE the contract — the bodies raise because a
     # contract module has nothing to implement.
     # :reek:UnusedParameters, :reek:LongParameterList
+    # rubocop:disable Metrics/ParameterLists -- the signatures ARE the §13
+    #   contract; every field is mandatory at the seam.
     module CommsStore
       CONTRACT_VERSION = 1
 
@@ -93,3 +95,4 @@ module Tamoz
     end
   end
 end
+# rubocop:enable Metrics/ParameterLists

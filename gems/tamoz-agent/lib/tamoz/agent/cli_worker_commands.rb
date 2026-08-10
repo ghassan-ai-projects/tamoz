@@ -277,7 +277,8 @@ module Tamoz
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
                                       .map { |row| {"effect_key" => row[:effect_key], "status" => "unknown"} },
-          "budget_exhaustions" => runtime.budget_exhaustions
+          "budget_exhaustions" => runtime.budget_exhaustions,
+          "channels" => comms_status(runtime)
         }
       end
 
@@ -362,6 +363,11 @@ module Tamoz
         @out.puts "sources:   #{document["capability_sources"].join(", ")}" unless document["capability_sources"].empty?
         counters = document["safety_counters"]
         @out.puts "safety:    #{counters.map { |name, count| "#{name}=#{count}" }.join(" ")}"
+        channels = document["channels"]
+        return if channels.fetch("surfaces").empty?
+
+        @out.puts "channels:  #{channels.fetch("surfaces").map { |row| row.fetch("surface_id") }.join(", ")}"
+        @out.puts "comms:     #{channels.fetch("safety_counters").map { |name, count| "#{name}=#{count}" }.join(" ")}"
       end
 
       # ------------------------------------------------------------------ shared

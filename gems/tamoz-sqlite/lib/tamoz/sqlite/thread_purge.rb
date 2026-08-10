@@ -191,6 +191,7 @@ module Tamoz
           [thread]
         )
       end
+      # rubocop:enable Metrics/MethodLength
 
       public
 

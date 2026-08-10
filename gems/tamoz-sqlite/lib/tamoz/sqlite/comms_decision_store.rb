@@ -16,7 +16,7 @@ module Tamoz
     # §13). An expired claim lease releases the record for crash recovery.
     # The wire/row mapping is a fixed column table; the size and parameter
     # metrics measure the mapping vocabulary, not a choice to overload.
-    # rubocop:disable Metrics/AbcSize, Metrics/ParameterLists
+    # rubocop:disable Metrics/AbcSize
     # rubocop:disable Naming/MethodParameterName -- `ms` and `wire` are the
     #   mapping unit vocabulary.
     class CommsDecisionStore
@@ -172,3 +172,5 @@ module Tamoz
     end
   end
 end
+# rubocop:enable Metrics/AbcSize
+# rubocop:enable Naming/MethodParameterName

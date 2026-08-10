@@ -31,6 +31,8 @@ module Tamoz
     #   fragment the durable operations.
     # :reek:TooManyMethods -- one primitive per table seam is the contract.
     # rubocop:disable Metrics/ParameterLists, Metrics/BlockLength -- the §13 contract signatures and their one-transaction blocks.
+    # rubocop:disable Metrics/ClassLength -- the store is one facade over the
+    #   §13 contract; splitting it would scatter the transaction boundaries.
     # rubocop:disable Metrics/MethodLength -- admit_and_enqueue is one atomic
     #   admission (inbound + request + enqueue); splitting it would open the
     #   crash window the design closes with a single transaction.
@@ -206,6 +208,10 @@ module Tamoz
         @outbox.mark_delivery(delivery_id:, status:, receipt:, now:)
       end
 
+      def resolve_delivery(delivery_id:, status:, now:)
+        @outbox.resolve_delivery(delivery_id:, status:, now:)
+      end
+
       def bind_correspondent(binding_wire, now:)
         @routes.bind_correspondent(binding_wire, now:)
       end
@@ -315,6 +321,131 @@ module Tamoz
         end
       end
 
+      # ===== operator surface (COMMS_DESIGN §14) =====
+
+      def surfaces
+        read('comms.surface.list') do |txn|
+          txn.rows('comms.surface.list', <<~SQL).map { |row| SURFACE_COLUMNS.zip(row).to_h }
+            SELECT #{SURFACE_COLUMNS.join(', ')} FROM tamoz_comms_surfaces
+            ORDER BY surface_id
+          SQL
+        end
+      end
+
+      def bindings(surface_id:)
+        read('comms.binding.list') do |txn|
+          txn.rows('comms.binding.list', <<~SQL, [surface_id]).map { |row| BINDING_COLUMNS.zip(row).to_h }
+            SELECT #{BINDING_COLUMNS.join(', ')} FROM tamoz_comms_bindings
+            WHERE surface_id = ? ORDER BY bound_at_ms DESC
+          SQL
+        end
+      end
+
+      def conversations(surface_id:)
+        read('comms.route.list') do |txn|
+          txn.rows('comms.route.list', <<~SQL, [surface_id]).map { |row| ROUTE_COLUMNS.zip(row).to_h }
+            SELECT #{ROUTE_COLUMNS.join(', ')} FROM tamoz_comms_conversations
+            WHERE surface_id = ? ORDER BY bound_at_ms DESC
+          SQL
+        end
+      end
+
+      def poll_state(bot_id:)
+        read('comms.poll.state') do |txn|
+          row = txn.first('comms.poll.state', <<~SQL, [bot_id])
+            SELECT #{POLL_COLUMNS.join(', ')} FROM tamoz_comms_poll_state
+            WHERE bot_id = ?
+          SQL
+          row && POLL_COLUMNS.zip(row).to_h
+        end
+      end
+
+      # Outbox depth per status for one surface (design §14: the status
+      # section shows pending depth and `:unknown` deliveries).
+      def outbox_counts(surface_id:)
+        read('comms.outbox.counts') do |txn|
+          txn.rows('comms.outbox.counts', <<~SQL, [surface_id]).to_h { |row| [row[0], row[1]] }
+            SELECT status, COUNT(*) FROM tamoz_comms_outbox
+            WHERE surface_id = ? GROUP BY status
+          SQL
+        end
+      end
+
+      # The comms safety counters (design §16), derived from durable rows:
+      # unauthorized admissions are `request` rows with no active binding
+      # anywhere for that correspondent, and chat grants are membership rows
+      # that reached `request` (impossible in v1 — admission ignores
+      # membership, but the count is derived, not assumed).
+      def admission_audit_counts
+        read('comms.audit.counts') do |txn|
+          {
+            'unauthorized_inbound_admissions' => txn.scalar('comms.audit.unauthorized', <<~SQL),
+              SELECT COUNT(*) FROM tamoz_comms_inbound i
+              WHERE i.disposition = 'request'
+                AND NOT EXISTS (
+                  SELECT 1 FROM tamoz_comms_bindings b
+                  WHERE b.surface_id = i.surface_id AND b.correspondent_id = i.correspondent_id
+                    AND b.status = 'active')
+            SQL
+            'chat_grants' => txn.scalar('comms.audit.chat_grants', <<~SQL)
+              SELECT COUNT(*) FROM tamoz_comms_inbound
+              WHERE kind = 'membership' AND disposition = 'request'
+            SQL
+          }
+        end
+      end
+
+      # ===== pairing (design §7) =====
+
+      # All pairing challenge rows, optionally filtered by status. The digest
+      # is stored, never the plaintext code.
+      def pairing_challenges(status: nil)
+        read('comms.pairing.list') do |txn|
+          sql = "SELECT #{PAIRING_COLUMNS.join(', ')} FROM tamoz_comms_pairing_challenges"
+          binds = []
+          unless status.nil?
+            sql << ' WHERE status = ?'
+            binds << status
+          end
+          sql << ' ORDER BY created_at_ms DESC'
+          txn.rows('comms.pairing.list', sql, binds).map { |row| PAIRING_COLUMNS.zip(row).to_h }
+        end
+      end
+
+      # Store the challenge digest for one unbound sender (idempotent on the
+      # digest; the plaintext code travels to the sender exactly once).
+      def insert_pairing_challenge(digest:, surface_id:, correspondent_id:, conversation_id:, expires_at:, now:)
+        transaction('comms.pairing.insert') do |txn|
+          binds = [digest, surface_id, correspondent_id, conversation_id, now_ms(expires_at), now_ms(now)]
+          txn.execute('comms.pairing.insert', <<~SQL, binds)
+            INSERT OR IGNORE INTO tamoz_comms_pairing_challenges (
+              challenge_digest, surface_id, correspondent_id, conversation_id,
+              status, attempts, expires_at_ms, created_at_ms
+            ) VALUES (?, ?, ?, ?, 'pending', 0, ?, ?)
+          SQL
+          txn.changes == 1 ? :inserted : :duplicate
+        end
+      end
+
+      # Consume ONE pending challenge and write its binding in one transaction
+      # (design §7): a crash between the two would leave a consumed challenge
+      # that grants nothing. The caller verifies the code against the digest
+      # and builds the binding wire; this method is the atomic commit.
+      def approve_pairing(challenge_digest:, binding_wire:, now:)
+        transaction('comms.pairing.approve') do |txn|
+          txn.execute('comms.pairing.approve.consume', <<~SQL, [challenge_digest])
+            UPDATE tamoz_comms_pairing_challenges SET status = 'consumed'
+            WHERE challenge_digest = ? AND status = 'pending'
+          SQL
+          next :missing unless txn.changes == 1
+
+          outcome = @routes.bind_correspondent_in_transaction!(txn, binding_wire, now:)
+          next :already_bound unless outcome == :bound
+
+          :approved
+        end
+      end
+
       private
 
       def transaction(operation, &)
@@ -328,4 +459,5 @@ module Tamoz
   end
 end
 # rubocop:enable Metrics/ParameterLists, Metrics/BlockLength
+# rubocop:enable Metrics/ClassLength
 # rubocop:enable Metrics/MethodLength

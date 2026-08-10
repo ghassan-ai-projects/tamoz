@@ -75,6 +75,11 @@ module Tamoz
 
           ignore(:unbound)
         when 'pairing'
+          # An approved challenge IS the binding: `tamoz comms pair approve`
+          # consumes the challenge and writes the active binding in one step
+          # (design §7), so an active binding is the consumed-challenge proof.
+          return request_disposition(envelope, surface:, conversation:) if binding&.fetch('status') == 'active'
+
           ignore(:pairing_pending)
         else
           reject(:disabled, 'admission is disabled')

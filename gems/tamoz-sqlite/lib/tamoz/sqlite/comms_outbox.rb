@@ -118,6 +118,20 @@ module Tamoz
         end
       end
 
+      # The OPERATOR's explicit resolution of a genuinely ambiguous send
+      # (design §14): an `unknown` row is resolved to succeeded or failed,
+      # never retried blindly. Only the operator's resolve command calls this.
+      def resolve_delivery(delivery_id:, status:, now:)
+        transaction('comms.outbox.resolve') do |txn|
+          txn.execute('comms.outbox.resolve', <<~SQL, [status, now_ms(now), delivery_id])
+            UPDATE tamoz_comms_outbox
+            SET status = ?, updated_at_ms = ?
+            WHERE delivery_id = ? AND status = 'unknown'
+          SQL
+          txn.changes == 1 ? :resolved : :not_unknown
+        end
+      end
+
       private
 
       def transaction(operation, &)

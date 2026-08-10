@@ -22,7 +22,7 @@ module Tamoz
     # :reek:DuplicateMethodCall, :reek:FeatureEnvy, :reek:NilCheck
     # :reek:TooManyInstanceVariables, :reek:TooManyMethods -- one loop owns
     #   every seam; splitting it would scatter the ordering invariant.
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
     class CommsGateway
       THREAD_PROFILE_NAMESPACE = %w[tamoz worker thread_profile].freeze
       POLLER_TTL_S = 60.0
@@ -54,7 +54,11 @@ module Tamoz
       # The fenced poller lease: :started, or :poller_busy when another
       # gateway holds a live lease for this bot.
       def start(now: Time.now.utc)
-        acquire_poller(now:) ? :started : :poller_busy
+        acquired = @store.acquire_poller_lease(
+          surface_id:, bot_id:, owner: @poller_owner, fence: next_fence,
+          ttl_s: POLLER_TTL_S, now:
+        )
+        acquired == :acquired ? :started : :poller_busy
       end
 
       def stop
@@ -224,14 +228,6 @@ module Tamoz
         { status: 'unknown', receipt: nil }
       end
 
-      def acquire_poller(now:)
-        acquired = @store.acquire_poller_lease(
-          surface_id:, bot_id:, owner: @poller_owner, fence: next_fence,
-          ttl_s: POLLER_TTL_S, now:
-        )
-        acquired == :acquired
-      end
-
       def release_poller
         @store.release_poller_lease(bot_id:, owner: @poller_owner, fence: @fence)
       end
@@ -256,4 +252,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists

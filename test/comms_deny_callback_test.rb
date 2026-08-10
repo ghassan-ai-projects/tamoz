@@ -6,7 +6,8 @@ require_relative 'test_helper'
 # ADR-043): a prompt activates only after its send receipt is durable, a
 # button press resolves exactly one ACTIVE prompt to a deny decision, and a
 # replay, expiry, or swapped binding never resolves (invariant 58).
-# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:disable Metrics/BlockLength, Lint/UnusedMethodArgument
 class CommsDenyCallbackTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -211,4 +212,5 @@ class CommsDenyCallbackTest < Minitest::Test
     end
   end
 end
-# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/BlockLength, Lint/UnusedMethodArgument

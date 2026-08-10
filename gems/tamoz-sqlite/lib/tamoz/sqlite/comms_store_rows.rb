@@ -14,6 +14,18 @@ module Tamoz
 
       # SELECT column lists for the row-shaped reads; the connection returns
       # positional rows, so the zip order is the table's DDL order.
+      SURFACE_COLUMNS = %w[
+        surface_id revision definition_digest descriptor_json created_at_ms
+        updated_at_ms
+      ].freeze
+      POLL_COLUMNS = %w[
+        bot_id surface_id next_offset poller_owner_id poller_fence
+        poller_expires_at_ms updated_at_ms
+      ].freeze
+      PAIRING_COLUMNS = %w[
+        challenge_digest surface_id correspondent_id conversation_id status
+        attempts expires_at_ms created_at_ms
+      ].freeze
       PROMPT_COLUMNS = %w[
         reference_digest surface_id surface_revision thread_id occurrence_id
         interrupt_digest correspondent_id conversation_id prompt_receipt status
@@ -104,18 +116,20 @@ module Tamoz
       end
 
       def upsert_surface!(txn, descriptor_wire, now)
-        txn.execute('comms.surface.deploy.upsert',
-                    <<~SQL, [descriptor_wire.fetch('surface_id'), descriptor_wire.fetch('revision'), descriptor_wire.fetch('definition_digest'), JSON.generate(descriptor_wire), now_ms(now), now_ms(now)])
-                      INSERT INTO tamoz_comms_surfaces (
-                        surface_id, revision, definition_digest, descriptor_json,
-                        created_at_ms, updated_at_ms
-                      ) VALUES (?, ?, ?, ?, ?, ?)
-                      ON CONFLICT(surface_id) DO UPDATE SET
-                        revision = excluded.revision,
-                        definition_digest = excluded.definition_digest,
-                        descriptor_json = excluded.descriptor_json,
-                        updated_at_ms = excluded.updated_at_ms
-                    SQL
+        binds = [descriptor_wire.fetch('surface_id'), descriptor_wire.fetch('revision'),
+                 descriptor_wire.fetch('definition_digest'), JSON.generate(descriptor_wire),
+                 now_ms(now), now_ms(now)]
+        txn.execute('comms.surface.deploy.upsert', <<~SQL, binds)
+          INSERT INTO tamoz_comms_surfaces (
+            surface_id, revision, definition_digest, descriptor_json,
+            created_at_ms, updated_at_ms
+          ) VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(surface_id) DO UPDATE SET
+            revision = excluded.revision,
+            definition_digest = excluded.definition_digest,
+            descriptor_json = excluded.descriptor_json,
+            updated_at_ms = excluded.updated_at_ms
+        SQL
       end
 
       def upsert_poller!(txn, surface_id:, bot_id:, owner:, fence:, expires_at_ms:, now:)

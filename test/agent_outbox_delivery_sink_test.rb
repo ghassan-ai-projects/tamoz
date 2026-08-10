@@ -5,7 +5,8 @@ require_relative 'test_helper'
 # Slice E (COMMS_TELEGRAM_PLAN §3) — the worker's DeliverySink projection:
 # lifecycle events become bounded outbox rows via the CommsStore, an unbound
 # thread delivers nothing (nil-safe), and the worker pushes before the
-# occurrence closes. rubocop:disable Minitest/MultipleAssertions
+# occurrence closes.
+# rubocop:disable Minitest/MultipleAssertions
 class AgentOutboxDeliverySinkTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -135,3 +136,4 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 end
+# rubocop:enable Minitest/MultipleAssertions

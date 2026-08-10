@@ -97,11 +97,59 @@ tool call, receipt and terminal transition. Two properties hold by construction:
   disclose only a generic phrase, so a hostile plan cannot use the error channel
   to echo content back.
 
+## Channels
+
+The gateway is one foreground process per bot, supervised the way `tamoz worker`
+is. `tamoz status --json` reports a `channels` section — surfaces, last-poll
+age, outbox depth and the comms safety counters — so a silent bot is visible
+before anyone notices.
+
+### Pairing and revocation
+
+In `admission.direct: pairing` mode an unbound sender receives a short-lived
+single-use code, and the OPERATOR approves it — the code grants nothing by
+itself:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms pair list
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms pair approve <CODE>
+```
+
+Approval consumes the challenge and writes the active binding in one
+transaction. Revocation takes effect for future admissions and atomically
+invalidates unused approval prompts; it does not rewrite admitted work — the
+revoke command prints the affected threads and the exact `tamoz cancel`
+commands, and you must run them yourself:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms pair revoke telegram:user:11111111
+```
+
+### When a delivery is `:unknown`
+
+A send whose outcome is genuinely unknown (a timeout on the wire, no receipt)
+is recorded `:unknown` — never retried blindly, never guessed. The operator
+reconciles it against the channel and resolves it explicitly:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms delivery resolve <ID> succeeded
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms delivery resolve <ID> failed
+```
+
+`resolve` prints the delivery's effect key; reconcile the journal with
+`tamoz resolve THREAD EFFECT_KEY {succeeded|failed|abandoned}` so the effect
+journal and the outbox agree. An `:unknown` delivery stays visible in
+`tamoz status` until resolved, and blocks purge under invariant 54.
+
 ## Migrations
 
 Schema migrations are numbered, checksummed and applied in one transaction; a
 failed migration rolls back every statement, and checksum tampering is refused.
-There are five: the base runtime, the memory index, the scheduler, the stream
-admission tables and the stream processing plane. A database from an older
-Tamoz migrates forward on open; a database from a NEWER Tamoz fails before any
-partial load.
+There are seven: the base runtime, the memory index, the scheduler, the stream
+admission tables, the stream processing plane, the communications tables, and
+the outbox receipt column. A database from an older Tamoz migrates forward on
+open; a database from a NEWER Tamoz fails before any partial load.
+
+Runtime configuration schema migrations are separate and explicit: `tamoz
+config migrate` moves schema 1 ("no channels") to schema 2 (`channels:`) with
+a backup and an atomic rename, and startup never rewrites operator authority.

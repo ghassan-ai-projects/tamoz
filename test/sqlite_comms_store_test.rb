@@ -10,7 +10,9 @@ require_relative 'test_helper'
 # poll offset never regresses, and the outbox is bounded and single-claim.
 #
 # Each case walks one primitive's whole state machine; the assertions belong
-# to the same scenario. rubocop:disable Minitest/MultipleAssertions
+# to the same scenario.
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:disable Metrics/BlockLength, Metrics/ClassLength
 class SQLiteCommsStoreTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -39,10 +41,10 @@ class SQLiteCommsStoreTest < Minitest::Test
   def descriptor(**overrides)
     Comms::SurfaceDescriptor.build(
       surface_id: 'telegram-ops', revision: 1, transport: {
-        mode: 'long_poll',
-        credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-        poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144
-      },
+                                                 mode: 'long_poll',
+                                                 credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+                                                 poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144
+                                               },
       identity: { expected_bot_id: 7_463_512_990 },
       admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
       threading: 'conversation', profile_id: 'ops',
@@ -109,7 +111,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   def ms(value)
-    value && ((Time.parse(value).utc.to_r * 1000).to_i)
+    value && (Time.parse(value).utc.to_r * 1000).to_i
   end
 
   def decision_wire(direction: 'deny')
@@ -139,15 +141,17 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store, _adapter, checkpoints|
       result = store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-        thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now:
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now:
       )
+
       assert_equal :enqueued, result
       assert_equal :duplicate, store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-        thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now: now + 1
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now: now + 1
       )
 
       requests = checkpoints.request_history(thread_id: 'tg.ops.abc')
+
       assert_equal 1, requests.length, 'the replay must not enqueue twice'
       assert_equal :turn, requests.first.operation
     end
@@ -157,11 +161,11 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store|
       assert_equal :recorded, store.disposition_only(
         envelope(update_id: 1), surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-        disposition: 'ignored', reason: 'unbound', now:
+                                disposition: 'ignored', reason: 'unbound', now:
       )
       assert_equal :duplicate, store.disposition_only(
         envelope(update_id: 1), surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-        disposition: 'ignored', reason: 'unbound', now: now + 1
+                                disposition: 'ignored', reason: 'unbound', now: now + 1
       )
     end
   end
@@ -269,6 +273,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       reopened = Tamoz::SQLite::Adapter.new(path:)
       begin
         decisions = reopened.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+
         assert_equal 1, decisions.length
         assert_equal 'pending', decisions.first.fetch('status'),
                      'the callback records a pending decision for the worker to consume'
@@ -287,6 +292,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         conversation_id: 'telegram:chat:22222222',
         bound_at: now, bound_by: 'operator:ghassan'
       ).wire
+
       assert_equal :bound, store.bind_correspondent(binding_wire, now:)
       insert_prompt!(store, reference: 'c' * 64)
       insert_prompt!(store, reference: 'd' * 64, status: 'active')
@@ -301,6 +307,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       ), 'revoking an already-revoked binding is idempotent'
 
       latest = store.binding(correspondent_id: 'telegram:user:11111111', surface_id: 'telegram-ops')
+
       assert_equal 'revoked', latest.fetch('status')
       assert_nil store.prompt(reference_digest: 'c' * 64), 'inactive prompts are invalidated'
       refute_nil store.prompt(reference_digest: 'd' * 64), 'an active prompt survives revocation'
@@ -314,6 +321,7 @@ class SQLiteCommsStoreTest < Minitest::Test
         conversation_id: 'telegram:chat:22222222', thread_id: 'tg.ops.abc',
         profile_id: 'ops', bound_at: now
       ).wire
+
       assert_equal :bound, store.bind_conversation(route, now:)
       assert_equal :duplicate, store.bind_conversation(route, now: now + 1)
 
@@ -366,4 +374,5 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 end
-# rubocop:enable Minitest/MultipleAssertions
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/BlockLength, Metrics/ClassLength

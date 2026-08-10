@@ -152,7 +152,7 @@ module Tamoz
         end
         unless Shapes.bounded_string?(conversation_id, max_bytes: MAX_ID_BYTES) &&
                conversation_id.start_with?('telegram:chat:', 'telegram:group:',
-                                          'telegram:supergroup:', 'telegram:channel:')
+                                           'telegram:supergroup:', 'telegram:channel:')
           raise ValidationError, 'conversation_id must be a bound telegram chat id'
         end
         if !reply_to.nil? && !Shapes.bounded_integer?(reply_to, max: 9_999_999_999_999_999)
