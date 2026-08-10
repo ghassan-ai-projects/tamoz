@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 363 | 259 | 9 | **no** |
+| 385 | 259 | 9 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 9 |
-| pass | 339 |
+| pass | 361 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -107,6 +107,28 @@ generating run.
 | `API-tamoz-agent-Tamoz::Agent::ToolPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Toolbox` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::AmbiguousDeliveryError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ApprovalPrompt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::AuthenticationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Binding` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Commands` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::CommsError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::CommsStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Conversation` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DecisionRecord` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DecisionStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Delivery` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DeliverySink` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::InboundEnvelope` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::InterruptDigest` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::PollerConflictError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Shapes` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::SurfaceDescriptor` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ThrottledError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration_finalized?` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configure` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
