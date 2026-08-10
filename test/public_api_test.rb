@@ -42,6 +42,30 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-comms" => {
+          "Tamoz::Comms::AmbiguousDeliveryError" => {},
+          "Tamoz::Comms::ApprovalPrompt" => {},
+          "Tamoz::Comms::AuthenticationError" => {},
+          "Tamoz::Comms::Binding" => {},
+          "Tamoz::Comms::Canonical" => {},
+          "Tamoz::Comms::Commands" => {},
+          "Tamoz::Comms::CommsError" => {},
+          "Tamoz::Comms::CommsStore" => {},
+          "Tamoz::Comms::Conversation" => {},
+          "Tamoz::Comms::DecisionRecord" => {},
+          "Tamoz::Comms::DecisionStore" => {},
+          "Tamoz::Comms::Delivery" => {},
+          "Tamoz::Comms::DeliverySink" => {},
+          "Tamoz::Comms::InboundEnvelope" => {},
+          "Tamoz::Comms::InterruptDigest" => {},
+          "Tamoz::Comms::PollerConflictError" => {},
+          "Tamoz::Comms::Shapes" => {},
+          "Tamoz::Comms::SurfaceDescriptor" => {},
+          "Tamoz::Comms::ThrottledError" => {},
+          "Tamoz::Comms::Transport" => {},
+          "Tamoz::Comms::ValidationError" => {},
+          "Tamoz::Comms::VERSION" => {}
+        },
         "tamoz-core" => {
           "Tamoz.configuration" => {},
           "Tamoz.configure" => {},
@@ -208,6 +232,12 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Stream::WallClock" => {},
           "Tamoz::Stream::WatermarkRegressionError" => {}
         },
+        "tamoz-telegram" => {
+          "Tamoz::Telegram::Client" => {},
+          "Tamoz::Telegram::Normalizer" => {},
+          "Tamoz::Telegram::Transport" => {},
+          "Tamoz::Telegram::VERSION" => {}
+        },
         "tamoz-tools" => {
           "Tamoz::Tools::CheckReceipt" => {},
           "Tamoz::Tools::Skills" => {},
@@ -265,7 +295,9 @@ class PublicAPITest < Minitest::Test
       Tamoz::Tools::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Evals::VERSION,
-      Tamoz::Mcp::VERSION
+      Tamoz::Mcp::VERSION,
+      Tamoz::Comms::VERSION,
+      Tamoz::Telegram::VERSION
     ]
 
     assert_equal GEM_ROOTS.keys.sort,

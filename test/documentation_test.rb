@@ -25,9 +25,9 @@ class DocumentationTest < Minitest::Test
     decisions = ROOT.join("docs", "design-v0.1", "DECISIONS.md").read(encoding: Encoding::UTF_8)
 
     assert_includes source, "source_commit=c123605"
-    assert_equal (1..55).to_a,
+    assert_equal (1..58).to_a,
                  invariants.scan(/^\| (\d+) \| \*\*/).flatten.map(&:to_i)
-    assert_equal (1..40).to_a,
+    assert_equal (1..43).to_a,
                  decisions.scan(/^### ADR-(\d{3}) /).flatten.map(&:to_i)
   end
 
@@ -39,7 +39,7 @@ class DocumentationTest < Minitest::Test
     )
 
     assert status.success?, "#{stdout}\n#{stderr}"
-    assert_match(/\Adesign validation passed \(\d+ documents, 55 invariants, 40 ADRs\)\n\z/, stdout)
+    assert_match(/\Adesign validation passed \(\d+ documents, 58 invariants, 43 ADRs\)\n\z/, stdout)
   end
 
   private

@@ -11,10 +11,11 @@ module TamozSQLiteOracle
   APPLICATION_ID = 1_413_565_786
   # P11: the schema moved 1 -> 2 through the checksummed MIGRATION_2 (the
   # lexical memory index). P13: 2 -> 3 through MIGRATION_3 (scheduler tables).
-  # P14: 3 -> 4 through MIGRATION_4 (stream tables). The oracle is a second,
-  # independent read-only verifier: it must agree with the migrated schema or
-  # every scenario database is schema_invalid.
-  SCHEMA_VERSION = 5
+  # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
+  # MIGRATION_6 (channel tables). The oracle is a second, independent
+  # read-only verifier: it must agree with the migrated schema or every
+  # scenario database is schema_invalid.
+  SCHEMA_VERSION = 7
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -25,6 +26,14 @@ module TamozSQLiteOracle
     "a7f78a37cd6d15b16489bf9f67580589d778f2a3100e0c5f8f50827acee425ba"
   MIGRATION_5_CHECKSUM =
     "be5abbc58052d5d5c596dfe96b227b4f7eb0ed53b3a58d6cf550a6bde87b2fff"
+  # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the channel-store
+  # tables (surfaces, bindings, pairing challenges, routes, inbound ledger,
+  # requests, poll state, outbox, prompts, decisions, gaps).
+  MIGRATION_6_CHECKSUM =
+    "b351a297958689ef65d744d82e1f6973c6cf45e8b661f148115d6293f05203e5"
+  # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its receipt column.
+  MIGRATION_7_CHECKSUM =
+    "4646a74aaf093face3b371a5e5dc7b0dead7c8967f21dd6f0c965ce57b89d055"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -743,7 +752,9 @@ module TamozSQLiteOracle
         [2, MIGRATION_2_CHECKSUM],
         [3, MIGRATION_3_CHECKSUM],
         [4, MIGRATION_4_CHECKSUM],
-        [5, MIGRATION_5_CHECKSUM]
+        [5, MIGRATION_5_CHECKSUM],
+        [6, MIGRATION_6_CHECKSUM],
+        [7, MIGRATION_7_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

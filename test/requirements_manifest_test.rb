@@ -34,10 +34,10 @@ class RequirementsManifestTest < Minitest::Test
            "the committed manifest diverges from a fresh generation:\n#{stderr}#{stdout}"
   end
 
-  # Every one of the 55 invariant clauses has a row. A clause cannot be
+  # Every one of the 58 invariant clauses has a row. A clause cannot be
   # silently dropped from release consideration.
   def test_every_invariant_clause_has_a_row
-    expected = (1..55).map { |number| format("INV-%02d", number) }
+    expected = (1..58).map { |number| format("INV-%02d", number) }
 
     assert_equal expected, requirements.filter_map { |row|
       row.fetch("id") if row.fetch("category") == "invariant"

@@ -519,6 +519,26 @@ EVIDENCE = {
       "test/agent_runtime_test.rb#test_structural_review_rejects_an_unavailable_tool_before_any_action"
     ]
   },
+  "INV-56" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test " \
+               "exists before the channel gems are built; the admission suite in the " \
+               "telegram slices converts this row to direct evidence."
+  },
+  "INV-57" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Channel outbox, offset persistence, and ambiguity handling " \
+               "(COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel " \
+               "gems are built; the kill matrix in the telegram slices converts this " \
+               "row to direct evidence."
+  },
+  "INV-58" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Deny-only callback and exact decision records (COMMS_TELEGRAM_PLAN " \
+               "slices A/H). No test exists before the channel gems are built; the " \
+               "adversarial approval suite in slice H converts this row to direct " \
+               "evidence."
+  },
 
   # ---- ADRs ---------------------------------------------------------------
   "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice"},
@@ -595,6 +615,24 @@ EVIDENCE = {
   "ADR-038" => {test: "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"},
   "ADR-039" => {test: "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides"},
   "ADR-040" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"},
+  "ADR-041" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and " \
+               "dependency-isolation proof for tamoz-comms/tamoz-telegram lands with " \
+               "the gems themselves."
+  },
+  "ADR-042" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-" \
+               "subprocess proof that the gateway never loads a model lands with the " \
+               "gateway slice."
+  },
+  "ADR-043" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The " \
+               "adversarial approval suite in slice H converts this row to direct " \
+               "evidence."
+  },
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
   "OBJ-1" => {
@@ -706,6 +744,8 @@ EVIDENCE = {
   "MIG-3" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic"},
   "MIG-4" => {test: "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes"},
   "MIG-5" => {test: "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything"},
+  "MIG-6" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
+  "MIG-7" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",

@@ -55,7 +55,25 @@ CASES = [
    priority: "resource-bounds"},
   {id: "10", name: "unknown_effect_never_retries_automatically",
    behavior: "An unknown effect is never retried by a machine.",
-   priority: "crash-recovery"}
+   priority: "crash-recovery"},
+  {id: "11", name: "chat_message_becomes_a_durable_turn_and_an_answer_returns",
+   behavior: "A chat message becomes a durable turn and the answer returns to the same conversation.",
+   priority: "channel"},
+  {id: "12", name: "the_same_update_never_makes_two_turns",
+   behavior: "A duplicated update makes exactly one logical turn.",
+   priority: "channel"},
+  {id: "13", name: "a_deny_press_denies_the_exact_interrupt_set",
+   behavior: "A Deny press resolves the exact interrupt set; the same occurrence completes denied.",
+   priority: "channel"},
+  {id: "14", name: "an_unbound_sender_never_reaches_a_turn",
+   behavior: "An unbound sender is durably rejected with no turn and no answer.",
+   priority: "channel"},
+  {id: "15", name: "an_ambiguous_send_becomes_unknown_and_is_never_resent",
+   behavior: "A send without a receipt is :unknown, never blindly resent.",
+   priority: "channel"},
+  {id: "16", name: "saturated_capacity_refuses_intake_but_reserves_the_answer",
+   behavior: "Capacity saturation refuses new intake while the reserved terminal answer still appends.",
+   priority: "channel"}
 ].freeze
 
 strict = ARGV.include?("--strict")

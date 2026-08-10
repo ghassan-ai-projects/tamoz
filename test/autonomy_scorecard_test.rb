@@ -253,4 +253,210 @@ class AutonomyScorecardTest < Minitest::Test
       assert_hard_counters_zero(rt)
     end
   end
+
+  # ----------------------------------------------------- 11. channel turn
+
+  # A chat message becomes a durable turn and the answer returns to the SAME
+  # conversation (design §16 case 11).
+  def test_case_11_chat_message_becomes_a_durable_turn_and_an_answer_returns
+    with_runtime(channels: channel_map) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.client.updates = [message_update(1, "Read note.txt")]
+
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+      serve_once(rt, factory: read_only_factory)
+
+      assert_equal 1, rt.client.sent.length, "the answer must be sent, exactly once"
+      assert_equal "22222222", rt.client.sent.first.fetch("chat_id"),
+                   "the answer returns to the conversation that asked"
+      # The VERIFIED answer and nothing else. Asserting `include?` here would
+      # also pass on a dump of the session state that produced it, which is
+      # internal detail and unbounded — a correspondent gets the answer.
+      assert_equal "hello", rt.client.sent.first.fetch("text"),
+                   "the answer must be the turn's verified answer, not its state"
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # ------------------------------------------------- 12. duplicate update
+
+  # The same update_id twice (concurrently or across a restart) makes exactly
+  # one logical turn (design §16 case 12, invariant 57's replay dedup).
+  def test_case_12_the_same_update_never_makes_two_turns
+    with_runtime(channels: channel_map) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.client.updates = [message_update(1, "Read note.txt"), message_update(1, "Read note.txt")]
+
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+
+      completions = rt.events.select { |event| event["event"] == "request.completed" }
+      assert_equal 1, completions.length, "a duplicated update must make exactly one turn"
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # ---------------------------------------------------- 13. deny callback
+
+  # An approval pause renders a prompt, the Deny press resolves the EXACT
+  # interrupt set, and the same occurrence completes denied — nothing edited,
+  # nothing answered for the human (design §16 case 13, ADR-043, invariant 58).
+  def test_case_13_a_deny_press_denies_the_exact_interrupt_set
+    with_runtime(channels: channel_map(approvals: {"mode" => "deny_only", "prompt_ttl_s" => 900}),
+                 unattended: {"reconcilable" => []}) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.client.updates = [message_update(1, "Fix note.txt")]
+
+      serve_once(rt, factory: edit_factory)
+      # The worker pauses on the edit interrupt; the prompt delivery is queued.
+      worker_once(rt, factory: edit_factory)
+      # The gateway sends the prompt (receipt durable -> prompt active).
+      serve_once(rt, factory: edit_factory)
+
+      reference = rt.client.sent.last.dig("reply_markup", "inline_keyboard").first.first.fetch("callback_data")
+      refute_empty reference, "the prompt message must carry the single-use reference"
+      rt.client.updates = [callback_update(2, reference)]
+
+      # The Deny press resolves exactly one active prompt to a deny decision.
+      serve_once(rt, factory: edit_factory)
+      # The worker consumes the decision: the same occurrence completes denied.
+      worker_once(rt, factory: edit_factory)
+
+      denied = rt.events.select { |event| event["event"] == "request.denied" }
+      assert_equal 1, denied.length, "the denied occurrence must emit one denied event"
+      assert_equal "hello\n", File.read(File.join(rt.workspace, "note.txt")),
+                   "the denied interrupt must never edit the workspace"
+      assert_empty rt.pending_approvals, "the decision must consume the pause"
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # ---------------------------------------------------- 14. unbound sender
+
+  # An unbound sender is durably rejected: no turn, no answer, no workspace
+  # content in the channel, zero unauthorized admissions (design §16 case 14,
+  # invariant 56).
+  def test_case_14_an_unbound_sender_never_reaches_a_turn
+    with_runtime(channels: channel_map) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "secret content\n")
+      rt.client.updates = [message_update(1, "Read note.txt", user_id: 999_999_99)]
+
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+
+      assert_empty rt.client.sent, "an unbound sender must receive nothing"
+      assert_empty(rt.events.select { |event| event["event"] == "request.completed" })
+      channels = rt.status_document.fetch("channels")
+      assert_equal 0, channels.dig("safety_counters", "unauthorized_inbound_admissions"),
+                   "a rejection is not an admission"
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # ---------------------------------------------------- 15. ambiguous send
+
+  # A send whose receipt never arrives is `:unknown` — never silently retried,
+  # never duplicated (design §16 case 15, §10 ambiguity policy).
+  def test_case_15_an_ambiguous_send_becomes_unknown_and_is_never_resent
+    with_runtime(channels: channel_map) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.client.updates = [message_update(1, "Read note.txt")]
+      rt.client.ambiguous_sends = 1
+
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+      # The send times out on the wire: the delivery is :unknown, not retried.
+      serve_once(rt, factory: read_only_factory)
+
+      channels = rt.status_document.fetch("channels")
+      assert_equal 1, channels.fetch("surfaces").first.fetch("unknown_deliveries"),
+                   "the ambiguous send must be durably :unknown"
+      sent = rt.client.sent.length
+      serve_once(rt, factory: read_only_factory)
+      assert_equal sent, rt.client.sent.length, "an :unknown delivery is never blindly resent"
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # ---------------------------------------------------- 16. capacity gate
+
+  # Capacity saturation refuses new intake while the reserved terminal answer
+  # for an admitted request still appends, and the slots return when the turn
+  # finishes (design §16 case 16, invariant 57).
+  def test_case_16_saturated_capacity_refuses_intake_but_reserves_the_answer
+    limits = {"outbox_capacity" => 3, "max_open_requests" => 1,
+              "max_denial_prompts_per_request" => 1}
+    with_runtime(channels: channel_map(limits:, approvals: {"mode" => "deny_only", "prompt_ttl_s" => 900},
+                                       rendering: {"max_parts" => 1}),
+                 unattended: {"reconcilable" => []}) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      # One request's reservation (parts + denial prompts) fills the cap; a
+      # second request must be refused while the first is still open.
+      rt.client.updates = [message_update(1, "Read note.txt"), message_update(2, "Read note.txt")]
+
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+
+      completions = rt.events.select { |event| event["event"] == "request.completed" }
+      assert_equal 1, completions.length, "saturated intake must refuse the second request"
+      assert rt.client.sent.any? { |message| message.fetch("text").include?("capacity") },
+             "the refused sender should get a busy notice, not a turn"
+
+      # The reserved terminal answer appends (drain sends it once).
+      serve_once(rt, factory: read_only_factory)
+      assert rt.client.sent.any? { |message| message.fetch("text").include?("hello") },
+             "the reserved terminal answer must be delivered"
+
+      # The finished request released its slots: intake is open again.
+      rt.client.updates = [message_update(3, "Read note.txt")]
+      serve_once(rt, factory: read_only_factory)
+      worker_once(rt, factory: read_only_factory)
+      assert_equal 2, rt.events.select { |event| event["event"] == "request.completed" }.length
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  private
+
+  # The channel cases drive the public CLI; these helpers keep the expected
+  # exit code at the point of use.
+  def serve_once(rt, factory: nil)
+    status = rt.cli(%w[comms serve --once], factory:)
+    assert_equal 0, status, rt.err
+  end
+
+  def worker_once(rt, factory: nil)
+    status = rt.cli(%w[worker --once --json], factory:)
+    assert_equal 0, status, rt.err
+  end
+
+  def channel_map(limits: nil, approvals: nil, rendering: nil)
+    entry = {
+      "kind" => "telegram", "revision" => 1, "enabled" => true,
+      "profile" => "trusted",
+      "credential_ref" => {"kind" => "env", "name" => "TAMOZ_TELEGRAM_BOT_TOKEN"},
+      "expected_bot_id" => 7_463_512_990,
+      "admission" => {"direct" => "allowlist", "correspondents" => ["telegram:user:11111111"]},
+      "approvals" => {"mode" => "none", "prompt_ttl_s" => 900}
+    }
+    entry["approvals"] = approvals if approvals
+    entry["limits"] = limits if limits
+    entry["rendering"] = rendering if rendering
+    {"telegram-ops" => entry}
+  end
+
+  def message_update(id, text, user_id: 111_111_11)
+    {"update_id" => id,
+     "message" => {"message_id" => id, "date" => 1_752_700_800,
+                   "chat" => {"id" => 222_222_22, "type" => "private"},
+                   "from" => {"id" => user_id}, "text" => text}}
+  end
+
+  def callback_update(id, reference)
+    {"update_id" => id,
+     "callback_query" => {"id" => "q-#{id}", "from" => {"id" => 111_111_11},
+                          "message" => {"chat" => {"id" => 222_222_22, "type" => "private"}},
+                          "data" => reference}}
+  end
 end

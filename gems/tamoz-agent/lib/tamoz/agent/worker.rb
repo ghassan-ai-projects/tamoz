@@ -235,10 +235,16 @@ module Tamoz
           if view && view.status == :paused && !view.interrupts.empty?
             # A human may have answered since the last pass. If they have, the
             # SAME occurrence continues; if they have not, it stays parked.
-            decision = @runtime.decision_for(thread_id, occurrence_id)
+            # The decision must bind the exact interrupt set this turn is
+            # paused on, so a decision for one question can never answer a
+            # later one in the same occurrence (design §9).
+            digest = interrupt_digest(view)
+            decision = @runtime.pending_decision(
+              thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
+            )
             return park(entry, view) && PARKED if decision.nil?
 
-            return apply_decision(session, thread_id:, occurrence_id:, view:, granted: decision)
+            return apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
           end
 
           # An open occurrence with nothing in the inbox and no interrupt is a
@@ -314,18 +320,34 @@ module Tamoz
       # The answers are built from the interrupts the session is ACTUALLY waiting
       # on, and every one of them carries the same recorded decision. The worker
       # supplies no value of its own: it is a courier, not a decision-maker.
-      def apply_decision(session, thread_id:, occurrence_id:, view:, granted:)
+      #
+      # The claim is a fenced compare-and-set, so a concurrent claimer loses and
+      # this thread stays parked; the resume request id is DERIVED from the
+      # decision, so a crash between enqueue and consumption repeats the same
+      # inbox request instead of duplicating the resume (invariant 23).
+      def apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
+        now = Time.now.utc
+        decision_id = decision.decision_id
+        claim = @runtime.claim_decision(
+          decision_id, owner: owner_id,
+                       fence: Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond), now:
+        )
+        return park({thread_id:, head_request_id: occurrence_id}, view) && PARKED unless claim == :claimed
+
+        granted = decision.granted?
         answers = {}
         view.interrupts.each do |interrupt|
-          answers[interrupt.task_id] ||= {}
-          answers[interrupt.task_id][interrupt.call_index] = answer_for(interrupt, granted)
+          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
         end
 
         emit("request.#{granted ? "approved" : "denied"}",
-             thread: thread_id, request_id: occurrence_id, actor: "human")
+             thread: thread_id, request_id: occurrence_id, actor: decision.actor_id)
+        notify_sink(thread_id, granted ? "request.approved" : "request.denied",
+                    granted ? "Approved." : "Denied.", request_id: occurrence_id)
         unpark(thread_id)
-        session.resume(answers, thread: thread_id, request_id: SecureRandom.uuid,
+        session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
                                 owner_id: owner_id)
+        @runtime.consume_decision(decision_id, now:)
         settle(session, thread_id:, occurrence_id:)
       end
 
@@ -389,12 +411,19 @@ module Tamoz
         case view.status
         when :completed
           @monitor.synchronize { @processed += 1 }
+          notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed")
           PROGRESSED
         when :failed
+          # A correspondent gets a generic phrase, never the failure's own text:
+          # the reason belongs in the worker's event stream, where an operator
+          # reads it, not in a chat a hostile plan could use to echo content
+          # back. The turn still owes the conversation a terminal message.
+          notify_sink(thread_id, "request.failed", "That turn failed. Nothing was changed.",
+                      request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.failed",
@@ -406,6 +435,8 @@ module Tamoz
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused")
           else
+            notify_sink(thread_id, "request.approval_request", "Approval requested.",
+                        request_id: occurrence_id, interrupts: interrupt_facts(view))
             emit_approval_request(thread_id, occurrence_id, view)
           end
           park({thread_id:, head_request_id: occurrence_id}, view)
@@ -423,11 +454,54 @@ module Tamoz
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) })
       end
 
+      # The channel projection: lifecycle events become outbox rows BEFORE the
+      # occurrence closes (design §11), so a crash never loses the terminal
+      # answer. Nil-safe — an unconfigured worker delivers nothing. An
+      # approval pause carries the occurrence and its exact interrupt set so
+      # the rendered prompt answers THAT question (ADR-043).
+      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
+      end
+
+      # What a correspondent receives when a turn completes: the VERIFIED
+      # answer, the same text `tamoz show` prints — never the session state
+      # that produced it, which is internal detail and unbounded. A completion
+      # that verified nothing still owes the channel a terminal message, so it
+      # says so plainly rather than delivering an empty one.
+      # :reek:UtilityFunction -- a pure function of the view.
+      def completion_text(view)
+        answer = view.state&.dig(:verification, "answer").to_s
+        answer.empty? ? "Completed." : answer
+      end
+
       def describe_interrupt(interrupt)
         {
           "kind" => interrupt.respond_to?(:kind) ? interrupt.kind.to_s : nil,
           "task_id" => interrupt.respond_to?(:task_id) ? interrupt.task_id : nil
         }.compact
+      end
+
+      # The canonical digest of the interrupt set this view is paused on. The
+      # CLI derives the same digest from the same session view when it records
+      # a decision, so the two sides agree on the exact question being answered.
+      # :reek:UtilityFunction -- a pure function of the view, like the other
+      # stateless interrupt helpers in this file.
+      def interrupt_digest(view)
+        Tamoz::Comms::InterruptDigest.of(interrupt_facts(view))
+      end
+
+      # The interrupt set as plain facts. The prompt the channel renders and
+      # the digest a decision binds are both derived from THIS, so the deny
+      # press can only ever resolve the exact question that was asked.
+      # :reek:UtilityFunction -- a pure function of the view.
+      def interrupt_facts(view)
+        view.interrupts.map do |interrupt|
+          {
+            task_id: interrupt.task_id,
+            call_index: interrupt.call_index,
+            descriptor: interrupt.descriptor
+          }
+        end
       end
 
       # ----------------------------------------------------------------- parking
@@ -459,12 +533,17 @@ module Tamoz
 
       # Sleep the poll interval, but wake the moment the token is cancelled so
       # SIGTERM is not held hostage by a long interval.
+      # The remaining time is measured ONCE per pass and then slept. Reading the
+      # clock again between the test and the sleep is a race: cross the deadline
+      # in that window and the interval is negative, which raises. One pass is
+      # unlikely to lose it; a worker idling for hours is not, and the process
+      # dies far from the code that caused it.
       def sleep_until_due
         deadline = Tamoz::Clock.monotonic.now + @poll_interval
-        while Tamoz::Clock.monotonic.now < deadline
+        while (remaining = deadline - Tamoz::Clock.monotonic.now).positive?
           return :cancelled if stopping?
 
-          sleep([0.05, deadline - Tamoz::Clock.monotonic.now].min)
+          sleep([0.05, remaining].min)
         end
         :due
       end

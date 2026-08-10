@@ -21,6 +21,8 @@ class AgentWorkerFailClosedTest < Minitest::Test
     )
     adapter = runtime.adapter
     adapter.define_singleton_method(:store) { raise IOError, 'the disk went away' }
+    adapter.define_singleton_method(:transaction) { raise IOError, 'the disk went away' }
+    adapter.define_singleton_method(:read) { raise IOError, 'the disk went away' }
     yield runtime
   ensure
     runtime&.close
@@ -53,7 +55,8 @@ class AgentWorkerFailClosedTest < Minitest::Test
     with_runtime do |harness|
       with_broken_store(harness) do |runtime|
         assert_raises(Tamoz::Agent::WorkerRuntime::StoreUnavailableError) do
-          runtime.decision_for('t0', 'r0')
+          runtime.pending_decision('t0', 'r0', interrupt_digest: '0' * 64,
+                                               now: Time.now.utc)
         end
       end
     end

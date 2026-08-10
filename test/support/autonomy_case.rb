@@ -82,6 +82,7 @@ module AutonomyCase
   # The operator's view of one runtime directory.
   class Runtime
     attr_reader :dir, :workspace, :out, :err
+    attr_accessor :client
 
     def initialize(dir:, workspace:)
       @dir = dir
@@ -89,17 +90,21 @@ module AutonomyCase
       @out = ""
       @err = ""
       @events = []
+      @client = nil
     end
 
     # Every product interaction goes through here.
-    def cli(argv, factory: nil, input: "")
+    def cli(argv, factory: nil, input: "", comms_factory: nil)
       out = StringIO.new
       err = StringIO.new
+      env = {"TAMOZ_CONFIG_HOME" => File.join(dir, "config")}
+      env["TAMOZ_TELEGRAM_BOT_TOKEN"] = "12345:secret" if @client
       status = Tamoz::Agent::CLI.run(
         ["--runtime-dir", dir] + argv,
         out:, err:, input: StringIO.new(input),
-        env: {"TAMOZ_CONFIG_HOME" => File.join(dir, "config")},
-        model_factory: factory
+        env:,
+        model_factory: factory,
+        comms_client_factory: comms_factory || (@client && ->(_token) { @client })
       )
       @out = out.string
       @err = err.string
@@ -204,7 +209,7 @@ module AutonomyCase
 
   # -------------------------------------------------------------- fixtures
 
-  def with_runtime(unattended: nil, budgets: nil, stream: nil)
+  def with_runtime(unattended: nil, budgets: nil, stream: nil, channels: nil)
     Dir.mktmpdir("tamoz-autonomy") do |directory|
       runtime_dir = File.join(directory, "runtime")
       workspace = File.join(directory, "workspace")
@@ -212,10 +217,12 @@ module AutonomyCase
       FileUtils.mkdir_p(runtime_dir, mode: 0o700)
       File.chmod(0o700, runtime_dir)
 
-      write_config(runtime_dir, workspace, stream:)
+      write_config(runtime_dir, workspace, stream:, channels:)
       write_trusted_profile(runtime_dir, workspace, unattended:, budgets:)
 
-      yield Runtime.new(dir: runtime_dir, workspace:)
+      runtime = Runtime.new(dir: runtime_dir, workspace:)
+      runtime.client = FixtureTelegramClient.new if channels
+      yield runtime
     end
   end
 
@@ -237,12 +244,13 @@ module AutonomyCase
     directory
   end
 
-  def write_config(runtime_dir, workspace, stream: nil)
+  def write_config(runtime_dir, workspace, stream: nil, channels: nil)
     document = {
-      "runtime" => {"schema_version" => 1},
+      "runtime" => {"schema_version" => channels ? 2 : 1},
       "workspace" => {"root" => workspace},
       "sources" => {}
     }
+    document["channels"] = channels if channels
     document["stream"] = stream if stream
     File.write(File.join(runtime_dir, "config.yaml"), Psych.dump(document))
     File.chmod(0o600, File.join(runtime_dir, "config.yaml"))
@@ -306,6 +314,47 @@ module AutonomyCase
     File.write(path, Psych.dump(document))
     File.chmod(0o600, path)
     path
+  end
+
+  # The fixture CLIENT the channel cases inject through the CLI's
+  # comms_client_factory seam (design §15: tests inject a fixture client rather
+  # than weakening the production origin rule). It is a scripted Telegram Bot
+  # API: getMe/getUpdates/sendMessage/answerCallbackQuery/getWebhookInfo, with
+  # the send-ambiguity switch case 15 needs.
+  class FixtureTelegramClient
+    attr_reader :sent
+    attr_accessor :updates, :webhook_url, :ambiguous_sends
+
+    def initialize(bot_id: 7_463_512_990)
+      @bot_id = bot_id
+      @updates = []
+      @sent = []
+      @webhook_url = ""
+      @offset = 0
+      @ambiguous_sends = 0
+    end
+
+    def call(method, params, idempotent: false)
+      case method
+      when "getMe" then {"id" => @bot_id, "username" => "ops_bot", "is_bot" => true, "first_name" => "Ops"}
+      when "getUpdates"
+        taken, remaining = @updates.partition { |update| update.fetch("update_id") > @offset }
+        @updates = remaining
+        @offset = taken.map { |update| update.fetch("update_id") }.max || @offset
+        taken
+      when "sendMessage", "editMessageText"
+        if @ambiguous_sends.positive?
+          @ambiguous_sends -= 1
+          raise Tamoz::Comms::AmbiguousDeliveryError, "fixture send timeout"
+        end
+        @sent << params
+        {"message_id" => @sent.length, "date" => 1_752_700_800}
+      when "answerCallbackQuery" then true
+      when "getWebhookInfo" then {"url" => @webhook_url}
+      else
+        raise ArgumentError, "unexpected method #{method}"
+      end
+    end
   end
 
   # -------------------------------------------------------------- factories

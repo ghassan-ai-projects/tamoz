@@ -83,7 +83,7 @@ end
 
 LIB_FLAGS = %w[
   tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent
-  tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream
+  tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram
 ].map { |name| "-Igems/#{name}/lib" }.join(" ").freeze
 
 # Measured wall-clock seconds per file (`rake test_profile` regenerates these).

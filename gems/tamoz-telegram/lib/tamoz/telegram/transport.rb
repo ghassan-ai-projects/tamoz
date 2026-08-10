@@ -1,0 +1,90 @@
+# frozen_string_literal: true
+
+require 'json'
+
+module Tamoz
+  module Telegram
+    # The Tamoz::Comms::Transport seam over the Telegram Bot API (design
+    # §6.4). `authenticate` is getMe; `poll` is getUpdates with the supplied
+    # candidate next_offset (confirming the prior durable prefix remotely);
+    # `deliver` is exactly one sendMessage/editMessageText — a timeout on a
+    # send becomes AmbiguousDeliveryError, never a blind retry; `signal` is
+    # answerCallbackQuery (ephemeral, unjournaled).
+    #
+    # This class must pass the tamoz-comms conformance suite (slice F exit):
+    # the fixture server can duplicate/reorder/throttle/lose/time out.
+    # The transport is the four-method seam; the metric smells measure the
+    # seam (poll params, deliver mapping), not a choice to overload.
+    # :reek:UtilityFunction, :reek:DuplicateMethodCall, :reek:ControlParameter
+    class Transport
+      include Comms::Transport
+
+      def initialize(client:, normalizer:)
+        @client = client
+        @normalizer = normalizer
+      end
+
+      # @return [Hash] the authenticated surface identity (getMe result).
+      def authenticate(_descriptor, _credential)
+        @client.call('getMe', {}, idempotent: true)
+      end
+
+      # @return [Hash] `{updates: [wire envelopes], next_offset: Integer}`
+      # :reek:TooManyStatements, :reek:NilCheck -- the poll builds params,
+      #   normalizes the batch and derives the candidate offset.
+      def poll(next_offset:, limit:, timeout_s:)
+        allowed = %w[message callback_query my_chat_member]
+        params = { 'timeout' => timeout_s, 'limit' => limit, 'allowed_updates' => allowed }
+        params['offset'] = next_offset unless next_offset.nil?
+        result = @client.call('getUpdates', params, idempotent: true)
+        updates = result.map { |update| @normalizer.normalize(update).wire }
+        candidate = result.map { |update| update.fetch('update_id') }.max
+        { updates:, next_offset: candidate && (candidate + 1) }
+      end
+
+      # @return [Hash] `{message_id:, platform_time:}`
+      # :reek:FeatureEnvy, :reek:TooManyStatements -- the send maps one
+      #   Delivery to one API effect.
+      def deliver(delivery)
+        params = {
+          'chat_id' => chat_id(delivery.conversation_id),
+          'text' => delivery.text
+        }
+        params['reply_to_message_id'] = delivery.reply_to if delivery.reply_to
+        attach_markup(params, delivery) if delivery.markup
+        method = delivery.operation == 'edit_message' ? 'editMessageText' : 'sendMessage'
+        result = @client.call(method, params)
+        {
+          'message_id' => result.fetch('message_id'),
+          'platform_time' => Time.at(result.fetch('date')).utc.iso8601(6)
+        }
+      end
+
+      def signal(kind, **fields)
+        return :unsupported unless kind == :ack
+
+        @client.call('answerCallbackQuery', { 'callback_query_id' => fields.fetch(:callback_query_id) })
+        :acked
+      end
+
+      private
+
+      # v1 deny-only (ADR-043): the control delivery's markup carries the
+      # single-use reference as an inline keyboard button — the plaintext that
+      # activates the prompt only after this send receipt is durable.
+      def attach_markup(params, delivery)
+        reference = JSON.parse(delivery.markup).fetch('reference')
+        params['reply_markup'] = {
+          'inline_keyboard' => [[{ 'text' => 'Deny', 'callback_data' => reference }]]
+        }
+      end
+
+      def chat_id(conversation_id)
+        conversation_id.delete_prefix('telegram:chat:')
+                       .delete_prefix('telegram:group:')
+                       .delete_prefix('telegram:supergroup:')
+                       .delete_prefix('telegram:channel:')
+      end
+    end
+  end
+end

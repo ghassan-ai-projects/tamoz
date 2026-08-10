@@ -386,6 +386,45 @@ versions are tested as explicit pairs. Repository proximity grants no runtime de
 cross-repository changes, CI, fixtures, and release coordination before ownership or release
 cadence has actually diverged.
 
+### ADR-041 — Communication channels are a contract gem plus per-transport adapter gems
+**Status:** accepted 2026-08-10.
+`tamoz-comms` owns the channel vocabulary and seams — surface and message values, identity
+and admission policy, rendering, the `Transport` adapter contract, and the structural
+`CommsStore` contract — and depends only on `tamoz-core`. Each transport (Telegram first)
+is a separate gem that must pass the `tamoz-comms` conformance suite; `tamoz-telegram`
+depends only on `tamoz-comms` and the standard library. The kind list is a closed set in
+`tamoz-comms`; adding a transport is a `tamoz-comms` release, not a plugin. The worker
+integrates through one nil-safe `DeliverySink` seam and never makes a channel network call.
+*Alternative rejected:* a single `tamoz-comms` gem with a lazily required Telegram backend.
+That would leave the transport seam untested as a seam and force `net/http` into the
+contract gem's load graph (ADR-014's plugin rejection stands).
+
+### ADR-042 — The channel gateway is a separate process in the connector zone
+**Status:** accepted 2026-08-10.
+`tamoz comms serve` is the only long-running Tamoz process that talks to the channel
+transport. It holds the transport credential, admits and normalizes inbound updates,
+writes the durable disposition, and drains the delivery outbox; it never constructs a
+`Session`, loads a model credential, opens a toolbox, or reads workspace files. The worker
+never makes a channel network call. Both processes share one SQLite runtime database so an
+admission and its request enqueue commit in one transaction.
+*Alternative rejected:* the worker performing the send. An outbound network call in the
+process that holds the model credential, toolbox, and workspace would make the connector
+zone table aspirational rather than structural.
+
+### ADR-043 — Telegram v1 is deny-only and reference-bound
+**Status:** accepted 2026-08-10.
+A chat identity is weaker evidence than filesystem access to the 0700 runtime directory, so
+v1 Telegram surfaces can deny an exact pending interrupt and cannot grant approval. A
+button carries an action plus a single-use 128-bit reference; the gateway stores only its
+domain-separated digest in an inactive prompt row that activates only after a durable send
+receipt, and consumption is atomic against every stored prompt binding. No channel
+component may answer on a human's behalf, and `chat_grants` and `headless_auto_approvals`
+must both remain zero. Any future grant mode requires a new ADR, a threat model, and a
+step-up identity decision.
+*Alternative rejected:* reusing the worker's existing `(thread, occurrence, granted)`
+decision tuple for callbacks. It binds no actor, interrupt digest, expiry, or consumption,
+so one decision could answer a later interrupt set in the same occurrence.
+
 ## Rejected, with reasons
 
 | Rejected | Why |

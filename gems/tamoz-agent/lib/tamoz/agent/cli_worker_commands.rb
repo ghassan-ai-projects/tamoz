@@ -1,5 +1,10 @@
 # frozen_string_literal: true
 
+require "etc"
+require "json"
+require "optionparser"
+require "time"
+
 module Tamoz
   module Agent
     # The unattended surface of the CLI: `init`, `queue`, `worker`, `status`.
@@ -144,8 +149,13 @@ module Tamoz
           # SIGINT/SIGTERM ask the worker to stop claiming and finish what it has.
           # The previous handlers are restored on the way out so this is safe to
           # call from a test in-process.
-          old_int = Signal.trap("INT") { worker.stop!("sigint") }
-          old_term = Signal.trap("TERM") { worker.stop!("sigterm") }
+          #
+          # The handler hands the request to a thread rather than doing it here:
+          # `stop!` takes a mutex, and `Mutex#synchronize` raises ThreadError in
+          # a trap context. Called directly, a supervisor's SIGTERM would kill
+          # the process with a backtrace WITHOUT cancelling the turn in hand.
+          old_int = Signal.trap("INT") { Thread.new { worker.stop!("sigint") } }
+          old_term = Signal.trap("TERM") { Thread.new { worker.stop!("sigterm") } }
           begin
             worker.run
           ensure
@@ -187,6 +197,11 @@ module Tamoz
       # one place is what makes "approval resumes the same occurrence" true rather
       # than aspirational — an approving command that ran the turn itself would be
       # a second executor with its own recovery semantics.
+      #
+      # The decision binds the exact interrupt set this occurrence is paused on
+      # (the same digest the worker derives from the same view), so a decision
+      # recorded now can never answer a different question in the same occurrence
+      # (design §9).
       def cmd_approve(options, argv)
         deny = false
         parser = OptionParser.new do |value|
@@ -200,27 +215,53 @@ module Tamoz
         raise OptionParser::MissingArgument, "REQUEST_ID" if request_id.to_s.empty?
 
         with_worker_runtime(options) do |runtime|
-          paused = paused_approvals(runtime)
-          entry = paused.find { |row| row.fetch("request_id") == request_id }
+          entry = paused_approvals(runtime).find { |row| row.fetch("request_id") == request_id }
           unless entry
             @err.puts "tamoz: no paused approval for #{request_id.inspect}"
             next 1
           end
 
-          runtime.record_decision(entry.fetch("thread_id"), request_id, granted: !deny)
-          if options[:json]
-            @out.puts JSON.generate(
-              "request_id" => request_id, "thread" => entry.fetch("thread_id"),
-              "decision" => deny ? "denied" : "approved"
-            )
-          else
-            @out.puts "#{deny ? "Denied" : "Approved"} #{request_id}"
-          end
+          direction = deny ? :deny : :approve
+          record = record_approval(runtime, entry, direction:)
+          report_decision(record, direction:, json: options[:json])
           0
         end
       end
 
       private
+
+      # The `deny`/`json` branching is the CLI's own json-vs-text convention
+      # (every command branches on the flag); the two report shapes share the
+      # record, so splitting them would duplicate the JSON shape.
+      # :reek:ControlParameter
+      def report_decision(record, direction:, json:)
+        occurrence_id = record.occurrence_id
+        decision_text = direction == :deny ? "denied" : "approved"
+        if json
+          @out.puts JSON.generate(
+            "request_id" => occurrence_id, "thread" => record.thread_id,
+            "decision" => decision_text, "decision_id" => record.decision_id,
+            "interrupt_digest" => record.interrupt_digest
+          )
+        else
+          @out.puts "#{decision_text.capitalize} #{occurrence_id}"
+        end
+      end
+
+      def record_approval(runtime, entry, direction:)
+        thread_id = entry.fetch("thread_id")
+        record = Tamoz::Comms::DecisionRecord.build(
+          thread_id:,
+          occurrence_id: entry.fetch("request_id"),
+          interrupts: interrupts_of(runtime.session_for(thread_id).view(thread: thread_id)),
+          direction:,
+          actor_kind: "os_user",
+          actor_id: os_user_id,
+          source: "cli"
+        )
+        runtime.record_decision(record)
+        record
+      end
 
       def build_status(runtime)
         pending = runtime.checkpoints.pending_threads(limit: 500)
@@ -241,7 +282,8 @@ module Tamoz
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
                                       .map { |row| {"effect_key" => row[:effect_key], "status" => "unknown"} },
-          "budget_exhaustions" => runtime.budget_exhaustions
+          "budget_exhaustions" => runtime.budget_exhaustions,
+          "channels" => comms_status(runtime)
         }
       end
 
@@ -275,6 +317,31 @@ module Tamoz
         end
       end
 
+      # The plain interrupt shape a decision digest is computed over — the same
+      # shape the worker derives from the same session view, so both sides agree
+      # on the exact question being answered.
+      # :reek:UtilityFunction -- a pure projection of the view, like the other
+      # stateless helpers in this file.
+      def interrupts_of(view)
+        view.interrupts.map do |interrupt|
+          {
+            task_id: interrupt.task_id,
+            call_index: interrupt.call_index,
+            descriptor: interrupt.descriptor
+          }
+        end
+      end
+
+      # The OS user id recorded as the decision actor (design §9). Falls back to
+      # the login name when the passwd entry cannot be resolved.
+      # :reek:UtilityFunction -- a pure environment probe, like the other
+      # stateless helpers in this file.
+      def os_user_id
+        Etc.getpwuid.uid.to_s
+      rescue ArgumentError
+        Etc.getlogin.to_s
+      end
+
       # Every counter is a COUNT OF EVIDENCE, so "zero" means "the journal contains
       # no instance of this", not "nothing incremented a variable".
       def safety_counters(effects)
@@ -301,6 +368,11 @@ module Tamoz
         @out.puts "sources:   #{document["capability_sources"].join(", ")}" unless document["capability_sources"].empty?
         counters = document["safety_counters"]
         @out.puts "safety:    #{counters.map { |name, count| "#{name}=#{count}" }.join(" ")}"
+        channels = document["channels"]
+        return if channels.fetch("surfaces").empty?
+
+        @out.puts "channels:  #{channels.fetch("surfaces").map { |row| row.fetch("surface_id") }.join(", ")}"
+        @out.puts "comms:     #{channels.fetch("safety_counters").map { |name, count| "#{name}=#{count}" }.join(" ")}"
       end
 
       # ------------------------------------------------------------------ shared
@@ -349,12 +421,21 @@ module Tamoz
         1
       end
 
+      # Each event is flushed as it happens. The worker's whole observability
+      # contract is "writes its events to stdout so a supervisor can own it",
+      # and piped stdout is BLOCK-buffered: without this, a journal shows
+      # nothing until the buffer fills, which for an idle worker can be hours.
       def worker_emitter(options)
         if options[:json]
-          ->(event) { @out.puts JSON.generate(event) }
+          ->(event) { emit_line(JSON.generate(event)) }
         else
-          ->(event) { @out.puts format_worker_event(event) }
+          ->(event) { emit_line(format_worker_event(event)) }
         end
+      end
+
+      def emit_line(line)
+        @out.puts(line)
+        @out.flush
       end
 
       def format_worker_event(event)

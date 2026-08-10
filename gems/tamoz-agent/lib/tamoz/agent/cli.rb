@@ -22,26 +22,31 @@ module Tamoz
       include CLISessionCommands
       include CLIAuthority
       include CLIRendering
+      include CLICommsCommands
+      include CLICommsDoctor
+      include CLICommsOps
 
       SUBCOMMANDS = %w[
         ask resume continue list show follow-up follow_up followup
         redirect cancel resolve profile
-        init queue worker status schedule approve
+        init queue worker status schedule approve comms config
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
 
-      def self.run(argv = ARGV, out: $stdout, err: $stderr, input: $stdin, env: ENV, model_factory: nil)
-        new(out:, err:, input:, env:, model_factory:).run(argv)
+      def self.run(argv = ARGV, out: $stdout, err: $stderr, input: $stdin, env: ENV, model_factory: nil,
+                   comms_client_factory: nil)
+        new(out:, err:, input:, env:, model_factory:, comms_client_factory:).run(argv)
       end
 
-      def initialize(out:, err:, input:, env:, model_factory: nil)
+      def initialize(out:, err:, input:, env:, model_factory: nil, comms_client_factory: nil)
         @out = out
         @err = err
         @input = input
         @env = env
         @cancellation = nil
         @model_factory = model_factory
+        @comms_client_factory = comms_client_factory
         @stream_error = nil
         @rendered_stale_request_ids = {}
         @prompts = PromptAdapter.new(input:, err:)
@@ -105,6 +110,8 @@ module Tamoz
         when "cancel" then cmd_cancel(options, argv)
         when "resolve" then cmd_resolve(options, argv)
         when "profile" then cmd_profile(options, argv)
+        when "comms" then catch(:tamoz_subcommand_help) { cmd_comms(options, argv) }
+        when "config" then catch(:tamoz_subcommand_help) { cmd_config(options, argv) }
         when "init", "queue", "worker", "status", "schedule", "approve"
           # `--help` on a subcommand prints that subcommand's options and stops
           # there, without opening a runtime directory it was never asked to touch.

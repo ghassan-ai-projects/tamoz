@@ -47,6 +47,8 @@ named example task in a clean subprocess.
 | `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
 | `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core` |
+| `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
+| `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
 | `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools` |
@@ -123,6 +125,8 @@ request inboxes and the checkpoints.
 | `status` | Report pending work, capability sources and safety counters |
 | `schedule` | `add`, `list`, `show`, `pause`, `resume`, `remove`, `run-now`, `occurrences` |
 | `approve` | Grant (or `--deny`) a paused approval so its occurrence can resume |
+| `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
+| `config` | Explicit configuration migration (`migrate`) |
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz init --workspace .
@@ -191,6 +195,59 @@ able to see rather than infer.
 Memory scopes its namespace by `tenant` and admits episodes under `owner`, both
 from operator configuration and never from a task, a model or the workspace.
 Memory is evidence the agent may read; it never alters policy.
+
+### Telegram channel setup
+
+Channels are a sibling of `sources:` — they are user surfaces, not capabilities
+the model can call. Schema 2 config carries a strict `channels:` mapping; a
+schema 1 directory loads unchanged as "no channels", and `tamoz config migrate`
+performs the explicit, backup-and-atomic-rename migration:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
+```
+
+First authenticate the bot and copy its numeric id into config — bootstrap
+prints it and never persists or trusts it automatically:
+
+```bash
+export TAMOZ_TELEGRAM_BOT_TOKEN=<token from BotFather>
+rbenv exec bundle exec tamoz comms doctor --bootstrap \
+  --credential-ref TAMOZ_TELEGRAM_BOT_TOKEN
+```
+
+Then configure the surface. The token is referenced by NAME, never by value:
+
+```yaml
+channels:
+  telegram-ops:
+    kind: telegram
+    revision: 1
+    enabled: true
+    profile: ops
+    credential_ref: {kind: env, name: TAMOZ_TELEGRAM_BOT_TOKEN}
+    expected_bot_id: 7463512990
+    threading: conversation
+    admission:
+      direct: allowlist
+      correspondents: ["telegram:user:11111111"]
+    approvals:
+      mode: deny_only
+      prompt_ttl_s: 900
+```
+
+`tamoz comms doctor` checks getMe against `expected_bot_id`, TLS, permissions,
+the webhook/poller conflict, and the token — each failure is named and exits 1.
+The gateway is a separate foreground process:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms serve --json
+```
+
+The gateway holds the bot token and never constructs a session, loads a model
+credential, or opens a file under the workspace root. Installations without the
+`tamoz-telegram` gem still run the agent and report a typed missing-adapter
+error for `tamoz comms serve`.
 
 An MCP server is a supervised subprocess, so its configuration is explicit and
 nothing is inferred from the environment:

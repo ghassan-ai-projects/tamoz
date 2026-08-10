@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 357 | 259 | 3 | **no** |
+| 391 | 260 | 9 | **no** |
 
 ## Status counts
 
@@ -15,15 +15,21 @@ generating run.
 |---|---:|
 | deferred-by-contract | 11 |
 | indirect | 4 |
-| missing | 3 |
-| pass | 339 |
+| missing | 9 |
+| pass | 367 |
 
 ## Release-blocking gaps (the DoD list)
 
 | Requirement | Status | Why |
 |---|---|---|
+| `ADR-041` — Communication channels are a contract gem plus per-transport adapter gems | missing | Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves. |
+| `ADR-042` — The channel gateway is a separate process in the connector zone | missing | Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice. |
+| `ADR-043` — Telegram v1 is deny-only and reference-bound | missing | Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence. |
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-48` — Backpressure and evidence gaps are bounded and visible | missing | The durable-admission, quarantine, typed-rejection and never-silent halves are directly evidenced. The backpressure half is NOT implemented: `ChannelDescriptor` validates and digests `queue_capacity`, `spool_capacity_bytes` and `overflow` (block/retry/spill_then_reject/sample/coalesce/reject), but no code outside the descriptor reads any of the three — measured at the release head by searching gems/tamoz-stream and gems/tamoz-sqlite. The declaration is recorded, never enforced, so no saturation test can exist yet. Owner decision required at P15-I: implement enforcement, or exclude the backpressure clause from the v0.1 surface. |
+| `INV-56` — A user channel is identified, bound, and grants nothing | missing | Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence. |
+| `INV-57` — Channel delivery is ordered, bounded, and ambiguity-safe | missing | Channel outbox, offset persistence, and ambiguity handling (COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel gems are built; the kill matrix in the telegram slices converts this row to direct evidence. |
+| `INV-58` — A channel decision is exact, expiring, and cannot widen authority | missing | Deny-only callback and exact decision records (COMMS_TELEGRAM_PLAN slices A/H). No test exists before the channel gems are built; the adversarial approval suite in slice H converts this row to direct evidence. |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
 
 ## Full audit
@@ -70,6 +76,9 @@ generating run.
 | `ADR-038` | adr | yes | pass | `test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery` |
 | `ADR-039` | adr | yes | pass | `test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides` |
 | `ADR-040` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
+| `ADR-041` | adr | yes | missing | `—` |
+| `ADR-042` | adr | yes | missing | `—` |
+| `ADR-043` | adr | yes | missing | `—` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::ApprovalDeniedError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -98,6 +107,28 @@ generating run.
 | `API-tamoz-agent-Tamoz::Agent::ToolPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Toolbox` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::AmbiguousDeliveryError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ApprovalPrompt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::AuthenticationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Binding` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Commands` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::CommsError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::CommsStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Conversation` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DecisionRecord` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DecisionStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Delivery` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::DeliverySink` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::InboundEnvelope` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::InterruptDigest` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::PollerConflictError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Shapes` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::SurfaceDescriptor` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ThrottledError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configuration_finalized?` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz.configure` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -250,6 +281,10 @@ generating run.
 | `API-tamoz-stream-Tamoz::Stream::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::WallClock` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-stream-Tamoz::Stream::WatermarkRegressionError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-telegram-Tamoz::Telegram::Client` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-telegram-Tamoz::Telegram::Normalizer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-telegram-Tamoz::Telegram::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-telegram-Tamoz::Telegram::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::Skills` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-tools-Tamoz::Tools::Skills.canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -347,11 +382,16 @@ generating run.
 | `INV-53` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_redirect_pins_target_and_generation_then_starts_new_turn` |
 | `INV-54` | invariant | yes | pass | `test/sqlite_deletion_test.rb#test_tombstone_blocks_new_work_and_purge_retains_idempotent_receipt` |
 | `INV-55` | invariant | yes | pass | `test/agent_session_test.rb#test_read_only_session_plans_reviews_executes_and_verifies_durably` |
+| `INV-56` | invariant | yes | missing | `—` |
+| `INV-57` | invariant | yes | missing | `—` |
+| `INV-58` | invariant | yes | missing | `—` |
 | `MIG-1` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
 | `MIG-2` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything` |
+| `MIG-6` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
+| `MIG-7` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |

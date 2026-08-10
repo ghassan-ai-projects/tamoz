@@ -49,9 +49,12 @@ class DocumentationSurfaceTest < Minitest::Test
     # The unattended subcommands each carry their own `--help`. The interactive
     # ones share the global flag surface and parse positionally, so asking them
     # for help means something else entirely. `queue` and `schedule` dispatch on
-    # a verb first, so their flags live on the verb.
+    # a verb first, so their flags live on the verb. `comms` and `config` do
+    # the same.
     [%w[init], %w[worker], %w[status], %w[queue add], %w[queue list],
-     %w[schedule add], %w[schedule list]].each do |argv|
+     %w[schedule add], %w[schedule list], %w[comms serve], %w[comms list],
+     %w[comms doctor], %w[comms pair list], %w[comms delivery resolve],
+     %w[config migrate]].each do |argv|
       help << capture_help(argv + ["--help"])
     end
 
@@ -92,29 +95,36 @@ class DocumentationSurfaceTest < Minitest::Test
   # audit MEASURED. If a gap closes, this fails until the page stops claiming
   # it; if a new gap opens, this fails until the page discloses it.
   def test_limitations_discloses_every_measured_release_blocking_gap
-    audit = read_json(ROOT.join("docs", "requirements-audit.json"))
-    gaps = audit.fetch("release_blocking_gaps")
+    audit = read_json(ROOT.join('docs', 'requirements-audit.json'))
+    gaps = audit.fetch('release_blocking_gaps')
     body = text(LIMITATIONS)
 
-    # Each measured gap has a human name on the page; the mapping is explicit
-    # so a renamed requirement cannot silently drop its disclosure.
-    disclosures = {
-      "INV-39" => "Cron and civil-time scheduling (invariant 39)",
-      "INV-48" => "Channel backpressure enforcement (invariant 48)",
-      "INV-43" => "Skill installation and update (invariant 43)",
-      "OBJ-7" => "## Release readiness"
-    }
     gaps.each do |gap|
-      heading = disclosures.fetch(gap) do
+      heading = GAP_DISCLOSURES.fetch(gap) do
         flunk "#{gap} is a measured release-blocking gap with no entry in this test's " \
-              "disclosure map; add it here and to docs/LIMITATIONS.md"
+              'disclosure map; add it here and to docs/LIMITATIONS.md'
       end
 
       assert_includes body, heading,
                       "#{gap} is a measured release-blocking gap that LIMITATIONS.md " \
-                      "does not disclose"
+                      'does not disclose'
     end
   end
+
+  # Each measured gap has a human name on the page; the mapping is explicit
+  # so a renamed requirement cannot silently drop its disclosure.
+  GAP_DISCLOSURES = {
+    'INV-39' => 'Cron and civil-time scheduling (invariant 39)',
+    'INV-48' => 'Channel backpressure enforcement (invariant 48)',
+    'INV-43' => 'Skill installation and update (invariant 43)',
+    'INV-56' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'INV-57' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'INV-58' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'ADR-041' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'ADR-042' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'ADR-043' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'OBJ-7' => '## Release readiness'
+  }.freeze
 
   # A limitation the page claims must still be TRUE. `OVERFLOW_POLICIES` being
   # unenforced is the load-bearing example: if someone implements enforcement,

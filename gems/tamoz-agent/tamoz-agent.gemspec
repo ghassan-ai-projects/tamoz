@@ -12,6 +12,7 @@ TamozGemspec.build(
     ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-comms", "= #{Tamoz::Agent::VERSION}"],
     ["ruby_llm", "~> 1.16.0"]
   ],
   executable: "tamoz"

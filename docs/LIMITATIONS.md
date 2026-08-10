@@ -76,6 +76,23 @@ implemented and exercised against it, and replay/shadow scopes provably hold no
 effector credentials. **No real actuator adapter exists**, and connecting one
 requires an explicit owner decision and a separate safety review.
 
+### Channel communications (invariants 56–58, ADR-041–043)
+
+The channel contract gem (`tamoz-comms`) exists with the exact decision
+machinery the worker consumes and the channel values and seams — the surface
+descriptor, normalized inbound envelopes, deliveries, bindings, approval
+prompts, the closed command table, and the `Transport`/`DeliverySink`/`CommsStore`
+contracts. **The Telegram channel itself does not exist yet**: there is no
+surface admission, no durable outbox, no transport adapter, and no gateway
+process. The channel clauses 56–58 and ADR-041–043 are accepted as owner
+policy and recorded as pending-owner-residual gaps; the slices of
+[`COMMS_TELEGRAM_PLAN.md`](COMMS_TELEGRAM_PLAN.md) convert each to direct
+evidence in order.
+
+Until then: the only surface is the operator CLI, and there is no way for a
+message from Telegram (or any other channel) to reach a runtime, and no way for
+agent output to reach a human outside the terminal.
+
 ## Deliberate non-goals
 
 These are not gaps to be filled later; they are decisions.

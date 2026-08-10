@@ -29,18 +29,24 @@ module Tamoz
       # gate has to REFUSE rather than guess, and it may clear on the next poll.
       class StoreUnavailableError < Error; end
 
-      attr_reader :directory, :adapter
+      attr_reader :directory, :adapter, :delivery_sink
 
-      def self.open(directory, model_factory:, lease_ttl: 30.0)
+      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
-        # the storage package at require time.
+        # the storage or channel packages at require time.
         require "tamoz/sqlite"
-        new(directory, model_factory:, lease_ttl:)
+        require "tamoz/comms"
+        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:)
+        runtime.install_channel_delivery_sink unless delivery_sink
+        runtime
       end
 
-      def initialize(directory, model_factory:, lease_ttl: 30.0)
+      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
         @directory = directory
         @model_factory = model_factory
+        # The channel projection is nil-safe by default (ADR-042): a worker
+        # without a comms surface delivers nothing and never raises.
+        @delivery_sink = delivery_sink || Tamoz::Comms::DeliverySink.null
         # The memory codec is the default codec PLUS one registration for
         # MemoryRecord, so it decodes everything the default could. Installing it
         # only when memory is enabled keeps a runtime that never asked for memory
@@ -60,6 +66,15 @@ module Tamoz
       end
 
       def path = @directory.path
+
+      # A runtime with channel surfaces delivers terminal output through the
+      # outbox (design §11); one without stays nil-safe. An unbound thread
+      # still delivers nothing either way.
+      def install_channel_delivery_sink
+        return if @directory.channels.empty?
+
+        @delivery_sink = OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints)
+      end
 
       def close
         @adapter.close unless @adapter.closed?
@@ -245,34 +260,59 @@ module Tamoz
         end
       end
 
-      # Human decisions about paused work, recorded by `tamoz approve` and
-      # consumed by the worker.
+      # Human decisions about paused work, recorded by `tamoz approve` and the
+      # channel gateway, consumed by the worker.
       #
-      # A decision is DURABLE and keyed to the exact occurrence it answers. It is
-      # written by a human-run command into the operator's own database; the
-      # worker only ever reads it. There is no code path that writes one on the
-      # worker's behalf, which is what makes "headless never becomes approval" a
-      # structural property rather than a promise.
-      DECISIONS = %w[tamoz worker decision].freeze
+      # A decision is DURABLE and binds the exact interrupt set it answers
+      # (interrupt_digest), so a decision for one question can never answer a
+      # later one in the same occurrence (design §9). Records live in the
+      # runtime database through the Comms DecisionStore contract; the worker
+      # only reads, claims and consumes them. There is no code path that writes
+      # one on the worker's behalf, which is what makes "headless never becomes
+      # approval" a structural property rather than a promise.
+      DECISION_CLAIM_TTL_S = 30.0
 
-      # One decision per (thread, occurrence). The separator is a character that
-      # cannot appear in either identifier, so two different pairs can never
-      # collide into one key.
-      def decision_key(thread_id, request_id)
-        "#{thread_id}/#{request_id}"
+      def decision_store
+        @decision_store ||= @adapter.bind_comms_decision_store
       end
 
-      def record_decision(thread_id, request_id, granted:)
-        upsert(DECISIONS, decision_key(thread_id, request_id),
-               {"granted" => granted, "recorded_at" => Time.now.utc.iso8601})
+      # The newest unexpired pending decision matching the exact interrupt set,
+      # or nil. `nil` means "no human has answered yet" and nothing else; a
+      # read error must not borrow that meaning, or a recorded approval would
+      # leave the work parked forever with no signal anywhere.
+      # :reek:LongParameterList -- mirrors the DecisionStore contract signature.
+      def pending_decision(thread_id, occurrence_id, interrupt_digest:, now:)
+        durable("decision for #{thread_id.inspect}/#{occurrence_id.inspect}") do
+          wire = decision_store.pending_decision_for(
+            thread_id:, occurrence_id:, interrupt_digest:, now:
+          )
+          wire && Tamoz::Comms::DecisionRecord.from_wire(wire)
+        end
       end
 
-      # `nil` means "no human has answered yet" and nothing else. A read error
-      # must not borrow that meaning: it would make a recorded approval
-      # invisible and leave the work parked forever with no signal anywhere.
-      def decision_for(thread_id, request_id)
-        durable("decision for #{thread_id.inspect}/#{request_id.inspect}") do
-          record(DECISIONS, decision_key(thread_id, request_id))&.fetch("granted", nil)
+      # Fenced lease on one decision. An expired claim lease releases the
+      # record back to claimable, so a crash before the resume enqueue is
+      # recovered by re-claiming on the next pass — never by duplicating work.
+      # :reek:LongParameterList -- mirrors the DecisionStore contract signature.
+      def claim_decision(decision_id, owner:, fence:, now:)
+        durable("claim decision #{decision_id.inspect}") do
+          decision_store.claim_decision(
+            decision_id:, owner:, fence:,
+            claim_expires_at: now + DECISION_CLAIM_TTL_S, now:
+          )
+        end
+      end
+
+      def consume_decision(decision_id, now:)
+        durable("consume decision #{decision_id.inspect}") do
+          decision_store.consume_decision(decision_id:, now:)
+        end
+      end
+
+      # The operator/CLI side of the contract: writes one pending decision.
+      def record_decision(record)
+        durable("record decision for #{record.thread_id.inspect}") do
+          decision_store.insert_decision(record.wire)
         end
       end
 

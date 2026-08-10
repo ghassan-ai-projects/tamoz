@@ -17,6 +17,8 @@ Bundler/OrderedGems:
 Gemspec/RequiredRubyVersion:
   Exclude:
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
+    - 'gems/tamoz-comms/tamoz-comms.gemspec'
+    - 'gems/tamoz-telegram/tamoz-telegram.gemspec'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
     - 'gems/tamoz-graph/tamoz-graph.gemspec'
