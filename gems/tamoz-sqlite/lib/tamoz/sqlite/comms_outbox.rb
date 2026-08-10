@@ -11,8 +11,10 @@ module Tamoz
     # compare-and-set and the row's effect binding is write-once. Bounded by
     # the surface's outbox_capacity (invariant 57).
     #
-    # :reek:LongParameterList -- the primitives mirror the §13 contract
-    #   signatures.
+    # :reek:LongParameterList, :reek:DuplicateMethodCall, :reek:NilCheck
+    # :reek:TooManyStatements, :reek:FeatureEnvy, :reek:DataClump
+    # :reek:NestedIterators, :reek:UnusedParameters -- the primitives mirror
+    #   the §13 contract signatures and their one-transaction bodies.
     class CommsOutbox
       include CommsStoreRows
 
@@ -98,6 +100,21 @@ module Tamoz
             ORDER BY created_at_ms LIMIT ?
           SQL
           rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }
+        end
+      end
+
+      # Record a transport outcome for a CLAIMED row: `succeeded` carries the
+      # receipt, `unknown` is the honest ambiguity state (design §10 — never a
+      # guess, never an automatic retry).
+      def mark_delivery(delivery_id:, status:, now:, receipt: nil)
+        transaction('comms.outbox.mark') do |txn|
+          txn.execute('comms.outbox.mark',
+                      <<~SQL, [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id])
+                        UPDATE tamoz_comms_outbox
+                        SET status = ?, receipt = ?, updated_at_ms = ?
+                        WHERE delivery_id = ? AND status = 'claimed'
+                      SQL
+          txn.changes == 1 ? :marked : :not_claimable
         end
       end
 

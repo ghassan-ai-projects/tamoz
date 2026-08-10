@@ -15,7 +15,7 @@ module TamozSQLiteOracle
   # MIGRATION_6 (channel tables). The oracle is a second, independent
   # read-only verifier: it must agree with the migrated schema or every
   # scenario database is schema_invalid.
-  SCHEMA_VERSION = 6
+  SCHEMA_VERSION = 7
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -31,6 +31,9 @@ module TamozSQLiteOracle
   # requests, poll state, outbox, prompts, decisions, gaps).
   MIGRATION_6_CHECKSUM =
     "b351a297958689ef65d744d82e1f6973c6cf45e8b661f148115d6293f05203e5"
+  # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its receipt column.
+  MIGRATION_7_CHECKSUM =
+    "4646a74aaf093face3b371a5e5dc7b0dead7c8967f21dd6f0c965ce57b89d055"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -750,7 +753,8 @@ module TamozSQLiteOracle
         [3, MIGRATION_3_CHECKSUM],
         [4, MIGRATION_4_CHECKSUM],
         [5, MIGRATION_5_CHECKSUM],
-        [6, MIGRATION_6_CHECKSUM]
+        [6, MIGRATION_6_CHECKSUM],
+        [7, MIGRATION_7_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

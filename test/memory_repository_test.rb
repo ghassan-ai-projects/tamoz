@@ -95,11 +95,11 @@ class MemoryRepositoryTest < Minitest::Test
     # P14: CURRENT_VERSION moved 3 -> 4 through MIGRATION_4 (stream tables);
     # comms moved 5 -> 6 through MIGRATION_6. The monotonic-ordering guard
     # makes ordinal reuse impossible.
-    assert_equal 6, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6], Tamoz::SQLite::Migrator.migration_ordinals
+    assert_equal 7, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7], Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 6, database.get_first_value("PRAGMA user_version")
+    assert_equal 7, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -139,11 +139,11 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 6, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 7, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

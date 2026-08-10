@@ -20,7 +20,7 @@ module Tamoz
       # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the ten
       # channel-store tables. Ordinals are consumed monotonically and never
       # reused; the monotonic-ordering test pins the exact ordinal list.
-      CURRENT_VERSION = 6
+      CURRENT_VERSION = 7
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -785,6 +785,19 @@ module Tamoz
         MIGRATION_6.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its transport
+      # receipt column. Receipts (message_id, platform date) are recorded on
+      # a durable success and are what make a send provably delivered.
+      MIGRATION_7 = [
+        <<~SQL.freeze
+          ALTER TABLE tamoz_comms_outbox ADD COLUMN receipt TEXT
+        SQL
+      ].freeze
+
+      MIGRATION_7_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_7.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -793,7 +806,8 @@ module Tamoz
         3 => [MIGRATION_3, MIGRATION_3_CHECKSUM],
         4 => [MIGRATION_4, MIGRATION_4_CHECKSUM],
         5 => [MIGRATION_5, MIGRATION_5_CHECKSUM],
-        6 => [MIGRATION_6, MIGRATION_6_CHECKSUM]
+        6 => [MIGRATION_6, MIGRATION_6_CHECKSUM],
+        7 => [MIGRATION_7, MIGRATION_7_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

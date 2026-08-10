@@ -31,7 +31,7 @@ module Tamoz
         delivery_id surface_id conversation_id kind operation text part_index
         part_count markup journaled content_digest render_version expires_at_ms
         status claim_owner claim_fence claim_expires_at_ms effect_key
-        effect_execution_id created_at_ms updated_at_ms
+        effect_execution_id receipt created_at_ms updated_at_ms
       ].freeze
 
       def transaction(operation, &)

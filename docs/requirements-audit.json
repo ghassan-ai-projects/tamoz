@@ -1,27 +1,35 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-10T12:36:16Z",
-  "manifest_requirements": 386,
+  "generated_at": "2026-08-10T13:30:37Z",
+  "manifest_requirements": 391,
   "named_cases_run": 260,
   "counts": {
     "deferred-by-contract": 11,
+    "failing": 3,
     "indirect": 4,
     "missing": 9,
-    "pass": 362
+    "pass": 364
   },
   "release_blocking_gaps": [
     "ADR-041",
     "ADR-042",
     "ADR-043",
+    "INV-21",
     "INV-39",
     "INV-48",
     "INV-56",
     "INV-57",
     "INV-58",
-    "OBJ-7"
+    "OBJ-4",
+    "OBJ-7",
+    "PHASE-P6"
   ],
-  "failing": [],
+  "failing": [
+    "INV-21",
+    "OBJ-4",
+    "PHASE-P6"
+  ],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -3983,6 +3991,70 @@
       "owner_signature": null
     },
     {
+      "id": "API-tamoz-telegram-Tamoz::Telegram::Client",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Telegram::Client",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-telegram",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-telegram-Tamoz::Telegram::Normalizer",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Telegram::Normalizer",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-telegram",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-telegram-Tamoz::Telegram::Transport",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Telegram::Transport",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-telegram",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-telegram-Tamoz::Telegram::VERSION",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Telegram::VERSION",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-telegram",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "API-tamoz-tools-Tamoz::Tools::CheckReceipt",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -5014,7 +5086,7 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Replay-safe effects or explicit ambiguity",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once",
       "supporting_tests": [
         "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
@@ -5025,7 +5097,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -5811,6 +5883,21 @@
       "owner_signature": null
     },
     {
+      "id": "MIG-7",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_7",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "NG-arbitrary-shell",
       "category": "non_goal",
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §1; docs/P15_RELEASE_PLAN.md scope",
@@ -5971,7 +6058,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "durable effects stop or reconcile ambiguity without guessing",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven",
       "supporting_tests": [
         "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
@@ -5981,7 +6068,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -6320,13 +6407,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Durable session/effect recovery — SQLite resumes plan/approval/tool/check state and reconciles kill points without guessing",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

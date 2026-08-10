@@ -24,8 +24,11 @@ module Tamoz
     #
     # The operation labels are the kill-harness addresses (BoundaryRegistry);
     # a crash before commit leaves `old` state, after commit `new` state.
-    # :reek:LongParameterList -- the primitives mirror the §13 contract
-    #   signatures; splitting them would fragment the durable operations.
+    # :reek:LongParameterList, :reek:UnusedParameters, :reek:DataClump
+    # :reek:DuplicateMethodCall, :reek:FeatureEnvy, :reek:NilCheck
+    # :reek:TooManyStatements -- the primitives mirror the §13 contract
+    #   signatures and their one-transaction bodies; splitting them would
+    #   fragment the durable operations.
     # :reek:TooManyMethods -- one primitive per table seam is the contract.
     # rubocop:disable Metrics/ParameterLists, Metrics/BlockLength -- the §13 contract signatures and their one-transaction blocks.
     # rubocop:disable Metrics/MethodLength -- admit_and_enqueue is one atomic
@@ -159,6 +162,28 @@ module Tamoz
         end
       end
 
+      # The durable next_offset for one bot (nil when never persisted).
+      def poll_offset(bot_id:)
+        read('comms.poll.offset.read') do |txn|
+          txn.scalar('comms.poll.offset.read', <<~SQL, [bot_id])
+            SELECT next_offset FROM tamoz_comms_poll_state WHERE bot_id = ?
+          SQL
+        end
+      end
+
+      # Release this gateway's poller lease (idempotent — only releases when
+      # the fence is ours, so a crashed gateway's lease expires on its own).
+      def release_poller_lease(bot_id:, owner:, fence:)
+        transaction('comms.poll.release') do |txn|
+          txn.execute('comms.poll.release', <<~SQL, [bot_id, owner, fence])
+            UPDATE tamoz_comms_poll_state
+            SET poller_owner_id = NULL, poller_fence = NULL, poller_expires_at_ms = NULL
+            WHERE bot_id = ? AND poller_owner_id = ? AND poller_fence = ?
+          SQL
+          :released
+        end
+      end
+
       # ===== outbox and routes (delegated) =====
 
       def append_delivery(delivery_wire, surface_id:, capacity:, now:)
@@ -175,6 +200,10 @@ module Tamoz
 
       def outbox_rows(surface_id:, statuses:, limit: 500)
         @outbox.outbox_rows(surface_id:, statuses:, limit:)
+      end
+
+      def mark_delivery(delivery_id:, status:, now:, receipt: nil)
+        @outbox.mark_delivery(delivery_id:, status:, receipt:, now:)
       end
 
       def bind_correspondent(binding_wire, now:)
