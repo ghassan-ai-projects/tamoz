@@ -35,6 +35,15 @@ module Tamoz
         StreamStore.new(adapter: self)
       end
 
+      # Slice A: the durable decision store (design §9) over the versioned
+      # Store namespace — every claim/consume is a compare-and-set.
+      def bind_comms_decision_store
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        CommsDecisionStore.new(store)
+      end
+
       def initialize(
         path:,
         limits: Limits.new,

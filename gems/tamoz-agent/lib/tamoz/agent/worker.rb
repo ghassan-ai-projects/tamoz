@@ -235,10 +235,16 @@ module Tamoz
           if view && view.status == :paused && !view.interrupts.empty?
             # A human may have answered since the last pass. If they have, the
             # SAME occurrence continues; if they have not, it stays parked.
-            decision = @runtime.decision_for(thread_id, occurrence_id)
+            # The decision must bind the exact interrupt set this turn is
+            # paused on, so a decision for one question can never answer a
+            # later one in the same occurrence (design §9).
+            digest = interrupt_digest(view)
+            decision = @runtime.pending_decision(
+              thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
+            )
             return park(entry, view) && PARKED if decision.nil?
 
-            return apply_decision(session, thread_id:, occurrence_id:, view:, granted: decision)
+            return apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
           end
 
           # An open occurrence with nothing in the inbox and no interrupt is a
@@ -314,18 +320,32 @@ module Tamoz
       # The answers are built from the interrupts the session is ACTUALLY waiting
       # on, and every one of them carries the same recorded decision. The worker
       # supplies no value of its own: it is a courier, not a decision-maker.
-      def apply_decision(session, thread_id:, occurrence_id:, view:, granted:)
+      #
+      # The claim is a fenced compare-and-set, so a concurrent claimer loses and
+      # this thread stays parked; the resume request id is DERIVED from the
+      # decision, so a crash between enqueue and consumption repeats the same
+      # inbox request instead of duplicating the resume (invariant 23).
+      def apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
+        now = Time.now.utc
+        decision_id = decision.decision_id
+        claim = @runtime.claim_decision(
+          decision_id, owner: owner_id,
+                       fence: Process.clock_gettime(Process::CLOCK_MONOTONIC, :microsecond), now:
+        )
+        return park({thread_id:, head_request_id: occurrence_id}, view) && PARKED unless claim == :claimed
+
+        granted = decision.granted?
         answers = {}
         view.interrupts.each do |interrupt|
-          answers[interrupt.task_id] ||= {}
-          answers[interrupt.task_id][interrupt.call_index] = answer_for(interrupt, granted)
+          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
         end
 
         emit("request.#{granted ? "approved" : "denied"}",
-             thread: thread_id, request_id: occurrence_id, actor: "human")
+             thread: thread_id, request_id: occurrence_id, actor: decision.actor_id)
         unpark(thread_id)
-        session.resume(answers, thread: thread_id, request_id: SecureRandom.uuid,
+        session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
                                 owner_id: owner_id)
+        @runtime.consume_decision(decision_id, now:)
         settle(session, thread_id:, occurrence_id:)
       end
 
@@ -428,6 +448,23 @@ module Tamoz
           "kind" => interrupt.respond_to?(:kind) ? interrupt.kind.to_s : nil,
           "task_id" => interrupt.respond_to?(:task_id) ? interrupt.task_id : nil
         }.compact
+      end
+
+      # The canonical digest of the interrupt set this view is paused on. The
+      # CLI derives the same digest from the same session view when it records
+      # a decision, so the two sides agree on the exact question being answered.
+      # :reek:UtilityFunction -- a pure function of the view, like the other
+      # stateless interrupt helpers in this file.
+      def interrupt_digest(view)
+        Tamoz::Comms::InterruptDigest.of(
+          view.interrupts.map do |interrupt|
+            {
+              task_id: interrupt.task_id,
+              call_index: interrupt.call_index,
+              descriptor: interrupt.descriptor
+            }
+          end
+        )
       end
 
       # ----------------------------------------------------------------- parking

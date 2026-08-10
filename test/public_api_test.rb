@@ -42,6 +42,19 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-comms" => {
+          "Tamoz::Comms::AmbiguousDeliveryError" => {},
+          "Tamoz::Comms::AuthenticationError" => {},
+          "Tamoz::Comms::Canonical" => {},
+          "Tamoz::Comms::CommsError" => {},
+          "Tamoz::Comms::DecisionRecord" => {},
+          "Tamoz::Comms::DecisionStore" => {},
+          "Tamoz::Comms::InterruptDigest" => {},
+          "Tamoz::Comms::PollerConflictError" => {},
+          "Tamoz::Comms::ThrottledError" => {},
+          "Tamoz::Comms::ValidationError" => {},
+          "Tamoz::Comms::VERSION" => {}
+        },
         "tamoz-core" => {
           "Tamoz.configuration" => {},
           "Tamoz.configure" => {},
@@ -265,7 +278,8 @@ class PublicAPITest < Minitest::Test
       Tamoz::Tools::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Evals::VERSION,
-      Tamoz::Mcp::VERSION
+      Tamoz::Mcp::VERSION,
+      Tamoz::Comms::VERSION
     ]
 
     assert_equal GEM_ROOTS.keys.sort,

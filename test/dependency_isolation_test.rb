@@ -74,6 +74,43 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  # ADR-041: tamoz-comms is a VALUES and CONTRACT gem — core only. It must not
+  # pull the durable store, the agent, or any model client, and it must not
+  # open a socket at load time. This is what keeps the channel vocabulary out
+  # of the HTTP-carrying transport and the credential-carrying worker.
+  # The subprocess proof loads tamoz/comms and asserts every forbidden feature
+  # is absent from one load graph.
+  def test_comms_loads_core_only_and_no_http_or_agent
+    script = <<~RUBY
+      require "json"
+      require "socket"
+      require "tamoz/comms"
+      puts JSON.generate(
+        "comms" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/comms") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "openssl" => $LOADED_FEATURES.any? { |path| path.include?("openssl") },
+        "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
+        "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
+        "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+        "evals" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/evals") },
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert result.fetch("comms")
+    %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the load graph"
+    end
+  end
+
   def test_no_production_gemspec_depends_on_evals
     production = GEM_ROOTS.except("tamoz-evals")
 
@@ -84,6 +121,13 @@ class DependencyIsolationTest < Minitest::Test
   end
 
   private
+
+  def clean_environment
+    ENV.each_key
+       .grep(/\A(?:BUNDLE|BUNDLER)/)
+       .to_h { |key| [key, nil] }
+       .merge("RUBYLIB" => nil, "RUBYOPT" => nil)
+  end
 
   def loaded_features_after(require_path)
     script = <<~RUBY
@@ -96,10 +140,6 @@ class DependencyIsolationTest < Minitest::Test
           .sort
       )
     RUBY
-    clean_environment = ENV.each_key
-                           .grep(/\A(?:BUNDLE|BUNDLER)/)
-                           .to_h { |key| [key, nil] }
-                           .merge("RUBYLIB" => nil, "RUBYOPT" => nil)
     stdout, stderr, status = Open3.capture3(
       clean_environment,
       RbConfig.ruby,

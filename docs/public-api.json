@@ -43,6 +43,19 @@
       },
       "Tamoz::Agent::VERSION": {}
     },
+    "tamoz-comms": {
+      "Tamoz::Comms::AmbiguousDeliveryError": {},
+      "Tamoz::Comms::AuthenticationError": {},
+      "Tamoz::Comms::Canonical": {},
+      "Tamoz::Comms::CommsError": {},
+      "Tamoz::Comms::DecisionRecord": {},
+      "Tamoz::Comms::DecisionStore": {},
+      "Tamoz::Comms::InterruptDigest": {},
+      "Tamoz::Comms::PollerConflictError": {},
+      "Tamoz::Comms::ThrottledError": {},
+      "Tamoz::Comms::ValidationError": {},
+      "Tamoz::Comms::VERSION": {}
+    },
     "tamoz-core": {
       "Tamoz.configuration": {},
       "Tamoz.configure": {},

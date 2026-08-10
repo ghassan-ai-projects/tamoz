@@ -47,6 +47,7 @@ named example task in a clean subprocess.
 | `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
 | `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core` |
+| `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
 | `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools` |

@@ -16,6 +16,7 @@ gem "tamoz-graph", path: "gems/tamoz-graph"
 gem "tamoz-sqlite", path: "gems/tamoz-sqlite"
 gem "tamoz-scheduler", path: "gems/tamoz-scheduler"
 gem "tamoz-stream", path: "gems/tamoz-stream"
+gem "tamoz-comms", path: "gems/tamoz-comms"
 gem "zeitwerk", "~> 2.6"
 
 # Development/test-only quality tooling (Q0 of the quality program).

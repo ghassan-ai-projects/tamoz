@@ -1,7 +1,8 @@
 # Communication channels and Telegram: implementation plan
 
-The build order for [`COMMS_DESIGN.md`](COMMS_DESIGN.md). Status: proposed. Nothing here
-is implemented.
+The build order for [`COMMS_DESIGN.md`](COMMS_DESIGN.md). Status: in progress — the
+design clauses are accepted (invariants 56–58, ADR-041–043, committed) and slice A
+(the exact decision machinery) is committed; slices B–J are being built in order.
 
 This plan follows the roadmap's operating rules
 ([`PRODUCT_EXECUTION_ROADMAP.md`](PRODUCT_EXECUTION_ROADMAP.md) §1): plan → implement →
