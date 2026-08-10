@@ -29,19 +29,22 @@ module Tamoz
       # gate has to REFUSE rather than guess, and it may clear on the next poll.
       class StoreUnavailableError < Error; end
 
-      attr_reader :directory, :adapter
+      attr_reader :directory, :adapter, :delivery_sink
 
-      def self.open(directory, model_factory:, lease_ttl: 30.0)
+      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
-        new(directory, model_factory:, lease_ttl:)
+        new(directory, model_factory:, lease_ttl:, delivery_sink:)
       end
 
-      def initialize(directory, model_factory:, lease_ttl: 30.0)
+      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
         @directory = directory
         @model_factory = model_factory
+        # The channel projection is nil-safe by default (ADR-042): a worker
+        # without a comms surface delivers nothing and never raises.
+        @delivery_sink = delivery_sink || Tamoz::Comms::DeliverySink.null
         # The memory codec is the default codec PLUS one registration for
         # MemoryRecord, so it decodes everything the default could. Installing it
         # only when memory is enabled keeps a runtime that never asked for memory

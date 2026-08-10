@@ -342,6 +342,8 @@ module Tamoz
 
         emit("request.#{granted ? "approved" : "denied"}",
              thread: thread_id, request_id: occurrence_id, actor: decision.actor_id)
+        notify_sink(thread_id, granted ? "request.approved" : "request.denied",
+                    granted ? "Approved." : "Denied.")
         unpark(thread_id)
         session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
                                 owner_id: owner_id)
@@ -409,12 +411,14 @@ module Tamoz
         case view.status
         when :completed
           @monitor.synchronize { @processed += 1 }
+          notify_sink(thread_id, "request.completed", view.state.to_s)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed")
           PROGRESSED
         when :failed
+          notify_sink(thread_id, "request.failed", view.respond_to?(:error) ? view.error.to_s : "failed")
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.failed",
@@ -426,6 +430,7 @@ module Tamoz
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused")
           else
+            notify_sink(thread_id, "request.approval_request", "Approval requested.")
             emit_approval_request(thread_id, occurrence_id, view)
           end
           park({thread_id:, head_request_id: occurrence_id}, view)
@@ -441,6 +446,13 @@ module Tamoz
              request_id: occurrence_id,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) })
+      end
+
+      # The channel projection: lifecycle events become outbox rows BEFORE the
+      # occurrence closes (design §11), so a crash never loses the terminal
+      # answer. Nil-safe — an unconfigured worker delivers nothing.
+      def notify_sink(thread_id, kind, text)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:)
       end
 
       def describe_interrupt(interrupt)

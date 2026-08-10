@@ -197,6 +197,18 @@ module Tamoz
         @routes.conversation(surface_id:, conversation_id:)
       end
 
+      # The conversation a thread routes to (via its most recent admission),
+      # for delivery projection (design §13).
+      def request_conversation(thread_id:)
+        read('comms.request.conversation') do |txn|
+          row = txn.first('comms.request.conversation', <<~SQL, [thread_id])
+            SELECT surface_id, conversation_id FROM tamoz_comms_requests
+            WHERE thread_id = ? ORDER BY created_at_ms DESC LIMIT 1
+          SQL
+          row && { 'surface_id' => row[0], 'conversation_id' => row[1] }
+        end
+      end
+
       # ===== prompts =====
 
       # Activate one approval prompt only after its send receipt is durable.
