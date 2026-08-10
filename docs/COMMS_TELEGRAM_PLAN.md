@@ -12,22 +12,25 @@ one's commit.
 ## 1. Scope commitment
 
 **In scope for v1:** two new gems (`tamoz-comms`, `tamoz-telegram`), one `CommsStore`
-implementation in `tamoz-sqlite`, one new long-running process (`tamoz comms serve`), the
-`tamoz comms` CLI surface, `config.yaml` schema version 2 with a `channels:` section, and
-six autonomy-scorecard cases.
+implementation in `tamoz-sqlite`, one nil-safe worker `DeliverySink`, one shared exact
+`DecisionRecord`, one new long-running process (`tamoz comms serve`), private Telegram
+chats over long polling, allowlist/pairing admission, deny-only callbacks, the `tamoz
+comms` CLI surface, backward-compatible reading of config schemas 1 and 2, and six
+autonomy-scorecard cases.
 
-**Out of scope, named so it cannot drift in:** everything in `COMMS_DESIGN.md` §19, and
-any change to `Worker`, `Session`, `DurableRunner`, the request-inbox semantics, or the
-capability registry. If a slice appears to need one of those, that is a design failure and
-the stop criteria in §8 apply.
+**Out of scope, named so it cannot drift in:** everything in `COMMS_DESIGN.md` §19; any
+network call from `Worker`; and any change to `Session`, `DurableRunner`, request-inbox
+semantics, capability registry, or profile authority. The worker integration is limited to
+the approved `DeliverySink` and exact decision-consumption seams. Anything broader hits
+the stop criteria in §8.
 
-**The gate this feature is really about:** a message from a phone must not be able to do
-anything a `tamoz queue add` from the operator's shell could not do, and an approval from
-a phone must be able to do strictly less.
+**The gate this feature is really about:** a message from a bound private chat must not be
+able to do anything a `tamoz queue add` under the bound profile could not do. A phone may
+deny an exact pending interrupt; it cannot grant one.
 
 ## 2. Prerequisite decisions (blocking, before slice A)
 
-Three things must be settled by the owner before code starts, because each changes what
+Four things must be settled by the owner before code starts, because each changes what
 gets built rather than how:
 
 1. **Clause acceptance.** §18 of the design proposes invariants 56–58 and ADR-041–043.
@@ -37,12 +40,17 @@ gets built rather than how:
    deliberate commit that edits `INVARIANTS.md`, `DECISIONS.md`, the two pinned counts in
    `documentation_test.rb`, and the regenerated manifest — **before** any gem exists, so
    the contract precedes the code.
-2. **Approval authority.** Ship with `approvals.mode` capped at `:deny_only`, or implement
-   `:granting` in v1? The design supports both; `:deny_only` is a materially smaller
-   security review. Recommendation: implement the full mode enum, but have
-   `RuntimeDirectory` refuse `:granting` in v1 with a typed error, so the code path exists,
-   is tested, and cannot be enabled until the review that clears it.
-3. **Where the feature sits on the roadmap.** The current phase is A1 (the autonomy
+2. **Cross-gem seams.** Repository policy requires owner approval before changing a
+   cross-gem interface. Approve exactly two: `tamoz-agent`'s nil-safe `DeliverySink` and
+   `tamoz-sqlite`'s transaction-bound `CommsStore` implementation. The existing request
+   inbox interface is reused, not changed.
+3. **Decision-record correction.** Approve replacing the current
+   `(thread, occurrence, granted)` worker record with the exact, consumable
+   `DecisionRecord` in design §9 for both local CLI and channel denial. This is a
+   prerequisite correctness/security fix, not Telegram-specific policy. No callback work
+   starts until multiple interrupt rounds in one occurrence are proven not to reuse a
+   prior decision.
+4. **Where the feature sits on the roadmap.** The current phase is A1 (the autonomy
    milestone) with cases 09 and 10 still failing. A channel is the operator-facing half of
    that milestone's loop (`… → durable outcome → notification or approval request`), so it
    plausibly belongs *inside* A1 as slices I–J rather than after it. Owner's call; this
@@ -53,115 +61,111 @@ gets built rather than how:
 Each slice names its exit criterion. A slice is done when that criterion is proven by a
 test that ran, not by inspection.
 
-### Slice A — `tamoz-comms` values and the transport seam
+### Slice A — exact decision foundation
 
-`SurfaceDescriptor`, `InboundEnvelope`, `Delivery`, `Correspondent`/`Conversation`
-bindings, the closed command table, the closed `KINDS` list, the `Transport` module, the
-typed error family (`AuthenticationError`, `AdmissionError`, `AmbiguousDeliveryError`,
-`ThrottledError`), and the `CommsStore` structural contract with `CONTRACT_VERSION = 1`.
+Introduce `tamoz-comms` with only design §9's immutable `DecisionRecord`/decision-store
+contract, then replace the current worker tuple and migrate `tamoz approve` and `Worker`
+together. This establishes the dependency direction without adding Telegram behavior.
 
-Everything is `Data.define` with validation in `initialize`, frozen fields, and a
-domain-separated `definition_digest` — the `Stream::ChannelDescriptor` shape exactly.
-Dependencies: `tamoz-core` only. No `net/http` anywhere in this gem.
+**Exit:** two distinct approval rounds in one occurrence cannot reuse a decision; wrong
+interrupt digest, expired record, duplicate consume, actor/source omission, concurrent
+consume, and storage failure all refuse; kill before/after deterministic resume enqueue
+neither loses nor duplicates the decision; existing CLI approval/denial tests remain green.
 
-**Exit:** value round-trip and rejection tests for every bound; a digest golden test; a
-clean-subprocess test proving `require "tamoz/comms"` loads no HTTP, no `tamoz-graph`, no
-`tamoz-agent`, no RubyLLM, and opens no socket (the invariant-11 test shape, reused).
+### Slice B — `tamoz-comms` values and seams
 
-### Slice B — `CommsStore` in `tamoz-sqlite`
+Complete `tamoz-comms` with `SurfaceDescriptor`, `InboundEnvelope`, `Delivery`,
+binding/prompt values, closed commands/kinds, `Transport`, `DeliverySink`, typed errors,
+and `CommsStore::CONTRACT_VERSION = 1`. Values validate/freeze all fields and use
+domain-separated digests. Dependency:
+`tamoz-core` only; no HTTP, graph, agent, or SQLite require.
 
-The seven tables from design §13, as one new migration, loaded through an explicitly
-required optional module — the `stream_store.rb` pattern, not a change to the base schema.
-Admission is one transaction: inbound record + request enqueue, or inbound record +
-decision record. Cursor advance is a separate, later transaction.
+**Exit:** bounds/round-trip/conflict tests, digest goldens, and a clean-subprocess proof
+that `require "tamoz/comms"` opens no socket and loads none of `net/http`, `tamoz-graph`,
+`tamoz-agent`, or RubyLLM.
 
-**Exit:** a raw-oracle-style test that admission and enqueue are atomic under `kill -9` at
-every statement; a test that the cursor never advances past an unadmitted update; a
-contract-version pair test in `tamoz-evals`; `boundary_source_audit` clean.
+### Slice C — `CommsStore` in `tamoz-sqlite`
 
-### Slice C — admission, identity, and pairing
+Add design §13's tables and transaction-bound methods through an explicitly required
+module. Admission and request enqueue share the existing
+`enqueue_request_in_transaction!`; decision admission and prompt consumption share one
+transaction. Poll `next_offset` persists only after the returned prefix is durable.
 
-Correspondent/conversation resolution, the four admission modes, group's two-gate rule,
-pairing code issue/approve/revoke with expiry, single use and per-sender rate limiting,
-and the durable rejection reason classes.
+**Exit:** raw-oracle/kill tests at every statement; offset never persists past an
+uncommitted disposition; one fenced poller per authenticated bot; contract-version pair
+test; deletion/tombstone/purge receipts cover comms rows; boundary audit clean.
 
-**Exit:** an adversarial test that walks every rejection reason and asserts a durable
-record with the right class and **no** enqueued request; a test that a DM pairing approval
-grants nothing in a group; a test that an empty allowlist under `:allowlist` is a
-configuration error at load, not an allow-all at runtime.
+### Slice D — private-chat admission and pairing
 
-### Slice D — `tamoz-telegram` transport
+Implement exact bot/correspondent/conversation ids, `:disabled|:allowlist|:pairing`, hashed
+single-use pairing codes that activate only after a send receipt, explicit binding
+versions/revocation, known-command parsing,
+private-chat-only refusal, `/new` generation rotation, capacity reservations, and all
+durable dispositions. A new thread's profile binding uses the existing Store's
+create-only compare-and-set before any request can enqueue; a crash may leave only an inert
+binding, never unauthorised work.
 
-`getMe`, `getUpdates` long polling with `allowed_updates` and an explicit deadline,
-`sendMessage`, `editMessageText`, `sendDocument`, `answerCallbackQuery`, `sendChatAction`.
-Egress enforced at the dial: allowlisted host, https, no private ranges, bounded response
-bytes, one redirect hop, connect timeout, circuit. Token redaction applied at URI and
-error construction, never at print time.
+**Exit:** every rejection has the right durable reason and no request; empty allowlist is
+a load error; usernames/display names/anonymous senders/groups/business/edited/media
+updates never admit; revoke invalidates prompts; concurrent `/new` routing is atomic.
+Capacity arithmetic is validated at config load, and exceeding the per-request denial-
+prompt cap leaves the occurrence locally approvable without creating a chat decision.
 
-**Exit:** the whole surface driven against a local fixture HTTP server covering `200`,
-`400 message is not modified`, `401`, `409`, `429 retry_after`, a truncated response, a
-redirect to a non-allowlisted host, a body over the byte bound, and a mid-send timeout; a
-property test that no constructed URI, exception message, or emitted event contains the
-token; a test that a delivery to any host outside the allowlist fails before a socket
-opens.
+### Slice E — rendering and worker delivery projection
 
-### Slice E — the gateway process
+Implement deterministic plain/restricted-HTML rendering, character/grapheme splitting,
+explicit truncation recovery, framework-only control messages, `Tamoz::Secret` refusal,
+the null sink, and projection-before-close for completed/failed/stopped/paused views.
 
-`tamoz comms serve` as a plain foreground process in the shape of `Worker`: SIGINT/SIGTERM
-finish what is in hand and exit 0, `--once` drains, idle sleeps on a cancellation token,
-per-surface containment so one sick surface cannot take the process down. The poll loop
-carries an explicit deadline and reports a stall rather than hanging silently.
+**Exit:** pathological Unicode/HTML/200-KB goldens; render-version conflict; crash before
+append, after append, and before occurrence close yields one delivery; a runtime with no
+channels is byte-identical to current worker behavior.
 
-**Exit:** an end-to-end test with the fixture transport and a scripted model: message in →
-request enqueued → `tamoz worker --once` runs the turn → answer delivered; a `kill -9`
-matrix at every seam (after poll, after admit, after enqueue, before cursor advance, after
-claim, after send, before receipt) asserting exactly one turn and no silent duplicate.
+### Slice F — `tamoz-telegram` transport
 
-### Slice F — outbound outbox and journaling
+Implement `getMe`, `getUpdates` with explicit `allowed_updates`, `sendMessage`, `editMessageText`,
+`answerCallbackQuery`, and `sendChatAction`. Production origin is fixed, redirects and env
+proxies are disabled, resolved addresses are public, TLS is verified, bodies/depth are
+bounded, deadlines explicit, and token redaction occurs at construction.
 
-Delivery append from the worker's settle path (the only change outside the new gems: the
-worker emits deliveries where it currently only emits events, behind a nil-safe seam so a
-runtime with no channel behaves byte-identically), fenced claim in the gateway, the
-journal integration under the synthetic `comms:<delivery_id>` execution id, the
-reconciler, and the two `:unknown` policies.
+**Exit:** fixture server covers success, unchanged edit, 401, 409, 429, truncation,
+oversize/deep JSON, redirect refusal, private-address refusal, lost poll response, and
+mid-send timeout. Property tests prove no URI/error/event/`inspect` contains the token and
+no forbidden destination opens a socket.
 
-**Exit:** a test that `:approval_request` under `:stop` leaves an `:unknown` effect visible
-in `tamoz status` and resolvable by `tamoz resolve`; a test that `:answer` under
-`:resend_once_marked` sends at most one marked duplicate and then stops; a test that a
-runtime with no `channels:` section produces byte-identical worker behavior to today.
+### Slice G — gateway, outbox, and effect journal
 
-### Slice G — rendering
+Build the foreground gateway, ordered prefix admission, persisted `next_offset`, fenced
+outbox claims, rate shaping, and journal integration. `sendMessage` is `:unsafe`; an
+ambiguous send stops `:unknown` with no automatic retry. The outbox schedules work but
+does not duplicate attempt/receipt lifecycle.
 
-Deterministic splitting, the part counter, the document/truncate overflow, plain and
-restricted-HTML escaping, the framework-only construction of control renderings, and the
-secret guard.
+**Exit:** end-to-end message → request → worker → answer; kill matrix after poll, each
+admission boundary, offset persistence, projection, claim, send, and receipt; exactly one
+turn, no offset loss, no blind resend, and reserved terminal output survives saturation.
 
-**Exit:** golden rendering fixtures over pathological inputs — a 200 KB answer, CJK and
-emoji at every boundary, text that is entirely one 5000-character word, model output
-containing `</pre><b>` and a Markdown link whose target is a `tg://` deep link, and a `Tamoz::Secret` reaching the
-renderer (which must raise, not redact silently).
+### Slice H — deny-only Telegram callback
 
-### Slice H — approvals from chat
+Add hashed 128-bit references, action encoding under 64 bytes, activation only after the
+prompt receipt, six-check atomic denial, refusal evidence, and callback acknowledgement.
+Plaintext reference tokens live only for one send attempt and never enter SQLite. There is
+no grant enum or branch.
 
-The prompt record, the reference encoding under 64 bytes, the five-check honour path, the
-refusal records, and `record_decision` with the correspondent as actor.
-
-**Exit:** an adversarial suite — replayed button, expired reference, wrong correspondent,
-reference for a question whose interrupt digest changed, grant attempted under
-`:deny_only`, grant of a class outside `grant_classes`, two presses racing. Each must
-refuse durably. Plus the counter assertion: `chat_grants_beyond_profile == 0` and
-`headless_auto_approvals == 0` across the whole suite.
+**Exit:** replay, expiry, wrong user/chat/message/binding/revision, inactive/unknown-send
+prompt, changed interrupt digest, forged grant action, and racing presses all refuse
+durably except one valid denial. `chat_grants == 0` and `headless_auto_approvals == 0`.
 
 ### Slice I — CLI, config, operator surface
 
-`config.yaml` schema version 2 with a migration path for version 1 directories,
-`tamoz comms serve|list|pair|send|doctor`, the `channels` section of `tamoz status`, and
+Add strict schema 2 plus schema-1-as-no-channels reading and explicit atomic migration,
+`tamoz comms serve|list|pair|delivery resolve|doctor`, the `channels` section of `tamoz
+status`, and
 `INSTALL.md`/`OPERATIONS.md` sections covering setup, revocation, and what to do when a
 delivery is `:unknown`.
 
-**Exit:** the CLI surface test (the repo already pins the subcommand list), a schema-1
-directory loading unchanged, and a `doctor` run that names each misconfiguration
-distinctly.
+**Exit:** pinned CLI surface test; schema-1 directory loads unchanged; migration preserves
+a backup and refuses partial writes; bootstrap prints but does not persist bot id; doctor
+names wrong bot id, webhook/poller conflict, permissions, token, TLS, and adapter absence.
 
 ### Slice J — evaluation
 
@@ -177,7 +181,7 @@ regenerated, roadmap updated.
 |---|---|
 | 23 | The same `update_id` delivered twice, concurrently and across a restart; one logical turn commits |
 | 24 | Property test: the token never appears in a checkpoint, store row, stream part, emitted event, exception message or `inspect` |
-| 21 / 57 | Kill at prepare, mid-send, after send and before receipt; converge or stop `:unknown`, never a blind resend of an approval prompt |
+| 21 / 57 | Kill at prepare, mid-send, after send and before receipt; edits converge, sends stop `:unknown`, and neither is blindly retried |
 | 44 / 56 | A channel request, a scheduled occurrence, a stream event and one graph's `StreamPart`s concurrently; each uses its own contract |
 | 53 | Two messages during a live turn plus a `/redirect`; FIFO holds, the redirect reconciles |
 | 58 | The adversarial approval suite from slice H |
@@ -194,9 +198,10 @@ needs an explicit answer in code rather than a rescue:
 1. **A remote peer that is simultaneously the credential holder's counterparty and the
    attacker's channel.** Every field from an update is untrusted, including ones that look
    structural (`chat.type`, `from.is_bot`, forum `message_thread_id`).
-2. **An ack that must lag durability.** The cursor is the only place where "we told the
-   remote we are done" can outrun "we recorded it", and it is the only place where a bug
-   silently loses a user's message. It gets its own test file.
+2. **Remote confirmation happens on the next poll.** A persisted `next_offset` is safe
+   only after the complete returned prefix has durable dispositions. The next
+   `getUpdates(offset:)` confirms it remotely. This ordering gets its own test file;
+   there is no invented acknowledge API.
 3. **An effect with no reconciliation query.** Documented in `docs/LIMITATIONS.md` rather
    than papered over.
 
@@ -204,8 +209,10 @@ needs an explicit answer in code rather than a rescue:
 
 - No webhook server. A public HTTPS listener is a second attack surface and a deployment
   requirement; long polling needs neither.
-- No media pipeline. Inbound non-text is refused typed; outbound overflow is one `.md`
-  attachment.
+- No media pipeline. Inbound non-text is refused typed; outbound overflow is explicitly
+  truncated in chat with a local `tamoz show` recovery path.
+- No group/supergroup/channel/forum support. V1 is private-chat-only until output
+  classification and changing membership have a separate accepted design.
 - No second notification abstraction. `Tamoz::Notifier` stays what it is; deliveries are
   outbox rows.
 - No `comms.notify` model capability. `Capability::BUILT_IN_SOURCES` is a closed set of
@@ -217,29 +224,34 @@ needs an explicit answer in code rather than a rescue:
 
 | Slice | Size | Depends on |
 |---|---|---|
-| A values and seam | M | clause acceptance |
-| B store | M | A |
-| C admission | M | A, B |
-| D transport | L | A |
-| E gateway | L | B, C, D |
-| F outbox and journal | L | B, E |
-| G rendering | M | A |
-| H approvals | L | E, F, G |
-| I CLI and config | M | E |
+| A exact decisions | M | clause acceptance, prerequisite 3 |
+| B values and seams | M | A |
+| C store | L | B |
+| D admission | M | B, C |
+| E rendering and worker sink | L | A, B, C |
+| F transport | L | B |
+| G gateway/outbox/journal | L | C, D, E, F |
+| H deny callback | L | A, C, D, E, F, G |
+| I CLI and config | M | D, G, H |
 | J evaluation | M | all |
 
-D and G have no dependency on each other and can run in parallel if two people are on it.
-H is the slice that must not be rushed; it is the only one that can widen authority.
+After B, C and F can proceed independently; after C, D and E can proceed independently.
+H is the highest-risk binding slice even though it can only deny.
 
 ## 8. Stop / redesign criteria
 
 Stop and redesign if any of these becomes true during the build:
 
-- a slice needs to change `Worker`, `Session`, or the request-inbox semantics;
-- the gateway needs the model credential, the toolbox, or the workspace path for any
-  reason;
-- an approval path needs to be honoured without all five checks in design §9;
+- a slice needs to change `Session`, `DurableRunner`, request-inbox semantics, or `Worker`
+  beyond the approved delivery/decision seams;
+- the gateway needs a model credential value, toolbox, or workspace file for any reason;
+- a callback path needs to be honoured without all six checks in design §9, or any chat
+  path can grant approval;
 - the closed command table needs an escape hatch;
+- production configuration can redirect the bot token away from the exact Telegram API
+  origin;
+- capacity pressure can discard a terminal delivery or advance an offset past an update
+  without a durable disposition;
 - delivery ambiguity needs to be resolved by guessing;
 - `tamoz-comms` needs a network dependency, or `tamoz-telegram` needs `tamoz-agent`.
 
@@ -255,11 +267,11 @@ to add an exception.
    durable turn → answer, with the worker on a real model, at least once — the roadmap's
    own standing complaint is that nothing has been proven against a real model, and a
    channel is exactly the feature where a scripted model hides the problems.
-4. The `kill -9` matrix from slice E passes at every seam.
+4. The `kill -9` matrix from slice G passes at every seam.
 5. The adversarial approval suite from slice H passes with both safety counters at zero.
 6. Scorecard cases 11–16 pass with zero hard safety counters.
-7. `rake ci_full` green in both locales — this slice touches durability, packaging and
-   evidence, which is exactly the set the gate policy names.
+7. `rake ci_full` green in both locales, plus `rubocop` and `enola check` — this feature
+   touches durability, packaging, boundaries, and evidence.
 8. `docs/LIMITATIONS.md` records the delivery-ambiguity boundary, and
    `docs/OPERATIONS.md` records revocation and `:unknown`-delivery recovery.
 9. An independent fresh-context review of the admission and approval boundaries has run
