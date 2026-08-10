@@ -40,8 +40,37 @@ module Tamoz
           'namespaces' => count(transaction, thread, prefix, 'namespaces'),
           'checkpoints' => count(transaction, thread, prefix, 'checkpoints'),
           'requests' => count(transaction, thread, prefix, 'requests'),
-          'effects' => count(transaction, thread, prefix, 'effects')
+          'effects' => count(transaction, thread, prefix, 'effects'),
+          'comms_routes' => count_comms_route(transaction, thread, prefix),
+          'comms_requests' => count(transaction, thread, prefix, 'comms_requests'),
+          'comms_decisions' => count(transaction, thread, prefix, 'comms_decisions'),
+          'comms_prompts' => count(transaction, thread, prefix, 'comms_approval_prompts'),
+          'comms_outbox' => count_comms_outbox(transaction, thread, prefix)
         }.freeze
+      end
+
+      # Invariant 54: comms rows are counted and purged EXPLICITLY — the
+      # foreign-key cascade is not accepted as proof. Conversations and outbox
+      # rows reference the thread through the route; the rest carry thread_id.
+      def self.count_comms_route(transaction, thread, prefix)
+        transaction.scalar(
+          "#{prefix}.count.comms_routes",
+          'SELECT COUNT(*) FROM tamoz_comms_conversations WHERE thread_id = ?',
+          [thread]
+        )
+      end
+
+      def self.count_comms_outbox(transaction, thread, prefix)
+        transaction.scalar(
+          "#{prefix}.count.comms_outbox",
+          <<~SQL,
+            SELECT COUNT(*) FROM tamoz_comms_outbox o
+            JOIN tamoz_comms_conversations c
+              ON c.surface_id = o.surface_id AND c.conversation_id = o.conversation_id
+            WHERE c.thread_id = ?
+          SQL
+          [thread]
+        )
       end
 
       def self.count(transaction, thread, prefix, table)

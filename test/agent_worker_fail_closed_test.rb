@@ -21,6 +21,8 @@ class AgentWorkerFailClosedTest < Minitest::Test
     )
     adapter = runtime.adapter
     adapter.define_singleton_method(:store) { raise IOError, 'the disk went away' }
+    adapter.define_singleton_method(:transaction) { raise IOError, 'the disk went away' }
+    adapter.define_singleton_method(:read) { raise IOError, 'the disk went away' }
     yield runtime
   ensure
     runtime&.close

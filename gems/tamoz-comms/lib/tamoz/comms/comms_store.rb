@@ -3,40 +3,60 @@
 module Tamoz
   module Comms
     # Structural contract for the channel store (design §13). `tamoz-sqlite`
-    # implements it as an optional module loaded only when explicitly required
-    # (dependency rule 9, exactly as StreamStore is implemented today); the
-    # integration layer that loads both verifies the CONTRACT_VERSION pair, and
-    # `tamoz-evals` audits it.
+    # implements it as an explicitly required module (dependency rule 9, exactly
+    # as StreamStore is implemented today); the integration layer that loads
+    # both verifies the CONTRACT_VERSION pair, and `tamoz-evals` audits it.
     #
-    # Every primitive is transaction-bound and names its idempotency/conflict
-    # result. The signatures below ARE the contract — the bodies raise because
-    # a contract module has nothing to implement.
+    # Every primitive is transaction-bound, names its idempotency/conflict
+    # result, and binds the caller's clock (`now:`) so behavior is
+    # deterministic under an injected clock and kill-consistent. Admission
+    # shares the request-inbox enqueue seam inside ONE transaction; prompt
+    # consumption inserts its decision in the same transaction (ADR-043).
+    #
+    # The signatures below ARE the contract — the bodies raise because a
+    # contract module has nothing to implement.
     # :reek:UnusedParameters, :reek:LongParameterList
     module CommsStore
       CONTRACT_VERSION = 1
 
-      # Admit one inbound update AND enqueue its request in one transaction.
-      # @return [:enqueued, :duplicate, :quarantined]
-      def admit_and_enqueue(envelope, surface:, binding:, thread:)
+      # Deploy one surface revision (upsert, digest-addressed).
+      # @return [:deployed, :duplicate]
+      def deploy_surface(descriptor_wire, now:)
         raise NotImplementedError
       end
 
-      # Record a non-request disposition (ignored/rejected/unsupported) durably.
+      # Admit ONE inbound update AND enqueue its turn in one transaction.
+      # `bot_id` is the authenticated surface identity the update arrived on;
+      # `reservation` is the terminal capacity reserved at admission
+      # (invariant 57). The derived request id dedups replays.
+      # @return [:enqueued, :duplicate]
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
+        raise NotImplementedError
+      end
+
+      # Record a non-request disposition durably.
       # @return [:recorded, :duplicate]
-      def disposition_only(envelope, surface:, reason:, control_reply: nil)
+      def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
         raise NotImplementedError
       end
 
-      # Persist the candidate next_offset ONLY after the returned prefix has a
-      # durable disposition.
+      # One fenced poller per authenticated bot; an expired lease is
+      # recoverable.
+      # @return [:acquired, :not_acquirable]
+      def acquire_poller_lease(surface_id:, bot_id:, owner:, fence:, ttl_s:, now:)
+        raise NotImplementedError
+      end
+
+      # Persist the candidate next_offset ONLY after the returned prefix is
+      # durable. Never regresses.
       # @return [:persisted, :behind]
-      def persist_next_offset(surface_id:, bot_id:, next_offset:, expected: nil)
+      def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
         raise NotImplementedError
       end
 
-      # Append one desired delivery to the outbox.
+      # Append one desired delivery to the bounded outbox.
       # @return [:appended, :duplicate, :capacity_refused]
-      def append_delivery(delivery, surface_id:)
+      def append_delivery(delivery_wire, surface_id:, capacity:, now:)
         raise NotImplementedError
       end
 
@@ -46,9 +66,9 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Bind an outbox row to its effect journal entry.
-      # @return [:bound, :conflict]
-      def bind_journal_effect(delivery_id:, effect_key:, execution_id:)
+      # Bind one outbox row to its effect journal entry (design §10).
+      # @return [:bound, :conflict, :missing]
+      def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
         raise NotImplementedError
       end
 
@@ -58,13 +78,14 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Consume one active approval prompt atomically with its decision record.
+      # Consume one ACTIVE prompt and insert its decision in ONE transaction.
       # @return [:consumed, :not_consumable, :missing, :expired]
-      def consume_prompt(reference_digest:, decision:, now:)
+      def consume_prompt(reference_digest:, decision_wire:, now:)
         raise NotImplementedError
       end
 
-      # Revoke one binding; atomically invalidates unused approval prompts.
+      # Revoke one binding; atomically invalidates its unused (inactive)
+      # approval prompts.
       # @return [:revoked, :missing]
       def revoke_binding(correspondent_id:, surface_id:, reason:, now:)
         raise NotImplementedError

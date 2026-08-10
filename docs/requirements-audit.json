@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-10T11:56:48Z",
-  "manifest_requirements": 385,
-  "named_cases_run": 259,
+  "generated_at": "2026-08-10T12:36:16Z",
+  "manifest_requirements": 386,
+  "named_cases_run": 260,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 9,
-    "pass": 361
+    "pass": 362
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -5788,6 +5788,21 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-6",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_6",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

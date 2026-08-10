@@ -744,6 +744,7 @@ EVIDENCE = {
   "MIG-3" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic"},
   "MIG-4" => {test: "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes"},
   "MIG-5" => {test: "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything"},
+  "MIG-6" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",

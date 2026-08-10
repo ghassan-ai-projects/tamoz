@@ -5136,6 +5136,19 @@
       "promotion_exclusion": null
     },
     {
+      "id": "MIG-6",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_6",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "NG-arbitrary-shell",
       "category": "non_goal",
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §1; docs/P15_RELEASE_PLAN.md scope",

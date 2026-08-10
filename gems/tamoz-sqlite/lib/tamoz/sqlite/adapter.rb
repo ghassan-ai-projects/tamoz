@@ -35,13 +35,23 @@ module Tamoz
         StreamStore.new(adapter: self)
       end
 
-      # Slice A: the durable decision store (design §9) over the versioned
-      # Store namespace — every claim/consume is a compare-and-set.
+      # Slice A/C: the durable decision store (design §9) — rows live in
+      # tamoz_comms_decisions so the gateway can consume a prompt and insert
+      # its decision in one transaction.
       def bind_comms_decision_store
         ensure_process!
         raise ClosedError, "SQLite adapter is closed" if closed?
 
-        CommsDecisionStore.new(store)
+        CommsDecisionStore.new(adapter: self)
+      end
+
+      # Slice C: the channel store (design §13) — admission shares the request
+      # inbox enqueue seam, so poll → admit → enqueue lands in the same file.
+      def bind_comms_store(checkpoints)
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        CommsStore.new(adapter: self, checkpoints:)
       end
 
       def initialize(

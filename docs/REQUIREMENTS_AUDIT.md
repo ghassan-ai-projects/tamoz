@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 385 | 259 | 9 | **no** |
+| 386 | 260 | 9 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 9 |
-| pass | 361 |
+| pass | 362 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -386,6 +386,7 @@ generating run.
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything` |
+| `MIG-6` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |

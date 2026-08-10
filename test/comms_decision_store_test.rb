@@ -20,7 +20,7 @@ class CommsDecisionStoreTest < Minitest::Test
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
       begin
-        yield Store.new(adapter.store), adapter
+        yield adapter.bind_comms_decision_store, adapter
       ensure
         adapter&.close
       end
@@ -226,7 +226,7 @@ class CommsDecisionStoreTest < Minitest::Test
 
       reopened = Tamoz::SQLite::Adapter.new(path:)
       begin
-        store = Store.new(reopened.store)
+        store = reopened.bind_comms_decision_store
         found = store.pending_decision_for(
           thread_id: 't1', occurrence_id: 'req-1',
           interrupt_digest: value.interrupt_digest, now: decided_at + 1

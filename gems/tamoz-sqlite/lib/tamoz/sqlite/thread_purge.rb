@@ -39,6 +39,7 @@ module Tamoz
         row = active_tombstone(transaction, id)
         thread = ensure_purgeable!(transaction, row, now)
         counts = ThreadDeletionQueries.counts(transaction, thread, 'thread.purge')
+        delete_comms_rows!(transaction, thread)
         final_report, report_digest = build_final_report(row, counts, now)
         thread_digest = Wire.digest(thread, domain: 'tamoz.sqlite.deleted_thread')
         ThreadDeletionQueries.insert_receipt!(
@@ -138,6 +139,57 @@ module Tamoz
           [thread, id]
         )
         raise CheckpointConflictError, 'thread purge lost' unless transaction.changes == 1
+      end
+
+      # Invariant 54: comms rows are deleted EXPLICITLY — no comms table has a
+      # foreign key to tamoz_threads, so cascade alone would leave orphaned
+      # conversations, outbox rows, requests, decisions and prompts. One
+      # statement per table is the deletion contract.
+      # rubocop:disable Metrics/MethodLength
+      def delete_comms_rows!(transaction, thread)
+        routes = transaction.rows(
+          'thread.purge.comms.routes',
+          <<~SQL,
+            SELECT surface_id, conversation_id FROM tamoz_comms_conversations WHERE thread_id = ?
+          SQL
+          [thread]
+        )
+        routes.each do |route|
+          transaction.execute(
+            'thread.purge.comms.outbox',
+            <<~SQL,
+              DELETE FROM tamoz_comms_outbox WHERE surface_id = ? AND conversation_id = ?
+            SQL
+            [route[0], route[1]]
+          )
+          transaction.execute(
+            'thread.purge.comms.inbound',
+            <<~SQL,
+              DELETE FROM tamoz_comms_inbound WHERE surface_id = ? AND conversation_id = ?
+            SQL
+            [route[0], route[1]]
+          )
+        end
+        transaction.execute(
+          'thread.purge.comms.routes.delete',
+          'DELETE FROM tamoz_comms_conversations WHERE thread_id = ?',
+          [thread]
+        )
+        transaction.execute(
+          'thread.purge.comms.requests.delete',
+          'DELETE FROM tamoz_comms_requests WHERE thread_id = ?',
+          [thread]
+        )
+        transaction.execute(
+          'thread.purge.comms.decisions.delete',
+          'DELETE FROM tamoz_comms_decisions WHERE thread_id = ?',
+          [thread]
+        )
+        transaction.execute(
+          'thread.purge.comms.prompts.delete',
+          'DELETE FROM tamoz_comms_approval_prompts WHERE thread_id = ?',
+          [thread]
+        )
       end
 
       public

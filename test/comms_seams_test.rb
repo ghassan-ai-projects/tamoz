@@ -65,8 +65,10 @@ class CommsSeamsTest < Minitest::Test
     store = Object.new.extend(Comms::CommsStore)
 
     assert_equal 1, Comms::CommsStore::CONTRACT_VERSION
-    assert_raises(NotImplementedError) { store.persist_next_offset(surface_id: 's', bot_id: 1, next_offset: 2) }
-    assert_raises(NotImplementedError) { store.append_delivery(nil, surface_id: 's') }
+    assert_raises(NotImplementedError) do
+      store.persist_next_offset(surface_id: 's', bot_id: 1, next_offset: 2, now: Time.now)
+    end
+    assert_raises(NotImplementedError) { store.append_delivery(nil, surface_id: 's', capacity: 10, now: Time.now) }
     assert_raises(NotImplementedError) do
       store.revoke_binding(correspondent_id: 'telegram:user:1', surface_id: 's', reason: 'x', now: Time.now)
     end
