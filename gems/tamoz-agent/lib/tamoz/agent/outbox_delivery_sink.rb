@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'time'
+require 'json'
 
 require 'tamoz/comms'
 
@@ -56,6 +57,12 @@ module Tamoz
         surface = @store.surface(surface_id: @surface_id)
         return nil unless surface
 
+        if kind == 'approval_request'
+          return nil unless surface.fetch('approvals').fetch('mode') == 'deny_only'
+
+          return push_approval_prompt(event, route, surface)
+        end
+
         rendering = surface.fetch('rendering')
         parts = @rendering.plain(event.fetch(:text).to_s,
                                  max_parts: rendering.fetch('max_parts'),
@@ -73,6 +80,34 @@ module Tamoz
             surface_id: @surface_id, capacity: @capacity, now: Time.now.utc
           )
         end
+        :accepted
+      end
+
+      private
+
+      # v1 deny-only (ADR-043): a fresh single-use prompt is stored inactive,
+      # and the control delivery's markup carries the plaintext reference so
+      # the gateway can activate it after the send receipt is durable.
+      def push_approval_prompt(event, route, surface)
+        reference, prompt = Comms::ApprovalPrompt.build(
+          thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
+          interrupts: event.fetch(:interrupts),
+          correspondent_id: route.fetch('correspondent_id'),
+          conversation_id: route.fetch('conversation_id'),
+          prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
+        )
+        @store.insert_prompt(prompt.wire)
+        markup = JSON.generate('reference' => reference, 'action' => 'deny')
+        @store.append_delivery(
+          Comms::Delivery.build(
+            conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
+            text: 'An action needs your approval.', part_index: 0, part_count: 1,
+            journaled: true, render_version: @rendering::RENDER_VERSION,
+            content_digest: @rendering.content_digest('approval_request'),
+            markup:
+          ).wire,
+          surface_id: @surface_id, capacity: @capacity, now: Time.now.utc
+        )
         :accepted
       end
     end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'time'
+require 'json'
 
 require 'tamoz/comms'
 
@@ -92,7 +93,7 @@ module Tamoz
         when :request
           admit_request(envelope, decision, now:)
         when :decision
-          @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'decision', reason: 'callback', now:)
+          resolve_callback(envelope, now:)
         when :rejected
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'rejected',
                                             reason: decision.reason.to_s, now:)
@@ -108,6 +109,34 @@ module Tamoz
       end
 
       private
+
+      # v1 deny-only (ADR-043): a callback press carries the plaintext
+      # reference; its domain-separated digest resolves exactly one ACTIVE
+      # prompt, and consumption inserts a deny decision for the worker in the
+      # SAME transaction. A replayed reference, an expiry, or a swapped
+      # binding never resolves (invariant 58).
+      def resolve_callback(envelope, now:)
+        reference = envelope.fetch('text').to_s
+        digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
+        prompt = @store.prompt(reference_digest: digest)
+
+        unless prompt && prompt.fetch('status') == 'active'
+          @store.disposition_only(envelope, surface_id:, bot_id:,
+                                            disposition: 'ignored', reason: 'unknown_reference', now:)
+          return
+        end
+
+        decision = Comms::DecisionRecord.build(
+          thread_id: prompt.fetch('thread_id'), occurrence_id: prompt.fetch('occurrence_id'),
+          interrupts: [], interrupt_digest: prompt.fetch('interrupt_digest'),
+          direction: :deny, actor_kind: 'telegram_user',
+          actor_id: envelope.fetch('correspondent_id'), source: 'telegram',
+          decided_at: now, ttl_s: @descriptor.approvals.fetch(:prompt_ttl_s)
+        )
+        outcome = @store.consume_prompt(reference_digest: digest, decision_wire: decision.wire, now:)
+        @store.disposition_only(envelope, surface_id:, bot_id:,
+                                          disposition: 'decision', reason: outcome.to_s, now:)
+      end
 
       # Authority binding precedes work (design §5): the deterministic thread
       # is created and the surface's profile bound write-once BEFORE the first
@@ -172,7 +201,18 @@ module Tamoz
             delivery_id: row.fetch('delivery_id'), status: outcome[:status],
             receipt: outcome[:receipt], now:
           )
+          activate_after_receipt(row, now:) if outcome[:status] == 'succeeded'
         end
+      end
+
+      # ADR-043: an approval prompt activates only after its send receipt is
+      # durable. The markup carried the plaintext reference exactly once.
+      def activate_after_receipt(row, now:)
+        return unless row.fetch('kind') == 'approval_request' && row['markup']
+
+        reference = JSON.parse(row.fetch('markup')).fetch('reference')
+        digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
+        @store.activate_prompt(reference_digest: digest, now:)
       end
 
       def send_delivery(row)

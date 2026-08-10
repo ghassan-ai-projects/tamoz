@@ -32,6 +32,10 @@ module Tamoz
     # :reek:LongParameterList -- the fifteen fields ARE the record (see above).
     # :reek:FeatureEnvy -- `==` and the field validators necessarily read the
     #   other value/wire being compared.
+    # :reek:ControlParameter -- `interrupt_digest:` on `build` lets the
+    #   gateway bind the prompt's pre-computed digest to the deny decision it
+    #   records for the same interrupt set (ADR-043); deriving it again from
+    #   an empty interrupt list would forge a different question.
     class DecisionRecord
       DIRECTIONS = %w[approve deny].freeze
       ACTOR_KINDS = %w[os_user telegram_user].freeze
@@ -93,9 +97,10 @@ module Tamoz
       # contract as initialize: every bound fact is part of the record.
       def self.build(
         thread_id:, occurrence_id:, interrupts:, direction:,
-        actor_kind:, actor_id:, source:, decided_at: Time.now.utc, ttl_s: DEFAULT_TTL_S
+        actor_kind:, actor_id:, source:, decided_at: Time.now.utc, ttl_s: DEFAULT_TTL_S,
+        interrupt_digest: nil
       )
-        digest = InterruptDigest.of(interrupts)
+        digest = interrupt_digest || InterruptDigest.of(interrupts)
         direction_text = direction.to_s
         decided = decided_at.utc
         expires = decided + ttl_s

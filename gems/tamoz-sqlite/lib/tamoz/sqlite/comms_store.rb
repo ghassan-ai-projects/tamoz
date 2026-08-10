@@ -240,6 +240,27 @@ module Tamoz
 
       # ===== prompts =====
 
+      # Insert one approval prompt (inactive until its send receipt is
+      # durable; ADR-043). Idempotent on reference_digest.
+      def insert_prompt(prompt_wire)
+        transaction('comms.prompt.insert') do |txn|
+          existing = txn.first('comms.prompt.insert.existing', <<~SQL, [prompt_wire.fetch('reference_digest')])
+            SELECT 1 FROM tamoz_comms_approval_prompts WHERE reference_digest = ?
+          SQL
+          next :duplicate if existing
+
+          txn.execute('comms.prompt.insert', <<~SQL, prompt_binds(prompt_wire))
+            INSERT INTO tamoz_comms_approval_prompts (
+              reference_digest, surface_id, surface_revision, thread_id,
+              occurrence_id, interrupt_digest, correspondent_id, conversation_id,
+              prompt_receipt, status, created_at_ms, activated_at_ms, consumed_at_ms,
+              expires_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          SQL
+          :inserted
+        end
+      end
+
       # Activate one approval prompt only after its send receipt is durable.
       def activate_prompt(reference_digest:, now:)
         transaction('comms.prompt.activate') do |txn|

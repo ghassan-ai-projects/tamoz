@@ -92,6 +92,17 @@ module Tamoz
         value && now_ms(Time.parse(value))
       end
 
+      def prompt_binds(wire)
+        [
+          wire.fetch('reference_digest'), wire['surface_id'], wire['surface_revision'],
+          wire.fetch('thread_id'), wire.fetch('occurrence_id'), wire.fetch('interrupt_digest'),
+          wire.fetch('correspondent_id'), wire.fetch('conversation_id'), wire['prompt_receipt'],
+          wire.fetch('status'), wire_time_ms(wire.fetch('created_at')),
+          wire_time_ms(wire['activated_at']), wire_time_ms(wire['consumed_at']),
+          wire_time_ms(wire.fetch('expires_at'))
+        ]
+      end
+
       def upsert_surface!(txn, descriptor_wire, now)
         txn.execute('comms.surface.deploy.upsert',
                     <<~SQL, [descriptor_wire.fetch('surface_id'), descriptor_wire.fetch('revision'), descriptor_wire.fetch('definition_digest'), JSON.generate(descriptor_wire), now_ms(now), now_ms(now)])
