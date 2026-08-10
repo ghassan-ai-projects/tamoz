@@ -25,7 +25,7 @@ later run.
 | Round | Target / responsibility | Builder | Critic verdict | Gates | Commit |
 |---:|---|---|---|---|---|
 | 0 | Baseline and target freeze | — | complete | architecture baseline pinned; target list frozen | branch created |
-| 1 | Extract five largest eligible production files | five Luna builders | session intermediate FAIL repaired; final parent harsh review PASS | `rake ci` and both UTF-8 `ci_full` gates pass | pending |
+| 1 | Extract five largest eligible production files | five Luna builders | session intermediate FAIL repaired; final parent harsh review PASS | `rake ci` and both UTF-8 `ci_full` gates pass | `ca08439` |
 
 ## Gate ledger
 
