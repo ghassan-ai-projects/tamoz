@@ -183,6 +183,40 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Mcp::VERSION" => {},
           "Tamoz::Mcp::ValidationError" => {}
         },
+        "tamoz-observability" => {
+          "Tamoz::Observability::Catalog" => {},
+          "Tamoz::Observability::ContentPolicy" => {},
+          "Tamoz::Observability::Correlation" => {},
+          "Tamoz::Observability::DuplicateSignalError" => {},
+          "Tamoz::Observability::ObservabilityError" => {},
+          "Tamoz::Observability::Recorder" => {},
+          "Tamoz::Observability::Recorder::Fanout" => {},
+          "Tamoz::Observability::Recorder::Journal" => {},
+          "Tamoz::Observability::Recorder::Memory" => {},
+          "Tamoz::Observability::Recorder::Null" => {},
+          "Tamoz::Observability::SCHEMA_VERSION" => {},
+          "Tamoz::Observability::SchemaEvolutionError" => {},
+          "Tamoz::Observability::Signal" => {},
+          "Tamoz::Observability::SignalCatalog" => {},
+          "Tamoz::Observability::Metrics" => {},
+          "Tamoz::Observability::ModelCall" => {},
+          "Tamoz::Observability::Notifier" => {},
+          "Tamoz::Observability::Cost" => {},
+          "Tamoz::Observability::PricingTable" => {},
+          "Tamoz::Observability::Producer" => {},
+          "Tamoz::Observability::TelemetryReader" => {},
+          "Tamoz::Observability::Trace" => {},
+          "Tamoz::Observability::Usage" => {},
+          "Tamoz::Observability::UnregisteredSignalError" => {},
+          "Tamoz::Observability::ValidationError" => {},
+          "Tamoz::Observability::VERSION" => {}
+        },
+        "tamoz-otel" => {
+          "Tamoz::OTel::AsyncExporter" => {},
+          "Tamoz::OTel::EgressPolicy" => {},
+          "Tamoz::OTel::HTTPExporter" => {},
+          "Tamoz::OTel::VERSION" => {}
+        },
         "tamoz-scheduler" => {
           "Tamoz::Scheduler::ClockRollbackError" => {},
           "Tamoz::Scheduler::GrantIntersector" => {},
@@ -297,7 +331,9 @@ class PublicAPITest < Minitest::Test
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
       Tamoz::Comms::VERSION,
-      Tamoz::Telegram::VERSION
+      Tamoz::Telegram::VERSION,
+      Tamoz::Observability::VERSION,
+      Tamoz::OTel::VERSION
     ]
 
     assert_equal GEM_ROOTS.keys.sort,

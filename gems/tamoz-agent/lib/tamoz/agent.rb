@@ -2,6 +2,7 @@
 
 require "tamoz/graph"
 require "tamoz/tools"
+require "tamoz/observability"
 require_relative "agent/version"
 require_relative "agent/errors"
 require_relative "agent/behavior_version"

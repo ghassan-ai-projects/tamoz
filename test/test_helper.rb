@@ -12,7 +12,7 @@ require "stringio"
 require "tmpdir"
 
 ROOT = Pathname.new(File.expand_path("..", __dir__)).freeze
-GEM_ROOTS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram].to_h do |name|
+GEM_ROOTS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram tamoz-observability tamoz-otel].to_h do |name|
   [name, ROOT.join("gems", name)]
 end.freeze
 
@@ -31,6 +31,8 @@ require "tamoz/scheduler"
 require "tamoz/stream"
 require "tamoz/comms"
 require "tamoz/telegram"
+require "tamoz/observability"
+require "tamoz/otel"
 
 module ArtifactHelpers
   def read_json(path)

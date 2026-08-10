@@ -5,6 +5,7 @@ PATH
       ruby_llm (~> 1.16.0)
       tamoz-comms (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
+      tamoz-observability (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 
@@ -38,6 +39,18 @@ PATH
     tamoz-mcp (0.1.0.alpha.1)
       mcp (~> 1.1)
       tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-observability
+  specs:
+    tamoz-observability (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-otel
+  specs:
+    tamoz-otel (0.1.0.alpha.1)
+      tamoz-observability (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-scheduler
@@ -226,6 +239,8 @@ DEPENDENCIES
   tamoz-evals!
   tamoz-graph!
   tamoz-mcp!
+  tamoz-observability!
+  tamoz-otel!
   tamoz-scheduler!
   tamoz-sqlite!
   tamoz-stream!
@@ -293,6 +308,8 @@ CHECKSUMS
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
   tamoz-mcp (0.1.0.alpha.1)
+  tamoz-observability (0.1.0.alpha.1)
+  tamoz-otel (0.1.0.alpha.1)
   tamoz-scheduler (0.1.0.alpha.1)
   tamoz-sqlite (0.1.0.alpha.1)
   tamoz-stream (0.1.0.alpha.1)

@@ -29,7 +29,7 @@ module Tamoz
       SUBCOMMANDS = %w[
         ask resume continue list show follow-up follow_up followup
         redirect cancel resolve profile
-        init queue worker status schedule approve comms config
+        init queue worker status schedule approve observe trace comms config
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
@@ -125,6 +125,8 @@ module Tamoz
             when "approve" then cmd_approve(options, argv)
             end
           end
+        when "observe" then catch(:tamoz_subcommand_help) { cmd_observe(options, argv) }
+        when "trace" then catch(:tamoz_subcommand_help) { cmd_trace(options, argv) }
         else
           raise OptionParser::InvalidArgument, "unknown subcommand: #{subcommand}"
         end

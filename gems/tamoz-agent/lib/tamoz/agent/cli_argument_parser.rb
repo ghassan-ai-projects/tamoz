@@ -52,7 +52,7 @@ module Tamoz
 
               Interactive:  ask, resume, continue, list, show, follow-up, redirect,
                             cancel, resolve, profile
-              Unattended:   init, queue, worker, status, schedule, approve
+              Unattended:   init, queue, worker, status, schedule, approve, observe, trace
 
               Run 'tamoz <subcommand> --help' for a subcommand's own options.
             BANNER

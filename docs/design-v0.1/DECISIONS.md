@@ -425,6 +425,47 @@ step-up identity decision.
 decision tuple for callbacks. It binds no actor, interrupt digest, expiry, or consumption,
 so one decision could answer a later interrupt set in the same occurrence.
 
+### ADR-044 — Observability is a contract gem plus per-exporter adapter gems
+**Status:** accepted 2026-08-10.
+The observability contract gem owns the signal catalog, recorder, journal, and exporter
+adapter seam; each exporter is a separate adapter gem that must pass the contract gem's
+conformance suite. The exporter list is a closed set in the contract gem; adding an
+exporter is a contract-gem release, not a plugin (ADR-014 stands).
+*Alternative rejected:* an exporter plugin API. It would make the export seam an
+unversioned extension point with no conformance gate, repeating the plugin rejection of
+ADR-014 on the one surface that carries telemetry out of the process.
+
+### ADR-045 — The observability gems add no durable table and no second source of truth
+**Status:** accepted 2026-08-10.
+History is the existing durable record plus a bounded rotating journal; authoritative
+traces are reconstructed. A telemetry writer would contend with the fenced writer that
+guards correctness. Model usage capture is **not** an exception to this: it is a
+separately authorized persistence change (OBSERVABILITY_DESIGN.md §10) that observability
+consumes. Operator authority records created by phase 5 (silences, rule revisions) are not
+telemetry and are out of scope for this ADR (§18.4).
+*Alternative rejected:* a durable telemetry table written alongside the runtime record.
+Two writers of overlapping truth would drift, and the telemetry writer would contend with
+the fenced writer the correctness model depends on.
+
+### ADR-046 — Content capture is off by default, per class, and refused for restricted classifications
+**Status:** accepted 2026-08-10.
+Prompts, tool arguments, tool results, plan and review text are excluded from every
+signal unless a named, digest-bound, classification-permitted policy admits them per
+class within byte bounds; omitted content is represented by a digest and size, and every
+signal records the governing policy digest.
+*Alternative rejected:* capture content by default and scrub at export. Scrubbing after
+the fact cannot prove what never reached the journal, and a default-on surface makes
+invisible capture one misconfiguration away.
+
+### ADR-047 — Sampling applies to export only and never to safety-bearing signals
+**Status:** accepted 2026-08-10.
+The journal records everything; the export retention decision is taken when the exporter
+reads the journal, so a turn that pauses for days cannot be lost to an in-memory window.
+Safety-bearing signals are never sampled.
+*Alternative rejected:* sampling at record time against an in-memory window. A paused or
+resumed turn outlives any such window, and dropping safety-bearing evidence at record
+time would make the durable record lie about what happened.
+
 ## Rejected, with reasons
 
 | Rejected | Why |

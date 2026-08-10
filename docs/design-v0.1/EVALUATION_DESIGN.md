@@ -11,7 +11,7 @@ precedence, protected holdouts, execution profiles, baseline comparison, and rel
 
 ## 1. Conformance
 
-The 55 clauses in [INVARIANTS.md](INVARIANTS.md) are named shared examples. Third-party
+The 61 clauses in [INVARIANTS.md](INVARIANTS.md) are named shared examples. Third-party
 adapters run the same examples unchanged.
 
 Published suites:
