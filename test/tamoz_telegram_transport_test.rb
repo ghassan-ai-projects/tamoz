@@ -156,6 +156,40 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  # The mirror image of the send case: a read that times out observed nothing
+  # and changed nothing, so it is typed TRANSIENT and the caller repeats it.
+  # Typing it as ambiguous would say an effect may already have happened, and
+  # a gateway that cannot tell the two apart either stalls or duplicates.
+  def test_a_poll_timeout_is_transient_not_ambiguous
+    with_transport do |transport, server|
+      server.script('getUpdates', body: { 'ok' => true, 'result' => [] }, times: 1, delay_s: 2.0)
+
+      error = assert_raises(Comms::TransientTransportError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 0)
+      end
+      refute_kind_of Comms::AmbiguousDeliveryError, error
+    end
+  end
+
+  # 409 is the remote telling us another getUpdates (or a webhook) owns this
+  # bot's update stream. `PollerConflictError` exists for exactly that; leaving
+  # it as a generic CommsError means the one condition the type was defined for
+  # is the one condition that never raises it.
+  def test_a_competing_poller_is_a_named_conflict_not_a_generic_error
+    with_transport do |transport, server|
+      server.script('getUpdates', status: 409, body: {
+        'ok' => false, 'error_code' => 409,
+        'description' => 'Conflict: terminated by other getUpdates request'
+      }, times: 1)
+
+      error = assert_raises(Comms::PollerConflictError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 0)
+      end
+      assert_includes error.message, 'other getUpdates request',
+                      "the API's own description names the competitor"
+    end
+  end
+
   def test_signal_answers_the_callback_query
     with_transport do |transport, server|
       server.script('answerCallbackQuery', body: { 'ok' => true, 'result' => true }, times: 1)

@@ -22,9 +22,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
           edge :finish, Tamoz::END
         end
         checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        sink = Tamoz::Agent::OutboxDeliverySink.new(
-          adapter:, checkpoints:, surface_id: 'telegram-ops', capacity: 10
-        )
+        sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
         yield sink, adapter, checkpoints
       ensure
         adapter&.close
@@ -66,7 +64,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     ).wire
     store.admit_and_enqueue(
       envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                thread:, profile_id: 'ops', reservation: 1, now:
+                thread:, profile_id: 'ops', reservation: 1, capacity: 500, now:
     )
   end
 
@@ -127,9 +125,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
   def test_the_default_worker_runtime_sink_is_nil_safe
     with_engine do |_sink, adapter, checkpoints|
       store = adapter.bind_comms_store(checkpoints)
-      sink = Tamoz::Agent::OutboxDeliverySink.new(
-        adapter:, checkpoints:, surface_id: 'telegram-ops', capacity: 10
-      )
+      sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
 
       assert_nil sink.push(thread_id: 'tg.x', kind: 'request.completed', text: '')
       assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])

@@ -141,13 +141,15 @@ class SQLiteCommsStoreTest < Minitest::Test
     with_engine do |store, _adapter, checkpoints|
       result = store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now:
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
+                  capacity: 500, now:
       )
 
       assert_equal :enqueued, result
       assert_equal :duplicate, store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1, now: now + 1
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
+                  capacity: 500, now: now + 1
       )
 
       requests = checkpoints.request_history(thread_id: 'tg.ops.abc')

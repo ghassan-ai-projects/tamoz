@@ -29,11 +29,12 @@ class CommsAdmissionTest < Minitest::Test
     )
   end
 
-  def envelope(kind: 'text', text: 'hello', conversation: 'telegram:chat:22222222')
+  def envelope(kind: 'text', text: 'hello', conversation: 'telegram:chat:22222222',
+               correspondent: 'telegram:user:11111111')
     Comms::InboundEnvelope.new(
       surface_id: 'telegram-ops', surface_revision: 1, update_id: 1,
       raw_payload_hash: 'a' * 64, parser_version: 1, kind:,
-      correspondent_id: 'telegram:user:11111111', conversation_id: conversation,
+      correspondent_id: correspondent, conversation_id: conversation,
       text:, observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
     ).wire
   end
@@ -66,10 +67,21 @@ class CommsAdmissionTest < Minitest::Test
   end
 
   def test_an_unbound_sender_is_ignored_not_rejected
-    decision = Comms::Admission.decide(envelope, surface: surface, binding: nil)
+    decision = Comms::Admission.decide(envelope(correspondent: 'telegram:user:99999999'),
+                                       surface: surface, binding: nil)
 
     assert_equal :ignored, decision.disposition
     assert_equal :unbound, decision.reason
+  end
+
+  # The allowlist is the admission (design §7): a listed id is admitted
+  # WITHOUT a pairing binding — the binding records operator pairing, the
+  # descriptor list records operator configuration.
+  def test_an_allowlisted_sender_is_admitted_without_a_binding
+    decision = Comms::Admission.decide(envelope, surface: surface, binding: nil, conversation: nil)
+
+    assert_equal :request, decision.disposition
+    refute_nil decision.thread_id
   end
 
   def test_a_disabled_surface_rejects_with_a_notice

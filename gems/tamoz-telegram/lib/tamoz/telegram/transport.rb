@@ -51,6 +51,7 @@ module Tamoz
           'text' => delivery.text
         }
         params['reply_to_message_id'] = delivery.reply_to if delivery.reply_to
+        attach_markup(params, delivery) if delivery.markup
         method = delivery.operation == 'edit_message' ? 'editMessageText' : 'sendMessage'
         result = @client.call(method, params)
         {
@@ -67,6 +68,16 @@ module Tamoz
       end
 
       private
+
+      # v1 deny-only (ADR-043): the control delivery's markup carries the
+      # single-use reference as an inline keyboard button — the plaintext that
+      # activates the prompt only after this send receipt is durable.
+      def attach_markup(params, delivery)
+        reference = JSON.parse(delivery.markup).fetch('reference')
+        params['reply_markup'] = {
+          'inline_keyboard' => [[{ 'text' => 'Deny', 'callback_data' => reference }]]
+        }
+      end
 
       def chat_id(conversation_id)
         conversation_id.delete_prefix('telegram:chat:')

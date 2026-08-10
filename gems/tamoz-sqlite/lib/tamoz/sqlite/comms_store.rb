@@ -79,11 +79,16 @@ module Tamoz
       # Admit ONE inbound update AND enqueue its turn in one transaction. The
       # derived request id is the dedup key; a replayed update is :duplicate.
       # `bot_id` is the authenticated surface identity the update arrived on.
+      # Intake is bounded by the surface's outbox capacity (design §12,
+      # invariant 57): pending+claimed deliveries plus the reservations of
+      # admitted-but-unfinished requests must stay under `capacity`, so the
+      # reserved terminal row can always append.
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
         transaction('comms.admit.enqueue') do |txn|
           next :duplicate if inbound_row(txn, envelope_wire, bot_id)
+          next :capacity_refused if capacity_saturated?(txn, surface_id, reservation, capacity)
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'request', reason: 'accepted', now:)
           request_id = request_id_for(envelope_wire, bot_id)
@@ -127,6 +132,13 @@ module Tamoz
       end
       # rubocop:enable Lint/UnusedMethodArgument
 
+      # The admission capacity gate (invariant 57): the new reservation must
+      # fit alongside pending+claimed deliveries and the other open
+      # reservations.
+      def capacity_saturated?(txn, surface_id, reservation, capacity)
+        pending_claimed_count(txn, surface_id) + open_reservations(txn, surface_id) + reservation > capacity
+      end
+
       # ===== poll state =====
 
       # One fenced poller per authenticated bot (design §13): a live lease is
@@ -145,9 +157,13 @@ module Tamoz
       end
 
       # Persist the candidate next_offset ONLY after the returned prefix is
-      # durable. Never regresses: an offset behind the stored one is :behind.
+      # durable. Never regresses: an offset behind the stored one is :behind,
+      # and a nil candidate (an empty poll prefix) is :unchanged — it must
+      # never clobber the durable offset.
       def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
         transaction('comms.poll.offset') do |txn|
+          next :unchanged if next_offset.nil?
+
           stored = txn.first('comms.poll.offset.stored', <<~SQL, [bot_id])
             SELECT next_offset FROM tamoz_comms_poll_state WHERE bot_id = ?
           SQL
@@ -188,8 +204,22 @@ module Tamoz
 
       # ===== outbox and routes (delegated) =====
 
-      def append_delivery(delivery_wire, surface_id:, capacity:, now:)
-        @outbox.append_delivery(delivery_wire, surface_id:, capacity:, now:)
+      def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
+        @outbox.append_delivery(delivery_wire, surface_id:, capacity:,
+                                               reserved_request_id:, now:)
+      end
+
+      # Terminal projection is durable; release the request's reservation so
+      # its slots return to intake (design §12: unused slots release only
+      # after terminal projection is durable).
+      def complete_request(thread_id:, request_id:)
+        transaction('comms.request.complete') do |txn|
+          txn.execute('comms.request.complete', <<~SQL, [thread_id, request_id])
+            UPDATE tamoz_comms_requests SET projection_state = 'completed'
+            WHERE thread_id = ? AND request_id = ? AND projection_state = 'admitted'
+          SQL
+          txn.changes == 1 ? :released : :not_admitted
+        end
       end
 
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
@@ -347,6 +377,14 @@ module Tamoz
             SELECT #{ROUTE_COLUMNS.join(', ')} FROM tamoz_comms_conversations
             WHERE surface_id = ? ORDER BY bound_at_ms DESC
           SQL
+        end
+      end
+
+      # The active binding that admitted one conversation's correspondent
+      # (the prompt needs the correspondent to scope its single-use digest).
+      def binding_by_conversation(surface_id:, conversation_id:)
+        bindings(surface_id:).find do |binding|
+          binding.fetch('conversation_id') == conversation_id && binding.fetch('status') == 'active'
         end
       end
 

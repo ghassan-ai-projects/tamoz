@@ -91,6 +91,49 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # A long poll that times out is the normal weather of long polling, not the
+  # end of the gateway: nothing was observed, the durable offset is untouched,
+  # and the very next pass still admits the message that was waiting.
+  def test_a_transient_poll_failure_does_not_end_the_gateway
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(101, text: 'hello')])
+      transport.transient_polls = 2
+
+      assert_equal :transient, gateway.serve_once
+      assert_equal :transient, gateway.serve_once
+      assert_nil store.poll_offset(bot_id: 7_463_512_990),
+                 'a read that observed nothing must not move the durable offset'
+
+      assert_equal :served, gateway.serve_once
+      assert_equal 102, store.poll_offset(bot_id: 7_463_512_990)
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      refute_nil store.request_conversation(thread_id: thread),
+                 'the message waiting through the blip must still become a turn'
+    end
+  end
+
+  # `stop` must END the loop, not merely drop the lease. A gateway that
+  # released its lease and kept polling would be reading an update stream it
+  # no longer owns — the exact condition Telegram answers with a 409.
+  def test_stop_ends_the_serve_loop_and_releases_the_lease
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([])
+
+      runner = Thread.new { gateway.serve_loop(interval_s: 0.01) }
+      Timeout.timeout(5) { sleep 0.05 until store.poll_state(bot_id: 7_463_512_990)&.fetch('poller_owner_id') }
+
+      gateway.stop
+      outcome = Timeout.timeout(5) { runner.value }
+
+      assert_equal :stopped, outcome, 'the serve loop must end when asked'
+      assert_nil store.poll_state(bot_id: 7_463_512_990).fetch('poller_owner_id'),
+                 'a stopped gateway must not keep the poller lease'
+    end
+  end
+
   def test_an_unknown_command_gets_a_typed_control_reply
     with_gateway do |gateway, transport, store|
       seed_binding(store)
@@ -193,10 +236,11 @@ class CommsGatewayTest < Minitest::Test
   # A scripted Transport for the loop: batches of raw updates, optional
   # receipt, optional ambiguity.
   class ScriptedTransport
-    attr_accessor :receipt, :raise_ambiguous
+    attr_accessor :receipt, :raise_ambiguous, :transient_polls
 
     def initialize
       @updates = []
+      @transient_polls = 0
     end
 
     def batch(updates)
@@ -205,6 +249,11 @@ class CommsGatewayTest < Minitest::Test
 
     # rubocop:disable Lint/UnusedMethodArgument -- the seam signature.
     def poll(next_offset:, limit:, timeout_s:)
+      if @transient_polls.positive?
+        @transient_polls -= 1
+        raise Comms::TransientTransportError, 'long poll timed out'
+      end
+
       ids = @updates.map { |update| update.fetch('update_id') }
       {
         updates: @updates.map { |update| normalize(update) },

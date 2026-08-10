@@ -22,20 +22,26 @@ module Tamoz
         @adapter = adapter
       end
 
-      # Append one desired delivery. Bounded: pending+claimed rows at capacity
-      # are :capacity_refused; the derived id dedups re-appends.
-      def append_delivery(delivery_wire, surface_id:, capacity:, now:)
+      # Append one desired delivery. Bounded (invariant 57, design §12):
+      # pending+claimed rows at capacity are :capacity_refused; the derived id
+      # dedups re-appends. A terminal/prompt row passes its request's
+      # reservation, so only the OTHER admitted requests' reservations count —
+      # the reserved terminal answer can always append. A control row has no
+      # reservation and refuses when total slots are at capacity.
+      def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
         transaction('comms.outbox.append') do |txn|
           existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
             SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
           SQL
           next :duplicate if existing
 
-          pending = txn.scalar('comms.outbox.append.count', <<~SQL, [surface_id])
-            SELECT COUNT(*) FROM tamoz_comms_outbox
-            WHERE surface_id = ? AND status IN ('pending', 'claimed')
-          SQL
-          next :capacity_refused if pending >= capacity
+          pending = pending_claimed_count(txn, surface_id)
+          reserved = if reserved_request_id
+                       [open_reservations(txn, surface_id) - reservation_of(txn, reserved_request_id), 0].max
+                     else
+                       open_reservations(txn, surface_id)
+                     end
+          next :capacity_refused if pending + reserved + 1 > capacity
 
           txn.execute('comms.outbox.append', <<~SQL, outbox_binds(delivery_wire, surface_id, now))
             INSERT INTO tamoz_comms_outbox (

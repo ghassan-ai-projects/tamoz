@@ -23,6 +23,14 @@ module Tamoz
     class AmbiguousDeliveryError < CommsError
     end
 
+    # An IDEMPOTENT read did not complete — a long poll that timed out, a
+    # dropped connection. Nothing was observed and nothing was persisted, so
+    # the caller retries from unchanged durable state. This is the normal
+    # weather of long polling, and it is precisely NOT AmbiguousDeliveryError:
+    # that one says an effect may already have happened.
+    class TransientTransportError < CommsError
+    end
+
     # The remote surface rate-limited the caller; `retry_after` carries the
     # authoritative server delay.
     class ThrottledError < CommsError

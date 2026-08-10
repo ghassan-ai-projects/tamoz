@@ -71,7 +71,14 @@ module Tamoz
         direct = surface.admission.fetch(:direct)
         case direct
         when 'allowlist'
-          return request_disposition(envelope, surface:, conversation:) if binding&.fetch('status') == 'active'
+          # The configured list IS the admission (design §7: explicit numeric
+          # ids are admitted); an approved pairing binding is the dynamic
+          # operator addition to it. An empty allowlist is a configuration
+          # error, not allow-everything.
+          if surface.admission.fetch(:correspondents).include?(envelope.fetch('correspondent_id')) ||
+             binding&.fetch('status') == 'active'
+            return request_disposition(envelope, surface:, conversation:)
+          end
 
           ignore(:unbound)
         when 'pairing'

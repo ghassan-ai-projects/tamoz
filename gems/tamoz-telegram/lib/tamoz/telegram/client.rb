@@ -54,16 +54,37 @@ module Tamoz
           raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(response))
         when Net::HTTPUnauthorized
           raise Comms::AuthenticationError, 'bot token refused'
+        when Net::HTTPConflict
+          # 409 is the remote saying another getUpdates holds this bot, or a
+          # webhook does. `doctor` catches that before serving, but only for
+          # THIS runtime directory: the competitor can be another host or a
+          # webhook set later. Fatal and named, never a retry — two pollers
+          # reading one update stream is a correctness problem.
+          raise Comms::PollerConflictError, conflict_message(response)
         else
           raise Comms::CommsError, "telegram api error #{response.code}"
         end
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT => e
-        raise if idempotent
+        # A read observed nothing and changed nothing, so it is typed transient
+        # and the caller repeats it from unchanged state. A send is the other
+        # case entirely: its outcome is unknown and must never be blindly
+        # retried (design §10).
+        raise Comms::TransientTransportError, "#{method} did not complete (#{e.class})" if idempotent
 
         raise Comms::AmbiguousDeliveryError, "send may or may not have happened (#{e.class})"
       end
 
       private
+
+      # The API's own description names WHICH competitor holds the stream, so
+      # it is worth carrying; a malformed body still gets a usable message.
+      # :reek:UtilityFunction -- a pure parse of the conflict payload.
+      def conflict_message(response)
+        described = JSON.parse(response.body, create_additions: false)['description']
+        described.to_s.empty? ? 'another poller or a webhook holds this bot' : described.to_s
+      rescue JSON::ParserError
+        'another poller or a webhook holds this bot'
+      end
 
       # :reek:UtilityFunction -- a pure parse of the throttle payload.
       def retry_after_from(response)

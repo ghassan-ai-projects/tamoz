@@ -220,6 +220,84 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # The idle sleep must never be handed a negative interval. The window is one
+  # clock read wide, so a single pass almost always wins it — and a worker
+  # polling once a second loses it eventually, dying hours later with an
+  # ArgumentError that names nothing about where it came from.
+  def test_the_idle_sleep_never_goes_negative_when_the_clock_crosses_the_deadline
+    worker = Tamoz::Agent::Worker.new(
+      runtime: nil, session_builder: ->(_thread) {}, emitter: ->(_event) {},
+      poll_interval: 1.0
+    )
+    # now() for the deadline, then a reading BEFORE it, then one PAST it: the
+    # deadline is crossed in exactly the window between the test and the sleep.
+    readings = [0.0, 0.5, 2.0, 2.0, 2.0]
+    clock = Object.new
+    clock.define_singleton_method(:now) { readings.shift || 2.0 }
+
+    with_monotonic_clock(clock) do
+      assert_equal :due, worker.send(:sleep_until_due),
+                   "the idle sleep raised instead of finding the deadline passed"
+    end
+  end
+
+  # Swaps the process clock for a scripted one, and always puts it back.
+  def with_monotonic_clock(clock)
+    original = Tamoz::Clock.method(:monotonic)
+    Tamoz::Clock.define_singleton_method(:monotonic) { clock }
+    yield
+  ensure
+    Tamoz::Clock.define_singleton_method(:monotonic, original)
+  end
+
+  # A REAL SIGTERM to a REAL process. The test below calls `stop!` from an
+  # ordinary thread, which is not the same thing at all: a signal handler runs
+  # in trap context, where `Mutex#synchronize` raises ThreadError. Sending the
+  # signal for real is the only way to prove that a supervisor's stop actually
+  # cancels the turn instead of killing the process with a backtrace.
+  def test_sigterm_stops_the_worker_cleanly_from_a_real_trap_context
+    with_runtime do |rt|
+      script = <<~RUBY
+        require "stringio"
+        require "tamoz/agent"
+        $stdout.sync = true
+        status = Tamoz::Agent::CLI.run(
+          ["--runtime-dir", #{rt.dir.inspect}, "worker", "--json"],
+          out: $stdout, err: $stderr, input: StringIO.new, env: {}
+        )
+        exit status
+      RUBY
+      out_read, out_write = IO.pipe
+      err_read, err_write = IO.pipe
+      pid = Process.spawn(RbConfig.ruby, "-e", script, out: out_write, err: err_write)
+      out_write.close
+      err_write.close
+
+      begin
+        started = nil
+        Timeout.timeout(30) { started = out_read.gets }
+        assert_includes started.to_s, "worker.started", "the child worker never started"
+
+        Process.kill("TERM", pid)
+        _pid, status = Timeout.timeout(30) { Process.wait2(pid) }
+        stderr = err_read.read
+
+        refute_includes stderr, "ThreadError",
+                        "the signal handler ran work that is illegal in trap context"
+        refute_includes stderr, "trap context", "SIGTERM raised out of the trap handler"
+        assert_equal 0, status.exitstatus, "a supervised stop must exit 0, got: #{stderr}"
+      ensure
+        begin
+          Process.kill("KILL", pid)
+        rescue Errno::ESRCH
+          nil
+        end
+        out_read.close
+        err_read.close
+      end
+    end
+  end
+
   # A worker asked to stop stops claiming. It must not be held hostage by its own
   # poll interval — a supervisor that sends SIGTERM expects the process to go.
   def test_stop_request_ends_the_polling_loop_promptly

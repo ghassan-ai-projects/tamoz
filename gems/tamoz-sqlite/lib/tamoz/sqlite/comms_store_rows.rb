@@ -68,6 +68,36 @@ module Tamoz
         )
       end
 
+      # Invariant 57 capacity accounting (design §12): pending+claimed
+      # JOURNALED rows (terminal answers, failures, prompts — the reserved
+      # kinds) consume slots now; ephemeral accepted/status controls are
+      # journaled=false and may be coalesced or dropped, so they do not pin
+      # capacity. The reservations of admitted-but-unfinished requests consume
+      # slots they are entitled to. Admission refuses when the new reservation
+      # would exceed capacity, and a terminal append counts only the OTHER
+      # requests' reservations — its own covers its rows, so the reserved
+      # answer can always append.
+      def pending_claimed_count(txn, surface_id)
+        txn.scalar('comms.admit.capacity.outbox', <<~SQL, [surface_id]).to_i
+          SELECT COUNT(*) FROM tamoz_comms_outbox
+          WHERE surface_id = ? AND journaled = 1 AND status IN ('pending', 'claimed')
+        SQL
+      end
+
+      def open_reservations(txn, surface_id)
+        txn.scalar('comms.admit.capacity.requests', <<~SQL, [surface_id]).to_i
+          SELECT COALESCE(SUM(reservation), 0) FROM tamoz_comms_requests
+          WHERE surface_id = ? AND projection_state = 'admitted'
+        SQL
+      end
+
+      def reservation_of(txn, request_id)
+        txn.scalar('comms.admit.capacity.request', <<~SQL, [request_id]).to_i
+          SELECT reservation FROM tamoz_comms_requests
+          WHERE request_id = ? AND projection_state = 'admitted'
+        SQL
+      end
+
       def inbound_row(txn, envelope_wire, bot_id)
         txn.first('comms.admit.inbound.existing',
                   <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')])

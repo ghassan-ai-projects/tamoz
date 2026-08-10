@@ -343,7 +343,7 @@ module Tamoz
         emit("request.#{granted ? "approved" : "denied"}",
              thread: thread_id, request_id: occurrence_id, actor: decision.actor_id)
         notify_sink(thread_id, granted ? "request.approved" : "request.denied",
-                    granted ? "Approved." : "Denied.")
+                    granted ? "Approved." : "Denied.", request_id: occurrence_id)
         unpark(thread_id)
         session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
                                 owner_id: owner_id)
@@ -411,14 +411,19 @@ module Tamoz
         case view.status
         when :completed
           @monitor.synchronize { @processed += 1 }
-          notify_sink(thread_id, "request.completed", view.state.to_s)
+          notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed")
           PROGRESSED
         when :failed
-          notify_sink(thread_id, "request.failed", view.respond_to?(:error) ? view.error.to_s : "failed")
+          # A correspondent gets a generic phrase, never the failure's own text:
+          # the reason belongs in the worker's event stream, where an operator
+          # reads it, not in a chat a hostile plan could use to echo content
+          # back. The turn still owes the conversation a terminal message.
+          notify_sink(thread_id, "request.failed", "That turn failed. Nothing was changed.",
+                      request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.failed",
@@ -430,7 +435,8 @@ module Tamoz
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused")
           else
-            notify_sink(thread_id, "request.approval_request", "Approval requested.")
+            notify_sink(thread_id, "request.approval_request", "Approval requested.",
+                        request_id: occurrence_id, interrupts: interrupt_facts(view))
             emit_approval_request(thread_id, occurrence_id, view)
           end
           park({thread_id:, head_request_id: occurrence_id}, view)
@@ -450,9 +456,22 @@ module Tamoz
 
       # The channel projection: lifecycle events become outbox rows BEFORE the
       # occurrence closes (design §11), so a crash never loses the terminal
-      # answer. Nil-safe — an unconfigured worker delivers nothing.
-      def notify_sink(thread_id, kind, text)
-        @runtime.delivery_sink&.push(thread_id:, kind:, text:)
+      # answer. Nil-safe — an unconfigured worker delivers nothing. An
+      # approval pause carries the occurrence and its exact interrupt set so
+      # the rendered prompt answers THAT question (ADR-043).
+      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
+      end
+
+      # What a correspondent receives when a turn completes: the VERIFIED
+      # answer, the same text `tamoz show` prints — never the session state
+      # that produced it, which is internal detail and unbounded. A completion
+      # that verified nothing still owes the channel a terminal message, so it
+      # says so plainly rather than delivering an empty one.
+      # :reek:UtilityFunction -- a pure function of the view.
+      def completion_text(view)
+        answer = view.state&.dig(:verification, "answer").to_s
+        answer.empty? ? "Completed." : answer
       end
 
       def describe_interrupt(interrupt)
@@ -468,15 +487,21 @@ module Tamoz
       # :reek:UtilityFunction -- a pure function of the view, like the other
       # stateless interrupt helpers in this file.
       def interrupt_digest(view)
-        Tamoz::Comms::InterruptDigest.of(
-          view.interrupts.map do |interrupt|
-            {
-              task_id: interrupt.task_id,
-              call_index: interrupt.call_index,
-              descriptor: interrupt.descriptor
-            }
-          end
-        )
+        Tamoz::Comms::InterruptDigest.of(interrupt_facts(view))
+      end
+
+      # The interrupt set as plain facts. The prompt the channel renders and
+      # the digest a decision binds are both derived from THIS, so the deny
+      # press can only ever resolve the exact question that was asked.
+      # :reek:UtilityFunction -- a pure function of the view.
+      def interrupt_facts(view)
+        view.interrupts.map do |interrupt|
+          {
+            task_id: interrupt.task_id,
+            call_index: interrupt.call_index,
+            descriptor: interrupt.descriptor
+          }
+        end
       end
 
       # ----------------------------------------------------------------- parking
@@ -508,12 +533,17 @@ module Tamoz
 
       # Sleep the poll interval, but wake the moment the token is cancelled so
       # SIGTERM is not held hostage by a long interval.
+      # The remaining time is measured ONCE per pass and then slept. Reading the
+      # clock again between the test and the sleep is a race: cross the deadline
+      # in that window and the interval is negative, which raises. One pass is
+      # unlikely to lose it; a worker idling for hours is not, and the process
+      # dies far from the code that caused it.
       def sleep_until_due
         deadline = Tamoz::Clock.monotonic.now + @poll_interval
-        while Tamoz::Clock.monotonic.now < deadline
+        while (remaining = deadline - Tamoz::Clock.monotonic.now).positive?
           return :cancelled if stopping?
 
-          sleep([0.05, deadline - Tamoz::Clock.monotonic.now].min)
+          sleep([0.05, remaining].min)
         end
         :due
       end

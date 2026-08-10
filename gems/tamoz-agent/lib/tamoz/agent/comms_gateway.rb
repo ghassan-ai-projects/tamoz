@@ -36,17 +36,25 @@ module Tamoz
         @poller_owner = poller_owner
         @batch_size = batch_size
         @fence = 0
+        @stopping = false
       end
 
       # Acquire the poller lease and enter the serve loop (the CLI drives
-      # this; Ctrl-C or a fatal transport error exits via the ensure).
+      # this). A fatal transport error exits via the ensure; INT/TERM ask
+      # through `stop`, and the loop checks that between passes.
+      #
+      # Shutdown takes at most one long-poll timeout: a pass already blocked in
+      # getUpdates finishes first. Releasing the lease WITHOUT ending the loop
+      # would be worse than not stopping at all — the gateway would keep
+      # reading a stream it no longer owns, which is the 409 conflict.
       def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0)
         return :poller_busy unless start(now: now_provider.call)
 
-        loop do
+        until @stopping
           serve_once(now: now_provider.call)
-          sleep interval_s
+          sleep interval_s unless @stopping
         end
+        :stopped
       ensure
         stop
       end
@@ -61,7 +69,11 @@ module Tamoz
         acquired == :acquired ? :started : :poller_busy
       end
 
+      # Asked from a signal handler, so it does the two things a stop means:
+      # end the loop, and give up the lease. Ending the loop is the half that
+      # a released lease alone does not buy.
       def stop
+        @stopping = true
         release_poller
       end
 
@@ -70,7 +82,8 @@ module Tamoz
       # releases it, and a crash leaves it to expire.
       def serve_once(now: Time.now.utc)
         next_offset = @store.poll_offset(bot_id:)
-        batch = @transport.poll(next_offset:, limit: @batch_size, timeout_s: poll_timeout_s)
+        batch = poll_batch(next_offset)
+        return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
@@ -80,6 +93,20 @@ module Tamoz
         :throttled
       rescue Comms::AuthenticationError
         :auth_failed
+      end
+
+      # The idempotent read, and ONLY the read. A long poll that times out or
+      # drops its connection observed nothing and persisted nothing, so the
+      # next pass repeats it from the same durable offset — a transient blip
+      # must not end a gateway that is supposed to stay open for days. The
+      # rescue is deliberately this narrow: a transient failure while admitting
+      # an update or draining the outbox touches durable state and must
+      # surface, not be swallowed here.
+      # @return [Hash, nil] the batch, or nil when the read did not complete.
+      def poll_batch(next_offset)
+        @transport.poll(next_offset:, limit: @batch_size, timeout_s: poll_timeout_s)
+      rescue Comms::TransientTransportError
+        nil
       end
 
       # Resolves one normalized update to its durable disposition (design §5):
@@ -145,7 +172,9 @@ module Tamoz
       # Authority binding precedes work (design §5): the deterministic thread
       # is created and the surface's profile bound write-once BEFORE the first
       # request enqueues. A crash between leaves an inert bound thread; the
-      # reverse order is forbidden.
+      # reverse order is forbidden. An allowlisted first contact also gets its
+      # correspondent binding (bound_by records the operator config, so
+      # `comms list` and `pair revoke` can see and revoke it).
       def admit_request(envelope, decision, now:)
         thread = decision.thread_id
         conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
@@ -159,21 +188,43 @@ module Tamoz
             ).wire,
             now:
           )
+          bind_allowlisted_correspondent(envelope, now:)
         end
-        @store.admit_and_enqueue(
+        outcome = @store.admit_and_enqueue(
           envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
-                    reservation: 1, now:
+                    reservation: reservation_slots, capacity: outbox_capacity, now:
         )
+        return if outcome == :enqueued
+
+        # Saturated (invariant 57): durable refusal, no turn, and a bounded
+        # busy reply that itself may be coalesced.
+        @store.disposition_only(envelope, surface_id:, bot_id:,
+                                          disposition: 'rejected', reason: 'capacity_refused', now:)
+        append_control('The channel is at capacity; try again later.', envelope, now:)
       end
 
       def bind_thread_profile(thread)
         @adapter.store.put(
           THREAD_PROFILE_NAMESPACE, thread,
-          { 'profile_id' => @descriptor.profile_id, 'recorded_at' => Time.now.utc.iso8601(6) },
+          { 'profile' => @descriptor.profile_id, 'recorded_at' => Time.now.utc.iso8601(6) },
           if_version: nil
         )
       rescue StoreConflictError
         nil # write-once: an existing binding wins
+      end
+
+      # Write-once: a pairing-approved binding (bound_by an operator) is never
+      # overwritten by the allowlist record.
+      def bind_allowlisted_correspondent(envelope, now:)
+        @store.bind_correspondent(
+          Comms::Binding.new(
+            surface_id:, surface_revision: envelope.fetch('surface_revision'),
+            correspondent_id: envelope.fetch('correspondent_id'),
+            conversation_id: envelope.fetch('conversation_id'),
+            bound_at: now, bound_by: 'gateway:allowlist'
+          ).wire,
+          now:
+        )
       end
 
       def append_control(reply_text, envelope, now:)
@@ -249,6 +300,15 @@ module Tamoz
       def poll_timeout_s = @descriptor.transport.fetch(:poll_timeout_s)
 
       def control_capacity = @descriptor.limits.fetch(:control_capacity)
+
+      def outbox_capacity = @descriptor.limits.fetch(:outbox_capacity)
+
+      # Terminal slots reserved at admission (design §12, invariant 57): the
+      # rendered parts plus the denial prompts a turn may need.
+      def reservation_slots
+        @descriptor.rendering.fetch(:max_parts) +
+          @descriptor.limits.fetch(:max_denial_prompts_per_request)
+      end
     end
   end
 end

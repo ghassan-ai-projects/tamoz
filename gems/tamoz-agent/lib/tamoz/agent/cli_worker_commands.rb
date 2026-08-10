@@ -149,8 +149,13 @@ module Tamoz
           # SIGINT/SIGTERM ask the worker to stop claiming and finish what it has.
           # The previous handlers are restored on the way out so this is safe to
           # call from a test in-process.
-          old_int = Signal.trap("INT") { worker.stop!("sigint") }
-          old_term = Signal.trap("TERM") { worker.stop!("sigterm") }
+          #
+          # The handler hands the request to a thread rather than doing it here:
+          # `stop!` takes a mutex, and `Mutex#synchronize` raises ThreadError in
+          # a trap context. Called directly, a supervisor's SIGTERM would kill
+          # the process with a backtrace WITHOUT cancelling the turn in hand.
+          old_int = Signal.trap("INT") { Thread.new { worker.stop!("sigint") } }
+          old_term = Signal.trap("TERM") { Thread.new { worker.stop!("sigterm") } }
           begin
             worker.run
           ensure
@@ -416,12 +421,21 @@ module Tamoz
         1
       end
 
+      # Each event is flushed as it happens. The worker's whole observability
+      # contract is "writes its events to stdout so a supervisor can own it",
+      # and piped stdout is BLOCK-buffered: without this, a journal shows
+      # nothing until the buffer fills, which for an idle worker can be hours.
       def worker_emitter(options)
         if options[:json]
-          ->(event) { @out.puts JSON.generate(event) }
+          ->(event) { emit_line(JSON.generate(event)) }
         else
-          ->(event) { @out.puts format_worker_event(event) }
+          ->(event) { emit_line(format_worker_event(event)) }
         end
+      end
+
+      def emit_line(line)
+        @out.puts(line)
+        @out.flush
       end
 
       def format_worker_event(event)

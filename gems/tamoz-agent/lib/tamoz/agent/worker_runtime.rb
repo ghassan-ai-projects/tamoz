@@ -36,7 +36,9 @@ module Tamoz
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
-        new(directory, model_factory:, lease_ttl:, delivery_sink:)
+        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:)
+        runtime.install_channel_delivery_sink unless delivery_sink
+        runtime
       end
 
       def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
@@ -64,6 +66,15 @@ module Tamoz
       end
 
       def path = @directory.path
+
+      # A runtime with channel surfaces delivers terminal output through the
+      # outbox (design §11); one without stays nil-safe. An unbound thread
+      # still delivers nothing either way.
+      def install_channel_delivery_sink
+        return if @directory.channels.empty?
+
+        @delivery_sink = OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints)
+      end
 
       def close
         @adapter.close unless @adapter.closed?

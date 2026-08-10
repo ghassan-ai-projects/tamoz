@@ -30,15 +30,33 @@ module Tamoz
       # Admit ONE inbound update AND enqueue its turn in one transaction.
       # `bot_id` is the authenticated surface identity the update arrived on;
       # `reservation` is the terminal capacity reserved at admission
-      # (invariant 57). The derived request id dedups replays.
-      # @return [:enqueued, :duplicate]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
+      # (invariant 57) and `capacity` is the surface's outbox_capacity — intake
+      # refuses while pending+claimed deliveries plus open reservations would
+      # meet it, so the reserved terminal answer can always append (design §12,
+      # scorecard case 16). The derived request id dedups replays.
+      # @return [:enqueued, :duplicate, :capacity_refused]
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
         raise NotImplementedError
       end
 
       # Record a non-request disposition durably.
       # @return [:recorded, :duplicate]
       def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
+        raise NotImplementedError
+      end
+
+      # Append one delivery. `reserved_request_id` carries the request whose
+      # admission reservation covers this terminal/prompt row (design §12);
+      # control rows pass nil. Terminal projection is the caller's completion
+      # signal — `complete_request` releases the reservation afterwards.
+      # @return [:appended, :duplicate, :capacity_refused]
+      def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
+        raise NotImplementedError
+      end
+
+      # Terminal projection is durable; release the request's reserved slots.
+      # @return [:released, :not_admitted]
+      def complete_request(thread_id:, request_id:)
         raise NotImplementedError
       end
 
@@ -53,12 +71,6 @@ module Tamoz
       # durable. Never regresses.
       # @return [:persisted, :behind]
       def persist_next_offset(surface_id:, bot_id:, next_offset:, now:)
-        raise NotImplementedError
-      end
-
-      # Append one desired delivery to the bounded outbox.
-      # @return [:appended, :duplicate, :capacity_refused]
-      def append_delivery(delivery_wire, surface_id:, capacity:, now:)
         raise NotImplementedError
       end
 

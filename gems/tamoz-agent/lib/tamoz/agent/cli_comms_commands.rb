@@ -73,6 +73,12 @@ module Tamoz
             0
           end
         end
+      # A competing poller is a correctness problem, not a retry: it is named
+      # and the gateway exits, rather than dying as an unhandled backtrace or
+      # looping against a stream it does not own.
+      rescue Comms::PollerConflictError => e
+        @err.puts "tamoz: poller conflict: #{e.message}"
+        1
       end
 
       # `tamoz comms list [--surface ID]` — surfaces, bindings, the
@@ -106,8 +112,12 @@ module Tamoz
       # INT/TERM ask every loop to stop, and the previous handlers are
       # restored so an in-process test never leaks traps.
       def run_gateway_loops(gateways)
-        old_int = Signal.trap('INT') { gateways.each(&:stop) }
-        old_term = Signal.trap('TERM') { gateways.each(&:stop) }
+        # Handed to a thread, not run here: `stop` releases the poller lease
+        # with a database write, and the connection pool's mutex raises
+        # ThreadError in a trap context. Doing it inline turns a supervisor's
+        # SIGTERM into a backtrace instead of a released lease.
+        old_int = Signal.trap('INT') { Thread.new { gateways.each(&:stop) } }
+        old_term = Signal.trap('TERM') { Thread.new { gateways.each(&:stop) } }
         begin
           gateways.map { |gateway| Thread.new { gateway.serve_loop } }.each(&:join)
         ensure
