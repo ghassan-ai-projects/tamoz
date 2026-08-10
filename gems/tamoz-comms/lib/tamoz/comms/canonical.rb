@@ -22,7 +22,7 @@ module Tamoz
         case value
         when Hash then canonical_hash(value)
         when Array then canonical_array(value)
-        when String, Integer, Float, Time, TrueClass, FalseClass, NilClass
+        when String, Symbol, Integer, Float, Time, TrueClass, FalseClass, NilClass
           canonical_scalar(value)
         else
           raise ValidationError, "cannot canonicalize #{value.class}"
@@ -42,7 +42,7 @@ module Tamoz
 
       def canonical_scalar(value)
         case value
-        when String then JSON.generate(value)
+        when String, Symbol then JSON.generate(value.to_s)
         when Time then canonical_bytes(value.utc.iso8601(6))
         else canonical_literal(value)
         end

@@ -1,7 +1,7 @@
 {
   "generated_by": "script/regenerate_quality_baseline",
   "git": {
-    "commit": "ccfe0f0",
+    "commit": "e017d6b",
     "dirty": true
   },
   "toolchain": {
@@ -10,13 +10,13 @@
     "simplecov": "0.22.0"
   },
   "loc": {
-    "files": 370,
-    "total_code_lines": 53479,
+    "files": 380,
+    "total_code_lines": 54390,
     "by_directory": {
       "apps/tamoz-agent": 22,
       "bin/tamoz-eval": 3,
       "gems/tamoz-agent": 13300,
-      "gems/tamoz-comms": 315,
+      "gems/tamoz-comms": 1226,
       "gems/tamoz-core": 3092,
       "gems/tamoz-evals": 10430,
       "gems/tamoz-graph": 4657,
@@ -54,10 +54,10 @@
     }
   },
   "rubocop": {
-    "total": 39953,
-    "files_inspected": 529,
+    "total": 39964,
+    "files_inspected": 541,
     "by_cop": {
-      "Style/StringLiterals": 28732,
+      "Style/StringLiterals": 28743,
       "Layout/SpaceInsideHashLiteralBraces": 3588,
       "Minitest/EmptyLineBeforeAssertionMethods": 1016,
       "Metrics/AbcSize": 837,
@@ -244,7 +244,7 @@
       "Minitest/AssertPathExists": 1
     },
     "by_severity": {
-      "convention": 39477,
+      "convention": 39488,
       "warning": 476
     },
     "metrics_over_ceiling": {
@@ -253,7 +253,7 @@
         "count": 244
       },
       "Metrics/MethodLength": {
-        "max": 253,
+        "max": 264,
         "count": 814
       },
       "Metrics/ParameterLists": {
@@ -531,12 +531,12 @@
     "check_verdict": "PASS"
   },
   "coverage": {
-    "line_percent": 89.29,
-    "line_covered": 20233,
-    "line_total": 22659,
-    "branch_percent": 69.34,
-    "branch_covered": 5290,
-    "branch_total": 7629,
+    "line_percent": 89.32,
+    "line_covered": 20664,
+    "line_total": 23135,
+    "branch_percent": 69.22,
+    "branch_covered": 5412,
+    "branch_total": 7818,
     "uncovered_files": [
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-agent/lib/tamoz/agent/version.rb",
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-comms/lib/tamoz/comms/version.rb",
@@ -550,8 +550,8 @@
       "/Users/ghassan/my-projects/tamoz/gems/tamoz-tools/lib/tamoz/tools/version.rb"
     ],
     "tests": {
-      "runs": 1293,
-      "assertions": 14281
+      "runs": 1318,
+      "assertions": 14458
     }
   },
   "documents": {

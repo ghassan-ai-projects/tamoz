@@ -79,9 +79,10 @@ requires an explicit owner decision and a separate safety review.
 ### Channel communications (invariants 56–58, ADR-041–043)
 
 The channel contract gem (`tamoz-comms`) exists with the exact decision
-machinery the worker consumes — a decision binds the exact interrupt set it
-answers, and `tamoz approve`/`--deny` records such a decision instead of a bare
-boolean. **The Telegram channel itself does not exist yet**: there is no
+machinery the worker consumes and the channel values and seams — the surface
+descriptor, normalized inbound envelopes, deliveries, bindings, approval
+prompts, the closed command table, and the `Transport`/`DeliverySink`/`CommsStore`
+contracts. **The Telegram channel itself does not exist yet**: there is no
 surface admission, no durable outbox, no transport adapter, and no gateway
 process. The channel clauses 56–58 and ADR-041–043 are accepted as owner
 policy and recorded as pending-owner-residual gaps; the slices of
