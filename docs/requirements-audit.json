@@ -1,21 +1,37 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-06T09:42:55Z",
-  "manifest_requirements": 357,
+  "generated_at": "2026-08-10T10:38:42Z",
+  "manifest_requirements": 363,
   "named_cases_run": 259,
   "counts": {
     "deferred-by-contract": 11,
+    "failing": 4,
     "indirect": 4,
-    "missing": 3,
-    "pass": 339
+    "missing": 9,
+    "pass": 335
   },
   "release_blocking_gaps": [
+    "ADR-015",
+    "ADR-041",
+    "ADR-042",
+    "ADR-043",
+    "INV-20",
     "INV-39",
     "INV-48",
-    "OBJ-7"
+    "INV-56",
+    "INV-57",
+    "INV-58",
+    "OBJ-3",
+    "OBJ-7",
+    "PHASE-P3"
   ],
-  "failing": [],
+  "failing": [
+    "ADR-015",
+    "INV-20",
+    "OBJ-3",
+    "PHASE-P3"
+  ],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -265,14 +281,14 @@
       "source": "docs/design-v0.1/DECISIONS.md",
       "title": "Durable means synchronous barrier commit",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "accepted",
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -694,6 +710,54 @@
       "promotion_exclusion": null,
       "adr_status": "accepted 2026-07-30",
       "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-041",
+      "category": "adr",
+      "source": "docs/design-v0.1/DECISIONS.md",
+      "title": "Communication channels are a contract gem plus per-transport adapter gems",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves.",
+      "promotion_exclusion": null,
+      "adr_status": "accepted 2026-08-10",
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-042",
+      "category": "adr",
+      "source": "docs/design-v0.1/DECISIONS.md",
+      "title": "The channel gateway is a separate process in the connector zone",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice.",
+      "promotion_exclusion": null,
+      "adr_status": "accepted 2026-08-10",
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
+      "id": "ADR-043",
+      "category": "adr",
+      "source": "docs/design-v0.1/DECISIONS.md",
+      "title": "Telegram v1 is deny-only and reference-bound",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence.",
+      "promotion_exclusion": null,
+      "adr_status": "accepted 2026-08-10",
+      "evidence_result": null,
       "owner_signature": null
     },
     {
@@ -4590,7 +4654,7 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Single fenced writer",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover",
       "supporting_tests": [
         "test/agent_session_operations_test.rb#test_two_concurrent_owners_cannot_both_advance_the_same_session",
@@ -4599,7 +4663,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -5268,6 +5332,51 @@
       "owner_signature": null
     },
     {
+      "id": "INV-56",
+      "category": "invariant",
+      "source": "docs/design-v0.1/INVARIANTS.md",
+      "title": "A user channel is identified, bound, and grants nothing",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence.",
+      "promotion_exclusion": null,
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
+      "id": "INV-57",
+      "category": "invariant",
+      "source": "docs/design-v0.1/INVARIANTS.md",
+      "title": "Channel delivery is ordered, bounded, and ambiguity-safe",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Channel outbox, offset persistence, and ambiguity handling (COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel gems are built; the kill matrix in the telegram slices converts this row to direct evidence.",
+      "promotion_exclusion": null,
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
+      "id": "INV-58",
+      "category": "invariant",
+      "source": "docs/design-v0.1/INVARIANTS.md",
+      "title": "A channel decision is exact, expiring, and cannot widen authority",
+      "release_blocking": true,
+      "status": "missing",
+      "named_test": null,
+      "supporting_tests": [],
+      "classification": "pending-owner-residual",
+      "rationale": "Deny-only callback and exact decision records (COMMS_TELEGRAM_PLAN slices A/H). No test exists before the channel gems are built; the adversarial approval suite in slice H converts this row to direct evidence.",
+      "promotion_exclusion": null,
+      "evidence_result": null,
+      "owner_signature": null
+    },
+    {
       "id": "MIG-1",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
@@ -5485,7 +5594,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
         "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
@@ -5496,7 +5605,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -5575,7 +5684,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -5809,13 +5918,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Coding behavior scorecard — fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

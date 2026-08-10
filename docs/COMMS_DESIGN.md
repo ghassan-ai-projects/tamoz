@@ -832,7 +832,7 @@ CLI and passes only because it executed:
 
 Implementing this design **changes pinned contracts**, and the repository enforces their
 counts. `test/documentation_test.rb` asserts that `INVARIANTS.md` contains exactly clauses
-1–55 and `DECISIONS.md` exactly ADR-001–040, and
+1–58 and `DECISIONS.md` exactly ADR-001–043, and
 `script/generate_requirements_manifest` regenerates `docs/requirements-manifest.json` and
 `docs/REQUIREMENTS_AUDIT.md` from both. Adding the clauses below is therefore a deliberate
 step with a manifest regeneration attached, not an edit that can be slipped in.

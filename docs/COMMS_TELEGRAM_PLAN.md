@@ -34,7 +34,7 @@ Four things must be settled by the owner before code starts, because each change
 gets built rather than how:
 
 1. **Clause acceptance.** §18 of the design proposes invariants 56–58 and ADR-041–043.
-   `test/documentation_test.rb` pins the counts at 55 and 40, and
+   `test/documentation_test.rb` pins the counts at 58 and 43, and
    `script/generate_requirements_manifest` regenerates `docs/requirements-manifest.json`
    and `docs/REQUIREMENTS_AUDIT.md` from both files. Accepting the clauses is one
    deliberate commit that edits `INVARIANTS.md`, `DECISIONS.md`, the two pinned counts in
