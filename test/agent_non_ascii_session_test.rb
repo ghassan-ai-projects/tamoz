@@ -237,7 +237,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   # Coverage measured by reverting each site's `.b` comparison and re-running
   # this file:
   #
-  #   effect_journal#decode_receipt          COVERED (the D-10 crash site)
+  #   effect_record_reader#decode_receipt   COVERED (the D-10 crash site)
   #   checkpoint_store#decode_request        COVERED (a non-ASCII task payload)
   #   store#get                              COVERED (application store values)
   #   checkpoint_codec#load_value            COVERED (durable state values)
@@ -254,7 +254,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   CANONICALITY_SITES = {
     "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
-    "tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb" => 1,
+    "tamoz-sqlite/lib/tamoz/sqlite/effect_record_reader.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/checkpoint_wire.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/store.rb" => 1
   }.freeze
