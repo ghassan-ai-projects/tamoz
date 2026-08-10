@@ -26,6 +26,12 @@ module Tamoz
     # The remote surface rate-limited the caller; `retry_after` carries the
     # authoritative server delay.
     class ThrottledError < CommsError
+      attr_reader :retry_after
+
+      def initialize(message, retry_after: 1)
+        super(message)
+        @retry_after = retry_after
+      end
     end
 
     # A second poller or a configured webhook competes for the same bot token.

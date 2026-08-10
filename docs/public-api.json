@@ -233,6 +233,12 @@
       "Tamoz::Stream::WallClock": {},
       "Tamoz::Stream::WatermarkRegressionError": {}
     },
+    "tamoz-telegram": {
+      "Tamoz::Telegram::Client": {},
+      "Tamoz::Telegram::Normalizer": {},
+      "Tamoz::Telegram::Transport": {},
+      "Tamoz::Telegram::VERSION": {}
+    },
     "tamoz-tools": {
       "Tamoz::Tools::CheckReceipt": {},
       "Tamoz::Tools::Skills": {},

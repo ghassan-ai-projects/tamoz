@@ -232,6 +232,12 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Stream::WallClock" => {},
           "Tamoz::Stream::WatermarkRegressionError" => {}
         },
+        "tamoz-telegram" => {
+          "Tamoz::Telegram::Client" => {},
+          "Tamoz::Telegram::Normalizer" => {},
+          "Tamoz::Telegram::Transport" => {},
+          "Tamoz::Telegram::VERSION" => {}
+        },
         "tamoz-tools" => {
           "Tamoz::Tools::CheckReceipt" => {},
           "Tamoz::Tools::Skills" => {},
@@ -290,7 +296,8 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
-      Tamoz::Comms::VERSION
+      Tamoz::Comms::VERSION,
+      Tamoz::Telegram::VERSION
     ]
 
     assert_equal GEM_ROOTS.keys.sort,

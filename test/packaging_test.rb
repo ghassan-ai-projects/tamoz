@@ -130,7 +130,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent tamoz-mcp tamoz-evals tamoz-comms]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")

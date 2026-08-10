@@ -120,6 +120,38 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  # ADR-041: tamoz-telegram is the HTTP-carrying transport — it depends only
+  # on tamoz-comms (values/contracts) and the stdlib; it must not pull the
+  # agent, the durable store, or any model client into a gateway process.
+  def test_telegram_loads_comms_and_stdlib_but_no_agent_or_store
+    script = <<~RUBY
+      require "json"
+      require "tamoz/telegram"
+      puts JSON.generate(
+        "comms" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/comms") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
+        "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
+        "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert result.fetch("comms")
+    assert result.fetch("net_http")
+    %w[graph sqlite agent ruby_llm].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the gateway load graph"
+    end
+  end
+
   private
 
   def clean_environment
