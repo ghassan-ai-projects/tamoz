@@ -7,11 +7,16 @@ module Tamoz
     class Metrics
       LOW_CARDINALITY_RE = /\A[a-zA-Z0-9_.:-]{1,128}\z/
       IDENTIFIER_LABELS = SignalCatalog::CORRELATION_IDENTIFIERS
+      DEFAULT_MAX_SERIES = 4_096
+      DEFAULT_MAX_HISTOGRAM_SAMPLES = 10_000
 
       attr_reader :violations
 
-      def initialize(catalog: Catalog)
+      def initialize(catalog: Catalog, max_series: DEFAULT_MAX_SERIES,
+                     max_histogram_samples: DEFAULT_MAX_HISTOGRAM_SAMPLES)
         @catalog = catalog
+        @max_series = positive_integer(max_series, :max_series)
+        @max_histogram_samples = positive_integer(max_histogram_samples, :max_histogram_samples)
         @counters = Hash.new(0)
         @gauges = {}
         @histograms = Hash.new { |hash, key| hash[key] = [] }
@@ -24,7 +29,9 @@ module Tamoz
         value = Float(value)
         raise ValidationError, 'metric value must be finite and non-negative' unless value.finite? && value >= 0
 
-        @counters[series_key(entry.name, labels)] += value
+        key = series_key(entry.name, labels)
+        register_series!(key, entry.name)
+        @counters[key] += value
         value
       rescue StandardError
         @violations[name.to_s] += 1
@@ -37,7 +44,12 @@ module Tamoz
         value = Float(value)
         raise ValidationError, 'histogram value must be finite and non-negative' unless value.finite? && value >= 0
 
-        @histograms[series_key(entry.name, labels)] << value
+        key = series_key(entry.name, labels)
+        register_series!(key, entry.name)
+        values = @histograms[key]
+        raise ValidationError, "#{entry.name}: histogram sample limit reached" if values.length >= @max_histogram_samples
+
+        values << value
         value
       rescue StandardError
         @violations[name.to_s] += 1
@@ -50,7 +62,9 @@ module Tamoz
         value = Float(value)
         raise ValidationError, 'gauge value must be finite' unless value.finite?
 
-        @gauges[series_key(entry.name, labels)] = value
+        key = series_key(entry.name, labels)
+        register_series!(key, entry.name)
+        @gauges[key] = value
         value
       rescue StandardError
         @violations[name.to_s] += 1
@@ -163,6 +177,19 @@ module Tamoz
       def series_key(name, labels)
         labels = labels.to_h.transform_keys(&:to_s).sort.to_h
         [name.to_s, labels]
+      end
+
+      def register_series!(key, name)
+        return if @counters.key?(key) || @gauges.key?(key) || @histograms.key?(key)
+        return if @counters.length + @gauges.length + @histograms.length < @max_series
+
+        raise ValidationError, "#{name}: metric series limit reached"
+      end
+
+      def positive_integer(value, name)
+        return value if value.is_a?(Integer) && value.positive?
+
+        raise ValidationError, "#{name} must be positive"
       end
 
       def serialize_series(series)

@@ -12,6 +12,7 @@ module Tamoz
       ].freeze
       CLASSIFICATION_RANKS = { public: 0, internal: 1, confidential: 2, restricted: 3 }.freeze
       DEFAULT_MAX_BYTES = 4_096
+      MAX_CONTENT_ENTRIES = 64
 
       attr_reader :name, :max_classification, :limits, :digest
 
@@ -121,6 +122,8 @@ module Tamoz
 
         case value
         when Hash
+          raise ValidationError, 'content exceeds 64 entries' if value.length > MAX_CONTENT_ENTRIES
+
           keys = value.keys.map(&:to_s)
           raise ValidationError, 'content has colliding string and symbol keys' unless keys.uniq.length == keys.length
 
@@ -129,7 +132,7 @@ module Tamoz
             [key, canonicalize(value.fetch(original), depth: depth + 1)]
           end
         when Array
-          raise ValidationError, 'content exceeds 100000 items' if value.length > 100_000
+          raise ValidationError, "content exceeds #{MAX_CONTENT_ENTRIES} items" if value.length > MAX_CONTENT_ENTRIES
 
           value.map { |entry| canonicalize(entry, depth: depth + 1) }
         when String

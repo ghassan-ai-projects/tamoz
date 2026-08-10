@@ -103,20 +103,22 @@ module Tamoz
           value.on("--since MS", Integer, "Only entries observed after this millisecond") { |entry| since_ms = entry }
         end.parse!(argv)
         directory = runtime_dir_path(options)
-        seen = 0
+        seen = {}
         loop do
-          documents = Tamoz::Observability::Recorder::Journal.read(
+          entries = Tamoz::Observability::Recorder::Journal.read_entries(
             directory, thread_id:, kind:, since_ms:
           )
-          documents.drop(seen).each do |document|
+          entries.each do |document, identity|
+            next if seen[identity]
+
             if options[:json]
               @out.puts JSON.generate(document)
             else
               @out.puts format_observation(document)
             end
+            seen[identity] = true
           end
           @out.flush
-          seen = documents.length
           break unless follow
 
           sleep 0.2

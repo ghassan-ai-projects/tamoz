@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "digest"
 require "securerandom"
 require "set"
 
@@ -589,7 +590,12 @@ module Tamoz
           key = key.to_s
           next unless document.key?(key)
 
-          [key, document.fetch(key)]
+          value = document.fetch(key)
+          declaration = Tamoz::Observability::Catalog.fetch(name).optional.fetch(key.to_sym)
+          if declaration == :low_cardinality && !value.to_s.match?(Tamoz::Observability::SignalCatalog::LOW_CARDINALITY_PATTERN)
+            value = "sha256:#{Digest::SHA256.hexdigest(value.to_s)}"
+          end
+          [key, value]
         end.to_h
         @observability.emit(name, correlation:, attributes:)
       rescue StandardError

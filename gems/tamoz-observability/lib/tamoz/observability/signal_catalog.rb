@@ -8,6 +8,7 @@ module Tamoz
     # bump, and a metric label that is a correlation identifier all raise.
     class SignalCatalog
       NAME_PATTERN = /\A[a-z0-9][a-z0-9._-]*\z/
+      LOW_CARDINALITY_PATTERN = /\A[a-zA-Z0-9_.:-]{1,128}\z/
       PERMITTED_PREFIXES = %w[tamoz. comms. stream. scheduler. mcp.].freeze
       CORRELATION_IDENTIFIERS = %i[
         thread_id execution_id request_id occurrence_id task_id effect_key span_id trace_id
@@ -179,7 +180,9 @@ module Tamoz
         valid = case type
                 when :integer, :timestamp_ms then value.is_a?(Integer)
                 when :boolean then value == true || value == false
-                when :string, :low_cardinality, :enum, :digest then value.is_a?(String) || value.is_a?(Symbol)
+                when :string, :digest then value.is_a?(String) || value.is_a?(Symbol)
+                when :low_cardinality, :enum
+                  (value.is_a?(String) || value.is_a?(Symbol)) && value.to_s.match?(LOW_CARDINALITY_PATTERN)
                 else false
                 end
         if type == :digest

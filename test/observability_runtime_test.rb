@@ -79,6 +79,40 @@ class ObservabilityRuntimeTest < Minitest::Test
     end
   end
 
+  def test_journal_read_ignores_drop_health_sidecars
+    Dir.mktmpdir do |directory|
+      journal = Observability::Recorder::Journal.new(
+        directory:, role: 'worker', queue_size: 1, flush_interval_ms: 1_000
+      )
+      producer = Observability::Producer.new(recorder: journal)
+      100.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x'}) }
+      journal.close
+
+      documents = Observability::Recorder::Journal.read(directory)
+      assert documents.all? { |document| document.key?('name') }
+      assert_operator Observability::Recorder::Journal.inventory(directory).fetch('drops'), :>, 0
+    end
+  end
+
+  def test_journal_cap_survives_reopen_and_one_file_retention
+    Dir.mktmpdir do |directory|
+      2.times do
+        journal = Observability::Recorder::Journal.new(
+          directory:, role: 'worker', pid: 7, max_file_bytes: 512, max_files: 1,
+          flush_interval_ms: 1
+        )
+        producer = Observability::Producer.new(recorder: journal)
+        12.times { producer.emit('tamoz.worker.error', attributes: {reason: 'x' * 20}) }
+        assert_equal 0, journal.flush(deadline_ms: 1_000)
+        journal.close
+      end
+
+      files = Dir.glob(File.join(directory, 'worker-7.ndjson*')).reject { |file| file.end_with?('.health.json') }
+      assert_equal 1, files.length
+      assert_operator File.size(files.first), :<=, 512
+    end
+  end
+
   def test_bulk_saturation_is_counted_and_metric_cardinality_is_rejected
     recorder = Observability::Recorder::Memory.new(max_size: 1)
     producer = Observability::Producer.new(recorder:)
@@ -96,6 +130,32 @@ class ObservabilityRuntimeTest < Minitest::Test
       labels: {outcome: 'ok', profile: 'p', surface: 's'}
     )
     assert_equal 1, metrics.to_h.fetch('counters').length
+  end
+
+  def test_metrics_bound_series_and_histogram_samples
+    metrics = Observability::Metrics.new(max_series: 2, max_histogram_samples: 2)
+    2.times do |index|
+      assert_equal 1.0, metrics.increment(
+        'tamoz.turn.duration_ms', labels: {outcome: 'ok', profile: 'p', surface: "s#{index}"}
+      )
+    end
+    assert_equal :rejected, metrics.increment(
+      'tamoz.turn.duration_ms', labels: {outcome: 'ok', profile: 'p', surface: 's2'}
+    )
+
+    histogram = Observability::Metrics.new(max_histogram_samples: 2)
+    2.times { assert_equal 1.0, histogram.observe('tamoz.model.call.duration_ms', 1, labels: {provider: 'p', model: 'm', outcome: 'ok'}) }
+    assert_equal :rejected, histogram.observe(
+      'tamoz.model.call.duration_ms', 1, labels: {provider: 'p', model: 'm', outcome: 'ok'}
+    )
+  end
+
+  def test_content_policy_rejects_oversized_hashes_before_serializing
+    content = 65.times.to_h { |index| ["key#{index}", 'value'] }
+
+    assert_raises(Observability::ValidationError) do
+      Observability::ContentPolicy::NONE.describe(:error_detail, content)
+    end
   end
 
   def test_trace_from_documents_uses_durable_identity

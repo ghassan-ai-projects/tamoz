@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'digest'
 require 'json'
 require 'net/http'
 require 'openssl'
@@ -8,6 +9,8 @@ module Tamoz
   module OTel
     class HTTPExporter
       include Tamoz::Observability::Exporter
+      MAX_RESPONSE_BODY_BYTES = 16 * 1_024 * 1_024
+      ResponseTooLarge = Class.new(StandardError)
 
       attr_reader :policy
 
@@ -19,11 +22,17 @@ module Tamoz
       end
 
       def open(descriptor = {}, credential = policy.credential_ref)
+        @opened = false
+        @headers = {}
+        @descriptor = nil
         @headers = credential_headers(credential)
         @descriptor = descriptor.dup.freeze
         @opened = true
         :opened
       rescue StandardError
+        @opened = false
+        @headers = {}
+        @descriptor = nil
         :rejected
       end
 
@@ -35,25 +44,43 @@ module Tamoz
         body = JSON.generate(resource_spans(batch))
         return :rejected if body.bytesize > 16 * 1_024 * 1_024
 
+        addresses = policy.resolved_addresses
+        policy.validate_resolved_addresses!(addresses)
+
         request = Net::HTTP::Post.new(policy.uri.request_uri)
         request['Content-Type'] = 'application/json'
         @headers.each { |name, value| request[name] = value }
         request.body = body
         http = Net::HTTP.new(policy.uri.host, policy.uri.port)
         http.use_ssl = true
+        http.ipaddr = addresses.first unless addresses.empty?
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
         timeout = [Float(deadline_ms) / 1_000, policy.timeout_ms / 1_000.0].min
         return :rejected unless timeout.positive?
 
         http.open_timeout = timeout
         http.read_timeout = timeout
-        response = http.start { |connection| connection.request(request) }
+        response = http.start do |connection|
+          connection.request(request) do |incoming|
+            if incoming.content_length && incoming.content_length > MAX_RESPONSE_BODY_BYTES
+              raise ResponseTooLarge
+            end
+
+            response_bytes = 0
+            incoming.read_body do |chunk|
+              response_bytes += chunk.bytesize
+              raise ResponseTooLarge if response_bytes > MAX_RESPONSE_BODY_BYTES
+            end
+          end
+        end
         case response
         when Net::HTTPSuccess then :delivered
         when Net::HTTPTooManyRequests then :throttled
         when Net::HTTPRedirection then :rejected
         else :unknown
         end
+      rescue ResponseTooLarge
+        :rejected
       rescue StandardError
         :unknown
       end
@@ -84,22 +111,24 @@ module Tamoz
       end
 
       def resource_spans(batch)
-        spans = batch.map do |item|
+        spans = batch.filter_map do |item|
           document = item.respond_to?(:to_h) ? item.to_h : item
           correlation = value(document, 'correlation') || {}
           attributes = value(document, 'attributes') || {}
           observed_at_ms = value(document, 'observed_at_ms')
           name = value(document, 'name')
-          trace_id = value(correlation, 'trace_id') || derived_trace_id(correlation)
+          trace_id = otel_trace_id(value(correlation, 'trace_id') || derived_trace_id(correlation))
           anchor = value(attributes, 'span_anchor') || value(correlation, 'effect_key') || observed_at_ms
-          span_id = value(attributes, 'span_id') || derived_span_id(trace_id, name, anchor)
+          span_id = otel_span_id(value(attributes, 'span_id') || derived_span_id(trace_id, name, anchor))
+          next unless trace_id && span_id
+
           started_at_ms = value(document, 'started_at_ms')
           ended_at_ms = value(document, 'ended_at_ms')
           {
             'name' => name,
             'trace_id' => trace_id,
             'span_id' => span_id,
-            'kind' => value(document, 'kind'),
+            'kind' => 'SPAN_KIND_INTERNAL',
             'start_time_unix_nano' => started_at_ms && Integer(started_at_ms * 1_000_000),
             'end_time_unix_nano' => ended_at_ms && Integer(ended_at_ms * 1_000_000),
             'attributes' => attributes
@@ -124,6 +153,20 @@ module Tamoz
         return unless trace_id && anchor
 
         Tamoz::Observability::Correlation.span_id(trace_id:, kind: name, anchor:)
+      end
+
+      def otel_trace_id(value)
+        return unless value
+        return value if value.to_s.match?(/\A[0-9a-f]{32}\z/)
+
+        Digest::SHA256.hexdigest("tamoz.otel.trace.v1\n#{value}")[0, 32]
+      end
+
+      def otel_span_id(value)
+        return unless value
+        return value if value.to_s.match?(/\A[0-9a-f]{16}\z/)
+
+        Digest::SHA256.hexdigest("tamoz.otel.span.v1\n#{value}")[0, 16]
       end
     end
   end

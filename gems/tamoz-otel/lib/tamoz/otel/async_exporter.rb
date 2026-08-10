@@ -35,7 +35,10 @@ module Tamoz
 
       def record(signal)
         @mutex.synchronize do
-          return :dropped if @closed || @disabled
+          if @closed || @disabled
+            @drops[@closed ? 'closed' : 'disabled'] += 1
+            return :dropped
+          end
           if @queue.length >= @max_queue
             @drops['queue_full'] += 1
             return :dropped
@@ -76,7 +79,6 @@ module Tamoz
           @condition.broadcast
         end
         @thread.join(Float(deadline_ms) / 1_000)
-        @exporter.close(deadline_ms:) if @exporter.respond_to?(:close)
         nil
       rescue StandardError
         nil
@@ -106,6 +108,8 @@ module Tamoz
         end
       rescue StandardError
         @mutex.synchronize { @disabled = true }
+      ensure
+        @exporter.close(deadline_ms: 0) if @closed && @exporter.respond_to?(:close)
       end
 
       def deliver(batch)

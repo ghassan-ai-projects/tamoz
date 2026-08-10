@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'ipaddr'
+require 'socket'
 require 'uri'
 
 module Tamoz
@@ -24,6 +25,19 @@ module Tamoz
 
       def uri
         endpoint.dup.freeze
+      end
+
+      def resolved_addresses
+        Socket.getaddrinfo(endpoint.hostname, endpoint.port, Socket::AF_UNSPEC, Socket::SOCK_STREAM)
+              .map { |entry| entry.fetch(3) }.uniq
+      end
+
+      def validate_resolved_addresses!(addresses)
+        return if allow_local
+        return unless addresses.any? { |address| private_ip?(address) }
+
+        raise Tamoz::Observability::ValidationError,
+              'private and loopback OTLP destinations require allow_local'
       end
 
       private

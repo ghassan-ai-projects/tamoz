@@ -130,21 +130,34 @@ module Tamoz
         attr_reader :path
 
         def self.read(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
+          read_entries(directory, role:, since_ms:, thread_id:, kind:).map(&:first)
+        end
+
+        def self.read_entries(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
           files = Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
+                       .reject { |file| file.end_with?('.health.json') }
           files.sort.flat_map do |file|
-            File.foreach(file, encoding: Encoding::UTF_8).filter_map do |line|
-              next if line.strip.empty?
+            begin
+              identity = begin
+                stat = File.stat(file)
+                "#{stat.dev}:#{stat.ino}"
+              end
+              File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
+                next if line.strip.empty?
 
-              document = JSON.parse(line)
-              next if since_ms && document.fetch('observed_at_ms', 0) < since_ms
-              next if thread_id && document.dig('correlation', 'thread_id') != thread_id
-              next if kind && document.fetch('kind') != kind.to_s
+                document = JSON.parse(line)
+                next if since_ms && document.fetch('observed_at_ms', 0) < since_ms
+                next if thread_id && document.dig('correlation', 'thread_id') != thread_id
+                next if kind && document.fetch('kind') != kind.to_s
 
-              document
-            rescue JSON::ParserError
-              nil
+                [document, "#{identity}:#{index}"]
+              rescue JSON::ParserError
+                nil
+              end
+            rescue Errno::ENOENT
+              []
             end
-          end.sort_by { |document| document.fetch('observed_at_ms', 0) }
+          end.sort_by { |document, _identity| document.fetch('observed_at_ms', 0) }
         end
 
         def self.inventory(directory)
@@ -200,7 +213,11 @@ module Tamoz
           validate!(signal)
           reserved = @catalog.safety_bearing?(signal.name)
           @mutex.synchronize do
-            return :dropped if @closed || @disabled
+            if @closed || @disabled
+              @drops[[signal.name, @closed ? 'closed' : 'disabled', reserved ? 'reserved' : 'bulk']] += 1
+              persist_health
+              return :dropped
+            end
 
             queue = reserved ? @reserved : @bulk
             limit = reserved ? @reserved_size : @queue_size
@@ -262,7 +279,6 @@ module Tamoz
             @condition.broadcast
           end
           @thread.join(1.0)
-          @mutex.synchronize { close_io }
           nil
         end
 
@@ -297,6 +313,8 @@ module Tamoz
           end
         rescue StandardError
           @mutex.synchronize { disable!('writer_failure') }
+        ensure
+          @mutex.synchronize { close_io }
         end
 
         def write_batch(batch)
@@ -320,8 +338,7 @@ module Tamoz
 
           line = JSON.generate(signal.to_h.merge('policy_digest' => signal.policy_digest || @policy_digest))
           rotate_if_needed(line.bytesize + 1)
-          @io ||= File.open(path, 'ab', 0o600)
-          File.chmod(0o600, path)
+          open_io
           @io.write("#{line}\n")
           @io.flush
           @io_bytes += line.bytesize + 1
@@ -332,16 +349,29 @@ module Tamoz
         end
 
         def rotate_if_needed(incoming_bytes)
-          return unless @io && @io_bytes + incoming_bytes > @max_file_bytes
+          current_bytes = @io ? @io_bytes : (File.file?(path) ? File.size(path) : 0)
+          return unless current_bytes.positive? && current_bytes + incoming_bytes > @max_file_bytes
 
           close_io
-          (@max_files - 1).downto(1) do |index|
-            source = index == 1 ? path : "#{path}.#{index - 1}"
-            target = "#{path}.#{index}"
-            File.delete(target) if File.exist?(target)
-            File.rename(source, target) if File.exist?(source)
+          if @max_files == 1
+            File.delete(path) if File.exist?(path)
+          else
+            (@max_files - 1).downto(1) do |index|
+              source = index == 1 ? path : "#{path}.#{index - 1}"
+              target = "#{path}.#{index}"
+              File.delete(target) if File.exist?(target)
+              File.rename(source, target) if File.exist?(source)
+            end
           end
           @io_bytes = 0
+        end
+
+        def open_io
+          return if @io
+
+          @io_bytes = File.file?(path) ? File.size(path) : 0
+          @io = File.open(path, 'ab', 0o600)
+          File.chmod(0o600, path)
         end
 
         def close_io

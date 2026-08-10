@@ -132,4 +132,19 @@ class ObservabilityCatalogTest < Minitest::Test
                                   correlation: [], required: {})
     end
   end
+
+  def test_low_cardinality_values_are_bounded
+    signal = Tamoz::Observability::Signal.build(
+      kind: :event,
+      name: 'tamoz.worker.error',
+      correlation: {},
+      timing: :point,
+      observed_at_ms: 1,
+      attributes: {reason: 'error message with unbounded detail'}
+    )
+
+    assert_raises(Tamoz::Observability::ValidationError) do
+      Catalog.validate_signal(signal)
+    end
+  end
 end
