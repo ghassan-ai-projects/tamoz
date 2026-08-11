@@ -31,6 +31,7 @@ module Tamoz
 
       def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil)
         @adapter = adapter
+        @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
         @transport = transport
         @descriptor = descriptor
@@ -142,7 +143,11 @@ module Tamoz
         when :control
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
                                             now:)
-          append_control(decision.control_reply, envelope, now:) if decision.control_reply
+          if decision.command_intent
+            handle_command(envelope, decision, now:)
+          elsif decision.control_reply
+            append_control(decision.control_reply, envelope, now:)
+          end
         else
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
                                             now:)
@@ -204,13 +209,56 @@ module Tamoz
           envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
                     reservation: reservation_slots, capacity: outbox_capacity, now:
         )
-        return if outcome == :enqueued
+        if %i[enqueued duplicate].include?(outcome)
+          append_control('Accepted. I will report committed progress.', envelope, now:, kind: 'accepted')
+          return
+        end
 
         # Saturated (invariant 57): durable refusal, no turn, and a bounded
         # busy reply that itself may be coalesced.
         @store.disposition_only(envelope, surface_id:, bot_id:,
                                           disposition: 'rejected', reason: 'capacity_refused', now:)
         append_control('The channel is at capacity; try again later.', envelope, now:)
+      end
+
+      def handle_command(envelope, decision, now:)
+        case decision.command_intent.name
+        when 'help'
+          append_control('Commands: /help, /status, /cancel. Commands never become task text.', envelope, now:)
+        when 'status'
+          append_control(status_text(envelope), envelope, now:)
+        when 'cancel'
+          append_control(cancel_request(envelope), envelope, now:)
+        else
+          append_control('That command is not available on this channel.', envelope, now:)
+        end
+      end
+
+      def status_text(envelope)
+        status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        return 'No work is admitted for this conversation.' unless status
+
+        "Work status: #{status.fetch('state')}; open requests: #{status.fetch('open_requests')}."
+      end
+
+      def cancel_request(envelope)
+        route = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        return 'No active work was found.' unless route
+
+        request_id = Comms::Canonical.hexdigest(
+          'tamoz.comms.command.v1',
+          [surface_id, envelope.fetch('update_id'), 'cancel']
+        )
+        @checkpoints.enqueue_request(
+          thread_id: route.fetch('thread_id'),
+          request_id:,
+          operation: :redirect,
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } },
+          delivery: :redirect
+        )
+        'Cancellation requested.'
+      rescue Tamoz::CheckpointConflictError
+        'Cancellation could not be queued; no active checkpoint is available.'
       end
 
       def bind_thread_profile(thread)
@@ -237,9 +285,9 @@ module Tamoz
         )
       end
 
-      def append_control(reply_text, envelope, now:)
+      def append_control(reply_text, envelope, now:, kind: 'control')
         delivery = Comms::Delivery.build(
-          conversation_id: envelope.fetch('conversation_id'), kind: 'control',
+          conversation_id: envelope.fetch('conversation_id'), reply_to: envelope.fetch('update_id'), kind:,
           text: reply_text, part_index: 0, part_count: 1, journaled: false,
           render_version: Comms::Rendering::RENDER_VERSION,
           content_digest: Comms::Rendering.content_digest(reply_text)

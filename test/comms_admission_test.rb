@@ -110,6 +110,19 @@ class CommsAdmissionTest < Minitest::Test
 
     assert_equal :control, decision.disposition
     assert_equal :command, decision.reason
+    assert_equal 'help', decision.command_intent.name
+    assert_nil decision.command_intent.arguments
+  end
+
+  def test_an_unbound_command_is_ignored_before_command_parsing_can_have_effect
+    decision = Comms::Admission.decide(
+      envelope(kind: 'command', text: '/cancel', correspondent: 'telegram:user:99999999'),
+      surface: surface, binding: nil
+    )
+
+    assert_equal :ignored, decision.disposition
+    assert_equal :unbound, decision.reason
+    assert_nil decision.command_intent
   end
 
   def test_an_unknown_slash_command_gets_a_typed_control_reply

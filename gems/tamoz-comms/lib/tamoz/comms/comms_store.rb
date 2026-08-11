@@ -108,6 +108,11 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Read-only channel status derived from durable admission/projection rows.
+      def conversation_status(surface_id:, conversation_id:)
+        raise NotImplementedError
+      end
+
       # Bind one outbox row to its effect journal entry (design §10).
       # @return [:bound, :conflict, :missing]
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)

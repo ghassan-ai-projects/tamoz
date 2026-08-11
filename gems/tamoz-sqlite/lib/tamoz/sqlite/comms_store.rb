@@ -247,6 +247,26 @@ module Tamoz
         @outbox.defer_delivery(surface_id:, conversation_id:, not_before:, now:)
       end
 
+      def conversation_status(surface_id:, conversation_id:)
+        read('comms.conversation.status') do |txn|
+          route = txn.first('comms.conversation.status.route', <<~SQL, [surface_id, conversation_id])
+            SELECT thread_id FROM tamoz_comms_conversations
+            WHERE surface_id = ? AND conversation_id = ?
+          SQL
+          next nil unless route
+
+          open_requests = txn.scalar('comms.conversation.status.requests', <<~SQL, [surface_id, conversation_id]).to_i
+            SELECT COUNT(*) FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+          SQL
+          {
+            'thread_id' => route.fetch(0),
+            'state' => open_requests.positive? ? 'accepted' : 'idle',
+            'open_requests' => open_requests
+          }
+        end
+      end
+
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
         @outbox.bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
       end

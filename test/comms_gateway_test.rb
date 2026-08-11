@@ -30,7 +30,7 @@ class CommsGatewayTest < Minitest::Test
           adapter:, checkpoints:, transport:, descriptor:,
           poller_owner: 'gateway:test'
         )
-        yield gateway, transport, store, adapter
+        yield gateway, transport, store, adapter, checkpoints
       ensure
         adapter&.close
       end
@@ -148,6 +148,39 @@ class CommsGatewayTest < Minitest::Test
       assert_equal 'control', rows.first.fetch('kind')
       assert_equal 0, rows.first.fetch('journaled'),
                    'control replies are ephemeral and unjournaled'
+    end
+  end
+
+  def test_known_commands_are_controls_and_never_become_task_text
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(1, text: '/help'), update(2, text: '/status')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_empty checkpoints.request_history(thread_id: thread)
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal(%w[control control], rows.map { |row| row.fetch('kind') })
+      refute(rows.any? { |row| %w[/help /status].include?(row.fetch('text')) }) # rubocop:disable Performance/CollectionLiteralInLoop
+    end
+  end
+
+  def test_cancel_is_a_typed_redirect_and_not_a_model_task
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work'), update(2, text: '/cancel')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      history = checkpoints.request_history(thread_id: thread)
+
+      assert_equal %i[turn redirect], history.map(&:operation)
+      assert history.last.payload.fetch('task').fetch('cancel')
+      refute_match(%r{/cancel}, history.last.payload.inspect)
     end
   end
 

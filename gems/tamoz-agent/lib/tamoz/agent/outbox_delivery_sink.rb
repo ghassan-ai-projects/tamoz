@@ -23,13 +23,10 @@ module Tamoz
     # overload.
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:UnusedParameters
     # :reek:DataClump, :reek:FeatureEnvy, :reek:NilCheck
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- the projection pipeline.
+    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- the projection pipeline.
     class OutboxDeliverySink
       EVENT_KINDS = {
-        # `request.accepted` is deliberately absent: it is an ephemeral status
-        # control the design lets a surface coalesce or drop (design §12), and
-        # v1 drops it so terminal answers are the only messages a conversation
-        # can receive.
+        'request.accepted' => 'accepted',
         'request.approved' => 'answer',
         'request.denied' => 'answer',
         'request.completed' => 'answer',
@@ -135,4 +132,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
