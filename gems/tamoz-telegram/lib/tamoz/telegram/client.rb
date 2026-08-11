@@ -31,7 +31,7 @@ module Tamoz
         @read_timeout = read_timeout
       end
 
-      # rubocop:disable Metrics/AbcSize -- one HTTP boundary with timeout and
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one HTTP boundary with timeout and
       #   throttle branches.
       # :reek:UncommunicativeVariableName -- `error` is the rescued exception.
       # One bounded API call. `idempotent` distinguishes reads (safe to
@@ -62,16 +62,16 @@ module Tamoz
           # reading one update stream is a correctness problem.
           raise Comms::PollerConflictError, conflict_message(response)
         else
-          raise Comms::CommsError, "telegram api error #{response.code}"
+          raise transport_failure(method, idempotent, "telegram api error #{response.code}")
         end
-      rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT => e
+      rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT, JSON::ParserError => e
         # A read observed nothing and changed nothing, so it is typed transient
         # and the caller repeats it from unchanged state. A send is the other
         # case entirely: its outcome is unknown and must never be blindly
         # retried (design §10).
         raise Comms::TransientTransportError, "#{method} did not complete (#{e.class})" if idempotent
 
-        raise Comms::AmbiguousDeliveryError, "send may or may not have happened (#{e.class})"
+        raise transport_failure(method, idempotent, "#{method} did not return a valid response (#{e.class})")
       end
 
       private
@@ -95,6 +95,14 @@ module Tamoz
         "/bot#{@token}/#{method}"
       end
 
+      def transport_failure(_method, idempotent, message)
+        if idempotent
+          Comms::TransientTransportError.new(message)
+        else
+          Comms::AmbiguousDeliveryError.new("send may or may not have happened (#{message})")
+        end
+      end
+
       def build_http
         uri = URI(@origin)
         http = Net::HTTP.new(uri.host, uri.port)
@@ -106,4 +114,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength

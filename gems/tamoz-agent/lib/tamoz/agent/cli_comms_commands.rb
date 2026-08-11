@@ -9,7 +9,7 @@ module Tamoz
     # serve|list`. The gateway is a separate process that holds the bot token
     # and NEVER constructs a Session, loads a model credential, or opens a
     # file under the workspace root.
-    # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Performance/CollectionLiteralInLoop
     # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     #   -- one operator command per method; the json-vs-text branching is the
     #   CLI's global convention and the summaries are one projection each.
@@ -66,12 +66,17 @@ module Tamoz
               )
             end
             if once
-              outcomes = gateways.map(&:serve_once)
+              outcomes = gateways.map do |gateway|
+                next :poller_busy unless gateway.start == :started
+
+                gateway.serve_once
+              ensure
+                gateway.stop
+              end
               @out.puts JSON.generate(outcomes) if options[:json]
-              outcomes.include?(:auth_failed) ? 1 : 0
+              outcomes.any? { |outcome| %i[auth_failed poller_busy poller_lost].include?(outcome) } ? 1 : 0
             else
               run_gateway_loops(gateways, drainers)
-              0
             end
           end
         end
@@ -121,9 +126,22 @@ module Tamoz
         old_int = Signal.trap('INT') { Thread.new { stop_loops(gateways, drainers) } }
         old_term = Signal.trap('TERM') { Thread.new { stop_loops(gateways, drainers) } }
         begin
-          threads = gateways.map { |gateway| Thread.new { gateway.serve_loop(drain: false) } }
+          threads = gateways.map do |gateway|
+            Thread.new do
+              outcome = gateway.serve_loop(drain: false)
+              stop_loops(gateways, drainers) if %i[auth_failed poller_conflict].include?(outcome)
+              outcome
+            end
+          end
           threads.concat(drainers.map { |drainer| Thread.new { drainer.serve_loop } })
-          threads.each(&:join)
+          outcomes = threads.map(&:value)
+          return 1 if outcomes.include?(:auth_failed)
+          if outcomes.include?(:poller_conflict)
+            raise Comms::PollerConflictError,
+                  'a gateway lost the Telegram poller lease'
+          end
+
+          0
         ensure
           stop_loops(gateways, drainers)
           Signal.trap('INT', old_int) if old_int
@@ -203,7 +221,7 @@ module Tamoz
         @out.puts "  outbox #{row.fetch('outbox').map { |status, count| "#{status}=#{count}" }.join(' ')}"
       end
     end
-    # rubocop:enable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:enable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Performance/CollectionLiteralInLoop
     # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   end
 end

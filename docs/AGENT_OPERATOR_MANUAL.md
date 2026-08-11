@@ -267,7 +267,40 @@ itself. If websearch is disabled or unavailable, Tamoz must say that it cannot
 verify a current internet fact rather than pretending local filesystem evidence
 is sufficient.
 
-## 6. Debugging checklist
+## 6. Telegram gateway
+
+The Telegram gateway is a separate operator process. It owns the bot token,
+the durable poller lease, inbound admission, and outbound delivery; the worker
+does not poll Telegram directly. Run the doctor before starting a long-lived
+gateway:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms doctor
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve --once --json
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve
+```
+
+`comms serve` stays in the foreground. It renews the fenced poller lease,
+retries transient API/network failures with bounded backoff, honors Telegram's
+`retry_after` value, and drains durable outbound rows independently. A send
+that reaches Telegram and then fails is recorded as `unknown`, never blindly
+resent. Authentication failures and a competing poller/webhook stop the
+process with a named error so a service supervisor can alert or restart it
+after the operator fixes the cause.
+
+Use these commands while it runs:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms list --json
+rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json | jq '.channels'
+```
+
+There must be exactly one long-running gateway for a bot token. Do not run a
+second `comms serve` against the same Telegram bot, and do not configure a
+Telegram webhook at the same time as long polling. Use `--once` only for a
+bounded smoke test or supervisor health check.
+
+## 7. Debugging checklist
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json
@@ -283,7 +316,8 @@ Check, in order:
 4. `capability_sources` versus `capability_catalog`;
 5. MCP transport, endpoint/command permissions, and working directory;
 6. websearch grant, provider JSON, egress JSON, and exact allowlisted host;
-7. `status --json` for a durable approval or budget pause.
+7. Telegram doctor output, token, webhook conflict, and `comms list --json`;
+8. `status --json` for a durable approval or budget pause.
 
 Useful references:
 

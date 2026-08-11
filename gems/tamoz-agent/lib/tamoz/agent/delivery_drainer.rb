@@ -8,6 +8,7 @@ module Tamoz
     # Drains durable outbound rows independently from inbound polling. Claims,
     # pacing reservations, effect bindings, receipts, and ambiguous-send
     # handling all remain on the shared SQLite contract.
+    # rubocop:disable Metrics/ParameterLists, Metrics/AbcSize, Metrics/MethodLength, Naming/PredicateMethod
     class DeliveryDrainer
       CLAIM_TTL_S = 30.0
 
@@ -26,8 +27,9 @@ module Tamoz
 
       def serve_loop(interval_s: 0.25)
         until @stopping
-          drain_once(now: @clock.call)
-          @sleeper.call(interval_s) unless @stopping
+          outcome = drain_once(now: @clock.call)
+          delay = outcome == :throttled ? @retry_after_s.to_f : interval_s
+          @sleeper.call(delay) if delay.positive? && !@stopping
         end
         :stopped
       ensure
@@ -47,7 +49,8 @@ module Tamoz
           send_row(row, now:)
         end
         :drained
-      rescue Comms::ThrottledError
+      rescue Comms::ThrottledError => e
+        @retry_after_s = e.retry_after
         :throttled
       end
 
@@ -130,5 +133,6 @@ module Tamoz
 
       def surface_id = @descriptor.surface_id
     end
+    # rubocop:enable Metrics/ParameterLists, Metrics/AbcSize, Metrics/MethodLength, Naming/PredicateMethod
   end
 end
