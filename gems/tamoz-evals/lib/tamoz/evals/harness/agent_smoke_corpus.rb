@@ -534,7 +534,10 @@ module Tamoz
         # exercises the production binary path without network access.
         class CliSubprocessHarness
           REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
-          LOAD_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-observability tamoz-agent].flat_map do |gem|
+          LOAD_PATHS = %w[
+            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools
+            tamoz-observability tamoz-comms tamoz-mcp tamoz-agent
+          ].flat_map do |gem|
             ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
           end.freeze
           PROMPT_TIMEOUT = 60.0
@@ -616,11 +619,13 @@ module Tamoz
             )
             [stdin_r, stdout_w, stderr_w].each(&:close)
             drain = Thread.new { stdout_r.read }
-            unless wait_for_prompt(stderr_r, "Approve apply_patch?")
+            prompted, stderr_output = wait_for_prompt(stderr_r, "Approve apply_patch?")
+            unless prompted
               Process.kill("KILL", pid)
-              Process.wait2(pid)
+              _pid, status = Process.wait2(pid)
               drain.join
-              raise ExecutionError, "agent smoke CLI never reached the approval prompt"
+              raise ExecutionError, "agent smoke CLI never reached the approval prompt " \
+                                    "(status=#{status.inspect}, stderr=#{stderr_output.inspect})"
             end
 
             Process.kill("KILL", pid)
@@ -786,16 +791,18 @@ module Tamoz
             deadline = monotonic + PROMPT_TIMEOUT
             buffer = +""
             until buffer.include?(needle)
-              return false if monotonic > deadline
+              return [false, buffer] if monotonic > deadline
 
               ready = IO.select([io], nil, nil, 0.5)
               next unless ready
 
               chunk = io.read_nonblock(4096, exception: false)
-              return false if chunk.nil? || chunk == :wait_readable
+              return [false, buffer] if chunk.nil?
+              next if chunk == :wait_readable
 
               buffer << chunk
             end
+            [true, buffer]
             true
           end
 
