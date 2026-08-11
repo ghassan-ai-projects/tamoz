@@ -258,13 +258,17 @@ class AutonomyScorecardTest < Minitest::Test
       worker_once(rt, factory: read_only_factory)
       serve_once(rt, factory: read_only_factory)
 
-      assert_equal 1, rt.client.sent.length, "the answer must be sent, exactly once"
-      assert_equal "22222222", rt.client.sent.first.fetch("chat_id"),
+      answers = rt.client.sent.select { |delivery| delivery.fetch("text") == "hello" }
+      assert_equal 1, answers.length, "the terminal answer must be sent exactly once"
+      assert_operator rt.client.sent.length, :>=, 2, "the accepted acknowledgement must precede the answer"
+      assert_match(/\AAccepted\./, rt.client.sent.first.fetch("text"),
+                   "the acknowledgement must be the first channel delivery")
+      assert_equal "22222222", answers.first.fetch("chat_id"),
                    "the answer returns to the conversation that asked"
       # The VERIFIED answer and nothing else. Asserting `include?` here would
       # also pass on a dump of the session state that produced it, which is
       # internal detail and unbounded — a correspondent gets the answer.
-      assert_equal "hello", rt.client.sent.first.fetch("text"),
+      assert_equal "hello", answers.first.fetch("text"),
                    "the answer must be the turn's verified answer, not its state"
       assert_hard_counters_zero(rt)
     end

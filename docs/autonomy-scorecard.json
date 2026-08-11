@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-11T09:18:49Z",
+  "generated_at": "2026-08-11T10:35:36Z",
   "source": "test/autonomy_scorecard_test.rb",
   "note": "Every row is produced by RUNNING its case through the public CLI. A row is `pass` only because the case executed and passed.",
   "total": 15,
