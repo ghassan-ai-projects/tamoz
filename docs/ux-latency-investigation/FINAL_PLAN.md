@@ -1,14 +1,34 @@
 # Tamoz Agent Improvement Plan
 
-**Status:** implementation-ready proposal.
+**Status:** deterministic implementation complete through Slice 8; Slice 9 evidence
+is in progress. Release thresholds that require a live provider or a green aggregate
+gate remain unclaimed.
 
 **Evidence date:** 2026-08-11.
 
 **Scope:** agent responsiveness, read-only task completion, truthful feedback,
 Telegram delivery latency, and the measurements that prevent regressions.
 
-**Authority:** this document does not authorize cross-gem interface changes. Slices
-4, 6, and 7 require an owner checkpoint before coding, as required by `AGENTS.md`.
+**Authority:** the required owner checkpoints for durable graph, delivery, and typed
+channel changes were accepted during this implementation. The cross-gem contracts
+remain narrow and their live-provider qualification is still outstanding.
+
+## Implementation status at the current commit
+
+| Slice | Status | Evidence |
+|---|---|---|
+| 0–3 | implemented | deterministic routing corpus, truthful response semantics, and latency smoke |
+| 4 | implemented | durable v1/v2 compatibility spike, v2 route, read-only discovery path |
+| 5 | qualified offline; default remains legacy | explicit experimental/shadow switches and offline artifact |
+| 6 | implemented deterministically | independent drainer, durable pacing/deadlines, ambiguous `unknown` handling |
+| 7 | implemented deterministically | accepted acknowledgement, typed commands, bounded `/status` and `/cancel` |
+| 8 | implemented deterministically | receipt-derived progress and truthful stop/recovery rendering |
+| 9 | in progress | evidence and operator documentation are being refreshed; live Telegram/provider runs are not claimed |
+
+The current verification record is kept in
+[`IMPLEMENTATION_EVIDENCE.md`](IMPLEMENTATION_EVIDENCE.md). In particular, the
+offline fixture passing does not establish provider latency, Telegram delivery
+latency, or release readiness.
 
 This plan supersedes the earlier synthesis. The investigation reports remain the
 evidence record; [`PLAN_REVIEW.md`](PLAN_REVIEW.md) records the corrections made
@@ -48,34 +68,32 @@ does not make the gate meaningless.
 The implementation agent must start from these verified facts, not from the first
 draft's broader claims:
 
-- `Runtime` and durable `Session` already split action-capable work into a
+- `Runtime` and durable v2 `Session` now split action-capable work into a
   read-only discovery phase followed by an action/repair phase. Do not build a
   second mutation discovery framework.
-- Read-only work still uses one static `read_only` plan. That is where the
-  discovery/concreteness deadlock remains.
+- Read-only work receives a route-provided discovery plan, executes it with
+  read-only capabilities, and then creates the evidence-scoped `read_only` plan.
 - The observability gem, catalog, journal, worker producer, trace, metrics, and
   doctor surfaces exist. Model/tool/turn and comms stage producers are the missing
   part; a new observability subsystem is not required.
 - `Tamoz::Comms::Transport#signal` is a real seam, but Telegram currently supports
   callback acknowledgement only. Typing is not an already-working capability.
-- `request.accepted` is intentionally absent from `OutboxDeliverySink`; v1 chose
-  terminal-only channel messages.
-- `/help`, `/status`, and `/cancel` are recognized, but `Admission` reduces them to
-  a control disposition with no executable intent and usually no reply.
+- `request.accepted` is now a bounded, non-terminal delivery intent. It does not
+  consume the reserved terminal capacity.
+- `/help`, `/status`, and `/cancel` now produce typed, bounded control behavior;
+  command text never becomes task text. `/status` intentionally reports only the
+  redacted state and open-request count currently available at the comms boundary.
 - Telegram ambiguous sends deliberately become durable `unknown` deliveries.
   Retrying them can duplicate a visible message because Telegram has no idempotency
   key for `sendMessage`. Keep that invariant.
-- The gateway drains outbound messages only after its long poll completes. This is
-  the quiet-stream 0-31 second delivery defect.
-- The committed autonomy scorecard is currently 14/16. Case 09 drives a removed
-  `stream publish` CLI surface, and case 10's `:effect_started` crash fixture actually
-  raises after the model's review call, before an effect starts. These are stale
-  scorecard seams, not evidence that the underlying safety properties pass or fail.
-  Repair the public-surface probes before using `autonomy_strict` as a feature gate.
-- The current `rake ci` baseline has one non-sandbox failure:
-  `DocumentationSurfaceTest` reports that measured gap ADR-015 is missing from its
-  disclosure map and `docs/LIMITATIONS.md`. Correct that baseline documentation in a
-  separate commit; do not attribute it to this feature or weaken the gate.
+- The CLI now schedules outbound delivery through an independent `DeliveryDrainer`
+  with its own adapter/transport in the long-running gateway process. The old
+  poll-coupled path remains available to deterministic one-pass tests.
+- The committed autonomy scorecard is now 15/15 after updating the channel case to
+  require exactly one terminal answer while also requiring the accepted acknowledgement.
+- The aggregate test runners still have environment/order-sensitive failures in
+  subprocess-heavy scorecard, crash, worker, and locale cases. Their focused suites
+  pass independently; this remains an evidence gap, not a reason to weaken tests.
 
 ## 3. Root cause and design decision
 

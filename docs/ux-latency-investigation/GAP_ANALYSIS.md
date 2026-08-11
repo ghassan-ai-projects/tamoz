@@ -7,11 +7,12 @@ whether its preferred architecture is elegant.
 
 ## Verdict
 
-The plan covers the dominant latency and completion failures, and the first
-ephemeral slices are now implemented: measurement, truthful feedback, explicit
-routing, and shadow qualification. The critical and high gaps have been folded
-into [`FINAL_PLAN.md`](FINAL_PLAN.md). Durable graph compatibility and the
-cross-gem delivery/command contracts remain deliberately owner-gated.
+The plan covers the dominant latency and completion failures. The deterministic
+implementation now includes measurement, truthful feedback, explicit routing,
+durable v1/v2 selection, read-only discovery, independent delivery draining, typed
+channel controls, and receipt-derived partial progress. The critical and high gaps
+are folded into [`FINAL_PLAN.md`](FINAL_PLAN.md). Live provider/Telegram evidence and
+aggregate gate stabilization remain open release work.
 
 ## Gap register
 
@@ -24,11 +25,11 @@ cross-gem delivery/command contracts remain deliberately owner-gated.
 | G5 | High | Route calls were outside explicit worker budgets and retry accounting | Malformed routing plus fallback could spend an extra unmetered call or cross a ceiling | Route calls share model/token/time/cost budgets; boundary and restart tests were added |
 | G6 | High | Global provider promotion assumed route JSON quality transfers between models | A weak or differently formatted configured model could become unsafe or loop on fallback | Qualification and promotion are per provider/model role; unknown roles use legacy behavior |
 | G7 | High | The delivery drainer had no complete durable retry state machine | `retry_after` could live only in sleep/process memory; restart could hot-loop or ignore claim expiry | Slice 6 now requires explicit durable transitions/deadlines before extraction and a cross-gem checkpoint if schema is needed |
-| G8 | High | Ack, progress, and terminal ordering was not defined | A quick answer could be followed by a stale "Working on it" message | Per-conversation ordering/coalescing and a concurrent fast-completion test are required |
+| G8 | High | Ack, progress, and terminal ordering was not defined | A quick answer could be followed by a stale "Working on it" message | Accepted acknowledgement is durable and precedes the terminal answer in the fixture; broader surface-revision/coalescing evidence remains |
 | G9 | High | Drainer concurrency ignored configured Telegram rate limits | Faster delivery can create throttling, starvation, or unfairness across chats | Slice 6 now owns per-chat/global pacing and restart tests |
 | G10 | Medium | One-shot observability had no recorder construction or join key | Signals could be unjoinable or require hidden global state | Slice 1 must define explicit recorder/correlation injection for ephemeral `Runtime` |
 | G11 | Medium | "Exactly one user-facing terminal message" exceeded what the system can prove | Network ambiguity means durable intent does not prove visibility | Acceptance and definition-of-done now require one durable intent and honest unknown outcomes |
-| G12 | Medium | Second discovery was named but its trigger taxonomy was not | Generic repairable tool failures could become accidental discovery loops | The remaining implementation must define a closed typed missing-evidence source before slice 4; otherwise the second pass is removed |
+| G12 | Medium | Second discovery was named but its trigger taxonomy was not | Generic repairable tool failures could become accidental discovery loops | No generic second discovery loop was added; the current implementation stops through the existing bounded recovery path until a typed missing-evidence contract is accepted |
 | G13 | Medium | Shadow evaluation did not say how direct-answer quality is judged | Route precision could pass while answers are useless | Slice 0/5 evidence must grade route correctness and direct answer usefulness separately |
 | G14 | Medium | Channel control capacity and terminal reservation were covered, but surface revision changes were not | Old queued control rows could be rendered under changed policy | Slice 7 tests must pin the surface revision carried by each delivery and refuse silent reinterpretation |
 
@@ -37,13 +38,13 @@ cross-gem delivery/command contracts remain deliberately owner-gated.
 | Concern | Covered by | Remaining decision |
 |---|---|---|
 | Simple latency | Slices 0, 1, 3, 5 | Live provider qualification remains reported, not gated |
-| Read-only completion | Slice 4 | Closed `missing_evidence` taxonomy |
+| Read-only completion | Slice 4 | First discovery -> evidence-scoped read-only plan is implemented; a second typed discovery pass remains intentionally unimplemented |
 | Mutation authority | Existing action pipeline + slices 3/4 tests | None; must not relax |
 | Durable compatibility | Slice 4 spike | Whether v1 can resume directly or needs version selection |
 | CLI liveness | Slice 2 | Exact TTY rendering is implementation-local |
 | Terminal truthfulness | Slices 2 and 8 | Safe reason vocabulary |
-| Telegram latency | Slice 6 | Cross-gem drainer/store contract |
-| Telegram controls | Slice 7 | Typed command-intent contract |
+| Telegram latency | Slice 6 | Deterministic drainer/store contract is implemented; real-provider timing remains |
+| Telegram controls | Slice 7 | Typed command-intent contract is implemented; surface revision/coalescing evidence remains |
 | Delivery ambiguity | Slices 6/7 | Operator reconciliation UX |
 | Conversation context | Slices 0/4 tests | Provenance-carrying direct context deferred |
 | Budgets/cost | Slices 1, 3, 4 | Provider usage availability remains conditional |
@@ -81,9 +82,8 @@ fast but semantically ambiguous direct path from entering durable sessions first
 
 ## Exit for the gap-analysis review
 
-Slices 0–3 and the shadow qualification portion of slice 5 are implemented and
-covered by focused tests, the deterministic smoke artifact, `rake ci`, and
-`rake autonomy_strict`. Slice 4 remains blocked on explicit v1/v2 graph selection
-and the closed `missing_evidence` decision. Slices 6 and 7 remain blocked on their
-named cross-gem owner checkpoints. No other uncovered issue requires a new
-subsystem.
+Slices 0–8 are implemented and covered by focused tests, the deterministic smoke
+artifact, the 15/15 autonomy scorecard, and the Enola structural gate. The second
+typed discovery pass is deliberately not present, so no generic repair-loop claim is
+made. Slice 9 remains open for live provider/Telegram evidence and stabilization of
+the aggregate subprocess/locale gate. No new subsystem is required for that work.

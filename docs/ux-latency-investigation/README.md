@@ -8,6 +8,21 @@ Staff+-level investigation into five symptoms:
 4. The Telegram experience feels slow or unsmooth.
 5. Users receive insufficient acknowledgement, progress, recovery, or completion feedback.
 
+## Current implementation status
+
+The deterministic implementation slices are now in place through verified partial
+progress: fused routing, durable v2 route selection, read-only discovery, independent
+delivery draining, typed channel controls, and receipt-derived terminal progress. The
+legacy path remains the default. The experimental path is opt-in with
+`--experimental-routing`, and malformed or unsafe route decisions fall back to the
+legacy lifecycle.
+
+The offline qualification artifact and autonomy scorecard pass. Live provider timing,
+real Telegram timing, and the complete aggregate CI gate remain release evidence to
+collect; they are not inferred from the offline fixture. See
+[`IMPLEMENTATION_EVIDENCE.md`](IMPLEMENTATION_EVIDENCE.md) and
+[`OPERATOR_GUIDE.md`](OPERATOR_GUIDE.md).
+
 ## Method
 
 The investigation began as an evidence-only loop and now carries the accepted
@@ -45,6 +60,10 @@ Run `rbenv exec ruby script/agent_latency_smoke --live` only with an explicitly
 configured provider; live timing is reported evidence, not a CI assertion.
 
 Final implementation plan: [FINAL_PLAN.md](FINAL_PLAN.md)
+
+Implementation evidence: [IMPLEMENTATION_EVIDENCE.md](IMPLEMENTATION_EVIDENCE.md)
+
+Operator guide: [OPERATOR_GUIDE.md](OPERATOR_GUIDE.md)
 
 Code-level review and corrections: [PLAN_REVIEW.md](PLAN_REVIEW.md)
 

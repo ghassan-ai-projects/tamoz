@@ -24,15 +24,15 @@ Wall-clock values are reported evidence. Offline values are harness timing, not 
 {
   "direct_response": {
     "p50": 0,
-    "p95": 1
+    "p95": 0
   },
   "route_adversarial": {
     "p50": 0,
     "p95": 1
   },
   "read_only_discovery": {
-    "p50": 1,
-    "p95": 1
+    "p50": 0,
+    "p95": 2
   }
 }
 ```

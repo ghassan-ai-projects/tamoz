@@ -104,13 +104,15 @@ are shipped and covered by focused tests and autonomy cases. Telegram is
 therefore a real, configured operator surface; it is not accurate to describe
 it as absent.
 
-The latency investigation's channel work is still incomplete. The independent
-outbound drainer, durable retry-deadline/rate-limit state, acknowledgement and
-control ordering, and a real-provider end-to-end qualification remain pending
-owner-gated slices. Ambiguous sends remain durable `unknown` and are never
-blindly retried. See [`COMMS_TELEGRAM_PLAN.md`](COMMS_TELEGRAM_PLAN.md) and
-[`docs/ux-latency-investigation/FINAL_PLAN.md`](ux-latency-investigation/FINAL_PLAN.md)
-for the remaining release criteria.
+The latency investigation's deterministic channel work is implemented: the CLI
+uses an independent outbound drainer, retry deadlines and pacing are durable,
+accepted acknowledgements and typed `/help`, `/status`, and `/cancel` controls are
+covered, and ambiguous sends remain durable `unknown` and are never blindly retried.
+The remaining release evidence is a real-provider end-to-end qualification, broader
+surface-revision/coalescing proof, and aggregate subprocess/locale gate stability.
+See [`COMMS_TELEGRAM_PLAN.md`](COMMS_TELEGRAM_PLAN.md) and
+[`docs/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md`](ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md)
+for the current boundary.
 
 ### Observability remains partial (invariants 59–61, ADR-044–047)
 

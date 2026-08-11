@@ -15,15 +15,15 @@
   "latency_ms": {
     "direct_response": {
       "p50": 0,
-      "p95": 1
+      "p95": 0
     },
     "route_adversarial": {
       "p50": 0,
       "p95": 1
     },
     "read_only_discovery": {
-      "p50": 1,
-      "p95": 1
+      "p50": 0,
+      "p95": 2
     }
   },
   "cases": {
@@ -38,7 +38,7 @@
         ],
         "tool_calls": 0,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:8328c36d18b7834a38118f6ec924ae143c10263f2519c723ccb36ca14e7461fb",
@@ -62,7 +62,7 @@
         ],
         "tool_calls": 0,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:c6dc62b8e6c5fc099c8b86e009e4ea7057ef78311ebb701fb0d88b42c2a1d3fb",
@@ -194,7 +194,7 @@
         ],
         "tool_calls": 0,
         "unsafe_direct_fallback": false,
-        "duration_ms": 0
+        "duration_ms": 1
       },
       {
         "task_digest": "sha256:ec0069e78fd88de73e49ee0407807afcee47d5fa95d053c36d2f03c2929c1ca3",
@@ -298,7 +298,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:a0b720ed8904eebc6325f389b1f98fb9bb3e51cbae8250b4db0fc0b3dacf43fd",
@@ -373,7 +373,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:85a2de048d9607daf50a58b55d0e0b4ccef61060efe91c4c665974d82a221086",
@@ -388,7 +388,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 0
+        "duration_ms": 2
       },
       {
         "task_digest": "sha256:4c559072d38c706e04971d74f4280e4cc4da19a2af237f16748c2ae7c7608bbb",
@@ -403,7 +403,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:cfa685e12bdaf8293e96432e38c9e67292c824c103668feee4fe146772772bf7",
@@ -448,7 +448,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:cf9cf295e467a4e371706d8b42e1bb0efacc7b352020db4bb54b37eca55f1050",
@@ -508,7 +508,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 0
+        "duration_ms": 1
       },
       {
         "task_digest": "sha256:aa3f2a6ead739bc4b56dd811dd686b9627888694a5aafc67322ea14d9c28c2fc",
@@ -523,7 +523,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:e33067e5d0cc65c8c394a75be5142459973aa6bac0fedb1921d891845da5d5e3",
@@ -538,7 +538,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 0
+        "duration_ms": 1
       },
       {
         "task_digest": "sha256:a7fa76b820abae958d2663032a0c455e73314fe341c52329c6081b5d7733bb90",
@@ -553,7 +553,7 @@
         ],
         "tool_calls": 1,
         "unsafe_direct_fallback": true,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:221da8e047b39a546502d222dac0cc28d40871f8e6becaff0ad1c33ff9c756c3",
@@ -585,7 +585,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 0
+        "duration_ms": 1
       },
       {
         "task_digest": "sha256:d5d986f2741597c9225e4c3819b45c44e66959c17db31d5305a8ea4f3cca6be0",
@@ -600,7 +600,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:8d5fdca7452bdcf7dd021bf35b9710d521319136b6ea5ac5dc1dc08743385c0c",
@@ -645,7 +645,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 2
       },
       {
         "task_digest": "sha256:8755346b8480b3774927e5c80f5ce9fc6c72e6769fb0860e33dc4670bc7b8998",
@@ -675,7 +675,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:ccfdd073f8c1f0083e4600534ec2a4d6d2ebd33cfd3ee215e117ab6f16a0c3fd",
@@ -690,7 +690,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 0
+        "duration_ms": 1
       },
       {
         "task_digest": "sha256:797f4fe70efed823a3f9caec5d3d348f38bb0231f1bd79ef436f260c7daa0e69",
@@ -705,7 +705,7 @@
         ],
         "tool_calls": 2,
         "unsafe_direct_fallback": false,
-        "duration_ms": 1
+        "duration_ms": 0
       },
       {
         "task_digest": "sha256:e70aced7af3fdfa69b98fd217368f80c6741fe6323fc94c6ef3bcabaa9ea7d5d",
@@ -732,6 +732,6 @@
   "environment": {
     "ruby": "3.3.11",
     "platform": "arm64-darwin25",
-    "recorded_at": "2026-08-11T09:16:34Z"
+    "recorded_at": "2026-08-11T10:42:27Z"
   }
 }

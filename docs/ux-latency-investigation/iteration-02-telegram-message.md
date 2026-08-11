@@ -15,6 +15,13 @@ times below are derived from code constants, marked accordingly): the message
 takes the identical durable path as any task, and the user sees **nothing** until
 the terminal answer.
 
+This is the pre-implementation baseline. The deterministic follow-up now emits an
+accepted acknowledgement, drains outbound rows independently, and handles typed
+`/help`, `/status`, and `/cancel` controls. The historical timing and findings below
+remain unchanged evidence of the original defect; current implementation status and
+the unmeasured real-provider boundary are in
+[`IMPLEMENTATION_EVIDENCE.md`](IMPLEMENTATION_EVIDENCE.md).
+
 ## Lifecycle trace (all stages confirmed in source)
 
 Telegram update → gateway long-poll (`transport.rb:35-43`, 30 s timeout) →

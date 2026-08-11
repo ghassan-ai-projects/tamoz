@@ -11,6 +11,12 @@ Expected experience: quick acknowledgement, a short plan, directory listing,
 per-file reads, a synthesized answer, and a truthful terminal report — in well
 under a minute.
 
+This report is the pre-implementation baseline. Durable v2 now accepts a route
+provided discovery plan and transitions to an evidence-scoped read-only plan; the
+current implementation boundary, including the intentionally absent generic second
+discovery pass, is recorded in
+[`IMPLEMENTATION_EVIDENCE.md`](IMPLEMENTATION_EVIDENCE.md).
+
 Observed outcome **[measured]**: **exit 1 after 23.6 s and 6+ model calls with
 zero tool calls executed.** All 3 plan attempts were rejected by semantic
 review; the CLI printed `tamoz: no plan passed review after 3 attempts: the
