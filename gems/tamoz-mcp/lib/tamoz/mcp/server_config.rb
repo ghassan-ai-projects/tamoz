@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "uri"
+
 module Tamoz
   module Mcp
     # Immutable admission configuration for one MCP server (P10 §4). Validated
@@ -8,12 +10,15 @@ module Tamoz
     # before adoption, exactly like the P8 profile/check preview.
     ServerConfig = Data.define(
       :server_id,          # SERVER_ID_PATTERN; the ONLY source of source qualification
-      :transport,          # :stdio (v1 only; :http is reserved and rejected)
-      :command,            # absolute path to the executable
+      :transport,          # :stdio or :http (Streamable HTTP)
+      :command,            # absolute path to the executable for stdio
       :arguments,          # frozen argv, no shell, no metacharacters
       :env_allowlist,      # names the child may inherit; values never logged
-      :credential_refs,    # env var names the child receives from the operator env
-      :working_directory,  # absolute, must exist, not the agent workspace root
+      :credential_refs,    # env var names resolved for the child or HTTP headers
+      :working_directory,  # absolute for stdio, nil for HTTP
+      :endpoint,           # absolute HTTP(S) endpoint for HTTP
+      :headers, # non-secret static HTTP headers
+      :credential_headers, # HTTP header => credential ref name
       :protocol_range,     # [min, max], default ["2025-11-25", "2026-07-28"]
       :primitives,         # subset of %i[tools resources prompts]; default [:tools]
       :budgets             # Budgets
@@ -103,11 +108,14 @@ module Tamoz
       def initialize(
         server_id:,
         transport:,
-        command:,
-        working_directory:,
+        command: nil,
+        working_directory: nil,
+        endpoint: nil,
         arguments: [],
         env_allowlist: [],
         credential_refs: [],
+        headers: {},
+        credential_headers: {},
         protocol_range: DEFAULT_PROTOCOL_RANGE,
         primitives: DEFAULT_PRIMITIVES,
         budgets: Budgets.new,
@@ -116,11 +124,15 @@ module Tamoz
         server_id = validate_server_id!(server_id)
         transport = validate_transport!(transport)
         workspace = validate_workspace_root!(workspace_root)
-        command = validate_command!(command, workspace)
         arguments = validate_arguments!(arguments)
         env_allowlist = validate_env_allowlist!(env_allowlist)
         credential_refs = validate_credential_refs!(credential_refs)
-        working_directory = validate_working_directory!(working_directory, workspace)
+        endpoint = validate_endpoint!(endpoint, transport)
+        headers = validate_headers!(headers)
+        credential_headers = validate_credential_headers!(credential_headers, credential_refs, headers)
+        command, working_directory = validate_process_surface!(
+          transport, command, arguments, env_allowlist, working_directory, workspace
+        )
         protocol_range = validate_protocol_range!(protocol_range)
         primitives = validate_primitives!(primitives)
         unless budgets.is_a?(Budgets)
@@ -129,7 +141,8 @@ module Tamoz
 
         super(
           server_id:, transport:, command:, arguments:, env_allowlist:,
-          credential_refs:, working_directory:, protocol_range:, primitives:,
+          credential_refs:, working_directory:, endpoint:, headers:, credential_headers:,
+          protocol_range:, primitives:,
           budgets:
         )
       end
@@ -146,6 +159,9 @@ module Tamoz
           "env_allowlist" => env_allowlist.dup,
           "credential_refs" => credential_refs.dup,
           "working_directory" => working_directory,
+          "endpoint" => endpoint,
+          "headers" => headers.keys,
+          "credential_headers" => credential_headers.keys,
           "protocol_range" => protocol_range.dup,
           "primitives" => primitives.map(&:to_s),
           "budgets" => {
@@ -179,14 +195,98 @@ module Tamoz
       end
 
       def validate_transport!(value)
-        if value == :http
-          raise ValidationError, "transport :http is reserved; only :stdio is supported in v1"
-        end
-        unless value == :stdio
-          raise ValidationError, "transport must be :stdio, got #{value.inspect}"
+        unless %i[stdio http].include?(value)
+          raise ValidationError, "transport must be :stdio or :http, got #{value.inspect}"
         end
 
         value
+      end
+
+      def validate_endpoint!(value, transport)
+        return nil if transport == :stdio && value.nil?
+        unless transport == :http && value.is_a?(String) && !value.empty?
+          raise ValidationError, "endpoint is required for :http and must be an absolute URL"
+        end
+
+        uri = URI.parse(value)
+        unless %w[http https].include?(uri.scheme) && uri.host && uri.userinfo.nil? && uri.fragment.nil?
+          raise ValidationError, "endpoint must be an absolute http(s) URL without userinfo or fragments"
+        end
+        if uri.scheme == "http" && !loopback_host?(uri.host)
+          raise ValidationError, "endpoint must use https unless it targets loopback"
+        end
+
+        value.dup.freeze
+      rescue URI::InvalidURIError
+        raise ValidationError, "endpoint must be an absolute http(s) URL"
+      end
+
+      def loopback_host?(host)
+        %w[localhost 127.0.0.1 ::1].include?(host.downcase.delete("[]"))
+      end
+
+      def validate_headers!(value)
+        unless value.is_a?(Hash)
+          raise ValidationError, "headers must be a mapping of non-secret names to strings"
+        end
+
+        value.each_with_object({}) do |(name, header_value), result|
+          validate_header_name!(name)
+          if credential_header_name?(name)
+            raise ValidationError, "headers cannot contain credential-bearing #{name.inspect}; use credential_headers"
+          end
+          validate_header_value!(header_value)
+          result[name.dup.freeze] = header_value.dup.freeze
+        end.freeze
+      end
+
+      def validate_credential_headers!(value, credential_refs, static_headers)
+        unless value.is_a?(Hash)
+          raise ValidationError, "credential_headers must map HTTP header names to credential refs"
+        end
+
+        static_names = static_headers.keys.map(&:downcase)
+        value.each_with_object({}) do |(name, ref), result|
+          validate_header_name!(name)
+          if static_names.include?(name.downcase)
+            raise ValidationError, "credential_headers cannot duplicate static header #{name.inspect}"
+          end
+          unless ref.is_a?(String) && credential_refs.include?(ref)
+            raise ValidationError,
+                  "credential_headers entry #{name.inspect} must reference a name in credential_refs"
+          end
+
+          result[name.dup.freeze] = ref.dup.freeze
+        end.freeze
+      end
+
+      def validate_header_name!(name)
+        unless name.is_a?(String) && name.match?(/\A[A-Za-z0-9!#$%&'*+.^_`|~-]+\z/)
+          raise ValidationError, "HTTP header names must be valid strings"
+        end
+      end
+
+      def validate_header_value!(value)
+        unless value.is_a?(String) && value.bytesize <= 4096 && !CONTROL_CHARACTER_PATTERN.match?(value)
+          raise ValidationError, "HTTP header values must be bounded strings without control characters"
+        end
+      end
+
+      def credential_header_name?(name)
+        name.match?(/authorization|cookie|token|secret|api[-_]?key|password/i)
+      end
+
+      def validate_process_surface!(transport, command, arguments, env_allowlist, working_directory, workspace)
+        if transport == :http
+          unless command.nil? && arguments.empty? && env_allowlist.empty? && working_directory.nil?
+            raise ValidationError,
+                  "HTTP MCP servers cannot configure a command, argv, environment, or working directory"
+          end
+
+          return [nil, nil]
+        end
+
+        [validate_command!(command, workspace), validate_working_directory!(working_directory, workspace)]
       end
 
       def validate_workspace_root!(value)

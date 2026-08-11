@@ -126,6 +126,12 @@ module Tamoz
 
       attr_reader :config, :circuit_threshold, :retry_budget
 
+      def self.build(config, **)
+        return HttpSupervisor.new(config, **) if config.transport == :http
+
+        new(config, **)
+      end
+
       # Jitter applied to the exponential restart backoff (±20%).
       BACKOFF_JITTER = 0.2
 

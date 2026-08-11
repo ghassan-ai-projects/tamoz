@@ -120,8 +120,42 @@ class McpServerConfigTest < Minitest::Test
 
   # --- transport --------------------------------------------------------------
 
-  def test_http_transport_is_reserved
-    assert_invalid({transport: :http}, /reserved/)
+  def test_http_transport_requires_an_endpoint
+    assert_invalid({transport: :http}, /endpoint/)
+  end
+
+  def test_http_transport_accepts_a_loopback_endpoint_without_a_process
+    config = ServerConfig.new(server_id: "remote", transport: :http, endpoint: "http://127.0.0.1:8787/mcp")
+
+    assert_nil config.command
+    assert_nil config.working_directory
+    assert_equal "http://127.0.0.1:8787/mcp", config.endpoint
+  end
+
+  def test_remote_http_requires_tls
+    assert_invalid({transport: :http, endpoint: "http://remote.example/mcp"}, /https/)
+  end
+
+  def test_http_credential_headers_are_names_only_and_must_reference_a_credential
+    config = ServerConfig.new(
+      server_id: "remote",
+      transport: :http,
+      endpoint: "http://127.0.0.1:8787/mcp",
+      credential_refs: ["TAMOZ_MCP_TOKEN"],
+      credential_headers: { "Authorization" => "TAMOZ_MCP_TOKEN" }
+    )
+
+    assert_equal({ "Authorization" => "TAMOZ_MCP_TOKEN" }, config.credential_headers)
+    assert_equal ["Authorization"], config.describe.fetch("credential_headers")
+    error = assert_raises(ValidationError) do
+      ServerConfig.new(
+        server_id: "remote",
+        transport: :http,
+        endpoint: "http://127.0.0.1:8787/mcp",
+        credential_headers: { "Authorization" => "TAMOZ_MCP_TOKEN" }
+      )
+    end
+    assert_match(/credential_headers/, error.message)
   end
 
   def test_unknown_transport_is_rejected
@@ -326,7 +360,7 @@ class McpServerConfigTest < Minitest::Test
     assert_operator Tamoz::Mcp::ProtocolError, :<, Tamoz::Mcp::Error
     assert_operator Tamoz::Mcp::CatalogSnapshotUnavailableError, :<, Tamoz::Mcp::Error
 
-    error = assert_invalid({transport: :http}, /reserved/)
+    error = assert_invalid({transport: :http}, /endpoint/)
     assert_equal "mcp_validation", error.category
     assert_predicate error, :user_visible?
     refute_predicate error, :retryable?

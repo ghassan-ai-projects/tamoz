@@ -109,14 +109,18 @@ silently widening an existing session is refused.
 ## 4. MCP servers
 
 MCP is disabled until `sources.mcp.enabled: true` is present in the operator
-configuration. The server is a supervised stdio subprocess. Configuration is
-exact and fail-closed:
+configuration. Servers may use the official MCP SDK's stdio or Streamable HTTP
+transport. Configuration is exact and fail-closed:
 
 - `command` must be an absolute executable path, not a symlink, and outside the
   workspace;
 - arguments are an exact argv vector; there is no shell;
 - `working_directory` must exist and must not be the workspace;
 - only explicitly allowlisted environment names are inherited;
+- remote HTTP endpoints must use HTTPS; plain HTTP is allowed only for loopback
+  fixture servers;
+- HTTP credentials are never placed in YAML: list the environment name under
+  `credential_refs` and map the header under `credential_headers`;
 - `read_only_tools` is operator policy. An MCP server cannot mark its own tools
   read-only. Every unlisted tool is treated as unknown-effects and can require
   approval.
@@ -135,6 +139,32 @@ sources:
         env_allowlist: [PATH, HOME, LANG, LC_ALL]
         read_only_tools: [search_notes, get_note]
 ```
+
+For a remote Streamable HTTP MCP server, omit the process fields and configure
+the endpoint. Static headers are limited to non-secret values; credential
+headers resolve their values from the operator environment at connection time:
+
+```yaml
+sources:
+  mcp:
+    enabled: true
+    servers:
+      - id: enola
+        transport: http
+        endpoint: https://mcp.example.com/mcp
+        headers:
+          X-Tamoz-Client: tamoz
+        credential_refs: [TAMOZ_ENOLA_TOKEN]
+        credential_headers:
+          Authorization: TAMOZ_ENOLA_TOKEN
+        read_only_tools: [search]
+```
+
+The SDK performs the MCP initialize handshake, session management, catalog
+listing, tool call, and shutdown over HTTP. A missing credential fails before
+the first request. The worker opens the remote session again for execution
+after catalog pinning; seeing a second initialize handshake in transport logs
+is expected.
 
 Tool names are source-qualified. A server tool appears as
 `mcp:notes/search_notes`; a bare `search_notes` is not dispatchable. Check the
@@ -251,7 +281,7 @@ Check, in order:
 2. private runtime directory and `config.yaml` schema;
 3. active profile path and canonical root;
 4. `capability_sources` versus `capability_catalog`;
-5. MCP command permissions and working directory;
+5. MCP transport, endpoint/command permissions, and working directory;
 6. websearch grant, provider JSON, egress JSON, and exact allowlisted host;
 7. `status --json` for a durable approval or budget pause.
 

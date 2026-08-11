@@ -56,7 +56,7 @@ module Tamoz
         configs.each do |config, settings|
           snapshot = Tamoz::Mcp::Catalog.compile(config)
           catalogs[snapshot.server_id] = snapshot
-          supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.new(config)
+          supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
           read_only = Array(settings["read_only_tools"])
           snapshot.entries.each do |entry|
             descriptors << Tamoz::Mcp::Invocation.descriptor_for(
@@ -81,7 +81,7 @@ module Tamoz
       # server. It resolves the snapshot by the descriptor's OWN source id, so a
       # descriptor can never be executed against a different server's transport.
       def build_executor(catalogs, supervisors)
-        lambda do |descriptor, arguments, _context|
+        lambda do |_context, descriptor, arguments|
           server_id = descriptor.source_id
           snapshot = catalogs.fetch(server_id) do
             raise Error, "no pinned catalog for MCP server #{server_id.inspect}"
@@ -126,31 +126,39 @@ module Tamoz
         [config_for(WEBSEARCH_SERVER_ID, settings), settings]
       end
 
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def config_for(server_id, settings)
-        missing = REQUIRED_KEYS.reject { |key| settings[key].is_a?(String) && !settings[key].empty? }
+        transport = (settings["transport"] || "stdio").to_sym
+        required = transport == :http ? %w[endpoint] : REQUIRED_KEYS
+        missing = required.reject { |key| settings[key].is_a?(String) && !settings[key].empty? }
         unless missing.empty?
           raise Error, "MCP server #{server_id.inspect} is missing #{missing.join(", ")}"
         end
 
         Tamoz::Mcp::ServerConfig.new(
           server_id:,
-          transport: :stdio,
-          command: settings.fetch("command"),
+          transport:,
+          command: settings["command"],
           arguments: Array(settings["arguments"]),
           # The subprocess sees only what the operator listed. An empty allowlist
           # means an empty environment, which is the right default for something
           # that will be handed a network capability.
           env_allowlist: Array(settings["env_allowlist"]),
+          credential_refs: Array(settings["credential_refs"]),
+          endpoint: settings["endpoint"],
+          headers: settings["headers"] || {},
+          credential_headers: settings["credential_headers"] || {},
           # Two different directories, and the MCP gem refuses to let them be the
           # same one. `workspace_root` is the tree the AGENT edits; the server
           # runs somewhere else — the runtime directory by default — so a server
           # process never has the tree under repair as its cwd.
-          working_directory: settings["working_directory"] || @directory.path,
+          working_directory: transport == :stdio ? (settings["working_directory"] || @directory.path) : nil,
           workspace_root: @directory.workspace_root
         )
       rescue Tamoz::Mcp::ValidationError => error
         raise Error, "MCP server #{server_id.inspect} is misconfigured: #{error.message}"
       end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     end
   end
 end

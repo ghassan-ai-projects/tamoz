@@ -10,6 +10,7 @@
 
 require_relative "test_helper"
 require_relative "support/autonomy_case"
+require_relative "support/mcp_http_fixture_server"
 
 class AgentWorkerMcpTest < Minitest::Test
   include AutonomyCase
@@ -57,6 +58,46 @@ class AgentWorkerMcpTest < Minitest::Test
       refute_includes catalog, "echo_constant"
     end
   end
+
+  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  def test_the_worker_calls_a_real_mcp_server_over_http
+    server = McpHttpFixtureServer.new
+    previous_token = ENV.fetch("TAMOZ_MCP_HTTP_TOKEN", nil)
+    ENV["TAMOZ_MCP_HTTP_TOKEN"] = "agent-http-secret"
+    with_runtime do |rt|
+      configure_mcp(rt, {
+        "mcp" => {
+          "enabled" => true,
+          "servers" => [{
+            "id" => "remote",
+            "transport" => "http",
+            "endpoint" => server.url,
+            "credential_refs" => ["TAMOZ_MCP_HTTP_TOKEN"],
+            "credential_headers" => { "Authorization" => "TAMOZ_MCP_HTTP_TOKEN" },
+            "read_only_tools" => ["finish"]
+          }]
+        }
+      })
+
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        source = runtime.mcp_source
+        outcome = source.execute({}, "mcp:remote/finish", {})
+
+        assert_equal "done", outcome.observation.text
+        assert_includes source.names, "mcp:remote/finish"
+      ensure
+        runtime.close
+      end
+    end
+  ensure
+    server&.stop
+    ENV["TAMOZ_MCP_HTTP_TOKEN"] = previous_token
+  end
+  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
   # Websearch is an MCP server with a reserved id, which is what keeps it one of
   # the four closed-world sources rather than a fifth.
