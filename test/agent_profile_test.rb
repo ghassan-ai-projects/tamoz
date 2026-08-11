@@ -456,7 +456,8 @@ class AgentProfileTest < Minitest::Test
     File.chmod(0o700, File.join(@profiles_dir, ".tamoz"))
     path = write_profile(valid_document, name: "ops.yaml", dir: runtime_profiles)
 
-    profile = Profile.preview(path)
+    env = {"TAMOZ_CONFIG_HOME" => File.join(@profiles_dir, ".tamoz")}
+    profile = Profile.load(path, env:, confirm_adoption: ->(_document) { true })
 
     refute profile.suggestion
     assert_equal "test-profile", profile.profile_id
