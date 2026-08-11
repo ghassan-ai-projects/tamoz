@@ -266,7 +266,7 @@ module Tamoz
                     history:
         )
         if %i[enqueued duplicate].include?(outcome)
-          append_control('Accepted. I will report committed progress.', envelope, now:, kind: 'accepted')
+          append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
           return
         end
 
@@ -275,6 +275,23 @@ module Tamoz
         @store.disposition_only(envelope, surface_id:, bot_id:,
                                           disposition: 'rejected', reason: 'capacity_refused', now:)
         append_control('The channel is at capacity; try again later.', envelope, now:)
+      end
+
+      # The one synchronous acknowledgement. When earlier admitted work is
+      # still open the message QUEUES behind it (the worker settles one
+      # occurrence before claiming the next), and the reply must say so —
+      # "Accepted" alone reads as "starting now".
+      def accepted_reply(envelope)
+        status = @store.conversation_status(
+          surface_id:, conversation_id: envelope.fetch('conversation_id')
+        )
+        return 'Accepted. I will report committed progress.' unless status
+
+        if status.fetch('open_requests') > 1
+          'Queued behind earlier work; I will report committed progress when it runs.'
+        else
+          'Accepted. I will report committed progress.'
+        end
       end
 
       def handle_command(envelope, decision, now:)
