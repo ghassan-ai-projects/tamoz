@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'terminal_progress'
+
 module Tamoz
   module Agent
     # How a finished session reaches the operator: what is printed, and what the
@@ -53,7 +55,9 @@ module Tamoz
           emit_cli_event('cli.session', {
             'thread_id' => view.thread_id,
             'request_id' => view.execution_id,
-            'status' => view.status.to_s
+            'status' => view.status.to_s,
+            'progress' => TerminalProgress.summarize(view),
+            'terminal' => view.terminal
           })
         else
           render_final_view_human(view)
@@ -64,21 +68,41 @@ module Tamoz
         case view.status
         when :completed then render_verification(view)
         when :failed
-          @err.puts(@stream_error ? "tamoz: session failed: #{@stream_error}" : 'tamoz: session failed')
+          @err.puts "tamoz: #{TerminalProgress.progress_line(view)}"
+          @err.puts 'tamoz: session failed before verified completion'
+          @err.puts "tamoz: Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"
         when :blocked
-          @err.puts 'tamoz: session is blocked'
+          @err.puts "tamoz: #{TerminalProgress.progress_line(view)}"
+          @err.puts 'tamoz: session is blocked before verified completion'
+          @err.puts "tamoz: Next action: #{TerminalProgress.next_action('effect_unknown')}"
         end
       end
 
       # A completed session prints its answer only when it verified one; a
       # completion without verification says nothing rather than something empty.
+      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- one bounded terminal renderer.
       def render_verification(view)
         verification = view.state&.fetch(:verification, nil)
         return unless verification
 
-        @out.puts verification.fetch('answer', '')
-        @out.puts("\nVerification: #{verification.fetch('satisfied', false) ? 'satisfied' : 'not satisfied'}")
+        answer = verification.fetch('answer', '')
+        @out.puts answer unless answer.empty?
+        reason = view.terminal&.fetch('reason', nil)
+        if reason == 'direct_response'
+          @out.puts 'Response provided; no task completion was claimed.'
+        elsif verification.fetch('satisfied', false)
+          artifact_line = TerminalProgress.artifact_line(view)
+          @out.puts artifact_line if artifact_line
+          @out.puts "\nVerification: satisfied"
+        else
+          @out.puts TerminalProgress.progress_line(view)
+          artifact_line = TerminalProgress.artifact_line(view)
+          @out.puts artifact_line if artifact_line
+          @out.puts 'Verification: not satisfied'
+          @out.puts "Next action: #{TerminalProgress.next_action(reason)}"
+        end
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       def exit_for_view(view)
         case view.status
@@ -117,6 +141,7 @@ module Tamoz
               'descriptor' => interrupt.descriptor }
           end,
           'effect_receipts' => receipts,
+          'progress' => TerminalProgress.summarize(view),
           'terminal' => view.terminal
         }
       end

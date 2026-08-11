@@ -5,6 +5,8 @@ require "digest"
 require "securerandom"
 require "set"
 
+require_relative "terminal_progress"
+
 module Tamoz
   module Agent
     # The foreground worker.
@@ -265,7 +267,7 @@ module Tamoz
         # `steps` budget is spent. This is a STOP, not a failure: the work was
         # well-formed and the ceiling did its job, so it is reported as its own
         # typed event and recorded durably for `tamoz status`.
-        budget_exhausted(entry, budget: "steps", detail: error.message)
+        budget_exhausted(entry, budget: "steps", detail: error.message, session:)
       rescue StandardError => error
         emit("request.failed",
              thread: entry.fetch(:thread_id),
@@ -299,15 +301,16 @@ module Tamoz
       # Durable and observable, in that order. The record is written before the
       # event is emitted, so a worker that dies between the two still leaves an
       # operator able to see why the occurrence stopped.
-      def budget_exhausted(entry, budget:, detail:)
+      def budget_exhausted(entry, budget:, detail:, session: nil)
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
+        view = session && view_of(session, thread_id)
         notify_sink(
           thread_id,
           "request.stopped",
-          "Work stopped before verified completion: the #{budget} budget was exhausted.",
+          stop_text(view, reason: 'budget_exhausted', budget:),
           request_id: occurrence_id
         )
         # A budget stop is TERMINAL for the occurrence, so the record is closed.
@@ -440,7 +443,7 @@ module Tamoz
           # the reason belongs in the worker's event stream, where an operator
           # reads it, not in a chat a hostile plan could use to echo content
           # back. The turn still owes the conversation a terminal message.
-          notify_sink(thread_id, "request.failed", "That turn failed. Nothing was changed.",
+          notify_sink(thread_id, "request.failed", failure_text(view),
                       request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
@@ -510,16 +513,41 @@ module Tamoz
       # that verified nothing still owes the channel a terminal message, so it
       # says so plainly rather than delivering an empty one.
       # :reek:UtilityFunction -- a pure function of the view.
+      # rubocop:disable Layout/LineLength -- the message remains one bounded
+      # deterministic projection of the terminal state.
       def completion_text(view)
         answer = view.state&.dig(:verification, "answer").to_s
-        answer.empty? ? "Completed." : answer
+        satisfied = view.terminal&.fetch('satisfied', false)
+        if satisfied
+          [answer.empty? ? 'Completed.' : answer, TerminalProgress.artifact_line(view)].compact.join("\n")
+        elsif view.terminal&.fetch('reason') == 'direct_response'
+          [answer, 'Response provided; no task completion was claimed.'].reject(&:empty?).join("\n")
+        else
+          [answer, TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+           'Verification was not satisfied.',
+           "Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"].compact.reject(&:empty?).join("\n")
+        end
       end
+      # rubocop:enable Layout/LineLength
 
       def blocked_text(view)
-        operation = view.blocked&.fetch("operation", "the effect") || "the effect"
-        "Work stopped before verified completion: #{operation} has an unknown outcome. " \
-          "Resolve the effect before continuing."
+        stop_text(view, reason: 'effect_unknown')
       end
+
+      # rubocop:disable Style/StringConcatenation -- the terminal message is
+      # assembled from bounded independent lines.
+      def failure_text(view)
+        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+         'Work failed before verified completion.',
+         "Next action: #{TerminalProgress.next_action('failed')}"].compact.join("\n") + '.'
+      end
+
+      def stop_text(view, reason:, budget: nil)
+        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+         'Work stopped before verified completion.',
+         "Next action: #{TerminalProgress.next_action(reason, budget:)}"].compact.join("\n") + '.'
+      end
+      # rubocop:enable Style/StringConcatenation
 
       def describe_interrupt(interrupt)
         {
@@ -617,7 +645,7 @@ module Tamoz
           "worker.error" => "tamoz.worker.error",
           "schedule.materialized" => "tamoz.worker.schedule.materialized",
           "schedule.error" => "tamoz.worker.schedule.error"
-        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil }
+        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil } # rubocop:disable Layout/LineLength
         return unless name && Tamoz::Observability::Catalog.registered?(name)
 
         correlation = {}
