@@ -18,9 +18,11 @@ sources:
     servers:
       - id: alms
         transport: http
-        endpoint: "http://127.0.0.1:8001/mcp"
+        endpoint: "http://<private-alms-host>:8001/mcp"
+        allow_insecure_http: true
         read_only_tools:
           - learning.search
+          - learning.sync
 
 channels:
   telegram-ops:
@@ -28,7 +30,7 @@ channels:
     profile: ops
 ```
 
-Use HTTPS for a non-loopback ALMS endpoint. The loopback endpoint above assumes the managed SSH tunnel from the integration findings is already running. The Telegram surface must be configured with the real bot identity and an active conversation route; send one message to the bot first if `comms list` shows no route.
+For a private-network HTTP endpoint, `allow_insecure_http: true` is an explicit local opt-in; it permits the test but does not encrypt the connection. Use HTTPS for production or public endpoints. Keep the actual endpoint in the operator runtime config, not in this repository. The Telegram surface must be configured with the real bot identity and an active conversation route; send one message to the bot first if `comms list` shows no route.
 
 ## Run
 

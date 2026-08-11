@@ -3,6 +3,7 @@
 
 require 'digest'
 require 'json'
+require 'ipaddr'
 require 'open3'
 require 'optparse'
 require 'psych'
@@ -14,6 +15,26 @@ require 'uri'
 # Operator-facing ALMS and Telegram acceptance harness. It uses the same CLI
 # commands as an operator and only reads the outbox to verify the final receipt.
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+LIVE_ALMS_ENVIRONMENT_LOADER = lambda do
+  values = ENV.to_h
+  path = ENV.fetch('TAMOZ_ENV_FILE', File.expand_path('../.env', __dir__))
+  if File.file?(path)
+    File.foreach(path) do |line|
+      next if line.strip.empty? || line.lstrip.start_with?('#')
+
+      key, value = line.split(/\s*=\s*/, 2)
+      next if key.to_s.strip.empty? || value.nil?
+
+      name = key.strip.sub(/\Aexport\s+/, '')
+      parsed = value.strip
+      parsed = parsed[1..-2] if parsed.match?(/\A(['"]).*\1\z/)
+      values[name] = parsed unless values.key?(name)
+    end
+  end
+  values
+end.freeze
+
+# Runs the ALMS-to-Telegram acceptance flow through the operator CLI.
 class LiveAlmsTelegram
   DEFAULT_SURFACE = 'telegram-ops'
   DEFAULT_LIMIT = 5
@@ -36,8 +57,9 @@ class LiveAlmsTelegram
 
   def initialize(argv)
     @options = parse(argv)
-    @env = ENV.to_h
+    @env = LIVE_ALMS_ENVIRONMENT_LOADER.call
     @env['TAMOZ_PROVIDER'] = @env.fetch('TAMOZ_PROVIDER', 'deepseek')
+    @env['TAMOZ_MODEL'] = @env.fetch('TAMOZ_MODEL', 'deepseek-chat')
     @run_id = "alms-live-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(4)}"
     @runtime_dir = File.expand_path(@options.fetch(:runtime_dir))
     @cli = Shellwords.split(@env.fetch('TAMOZ_CLI', 'bundle exec tamoz'))
@@ -48,7 +70,10 @@ class LiveAlmsTelegram
     config = load_config
     surface = config.fetch('channels').fetch(@options.fetch(:surface))
     server = alms_server(config)
-    validate_transport(server.fetch('endpoint'))
+    validate_transport(
+      server.fetch('endpoint'),
+      allow_insecure_http: server.fetch('allow_insecure_http', false)
+    )
     validate_model_credentials
     validate_mcp_catalog
     doctor
@@ -58,6 +83,7 @@ class LiveAlmsTelegram
     end
 
     route = telegram_route
+    ensure_route_ready(route)
     thread = @options[:thread] || route.fetch('thread_id')
     profile = @options[:profile] || surface['profile']
     task = build_task
@@ -137,14 +163,21 @@ class LiveAlmsTelegram
     server
   end
 
-  def validate_transport(endpoint)
+  def validate_transport(endpoint, allow_insecure_http: false)
     uri = URI.parse(endpoint)
     loopback = %w[localhost 127.0.0.1 ::1].include?(uri.host)
-    return if uri.scheme == 'https' || loopback
+    private_http = uri.scheme == 'http' && allow_insecure_http == true && private_ip_host?(uri.host)
+    return if uri.scheme == 'https' || loopback || private_http
 
-    raise ArgumentError, 'ALMS HTTP endpoint must be HTTPS or loopback (use the managed tunnel)'
+    raise ArgumentError, 'ALMS HTTP endpoint must be HTTPS, loopback, or explicit private-network HTTP'
   rescue URI::InvalidURIError
     raise ArgumentError, 'ALMS endpoint is not a valid URI'
+  end
+
+  def private_ip_host?(host)
+    IPAddr.new(host.delete('[]')).private?
+  rescue IPAddr::InvalidAddressError
+    false
   end
 
   def validate_model_credentials
@@ -163,6 +196,7 @@ class LiveAlmsTelegram
     expected = "mcp:alms/#{REQUIRED_TOOL}"
     raise "ALMS catalog does not expose #{expected}" unless catalog.include?(expected)
 
+    @status_document = document
     phase('catalog_pinned', "run=#{@run_id} tool=#{expected}")
   end
 
@@ -182,10 +216,18 @@ class LiveAlmsTelegram
     route
   end
 
+  def ensure_route_ready(route)
+    paused = Array(@status_document && @status_document['paused_approvals'])
+    return unless paused.any? { |entry| entry['thread_id'] == route.fetch('thread_id') }
+
+    raise 'Telegram route thread is paused for approval; resolve the pending Telegram decision before rerunning'
+  end
+
   def build_task
     "Use mcp:alms/#{REQUIRED_TOOL} with query \"*\" and limit #{@options.fetch(:limit)} to retrieve " \
-      'learnings. Use only arguments supported by the pinned tool schema; do not invent sort or ' \
-      'other fields. Order the returned records by their newest available timestamps, then ' \
+      'learnings. Use only this ALMS MCP tool; do not use local filesystem tools, other MCP ' \
+      'tools, or invented arguments. Use only arguments supported by the pinned tool schema; ' \
+      'do not invent sort or other fields. Order the returned records by their newest available timestamps, then ' \
       "summarize each with its source and timestamp. Return only the verified summary. Live run #{@run_id}."
   end
 
@@ -217,15 +259,30 @@ class LiveAlmsTelegram
 
   def successful_worker?(result, events, request_id)
     result.success? && events.any? do |event|
-      event['event'] == 'request.completed' && event['request_id'] == request_id
+      worker_event_name(event) == 'request.completed' && worker_request_id(event) == request_id
     end
   end
 
   def worker_failure_detail(events, request_id)
     failure = events.find do |event|
-      event['event'] == 'request.failed' && event['request_id'] == request_id
+      worker_event_name(event) == 'request.failed' && worker_request_id(event) == request_id
     end
-    failure&.fetch('reason', 'unknown failure') || 'no terminal worker event'
+    return failure.fetch('reason', 'unknown failure') if failure
+
+    paused = events.find do |event|
+      worker_event_name(event) == 'request.paused' && worker_request_id(event) == request_id
+    end
+    return paused.fetch('reason', 'approval required') if paused
+
+    'no terminal worker event'
+  end
+
+  def worker_event_name(event)
+    event['event'] || event['name'].to_s.delete_prefix('tamoz.worker.')
+  end
+
+  def worker_request_id(event)
+    event['request_id'] || event.dig('correlation', 'occurrence_id')
   end
 
   def verify_gateway(result)

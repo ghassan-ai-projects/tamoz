@@ -183,6 +183,7 @@ module Tamoz
           env_allowlist: Array(settings["env_allowlist"]),
           credential_refs: Array(settings["credential_refs"]),
           endpoint: settings["endpoint"],
+          allow_insecure_http: settings.fetch("allow_insecure_http", false),
           headers: settings["headers"] || {},
           credential_headers: settings["credential_headers"] || {},
           # Two different directories, and the MCP gem refuses to let them be the

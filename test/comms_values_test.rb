@@ -134,6 +134,19 @@ class CommsValuesTest < Minitest::Test
                  'different content must not collide under the same logical id'
   end
 
+  def test_delivery_identity_key_distinguishes_repeated_occurrences
+    first = delivery(identity_key: 'occurrence-1')
+    repeat = delivery(identity_key: 'occurrence-1')
+    second = delivery(identity_key: 'occurrence-2')
+
+    assert_equal first.delivery_id, repeat.delivery_id
+    refute_equal first.delivery_id, second.delivery_id
+  end
+
+  def test_delivery_rejects_an_unbounded_identity_key
+    assert_raises(Comms::ValidationError) { delivery(identity_key: 'x' * 257) }
+  end
+
   def test_delivery_validates_kinds_parts_and_operations
     assert_raises(Comms::ValidationError) { delivery(kind: 'spam') }
     assert_raises(Comms::ValidationError) { delivery(part_index: 2, part_count: 1) }

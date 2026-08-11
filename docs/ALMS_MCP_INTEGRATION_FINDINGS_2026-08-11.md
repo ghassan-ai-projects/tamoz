@@ -117,5 +117,71 @@ WHERE thread_id='<thread>' AND status='completed';
 
 ---
 
-## 6. Recommended next step
+## 7. UPDATE 2026-08-11 17:40 — Telegram gateway delivery gap (why you see nothing)
+
+### Symptom
+Chatting with the bot @tamoz_agent_bot: you send a message and see **no reply**. The command-line test works fine (Section 2), but Telegram is silent.
+
+### Diagnosis (worker log)
+```
+request.claimed  ... request_id=b729...
+request.completed ... status=completed duration_ms=5713   # ALMS answer produced
+request.claimed  ... request_id=43b0...
+request.paused  ... reason=approval_required interrupts=[{"task_id"=>"sha256:47df5e60..."}]
+```
+- Your messages ARE received and processed.
+- Turns that involve ALMS (or any non-read-only step) **pause for approval** (`mode: deny_only` in the ops profile).
+- But the approval prompt is written to `tamoz_comms_approval_prompts` (status=active) and **never delivered** to your Telegram chat.
+
+### Root cause — worker ↔ gateway delivery sink mismatch
+- The **worker** (`tamoz worker`) writes outbound deliveries via `OutboxDeliverySink` → `tamoz_comms_outbox`.
+- The **gateway** (`tamoz comms serve`) drains the **stream** outbox (`tamoz_stream_outbox`).
+- Both outboxes end up **empty** → nothing is ever delivered to Telegram, including the approval prompt and earlier completed replies.
+
+### Also observed
+- `tamoz_comms_outbox` and `tamoz_stream_outbox` both stay empty despite completed/paused turns.
+- The approval prompt rows exist in `tamoz_comms_approval_prompts` but have an empty `prompt_receipt` (never sent).
+
+### Fix direction (not applied — requires tamoz code/setup change)
+1. Make the worker and gateway drain the SAME outbox, or route the worker's `OutboxDeliverySink` into the outbox the telegram gateway drains (align `tamoz_comms_outbox` vs `tamoz_stream_outbox`).
+2. OR run the gateway such that it also processes turns in-process (avoiding the two-process sink split), matching the intended deployment in COMMS_DESIGN.
+3. For the immediate ALMS test, the approval gating can be avoided by only sending read-only requests (e.g., `learning.search`) — but the delivery still must be fixed for any reply to appear.
+
+### Status of processes (as of 17:40)
+- Launch script `scripts/start-tamoz-comms.sh` created and working (loads .env properly, launches gateway + worker detached). Currently **stopped** pending the delivery fix.
+
+---
+
+## 8. Recommended next step
 Review **FIX-1** and apply it in the tamoz repo (wire `mcp:` into the CLI `run_durable` session), so `tamoz ask` works as well as the worker path. Also consider **FIX-3** (https in front of ALMS) to remove the tunnel dependency.
+
+## 9. UPDATE 2026-08-11 18:15 — current live-test correction
+
+The earlier Section 7 diagnosis was based on an outdated runtime observation. The
+current worker and Telegram gateway both use `tamoz_comms_outbox`; the active
+delivery failure was instead an idempotency collision:
+
+- approval prompts used identical delivery identity for one conversation because
+  their visible text and rendering digest are constant;
+- a second approval occurrence therefore returned `:duplicate` from the outbox;
+- the sink discarded that result and the new prompt remained inactive, so no
+  Telegram message was sent.
+
+The fix adds a bounded occurrence identity to approval delivery IDs while keeping
+retries for the same occurrence idempotent. A regression test covers repeated
+approval occurrences.
+
+The operator runtime now supports a deliberately explicit private-network HTTP
+opt-in (`allow_insecure_http: true`). The live script and the comms startup
+script read the endpoint from runtime configuration; repository tests and scripts
+do not contain the private endpoint.
+
+For “latest learnings”, the model may select `learning.sync` rather than an
+empty `learning.search`. It must therefore be classified in the operator
+`read_only_tools` list. The current live harness also refuses to queue onto a
+Telegram thread that is already paused for an unresolved approval.
+
+The pending approval was successfully drained to Telegram and recorded with a
+`succeeded` outbox receipt. The live acceptance run is waiting for that existing
+Telegram decision to be approved or denied; no decision was made by the test
+runner.

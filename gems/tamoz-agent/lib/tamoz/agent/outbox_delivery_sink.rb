@@ -118,6 +118,7 @@ module Tamoz
             text: 'An action needs your approval.', part_index: 0, part_count: 1,
             journaled: true, render_version: @rendering::RENDER_VERSION,
             content_digest: @rendering.content_digest('approval_request'),
+            identity_key: event.fetch(:request_id),
             markup:
           ).wire,
           surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),

@@ -136,6 +136,30 @@ class McpServerConfigTest < Minitest::Test
     assert_invalid({transport: :http, endpoint: "http://remote.example/mcp"}, /https/)
   end
 
+  def test_private_http_accepts_an_explicit_opt_in
+    config = ServerConfig.new(
+      server_id: "remote", transport: :http,
+      endpoint: "http://10.0.0.1:8787/mcp", allow_insecure_http: true
+    )
+
+    assert config.allow_insecure_http
+    assert config.describe.fetch("allow_insecure_http")
+  end
+
+  def test_private_http_opt_in_does_not_allow_a_public_host
+    assert_invalid(
+      {transport: :http, endpoint: "http://remote.example/mcp", allow_insecure_http: true},
+      /https/
+    )
+  end
+
+  def test_private_http_opt_in_must_be_boolean
+    assert_invalid(
+      {transport: :http, endpoint: "http://10.0.0.1:8787/mcp", allow_insecure_http: "true"},
+      /allow_insecure_http.*boolean/
+    )
+  end
+
   def test_http_credential_headers_are_names_only_and_must_reference_a_credential
     config = ServerConfig.new(
       server_id: "remote",
