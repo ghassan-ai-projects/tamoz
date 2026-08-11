@@ -450,6 +450,18 @@ class AgentProfileTest < Minitest::Test
     assert Profile.preview(path, suggestion: true).suggestion
   end
 
+  def test_runtime_profiles_under_dot_tamoz_are_operator_authority
+    runtime_profiles = File.join(@profiles_dir, ".tamoz", "profiles")
+    FileUtils.mkdir_p(runtime_profiles, mode: 0o700)
+    File.chmod(0o700, File.join(@profiles_dir, ".tamoz"))
+    path = write_profile(valid_document, name: "ops.yaml", dir: runtime_profiles)
+
+    profile = Profile.preview(path)
+
+    refute profile.suggestion
+    assert_equal "test-profile", profile.profile_id
+  end
+
   def test_profile_inside_its_own_root_rejected
     path = write_profile(valid_document, dir: @dir)
     error = assert_raises(Profile::ValidationError) { Profile.preview(path) }

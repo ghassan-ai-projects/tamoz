@@ -313,14 +313,14 @@ module Tamoz
       end
 
       # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
-      # same directory entry as `.tamoz/`, so an exact-case component match let a
+      # same directory entry as `.tamoz/`, so an exact-case parent match let a
       # repository-supplied suggestion be addressed as authority simply by changing
-      # the case of the path. The comparison is case-folded, which over-rejects on a
-      # case-sensitive filesystem and therefore fails closed on every platform.
+      # the case of the path. Only the reserved suggestion basename is evidence-only:
+      # `~/.tamoz/profiles/ops.yaml` is a valid operator runtime profile directory.
       def self.suggestion_path?(expanded_path)
-        Pathname.new(expanded_path).each_filename.any? do |component|
-          component.downcase == SUGGESTION_DIRECTORY
-        end
+        path = Pathname.new(expanded_path)
+        path.basename.to_s.downcase == SUGGESTION_BASENAME.downcase &&
+          path.dirname.basename.to_s.downcase == SUGGESTION_DIRECTORY
       end
 
       # P8-E: a profile stored inside the very root it grants authority over is
