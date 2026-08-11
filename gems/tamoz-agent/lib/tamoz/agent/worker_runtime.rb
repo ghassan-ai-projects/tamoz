@@ -242,6 +242,15 @@ module Tamoz
         end
       end
 
+      def occurrence_age_milliseconds(thread_id)
+        durable("occurrence age for #{thread_id.inspect}") do
+          opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+          next 0 unless opened
+
+          [(Time.now.utc - Time.parse(opened)).to_f * 1_000, 0].max.round
+        end
+      end
+
       # A stop caused by a spent budget. Durable so `tamoz status` can report it
       # after the worker has exited, and keyed by occurrence so an operator can
       # see which piece of work hit which ceiling.

@@ -14,7 +14,8 @@ class ObservabilityCatalogTest < Minitest::Test
       tamoz.agent.tool.prepare tamoz.agent.tool.finish
       tamoz.agent.compatibility.failure
       tamoz.worker.started tamoz.worker.stopped tamoz.worker.error
-      tamoz.worker.request.completed tamoz.worker.request.failed tamoz.worker.request.paused
+      tamoz.worker.request.completed tamoz.worker.request.failed tamoz.worker.request.blocked
+      tamoz.worker.request.paused
       tamoz.worker.request.stopped tamoz.worker.request.approved tamoz.worker.request.denied
       tamoz.worker.request.claimed tamoz.worker.request.recovered
       tamoz.worker.schedule.materialized tamoz.worker.schedule.error
@@ -140,7 +141,7 @@ class ObservabilityCatalogTest < Minitest::Test
       correlation: {},
       timing: :point,
       observed_at_ms: 1,
-      attributes: {reason: 'error message with unbounded detail'}
+      attributes: { reason: 'error message with unbounded detail' }
     )
 
     assert_raises(Tamoz::Observability::ValidationError) do

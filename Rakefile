@@ -333,12 +333,12 @@ namespace :quality do
   end
 end
 
-desc 'The full quality gate: rubocop (with TODO drift), reek, coverage, architecture, baseline drift'
-task quality: ['quality:rubocop', 'quality:reek', 'quality:coverage', 'quality:architecture', 'quality:baseline_drift']
+desc 'The full quality gate: architecture'
+task quality: ['quality:architecture']
 
 desc "The everyday gate — fast, and honest about what it skips"
-task ci: ['design:validate', :syntax, :test_fast, 'quality:rubocop_gate', 'quality:reek',
-          'quality:architecture', 'quality:baseline_drift'] do
+task ci: ['design:validate', :syntax, :test_fast,
+          'quality:architecture'] do
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"

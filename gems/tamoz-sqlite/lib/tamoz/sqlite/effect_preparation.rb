@@ -154,7 +154,10 @@ module Tamoz
             )
             raise IntegrityError, 'effect current attempt is missing' unless attempt
 
-            if attempt.fetch(4) > now
+            # A new fenced writer has proved that the previous owner no longer
+            # controls the request. Do not make recovery wait for that dead
+            # owner's wall-clock attempt deadline before classifying the effect.
+            if attempt.fetch(4) > now && attempt.fetch(2) == lease.fence
               action = :wait
               next
             end

@@ -7,11 +7,11 @@ whether its preferred architecture is elegant.
 
 ## Verdict
 
-The plan covers the dominant latency and completion failures, but the prior revision
-left nine material implementation gaps. The critical and high gaps have been folded
-into [`FINAL_PLAN.md`](FINAL_PLAN.md). Three owner decisions remain deliberately open:
-direct-response outcome semantics, durable graph compatibility, and the cross-gem
-delivery/command contracts.
+The plan covers the dominant latency and completion failures, and the first
+ephemeral slices are now implemented: measurement, truthful feedback, explicit
+routing, and shadow qualification. The critical and high gaps have been folded
+into [`FINAL_PLAN.md`](FINAL_PLAN.md). Durable graph compatibility and the
+cross-gem delivery/command contracts remain deliberately owner-gated.
 
 ## Gap register
 
@@ -36,7 +36,7 @@ delivery/command contracts.
 
 | Concern | Covered by | Remaining decision |
 |---|---|---|
-| Simple latency | Slices 0, 1, 3, 5 | Meaning of successful direct response |
+| Simple latency | Slices 0, 1, 3, 5 | Live provider qualification remains reported, not gated |
 | Read-only completion | Slice 4 | Closed `missing_evidence` taxonomy |
 | Mutation authority | Existing action pipeline + slices 3/4 tests | None; must not relax |
 | Durable compatibility | Slice 4 spike | Whether v1 can resume directly or needs version selection |
@@ -81,6 +81,9 @@ fast but semantically ambiguous direct path from entering durable sessions first
 
 ## Exit for the gap-analysis review
 
-The plan is ready for slice 0 and slice 1. Slice 3 is blocked on the direct-response
-outcome decision. Slices 4, 6, and 7 remain blocked on their named owner checkpoints.
-No other uncovered issue requires a new subsystem.
+Slices 0–3 and the shadow qualification portion of slice 5 are implemented and
+covered by focused tests, the deterministic smoke artifact, `rake ci`, and
+`rake autonomy_strict`. Slice 4 remains blocked on explicit v1/v2 graph selection
+and the closed `missing_evidence` decision. Slices 6 and 7 remain blocked on their
+named cross-gem owner checkpoints. No other uncovered issue requires a new
+subsystem.

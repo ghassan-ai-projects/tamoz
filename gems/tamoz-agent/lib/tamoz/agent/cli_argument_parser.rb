@@ -28,6 +28,8 @@ module Tamoz
             json: false,
             assume_model_exists: false,
             allow_changes: false,
+            experimental_routing: false,
+            shadow_routing: false,
             non_interactive: false,
             checks: {}
           }
@@ -77,6 +79,12 @@ module Tamoz
             end
             value.on('--allow-changes', 'Enable reviewed and approved workspace changes') do
               options[:allow_changes] = true
+            end
+            value.on('--experimental-routing', 'Use the experimental fused request router') do
+              options[:experimental_routing] = true
+            end
+            value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
+              options[:shadow_routing] = true
             end
             value.on('--check NAME=COMMAND', 'Configure a named verification command') do |entry|
               name, command = entry.split('=', 2)

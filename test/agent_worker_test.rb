@@ -173,6 +173,7 @@ class AgentWorkerTest < Minitest::Test
 
       completed = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 1, completed.length
+      assert_operator completed.first.fetch("duration_ms"), :>=, 0
     end
   end
 

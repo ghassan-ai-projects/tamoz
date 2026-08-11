@@ -270,6 +270,7 @@ module Tamoz
         emit("request.failed",
              thread: entry.fetch(:thread_id),
              request_id: entry.fetch(:head_request_id),
+             duration_ms: @runtime.occurrence_age_milliseconds(entry.fetch(:thread_id)),
              reason: "#{error.class}: #{error.message}")
         park(entry, nil, reason: "failed")
         PARKED
@@ -301,7 +302,14 @@ module Tamoz
       def budget_exhausted(entry, budget:, detail:)
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
+        notify_sink(
+          thread_id,
+          "request.stopped",
+          "Work stopped before verified completion: the #{budget} budget was exhausted.",
+          request_id: occurrence_id
+        )
         # A budget stop is TERMINAL for the occurrence, so the record is closed.
         # Parking would only be in-memory: the next worker process would have an
         # empty park map, re-examine the same occurrence and stop it again, and
@@ -315,7 +323,8 @@ module Tamoz
              request_id: occurrence_id,
              reason: "budget_exhausted",
              budget:,
-             detail:)
+             detail:,
+             duration_ms:)
         PROGRESSED
       end
 
@@ -413,6 +422,8 @@ module Tamoz
         view = view_of(session, thread_id)
         return IDLE unless view
 
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+
         case view.status
         when :completed
           @monitor.synchronize { @processed += 1 }
@@ -421,6 +432,7 @@ module Tamoz
           unpark(thread_id)
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed",
+               duration_ms:,
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :failed
@@ -434,13 +446,31 @@ module Tamoz
           unpark(thread_id)
           emit("request.failed",
                thread: thread_id, request_id: occurrence_id,
+               duration_ms:,
                reason: view.respond_to?(:error) ? view.error.to_s : "failed",
+               observability: {execution_id: view.execution_id})
+          PROGRESSED
+        when :blocked
+          notify_sink(
+            thread_id,
+            "request.blocked",
+            blocked_text(view),
+            request_id: occurrence_id
+          )
+          @runtime.close_occurrence(thread_id)
+          unpark(thread_id)
+          emit("request.blocked",
+               thread: thread_id,
+               request_id: occurrence_id,
+               duration_ms:,
+               reason: "effect_unknown",
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :paused
           if view.interrupts.empty?
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused",
+                 duration_ms:,
                  observability: {execution_id: view.execution_id})
           else
             notify_sink(thread_id, "request.approval_request", "Approval requested.",
@@ -455,9 +485,11 @@ module Tamoz
       end
 
       def emit_approval_request(thread_id, occurrence_id, view)
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         emit("request.paused",
              thread: thread_id,
              request_id: occurrence_id,
+             duration_ms:,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
              observability: {execution_id: view.execution_id})
@@ -481,6 +513,12 @@ module Tamoz
       def completion_text(view)
         answer = view.state&.dig(:verification, "answer").to_s
         answer.empty? ? "Completed." : answer
+      end
+
+      def blocked_text(view)
+        operation = view.blocked&.fetch("operation", "the effect") || "the effect"
+        "Work stopped before verified completion: #{operation} has an unknown outcome. " \
+          "Resolve the effect before continuing."
       end
 
       def describe_interrupt(interrupt)

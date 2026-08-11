@@ -34,6 +34,22 @@ module Tamoz
         set satisfied to false and say exactly what remains unknown.
       TEXT
 
+      ROUTING_SYSTEM = <<~TEXT.freeze
+        You are Tamoz's intake router. Return exactly one JSON object and nothing else.
+        Choose direct_response only for a self-contained interaction that needs no
+        workspace, tool, current external state, prior conversation, or action result.
+        A direct response is a response, not verified task completion. Never use it for
+        file reads, directory discovery, diagnosis, edits, commands, current-state
+        questions, or requests to pretend work happened.
+        For work, return read_only_work or managed_action and a concrete discovery_plan
+        using only the listed tools. The plan may gather evidence but must not mutate.
+        Use reason_class from the closed list: greeting, general_knowledge, explanation,
+        writing, workspace_evidence, current_external_state, requested_change,
+        command_or_code, action_result, ambiguous_context.
+        Direct response shape: {route, answer, reason_class}.
+        Work shape: {route, discovery_plan, reason_class}.
+      TEXT
+
       MUTATION_TOOLS = %w[apply_patch create_file].freeze
 
       # D-8 Fix B (RC-4): template placeholders and cross-step references in step
@@ -116,6 +132,15 @@ module Tamoz
           }
         end
         JSON.pretty_generate(plan_input)
+      end
+
+      def routing_prompt(task, toolbox:)
+        JSON.pretty_generate(
+          "task" => task,
+          "available_read_only_tools" => toolbox.read_only_names,
+          "available_work_tools" => toolbox.names,
+          "tool_descriptions" => toolbox.descriptions.slice(*toolbox.names)
+        )
       end
 
       def review_prompt(task, plan, phase:, evidence:, planning_context:)

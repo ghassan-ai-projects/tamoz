@@ -11,6 +11,26 @@ Read it before deciding whether Tamoz fits your problem.
 
 ## Not implemented
 
+### Single-writer recovery evidence remains partial (invariant 20)
+
+The checkpoint store is designed around one fenced writer per thread namespace,
+but the current release audit still reports a failing takeover test. Treat a
+failed single-writer evidence gate as a release blocker until the expired-owner
+and concurrent-owner cases are green together.
+
+### Evaluation hard gates are not currently release-green (objective 3)
+
+The evaluation contract keeps unauthorized effects, duplicate effects, unknown
+effect retries, and headless approvals at zero. The current committed evaluation
+evidence does not satisfy every release gate, so a passing feature test is not a
+release claim.
+
+### Coding behavior scorecard remains incomplete (phase P3)
+
+The deterministic coding-agent scorecard still reports incomplete behavior
+coverage. It must be regenerated from the owning test and reviewed with its
+hard-safety counters before the P3 exit criterion can be claimed.
+
 ### Operator visibility is partial
 
 `tamoz status --json` reports pending work, paused approvals, blocked (`:unknown`)
@@ -78,20 +98,19 @@ requires an explicit owner decision and a separate safety review.
 
 ### Channel communications (invariants 56–58, ADR-041–043)
 
-The channel contract gem (`tamoz-comms`) exists with the exact decision
-machinery the worker consumes and the channel values and seams — the surface
-descriptor, normalized inbound envelopes, deliveries, bindings, approval
-prompts, the closed command table, and the `Transport`/`DeliverySink`/`CommsStore`
-contracts. **The Telegram channel itself does not exist yet**: there is no
-surface admission, no durable outbox, no transport adapter, and no gateway
-process. The channel clauses 56–58 and ADR-041–043 are accepted as owner
-policy and recorded as pending-owner-residual gaps; the slices of
-[`COMMS_TELEGRAM_PLAN.md`](COMMS_TELEGRAM_PLAN.md) convert each to direct
-evidence in order.
+The channel contract gem (`tamoz-comms`), Telegram adapter (`tamoz-telegram`),
+durable admission/outbox, gateway process, pairing, and worker turn projection
+are shipped and covered by focused tests and autonomy cases. Telegram is
+therefore a real, configured operator surface; it is not accurate to describe
+it as absent.
 
-Until then: the only surface is the operator CLI, and there is no way for a
-message from Telegram (or any other channel) to reach a runtime, and no way for
-agent output to reach a human outside the terminal.
+The latency investigation's channel work is still incomplete. The independent
+outbound drainer, durable retry-deadline/rate-limit state, acknowledgement and
+control ordering, and a real-provider end-to-end qualification remain pending
+owner-gated slices. Ambiguous sends remain durable `unknown` and are never
+blindly retried. See [`COMMS_TELEGRAM_PLAN.md`](COMMS_TELEGRAM_PLAN.md) and
+[`docs/ux-latency-investigation/FINAL_PLAN.md`](ux-latency-investigation/FINAL_PLAN.md)
+for the remaining release criteria.
 
 ### Observability remains partial (invariants 59–61, ADR-044–047)
 
@@ -108,6 +127,14 @@ divergence accounting, and benchmark remain outstanding. The local journal is
 observer-only and every bounded bulk drop is counted; it is not a second source
 of truth. Alerting and automated response are intentionally outside this phase
 and require separate authorization under phase 5 / ADR-048.
+
+### Durable barrier timing remains partial (ADR-015)
+
+Tamoz commits durable graph barriers synchronously, but the release evidence does
+not yet establish the post-v0.1 timing and crash-boundary guarantees described by
+ADR-015 across every storage and deployment configuration. Treat the checkpoint
+as durable only after the store reports its commit; do not infer external effect
+visibility from a committed checkpoint.
 
 ## Deliberate non-goals
 

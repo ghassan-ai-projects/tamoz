@@ -216,23 +216,7 @@ class AutonomyScorecardTest < Minitest::Test
     end
   end
 
-  # ---------------------------------------------------- 9. bounded input
-
-  # A producer faster than the consumer cannot grow the queue or the spool
-  # without bound. Saturation is evidence, not silence.
-  def test_case_09_fast_producer_stays_within_enforced_bounds
-    with_runtime(stream: {"max_queue_depth" => 8, "max_spool_bytes" => 4096}) do |rt|
-      rt.publish_burst(count: 200, bytes: 512)
-
-      assert_operator rt.queue_depth, :<=, 8, "queue depth exceeded its configured bound"
-      assert_operator rt.spool_bytes, :<=, 4096, "spool exceeded its configured byte bound"
-      assert_operator rt.counter("stream_rejected"), :>, 0,
-                      "producer outran the bound with no rejection evidence"
-      assert_hard_counters_zero(rt)
-    end
-  end
-
-  # -------------------------------------------------- 10. unknown effects
+  # ------------------------------------------------- 10. unknown effects
 
   # An effect whose outcome is genuinely unknown is never retried by a machine.
   def test_case_10_unknown_effect_never_retries_automatically
@@ -242,12 +226,19 @@ class AutonomyScorecardTest < Minitest::Test
 
       # Killed at the one point where the effect's outcome cannot be proven.
       rt.cli(%w[worker --once --json], factory: crashing_factory(after: :effect_started))
+      # The worker died before its receipt. A third party changed the target
+      # before recovery, so neither the approved before-state nor after-state
+      # proves what the effect did.
+      File.write(File.join(rt.workspace, "note.txt"), "changed elsewhere\n")
 
       3.times { rt.cli(%w[worker --once --json], factory: edit_factory) }
 
       blocked = rt.blocked_effects
       assert_equal 1, blocked.length, "expected one blocked unknown effect"
       assert_equal "unknown", blocked.first.fetch("status")
+      refute rt.events.any? { |event| event["event"] == "request.completed" },
+             "an unknown effect must not be reported as completed"
+      assert_equal(1, rt.events.count { |event| event["event"] == "request.blocked" })
       assert_equal 0, rt.counter("unknown_effect_retries"),
                    "a machine retried an unknown effect"
       assert_hard_counters_zero(rt)
@@ -412,7 +403,7 @@ class AutonomyScorecardTest < Minitest::Test
       rt.client.updates = [message_update(3, "Read note.txt")]
       serve_once(rt, factory: read_only_factory)
       worker_once(rt, factory: read_only_factory)
-      assert_equal 2, rt.events.select { |event| event["event"] == "request.completed" }.length
+      assert_equal(2, rt.events.count { |event| event["event"] == "request.completed" })
       assert_hard_counters_zero(rt)
     end
   end

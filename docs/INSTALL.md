@@ -80,6 +80,16 @@ model can choose to run `test`; it can never alter that command's arguments.
 rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' "Fix the failing test"
 ```
 
+The fused request router is opt-in while its qualification corpus is being
+built. Use `--experimental-routing` for self-contained questions and short
+writing requests; it falls back to the standard reviewed workflow for work,
+current-state, or ambiguous requests. A direct response is reported as
+`responded`, not as verified task completion.
+
+Use `--shadow-routing` to record a route decision while retaining the standard
+reviewed workflow; shadow records contain route, outcome, call count, and a
+bounded disagreement reason, never the candidate answer.
+
 ### Durable sessions
 
 Pass `--session-dir` and the turn becomes a durable thread: it survives

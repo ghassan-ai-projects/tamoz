@@ -10,11 +10,12 @@ Staff+-level investigation into five symptoms:
 
 ## Method
 
-Investigation-only loop (no code changes were made). Per iteration: pick one user
-journey, state the expected experience, trace the full lifecycle in code, confirm
-claims with runtime evidence where possible, classify the request path, run
-Five Whys to a controllable cause, and record findings with severity / frequency /
-confidence. Every conclusion is labeled:
+The investigation began as an evidence-only loop and now carries the accepted
+ephemeral routing, truthful feedback, and measurement slices. Each iteration:
+pick one user journey, state the expected experience, trace the full lifecycle in
+code, confirm claims with runtime evidence where possible, classify the request
+path, run Five Whys to a controllable cause, and record findings with severity /
+frequency / confidence. Every conclusion is labeled:
 
 - **[measured]** — observed at runtime with a live model, or counted in committed artifacts.
 - **[supported]** — directly evidenced in source code / tests (file:line cited), behavior certain.
@@ -25,6 +26,7 @@ confidence. Every conclusion is labeled:
 - Live CLI runs against DeepSeek (`deepseek-chat`), 2026-08-11, raw logs in `tmp/ux-probe/`
   (`run1.jsonl`, `run2.out`, `run3.jsonl`, `run4.out`, `run5.jsonl`, `*.time`).
 - Committed evaluation artifacts: `docs/autonomy-scorecard.json`, `docs/benchmark.json`,
+  `docs/ux-latency-investigation/latency-smoke.json`,
   `agenteval/reports/baseline-20260805.json`.
 - Source traces over `gems/tamoz-agent`, `gems/tamoz-comms`, `gems/tamoz-telegram`,
   `gems/tamoz-sqlite`, `gems/tamoz-observability` (file:line citations inline).
@@ -37,6 +39,10 @@ confidence. Every conclusion is labeled:
 | 2 | Simple Telegram message | [iteration-02-telegram-message.md](iteration-02-telegram-message.md) |
 | 3 | Complex multi-step task (completion failure) | [iteration-03-complex-task-completion.md](iteration-03-complex-task-completion.md) |
 | 4 | Runtime latency experiments (live model) | [iteration-04-live-latency-runs.md](iteration-04-live-latency-runs.md) |
+
+The reproducible routing qualification is [latency-smoke.md](latency-smoke.md).
+Run `rbenv exec ruby script/agent_latency_smoke --live` only with an explicitly
+configured provider; live timing is reported evidence, not a CI assertion.
 
 Final implementation plan: [FINAL_PLAN.md](FINAL_PLAN.md)
 

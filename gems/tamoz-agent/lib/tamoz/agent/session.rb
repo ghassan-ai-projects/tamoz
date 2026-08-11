@@ -178,6 +178,12 @@ module Tamoz
         nil
       end
 
+      def verify_graph_binding!(thread:)
+        stored = stored_state(thread)
+        enforce_graph_binding!(thread, stored) if stored
+        nil
+      end
+
       # P10 §5 epoch rules: a resumed session must bind the exact MCP catalog
       # digests it was planned against. A digest mismatch stops with the typed
       # `McpCatalogSnapshotUnavailableError` — no silent schema substitution. The
@@ -232,6 +238,19 @@ module Tamoz
         SessionRecords.load_state!(@app.snapshot(snapshot).state)
       end
       private :stored_state
+
+      def enforce_graph_binding!(thread, state)
+        record = state[:session]
+        return unless record
+
+        stored = record.fetch("graph_version")
+        return if stored == GRAPH_VERSION
+
+        raise Tamoz::CheckpointVersionError,
+              "session #{thread} uses graph version #{stored.inspect}; this runtime supports " \
+              "#{GRAPH_VERSION.inspect}. Start a new session or use a compatible runtime."
+      end
+      private :enforce_graph_binding!
 
       def enforce_skill_binding!(thread, state)
         record = state[:session]
@@ -445,12 +464,14 @@ module Tamoz
       def view(thread:)
         snapshot = @app.state(thread:)
         state = SessionRecords.load_state!(snapshot.state)
+        enforce_graph_binding!(thread, state)
+        status = state[:blocked] ? :blocked : snapshot.status
         SessionView.new(
           thread_id: snapshot.thread_id,
           checkpoint_id: snapshot.checkpoint_id,
           sequence: snapshot.sequence,
           execution_id: snapshot.execution_id,
-          status: snapshot.status,
+          status:,
           phase: state.fetch(:phase),
           accepted_plan: state[:accepted_plan],
           approvals: state.fetch(:approvals),
@@ -521,6 +542,7 @@ module Tamoz
         state = stored_state(thread)
         return unless state
 
+        enforce_graph_binding!(thread, state)
         enforce_skill_binding!(thread, state)
         enforce_mcp_binding!(thread, state)
         enforce_egress_binding!(thread, state)
@@ -531,7 +553,8 @@ module Tamoz
       def outcome(thread:, request_id:)
         request = @runner.fetch(thread:, request_id:)
         snapshot = @app.state(thread:)
-        state = snapshot.state
+        state = SessionRecords.load_state!(snapshot.state)
+        enforce_graph_binding!(thread, state)
         verification = state[:verification]
         result =
           if verification
