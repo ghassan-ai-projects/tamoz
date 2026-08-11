@@ -30,7 +30,7 @@ class CommsGatewayTest < Minitest::Test
           adapter:, checkpoints:, transport:, descriptor:,
           poller_owner: 'gateway:test'
         )
-        yield gateway, transport, store, adapter
+        yield gateway, transport, store, adapter, checkpoints
       ensure
         adapter&.close
       end
@@ -114,6 +114,35 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def test_the_long_running_loop_retries_a_generic_transport_error
+    with_gateway do |gateway, transport, _store|
+      transport.comms_errors = 1
+      runner = Thread.new do
+        gateway.serve_loop(interval_s: 0, sleeper: ->(_seconds) {})
+      end
+
+      Timeout.timeout(5) { sleep 0.01 until transport.poll_calls >= 2 }
+      gateway.stop
+
+      assert_equal :stopped, runner.value
+      assert_operator transport.poll_calls, :>=, 2
+    end
+  end
+
+  def test_the_polling_lease_is_renewed_after_a_long_poll
+    with_gateway do |gateway, _transport, store|
+      assert_equal :started, gateway.start(now: Time.utc(2026, 8, 11, 12, 0, 0))
+      later = Time.utc(2026, 8, 11, 12, 1, 10)
+
+      assert_equal :served, gateway.serve_once(now: later)
+      state = store.poll_state(bot_id: 7_463_512_990)
+
+      assert_operator state.fetch('poller_expires_at_ms'), :>, later.to_f * 1000
+    ensure
+      gateway&.stop
+    end
+  end
+
   # `stop` must END the loop, not merely drop the lease. A gateway that
   # released its lease and kept polling would be reading an update stream it
   # no longer owns — the exact condition Telegram answers with a 409.
@@ -148,6 +177,39 @@ class CommsGatewayTest < Minitest::Test
       assert_equal 'control', rows.first.fetch('kind')
       assert_equal 0, rows.first.fetch('journaled'),
                    'control replies are ephemeral and unjournaled'
+    end
+  end
+
+  def test_known_commands_are_controls_and_never_become_task_text
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(1, text: '/help'), update(2, text: '/status')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_empty checkpoints.request_history(thread_id: thread)
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal(%w[control control], rows.map { |row| row.fetch('kind') })
+      refute(rows.any? { |row| %w[/help /status].include?(row.fetch('text')) }) # rubocop:disable Performance/CollectionLiteralInLoop
+    end
+  end
+
+  def test_cancel_is_a_typed_redirect_and_not_a_model_task
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work'), update(2, text: '/cancel')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      history = checkpoints.request_history(thread_id: thread)
+
+      assert_equal %i[turn redirect], history.map(&:operation)
+      assert history.last.payload.fetch('task').fetch('cancel')
+      refute_match(%r{/cancel}, history.last.payload.inspect)
     end
   end
 
@@ -236,11 +298,13 @@ class CommsGatewayTest < Minitest::Test
   # A scripted Transport for the loop: batches of raw updates, optional
   # receipt, optional ambiguity.
   class ScriptedTransport
-    attr_accessor :receipt, :raise_ambiguous, :transient_polls
+    attr_accessor :receipt, :raise_ambiguous, :transient_polls, :comms_errors
 
     def initialize
       @updates = []
       @transient_polls = 0
+      @comms_errors = 0
+      @poll_calls = 0
     end
 
     def batch(updates)
@@ -249,6 +313,11 @@ class CommsGatewayTest < Minitest::Test
 
     # rubocop:disable Lint/UnusedMethodArgument -- the seam signature.
     def poll(next_offset:, limit:, timeout_s:)
+      @poll_calls += 1
+      if @comms_errors.positive?
+        @comms_errors -= 1
+        raise Comms::CommsError, 'temporary Telegram API failure'
+      end
       if @transient_polls.positive?
         @transient_polls -= 1
         raise Comms::TransientTransportError, 'long poll timed out'
@@ -260,6 +329,8 @@ class CommsGatewayTest < Minitest::Test
         next_offset: ids.max && (ids.max + 1)
       }
     end
+
+    attr_reader :poll_calls
     # rubocop:enable Lint/UnusedMethodArgument
 
     def deliver(delivery)

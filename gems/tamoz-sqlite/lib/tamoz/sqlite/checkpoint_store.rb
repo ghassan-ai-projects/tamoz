@@ -42,6 +42,13 @@ module Tamoz
         @queries.latest(thread_id:, namespace:)
       end
 
+      # Select graph identity without decoding the graph-specific checkpoint
+      # payload. Sessions that retain multiple graph definitions use this narrow
+      # metadata seam before choosing the compatible checkpoint codec.
+      def latest_graph_version(thread_id:, namespace: [])
+        @queries.latest_graph_version(thread_id:, namespace:)
+      end
+
       def find(thread_id:, namespace: [], checkpoint_id:)
         @queries.find(thread_id:, namespace:, checkpoint_id:)
       end

@@ -86,11 +86,11 @@ module Tamoz
         %w[started stopped error].each do |state|
           catalog.event(
             "tamoz.worker.#{state}", since: 1, stability: :stable, safety_bearing: false,
-                                          correlation: [], required: {}, optional: { reason: :low_cardinality },
-                                          content: state == 'error' ? [:error_detail] : []
+                                     correlation: [], required: {}, optional: { reason: :low_cardinality },
+                                     content: state == 'error' ? [:error_detail] : []
           )
         end
-        %w[completed failed paused stopped approved denied claimed recovered].each do |state|
+        %w[completed failed blocked paused stopped approved denied claimed recovered].each do |state|
           catalog.event(
             "tamoz.worker.request.#{state}", since: 1, stability: :stable, safety_bearing: false,
                                              correlation: %i[thread_id occurrence_id],
@@ -103,12 +103,12 @@ module Tamoz
         end
         catalog.event(
           'tamoz.worker.schedule.materialized', since: 1, stability: :stable, safety_bearing: false,
-                                                 correlation: [], required: {},
-                                                 optional: { schedule_id: :string, occurrence_id: :string, request_id: :string }
+                                                correlation: [], required: {},
+                                                optional: { schedule_id: :string, occurrence_id: :string, request_id: :string }
         )
         catalog.event(
           'tamoz.worker.schedule.error', since: 1, stability: :stable, safety_bearing: false,
-                                            correlation: [], required: {}, optional: { reason: :low_cardinality }
+                                         correlation: [], required: {}, optional: { reason: :low_cardinality }
         )
       end
       private_class_method :worker_events

@@ -11,8 +11,14 @@ module Tamoz
     module Commands
       KNOWN = %w[help status new cancel redirect whoami].freeze
 
+      # The typed command crossing admission into the gateway. It carries no
+      # free-form task text and is never a model prompt.
+      CommandIntent = Data.define(:name, :arguments)
+
       # A parsed known command. `arguments` is nil when absent.
-      Command = Data.define(:command, :arguments)
+      Command = Data.define(:command, :arguments) do
+        def intent = CommandIntent.new(name: command, arguments:)
+      end
 
       module_function
 

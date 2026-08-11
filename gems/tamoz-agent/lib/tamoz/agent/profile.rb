@@ -219,7 +219,7 @@ module Tamoz
 
       def self.load(path, env: ENV, adoption_registry: nil, confirm_adoption: nil)
         expanded = File.expand_path(File.path(path))
-        document = load_document(expanded, suggestion: false)
+        document = load_document(expanded, suggestion: false, env:)
         registry = adoption_registry || AdoptionRegistry.new(env:)
         unless registry.activated?(document.profile_id, document.canonical_digest)
           confirmed = confirm_adoption&.call(document)
@@ -237,8 +237,8 @@ module Tamoz
 
       # Validation-only load used by `tamoz profile preview`. The suggestion flag
       # marks repository-provided files as evidence; it never grants authority.
-      def self.preview(path, suggestion: false)
-        load_document(File.expand_path(File.path(path)), suggestion:)
+      def self.preview(path, suggestion: false, env: ENV)
+        load_document(File.expand_path(File.path(path)), suggestion:, env:)
       end
 
       # The exact bytes that produced a validated document, returned alongside it.
@@ -247,10 +247,10 @@ module Tamoz
       # the ones whose digest the operator just confirmed.
       Source = Data.define(:document, :bytes)
 
-      def self.preview_source(path, suggestion: false)
+      def self.preview_source(path, suggestion: false, env: ENV)
         expanded = File.expand_path(File.path(path))
         captured = nil
-        document = load_document(expanded, suggestion:) { |bytes| captured = bytes }
+        document = load_document(expanded, suggestion:, env:) { |bytes| captured = bytes }
         Source.new(document:, bytes: captured)
       end
 
@@ -313,14 +313,20 @@ module Tamoz
       end
 
       # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
-      # same directory entry as `.tamoz/`, so an exact-case component match let a
+      # same directory entry as `.tamoz/`, so an exact-case parent match let a
       # repository-supplied suggestion be addressed as authority simply by changing
-      # the case of the path. The comparison is case-folded, which over-rejects on a
-      # case-sensitive filesystem and therefore fails closed on every platform.
-      def self.suggestion_path?(expanded_path)
-        Pathname.new(expanded_path).each_filename.any? do |component|
-          component.downcase == SUGGESTION_DIRECTORY
-        end
+      # the case of the path. Only the reserved suggestion basename is evidence-only:
+      # `~/.tamoz/profiles/ops.yaml` is a valid operator runtime profile directory.
+      def self.suggestion_path?(expanded_path, env: ENV)
+        return false if operator_profile_path?(expanded_path, env:)
+
+        path = Pathname.new(expanded_path)
+        path.each_filename.any? { |component| component.downcase == SUGGESTION_DIRECTORY }
+      end
+
+      def self.operator_profile_path?(expanded_path, env: ENV)
+        profiles = File.expand_path(Locations.profiles_dir(env:))
+        expanded_path.start_with?("#{profiles}#{File::SEPARATOR}")
       end
 
       # P8-E: a profile stored inside the very root it grants authority over is
@@ -375,9 +381,9 @@ module Tamoz
         Locations.transitions_path(env:)
       end
 
-      def self.load_document(expanded_path, suggestion:)
+      def self.load_document(expanded_path, suggestion:, env: ENV)
         unless suggestion
-          if suggestion_path?(expanded_path)
+          if suggestion_path?(expanded_path, env:)
             raise ValidationError,
                   "#{expanded_path} is inside #{SUGGESTION_DIRECTORY}/ and is evidence " \
                   "only; preview or import it instead of activating it"

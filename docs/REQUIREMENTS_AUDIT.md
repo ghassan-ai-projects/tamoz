@@ -7,23 +7,21 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 432 | 266 | 20 | **no** |
+| 433 | 266 | 16 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
-| failing | 4 |
 | indirect | 4 |
 | missing | 16 |
-| pass | 397 |
+| pass | 402 |
 
 ## Release-blocking gaps (the DoD list)
 
 | Requirement | Status | Why |
 |---|---|---|
-| `ADR-015` — Durable means synchronous barrier commit | failing | no direct evidence names this requirement |
 | `ADR-041` — Communication channels are a contract gem plus per-transport adapter gems | missing | Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves. |
 | `ADR-042` — The channel gateway is a separate process in the connector zone | missing | Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice. |
 | `ADR-043` — Telegram v1 is deny-only and reference-bound | missing | Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence. |
@@ -31,7 +29,6 @@ generating run.
 | `ADR-045` — The observability gems add no durable table and no second source of truth | missing | No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The migration-count proof and the separately authorized model usage persistence land with slice E. |
 | `ADR-046` — Content capture is off by default, per class, and refused for restricted classifications | missing | Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice. |
 | `ADR-047` — Sampling applies to export only and never to safety-bearing signals | missing | Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice. |
-| `INV-20` — Single fenced writer | failing | no direct evidence names this requirement |
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-48` — Backpressure and evidence gaps are bounded and visible | missing | The durable-admission, quarantine, typed-rejection and never-silent halves are directly evidenced. The backpressure half is NOT implemented: `ChannelDescriptor` validates and digests `queue_capacity`, `spool_capacity_bytes` and `overflow` (block/retry/spill_then_reject/sample/coalesce/reject), but no code outside the descriptor reads any of the three — measured at the release head by searching gems/tamoz-stream and gems/tamoz-sqlite. The declaration is recorded, never enforced, so no saturation test can exist yet. Owner decision required at P15-I: implement enforcement, or exclude the backpressure clause from the v0.1 surface. |
 | `INV-56` — A user channel is identified, bound, and grants nothing | missing | Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence. |
@@ -40,16 +37,7 @@ generating run.
 | `INV-59` — Observation cannot change execution, and its surface is bounded and versioned | missing | The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual. |
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
-| `OBJ-3` — evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines | failing | no direct evidence names this requirement |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
-| `PHASE-P3` — Coding behavior scorecard — fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies | failing | no direct evidence names this requirement |
-
-## Failing evidence (release stopper)
-
-- `ADR-015` — test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution
-- `INV-20` — test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover
-- `OBJ-3` — test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates
-- `PHASE-P3` — test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps
 
 ## Full audit
 
@@ -69,7 +57,7 @@ generating run.
 | `ADR-012` | adr | yes | pass | `test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk` |
 | `ADR-013` | adr | no | indirect | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `ADR-014` | adr | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
-| `ADR-015` | adr | yes | failing | `test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution` |
+| `ADR-015` | adr | yes | pass | `test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution` |
 | `ADR-016` | adr | yes | pass | `test/sqlite_effect_journal_test.rb#test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth` |
 | `ADR-017` | adr | yes | pass | `test/sqlite_checkpoint_test.rb#test_lease_fences_increase_after_release_and_reject_concurrent_owner` |
 | `ADR-018` | adr | yes | pass | `test/graph_identity_test.rb#test_memory_checkpointer_assigns_strict_sequence_and_rejects_stale_base` |
@@ -403,7 +391,7 @@ generating run.
 | `INV-17` | invariant | yes | pass | `test/agent_tool_error_recovery_test.rb#test_taxonomy_marks_only_argument_failures_repairable` |
 | `INV-18` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read` |
 | `INV-19` | invariant | yes | pass | `test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state` |
-| `INV-20` | invariant | yes | failing | `test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover` |
+| `INV-20` | invariant | yes | pass | `test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover` |
 | `INV-21` | invariant | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |
 | `INV-22` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database` |
 | `INV-23` | invariant | yes | pass | `test/sqlite_request_inbox_test.rb#test_duplicate_delivery_returns_one_completed_turn_and_conflicts_on_change` |
@@ -452,6 +440,7 @@ generating run.
 | `MIG-5` | migration | yes | pass | `test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything` |
 | `MIG-6` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `MIG-7` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
+| `MIG-8` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
@@ -460,7 +449,7 @@ generating run.
 | `NG-self-promotion` | non_goal | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `OBJ-1` | objective | no | indirect | `—` |
 | `OBJ-2` | objective | yes | pass | `test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound` |
-| `OBJ-3` | objective | yes | failing | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
+| `OBJ-3` | objective | yes | pass | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
 | `OBJ-4` | objective | yes | pass | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
 | `OBJ-5` | objective | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
 | `OBJ-6` | objective | yes | pass | `test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides` |
@@ -480,7 +469,7 @@ generating run.
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
 | `PHASE-P18` | phase_exit_criterion | yes | pass | `test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture` |
 | `PHASE-P2` | phase_exit_criterion | yes | pass | `test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes` |
-| `PHASE-P3` | phase_exit_criterion | yes | failing | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
+| `PHASE-P3` | phase_exit_criterion | yes | pass | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
 | `PHASE-P4` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements` |
 | `PHASE-P5` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_create_file_writes_exact_bytes_with_default_mode` |
 | `PHASE-P6` | phase_exit_criterion | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |

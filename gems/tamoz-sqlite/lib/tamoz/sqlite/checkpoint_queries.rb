@@ -39,6 +39,23 @@ module Tamoz
         @store.materialize(row)
       end
 
+      def latest_graph_version(thread_id:, namespace: [])
+        address = @store.normalize_address(thread_id, namespace)
+        adapter.__send__(:read, operation: 'checkpoint.latest_graph_version') do |tx|
+          tx.scalar(
+            'checkpoint.latest_graph_version',
+            <<~SQL,
+              SELECT c.graph_version
+              FROM tamoz_namespaces n
+              LEFT JOIN tamoz_checkpoints c
+                ON c.id = n.active_checkpoint_id
+              WHERE n.thread_id = ? AND n.namespace = ?
+            SQL
+            address
+          )
+        end
+      end
+
       def find(thread_id:, checkpoint_id:, namespace: [])
         address = @store.normalize_address(thread_id, namespace)
         id = Wire.identity(checkpoint_id, name: 'checkpoint id')

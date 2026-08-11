@@ -37,6 +37,7 @@ module Tamoz
         request:,
         actor:,
         reconcile: nil,
+        after_start: nil,
         &perform
       )
         effects = context.effects
@@ -142,6 +143,7 @@ module Tamoz
         when :execute
           token = decision.attempt_token
           effects.start(key:, attempt_token: token)
+          after_start&.call
           begin
             value = perform.call
           rescue ToolError => error

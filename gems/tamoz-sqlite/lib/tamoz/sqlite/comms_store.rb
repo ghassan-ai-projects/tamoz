@@ -39,12 +39,12 @@ module Tamoz
     class CommsStore
       include CommsStoreRows
 
-      CONTRACT_VERSION = 1
+      CONTRACT_VERSION = 2
       REQUEST_OPERATION = 'turn'
       REQUEST_DELIVERY = 'queue'
       DEFAULT_NAMESPACE = '[]'
 
-      def initialize(adapter:, checkpoints:)
+      def initialize(adapter:, checkpoints: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @outbox = CommsOutbox.new(adapter:)
@@ -224,6 +224,47 @@ module Tamoz
 
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
         @outbox.claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
+      end
+
+      def reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:, global_messages_per_s:, now:)
+        @outbox.reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:,
+                                      global_messages_per_s:, now:)
+      end
+
+      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+        @outbox.release_delivery_claim(delivery_id:, owner:, fence:, now:)
+      end
+
+      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+        @outbox.mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+      end
+
+      def reconcile_expired_deliveries(now:)
+        @outbox.reconcile_expired_deliveries(now:)
+      end
+
+      def defer_delivery(surface_id:, conversation_id:, not_before:, now:)
+        @outbox.defer_delivery(surface_id:, conversation_id:, not_before:, now:)
+      end
+
+      def conversation_status(surface_id:, conversation_id:)
+        read('comms.conversation.status') do |txn|
+          route = txn.first('comms.conversation.status.route', <<~SQL, [surface_id, conversation_id])
+            SELECT thread_id FROM tamoz_comms_conversations
+            WHERE surface_id = ? AND conversation_id = ?
+          SQL
+          next nil unless route
+
+          open_requests = txn.scalar('comms.conversation.status.requests', <<~SQL, [surface_id, conversation_id]).to_i
+            SELECT COUNT(*) FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+          SQL
+          {
+            'thread_id' => route.fetch(0),
+            'state' => open_requests.positive? ? 'accepted' : 'idle',
+            'open_requests' => open_requests
+          }
+        end
       end
 
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)

@@ -308,6 +308,10 @@ class AgentRuntimeTest < Minitest::Test
       assert_equal 2, approvals.length
       assert_equal "A = 2\n", File.read(File.join(root, "a.rb"))
       assert_equal "B = 2\n", File.read(File.join(root, "b.rb"))
+      review_prompt = model.calls.reverse.find { |call| call.fetch(:stage) == :review }.fetch(:prompt)
+      assert_includes review_prompt, '"phase": "action"'
+      assert_includes review_prompt, '"apply_patch"'
+      assert_includes review_prompt, "multiple bounded file mutations"
     end
   end
 

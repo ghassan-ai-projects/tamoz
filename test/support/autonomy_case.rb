@@ -68,12 +68,18 @@ module AutonomyCase
       result
     end
 
+    def after_effect_started(operation:)
+      return unless @after == :effect_started && operation == "tool.apply_patch" && !@fired
+
+      @fired = true
+      raise Killed, "simulated kill -9 after effect started"
+    end
+
     private
 
     def crash_point?(stage, _result)
       case @after
       when :claim then stage == :plan
-      when :effect_started then stage == :review
       else false
       end
     end

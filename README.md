@@ -65,7 +65,9 @@ rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec b
 ```
 
 Read-only is the default. See [`docs/INSTALL.md`](docs/INSTALL.md) for durable
-sessions, profiles and the full subcommand surface, and
+sessions, profiles and the full subcommand surface. For a copy-paste
+agent/operator runbook covering MCP and governed websearch, see
+[`docs/AGENT_OPERATOR_MANUAL.md`](docs/AGENT_OPERATOR_MANUAL.md), and see
 [`docs/OPERATIONS.md`](docs/OPERATIONS.md) for backup, restore and crash
 recovery.
 

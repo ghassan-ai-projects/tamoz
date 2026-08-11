@@ -115,6 +115,8 @@ class DocumentationSurfaceTest < Minitest::Test
   # Each measured gap has a human name on the page; the mapping is explicit
   # so a renamed requirement cannot silently drop its disclosure.
   GAP_DISCLOSURES = {
+    'ADR-015' => 'Durable barrier timing remains partial (ADR-015)',
+    'INV-20' => 'Single-writer recovery evidence remains partial (invariant 20)',
     'INV-39' => 'Cron and civil-time scheduling (invariant 39)',
     'INV-48' => 'Channel backpressure enforcement (invariant 48)',
     'INV-43' => 'Skill installation and update (invariant 43)',
@@ -131,6 +133,8 @@ class DocumentationSurfaceTest < Minitest::Test
     'INV-59' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
     'INV-60' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
     'INV-61' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'OBJ-3' => 'Evaluation hard gates are not currently release-green (objective 3)',
+    'PHASE-P3' => 'Coding behavior scorecard remains incomplete (phase P3)',
     'OBJ-7' => '## Release readiness'
   }.freeze
 

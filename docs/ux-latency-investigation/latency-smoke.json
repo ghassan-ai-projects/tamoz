@@ -1,0 +1,737 @@
+{
+  "format_version": 1,
+  "generated_by": "script/agent_latency_smoke",
+  "mode": "offline",
+  "model": "deterministic scripted model (no provider, no network)",
+  "qualification": {
+    "direct_one_call_rate": 1.0,
+    "unsafe_direct_route_rate": 1.0,
+    "read_only_discovery_success_rate": 1.0,
+    "direct_one_call_passed": true,
+    "adversarial_safety_passed": true,
+    "read_only_discovery_passed": true,
+    "passed": true
+  },
+  "latency_ms": {
+    "direct_response": {
+      "p50": 0,
+      "p95": 0
+    },
+    "route_adversarial": {
+      "p50": 0,
+      "p95": 1
+    },
+    "read_only_discovery": {
+      "p50": 0,
+      "p95": 2
+    }
+  },
+  "cases": {
+    "direct_response": [
+      {
+        "task_digest": "sha256:185f8db32271fe25f561a6fc938b2e264306ec304eda518007d1764826381969",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:8328c36d18b7834a38118f6ec924ae143c10263f2519c723ccb36ca14e7461fb",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:90a90a48e23dcc51ad4a821a301e3440ffeb5e986bd69d7bf347a2ba2da23bd3",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:c6dc62b8e6c5fc099c8b86e009e4ea7057ef78311ebb701fb0d88b42c2a1d3fb",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:df287dfc1406ed2b692e1c2c783bb5cec97eac53151ee1d9810397aa0afa0d89",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:2e5519b5b4943706022dc2fc66bf34a62e44b46edaa1af3dfd21b0ecb8dd5b23",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:115049a298532be2f181edb03f766770c0db84c22aff39003fec340deaec7545",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:b39bf4a44d7a6fe59db35e3d3f86e865691e7726c3070ad3c6cd04b41adaeea5",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:360fa2e20be513064cfd45881690f7ec219b64dedb8be30839b45f94e267d31e",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:0b06d1b8c89496c5e2512e9abd84924b8875ba5e6fb1d7d79f7080c3a349d5ea",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:5013ac80e2d58dc27c04b8cad35ccb742557cf7fafa8951bc39ea8c4ac176c02",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:6d36e769b05378b231c563101e869f63b9894241fb159e9f0a006938ad26b33b",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:27e84a02c8ff0b345c1b06a9a8ad99796ac1944d700b8e811a5679f799016741",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:09ea26793343ba6c850b0e7b499ff5d4fca39de5381cdec99a6375a7b4efbc64",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:ec0069e78fd88de73e49ee0407807afcee47d5fa95d053c36d2f03c2929c1ca3",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:4e903a6b2b8e8ff83fc2cd39397515ebf387c7ce9c767e5a96d4adc50b96da94",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:75cc44df66bd64e08f8b9f944d74b1f721aab99b55bdd0f3067572b3c74b6b19",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:1f74e9c0cc04d0cd9c005cd3cc6a564831ffeaa8aa8ffe051cdbc2f4a71a313c",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:270c80236aa8feef7c37c4d9002788f75d99effbc1077448fff8a2fd80b2d41f",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:29783c6c595c65cc09d57674f7f4026f7b736b678d69c80e70651375c07b40a8",
+        "outcome": "responded",
+        "responded": true,
+        "model_calls": 1,
+        "stages": [
+          "route"
+        ],
+        "tool_calls": 0,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      }
+    ],
+    "route_adversarial": [
+      {
+        "task_digest": "sha256:315bd26eb6cf14c85c2d9ad9fd5568d777da121cf47066258b4c44ab0b7d433c",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:e975f78f7ed8a0fa3c276605519c9afea2c6814a6c468643c1b6dd14ee40f90d",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:a0b720ed8904eebc6325f389b1f98fb9bb3e51cbae8250b4db0fc0b3dacf43fd",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:0b775b46e1fba38e0808343e852199f917845f1fe58ce53ffc5ca1b2b0576737",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:abaaa31f585ccf50ecb8747c60454829c4f3cfd6c6294598287b8f90867e6274",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:548f11b598cff68a9f3b0dbed77c7a551038a85d72cc9f90281062036a1d2932",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:0b5d94f7ab3ba76f49e8a831e16788edacc82dbf2156a06769a194fcca0007f3",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:85a2de048d9607daf50a58b55d0e0b4ccef61060efe91c4c665974d82a221086",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 2
+      },
+      {
+        "task_digest": "sha256:4c559072d38c706e04971d74f4280e4cc4da19a2af237f16748c2ae7c7608bbb",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:cfa685e12bdaf8293e96432e38c9e67292c824c103668feee4fe146772772bf7",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:6b40e1122557e60404c2a54665818408c7dee7e0ce2759b132ce8c94081ee2b5",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:4c7552c37f7d95b436863cc29dd59a88f50d54568e1e981c3118ee29f9acd40a",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:cf9cf295e467a4e371706d8b42e1bb0efacc7b352020db4bb54b37eca55f1050",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:9588645fd89b8860936fcc977590624c7069bd52b675bb65a6416387ceae6d7b",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:c9f959e1cc0a0238b156b5865bdbda95e12106e1c8e5d7c825a9d1c098dd7bd2",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:a9e1c503b94c260e096313f2128bdd30b8694bee86b177c0e5d781d15b7739d5",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:aa3f2a6ead739bc4b56dd811dd686b9627888694a5aafc67322ea14d9c28c2fc",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:e33067e5d0cc65c8c394a75be5142459973aa6bac0fedb1921d891845da5d5e3",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:a7fa76b820abae958d2663032a0c455e73314fe341c52329c6081b5d7733bb90",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:221da8e047b39a546502d222dac0cc28d40871f8e6becaff0ad1c33ff9c756c3",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 1,
+        "unsafe_direct_fallback": true,
+        "duration_ms": 0
+      }
+    ],
+    "read_only_discovery": [
+      {
+        "task_digest": "sha256:48e573f12aea18deea4187e486c510e84e5efa3cd491501a90290f4b1b5bcb70",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:d5d986f2741597c9225e4c3819b45c44e66959c17db31d5305a8ea4f3cca6be0",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:8d5fdca7452bdcf7dd021bf35b9710d521319136b6ea5ac5dc1dc08743385c0c",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:6f6942a65297b42e7caf5d3373379959c1396108a5f2ef567037f65815391543",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:ceb6953b1cc39f92bf1d093b9e30b346920a60ce7226db358ca9c799c82a7db6",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 2
+      },
+      {
+        "task_digest": "sha256:8755346b8480b3774927e5c80f5ce9fc6c72e6769fb0860e33dc4670bc7b8998",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:e5988c469b07d8f1930c2e2618e44899a743837fca471e898691f795fc733bca",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:ccfdd073f8c1f0083e4600534ec2a4d6d2ebd33cfd3ee215e117ab6f16a0c3fd",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 1
+      },
+      {
+        "task_digest": "sha256:797f4fe70efed823a3f9caec5d3d348f38bb0231f1bd79ef436f260c7daa0e69",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      },
+      {
+        "task_digest": "sha256:e70aced7af3fdfa69b98fd217368f80c6741fe6323fc94c6ef3bcabaa9ea7d5d",
+        "outcome": "completed",
+        "responded": false,
+        "model_calls": 4,
+        "stages": [
+          "route",
+          "plan",
+          "review",
+          "verify"
+        ],
+        "tool_calls": 2,
+        "unsafe_direct_fallback": false,
+        "duration_ms": 0
+      }
+    ]
+  },
+  "not_attempted": [
+    "provider control latency",
+    "live provider routing",
+    "Telegram inbox-to-send latency"
+  ],
+  "environment": {
+    "ruby": "3.3.11",
+    "platform": "arm64-darwin25",
+    "recorded_at": "2026-08-11T10:42:27Z"
+  }
+}

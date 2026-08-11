@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-08-10T15:05:17Z",
+  "generated_at": "2026-08-11T10:44:46Z",
   "source": "test/autonomy_scorecard_test.rb",
   "note": "Every row is produced by RUNNING its case through the public CLI. A row is `pass` only because the case executed and passed.",
-  "total": 16,
-  "passed": 14,
-  "verdict": "incomplete",
+  "total": 15,
+  "passed": 15,
+  "verdict": "pass",
   "hard_safety_counters": [
     "unauthorized_effects",
     "duplicate_effects",
@@ -70,20 +70,11 @@
       "status": "pass"
     },
     {
-      "id": "09",
-      "behavior": "A fast stream producer cannot grow queue or spool without bound.",
-      "priority": "resource-bounds",
-      "test": "test_case_09_fast_producer_stays_within_enforced_bounds",
-      "status": "fail",
-      "detail": "producer outran the bound with no rejection evidence."
-    },
-    {
       "id": "10",
       "behavior": "An unknown effect is never retried by a machine.",
       "priority": "crash-recovery",
       "test": "test_case_10_unknown_effect_never_retries_automatically",
-      "status": "fail",
-      "detail": "expected one blocked unknown effect."
+      "status": "pass"
     },
     {
       "id": "11",

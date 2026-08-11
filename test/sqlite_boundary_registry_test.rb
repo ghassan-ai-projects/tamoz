@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteBoundaryRegistryTest < Minitest::Test
   REGISTRY_DIGEST =
-    "sha256:9b41900d7ea06bf6fac1223481ac936fdaf2fb2da9ffa49823e42df8b3e7b9ed"
+    "sha256:5a02e47dc1f72efcc99f36f8e8e4357c97882a495c36b2b672d15f0b69eafce6"
 
   def test_registry_is_deeply_frozen_unique_and_digest_stable
     registry = boundary_registry
@@ -15,10 +15,10 @@ class SQLiteBoundaryRegistryTest < Minitest::Test
     operations = document.fetch("operations")
     names = operations.map { |entry| entry.fetch("operation") }
     assert_equal names.uniq, names
-    # 22, not 20: the worker added `request.pending_threads` and `effect.census`,
-    # both read-only. This count and REGISTRY_DIGEST below are tripwires on the
-    # storage boundary — moving them is a deliberate act.
-    assert_equal 22, names.length
+    # 23, not 20: the worker added `request.pending_threads` and `effect.census`,
+    # and durable routing added `checkpoint.latest_graph_version`, all read-only.
+    # This count and REGISTRY_DIGEST below are tripwires on the storage boundary.
+    assert_equal 23, names.length
     operations.each do |operation|
       templates = operation.fetch("statements").map do |entry|
         entry.fetch("template")

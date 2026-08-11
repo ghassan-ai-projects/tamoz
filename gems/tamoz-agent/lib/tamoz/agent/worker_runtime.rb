@@ -31,19 +31,24 @@ module Tamoz
 
       attr_reader :directory, :adapter, :delivery_sink
 
-      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
+      def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
-        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:)
+        runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:)
         runtime.install_channel_delivery_sink unless delivery_sink
         runtime
       end
 
-      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil)
+      def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
         @directory = directory
         @model_factory = model_factory
+        @routing = routing.to_sym
+        unless Session::ROUTINGS.include?(@routing)
+          raise ArgumentError, "routing must be one of #{Session::ROUTINGS.join(', ')}"
+        end
+
         # The channel projection is nil-safe by default (ADR-042): a worker
         # without a comms surface delivers nothing and never raises.
         @delivery_sink = delivery_sink || Tamoz::Comms::DeliverySink.null
@@ -239,6 +244,15 @@ module Tamoz
           next 0.0 unless opened
 
           (Time.now.utc - Time.parse(opened)).to_f
+        end
+      end
+
+      def occurrence_age_milliseconds(thread_id)
+        durable("occurrence age for #{thread_id.inspect}") do
+          opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+          next 0 unless opened
+
+          [(Time.now.utc - Time.parse(opened)).to_f * 1_000, 0].max.round
         end
       end
 
@@ -573,7 +587,8 @@ module Tamoz
           profile_budgets: resolved && resolved.budgets,
           memory: engine,
           memory_owner: engine && memory_owner,
-          mcp: mcp_source
+          mcp: mcp_source,
+          routing: @routing
         )
       end
     end

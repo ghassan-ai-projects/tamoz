@@ -34,7 +34,7 @@ module Tamoz
             raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
           end
 
-          supervisor = Supervisor.new(config)
+          supervisor = config.transport == :http ? HttpSupervisor.new(config) : Supervisor.new(config)
           begin
             client = (client_factory || ->(sup) { MCP::Client.new(transport: sup) }).call(supervisor)
             protocol_version = handshake(client, config)

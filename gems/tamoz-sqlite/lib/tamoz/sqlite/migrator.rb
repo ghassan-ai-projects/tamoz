@@ -20,7 +20,7 @@ module Tamoz
       # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the ten
       # channel-store tables. Ordinals are consumed monotonically and never
       # reused; the monotonic-ordering test pins the exact ordinal list.
-      CURRENT_VERSION = 7
+      CURRENT_VERSION = 8
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -798,6 +798,27 @@ module Tamoz
         MIGRATION_7.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # Delivery scheduling (COMMS_DESIGN §10): durable next-allowed times
+      # make rate limits survive a drainer restart and serialize competing
+      # drainers without a process-local lock.
+      MIGRATION_8 = [
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_comms_outbox ADD COLUMN send_started_at_ms INTEGER
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_delivery_pacing (
+            surface_id TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            next_allowed_at_ms INTEGER NOT NULL CHECK (next_allowed_at_ms >= 0),
+            PRIMARY KEY (surface_id, scope)
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_8_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_8.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -807,7 +828,8 @@ module Tamoz
         4 => [MIGRATION_4, MIGRATION_4_CHECKSUM],
         5 => [MIGRATION_5, MIGRATION_5_CHECKSUM],
         6 => [MIGRATION_6, MIGRATION_6_CHECKSUM],
-        7 => [MIGRATION_7, MIGRATION_7_CHECKSUM]
+        7 => [MIGRATION_7, MIGRATION_7_CHECKSUM],
+        8 => [MIGRATION_8, MIGRATION_8_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

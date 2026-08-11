@@ -19,7 +19,7 @@ module Tamoz
     # rubocop:disable Metrics/ParameterLists -- the signatures ARE the §13
     #   contract; every field is mandatory at the seam.
     module CommsStore
-      CONTRACT_VERSION = 1
+      CONTRACT_VERSION = 2
 
       # Deploy one surface revision (upsert, digest-addressed).
       # @return [:deployed, :duplicate]
@@ -77,6 +77,39 @@ module Tamoz
       # Claim one outbox row under a fenced lease for a transport attempt.
       # @return [:claimed, :not_claimable, :missing]
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
+        raise NotImplementedError
+      end
+
+      # Reserve the next durable send slot for one chat and the surface-wide
+      # lane. The returned delay is safe for concurrent drainers.
+      def reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:, global_messages_per_s:, now:)
+        raise NotImplementedError
+      end
+
+      # Return a claimed row to pending only for a typed, proven-not-sent
+      # transport refusal such as a server throttle.
+      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+        raise NotImplementedError
+      end
+
+      # Mark an attempt immediately before crossing the transport boundary.
+      # An expired row with this marker is resolved to unknown, never retried.
+      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+        raise NotImplementedError
+      end
+
+      # Resolve crashed attempts whose transport boundary was already crossed.
+      def reconcile_expired_deliveries(now:)
+        raise NotImplementedError
+      end
+
+      # Persist a provider retry deadline in the pacing lane.
+      def defer_delivery(surface_id:, conversation_id:, not_before:, now:)
+        raise NotImplementedError
+      end
+
+      # Read-only channel status derived from durable admission/projection rows.
+      def conversation_status(surface_id:, conversation_id:)
         raise NotImplementedError
       end
 

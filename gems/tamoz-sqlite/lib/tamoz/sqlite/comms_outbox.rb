@@ -54,11 +54,9 @@ module Tamoz
         end
       end
 
-      # Claim one row under a fenced lease for a transport attempt. An expired
-      # lease is not automatically re-claimable in v1 — the gateway resolves
-      # the effect first (design §10 ambiguity handling).
-      # rubocop:disable Lint/UnusedMethodArgument -- `now` keeps the §13
-      # contract clock signature; the lease deadline is claim_expires_at.
+      # Claim one row under a fenced lease for a transport attempt. A crashed
+      # claim is retryable only when the transport boundary was never crossed;
+      # marked sends become unknown during reconciliation.
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
         transaction('comms.outbox.claim') do |txn|
           missing = txn.first('comms.outbox.claim.exists', <<~SQL, [delivery_id])
@@ -66,16 +64,93 @@ module Tamoz
           SQL
           next :missing unless missing
 
-          txn.execute('comms.outbox.claim', <<~SQL, [owner, fence, now_ms(claim_expires_at), delivery_id])
+          txn.execute('comms.outbox.claim', <<~SQL, [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
             UPDATE tamoz_comms_outbox
             SET status = 'claimed', claim_owner = ?, claim_fence = ?, claim_expires_at_ms = ?
-            WHERE delivery_id = ? AND status = 'pending'
+            WHERE delivery_id = ? AND (
+              status = 'pending' OR
+              (status = 'claimed' AND claim_expires_at_ms <= ? AND send_started_at_ms IS NULL)
+            )
           SQL
           txn.changes == 1 ? :claimed : :not_claimable
         end
       end
 
-      # rubocop:enable Lint/UnusedMethodArgument
+      def reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:, global_messages_per_s:, now:)
+        validate_rate!(per_chat_messages_per_s, 'per_chat_messages_per_s')
+        validate_rate!(global_messages_per_s, 'global_messages_per_s')
+        current_ms = now_ms(now)
+        global_interval = interval_ms(global_messages_per_s)
+        chat_interval = interval_ms(per_chat_messages_per_s)
+        transaction('comms.outbox.pacing.reserve') do |txn|
+          global_ready = [current_ms, pacing_time(txn, surface_id, PACING_GLOBAL_SCOPE)].max
+          chat_ready = if conversation_id
+                         [current_ms, pacing_time(txn, surface_id, conversation_id)].max
+                       else
+                         current_ms
+                       end
+          scheduled = [global_ready, chat_ready].max
+          upsert_pacing!(txn, surface_id, PACING_GLOBAL_SCOPE, scheduled + global_interval)
+          upsert_pacing!(txn, surface_id, conversation_id, scheduled + chat_interval) if conversation_id
+          (scheduled - current_ms) / 1000.0
+        end
+      end
+
+      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+        transaction('comms.outbox.release_claim') do |txn|
+          txn.execute('comms.outbox.release_claim', <<~SQL, [now_ms(now), delivery_id, owner, fence])
+            UPDATE tamoz_comms_outbox
+            SET status = 'pending', claim_owner = NULL, claim_fence = NULL,
+                claim_expires_at_ms = NULL, send_started_at_ms = NULL, updated_at_ms = ?
+            WHERE delivery_id = ? AND status = 'claimed'
+              AND claim_owner = ? AND claim_fence = ?
+          SQL
+          txn.changes == 1 ? :released : :not_claimable
+        end
+      end
+
+      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+        transaction('comms.outbox.send_started') do |txn|
+          txn.execute('comms.outbox.send_started', <<~SQL, [now_ms(now), now_ms(now), delivery_id, owner, fence])
+            UPDATE tamoz_comms_outbox
+            SET send_started_at_ms = ?, updated_at_ms = ?
+            WHERE delivery_id = ? AND status = 'claimed'
+              AND claim_owner = ? AND claim_fence = ?
+          SQL
+          txn.changes == 1 ? :marked : :not_claimable
+        end
+      end
+
+      def reconcile_expired_deliveries(now:)
+        transaction('comms.outbox.reconcile_expired') do |txn|
+          txn.execute('comms.outbox.reconcile_expired', <<~SQL, [now_ms(now), now_ms(now)])
+            UPDATE tamoz_comms_outbox
+            SET status = 'unknown', updated_at_ms = ?
+            WHERE status = 'claimed' AND claim_expires_at_ms <= ?
+              AND send_started_at_ms IS NOT NULL
+          SQL
+          txn.execute('comms.outbox.reconcile_unstarted', <<~SQL, [now_ms(now), now_ms(now)])
+            UPDATE tamoz_comms_outbox
+            SET status = 'pending', claim_owner = NULL, claim_fence = NULL,
+                claim_expires_at_ms = NULL, updated_at_ms = ?
+            WHERE status = 'claimed' AND claim_expires_at_ms <= ?
+              AND send_started_at_ms IS NULL
+          SQL
+          txn.changes
+        end
+      end
+
+      def defer_delivery(surface_id:, conversation_id:, not_before:, now:)
+        deadline = [now_ms(now), now_ms(not_before)].max
+        transaction('comms.outbox.pacing.defer') do |txn|
+          scopes = [PACING_GLOBAL_SCOPE, conversation_id].compact.uniq
+          scopes.each do |scope|
+            current = pacing_time(txn, surface_id, scope)
+            upsert_pacing!(txn, surface_id, scope, [current, deadline].max)
+          end
+          :deferred
+        end
+      end
 
       # Bind one row to its effect journal entry (design §10): the journal
       # holds attempts and receipts, never the outbox. Write-once.
@@ -139,6 +214,34 @@ module Tamoz
       end
 
       private
+
+      def validate_rate!(value, name)
+        return if value.is_a?(Numeric) && value.positive?
+
+        raise ArgumentError, "#{name} must be a positive number"
+      end
+
+      def interval_ms(rate)
+        (1000.0 / rate).ceil
+      end
+
+      def pacing_time(txn, surface_id, scope)
+        return 0 unless scope
+
+        txn.scalar('comms.outbox.pacing.read', <<~SQL, [surface_id, scope]).to_i
+          SELECT next_allowed_at_ms FROM tamoz_comms_delivery_pacing
+          WHERE surface_id = ? AND scope = ?
+        SQL
+      end
+
+      def upsert_pacing!(txn, surface_id, scope, next_allowed_at_ms)
+        txn.execute('comms.outbox.pacing.upsert', <<~SQL, [surface_id, scope, next_allowed_at_ms])
+          INSERT INTO tamoz_comms_delivery_pacing (surface_id, scope, next_allowed_at_ms)
+          VALUES (?, ?, ?)
+          ON CONFLICT(surface_id, scope) DO UPDATE SET
+            next_allowed_at_ms = excluded.next_allowed_at_ms
+        SQL
+      end
 
       def transaction(operation, &)
         @adapter.__send__(:transaction, operation:, &)

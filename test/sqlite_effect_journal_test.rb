@@ -250,6 +250,45 @@ class SQLiteEffectJournalTest < Minitest::Test
     end
   end
 
+  def test_running_unsafe_attempt_from_an_old_fence_becomes_unknown_without_waiting
+    with_effect_store do |_adapter, _app, store, execution_id|
+      old_effects = nil
+      decision = nil
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.unsafe.old-fence",
+        ttl: store.writer_ttl
+      ) do |writer|
+        old_effects = writer.effects
+        decision = prepare_effect(
+          old_effects,
+          execution_id:,
+          task_id: "task.unsafe.old-fence",
+          safety: :unsafe
+        )
+        old_effects.start(key: decision.record.key, attempt_token: decision.attempt_token)
+      end
+
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.unsafe.takeover",
+        ttl: store.writer_ttl
+      ) do |writer|
+        recovery = prepare_effect(
+          writer.effects,
+          execution_id:,
+          task_id: "task.unsafe.old-fence",
+          safety: :unsafe
+        )
+        assert_equal :unknown, recovery.action
+        assert_equal :unknown, recovery.record.status
+        assert_nil recovery.attempt_token
+      end
+    end
+  end
+
   def test_late_old_success_is_retained_without_overwriting_new_succeeded_head
     with_effect_store do |adapter, _app, store, execution_id|
       old_effects = nil

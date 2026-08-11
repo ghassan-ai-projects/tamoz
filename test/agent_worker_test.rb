@@ -173,6 +173,7 @@ class AgentWorkerTest < Minitest::Test
 
       completed = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 1, completed.length
+      assert_operator completed.first.fetch("duration_ms"), :>=, 0
     end
   end
 
@@ -269,7 +270,11 @@ class AgentWorkerTest < Minitest::Test
       RUBY
       out_read, out_write = IO.pipe
       err_read, err_write = IO.pipe
-      pid = Process.spawn(RbConfig.ruby, "-e", script, out: out_write, err: err_write)
+      load_paths = %w[
+        tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools
+        tamoz-observability tamoz-comms tamoz-mcp tamoz-agent
+      ].flat_map { |gem| ["-I", GEM_ROOTS.fetch(gem).join("lib").to_s] }
+      pid = Process.spawn(RbConfig.ruby, *load_paths, "-e", script, out: out_write, err: err_write)
       out_write.close
       err_write.close
 
@@ -329,6 +334,21 @@ class AgentWorkerTest < Minitest::Test
       ensure
         runtime.close
       end
+    end
+  end
+
+  def test_experimental_routing_selects_the_v2_worker_graph
+    with_runtime do |rt|
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) },
+        routing: :experimental
+      )
+
+      assert_equal '2', runtime.session_for('experimental').definition.version
+      assert_includes runtime.session_for('experimental').definition.nodes.keys, :route
+    ensure
+      runtime&.close
     end
   end
 

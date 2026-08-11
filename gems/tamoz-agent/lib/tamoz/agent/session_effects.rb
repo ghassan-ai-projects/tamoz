@@ -87,6 +87,7 @@ module Tamoz
           call_index: 0,
           request: dispatch_request(intent, tool, arguments),
           actor: 'tamoz.agent.session',
+          after_start: -> { after_effect_started(intent.fetch('operation')) },
           reconcile: reconciler_for(intent, safety)
         }
       end
@@ -115,6 +116,11 @@ module Tamoz
         verify_intent_before_state!(intent)
         result = @configuration.capabilities.execute(context, tool, arguments)
         result_payload(result)
+      end
+
+      def after_effect_started(operation)
+        model = @configuration.model
+        model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
       end
 
       def result_payload(result)

@@ -4,6 +4,7 @@ require 'time'
 require 'json'
 
 require 'tamoz/comms'
+require_relative 'delivery_drainer'
 
 module Tamoz
   module Agent
@@ -22,14 +23,17 @@ module Tamoz
     # :reek:DuplicateMethodCall, :reek:FeatureEnvy, :reek:NilCheck
     # :reek:TooManyInstanceVariables, :reek:TooManyMethods -- one loop owns
     #   every seam; splitting it would scatter the ordering invariant.
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Performance/CollectionLiteralInLoop, Naming/PredicateMethod
     class CommsGateway
       THREAD_PROFILE_NAMESPACE = %w[tamoz worker thread_profile].freeze
       POLLER_TTL_S = 60.0
       CLAIM_TTL_S = 30.0
+      TRANSIENT_BACKOFF_BASE_S = 1.0
+      TRANSIENT_BACKOFF_MAX_S = 30.0
 
-      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50)
+      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil)
         @adapter = adapter
+        @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
         @transport = transport
         @descriptor = descriptor
@@ -37,6 +41,14 @@ module Tamoz
         @batch_size = batch_size
         @fence = 0
         @stopping = false
+        @drainer = drainer || DeliveryDrainer.new(
+          store: @store,
+          transport:,
+          descriptor:,
+          owner: "#{poller_owner}:drainer",
+          batch_size:
+        )
+        @owns_drainer = drainer.nil?
       end
 
       # Acquire the poller lease and enter the serve loop (the CLI drives
@@ -47,14 +59,21 @@ module Tamoz
       # getUpdates finishes first. Releasing the lease WITHOUT ending the loop
       # would be worse than not stopping at all — the gateway would keep
       # reading a stream it no longer owns, which is the 409 conflict.
-      def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0)
+      def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0, drain: true,
+                     sleeper: ->(seconds) { sleep seconds })
         return :poller_busy unless start(now: now_provider.call)
 
+        outcome = :stopped
         until @stopping
-          serve_once(now: now_provider.call)
-          sleep interval_s unless @stopping
+          outcome = serve_once(now: now_provider.call, drain:)
+          break if %i[auth_failed poller_lost].include?(outcome)
+
+          delay = loop_delay(outcome, interval_s)
+          sleeper.call(delay) if delay.positive? && !@stopping
         end
-        :stopped
+        outcome == :stopped || @stopping ? :stopped : outcome
+      rescue Comms::PollerConflictError
+        :poller_conflict
       ensure
         stop
       end
@@ -64,7 +83,7 @@ module Tamoz
       def start(now: Time.now.utc)
         acquired = @store.acquire_poller_lease(
           surface_id:, bot_id:, owner: @poller_owner, fence: next_fence,
-          ttl_s: POLLER_TTL_S, now:
+          ttl_s: poller_ttl_s, now:
         )
         acquired == :acquired ? :started : :poller_busy
       end
@@ -74,25 +93,33 @@ module Tamoz
       # a released lease alone does not buy.
       def stop
         @stopping = true
+        @drainer.stop if @owns_drainer
         release_poller
       end
 
       # One poll + admit + offset + drain pass. The poller lease is held
       # across passes (one fenced poller per bot); only serve_loop's ensure
       # releases it, and a crash leaves it to expire.
-      def serve_once(now: Time.now.utc)
+      def serve_once(now: Time.now.utc, drain: true)
+        return :poller_lost unless renew_poller(now)
+
         next_offset = @store.poll_offset(bot_id:)
         batch = poll_batch(next_offset)
         return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
-        drain_outbox(now:)
+        drain_outbox(now:) if drain
         :served
-      rescue Comms::ThrottledError
+      rescue Comms::PollerConflictError
+        raise
+      rescue Comms::ThrottledError => e
+        @retry_after_s = e.retry_after
         :throttled
       rescue Comms::AuthenticationError
         :auth_failed
+      rescue Comms::TransientTransportError, Comms::CommsError
+        :transient
       end
 
       # The idempotent read, and ONLY the read. A long poll that times out or
@@ -107,6 +134,30 @@ module Tamoz
         @transport.poll(next_offset:, limit: @batch_size, timeout_s: poll_timeout_s)
       rescue Comms::TransientTransportError
         nil
+      end
+
+      def renew_poller(now)
+        return true if @fence.zero?
+
+        @store.acquire_poller_lease(
+          surface_id:, bot_id:, owner: @poller_owner, fence: @fence,
+          ttl_s: poller_ttl_s, now:
+        ) == :acquired
+      end
+
+      def loop_delay(outcome, interval_s)
+        case outcome
+        when :transient
+          @transient_failures = @transient_failures.to_i + 1
+          [TRANSIENT_BACKOFF_BASE_S * (2**(@transient_failures - 1)), TRANSIENT_BACKOFF_MAX_S].min
+        when :throttled
+          @transient_failures = 0
+          [@retry_after_s.to_f, interval_s].max
+        else
+          @transient_failures = 0
+          @retry_after_s = nil
+          interval_s
+        end
       end
 
       # Resolves one normalized update to its durable disposition (design §5):
@@ -132,7 +183,11 @@ module Tamoz
         when :control
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
                                             now:)
-          append_control(decision.control_reply, envelope, now:) if decision.control_reply
+          if decision.command_intent
+            handle_command(envelope, decision, now:)
+          elsif decision.control_reply
+            append_control(decision.control_reply, envelope, now:)
+          end
         else
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
                                             now:)
@@ -194,13 +249,56 @@ module Tamoz
           envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
                     reservation: reservation_slots, capacity: outbox_capacity, now:
         )
-        return if outcome == :enqueued
+        if %i[enqueued duplicate].include?(outcome)
+          append_control('Accepted. I will report committed progress.', envelope, now:, kind: 'accepted')
+          return
+        end
 
         # Saturated (invariant 57): durable refusal, no turn, and a bounded
         # busy reply that itself may be coalesced.
         @store.disposition_only(envelope, surface_id:, bot_id:,
                                           disposition: 'rejected', reason: 'capacity_refused', now:)
         append_control('The channel is at capacity; try again later.', envelope, now:)
+      end
+
+      def handle_command(envelope, decision, now:)
+        case decision.command_intent.name
+        when 'help'
+          append_control('Commands: /help, /status, /cancel. Commands never become task text.', envelope, now:)
+        when 'status'
+          append_control(status_text(envelope), envelope, now:)
+        when 'cancel'
+          append_control(cancel_request(envelope), envelope, now:)
+        else
+          append_control('That command is not available on this channel.', envelope, now:)
+        end
+      end
+
+      def status_text(envelope)
+        status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        return 'No work is admitted for this conversation.' unless status
+
+        "Work status: #{status.fetch('state')}; open requests: #{status.fetch('open_requests')}."
+      end
+
+      def cancel_request(envelope)
+        route = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        return 'No active work was found.' unless route
+
+        request_id = Comms::Canonical.hexdigest(
+          'tamoz.comms.command.v1',
+          [surface_id, envelope.fetch('update_id'), 'cancel']
+        )
+        @checkpoints.enqueue_request(
+          thread_id: route.fetch('thread_id'),
+          request_id:,
+          operation: :redirect,
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } },
+          delivery: :redirect
+        )
+        'Cancellation requested.'
+      rescue Tamoz::CheckpointConflictError
+        'Cancellation could not be queued; no active checkpoint is available.'
       end
 
       def bind_thread_profile(thread)
@@ -227,9 +325,9 @@ module Tamoz
         )
       end
 
-      def append_control(reply_text, envelope, now:)
+      def append_control(reply_text, envelope, now:, kind: 'control')
         delivery = Comms::Delivery.build(
-          conversation_id: envelope.fetch('conversation_id'), kind: 'control',
+          conversation_id: envelope.fetch('conversation_id'), reply_to: envelope.fetch('update_id'), kind:,
           text: reply_text, part_index: 0, part_count: 1, journaled: false,
           render_version: Comms::Rendering::RENDER_VERSION,
           content_digest: Comms::Rendering.content_digest(reply_text)
@@ -238,45 +336,7 @@ module Tamoz
       end
 
       def drain_outbox(now:)
-        rows = @store.outbox_rows(surface_id:, statuses: %w[pending], limit: @batch_size)
-        rows.each do |row|
-          claimed = @store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), owner: @poller_owner,
-            fence: next_fence, claim_expires_at: now + CLAIM_TTL_S, now:
-          )
-          next unless claimed == :claimed
-
-          @store.bind_journal_effect(
-            delivery_id: row.fetch('delivery_id'),
-            effect_key: "sha256:#{Comms::Canonical.hexdigest('tamoz.comms.delivery.effect', row.fetch('delivery_id'))}",
-            execution_id: "comms:#{row.fetch('delivery_id')}", now:
-          )
-          outcome = send_delivery(row)
-          @store.mark_delivery(
-            delivery_id: row.fetch('delivery_id'), status: outcome[:status],
-            receipt: outcome[:receipt], now:
-          )
-          activate_after_receipt(row, now:) if outcome[:status] == 'succeeded'
-        end
-      end
-
-      # ADR-043: an approval prompt activates only after its send receipt is
-      # durable. The markup carried the plaintext reference exactly once.
-      def activate_after_receipt(row, now:)
-        return unless row.fetch('kind') == 'approval_request' && row['markup']
-
-        reference = JSON.parse(row.fetch('markup')).fetch('reference')
-        digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
-        @store.activate_prompt(reference_digest: digest, now:)
-      end
-
-      def send_delivery(row)
-        wire = row.merge('journaled' => row.fetch('journaled') == 1)
-        delivery = Comms::Delivery.from_wire(wire)
-        receipt = @transport.deliver(delivery)
-        { status: 'succeeded', receipt: }
-      rescue Comms::AmbiguousDeliveryError
-        { status: 'unknown', receipt: nil }
+        @drainer.drain_once(now:)
       end
 
       def release_poller
@@ -299,6 +359,8 @@ module Tamoz
 
       def poll_timeout_s = @descriptor.transport.fetch(:poll_timeout_s)
 
+      def poller_ttl_s = [POLLER_TTL_S, poll_timeout_s.to_f + 30.0].max
+
       def control_capacity = @descriptor.limits.fetch(:control_capacity)
 
       def outbox_capacity = @descriptor.limits.fetch(:outbox_capacity)
@@ -312,4 +374,4 @@ module Tamoz
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Performance/CollectionLiteralInLoop, Naming/PredicateMethod

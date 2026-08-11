@@ -1,18 +1,16 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-10T23:06:39Z",
-  "manifest_requirements": 432,
+  "generated_at": "2026-08-11T12:08:40Z",
+  "manifest_requirements": 433,
   "named_cases_run": 266,
   "counts": {
     "deferred-by-contract": 11,
-    "failing": 4,
     "indirect": 4,
     "missing": 16,
-    "pass": 397
+    "pass": 402
   },
   "release_blocking_gaps": [
-    "ADR-015",
     "ADR-041",
     "ADR-042",
     "ADR-043",
@@ -20,7 +18,6 @@
     "ADR-045",
     "ADR-046",
     "ADR-047",
-    "INV-20",
     "INV-39",
     "INV-48",
     "INV-56",
@@ -29,16 +26,9 @@
     "INV-59",
     "INV-60",
     "INV-61",
-    "OBJ-3",
-    "OBJ-7",
-    "PHASE-P3"
+    "OBJ-7"
   ],
-  "failing": [
-    "ADR-015",
-    "INV-20",
-    "OBJ-3",
-    "PHASE-P3"
-  ],
+  "failing": [],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -288,14 +278,14 @@
       "source": "docs/design-v0.1/DECISIONS.md",
       "title": "Durable means synchronous barrier commit",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "accepted",
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -5685,7 +5675,7 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Single fenced writer",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover",
       "supporting_tests": [
         "test/agent_session_operations_test.rb#test_two_concurrent_owners_cannot_both_advance_the_same_session",
@@ -5694,7 +5684,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -6560,6 +6550,21 @@
       "owner_signature": null
     },
     {
+      "id": "MIG-8",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_8",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "NG-arbitrary-shell",
       "category": "non_goal",
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §1; docs/P15_RELEASE_PLAN.md scope",
@@ -6700,7 +6705,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
         "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
@@ -6711,7 +6716,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -6790,7 +6795,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -7024,13 +7029,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Coding behavior scorecard — fixed deterministic corpus reports success, safety, attempts, approvals, and cost proxies",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {

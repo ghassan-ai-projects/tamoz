@@ -25,10 +25,11 @@ module Tamoz
     # rubocop:disable Metrics/PerceivedComplexity -- the decision table IS
     #   the admission policy; splitting it would scatter the rules.
     module Admission
-      # The disposition of one update. `thread_id` is the deterministic
-      # conversation thread for :request; `control_reply` is the exact reply
-      # text for :control/:rejected dispositions that answer the sender.
-      Decision = Data.define(:disposition, :reason, :control_reply, :thread_id)
+      # The disposition of one update. `command_intent` is typed and bounded;
+      # it is not task text and cannot be forwarded to a model.
+      Decision = Data.define(
+        :disposition, :reason, :control_reply, :thread_id, :command_intent
+      )
 
       module_function
 
@@ -40,7 +41,7 @@ module Tamoz
         return decision_disposition if envelope.fetch('kind') == 'callback'
 
         if envelope.fetch('kind') == 'command'
-          command_disposition(envelope, bot_username:)
+          command_admission(envelope, surface:, binding:, bot_username:)
         else
           text_disposition(envelope, surface:, binding:, conversation:)
         end
@@ -60,11 +61,26 @@ module Tamoz
         conversation_id.start_with?('telegram:supergroup:', 'telegram:channel:', 'telegram:group:')
       end
 
+      def command_admission(envelope, surface:, binding:, bot_username:)
+        case surface.admission.fetch(:direct)
+        when 'allowlist'
+          authorized = surface.admission.fetch(:correspondents).include?(envelope.fetch('correspondent_id')) ||
+                       binding&.fetch('status') == 'active'
+          return ignore(:unbound) unless authorized
+        when 'pairing'
+          return ignore(:pairing_pending) unless binding&.fetch('status') == 'active'
+        else
+          return reject(:disabled, 'admission is disabled')
+        end
+
+        command_disposition(envelope, bot_username:)
+      end
+
       def command_disposition(envelope, bot_username:)
         parsed = Commands.parse(envelope.fetch('text'), bot_username:)
-        return Decision.new(:control, :unknown_command, 'Unknown command.', nil) if parsed.nil?
+        return Decision.new(:control, :unknown_command, 'Unknown command.', nil, nil) if parsed.nil?
 
-        Decision.new(:control, :command, nil, nil)
+        Decision.new(:control, :command, nil, nil, parsed.intent)
       end
 
       def text_disposition(envelope, surface:, binding:, conversation:)
@@ -96,20 +112,20 @@ module Tamoz
       def request_disposition(envelope, surface:, conversation:)
         if conversation.nil?
           Decision.new(:request, :first_request, nil,
-                       thread_id(surface.surface_id, envelope.fetch('conversation_id')))
+                       thread_id(surface.surface_id, envelope.fetch('conversation_id')), nil)
         else
-          Decision.new(:request, :bound, nil, conversation.fetch('thread_id'))
+          Decision.new(:request, :bound, nil, conversation.fetch('thread_id'), nil)
         end
       end
 
       def decision_disposition
-        Decision.new(:decision, :callback, nil, nil)
+        Decision.new(:decision, :callback, nil, nil, nil)
       end
 
-      def ignore(reason) = Decision.new(:ignored, reason, nil, nil)
+      def ignore(reason) = Decision.new(:ignored, reason, nil, nil, nil)
 
       def reject(reason, reply)
-        Decision.new(:rejected, reason, reply, nil)
+        Decision.new(:rejected, reason, reply, nil, nil)
       end
     end
   end

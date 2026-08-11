@@ -21,6 +21,10 @@ module Tamoz
           model.generate(...)
         end
 
+        def after_effect_started(operation:)
+          model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
+        end
+
         private
 
         def model

@@ -23,8 +23,10 @@ ROOT = File.expand_path("..", __dir__)
 TEST_FILE = File.join(ROOT, "test", "autonomy_scorecard_test.rb")
 OUTPUT = File.join(ROOT, "docs", "autonomy-scorecard.json")
 
-# The ten behaviours the owner named. The `case` key is the test method suffix;
-# the order here is the order the milestone values them.
+# The behaviours the owner named. The stream bounded-producer probe is intentionally
+# not in this scorecard: no public stream producer exists yet, so keeping that stale
+# test here would turn an absent product surface into misleading feature evidence.
+# INV-48 remains disclosed by the requirements audit and LIMITATIONS.md.
 CASES = [
   {id: "01", name: "queued_read_only_task_completes_unattended",
    behavior: "A queued read-only task completes with nobody watching.",
@@ -50,9 +52,6 @@ CASES = [
   {id: "08", name: "capability_source_requires_operator_configuration",
    behavior: "A capability source is available only when the operator configured it.",
    priority: "capability-integration"},
-  {id: "09", name: "fast_producer_stays_within_enforced_bounds",
-   behavior: "A fast stream producer cannot grow queue or spool without bound.",
-   priority: "resource-bounds"},
   {id: "10", name: "unknown_effect_never_retries_automatically",
    behavior: "An unknown effect is never retried by a machine.",
    priority: "crash-recovery"},

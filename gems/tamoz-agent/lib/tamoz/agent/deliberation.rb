@@ -27,11 +27,34 @@ module Tamoz
         issues (an array of concrete strings), and rationale (a string).
       TEXT
 
+      REVIEW_RULES = [
+        "Review the plan against the supplied tool descriptions and phase; do not infer a stricter tool contract.",
+        "Discovery plans may gather directory or search evidence whose exact results are not known yet; a later action phase will receive that evidence and re-plan.",
+        "An action plan may contain multiple bounded file mutations. Accept it when every target path and mutation argument is concrete, ordered, and verifiable; do not reject it merely because it edits more than one file.",
+        "A read-back step is valid verification for a mutation. Do not require an additional step when the plan already has an observable verification condition."
+      ].freeze
+
       VERIFY_SYSTEM = <<~TEXT.freeze
         You are Tamoz's final verification stage. Use only the supplied task, accepted plan,
         and tool observations. Do not invent evidence. Return only JSON with answer (string),
         satisfied (boolean), and evidence (array of strings). If evidence is insufficient,
         set satisfied to false and say exactly what remains unknown.
+      TEXT
+
+      ROUTING_SYSTEM = <<~TEXT.freeze
+        You are Tamoz's intake router. Return exactly one JSON object and nothing else.
+        Choose direct_response only for a self-contained interaction that needs no
+        workspace, tool, current external state, prior conversation, or action result.
+        A direct response is a response, not verified task completion. Never use it for
+        file reads, directory discovery, diagnosis, edits, commands, current-state
+        questions, or requests to pretend work happened.
+        For work, return read_only_work or managed_action and a concrete discovery_plan
+        using only the listed tools. The plan may gather evidence but must not mutate.
+        Use reason_class from the closed list: greeting, general_knowledge, explanation,
+        writing, workspace_evidence, current_external_state, requested_change,
+        command_or_code, action_result, ambiguous_context.
+        Direct response shape: {route, answer, reason_class}.
+        Work shape: {route, discovery_plan, reason_class}.
       TEXT
 
       MUTATION_TOOLS = %w[apply_patch create_file].freeze
@@ -64,7 +87,8 @@ module Tamoz
         phase_instruction = if phase == :discovery
                               "Gather only the evidence needed to prepare a later action plan. Do not mutate or run commands."
                             elsif phase == :action
-                              "Use the discovery evidence to propose the exact bounded actions and verification checks."
+                              "Use the discovery evidence to propose exact bounded actions and verification checks. " \
+                                "Multiple independent file edits are valid when each target and mutation is explicit."
                             elsif phase == :repair
                               "Use all prior plans and receipts to propose a different bounded repair and a configured verification check. Do not repeat a prior action signature."
                             else
@@ -118,12 +142,23 @@ module Tamoz
         JSON.pretty_generate(plan_input)
       end
 
-      def review_prompt(task, plan, phase:, evidence:, planning_context:)
+      def routing_prompt(task, toolbox:)
+        JSON.pretty_generate(
+          "task" => task,
+          "available_read_only_tools" => toolbox.read_only_names,
+          "available_work_tools" => toolbox.names,
+          "tool_descriptions" => toolbox.descriptions.slice(*toolbox.names)
+        )
+      end
+
+      def review_prompt(task, plan, phase:, evidence:, planning_context:, tool_descriptions: {})
         review_input = {
           "task" => task,
           "phase" => phase.to_s,
           "evidence" => evidence,
-          "plan" => plan.to_h
+          "plan" => plan.to_h,
+          "review_rules" => REVIEW_RULES,
+          "available_tools" => tool_descriptions
         }
         review_input["planning_context"] = planning_context unless planning_context.empty?
         JSON.pretty_generate(review_input)

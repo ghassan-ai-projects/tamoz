@@ -5,6 +5,8 @@ require "digest"
 require "securerandom"
 require "set"
 
+require_relative "terminal_progress"
+
 module Tamoz
   module Agent
     # The foreground worker.
@@ -265,11 +267,12 @@ module Tamoz
         # `steps` budget is spent. This is a STOP, not a failure: the work was
         # well-formed and the ceiling did its job, so it is reported as its own
         # typed event and recorded durably for `tamoz status`.
-        budget_exhausted(entry, budget: "steps", detail: error.message)
+        budget_exhausted(entry, budget: "steps", detail: error.message, session:)
       rescue StandardError => error
         emit("request.failed",
              thread: entry.fetch(:thread_id),
              request_id: entry.fetch(:head_request_id),
+             duration_ms: @runtime.occurrence_age_milliseconds(entry.fetch(:thread_id)),
              reason: "#{error.class}: #{error.message}")
         park(entry, nil, reason: "failed")
         PARKED
@@ -298,10 +301,18 @@ module Tamoz
       # Durable and observable, in that order. The record is written before the
       # event is emitted, so a worker that dies between the two still leaves an
       # operator able to see why the occurrence stopped.
-      def budget_exhausted(entry, budget:, detail:)
+      def budget_exhausted(entry, budget:, detail:, session: nil)
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
+        view = session && view_of(session, thread_id)
+        notify_sink(
+          thread_id,
+          "request.stopped",
+          stop_text(view, reason: 'budget_exhausted', budget:),
+          request_id: occurrence_id
+        )
         # A budget stop is TERMINAL for the occurrence, so the record is closed.
         # Parking would only be in-memory: the next worker process would have an
         # empty park map, re-examine the same occurrence and stop it again, and
@@ -315,7 +326,8 @@ module Tamoz
              request_id: occurrence_id,
              reason: "budget_exhausted",
              budget:,
-             detail:)
+             detail:,
+             duration_ms:)
         PROGRESSED
       end
 
@@ -413,6 +425,8 @@ module Tamoz
         view = view_of(session, thread_id)
         return IDLE unless view
 
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+
         case view.status
         when :completed
           @monitor.synchronize { @processed += 1 }
@@ -421,6 +435,7 @@ module Tamoz
           unpark(thread_id)
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed",
+               duration_ms:,
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :failed
@@ -428,19 +443,37 @@ module Tamoz
           # the reason belongs in the worker's event stream, where an operator
           # reads it, not in a chat a hostile plan could use to echo content
           # back. The turn still owes the conversation a terminal message.
-          notify_sink(thread_id, "request.failed", "That turn failed. Nothing was changed.",
+          notify_sink(thread_id, "request.failed", failure_text(view),
                       request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.failed",
                thread: thread_id, request_id: occurrence_id,
+               duration_ms:,
                reason: view.respond_to?(:error) ? view.error.to_s : "failed",
+               observability: {execution_id: view.execution_id})
+          PROGRESSED
+        when :blocked
+          notify_sink(
+            thread_id,
+            "request.blocked",
+            blocked_text(view),
+            request_id: occurrence_id
+          )
+          @runtime.close_occurrence(thread_id)
+          unpark(thread_id)
+          emit("request.blocked",
+               thread: thread_id,
+               request_id: occurrence_id,
+               duration_ms:,
+               reason: "effect_unknown",
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :paused
           if view.interrupts.empty?
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused",
+                 duration_ms:,
                  observability: {execution_id: view.execution_id})
           else
             notify_sink(thread_id, "request.approval_request", "Approval requested.",
@@ -455,9 +488,11 @@ module Tamoz
       end
 
       def emit_approval_request(thread_id, occurrence_id, view)
+        duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         emit("request.paused",
              thread: thread_id,
              request_id: occurrence_id,
+             duration_ms:,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
              observability: {execution_id: view.execution_id})
@@ -478,10 +513,41 @@ module Tamoz
       # that verified nothing still owes the channel a terminal message, so it
       # says so plainly rather than delivering an empty one.
       # :reek:UtilityFunction -- a pure function of the view.
+      # rubocop:disable Layout/LineLength -- the message remains one bounded
+      # deterministic projection of the terminal state.
       def completion_text(view)
         answer = view.state&.dig(:verification, "answer").to_s
-        answer.empty? ? "Completed." : answer
+        satisfied = view.terminal&.fetch('satisfied', false)
+        if satisfied
+          [answer.empty? ? 'Completed.' : answer, TerminalProgress.artifact_line(view)].compact.join("\n")
+        elsif view.terminal&.fetch('reason') == 'direct_response'
+          [answer, 'Response provided; no task completion was claimed.'].reject(&:empty?).join("\n")
+        else
+          [answer, TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+           'Verification was not satisfied.',
+           "Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"].compact.reject(&:empty?).join("\n")
+        end
       end
+      # rubocop:enable Layout/LineLength
+
+      def blocked_text(view)
+        stop_text(view, reason: 'effect_unknown')
+      end
+
+      # rubocop:disable Style/StringConcatenation -- the terminal message is
+      # assembled from bounded independent lines.
+      def failure_text(view)
+        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+         'Work failed before verified completion.',
+         "Next action: #{TerminalProgress.next_action('failed')}"].compact.join("\n") + '.'
+      end
+
+      def stop_text(view, reason:, budget: nil)
+        [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
+         'Work stopped before verified completion.',
+         "Next action: #{TerminalProgress.next_action(reason, budget:)}"].compact.join("\n") + '.'
+      end
+      # rubocop:enable Style/StringConcatenation
 
       def describe_interrupt(interrupt)
         {
@@ -579,7 +645,7 @@ module Tamoz
           "worker.error" => "tamoz.worker.error",
           "schedule.materialized" => "tamoz.worker.schedule.materialized",
           "schedule.error" => "tamoz.worker.schedule.error"
-        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil }
+        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil } # rubocop:disable Layout/LineLength
         return unless name && Tamoz::Observability::Catalog.registered?(name)
 
         correlation = {}

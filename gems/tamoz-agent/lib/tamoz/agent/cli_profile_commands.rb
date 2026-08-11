@@ -175,7 +175,11 @@ module Tamoz
         raise OptionParser::MissingArgument, 'PATH' if path.to_s.empty?
 
         expanded = File.expand_path(File.path(path))
-        document = Profile.preview(expanded, suggestion: Profile.suggestion_path?(expanded))
+        document = Profile.preview(
+          expanded,
+          suggestion: Profile.suggestion_path?(expanded, env: @env),
+          env: @env
+        )
         render_profile(document)
         document.suggestion ? 3 : 0
       end
@@ -228,7 +232,11 @@ module Tamoz
         raise OptionParser::MissingArgument, 'PATH' if source.to_s.empty?
 
         expanded = File.expand_path(File.path(source))
-        captured = Profile.preview_source(expanded, suggestion: Profile.suggestion_path?(expanded))
+        captured = Profile.preview_source(
+          expanded,
+          suggestion: Profile.suggestion_path?(expanded, env: @env),
+          env: @env
+        )
         document = captured.document
         target = File.join(Profile.profiles_dir(env: @env), "#{document.profile_id}.yaml")
         if File.exist?(target) && !force

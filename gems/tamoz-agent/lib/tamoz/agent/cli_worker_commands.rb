@@ -542,7 +542,8 @@ module Tamoz
         runtime = WorkerRuntime.open(
           directory,
           model_factory: ->(profile:) { build_model(options, profile:) },
-          lease_ttl: lease_ttl
+          lease_ttl: lease_ttl,
+          routing: options[:experimental_routing] ? :experimental : :legacy
         )
         begin
           yield runtime

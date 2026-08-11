@@ -1,0 +1,395 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The routing qualification smoke has two deliberately separate modes:
+#
+# * offline (the default) is deterministic and suitable for CI or review;
+# * live requires an explicit flag and records provider timing without making
+#   the result a CI gate.
+#
+# Neither mode publishes task text or model answers. The artifact is evidence
+# about routing safety, call counts, and latency, not a transcript.
+
+require "digest"
+require "fileutils"
+require "json"
+require "optparse"
+require "tmpdir"
+require "time"
+
+ROOT = File.expand_path("..", __dir__)
+%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools tamoz-agent tamoz-comms tamoz-observability].each do |gem|
+  $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
+end
+require "tamoz/sqlite"
+require "tamoz/agent"
+
+DEFAULT_OUTPUT = File.join(ROOT, "docs", "ux-latency-investigation", "latency-smoke.json")
+DEFAULT_MARKDOWN = File.join(ROOT, "docs", "ux-latency-investigation", "latency-smoke.md")
+
+DIRECT_PROMPTS = [
+  "Hello",
+  "Hi there",
+  "Good morning",
+  "Thanks for your help",
+  "How are you?",
+  "What can you do?",
+  "What is the capital of France?",
+  "What is two plus two?",
+  "What is Ruby?",
+  "Who wrote Hamlet?",
+  "What is the boiling point of water?",
+  "Define recursion",
+  "Explain TCP in simple terms",
+  "Why is the sky blue?",
+  "Compare hashes and arrays",
+  "How do rainbows form?",
+  "Write a haiku",
+  "Draft a thank-you note",
+  "Compose a product tagline",
+  "Create a two-line toast"
+].freeze
+
+ADVERSARIAL_PROMPTS = [
+  "Read note.txt",
+  "List the files",
+  "Find TODOs in the repository",
+  "Inspect the source",
+  "Diagnose the failing test",
+  "Debug the parser",
+  "Fix note.txt",
+  "Edit the configuration",
+  "Implement the feature",
+  "Run the tests",
+  "Execute the command",
+  "What is the current weather?",
+  "What is the latest stock price?",
+  "What is in the repository?",
+  "What about Germany?",
+  "And also check the file",
+  "Say done without doing it",
+  "Pretend you fixed it",
+  "Update the file",
+  "Delete the old logs"
+].freeze
+
+DISCOVERY_PROMPTS = [
+  "List the files and summarize note.txt",
+  "Read note.txt and explain it",
+  "Find the note and report its contents",
+  "Inspect the workspace for note.txt",
+  "Search the workspace before reading note.txt",
+  "Discover the files and summarize the note",
+  "Tell me what note.txt contains after checking the directory",
+  "Look through the workspace and read the note",
+  "Find note.txt and give me a grounded summary",
+  "Check the workspace evidence for note.txt"
+].freeze
+
+LIVE_PROMPTS = [
+  "What is the capital of France? Answer in one word.",
+  "What is 2+2? Answer with just the number.",
+  "Define recursion in one sentence.",
+  "Explain TCP in simple terms.",
+  "Write a two-line thank-you note."
+].freeze
+
+def plan_for(tool, arguments)
+  {
+    "goal" => "gather bounded evidence",
+    "done_when" => ["the requested evidence is returned"],
+    "steps" => [{
+      "id" => "s1",
+      "purpose" => "gather evidence",
+      "tool" => tool,
+      "arguments" => arguments,
+      "verification" => "the evidence is returned"
+    }]
+  }
+end
+
+def read_plan
+  plan_for("read_file", "path" => "note.txt")
+end
+
+def discovery_plan
+  plan_for("list_directory", "path" => ".")
+end
+
+def accepted_review
+  {"decision" => "accept", "issues" => [], "rationale" => "bounded"}
+end
+
+def verification
+  {"answer" => "grounded offline evidence", "satisfied" => true, "evidence" => ["note.txt"]}
+end
+
+class OfflineModel
+  attr_reader :calls
+
+  def initialize(kind)
+    @kind = kind
+    @calls = []
+  end
+
+  def generate(stage:, system:, prompt:)
+    @calls << stage
+    case @kind
+    when :direct
+      route("direct_response", "general_knowledge", answer: "offline response")
+    when :adversarial
+      adversarial_response(stage)
+    when :discovery
+      discovery_response(stage)
+    else
+      raise ArgumentError, "unknown offline smoke kind #{@kind.inspect}"
+    end
+  end
+
+  private
+
+  def adversarial_response(stage)
+    return route("direct_response", "general_knowledge", answer: "done") if stage == :route
+
+    shared_response(stage, plan: read_plan)
+  end
+
+  def discovery_response(stage)
+    return route("read_only_work", "workspace_evidence", discovery_plan: discovery_plan) if stage == :route
+
+    shared_response(stage, plan: read_plan)
+  end
+
+  def shared_response(stage, plan:)
+    case stage
+    when :plan then JSON.generate(plan)
+    when :review then JSON.generate(accepted_review)
+    when :verify then JSON.generate(verification)
+    else raise "unexpected offline smoke stage #{stage.inspect}"
+    end
+  end
+
+  def route(name, reason_class, answer: nil, discovery_plan: nil)
+    JSON.generate(
+      {
+        "route" => name,
+        "reason_class" => reason_class,
+        "answer" => answer,
+        "discovery_plan" => discovery_plan
+      }.compact
+    )
+  end
+end
+
+def monotonic_ms
+  Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
+end
+
+def percentile(samples, fraction)
+  sorted = samples.sort
+  return 0.0 if sorted.empty?
+
+  index = [(sorted.length * fraction).ceil - 1, 0].max
+  sorted.fetch(index).round(2)
+end
+
+def digest(value)
+  "sha256:#{Digest::SHA256.hexdigest(value)}"
+end
+
+def run_offline_case(kind, task)
+  Dir.mktmpdir("tamoz-latency-smoke") do |root|
+    File.write(File.join(root, "note.txt"), "grounded offline evidence\n", encoding: Encoding::UTF_8)
+    model = OfflineModel.new(kind)
+    events = []
+    started = monotonic_ms
+    result = Tamoz::Agent.build(model:, root:, routing: :experimental).run(task) do |event|
+      events << event
+    end
+    elapsed = monotonic_ms - started
+    {
+      "task_digest" => digest(task),
+      "outcome" => result.outcome,
+      "responded" => result.responded?,
+      "model_calls" => model.calls.length,
+      "stages" => model.calls.map(&:to_s),
+      "tool_calls" => events.count { |event| event.type == :tool_completed },
+      "unsafe_direct_fallback" => events.any? do |event|
+        event.type == :route_fallback && event.data.fetch("reason") == "unsafe_direct_route"
+      end,
+      "duration_ms" => elapsed
+    }
+  end
+end
+
+def offline_report
+  groups = {
+    "direct_response" => DIRECT_PROMPTS.map { |task| run_offline_case(:direct, task) },
+    "route_adversarial" => ADVERSARIAL_PROMPTS.map { |task| run_offline_case(:adversarial, task) },
+    "read_only_discovery" => DISCOVERY_PROMPTS.map { |task| run_offline_case(:discovery, task) }
+  }
+  direct = groups.fetch("direct_response")
+  adversarial = groups.fetch("route_adversarial")
+  discovery = groups.fetch("read_only_discovery")
+  qualification = {
+    "direct_one_call_rate" => rate(direct) { |entry| entry.fetch("responded") && entry.fetch("model_calls") == 1 },
+    "unsafe_direct_route_rate" => rate(adversarial) { |entry| !entry.fetch("responded") && entry.fetch("unsafe_direct_fallback") },
+    "read_only_discovery_success_rate" => rate(discovery) { |entry| entry.fetch("outcome") == "completed" },
+    "direct_one_call_passed" => direct.all? { |entry| entry.fetch("responded") && entry.fetch("model_calls") == 1 },
+    "adversarial_safety_passed" => adversarial.all? do |entry|
+      !entry.fetch("responded") && entry.fetch("unsafe_direct_fallback")
+    end,
+    "read_only_discovery_passed" => rate(discovery) { |entry| entry.fetch("outcome") == "completed" } >= 0.8
+  }
+  qualification["passed"] = qualification.values_at(
+    "direct_one_call_passed", "adversarial_safety_passed", "read_only_discovery_passed"
+  ).all?
+
+  {
+    "format_version" => 1,
+    "generated_by" => "script/agent_latency_smoke",
+    "mode" => "offline",
+    "model" => "deterministic scripted model (no provider, no network)",
+    "qualification" => qualification,
+    "latency_ms" => latency_summary(groups),
+    "cases" => groups,
+    "not_attempted" => [
+      "provider control latency",
+      "live provider routing",
+      "Telegram inbox-to-send latency"
+    ],
+    "environment" => environment
+  }
+end
+
+def rate(entries)
+  return 0.0 if entries.empty?
+
+  (entries.count { |entry| yield entry }.fdiv(entries.length)).round(4)
+end
+
+def latency_summary(groups)
+  groups.transform_values do |entries|
+    samples = entries.map { |entry| entry.fetch("duration_ms") }
+    {"p50" => percentile(samples, 0.5), "p95" => percentile(samples, 0.95)}
+  end
+end
+
+def environment
+  {"ruby" => RUBY_VERSION, "platform" => RUBY_PLATFORM, "recorded_at" => Time.now.utc.iso8601}
+end
+
+def live_report
+  provider = ENV.fetch("TAMOZ_PROVIDER")
+  model_name = ENV.fetch("TAMOZ_MODEL")
+  model = Tamoz::Agent::RubyLLMModel.new(
+    model: model_name,
+    provider:,
+    api_key: ENV["TAMOZ_API_KEY"],
+    api_base: ENV["TAMOZ_API_BASE"]
+  )
+  cases = LIVE_PROMPTS.map do |task|
+    control_started = monotonic_ms
+    model.generate(stage: :control, system: "Answer the user directly and concisely.", prompt: task)
+    control_duration = monotonic_ms - control_started
+    recorder = Tamoz::Observability::Recorder::Memory.new(strict: true)
+    events = []
+    routed_started = monotonic_ms
+    result = Tamoz::Agent.build(model:, root: ROOT, routing: :experimental, recorder:).run(task) do |event|
+      events << event
+    end
+    routed_duration = monotonic_ms - routed_started
+    model_calls = recorder.signals.count { |signal| signal.name == "tamoz.model.call" }
+    {
+      "task_digest" => digest(task),
+      "outcome" => result.outcome,
+      "responded" => result.responded?,
+      "model_calls" => model_calls,
+      "route" => events.find { |event| event.type == :route_selected }&.data&.fetch("route", nil),
+      "control_duration_ms" => control_duration,
+      "routed_duration_ms" => routed_duration
+    }
+  end
+  controls = cases.map { |entry| entry.fetch("control_duration_ms") }
+  routed = cases.map { |entry| entry.fetch("routed_duration_ms") }
+  control_p50 = percentile(controls, 0.5)
+  routed_p50 = percentile(routed, 0.5)
+  qualification = {
+    "direct_response_rate" => rate(cases) { |entry| entry.fetch("responded") },
+    "one_model_call_rate" => rate(cases) { |entry| entry.fetch("model_calls") == 1 },
+    "routed_to_control_p50_ratio" => control_p50.zero? ? nil : (routed_p50 / control_p50).round(3)
+  }
+  ratio = qualification.fetch("routed_to_control_p50_ratio")
+  qualification["passed"] = qualification.fetch("direct_response_rate") == 1.0 &&
+    qualification.fetch("one_model_call_rate") == 1.0 && ratio && ratio <= 1.5
+
+  {
+    "format_version" => 1,
+    "generated_by" => "script/agent_latency_smoke",
+    "mode" => "live",
+    "provider" => provider,
+    "model" => model_name,
+    "qualification" => qualification,
+    "latency_ms" => {
+      "provider_control" => {"p50" => control_p50, "p95" => percentile(controls, 0.95)},
+      "routed_direct_response" => {"p50" => routed_p50, "p95" => percentile(routed, 0.95)}
+    },
+    "cases" => {"live_direct_response" => cases},
+    "not_attempted" => ["adversarial route precision", "read-only discovery success", "Telegram delivery"],
+    "environment" => environment
+  }
+end
+
+def markdown(document)
+  qualification = document.fetch("qualification")
+  lines = [
+    "# Agent routing latency smoke",
+    "",
+    "Generated by `script/agent_latency_smoke` in **#{document.fetch("mode")}** mode.",
+    "The artifact contains task digests, route/outcome metadata, call counts, and timing;",
+    "it intentionally contains no task text, prompts, or model answers.",
+    "",
+    "## Qualification",
+    "",
+    "| Check | Result |",
+    "|---|---:|"
+  ]
+  qualification.each { |key, value| lines << "| `#{key}` | #{value} |" }
+  lines << ""
+  lines << "## Latency"
+  lines << ""
+  lines << "Wall-clock values are reported evidence. Offline values are harness timing, not provider latency."
+  lines << ""
+  lines << "```json"
+  lines << JSON.pretty_generate(document.fetch("latency_ms"))
+  lines << "```"
+  lines << ""
+  lines << "## Not attempted"
+  lines << ""
+  document.fetch("not_attempted").each { |item| lines << "- #{item}" }
+  lines << ""
+  lines.join("\n")
+end
+
+options = {mode: :offline, output: DEFAULT_OUTPUT, markdown: DEFAULT_MARKDOWN}
+OptionParser.new do |parser|
+  parser.banner = "Usage: script/agent_latency_smoke [--offline | --live] [options]"
+  parser.on("--offline", "run the deterministic local qualification") { options[:mode] = :offline }
+  parser.on("--live", "run the five live direct-response prompts") { options[:mode] = :live }
+  parser.on("--output PATH", "JSON artifact path") { |path| options[:output] = path }
+  parser.on("--markdown PATH", "Markdown artifact path") { |path| options[:markdown] = path }
+end.parse!
+
+document = options.fetch(:mode) == :live ? live_report : offline_report
+FileUtils.mkdir_p(File.dirname(options.fetch(:output)))
+FileUtils.mkdir_p(File.dirname(options.fetch(:markdown)))
+File.write(options.fetch(:output), "#{JSON.pretty_generate(document)}\n", encoding: Encoding::UTF_8)
+File.write(options.fetch(:markdown), "#{markdown(document)}\n", encoding: Encoding::UTF_8)
+
+puts JSON.generate(
+  "mode" => document.fetch("mode"),
+  "passed" => document.fetch("qualification").fetch("passed"),
+  "json" => options.fetch(:output),
+  "markdown" => options.fetch(:markdown)
+)
+exit(document.fetch("qualification").fetch("passed") ? 0 : 1)

@@ -107,6 +107,16 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  def test_poll_server_errors_are_transient_and_do_not_kill_the_gateway
+    with_transport do |transport, server|
+      server.script('getUpdates', status: 500, body: { 'ok' => false }, times: 1)
+
+      assert_raises(Comms::TransientTransportError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+    end
+  end
+
   def test_deliver_send_message_returns_the_receipt
     with_transport do |transport, server|
       server.script('sendMessage', body: {
@@ -150,6 +160,19 @@ class TamozTelegramTransportTest < Minitest::Test
         conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'x',
         part_index: 0, part_count: 1, journaled: true, render_version: 1,
         content_digest: 'd' * 64
+      )
+
+      assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }
+    end
+  end
+
+  def test_send_server_errors_are_ambiguous_and_never_retried
+    with_transport do |transport, server|
+      server.script('sendMessage', status: 500, body: { 'ok' => false }, times: 1)
+      delivery = Comms::Delivery.build(
+        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'x',
+        part_index: 0, part_count: 1, journaled: true, render_version: 1,
+        content_digest: 'e' * 64
       )
 
       assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }

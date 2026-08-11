@@ -150,15 +150,27 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
-          approval: method(:approve_one_shot)
+          approval: method(:approve_one_shot),
+          routing: if options[:experimental_routing]
+                     :experimental
+                   elsif options[:shadow_routing]
+                     :shadow
+                   else
+                     :legacy
+                   end
         )
         result = runtime.run(task) { |event| render_runtime_event(event, json: options[:json]) }
         unless options[:json]
           @out.puts
           @out.puts result.answer
-          @out.puts("\nVerification: #{result.satisfied ? "satisfied" : "not satisfied"}")
+          label = if result.responded?
+                    "Response: not verified task completion"
+                  else
+                    "Verification: #{result.satisfied ? "satisfied" : "not satisfied"}"
+                  end
+          @out.puts("\n#{label}")
         end
-        result.satisfied ? 0 : 2
+        result.exit_status
       rescue Tamoz::Agent::ApprovalDeniedError
         @err.puts "tamoz: approval denied"
         1
@@ -534,7 +546,8 @@ module Tamoz
             checkpointer: adapter,
             profile:,
             profile_roles: resolve_profile_roles(profile, options),
-            profile_budgets: profile && profile.budgets
+            profile_budgets: profile && profile.budgets,
+            routing: options[:experimental_routing] ? :experimental : :legacy
           )
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
@@ -777,19 +790,27 @@ module Tamoz
         end
 
         case event.type
+        when :task_started
+          @err.puts "Working..."
+        when :route_selected
+          @err.puts "Route: #{event.data.fetch("route")}"
+        when :route_fallback
+          @err.puts "Route fallback: continuing with the standard workflow."
+        when :route_shadow
+          @err.puts "Route shadow: #{event.data.fetch("route")} (standard workflow retained)"
         when :plan_drafted
-          @out.puts "Plan #{event.data.fetch("attempt")} (#{event.data.fetch("phase")}):"
+          @err.puts "Plan #{event.data.fetch("attempt")} (#{event.data.fetch("phase")}):"
           event.data.fetch("plan").fetch("steps").each do |step|
             tool = step.fetch("tool") ? " [#{step.fetch("tool")}]" : ""
-            @out.puts "  - #{step.fetch("purpose")}#{tool}"
+            @err.puts "  - #{step.fetch("purpose")}#{tool}"
           end
         when :plan_reviewed
-          @out.puts "Review (#{event.data.fetch("layer")}): #{event.data.fetch("decision")}"
+          @err.puts "Review (#{event.data.fetch("layer")}): #{event.data.fetch("decision")}"
         when :tool_started
-          @out.puts "Running #{event.data.fetch("tool")}..."
+          @err.puts "Running #{event.data.fetch("tool")}..."
         when :approval_requested
-          @out.puts "Approval required for #{event.data.fetch("tool")}:"
-          @out.puts event.data.fetch("preview")
+          @err.puts "Approval required for #{event.data.fetch("tool")}:"
+          @err.puts event.data.fetch("preview")
         end
       end
 

@@ -9,7 +9,7 @@ module Tamoz
     # serve|list`. The gateway is a separate process that holds the bot token
     # and NEVER constructs a Session, loads a model credential, or opens a
     # file under the workspace root.
-    # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:disable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Performance/CollectionLiteralInLoop
     # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     #   -- one operator command per method; the json-vs-text branching is the
     #   CLI's global convention and the summaries are one projection each.
@@ -57,20 +57,27 @@ module Tamoz
           end
 
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
-          gateways = descriptors.map do |descriptor|
-            transport = build_transport(descriptor, credential(descriptor))
-            Tamoz::Agent::CommsGateway.new(
-              adapter:, checkpoints:, transport:, descriptor:,
-              poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}"
-            )
-          end
-          if once
-            outcomes = gateways.map(&:serve_once)
-            @out.puts JSON.generate(outcomes) if options[:json]
-            outcomes.include?(:auth_failed) ? 1 : 0
-          else
-            run_gateway_loops(gateways)
-            0
+          with_delivery_drainers(directory, descriptors) do |drainers|
+            gateways = descriptors.zip(drainers).map do |descriptor, drainer|
+              transport = build_transport(descriptor, credential(descriptor))
+              Tamoz::Agent::CommsGateway.new(
+                adapter:, checkpoints:, transport:, descriptor:,
+                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:
+              )
+            end
+            if once
+              outcomes = gateways.map do |gateway|
+                next :poller_busy unless gateway.start == :started
+
+                gateway.serve_once
+              ensure
+                gateway.stop
+              end
+              @out.puts JSON.generate(outcomes) if options[:json]
+              outcomes.any? { |outcome| %i[auth_failed poller_busy poller_lost].include?(outcome) } ? 1 : 0
+            else
+              run_gateway_loops(gateways, drainers)
+            end
           end
         end
       # A competing poller is a correctness problem, not a retry: it is named
@@ -111,18 +118,71 @@ module Tamoz
       # A fenced gateway loop per surface, supervised like `tamoz worker`:
       # INT/TERM ask every loop to stop, and the previous handlers are
       # restored so an in-process test never leaks traps.
-      def run_gateway_loops(gateways)
+      def run_gateway_loops(gateways, drainers)
         # Handed to a thread, not run here: `stop` releases the poller lease
         # with a database write, and the connection pool's mutex raises
         # ThreadError in a trap context. Doing it inline turns a supervisor's
         # SIGTERM into a backtrace instead of a released lease.
-        old_int = Signal.trap('INT') { Thread.new { gateways.each(&:stop) } }
-        old_term = Signal.trap('TERM') { Thread.new { gateways.each(&:stop) } }
+        old_int = Signal.trap('INT') { Thread.new { stop_loops(gateways, drainers) } }
+        old_term = Signal.trap('TERM') { Thread.new { stop_loops(gateways, drainers) } }
         begin
-          gateways.map { |gateway| Thread.new { gateway.serve_loop } }.each(&:join)
+          threads = gateways.map do |gateway|
+            Thread.new do
+              outcome = gateway.serve_loop(drain: false)
+              stop_loops(gateways, drainers) if %i[auth_failed poller_conflict].include?(outcome)
+              outcome
+            end
+          end
+          threads.concat(drainers.map { |drainer| Thread.new { drainer.serve_loop } })
+          outcomes = threads.map(&:value)
+          return 1 if outcomes.include?(:auth_failed)
+          if outcomes.include?(:poller_conflict)
+            raise Comms::PollerConflictError,
+                  'a gateway lost the Telegram poller lease'
+          end
+
+          0
         ensure
+          stop_loops(gateways, drainers)
           Signal.trap('INT', old_int) if old_int
           Signal.trap('TERM', old_term) if old_term
+        end
+      end
+
+      def stop_loops(gateways, drainers)
+        gateways.each(&:stop)
+        drainers.each(&:stop)
+      end
+
+      def with_delivery_drainers(directory, descriptors)
+        entries = []
+        descriptors.each do |descriptor|
+          adapter = nil
+          begin
+            codec = directory.enabled_sources.include?('memory') ? Memory::Surface.codec : nil
+            adapter = Tamoz::SQLite::Adapter.new(
+              path: directory.database_path,
+              limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl),
+              **(codec ? { state_codec: codec } : {})
+            )
+            store = adapter.bind_comms_store
+            transport = build_transport(descriptor, credential(descriptor))
+            drainer = Tamoz::Agent::DeliveryDrainer.new(
+              store:, transport:, descriptor:,
+              owner: "#{GATEWAY_POLLER_PREFIX}:drainer:#{Process.pid}:#{descriptor.surface_id}",
+              batch_size: descriptor.transport.fetch(:batch)
+            )
+            entries << [adapter, drainer]
+          rescue StandardError
+            adapter&.close unless adapter&.closed?
+            raise
+          end
+        end
+        yield entries.map(&:last)
+      ensure
+        entries.each do |adapter, drainer|
+          drainer.stop
+          adapter.close unless adapter.closed?
         end
       end
 
@@ -161,7 +221,7 @@ module Tamoz
         @out.puts "  outbox #{row.fetch('outbox').map { |status, count| "#{status}=#{count}" }.join(' ')}"
       end
     end
-    # rubocop:enable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength
+    # rubocop:enable Metrics/ModuleLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Performance/CollectionLiteralInLoop
     # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
   end
 end

@@ -232,6 +232,7 @@ class AgentToolboxTest < Minitest::Test
         "-I#{GEM_ROOTS.fetch("tamoz-graph").join("lib")}",
         "-I#{GEM_ROOTS.fetch("tamoz-tools").join("lib")}",
         "-I#{GEM_ROOTS.fetch("tamoz-observability").join("lib")}",
+        "-I#{GEM_ROOTS.fetch("tamoz-comms").join("lib")}",
         "-I#{GEM_ROOTS.fetch("tamoz-agent").join("lib")}",
         "-e",
         script,

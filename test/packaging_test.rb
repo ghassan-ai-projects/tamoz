@@ -504,7 +504,7 @@ class PackagingTest < Minitest::Test
       result = JSON.parse(stdout)
 
       assert_equal 1, result.fetch("schema_version")
-      assert_equal 67, result.fetch("signal_names")
+      assert_equal 68, result.fetch("signal_names")
       assert_equal 16, result.fetch("trace_id").length
       assert_equal true, result.fetch("signal_frozen")
       assert_equal "nil", result.fetch("sqlite_defined")

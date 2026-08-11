@@ -69,6 +69,14 @@ nothing is written without an approval you granted.
 export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
 ```
 
+For another provider, set both the provider and model explicitly. The provider's
+credential remains in its normal environment variable:
+
+```bash
+export DEEPSEEK_API_KEY="..."
+export TAMOZ_PROVIDER="deepseek" TAMOZ_MODEL="deepseek-v4-flash"
+```
+
 ```bash
 rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
 ```
@@ -79,6 +87,16 @@ model can choose to run `test`; it can never alter that command's arguments.
 ```bash
 rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' "Fix the failing test"
 ```
+
+The fused request router is opt-in while its qualification corpus is being
+built. Use `--experimental-routing` for self-contained questions and short
+writing requests; it falls back to the standard reviewed workflow for work,
+current-state, or ambiguous requests. A direct response is reported as
+`responded`, not as verified task completion.
+
+Use `--shadow-routing` to record a route decision while retaining the standard
+reviewed workflow; shadow records contain route, outcome, call count, and a
+bounded disagreement reason, never the candidate answer.
 
 ### Durable sessions
 
@@ -292,6 +310,11 @@ sources:
 Websearch is not a separate mechanism: it is an MCP server whose id is the
 reserved `websearch`, which is what keeps it one of the four closed-world sources
 rather than a fifth. A generic server may not claim that id.
+
+Websearch is intentionally off unless `sources.websearch.enabled: true` is
+present in the operator configuration. With no enabled websearch source, the
+agent has only its configured local capabilities and must refuse to present
+current internet facts as verified.
 
 Three rules hold for every server. The catalog is **pinned** at construction, so
 a server that grows a tool later cannot silently widen what the agent may do.

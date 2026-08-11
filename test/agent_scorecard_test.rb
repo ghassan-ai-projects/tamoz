@@ -125,7 +125,10 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 36,
         "model_calls" => 95,
-        "model_input_bytes" => 212_249,
+        # The reviewed tool surface and phase-specific review rules are included
+        # in every plan review prompt. The behavior counters remain unchanged;
+        # only the measured prompt bytes grow with that explicit context.
+        "model_input_bytes" => 276_936,
         "model_output_bytes" => 21_472,
         "tool_output_bytes" => 4_946,
         "mutations" => 10,
