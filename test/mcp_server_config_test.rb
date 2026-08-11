@@ -362,7 +362,7 @@ class McpServerConfigTest < Minitest::Test
     claims = Hash.new { |store, key| store[key] = [] }
     sources.each do |path|
       inside = false
-      File.readlines(path).each do |line|
+      File.readlines(path, encoding: Encoding::UTF_8).each do |line|
         inside = true if line.match?(/Data\.define\(.*\) do|^\s+\) do\s*$/)
         next unless inside
 
