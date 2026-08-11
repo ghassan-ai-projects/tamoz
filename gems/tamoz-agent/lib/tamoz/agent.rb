@@ -8,6 +8,7 @@ require_relative "agent/errors"
 require_relative "agent/behavior_version"
 require_relative "agent/plan"
 require_relative "agent/deliberation"
+require_relative "agent/request_route"
 require_relative "agent/mcp_capability_source"
 require_relative "agent/capability_binding"
 require_relative "agent/ruby_llm_model"
@@ -67,13 +68,15 @@ module Tamoz
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
       approval: nil,
-      skills: Skills::Snapshot.empty
+      skills: Skills::Snapshot.empty,
+      routing: :legacy,
+      recorder: Tamoz::Observability::Recorder::Null::INSTANCE
     )
       # `skills` is a compiled snapshot supplied by the caller — operator authority.
       # It is never discovered by scanning the workspace, so repository content can
       # never put a skill on the catalog (plan §2).
       toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:, skills:)
-      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:)
+      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:)
     end
   end
 end
