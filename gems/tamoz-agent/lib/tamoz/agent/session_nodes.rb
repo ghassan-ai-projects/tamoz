@@ -13,6 +13,7 @@ require_relative "session_evidence"
 require_relative "session_deliberation"
 require_relative "session_steps"
 require_relative "session_lifecycle"
+require_relative "session_routing"
 
 module Tamoz
   module Agent
@@ -39,7 +40,8 @@ module Tamoz
         :profile_budgets,
         :memory,
         :memory_owner,
-        :capabilities
+        :capabilities,
+        :graph_version
       )
 
       # Immutable collaborator graph for the durable session façade.
@@ -68,7 +70,8 @@ module Tamoz
         profile_roles: nil,
         profile_budgets: nil,
         memory: nil,
-        memory_owner: nil
+        memory_owner: nil,
+        graph_version: GRAPH_VERSION
       )
         @model = model
         @toolbox = toolbox
@@ -79,6 +82,7 @@ module Tamoz
         @mcp = mcp
         @memory = memory
         @memory_owner = memory_owner
+        @graph_version = String(graph_version).freeze
         @profile_roles = profile_roles
         @profile_budgets = profile_budgets
         verify_profile_roles!(profile_roles)
@@ -96,10 +100,15 @@ module Tamoz
           profile_budgets:,
           memory:,
           memory_owner:,
-          capabilities: @capabilities
+          capabilities: @capabilities,
+          graph_version: @graph_version
         )
         @memory_nodes = SessionMemory.new(configuration:)
-        @bindings = SessionBindings.new(configuration:, memory: @memory_nodes)
+        @bindings = SessionBindings.new(
+          configuration:,
+          memory: @memory_nodes,
+          graph_version: @graph_version
+        )
         @planning_context = SessionPlanningContext.new(
           configuration:,
           memory: @memory_nodes
@@ -116,6 +125,7 @@ module Tamoz
           effects: @effects,
           evidence: @evidence
         )
+        @routing = SessionRouting.new(services:)
         @deliberation = SessionDeliberation.new(services:)
         @steps = SessionSteps.new(services:)
         @lifecycle = SessionLifecycle.new(services:)
@@ -147,6 +157,8 @@ module Tamoz
       def recorded_profile_budgets = @bindings.recorded_profile_budgets
 
       def deliberate(state, context) = @deliberation.deliberate(state, context)
+
+      def route(state, context) = @routing.route(state, context)
 
       def step_gate(state, context) = @steps.step_gate(state, context)
 

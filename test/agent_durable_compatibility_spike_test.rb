@@ -35,7 +35,7 @@ class AgentDurableCompatibilitySpikeTest < Minitest::Test
       task: 'read the note',
       task_digest: 'a' * 64,
       root: '/tmp',
-      graph_version: '2',
+      graph_version: '3',
       behavior_version: 'tamoz.agent.session/1',
       tool_catalog_digest: "sha256:#{'b' * 64}",
       created_at_ms: 0
@@ -44,7 +44,7 @@ class AgentDurableCompatibilitySpikeTest < Minitest::Test
     loaded = Tamoz::Agent::SessionRecords.load!(record)
 
     assert_equal '1', Tamoz::Agent::Session::GRAPH_VERSION
-    assert_equal '2', loaded.fetch('graph_version')
+    assert_equal '3', loaded.fetch('graph_version')
   end
 
   def test_runtime_rejects_a_future_graph_before_resume
@@ -54,10 +54,10 @@ class AgentDurableCompatibilitySpikeTest < Minitest::Test
       session.send(
         :enforce_graph_binding!,
         'compatibility-spike',
-        session: { 'graph_version' => '2' }
+        session: { 'graph_version' => '3' }
       )
     end
 
-    assert_match(/graph version "2".*supports "1"/, error.message)
+    assert_match(/graph version "3".*supports 1, 2/, error.message)
   end
 end

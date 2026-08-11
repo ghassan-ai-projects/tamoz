@@ -73,7 +73,8 @@ module Tamoz
       def completion_update(state)
         case state.fetch(:phase)
         when 'discovery'
-          { next_node: 'deliberate', phase: 'action', step_cursor: 0 }
+          next_phase = state.dig(:route, 'route') == 'read_only_work' ? 'read_only' : 'action'
+          { next_node: 'deliberate', phase: next_phase, step_cursor: 0 }
         when 'read_only'
           { next_node: 'verify', terminal_reason: 'completed' }
         else

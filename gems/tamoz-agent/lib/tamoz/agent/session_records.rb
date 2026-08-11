@@ -129,6 +129,17 @@ module Tamoz
           },
           optional: {}
         },
+        "route" => {
+          required: {
+            "route" => STRING,
+            "reason_class" => STRING,
+            "route_digest" => STRING
+          },
+          optional: {
+            "plan_digest" => STRING,
+            "fallback" => STRING
+          }
+        },
         "approval" => {
           required: {
             "approval_id" => STRING,

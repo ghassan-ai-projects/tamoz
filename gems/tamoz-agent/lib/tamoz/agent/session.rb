@@ -48,7 +48,10 @@ module Tamoz
     class Session
       GRAPH_NAME = "tamoz.agent.session"
       GRAPH_VERSION = "1"
+      CURRENT_GRAPH_VERSION = "2"
+      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION].freeze
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
+      ROUTINGS = %i[legacy experimental].freeze
 
       attr_reader :app, :definition, :toolbox
 
@@ -69,7 +72,8 @@ module Tamoz
         profile_roles: nil,
         profile_budgets: nil,
         memory: nil,
-        memory_owner: nil
+        memory_owner: nil,
+        routing: :legacy
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
@@ -82,6 +86,7 @@ module Tamoz
           raise ArgumentError,
                 "model_call_safety must be one of #{MODEL_CALL_SAFETIES.join(", ")}"
         end
+        raise ArgumentError, "routing must be one of #{ROUTINGS.join(", ")}" unless ROUTINGS.include?(routing.to_sym)
         unless checkpointer.respond_to?(:durable?) && checkpointer.durable?
           raise ConfigurationError,
                 "Tamoz::Agent::Session requires a durable checkpointer; use " \
@@ -95,8 +100,9 @@ module Tamoz
         # every memory branch inert (pre-P11 sessions resume byte-identically).
         @memory = memory
         @memory_owner = memory_owner
+        @default_graph_version = routing.to_sym == :experimental ? CURRENT_GRAPH_VERSION : GRAPH_VERSION
         verify_profile_binding!(profile)
-        @nodes = SessionNodes.new(
+        node_arguments = {
           model:,
           toolbox:,
           max_plan_attempts:,
@@ -108,9 +114,22 @@ module Tamoz
           profile_budgets:,
           memory:,
           memory_owner:
-        )
-        @definition = Session.build_definition(@nodes)
-        @app = @definition.compile(checkpointer:)
+        }
+        @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
+        @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
+        @definitions = {
+          GRAPH_VERSION => Session.build_definition(
+            @nodes_v1,
+            version: GRAPH_VERSION
+          ),
+          CURRENT_GRAPH_VERSION => Session.build_definition(
+            @nodes,
+            version: CURRENT_GRAPH_VERSION
+          )
+        }.freeze
+        @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
+        @definition = @definitions.fetch(@default_graph_version)
+        @app = @apps.fetch(@default_graph_version)
         @runner = @app.durable_runner
         freeze
       end
@@ -232,10 +251,11 @@ module Tamoz
       # version — propagates, because a guard that swallows an unreadable record
       # fails *open*, which is the opposite of what invariant 41 asks for.
       def stored_state(thread)
-        snapshot = @app.checkpointer.latest(thread_id: thread, namespace: [])
+        app = app_for_thread(thread)
+        snapshot = app.checkpointer.latest(thread_id: thread, namespace: [])
         return nil unless snapshot
 
-        SessionRecords.load_state!(@app.snapshot(snapshot).state)
+        SessionRecords.load_state!(app.snapshot(snapshot).state)
       end
       private :stored_state
 
@@ -244,11 +264,11 @@ module Tamoz
         return unless record
 
         stored = record.fetch("graph_version")
-        return if stored == GRAPH_VERSION
+        return if SUPPORTED_GRAPH_VERSIONS.include?(stored)
 
         raise Tamoz::CheckpointVersionError,
               "session #{thread} uses graph version #{stored.inspect}; this runtime supports " \
-              "#{GRAPH_VERSION.inspect}. Start a new session or use a compatible runtime."
+              "#{SUPPORTED_GRAPH_VERSIONS.join(", ")}. Start a new session or use a compatible runtime."
       end
       private :enforce_graph_binding!
 
@@ -330,8 +350,9 @@ module Tamoz
       end
       private :current_egress_pin
 
-      def self.build_definition(nodes)
-        Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
+      def self.build_definition(nodes, version: GRAPH_VERSION)
+        routed = String(version) == CURRENT_GRAPH_VERSION
+        Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
           state :task, default: ""
           state :phase, default: ""
           state :next_node, default: "intake"
@@ -341,6 +362,7 @@ module Tamoz
           state :provider_ambiguity, default: 0
           state :check_passed, default: false
           state :session
+          state :route if routed
           state :accepted_plan
           state :verification
           state :blocked
@@ -359,6 +381,11 @@ module Tamoz
 
           node(:intake, implementation_name: "tamoz.agent.session.intake", version: "1") do |state, context|
             nodes.intake(state, context)
+          end
+          if routed
+            node(:route, implementation_name: "tamoz.agent.session.route", version: "1") do |state, context|
+              nodes.route(state, context)
+            end
           end
           node(:deliberate, implementation_name: "tamoz.agent.session.deliberate", version: "1") do |state, context|
             nodes.deliberate(state, context)
@@ -380,9 +407,18 @@ module Tamoz
           end
 
           edge Tamoz::START, :intake
-          edge :intake, :deliberate
+          edge :intake, routed ? :route : :deliberate
           edge :verify, :terminal
           edge :terminal, Tamoz::END
+
+          if routed
+            branch :route,
+                   name: :route_route,
+                   version: "1",
+                   targets: %i[step_gate deliberate terminal] do |state|
+              state.fetch(:next_node).to_sym
+            end
+          end
 
           branch :deliberate,
                  name: :deliberate_route,
@@ -413,7 +449,7 @@ module Tamoz
 
       def start(task, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         run_context = build_run_context(context:, emitter:)
-        @runner.deliver(
+        runner_for(thread).deliver(
           {"task" => String(task)},
           thread:,
           request_id:,
@@ -426,7 +462,7 @@ module Tamoz
       def resume(answers, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
         run_context = build_run_context(context:, emitter:)
-        @runner.deliver(
+        runner_for(thread).deliver(
           answers,
           thread:,
           request_id:,
@@ -440,7 +476,7 @@ module Tamoz
       def continue(thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
         run_context = build_run_context(context:, emitter:)
-        @runner.deliver(
+        runner_for(thread).deliver(
           {},
           thread:,
           request_id:,
@@ -453,7 +489,7 @@ module Tamoz
 
       def recover(thread:, request_id:, owner_id: nil)
         guard_state!(thread)
-        @runner.recover(
+        runner_for(thread).recover(
           thread:,
           request_id:,
           owner_id: owner_id || SecureRandom.uuid
@@ -462,7 +498,8 @@ module Tamoz
       end
 
       def view(thread:)
-        snapshot = @app.state(thread:)
+        app = app_for_thread(thread)
+        snapshot = app.state(thread:)
         state = SessionRecords.load_state!(snapshot.state)
         enforce_graph_binding!(thread, state)
         status = state[:blocked] ? :blocked : snapshot.status
@@ -487,7 +524,7 @@ module Tamoz
       # Human resolution of an effect the framework refused to guess about. This is the
       # only way a `:unknown` effect leaves that state; nothing automatic can.
       def resolve_effect(thread:, effect_key:, status:, actor:, evidence: {}, namespace: [], owner_id: nil)
-        store = @app.checkpointer
+        store = app_for_thread(thread).checkpointer
         record = nil
         store.open_writer(
           thread_id: thread,
@@ -506,7 +543,7 @@ module Tamoz
       end
 
       def effect(thread:, effect_key:, namespace: [], owner_id: nil)
-        store = @app.checkpointer
+        store = app_for_thread(thread).checkpointer
         record = nil
         store.open_writer(
           thread_id: thread,
@@ -551,8 +588,10 @@ module Tamoz
       end
 
       def outcome(thread:, request_id:)
-        request = @runner.fetch(thread:, request_id:)
-        snapshot = @app.state(thread:)
+        app = app_for_thread(thread)
+        runner = app.durable_runner
+        request = runner.fetch(thread:, request_id:)
+        snapshot = app.state(thread:)
         state = SessionRecords.load_state!(snapshot.state)
         enforce_graph_binding!(thread, state)
         verification = state[:verification]
@@ -594,6 +633,27 @@ module Tamoz
           state:
         )
       end
+
+      def app_for_thread(thread)
+        checkpointer = @app.checkpointer
+        version = if checkpointer.respond_to?(:latest_graph_version)
+                    checkpointer.latest_graph_version(thread_id: thread, namespace: [])
+                  else
+                    checkpointer.latest(thread_id: thread, namespace: [])&.graph_version
+                  end
+        version ||= @default_graph_version
+        @apps.fetch(version) do
+          raise Tamoz::CheckpointVersionError,
+                "session #{thread} uses graph version #{version.inspect}; this runtime supports " \
+                "#{SUPPORTED_GRAPH_VERSIONS.join(", ")}"
+        end
+      end
+      private :app_for_thread
+
+      def runner_for(thread)
+        app_for_thread(thread).durable_runner
+      end
+      private :runner_for
     end
   end
 end
