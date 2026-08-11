@@ -354,6 +354,9 @@ module Tamoz
         routed = String(version) == CURRENT_GRAPH_VERSION
         Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
           state :task, default: ""
+          # The conversation transcript the task arrived with (channel turns
+          # only; the CLI delivers a bare task and the default applies).
+          state :conversation, default: []
           state :phase, default: ""
           state :next_node, default: "intake"
           state :terminal_reason, default: "no_check"

@@ -16,6 +16,7 @@ module Tamoz
 
       def planning_context_for(state, phase)
         context = action_context(state, phase)
+        add_conversation_context(context, state)
         add_behavior_snapshot(context, state)
         add_memory_context(context, state, phase)
         context
@@ -66,6 +67,21 @@ module Tamoz
             'rationale' => record.fetch('rationale', '')
           }
         end
+      end
+
+      # The transcript the current task arrived with, for EVERY phase: a
+      # follow-up like "yes, do that" or "make it blue instead" only reads
+      # as a task when the planner and the reviewer can see what came
+      # before it. Channel turns carry it in state; CLI turns have none.
+      def add_conversation_context(context, state)
+        messages = state.fetch(:conversation)
+        return if messages.empty?
+
+        context['conversation'] = {
+          'note' => 'Recent messages in this conversation, oldest first. The task is ' \
+                    'the latest user message; use the earlier ones to interpret it.',
+          'messages' => messages
+        }
       end
 
       def add_behavior_snapshot(context, state)

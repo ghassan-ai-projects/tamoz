@@ -156,6 +156,64 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_equal 1, requests.length, 'the replay must not enqueue twice'
       assert_equal :turn, requests.first.operation
+      refute requests.first.payload.key?('conversation'),
+             'a first contact has no transcript; the payload stays bare'
+    end
+  end
+
+  # The transcript a turn is planned with: admitted task texts interleaved
+  # with the terminal replies the correspondent saw. Control deliveries
+  # ('Accepted…') and non-admitted messages never enter it.
+  def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
+    with_engine do |store, _adapter, _checkpoints|
+      store.admit_and_enqueue(
+        envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
+        bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+        reservation: 1, capacity: 500, now:
+      )
+      store.append_delivery(delivery(text: 'done, it is blue'),
+                            surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      store.append_delivery(
+        delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
+                 journaled: false, content_digest: 'c' * 64),
+        surface_id: 'telegram-ops', capacity: 10, now: now + 1
+      )
+      store.admit_and_enqueue(
+        envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
+        bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+        reservation: 1, capacity: 500, now: now + 2
+      )
+
+      history = store.conversation_history(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+      )
+
+      assert_equal(
+        [
+          {'role' => 'user', 'text' => 'make it blue'},
+          {'role' => 'assistant', 'text' => 'done, it is blue'},
+          {'role' => 'user', 'text' => 'and the font?'}
+        ],
+        history
+      )
+    end
+  end
+
+  # The history rides the request payload, so the worker — which never sees
+  # the comms store — plans the turn with the thread's context.
+  def test_admit_and_enqueue_carries_the_history_in_the_turn_payload
+    with_engine do |store, _adapter, checkpoints|
+      history = [{'role' => 'user', 'text' => 'earlier'}]
+      store.admit_and_enqueue(
+        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
+                  capacity: 500, now:, history:
+      )
+
+      payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload
+
+      assert_equal 'hello', payload.fetch('task')
+      assert_equal history, payload.fetch('conversation')
     end
   end
 

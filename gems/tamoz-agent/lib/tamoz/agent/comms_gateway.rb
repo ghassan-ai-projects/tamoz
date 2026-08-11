@@ -257,9 +257,13 @@ module Tamoz
           )
           bind_allowlisted_correspondent(envelope, now:)
         end
+        history = @store.conversation_history(
+          surface_id:, conversation_id: envelope.fetch('conversation_id')
+        )
         outcome = @store.admit_and_enqueue(
           envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
-                    reservation: reservation_slots, capacity: outbox_capacity, now:
+                    reservation: reservation_slots, capacity: outbox_capacity, now:,
+                    history:
         )
         if %i[enqueued duplicate].include?(outcome)
           append_control('Accepted. I will report committed progress.', envelope, now:, kind: 'accepted')

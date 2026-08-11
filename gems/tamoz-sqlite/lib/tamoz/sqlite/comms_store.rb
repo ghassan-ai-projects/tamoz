@@ -43,6 +43,8 @@ module Tamoz
       REQUEST_OPERATION = 'turn'
       REQUEST_DELIVERY = 'queue'
       DEFAULT_NAMESPACE = '[]'
+      HISTORY_LIMIT = 12
+      HISTORY_TEXT_CHARACTERS = 500
 
       def initialize(adapter:, checkpoints: nil)
         @adapter = adapter
@@ -83,9 +85,12 @@ module Tamoz
       # invariant 57): pending+claimed deliveries plus the reservations of
       # admitted-but-unfinished requests must stay under `capacity`, so the
       # reserved terminal row can always append.
+      # `history` is the conversation transcript so far (see
+      # `conversation_history`); it rides the request payload so the turn is
+      # planned with the thread's context, not with one message alone.
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:, history: [])
         transaction('comms.admit.enqueue') do |txn|
           next :duplicate if inbound_row(txn, envelope_wire, bot_id)
           next :capacity_refused if capacity_saturated?(txn, surface_id, reservation, capacity)
@@ -103,6 +108,7 @@ module Tamoz
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?)
           SQL
           payload = { 'task' => envelope_wire.fetch('text') }
+          payload['conversation'] = history unless history.empty?
           payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(REQUEST_OPERATION, payload)
           payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
           input_digest = Wire.digest(
@@ -269,6 +275,22 @@ module Tamoz
 
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
         @outbox.bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
+      end
+
+      # ===== conversation history =====
+
+      # The recent transcript of one conversation, oldest first, for the
+      # turn's planning context: user lines are the admitted requests' task
+      # payloads (the inbound table stores hashes, never text), assistant
+      # lines are the journaled terminal deliveries the correspondent
+      # actually saw. Bounded twice — `limit` entries, each truncated —
+      # because the transcript rides the request payload into a model prompt.
+      def conversation_history(surface_id:, conversation_id:, limit: HISTORY_LIMIT)
+        entries = recent_request_tasks(surface_id:, conversation_id:, limit:) +
+                  recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
+        entries.sort_by { |entry| entry.fetch(:at) }.last(limit).map do |entry|
+          {'role' => entry.fetch(:role), 'text' => entry.fetch(:text)}
+        end
       end
 
       def outbox_rows(surface_id:, statuses:, limit: 500)
@@ -526,6 +548,46 @@ module Tamoz
       end
 
       private
+
+      def recent_request_tasks(surface_id:, conversation_id:, limit:)
+        rows = read('comms.history.requests') do |txn|
+          txn.rows('comms.history.requests', <<~SQL, [surface_id, conversation_id, limit])
+            SELECT request_id, thread_id, created_at_ms FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ?
+            ORDER BY created_at_ms DESC LIMIT ?
+          SQL
+        end
+        rows.filter_map do |request_id, thread_id, at|
+          task = request_task(request_id, thread_id)
+          task && {role: 'user', text: task[0, HISTORY_TEXT_CHARACTERS], at:}
+        end
+      end
+
+      # The task text of one admitted request, read back from the graph inbox
+      # payload. A non-text turn (a redirect payload is a Hash) has no
+      # transcript line, and a row that cannot be read back must not take the
+      # admission down with it.
+      def request_task(request_id, thread_id)
+        request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
+        task = request&.payload&.fetch('task', nil)
+        task.is_a?(String) ? task : nil
+      rescue StandardError
+        nil
+      end
+
+      def recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
+        rows = read('comms.history.deliveries') do |txn|
+          txn.rows('comms.history.deliveries', <<~SQL, [surface_id, conversation_id, limit])
+            SELECT text, created_at_ms FROM tamoz_comms_outbox
+            WHERE surface_id = ? AND conversation_id = ? AND journaled = 1
+              AND kind IN ('answer', 'failed', 'stopped', 'blocked') AND part_index = 0
+            ORDER BY created_at_ms DESC LIMIT ?
+          SQL
+        end
+        rows.map do |text, at|
+          {role: 'assistant', text: text[0, HISTORY_TEXT_CHARACTERS], at:}
+        end
+      end
 
       def transaction(operation, &)
         @adapter.__send__(:transaction, operation:, &)

@@ -91,6 +91,29 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # A follow-up message is planned with the thread's transcript: the gateway
+  # reads the conversation history and it rides the second turn's payload.
+  # The first contact stays bare — there is nothing to recall yet.
+  def test_a_follow_up_message_carries_the_conversation_transcript
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(101, text: 'make it blue')])
+
+      assert_equal :served, gateway.serve_once
+
+      transport.batch([update(102, text: 'and the font?')])
+      assert_equal :served, gateway.serve_once
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      requests = checkpoints.request_history(thread_id: thread)
+
+      assert_equal 2, requests.length
+      refute requests.first.payload.key?('conversation')
+      assert_equal [{'role' => 'user', 'text' => 'make it blue'}],
+                   requests.last.payload.fetch('conversation')
+    end
+  end
+
   # A long poll that times out is the normal weather of long polling, not the
   # end of the gateway: nothing was observed, the durable offset is untouched,
   # and the very next pass still admits the message that was waiting.
