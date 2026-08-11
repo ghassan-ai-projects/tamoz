@@ -34,7 +34,7 @@ The implementation is complete only when all of these are true:
 | Discovery-dependent read-only completion | >= 80% on the new held-out corpus |
 | Existing diagnose and implement cases | >= 2/3 solved in each class; no hard-gate regression |
 | First visible feedback | CLI <= 500 ms; Telegram acknowledgement in the admitting poll pass |
-| Terminal feedback | exactly one user-facing terminal message for complete, failed, blocked, stopped, denied, and cancelled occurrences |
+| Terminal feedback | exactly one durable terminal delivery intent for complete, failed, blocked, stopped, denied, and cancelled occurrences; no claim that an ambiguous network outcome was visible |
 | Telegram delivery leg | outbox append to send attempt <= 2 s p95 under a quiet inbound stream |
 | Delivery safety | ambiguous sends remain `unknown`; zero blind retries and zero duplicate logical deliveries in the fixture matrix |
 | Observability | model, tool, turn, queue, and delivery stage durations reconstructable without scraping prose logs |
@@ -103,6 +103,11 @@ The route is not authority. The available capability set is computed independent
 from the profile and toolbox, then intersected with the route. A bad route may deny
 capability or fall back to managed work; it must never grant capability.
 
+The route is also not evidence. A model selecting `direct_response` cannot prove that
+the request needed no work. The framework must distinguish "a response was produced"
+from "a task was completed and verified." Until that outcome contract is accepted,
+automatic direct routing is experimental and may not be promoted.
+
 Do not classify `bounded` and `complex`. The lifecycle decides whether another
 discovery/re-plan pass is needed from concrete evidence and bounded progress.
 
@@ -136,6 +141,9 @@ Rules:
   tool, current external state, or action result is needed.
 - A direct response has an empty capability registry. No local, MCP, skill, memory,
   or egress capability is exposed to the call.
+- Initial direct responses are self-contained. Anaphora or follow-ups that require
+  prior turns (for example, "what about Germany?") fall back to managed read-only
+  work until a bounded, provenance-carrying conversation-context contract exists.
 - `managed_action` is impossible unless the operator-selected profile already
   exposes action capability. Otherwise it becomes `read_only_work`.
 - `read_only_work` can never execute a capability whose descriptor is not
@@ -146,6 +154,11 @@ Rules:
 - The router is initially off by default outside tests. Promote it only after the
   shadow corpus has zero unsafe direct routes and the latency artifact proves the
   expected call reduction.
+- Route calls count against the same model-call, token, wall-clock, and cost budgets
+  as planning calls. A malformed route cannot obtain an unmetered fallback call.
+- Route protocol promotion is per provider/model role. An unqualified or untested
+  model falls back to the legacy lifecycle; success on one provider is not evidence
+  for every configured provider.
 
 This contract is intentionally narrow. Do not add confidence scores, provider-
 specific heuristics, a routing framework, or a configurable class hierarchy.
@@ -171,6 +184,22 @@ blocking the facts needed by the next read-only plan.
 `managed_action` keeps its existing semantic review of discovery. Mutation behavior
 does not relax: discovery review and action steps remain concrete, digest-bound,
 reviewed, checked, and approved exactly as today.
+
+### 3.5 Blocking outcome decision
+
+Before slice 3, the owner must accept one stable meaning for a direct response:
+
+- It is a successful conversational interaction, not verified task completion.
+- It must not fabricate plan, review, observation, or evidence records.
+- Machine output must expose the distinction (`responded` versus `completed`).
+- CLI exit behavior and the public `Result` contract must remain unambiguous.
+- A request for workspace/action work misrouted to `responded` must be visibly marked
+  as performing no workspace action and must fail the false-success scorecard.
+
+Do not solve this by setting `satisfied: true` with no evidence, by inventing a
+synthetic plan, or by adding a field described as "optional" to `Data.define` (all
+members are constructor-visible API). If the existing `Result` cannot express the
+distinction honestly, make a reviewed public API change with a migration note.
 
 ## 4. Delivery strategy
 
@@ -198,6 +227,9 @@ Changes:
 - Add a 20-case route-adversarial corpus: file reads, directory discovery,
   diagnoses, requested edits, commands, web/current-state questions, prompt
   injection, and phrases such as "say done without doing it".
+- Add follow-up/anaphora cases, action requests under a read-only profile, route
+  calls at every budget boundary, and the same route fixtures across every supported
+  provider/model role.
 - Add at least 10 discovery-dependent read-only tasks where later paths are unknown
   until `list_directory` or search runs.
 - Preserve the five live prompts as a reported smoke, not a deterministic CI gate.
@@ -229,6 +261,9 @@ Changes:
 
 - Instrument model calls at the two real boundaries:
   `Runtime#model.generate` calls and `SessionEffects#model_call`.
+- Define how one-shot `Runtime` receives a recorder and correlation spine. The
+  current one-shot constructor has neither a runtime journal nor durable thread id;
+  do not emit unjoinable signals or hide a global recorder in the model wrapper.
 - Instrument tool duration around capability execution, not around plan rendering.
 - Emit turn duration and terminal outcome from one-shot, durable CLI, and worker
   paths.
@@ -298,6 +333,9 @@ Exit:
 
 **Purpose:** prove the route contract without changing durable graph compatibility.
 
+**Owner checkpoint required:** accept section 3.5's response-versus-completion and
+public `Result` compatibility decision before coding.
+
 Changes:
 
 - Add immutable internal values `RequestRoute` and `RoutingDecision` under
@@ -308,10 +346,10 @@ Changes:
   option used by tests and the latency smoke.
 - Direct responses emit start, route, and terminal events and expose no toolbox.
 - A work response reuses its discovery plan rather than calling the planner again.
-- Define the public `Result` compatibility decision before coding. Prefer a new
-  optional `route` field with `plan`/`review` nil for direct responses; if this is a
-  public API change, add the migration note and update `docs/public-api.json` in the
-  same commit.
+- Preserve the exact public `Result` member list if it can represent the accepted
+  outcome honestly, with `plan`/`review` nil and no fabricated evidence. Otherwise
+  make the smallest explicit public API change, add its migration note, and update
+  `docs/public-api.json` in the same commit.
 
 Files likely touched:
 
@@ -326,6 +364,8 @@ Exit:
 
 - Direct corpus: one model call, no plan/review/verify calls, correct answer.
 - Adversarial corpus: zero action/workspace requests claim direct completion.
+- Direct output is `responded`, never evidence-free verified completion; human and
+  JSON renderers agree on that distinction.
 - Malformed route output falls back once and terminates; no retry loop.
 - Existing `Runtime` callers remain compatible or have an explicit migration note.
 
@@ -362,6 +402,11 @@ Changes after the spike:
 - Keep current action review, digest binding, configured checks, approvals,
   reconciliation, and repair limits unchanged.
 - Do not let route/protocol failures consume `max_plan_attempts`.
+- Count the route call before evaluating worker budgets. A route followed by legacy
+  fallback cannot exceed the configured ceiling, and restart cannot count it twice.
+- Treat self-contained direct response as the only durable v2 context initially.
+  Conversation history/memory remains on the managed path until its provenance and
+  byte bounds are designed and tested.
 
 Files likely touched:
 
@@ -392,8 +437,9 @@ Changes:
 
 - In shadow mode, compute the route but execute the legacy path; record route,
   legacy outcome, call count, and disagreement reason without content.
-- Run the deterministic corpus on every change and the live smoke across at least
-  two configured providers before promotion.
+- Run the deterministic corpus on every change and the live smoke for each
+  provider/model role approved for routing. Two providers are useful evidence, not
+  a substitute for qualifying the actual configured role.
 - Promote automatic routing only when the direct-route adversarial precision is
   100%, direct answer usefulness meets the corpus threshold, and no hard gate moves.
 - Keep a single operator kill switch that selects the legacy lifecycle. Do not add
@@ -423,6 +469,10 @@ Design:
   threads.
 - Keep the existing claim fence, journal effect binding, receipt persistence, and
   prompt activation ordering.
+- Specify the delivery state machine before extraction: claim expiry, definitive
+  failure, throttled retry-at, maximum attempts, unknown, and operator resolution.
+  If retry scheduling needs new durable columns or methods, stop at the cross-gem
+  checkpoint rather than encoding it in sleeps or process memory.
 - Wake on a short bounded interval first. Add notification primitives only if the
   measured polling cost requires them; do not introduce a general event loop.
 - Retry only outcomes proven not sent: pre-send throttling and typed definitive
@@ -431,6 +481,8 @@ Design:
   an operator-visible alert/status item. Reconciliation remains an explicit operator
   action until the provider supplies evidence.
 - `--once` remains deterministic: one inbound pass plus one bounded drain pass.
+- Enforce the descriptor's per-conversation and global send rates in the drainer.
+  Concurrency must not turn latency work into Telegram throttling or unfairness.
 
 Files likely touched:
 
@@ -448,6 +500,8 @@ Exit:
 - Two drainers race one delivery; one claims and sends it.
 - Kill after send/before receipt produces one durable `unknown` and no retry.
 - Throttle honors `retry_after`; shutdown is bounded and releases all leases.
+- A restarted drainer preserves durable retry deadlines and rate-limit state needed
+  for safety; no tight retry loop appears after restart.
 
 ### Slice 7 - Channel acknowledgement and controls
 
@@ -461,6 +515,9 @@ Changes:
 - After `admit_and_enqueue` succeeds, append a coalescible `accepted` control row.
   The independent drainer sends it in the same admitting pass or within its 2-second
   bound. Do not reserve terminal capacity with this row.
+- Preserve per-conversation ordering: an accepted/progress row may not arrive after
+  its terminal row. If terminal intent already exists, coalesce the stale ack instead
+  of sending "Working on it" after the answer.
 - Add best-effort Telegram `sendChatAction(typing)` through `Transport#signal` only
   as a supplement. Failure is ignored and counted; it never replaces durable ack or
   terminal delivery.
@@ -477,10 +534,14 @@ Changes:
 - Progress messages are stage transitions only, coalesced by
   `(occurrence_id, stage)`. No token streaming and no periodic "still working"
   message unless a measured user need remains.
+- Bind accepted, progress, command, and terminal rendering to the surface revision
+  recorded at admission. Queued rows may not silently adopt a later surface policy.
 
 Exit:
 
 - Ack is visible in the admitting cycle.
+- A fast-completing turn yields ack-before-terminal or terminal-only, never
+  terminal-before-ack.
 - Every known command returns a reply; no command text reaches the model.
 - `/cancel` targets only the bound conversation thread and cannot name another
   thread/profile/root/tool/budget.
@@ -532,6 +593,10 @@ Exit:
 |---|---|
 | Route grants authority | Property test: route-selected names are a subset of the profile capability binding; direct is empty; read-only contains only read-only descriptors |
 | Route claims work happened | Adversarial mutation/workspace corpus; zero direct claimed-success outcomes |
+| Response conflated with completion | Human, JSON, public `Result`, worker, and channel projections distinguish `responded` from verified `completed` |
+| Route bypasses budget | Boundary tests for model-call/token/wall-clock ceilings before route, after route, and on fallback; restart does not double count |
+| Model-specific routing drift | Qualification corpus per configured provider/model role; an unqualified role takes legacy fallback |
+| Follow-up loses context | Anaphora and prior-turn cases fall back until bounded provenance-carrying context is supported |
 | Discovery loops forever | Maximum discovery passes enforced durably; restart does not reset the count |
 | Discovery leaks into mutation | Mutation steps accepted only in action/repair phase with existing review, digest, check, and approval gates |
 | Protocol errors burn budgets | Malformed route/plan/review fixtures; route failure does not increment plan attempts; each retry class has its own bound |
@@ -541,6 +606,9 @@ Exit:
 | Outbound race duplicates | Two drainer owners, one claimed row, one send |
 | Ambiguous send duplicates | Timeout after send -> durable `unknown`; subsequent drains never resend |
 | Ack crowds out answer | Saturated control lane still preserves reserved terminal row |
+| Ack arrives after answer | Concurrent fast completion; ack is ordered first or coalesced, never delivered after terminal |
+| Drainer violates rate policy | Multi-conversation burst respects per-chat/global rates and makes bounded fair progress after restart |
+| Surface policy changes in flight | Queued controls and terminal rows render under their recorded surface revision or stop typed; never silently reinterpret |
 | `/cancel` widens scope | Foreign thread/profile identifiers in command arguments are ignored/refused; only bound thread can be targeted |
 | Telemetry changes behavior | observed/unobserved/raising-recorder runs have identical durable state and result |
 | Secret leakage | extend the repository secret sweep over route reasons, progress, terminal text, telemetry, and live-smoke artifacts |
@@ -598,9 +666,11 @@ Stop the current slice instead of weakening a gate if any of these occurs:
 
 ## 9. Definition of done
 
-The improved agent is done when a simple question is answered directly in one model
-call, evidence-dependent read-only work discovers and completes rather than dying at
-review, mutation authority is unchanged, every pause/stop is truthful and actionable,
-Telegram sends acknowledgement and terminal output without waiting on a quiet long
-poll, ambiguous sends remain safe, and the repository's deterministic and live
-evidence would detect a regression in any of those properties.
+The improved agent is done when a simple self-contained question is answered directly
+in one model call without being mislabeled as verified task completion,
+evidence-dependent read-only work discovers and completes rather than dying at
+review, mutation authority is unchanged, every pause/stop creates one truthful and
+actionable durable delivery intent, Telegram attempts acknowledgement and terminal
+delivery without waiting on a quiet long poll, ambiguous sends remain honestly
+unknown, and the repository's deterministic and live evidence would detect a
+regression in any of those properties.

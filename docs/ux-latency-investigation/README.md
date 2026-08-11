@@ -41,3 +41,7 @@ confidence. Every conclusion is labeled:
 Final implementation plan: [FINAL_PLAN.md](FINAL_PLAN.md)
 
 Code-level review and corrections: [PLAN_REVIEW.md](PLAN_REVIEW.md)
+
+Coverage gap analysis: [GAP_ANALYSIS.md](GAP_ANALYSIS.md)
+
+Deeper adversarial review: [DEEP_CRITICAL_REVIEW.md](DEEP_CRITICAL_REVIEW.md)
