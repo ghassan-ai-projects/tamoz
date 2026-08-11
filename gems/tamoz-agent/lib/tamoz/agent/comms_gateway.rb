@@ -4,6 +4,7 @@ require 'time'
 require 'json'
 
 require 'tamoz/comms'
+require_relative 'delivery_drainer'
 
 module Tamoz
   module Agent
@@ -28,7 +29,7 @@ module Tamoz
       POLLER_TTL_S = 60.0
       CLAIM_TTL_S = 30.0
 
-      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50)
+      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil)
         @adapter = adapter
         @store = adapter.bind_comms_store(checkpoints)
         @transport = transport
@@ -37,6 +38,14 @@ module Tamoz
         @batch_size = batch_size
         @fence = 0
         @stopping = false
+        @drainer = drainer || DeliveryDrainer.new(
+          store: @store,
+          transport:,
+          descriptor:,
+          owner: "#{poller_owner}:drainer",
+          batch_size:
+        )
+        @owns_drainer = drainer.nil?
       end
 
       # Acquire the poller lease and enter the serve loop (the CLI drives
@@ -47,11 +56,11 @@ module Tamoz
       # getUpdates finishes first. Releasing the lease WITHOUT ending the loop
       # would be worse than not stopping at all — the gateway would keep
       # reading a stream it no longer owns, which is the 409 conflict.
-      def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0)
+      def serve_loop(now_provider: -> { Time.now.utc }, interval_s: 1.0, drain: true)
         return :poller_busy unless start(now: now_provider.call)
 
         until @stopping
-          serve_once(now: now_provider.call)
+          serve_once(now: now_provider.call, drain:)
           sleep interval_s unless @stopping
         end
         :stopped
@@ -74,20 +83,21 @@ module Tamoz
       # a released lease alone does not buy.
       def stop
         @stopping = true
+        @drainer.stop if @owns_drainer
         release_poller
       end
 
       # One poll + admit + offset + drain pass. The poller lease is held
       # across passes (one fenced poller per bot); only serve_loop's ensure
       # releases it, and a crash leaves it to expire.
-      def serve_once(now: Time.now.utc)
+      def serve_once(now: Time.now.utc, drain: true)
         next_offset = @store.poll_offset(bot_id:)
         batch = poll_batch(next_offset)
         return :transient unless batch
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
-        drain_outbox(now:)
+        drain_outbox(now:) if drain
         :served
       rescue Comms::ThrottledError
         :throttled
@@ -238,45 +248,7 @@ module Tamoz
       end
 
       def drain_outbox(now:)
-        rows = @store.outbox_rows(surface_id:, statuses: %w[pending], limit: @batch_size)
-        rows.each do |row|
-          claimed = @store.claim_delivery(
-            delivery_id: row.fetch('delivery_id'), owner: @poller_owner,
-            fence: next_fence, claim_expires_at: now + CLAIM_TTL_S, now:
-          )
-          next unless claimed == :claimed
-
-          @store.bind_journal_effect(
-            delivery_id: row.fetch('delivery_id'),
-            effect_key: "sha256:#{Comms::Canonical.hexdigest('tamoz.comms.delivery.effect', row.fetch('delivery_id'))}",
-            execution_id: "comms:#{row.fetch('delivery_id')}", now:
-          )
-          outcome = send_delivery(row)
-          @store.mark_delivery(
-            delivery_id: row.fetch('delivery_id'), status: outcome[:status],
-            receipt: outcome[:receipt], now:
-          )
-          activate_after_receipt(row, now:) if outcome[:status] == 'succeeded'
-        end
-      end
-
-      # ADR-043: an approval prompt activates only after its send receipt is
-      # durable. The markup carried the plaintext reference exactly once.
-      def activate_after_receipt(row, now:)
-        return unless row.fetch('kind') == 'approval_request' && row['markup']
-
-        reference = JSON.parse(row.fetch('markup')).fetch('reference')
-        digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
-        @store.activate_prompt(reference_digest: digest, now:)
-      end
-
-      def send_delivery(row)
-        wire = row.merge('journaled' => row.fetch('journaled') == 1)
-        delivery = Comms::Delivery.from_wire(wire)
-        receipt = @transport.deliver(delivery)
-        { status: 'succeeded', receipt: }
-      rescue Comms::AmbiguousDeliveryError
-        { status: 'unknown', receipt: nil }
+        @drainer.drain_once(now:)
       end
 
       def release_poller

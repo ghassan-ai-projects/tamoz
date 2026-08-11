@@ -39,12 +39,12 @@ module Tamoz
     class CommsStore
       include CommsStoreRows
 
-      CONTRACT_VERSION = 1
+      CONTRACT_VERSION = 2
       REQUEST_OPERATION = 'turn'
       REQUEST_DELIVERY = 'queue'
       DEFAULT_NAMESPACE = '[]'
 
-      def initialize(adapter:, checkpoints:)
+      def initialize(adapter:, checkpoints: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @outbox = CommsOutbox.new(adapter:)
@@ -224,6 +224,27 @@ module Tamoz
 
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
         @outbox.claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
+      end
+
+      def reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:, global_messages_per_s:, now:)
+        @outbox.reserve_delivery_slot(surface_id:, conversation_id:, per_chat_messages_per_s:,
+                                      global_messages_per_s:, now:)
+      end
+
+      def release_delivery_claim(delivery_id:, owner:, fence:, now:)
+        @outbox.release_delivery_claim(delivery_id:, owner:, fence:, now:)
+      end
+
+      def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+        @outbox.mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+      end
+
+      def reconcile_expired_deliveries(now:)
+        @outbox.reconcile_expired_deliveries(now:)
+      end
+
+      def defer_delivery(surface_id:, conversation_id:, not_before:, now:)
+        @outbox.defer_delivery(surface_id:, conversation_id:, not_before:, now:)
       end
 
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)

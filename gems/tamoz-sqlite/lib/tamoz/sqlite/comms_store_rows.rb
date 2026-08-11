@@ -44,7 +44,9 @@ module Tamoz
         part_count markup journaled content_digest render_version expires_at_ms
         status claim_owner claim_fence claim_expires_at_ms effect_key
         effect_execution_id receipt created_at_ms updated_at_ms
+        send_started_at_ms
       ].freeze
+      PACING_GLOBAL_SCOPE = '__global__'
 
       def transaction(operation, &)
         @adapter.__send__(:transaction, operation:, &)

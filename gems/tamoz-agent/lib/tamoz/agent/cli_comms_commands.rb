@@ -57,20 +57,22 @@ module Tamoz
           end
 
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
-          gateways = descriptors.map do |descriptor|
-            transport = build_transport(descriptor, credential(descriptor))
-            Tamoz::Agent::CommsGateway.new(
-              adapter:, checkpoints:, transport:, descriptor:,
-              poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}"
-            )
-          end
-          if once
-            outcomes = gateways.map(&:serve_once)
-            @out.puts JSON.generate(outcomes) if options[:json]
-            outcomes.include?(:auth_failed) ? 1 : 0
-          else
-            run_gateway_loops(gateways)
-            0
+          with_delivery_drainers(directory, descriptors) do |drainers|
+            gateways = descriptors.zip(drainers).map do |descriptor, drainer|
+              transport = build_transport(descriptor, credential(descriptor))
+              Tamoz::Agent::CommsGateway.new(
+                adapter:, checkpoints:, transport:, descriptor:,
+                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:
+              )
+            end
+            if once
+              outcomes = gateways.map(&:serve_once)
+              @out.puts JSON.generate(outcomes) if options[:json]
+              outcomes.include?(:auth_failed) ? 1 : 0
+            else
+              run_gateway_loops(gateways, drainers)
+              0
+            end
           end
         end
       # A competing poller is a correctness problem, not a retry: it is named
@@ -111,18 +113,58 @@ module Tamoz
       # A fenced gateway loop per surface, supervised like `tamoz worker`:
       # INT/TERM ask every loop to stop, and the previous handlers are
       # restored so an in-process test never leaks traps.
-      def run_gateway_loops(gateways)
+      def run_gateway_loops(gateways, drainers)
         # Handed to a thread, not run here: `stop` releases the poller lease
         # with a database write, and the connection pool's mutex raises
         # ThreadError in a trap context. Doing it inline turns a supervisor's
         # SIGTERM into a backtrace instead of a released lease.
-        old_int = Signal.trap('INT') { Thread.new { gateways.each(&:stop) } }
-        old_term = Signal.trap('TERM') { Thread.new { gateways.each(&:stop) } }
+        old_int = Signal.trap('INT') { Thread.new { stop_loops(gateways, drainers) } }
+        old_term = Signal.trap('TERM') { Thread.new { stop_loops(gateways, drainers) } }
         begin
-          gateways.map { |gateway| Thread.new { gateway.serve_loop } }.each(&:join)
+          threads = gateways.map { |gateway| Thread.new { gateway.serve_loop(drain: false) } }
+          threads.concat(drainers.map { |drainer| Thread.new { drainer.serve_loop } })
+          threads.each(&:join)
         ensure
+          stop_loops(gateways, drainers)
           Signal.trap('INT', old_int) if old_int
           Signal.trap('TERM', old_term) if old_term
+        end
+      end
+
+      def stop_loops(gateways, drainers)
+        gateways.each(&:stop)
+        drainers.each(&:stop)
+      end
+
+      def with_delivery_drainers(directory, descriptors)
+        entries = []
+        descriptors.each do |descriptor|
+          adapter = nil
+          begin
+            codec = directory.enabled_sources.include?('memory') ? Memory::Surface.codec : nil
+            adapter = Tamoz::SQLite::Adapter.new(
+              path: directory.database_path,
+              limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl),
+              **(codec ? { state_codec: codec } : {})
+            )
+            store = adapter.bind_comms_store
+            transport = build_transport(descriptor, credential(descriptor))
+            drainer = Tamoz::Agent::DeliveryDrainer.new(
+              store:, transport:, descriptor:,
+              owner: "#{GATEWAY_POLLER_PREFIX}:drainer:#{Process.pid}:#{descriptor.surface_id}",
+              batch_size: descriptor.transport.fetch(:batch)
+            )
+            entries << [adapter, drainer]
+          rescue StandardError
+            adapter&.close unless adapter&.closed?
+            raise
+          end
+        end
+        yield entries.map(&:last)
+      ensure
+        entries.each do |adapter, drainer|
+          drainer.stop
+          adapter.close unless adapter.closed?
         end
       end
 

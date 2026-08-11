@@ -47,7 +47,7 @@ module Tamoz
 
       # Slice C: the channel store (design §13) — admission shares the request
       # inbox enqueue seam, so poll → admit → enqueue lands in the same file.
-      def bind_comms_store(checkpoints)
+      def bind_comms_store(checkpoints = nil)
         ensure_process!
         raise ClosedError, "SQLite adapter is closed" if closed?
 
