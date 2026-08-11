@@ -269,11 +269,21 @@ module Tamoz
         # typed event and recorded durably for `tamoz status`.
         budget_exhausted(entry, budget: "steps", detail: error.message, session:)
       rescue StandardError => error
+        thread_id = entry.fetch(:thread_id)
+        occurrence_id = entry.fetch(:head_request_id)
         emit("request.failed",
-             thread: entry.fetch(:thread_id),
-             request_id: entry.fetch(:head_request_id),
-             duration_ms: @runtime.occurrence_age_milliseconds(entry.fetch(:thread_id)),
+             thread: thread_id,
+             request_id: occurrence_id,
+             duration_ms: @runtime.occurrence_age_milliseconds(thread_id),
              reason: "#{error.class}: #{error.message}")
+        if entry.fetch(:head_status) == :queued
+          begin
+            @runtime.durably_fail_request(thread_id, occurrence_id, reason: bounded_reason(error))
+          rescue StandardError
+            # The claim may have completed under a concurrent pass; the failed
+            # park below still stops the hot loop for claimed entries.
+          end
+        end
         park(entry, nil, reason: "failed")
         PARKED
       end
@@ -384,8 +394,8 @@ module Tamoz
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
-        session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
-        settle(session, thread_id:, occurrence_id:)
+        request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        settle(session, thread_id:, occurrence_id:, request:)
       end
 
       # A request left `claimed`/`running` belongs to a worker that died holding
@@ -393,10 +403,10 @@ module Tamoz
       # one, which is what keeps a crash from becoming a second effect.
       def recover(session, thread_id:, occurrence_id:)
         emit("request.recovered", thread: thread_id, request_id: occurrence_id)
-        session.app.durable_runner.recover(
+        request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
-        settle(session, thread_id:, occurrence_id:)
+        settle(session, thread_id:, occurrence_id:, request:)
       end
 
       # Where the turn ended up, reported against the OCCURRENCE — the queued
@@ -410,7 +420,7 @@ module Tamoz
         nil
       end
 
-      def settle(session, thread_id:, occurrence_id:)
+      def settle(session, thread_id:, occurrence_id:, request: nil)
         # The budget is checked BEFORE the outcome is interpreted, so a run that
         # spent its ceiling stops as a budget stop rather than being reported as
         # whatever the turn happened to look like when it ran out.
@@ -426,6 +436,21 @@ module Tamoz
         return IDLE unless view
 
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+
+        # A claim that was rejected as stale returns a terminal-failed request
+        # whose view is the thread's OLD latest checkpoint — never this
+        # occurrence's. Interpreting that view as THIS turn's pause would create
+        # an approval prompt for an occurrence that can never resume (the
+        # decision would dangle forever). Fail it closed instead.
+        if request && request.status == :failed && view.execution_id != request.execution_id
+          @runtime.close_occurrence(thread_id)
+          unpark(thread_id)
+          emit("request.failed",
+               thread: thread_id, request_id: occurrence_id,
+               duration_ms:,
+               reason: failure_reason(request))
+          return PROGRESSED
+        end
 
         case view.status
         when :completed
@@ -594,13 +619,36 @@ module Tamoz
         @monitor.synchronize { @parked.delete(thread_id) }
       end
 
+      # The terminal error column bounds its reason (512 bytes, no control
+      # characters), so a raised claim failure is truncated before it is
+      # persisted.
+      # :reek:UtilityFunction -- a pure projection of the failure text.
+      def bounded_reason(error)
+        text = "#{error.class}: #{error.message}"
+        text = text.gsub(/[[:cntrl:]]/, ' ')
+        text.bytesize <= 512 ? text : text.byteslice(0, 512)
+      end
+
+      # The durable reason recorded on a terminal-failed request (the staleness
+      # verdict), or a fallback when the row has none.
+      # :reek:UtilityFunction -- a pure projection of the request row.
+      def failure_reason(request)
+        error = request.terminal_error
+        return "failed" unless error.is_a?(Hash)
+
+        error.fetch("reason", "failed").to_s
+      end
+
       def parked?(entry)
         @monitor.synchronize do
           signature = @parked[entry.fetch(:thread_id)]
           next false unless signature
 
+          # A failed claim parks even a :queued entry: without this, the worker
+          # would re-claim it every poll and hot-loop (bounded to one attempt
+          # per process start, since the park is in-memory).
           signature.first == entry.fetch(:head_request_id) &&
-            entry.fetch(:head_status) != :queued
+            (entry.fetch(:head_status) != :queued || signature.last == "failed")
         end
       end
 

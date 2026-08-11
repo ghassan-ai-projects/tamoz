@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'securerandom'
+
 module Tamoz
   module SQLite
     # :nodoc: Owns explicit recovery and the post-claim terminal-fail backstop.
@@ -57,24 +59,41 @@ module Tamoz
           )
           raise CheckpointConflictError, 'request does not exist' unless row
 
-          validate_terminal_fail_status!(row)
-          transitions.apply_request_transition_in_transaction!(
-            tx,
-            lease:,
-            checkpoint_id: nil,
-            transition: staleness.terminal_transition(
-              request_id: id,
-              execution_id: row.fetch(10),
-              operation:,
-              reason:
-            ),
-            now:,
-            evidence_override: staleness.transition_evidence(
+          # A claim that raised before its durable transition leaves the request
+          # `queued`; the guarded transition plan only accepts claimed/running/
+          # redirecting, so route through the claimer's un-guarded fenced
+          # failure, which already handles queued rows (the stale-claim path).
+          if row.fetch(7) == 'queued'
+            claimer.terminal_fail_in_transaction!(
+              tx,
+              lease:,
+              row:,
               operation:,
               reason:,
-              checkpoint_id: nil
+              execution_id: SecureRandom.uuid,
+              checkpoint_id: nil,
+              now:
             )
-          )
+          else
+            validate_terminal_fail_status!(row)
+            transitions.apply_request_transition_in_transaction!(
+              tx,
+              lease:,
+              checkpoint_id: nil,
+              transition: staleness.terminal_transition(
+                request_id: id,
+                execution_id: row.fetch(10),
+                operation:,
+                reason:
+              ),
+              now:,
+              evidence_override: staleness.transition_evidence(
+                operation:,
+                reason:,
+                checkpoint_id: nil
+              )
+            )
+          end
           row = rows.request_row(
             tx,
             lease.thread_id,

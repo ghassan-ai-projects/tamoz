@@ -43,7 +43,19 @@ load_env .env
 : "${TAMOZ_RUNTIME_DIR:=$HOME/.tamoz}"
 : "${TAMOZ_MODEL:=deepseek-chat}"
 : "${TAMOZ_PROVIDER:=deepseek}"
-export TAMOZ_RUNTIME_DIR
+: "${TAMOZ_TELEGRAM_SURFACE:=telegram-ops}"
+export TAMOZ_RUNTIME_DIR TAMOZ_MODEL TAMOZ_PROVIDER TAMOZ_TELEGRAM_SURFACE
+
+RUBY_BIN="${TAMOZ_RUBY_BIN:-$(command -v ruby || true)}"
+if [ -z "$RUBY_BIN" ] || [ ! -x "$RUBY_BIN" ]; then
+  echo "ERROR: Ruby is not available. Add the project Ruby to PATH or set TAMOZ_RUBY_BIN."
+  exit 1
+fi
+
+if ! command -v bundle >/dev/null 2>&1; then
+  echo "ERROR: Bundler is not available for the project Ruby."
+  exit 1
+fi
 
 # Build the bundle load path so plain `ruby <exe>` finds tamoz gems.
 RUBYLIB="$(bundle exec ruby -e 'puts $LOAD_PATH.reject{|p| p=="/"||p==""}.join(":")')"
@@ -57,8 +69,11 @@ WORKER_LOG=/tmp/tamoz_worker.log
 
 stop_all() {
   echo "Stopping tamoz gateway + worker..."
-  pkill -f "$PWD/gems/tamoz-agent/exe/tamoz.*comms serve" 2>/dev/null || true
-  pkill -f "$PWD/gems/tamoz-agent/exe/tamoz.*worker" 2>/dev/null || true
+  # Match by runtime dir + subcommand, NOT the repo exe path: a worker started
+  # from the installed gem binstub (or a different checkout) would otherwise
+  # survive --stop and keep processing (or hot-looping) against the same DB.
+  pkill -f "tamoz.*--runtime-dir $TAMOZ_RUNTIME_DIR.*comms serve" 2>/dev/null || true
+  pkill -f "tamoz.*--runtime-dir $TAMOZ_RUNTIME_DIR.*worker" 2>/dev/null || true
   echo "done."
 }
 
@@ -111,13 +126,18 @@ stop_all
 sleep 1
 
 start_one "gateway" "$GATEWAY_LOG" \
-  "$HOME/.rbenv/versions/3.3.11/bin/ruby" "$EXE" \
+  "$RUBY_BIN" "$EXE" \
   --runtime-dir "$TAMOZ_RUNTIME_DIR" \
   --provider "$TAMOZ_PROVIDER" --model "$TAMOZ_MODEL" \
-  comms serve --surface telegram-ops
+  comms serve --surface "$TAMOZ_TELEGRAM_SURFACE"
+
+# A fresh runtime DB is migrated by whichever process opens it first; the
+# worker starting simultaneously would race that migration and die on a lock.
+# Let the gateway finish first, then start the worker.
+sleep 2
 
 start_one "worker" "$WORKER_LOG" \
-  "$HOME/.rbenv/versions/3.3.11/bin/ruby" "$EXE" \
+  "$RUBY_BIN" "$EXE" \
   --runtime-dir "$TAMOZ_RUNTIME_DIR" \
   --provider "$TAMOZ_PROVIDER" --model "$TAMOZ_MODEL" \
   worker --concurrency 1
@@ -125,9 +145,18 @@ start_one "worker" "$WORKER_LOG" \
 echo
 echo "Waiting 8s to verify they stay up..."
 sleep 8
-echo "Gateway process: $(pgrep -f 'comms serve' >/dev/null && echo RUNNING || echo DOWN)"
-echo "Worker  process: $(pgrep -f 'worker' >/dev/null && echo RUNNING || echo DOWN)"
+gateway_up="$(pgrep -f "tamoz.*--runtime-dir $TAMOZ_RUNTIME_DIR.*comms serve" | head -1)"
+worker_up="$(pgrep -f "tamoz.*--runtime-dir $TAMOZ_RUNTIME_DIR.*worker" | head -1)"
+echo "Gateway process: $([ -n "$gateway_up" ] && echo RUNNING || echo DOWN)"
+echo "Worker  process: $([ -n "$worker_up" ] && echo RUNNING || echo DOWN)"
 echo "-- gateway log --"; tail -5 "$GATEWAY_LOG" 2>/dev/null || true
 echo "-- worker log --"; tail -5 "$WORKER_LOG" 2>/dev/null || true
+if [ -z "$worker_up" ] || [ -z "$gateway_up" ]; then
+  echo
+  echo "ERROR: a tamoz process did not stay up (see the logs above)."
+  echo "A worker that dies at startup usually cannot build the MCP session"
+  echo "(e.g. ALMS unreachable from this process context)."
+  exit 1
+fi
 echo
 echo "Done. Chat with @tamoz_agent_bot to test ALMS MCP."

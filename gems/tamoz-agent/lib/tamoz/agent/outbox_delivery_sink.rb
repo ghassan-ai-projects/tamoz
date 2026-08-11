@@ -111,7 +111,7 @@ module Tamoz
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
         @store.insert_prompt(prompt.wire)
-        markup = JSON.generate('reference' => reference, 'action' => 'deny')
+        markup = JSON.generate('reference' => reference, 'actions' => %w[approve deny])
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',

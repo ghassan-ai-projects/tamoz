@@ -192,6 +192,20 @@ module Tamoz
         end
       end
 
+      # Durable terminal failure of a request whose claim raised before it
+      # completed (worker hot-loop fix): the row leaves pending_threads instead
+      # of being re-claimed every poll.
+      def durably_fail_request(thread_id, request_id, reason:)
+        checkpoints.open_writer(
+          thread_id:,
+          namespace: [],
+          owner_id: "worker:#{Process.pid}",
+          ttl: checkpoints.writer_ttl
+        ) do |writer|
+          writer.terminal_fail(request_id:, operation: :turn, reason:)
+        end
+      end
+
       def occurrence_for(thread_id)
         durable("open occurrence for #{thread_id.inspect}") do
           record(OPEN_OCCURRENCES, thread_id)&.fetch("occurrence_id", nil)

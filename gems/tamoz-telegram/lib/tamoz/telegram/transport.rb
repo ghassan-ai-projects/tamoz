@@ -69,13 +69,19 @@ module Tamoz
 
       private
 
-      # v1 deny-only (ADR-043): the control delivery's markup carries the
-      # single-use reference as an inline keyboard button — the plaintext that
-      # activates the prompt only after this send receipt is durable.
+      # v2 approve+deny (ADR-043 v1 was deny-only): the control delivery's
+      # markup carries the single-use reference plus the actions; each button's
+      # callback data encodes `action:reference` so a press resolves exactly
+      # one ACTIVE prompt in the direction the operator chose. A bare
+      # reference (v1 wire) still resolves as deny.
       def attach_markup(params, delivery)
-        reference = JSON.parse(delivery.markup).fetch('reference')
+        markup = JSON.parse(delivery.markup)
+        reference = markup.fetch('reference')
+        actions = markup.fetch('actions', %w[deny])
         params['reply_markup'] = {
-          'inline_keyboard' => [[{ 'text' => 'Deny', 'callback_data' => reference }]]
+          'inline_keyboard' => [actions.map do |action|
+            { 'text' => action.capitalize, 'callback_data' => "#{action}:#{reference}" }
+          end]
         }
       end
 
