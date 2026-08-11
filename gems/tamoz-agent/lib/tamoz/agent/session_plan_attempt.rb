@@ -163,7 +163,12 @@ module Tamoz
             plan_data.plan,
             phase: details.phase,
             evidence: details.evidence,
-            planning_context: details.planning_context
+            planning_context: details.planning_context,
+            tool_descriptions: Tamoz::Agent::Deliberation.merge_tool_surfaces(
+              @services.configuration.toolbox.descriptions,
+              details.allowed_tools,
+              details.mcp_tools
+            )
           ),
           call_index: (details.attempt * 2) + 1
         )

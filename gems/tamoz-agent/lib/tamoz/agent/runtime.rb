@@ -541,7 +541,12 @@ module Tamoz
             plan,
             phase:,
             evidence:,
-            planning_context:
+            planning_context:,
+            tool_descriptions: Deliberation.merge_tool_surfaces(
+              toolbox.descriptions,
+              toolbox.names,
+              {}
+            )
           )
         )
         Deliberation.parse_review(raw)

@@ -136,7 +136,10 @@ module Tamoz
             plan_data.plan,
             phase: :discovery,
             evidence: [],
-            planning_context: {}
+            planning_context: {},
+            tool_descriptions: @services.configuration.toolbox.descriptions.slice(
+              *@services.configuration.toolbox.read_only_names
+            )
           ),
           call_index: 1
         )
