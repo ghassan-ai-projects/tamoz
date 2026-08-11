@@ -197,6 +197,84 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8  # RubyLLM crashes parsing its models
 
 ---
 
+# Post-Fix Re-Test — 2026-08-11 (14:33 CEST)
+
+The coding agent remediated every priority finding. HEAD at re-test: `2fdc159`
+("Document Tamoz MCP and websearch operations"). Fix commits reviewed:
+
+- `7cb8771` Fix MCP configuration validation loading  (P1)
+- `1d7e64d` Allow profiles in dot tamoz runtimes        (P2 Telegram)
+- `7a85930` Improve multi-file plan review context       (P2 write)
+- `ab8fa78` Make model loading locale safe               (P3 env)
+- `1f07a94` Preserve suggestion isolation for runtime profiles
+
+## Re-Test 1 — Read-only review (sanity): ✅ PASS
+
+Same invocation as before (one-shot CLI, `--root` to article dir). Discovery plan
+accepted, read `article.md`, returned a precise summary + top risk. Unchanged
+from pre-fix behavior; no regression.
+
+## Re-Test 3 — Multi-file write / mutate: ✅ PASS (fix verified)
+
+Re-ran the exact multi-file task that previously failed (3 attempts rejected at
+review). After the fix:
+- Discovery plan **accepted** by both structural AND semantic review.
+- Action plan (two `apply_patch` edits + two read-back verifications) **accepted**.
+- Applied patch #1 to `todo.md` (`- [x] Release script` committed to disk,
+  confirmed).
+- Stopped at the second approval gate (needs one `y` per patch in unattended
+  stdin); the approval gate itself behaved correctly.
+
+Root-cause fix works: valid multi-file change plans now get actionable semantic
+approval instead of an opaque 3-attempt `revise` loop.
+
+## Re-Test 5 — MCP capability: ✅ PASS at build (P1 fixed)
+
+- The `NameError` crash on MCP source build is **gone**. `queue list` against the
+  MCP-enabled runtime now returns `No pending work.` instead of
+  `uninitialized constant Tamoz::Mcp::ValidationError`.
+- Dedicated regression test passes: `test/agent_worker_mcp_test.rb` —
+  **9 runs, 30 assertions, 0 failures, 0 errors**.
+- The fix (`require "tamoz/mcp"` hoisted to the top of `McpSourceBuilder#build`,
+  before `config_for`) resolves the constant-loading defect.
+
+**Note / not a code defect:** a full edge-to-edge MCP *invocation* through the
+worker path was not completed because the `ops` test profile pins a `policy.
+tool_catalog_digest` (`4a44f855…`) that no longer matches the current toolbox
+catalog (`6b78e9ea…`, which changed once MCP tools are in scope). Rebinding the
+profile digest to the live catalog is required before a queued MCP task will be
+accepted by `queue add`. This is expected profile-pinning behavior, not a code
+failure.
+
+## Re-Test 4 — Telegram worker profile: ✅ FIXED (P2)
+
+- `1d7e64d` changes `Profile.suggestion_path?` so a profile at
+  `~/.tamoz/profiles/ops.yaml` is treated as a valid operator runtime profile
+  (only the reserved suggestion basename stays evidence-only), instead of the
+t
+  previous over-broad rejection of any path under `.tamoz/`.
+- Associated tests pass: `test/agent_profile_test.rb` —
+  **43 runs, 124 assertions, 0 failures**.
+
+## Env / locale gate: ✅ FIXED (P3)
+
+- `ab8fa78` sets `Encoding.default_external = UTF-8` before requiring RubyLLM so
+  its bundled `models.json` parses under a C/ASCII locale.
+- `test/agent_ruby_llm_model_test.rb` — **3 runs, 12 assertions, 0 failures**.
+- Interaction manual updated in `docs/INSTALL.md` (explicit `TAMOZ_PROVIDER` +
+  `TAMOZ_MODEL` usage, and the websearch-off-by-default note).
+
+## Residual items for the fixing agent (non-blocking)
+
+- Profile `tool_catalog_digest` rebinding when MCP sources are added to a runtime
+  (the `ops` profile used for testing still pins the pre-MCP digest). Not a code
+  bug — confirm the documented flow for refreshing a pinned profile after adding
+  an MCP source.
+- Full end-to-end MCP invocation (exit the queue as the last unknown) still needs
+  that rebind before it can be exercised live.
+
+---
+
 ## Remediation loop — 2026-08-11
 
 The findings above were reproduced against the implementation and addressed in
