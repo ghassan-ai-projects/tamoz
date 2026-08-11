@@ -44,10 +44,10 @@ module Tamoz
       # Returns nil rather than an empty source so `Session.new(mcp: nil)` keeps
       # its exact pre-existing behaviour when MCP is off.
       def build
+        require "tamoz/mcp"
+
         configs = server_configs
         return nil if configs.empty?
-
-        require "tamoz/mcp"
 
         catalogs = {}
         descriptors = []

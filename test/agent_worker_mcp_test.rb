@@ -160,4 +160,20 @@ class AgentWorkerMcpTest < Minitest::Test
       assert_match(/missing command/, rt.err)
     end
   end
+
+  def test_invalid_server_config_is_reported_without_masking_the_validation_error
+    with_runtime do |rt|
+      configure_mcp(rt, {"mcp" => {"enabled" => true,
+                                   "servers" => [server_settings(
+                                     "id" => "broken",
+                                     "working_directory" => rt.workspace
+                                   )]}})
+
+      status = rt.cli(%w[status --json])
+
+      assert_equal 1, status
+      assert_match(/MCP server "broken" is misconfigured/, rt.err)
+      refute_match(/NameError|uninitialized constant/, rt.err)
+    end
+  end
 end
