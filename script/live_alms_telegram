@@ -1,0 +1,284 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'digest'
+require 'json'
+require 'open3'
+require 'optparse'
+require 'psych'
+require 'securerandom'
+require 'shellwords'
+require 'time'
+require 'uri'
+
+# Operator-facing ALMS and Telegram acceptance harness. It uses the same CLI
+# commands as an operator and only reads the outbox to verify the final receipt.
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+class LiveAlmsTelegram
+  DEFAULT_SURFACE = 'telegram-ops'
+  DEFAULT_LIMIT = 5
+  REQUIRED_TOOL = 'learning.search'
+  CommandResult = Struct.new(:stdout, :stderr, :status) do
+    def success?
+      status.success?
+    end
+  end
+
+  def self.run(argv)
+    new(argv).run
+  rescue OptionParser::ParseError, ArgumentError => e
+    warn "live ALMS test: #{e.message}"
+    64
+  rescue StandardError => e
+    warn "live ALMS test failed: #{e.message}"
+    1
+  end
+
+  def initialize(argv)
+    @options = parse(argv)
+    @env = ENV.to_h
+    @env['TAMOZ_PROVIDER'] = @env.fetch('TAMOZ_PROVIDER', 'deepseek')
+    @run_id = "alms-live-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(4)}"
+    @runtime_dir = File.expand_path(@options.fetch(:runtime_dir))
+    @cli = Shellwords.split(@env.fetch('TAMOZ_CLI', 'bundle exec tamoz'))
+  end
+
+  def run
+    phase('preflight', "run=#{@run_id}")
+    config = load_config
+    surface = config.fetch('channels').fetch(@options.fetch(:surface))
+    server = alms_server(config)
+    validate_transport(server.fetch('endpoint'))
+    validate_model_credentials
+    validate_mcp_catalog
+    doctor
+    if @options[:preflight_only]
+      phase('preflight_succeeded', "run=#{@run_id}")
+      return 0
+    end
+
+    route = telegram_route
+    thread = @options[:thread] || route.fetch('thread_id')
+    profile = @options[:profile] || surface['profile']
+    task = build_task
+    started_ms = (Time.now.to_f * 1000).to_i
+
+    queued = queue_task(task, thread, profile)
+    request_id = queued.fetch('request_id')
+    phase('delivery_queued', "run=#{@run_id} request=#{request_id}")
+
+    worker = run_cli(%w[worker --once --json], allow_failure: true)
+    verify_worker(worker, request_id)
+    phase('summary_ready', "run=#{@run_id} request=#{request_id}")
+
+    gateway = run_cli(['comms', 'serve', '--surface', @options.fetch(:surface), '--once', '--json'])
+    verify_gateway(gateway)
+    delivery = delivered_summary(started_ms, route.fetch('conversation_id'))
+    phase('delivery_succeeded', "run=#{@run_id} bytes=#{delivery.fetch('text').bytesize} " \
+                                "digest=#{Digest::SHA256.hexdigest(delivery.fetch('text'))}")
+    0
+  ensure
+    phase('cleanup', "run=#{@run_id}") if @run_id
+  end
+
+  private
+
+  def parse(argv)
+    values = {
+      runtime_dir: ENV.fetch('TAMOZ_RUNTIME_DIR', '~/.tamoz'),
+      surface: DEFAULT_SURFACE,
+      limit: DEFAULT_LIMIT
+    }
+    OptionParser.new do |parser|
+      parser.banner = 'Usage: script/live_alms_telegram [options]'
+      parser.on('--runtime-dir DIR', 'Operator runtime directory') { |value| values[:runtime_dir] = value }
+      parser.on('--surface ID', "Telegram surface (default: #{DEFAULT_SURFACE})") { |value| values[:surface] = value }
+      parser.on('--thread ID', 'Existing Telegram-bound thread; otherwise use the first route') do |value|
+        values[:thread] = value
+      end
+      parser.on('--profile ID', 'Trusted profile for the queued task') { |value| values[:profile] = value }
+      parser.on('--limit N', Integer, "Maximum learnings requested (default: #{DEFAULT_LIMIT})") do |value|
+        values[:limit] = value
+      end
+      parser.on('--preflight-only', 'Validate ALMS, model, Telegram, and routing without running a task') do
+        values[:preflight_only] = true
+      end
+      parser.on('-h', '--help', 'Show this help') do
+        puts parser
+        exit 0
+      end
+    end.parse!(argv)
+    raise ArgumentError, '--limit must be positive' unless values.fetch(:limit).positive?
+
+    values
+  end
+
+  def load_config
+    path = File.join(@runtime_dir, 'config.yaml')
+    raise ArgumentError, "runtime config is missing: #{path}" unless File.file?(path)
+
+    document = Psych.safe_load_file(path, permitted_classes: [], aliases: false)
+    raise ArgumentError, 'runtime config is not a mapping' unless document.is_a?(Hash)
+
+    document
+  end
+
+  def alms_server(config)
+    settings = config.dig('sources', 'mcp')
+    raise ArgumentError, 'sources.mcp is not enabled' unless settings.is_a?(Hash) && settings['enabled'] == true
+
+    server = Array(settings['servers']).find { |entry| entry.is_a?(Hash) && entry['id'] == 'alms' }
+    raise ArgumentError, 'the configured MCP server must be named alms' unless server
+    raise ArgumentError, 'ALMS must use HTTP transport' unless server['transport'] == 'http'
+    unless Array(server['read_only_tools']).include?(REQUIRED_TOOL)
+      raise ArgumentError, "#{REQUIRED_TOOL} must be operator-classified read-only"
+    end
+
+    server
+  end
+
+  def validate_transport(endpoint)
+    uri = URI.parse(endpoint)
+    loopback = %w[localhost 127.0.0.1 ::1].include?(uri.host)
+    return if uri.scheme == 'https' || loopback
+
+    raise ArgumentError, 'ALMS HTTP endpoint must be HTTPS or loopback (use the managed tunnel)'
+  rescue URI::InvalidURIError
+    raise ArgumentError, 'ALMS endpoint is not a valid URI'
+  end
+
+  def validate_model_credentials
+    provider = @env.fetch('TAMOZ_PROVIDER')
+    model = @env['TAMOZ_MODEL']
+    raise ArgumentError, 'TAMOZ_MODEL is not set' if model.to_s.empty?
+
+    credential_name = @env.fetch('TAMOZ_MODEL_CREDENTIAL_ENV', "#{provider.upcase}_API_KEY")
+    raise ArgumentError, "#{credential_name} is not set" if @env[credential_name].to_s.empty?
+  end
+
+  def validate_mcp_catalog
+    result = run_cli(%w[status --json])
+    document = parse_json(result.stdout)
+    catalog = Array(document.fetch('capability_catalog'))
+    expected = "mcp:alms/#{REQUIRED_TOOL}"
+    raise "ALMS catalog does not expose #{expected}" unless catalog.include?(expected)
+
+    phase('catalog_pinned', "run=#{@run_id} tool=#{expected}")
+  end
+
+  def doctor
+    result = run_cli(%w[comms doctor])
+    raise 'Telegram doctor failed' unless result.success?
+
+    phase('telegram_preflight_ok', "run=#{@run_id}")
+  end
+
+  def telegram_route
+    result = run_cli(['comms', 'list', '--surface', @options.fetch(:surface), '--json'])
+    surface = Array(parse_json(result.stdout)).first
+    route = Array(surface && surface['conversations']).first
+    raise 'no Telegram conversation route exists; send one message to the bot first' unless route
+
+    route
+  end
+
+  def build_task
+    "Use mcp:alms/#{REQUIRED_TOOL} with query \"*\" and limit #{@options.fetch(:limit)} to retrieve " \
+      'learnings. Use only arguments supported by the pinned tool schema; do not invent sort or ' \
+      'other fields. Order the returned records by their newest available timestamps, then ' \
+      "summarize each with its source and timestamp. Return only the verified summary. Live run #{@run_id}."
+  end
+
+  def queue_task(task, thread, profile)
+    args = ['queue', 'add', '--task', task, '--thread', thread, '--json']
+    args += ['--profile', profile] unless profile.to_s.empty?
+    result = run_cli(args)
+    parse_json(result.stdout)
+  end
+
+  def verify_worker(result, request_id)
+    events = worker_events(result.stdout)
+    return phase('mcp_call_succeeded', "run=#{@run_id} request=#{request_id}") if
+      successful_worker?(result, events, request_id)
+
+    detail = worker_failure_detail(events, request_id)
+    raise "worker did not complete request #{request_id}: #{detail}"
+  end
+
+  def worker_events(output)
+    output.each_line.filter_map { |line| parse_worker_event(line) }
+  end
+
+  def parse_worker_event(line)
+    JSON.parse(line)
+  rescue JSON::ParserError
+    nil
+  end
+
+  def successful_worker?(result, events, request_id)
+    result.success? && events.any? do |event|
+      event['event'] == 'request.completed' && event['request_id'] == request_id
+    end
+  end
+
+  def worker_failure_detail(events, request_id)
+    failure = events.find do |event|
+      event['event'] == 'request.failed' && event['request_id'] == request_id
+    end
+    failure&.fetch('reason', 'unknown failure') || 'no terminal worker event'
+  end
+
+  def verify_gateway(result)
+    outcomes = parse_json(result.stdout)
+    raise "Telegram gateway did not serve successfully: #{outcomes.inspect}" unless result.success? &&
+                                                                                    Array(outcomes).all?('served')
+  end
+
+  def delivered_summary(started_ms, conversation_id)
+    require 'tamoz/agent'
+    require 'tamoz/sqlite'
+    directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env)
+    adapter = Tamoz::SQLite::Adapter.new(
+      path: directory.database_path,
+      limits: Tamoz::SQLite::Limits.new(lease_ttl: 30.0)
+    )
+    rows = adapter.bind_comms_store.outbox_rows(
+      surface_id: @options.fetch(:surface), statuses: %w[succeeded], limit: 500
+    )
+    row = rows.reverse.find do |entry|
+      entry.fetch('conversation_id') == conversation_id &&
+        entry.fetch('created_at_ms') >= started_ms &&
+        entry.fetch('kind') == 'answer' &&
+        !entry.fetch('text').to_s.empty?
+    end
+    raise 'no succeeded Telegram answer was recorded for this run' unless row
+
+    row
+  ensure
+    adapter&.close unless adapter&.closed?
+  end
+
+  def run_cli(args, allow_failure: false)
+    command = @cli + ['--runtime-dir', @runtime_dir] + args
+    stdout, stderr, status = Open3.capture3(@env, *command)
+    warn "tamoz #{args.first}: #{stderr.lines.last(3).join.strip}" unless status.success? || stderr.empty?
+    raise "tamoz #{args.first} exited #{status.exitstatus}" unless status.success? || allow_failure
+
+    CommandResult.new(stdout, stderr, status)
+  end
+
+  def parse_json(text)
+    JSON.parse(text)
+  rescue JSON::ParserError => e
+    raise "Tamoz returned non-JSON output: #{e.message}"
+  end
+
+  def phase(name, details)
+    puts "[#{name}] #{details}"
+    $stdout.flush
+  end
+end
+
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+exit LiveAlmsTelegram.run(ARGV)

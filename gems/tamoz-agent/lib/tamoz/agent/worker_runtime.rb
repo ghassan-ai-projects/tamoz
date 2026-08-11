@@ -82,6 +82,7 @@ module Tamoz
       end
 
       def close
+        @mcp_source&.close if defined?(@mcp_source)
         @adapter.close unless @adapter.closed?
       end
 
