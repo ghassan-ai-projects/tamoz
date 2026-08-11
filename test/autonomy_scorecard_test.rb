@@ -309,8 +309,11 @@ class AutonomyScorecardTest < Minitest::Test
       # The gateway sends the prompt (receipt durable -> prompt active).
       serve_once(rt, factory: edit_factory)
 
-      reference = rt.client.sent.last.dig("reply_markup", "inline_keyboard").first.first.fetch("callback_data")
-      refute_empty reference, "the prompt message must carry the single-use reference"
+      buttons = rt.client.sent.last.dig("reply_markup", "inline_keyboard").first
+      deny = buttons.find { |button| button.fetch("text") == "Deny" }
+      refute_nil deny, "the prompt message must carry a Deny button"
+      reference = deny.fetch("callback_data")
+      refute_empty reference, "the Deny button must carry the single-use reference"
       rt.client.updates = [callback_update(2, reference)]
 
       # The Deny press resolves exactly one active prompt to a deny decision.

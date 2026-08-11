@@ -535,7 +535,9 @@ module Tamoz
           path: File.join(session_dir, "#{thread_id}.sqlite3"),
           limits: Tamoz::SQLite::Limits.new(lease_ttl: lease_ttl)
         )
+        mcp = nil
         begin
+          mcp = build_mcp_source(options, profile:)
           # DR-5 D1 (RC5): the post-override resolution and the profile budgets are
           # computed HERE, in cli.rb, and folded into the session record at intake
           # via the extra constructor parameters — the same shared resolution
@@ -547,14 +549,31 @@ module Tamoz
             profile:,
             profile_roles: resolve_profile_roles(profile, options),
             profile_budgets: profile && profile.budgets,
+            mcp:,
             routing: options[:experimental_routing] ? :experimental : :legacy
           )
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
           end
         ensure
+          mcp&.close
           adapter.close unless read_only
         end
+      end
+
+      def build_mcp_source(options, profile: nil)
+        runtime_path = options[:runtime_dir] || @env["TAMOZ_RUNTIME_DIR"]
+        return nil unless runtime_path
+
+        directory = RuntimeDirectory.resolve(path: runtime_path, env: @env)
+        expected_root = profile ? profile.canonical_root : options[:root]
+        unless File.expand_path(directory.workspace_root) == File.expand_path(expected_root)
+          raise ArgumentError,
+                "runtime workspace #{directory.workspace_root.inspect} does not match " \
+                "the CLI workspace #{expected_root.inspect}"
+        end
+
+        McpSourceBuilder.new(directory).build
       end
 
       def build_toolbox(options, profile: nil)

@@ -46,33 +46,43 @@ module Tamoz
       def build
         require "tamoz/mcp"
 
-        configs = server_configs
-        return nil if configs.empty?
-
         catalogs = {}
         descriptors = []
         supervisors = {}
+        configs = server_configs
+        return nil if configs.empty?
 
-        configs.each do |config, settings|
-          snapshot = Tamoz::Mcp::Catalog.compile(config)
-          catalogs[snapshot.server_id] = snapshot
-          supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
-          read_only = Array(settings["read_only_tools"])
-          snapshot.entries.each do |entry|
-            descriptors << Tamoz::Mcp::Invocation.descriptor_for(
-              entry,
-              snapshot:,
-              # Fail closed: only a tool the OPERATOR named is read-only.
-              effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
-            )
+        begin
+          configs.each do |config, settings|
+            snapshot = Tamoz::Mcp::Catalog.compile(config)
+            catalogs[snapshot.server_id] = snapshot
+            supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
+            read_only = Array(settings["read_only_tools"])
+            snapshot.entries.each do |entry|
+              descriptors << Tamoz::Mcp::Invocation.descriptor_for(
+                entry,
+                snapshot:,
+                # Fail closed: only a tool the OPERATOR named is read-only.
+                effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
+              )
+            end
           end
-        end
 
-        McpCapabilitySource.new(
-          catalogs:,
-          descriptors:,
-          executor: build_executor(catalogs, supervisors)
-        )
+          McpCapabilitySource.new(
+            catalogs:,
+            descriptors:,
+            validator: lambda do |descriptor, arguments|
+              with_mcp_error_mapping do
+                Tamoz::Mcp::Invocation.validate_arguments(descriptor, arguments)
+              end
+            end,
+            executor: build_executor(catalogs, supervisors),
+            closer: -> { supervisors.each_value(&:close) }
+          )
+        rescue StandardError
+          supervisors.each_value(&:close)
+          raise
+        end
       end
 
       private
@@ -89,7 +99,34 @@ module Tamoz
           supervisor = supervisors.fetch(server_id) do
             raise Error, "no supervisor for MCP server #{server_id.inspect}"
           end
-          Tamoz::Mcp::Invocation.call(descriptor, arguments, snapshot:, supervisor:)
+          with_mcp_error_mapping do
+            Tamoz::Mcp::Invocation.call(descriptor, arguments, snapshot:, supervisor:)
+          end
+        end
+      end
+
+      def with_mcp_error_mapping
+        yield
+      rescue Tamoz::Mcp::Error => error
+        mapped = map_mcp_error(error)
+        raise mapped if mapped
+
+        raise
+      end
+
+      def map_mcp_error(error)
+        case error
+        when Tamoz::Mcp::ToolArgumentError
+          Tamoz::Agent::ToolArgumentError.new(error.message)
+        when Tamoz::Mcp::ToolPolicyError, Tamoz::Mcp::CircuitPolicyError,
+             Tamoz::Mcp::ProtocolError, Tamoz::Mcp::ValidationError
+          Tamoz::Agent::ToolPolicyError.new(error.message)
+        when Tamoz::Mcp::UnavailableError
+          Tamoz::Agent::ToolError.new(error.message)
+        when Tamoz::Mcp::CatalogSnapshotUnavailableError
+          Tamoz::Agent::McpCatalogSnapshotUnavailableError.new(error.message)
+        when Tamoz::Mcp::AmbiguousOutcomeError
+          Tamoz::EffectUnknownError.new(error.message)
         end
       end
 
@@ -146,6 +183,7 @@ module Tamoz
           env_allowlist: Array(settings["env_allowlist"]),
           credential_refs: Array(settings["credential_refs"]),
           endpoint: settings["endpoint"],
+          allow_insecure_http: settings.fetch("allow_insecure_http", false),
           headers: settings["headers"] || {},
           credential_headers: settings["credential_headers"] || {},
           # Two different directories, and the MCP gem refuses to let them be the

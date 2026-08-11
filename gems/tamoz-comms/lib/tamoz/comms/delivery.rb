@@ -66,11 +66,17 @@ module Tamoz
       def self.build(
         conversation_id:, kind:, text:, render_version:, content_digest:,
         reply_to: nil, operation: 'send_message', part_index: 0, part_count: 1,
-        markup: nil, journaled: true, expires_at: nil
+        markup: nil, journaled: true, expires_at: nil, identity_key: nil
       )
+        unless identity_key.nil? || Shapes.bounded_string?(identity_key, max_bytes: 256)
+          raise ValidationError, 'identity_key must be a bounded string'
+        end
+
+        identity = [conversation_id, reply_to, part_index, render_version, content_digest]
+        identity << identity_key unless identity_key.nil?
         delivery_id = Canonical.hexdigest(
           DIGEST_DOMAIN,
-          [conversation_id, reply_to, part_index, render_version, content_digest]
+          identity
         )
         new(delivery_id:, conversation_id:, reply_to:, kind:, operation:,
             text:, part_index:, part_count:, markup:, journaled:,

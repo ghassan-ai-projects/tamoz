@@ -131,6 +131,15 @@ module Tamoz
           "sha256:#{Digest::SHA256.hexdigest(payload)}"
         end
 
+        # Validates arguments against the already pinned descriptor schema without
+        # connecting to or querying the remote server. Agent plan review uses this
+        # same path as execution so schema errors become repairable before an
+        # effect is journaled.
+        def validate_arguments(descriptor, arguments)
+          validate_descriptor!(descriptor)
+          validate_arguments!(descriptor, arguments)
+        end
+
         # Convenience constructor for the catalog path: builds a frozen
         # `Descriptor` whose definition digest is the snapshot entry's pinned
         # digest. `effect_class` is local policy (default `:unknown_effects` →

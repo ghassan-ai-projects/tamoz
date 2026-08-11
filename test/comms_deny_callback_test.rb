@@ -150,6 +150,42 @@ class CommsDenyCallbackTest < Minitest::Test
     end
   end
 
+  # v2 approve+deny (ADR-043 was v1 deny-only): an approve press records an
+  # approve decision; a bare v1 reference still resolves as deny.
+  def test_an_approve_press_records_an_approve_decision
+    with_engine do |adapter, checkpoints|
+      store = adapter.bind_comms_store(checkpoints)
+      store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
+      transport = ScriptedTransport.new
+      gateway = Tamoz::Agent::CommsGateway.new(
+        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
+      )
+      transport.batch([])
+
+      reference, prompt = Comms::ApprovalPrompt.build(
+        thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+        interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+      )
+      store.insert_prompt(prompt.wire)
+      store.activate_prompt(reference_digest: prompt.reference_digest, now: Time.utc(2026, 8, 10, 12, 0, 1))
+
+      transport.batch([callback_update("approve:#{reference}", 60)])
+      transport.receipt = { 'message_id' => 1, 'date' => 1 }
+      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
+
+      decision = adapter.bind_comms_decision_store
+                        .pending_decision_for(
+                          thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+                          interrupt_digest: prompt.interrupt_digest, now: Time.utc(2026, 8, 10, 12, 0, 3)
+                        )
+
+      refute_nil decision, 'the approve decision must be recorded for the worker'
+      assert_equal 'approve', decision.fetch('direction')
+    end
+  end
+
   private
 
   def prompt_for(_reference, digest)

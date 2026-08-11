@@ -82,6 +82,7 @@ module Tamoz
       end
 
       def close
+        @mcp_source&.close if defined?(@mcp_source)
         @adapter.close unless @adapter.closed?
       end
 
@@ -188,6 +189,20 @@ module Tamoz
         durable("open occurrence for #{thread_id.inspect}") do
           @adapter.store.delete(OPEN_OCCURRENCES, thread_id,
                                 if_version: @adapter.store.head_version(OPEN_OCCURRENCES, thread_id))
+        end
+      end
+
+      # Durable terminal failure of a request whose claim raised before it
+      # completed (worker hot-loop fix): the row leaves pending_threads instead
+      # of being re-claimed every poll.
+      def durably_fail_request(thread_id, request_id, reason:)
+        checkpoints.open_writer(
+          thread_id:,
+          namespace: [],
+          owner_id: "worker:#{Process.pid}",
+          ttl: checkpoints.writer_ttl
+        ) do |writer|
+          writer.terminal_fail(request_id:, operation: :turn, reason:)
         end
       end
 

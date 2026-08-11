@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "ipaddr"
 require "uri"
 
 module Tamoz
@@ -17,6 +18,7 @@ module Tamoz
       :credential_refs,    # env var names resolved for the child or HTTP headers
       :working_directory,  # absolute for stdio, nil for HTTP
       :endpoint,           # absolute HTTP(S) endpoint for HTTP
+      :allow_insecure_http, # explicit private-network HTTP opt-in
       :headers, # non-secret static HTTP headers
       :credential_headers, # HTTP header => credential ref name
       :protocol_range,     # [min, max], default ["2025-11-25", "2026-07-28"]
@@ -111,6 +113,7 @@ module Tamoz
         command: nil,
         working_directory: nil,
         endpoint: nil,
+        allow_insecure_http: false,
         arguments: [],
         env_allowlist: [],
         credential_refs: [],
@@ -127,7 +130,8 @@ module Tamoz
         arguments = validate_arguments!(arguments)
         env_allowlist = validate_env_allowlist!(env_allowlist)
         credential_refs = validate_credential_refs!(credential_refs)
-        endpoint = validate_endpoint!(endpoint, transport)
+        allow_insecure_http = validate_allow_insecure_http!(allow_insecure_http)
+        endpoint = validate_endpoint!(endpoint, transport, allow_insecure_http)
         headers = validate_headers!(headers)
         credential_headers = validate_credential_headers!(credential_headers, credential_refs, headers)
         command, working_directory = validate_process_surface!(
@@ -141,7 +145,7 @@ module Tamoz
 
         super(
           server_id:, transport:, command:, arguments:, env_allowlist:,
-          credential_refs:, working_directory:, endpoint:, headers:, credential_headers:,
+          credential_refs:, working_directory:, endpoint:, allow_insecure_http:, headers:, credential_headers:,
           protocol_range:, primitives:,
           budgets:
         )
@@ -160,6 +164,7 @@ module Tamoz
           "credential_refs" => credential_refs.dup,
           "working_directory" => working_directory,
           "endpoint" => endpoint,
+          "allow_insecure_http" => allow_insecure_http,
           "headers" => headers.keys,
           "credential_headers" => credential_headers.keys,
           "protocol_range" => protocol_range.dup,
@@ -202,7 +207,13 @@ module Tamoz
         value
       end
 
-      def validate_endpoint!(value, transport)
+      def validate_allow_insecure_http!(value)
+        return value if [true, false].include?(value)
+
+        raise ValidationError, "allow_insecure_http must be a boolean"
+      end
+
+      def validate_endpoint!(value, transport, allow_insecure_http)
         return nil if transport == :stdio && value.nil?
         unless transport == :http && value.is_a?(String) && !value.empty?
           raise ValidationError, "endpoint is required for :http and must be an absolute URL"
@@ -212,7 +223,8 @@ module Tamoz
         unless %w[http https].include?(uri.scheme) && uri.host && uri.userinfo.nil? && uri.fragment.nil?
           raise ValidationError, "endpoint must be an absolute http(s) URL without userinfo or fragments"
         end
-        if uri.scheme == "http" && !loopback_host?(uri.host)
+        if uri.scheme == "http" && !loopback_host?(uri.host) &&
+           !(allow_insecure_http && private_ip_host?(uri.host))
           raise ValidationError, "endpoint must use https unless it targets loopback"
         end
 
@@ -223,6 +235,12 @@ module Tamoz
 
       def loopback_host?(host)
         %w[localhost 127.0.0.1 ::1].include?(host.downcase.delete("[]"))
+      end
+
+      def private_ip_host?(host)
+        IPAddr.new(host.delete("[]")).private?
+      rescue IPAddr::InvalidAddressError
+        false
       end
 
       def validate_headers!(value)

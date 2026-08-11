@@ -55,6 +55,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
   def bind_thread_to_conversation(store, thread: 'tg.ops.abc')
     now = Time.utc(2026, 8, 10, 12, 0, 0)
     store.deploy_surface(descriptor.wire, now:)
+    store.bind_correspondent(binding_wire(now), now:)
     envelope = Comms::InboundEnvelope.new(
       surface_id: 'telegram-ops', surface_revision: 1, update_id: 1,
       raw_payload_hash: 'a' * 64, parser_version: 1, kind: 'text',
@@ -66,6 +67,15 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
                 thread:, profile_id: 'ops', reservation: 1, capacity: 500, now:
     )
+  end
+
+  def binding_wire(now)
+    Comms::Binding.new(
+      surface_id: 'telegram-ops', surface_revision: 1,
+      correspondent_id: 'telegram:user:11111111',
+      conversation_id: 'telegram:chat:22222222',
+      bound_at: now, bound_by: 'operator:test'
+    ).wire
   end
 
   def test_a_worker_event_appends_bounded_deliveries
@@ -98,6 +108,28 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
         assert_operator row.fetch('text').length, :<=, 100
       end
       assert_equal([0, 1, 2], rows.map { |row| row.fetch('part_index') })
+    end
+  end
+
+  def test_repeated_approval_occurrences_create_distinct_deliveries
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      interrupts = [{ task_id: 'task', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }]
+
+      2.times do |index|
+        result = sink.push(
+          thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
+          request_id: "occurrence-#{index + 1}", interrupts:
+        )
+
+        assert_equal :accepted, result
+      end
+
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal 2, rows.length
+      assert_equal 2, rows.map { |row| row.fetch('delivery_id') }.uniq.length
     end
   end
 

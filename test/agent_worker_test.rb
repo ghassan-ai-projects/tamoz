@@ -10,6 +10,8 @@
 require_relative "test_helper"
 require_relative "support/autonomy_case"
 
+# rubocop:disable Metrics/ClassLength -- the unattended surface has one file
+#   per concern; the class is the file.
 class AgentWorkerTest < Minitest::Test
   include AutonomyCase
 
@@ -352,6 +354,80 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  # A queued request whose claim raises (e.g. the session builder fails at
+  # MCP catalog compile) must be failed durably, not re-claimed on every poll.
+  # `parked?` ignores queued entries, so an in-memory park alone would hot-loop
+  # the worker at the poll interval forever.
+  def test_queued_request_whose_claim_raises_is_failed_durably_not_hot_looped
+    with_runtime do |rt|
+      rt.cli(%W[queue add --task Read\ note.txt --thread stuck], factory: read_only_factory)
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      entry = runtime.checkpoints.pending_threads(limit: 5).first
+      assert_equal :queued, entry.fetch(:head_status)
+
+      events = []
+      worker = Tamoz::Agent::Worker.new(
+        runtime:,
+        session_builder: ->(_thread_id) { raise "session build failed" },
+        emitter: ->(event) { events << event },
+        once: true
+      )
+      worker.run
+
+      failed = events.select { |event| event["event"] == "request.failed" }
+      assert_equal 1, failed.length, "the failed claim must be reported exactly once"
+      assert_equal "stuck", failed.first.fetch("thread")
+
+      request = runtime.checkpoints.fetch_request(thread_id: "stuck", request_id: entry.fetch(:head_request_id))
+      assert_equal :failed, request.status, "the request must be terminal, not left queued"
+
+      # A second pass must not re-claim the failed request.
+      second_events = []
+      second = Tamoz::Agent::Worker.new(
+        runtime:,
+        session_builder: ->(_thread_id) { raise "session build failed" },
+        emitter: ->(event) { second_events << event },
+        once: true
+      )
+      second.run
+      assert_empty runtime.checkpoints.pending_threads(limit: 5), "the failed request leaves the inbox"
+      assert_empty second_events.select { |event| event["event"] == "request.claimed" }
+    ensure
+      runtime&.close
+    end
+  end
+
+  # A request queued behind a genuinely paused turn is claim-rejected (the
+  # thread's latest checkpoint is paused, not terminal). The worker must NOT
+  # turn that stale rejection into a fresh approval prompt from the OLD paused
+  # view — the request is terminal-failed and can never resume, so a prompt
+  # would only dangle a decision forever.
+  def test_claim_rejected_turn_emits_failed_without_a_phantom_approval_prompt
+    with_runtime(unattended: {"reconcilable" => []}) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      # First turn pauses for approval (apply_patch is not preauthorized).
+      rt.cli(%W[queue add --task Fix\ note.txt --thread t1 --profile trusted], factory: edit_factory)
+      rt.cli(%w[worker --once --json], factory: edit_factory)
+      paused = rt.events.select { |event| event["event"] == "request.paused" }
+      assert_equal 1, paused.length, "the first turn must pause for approval"
+
+      # Second turn on the same thread is claim-rejected as stale.
+      rt.cli(%W[queue add --task Read\ note.txt --thread t1 --profile trusted], factory: read_only_factory)
+      before = rt.events.length
+      rt.cli(%w[worker --once --json], factory: edit_factory)
+
+      events = rt.events[before..]
+      failed = events.select { |event| event["event"] == "request.failed" }
+      assert_equal 1, failed.length, "the stale claim must be reported as failed"
+      assert_equal "latest checkpoint is not terminal", failed.first.fetch("reason")
+      refute events.any? { |event| event["event"] == "request.paused" },
+             "a claim-rejected request must not create a phantom approval pause"
+    end
+  end
+
   def test_worker_processes_several_threads_with_bounded_concurrency
     with_runtime do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
@@ -427,3 +503,4 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 end
+# rubocop:enable Metrics/ClassLength

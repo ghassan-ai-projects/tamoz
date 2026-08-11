@@ -196,13 +196,14 @@ module Tamoz
 
       private
 
-      # v1 deny-only (ADR-043): a callback press carries the plaintext
-      # reference; its domain-separated digest resolves exactly one ACTIVE
-      # prompt, and consumption inserts a deny decision for the worker in the
-      # SAME transaction. A replayed reference, an expiry, or a swapped
-      # binding never resolves (invariant 58).
+      # v2 approve+deny (ADR-043 v1 was deny-only): the callback text encodes
+      # `action:reference`; its domain-separated digest resolves exactly one
+      # ACTIVE prompt, and consumption inserts an approve/deny decision for the
+      # worker in the SAME transaction. A bare reference (v1 wire) resolves as
+      # deny. A replayed reference, an expiry, or a swapped binding never
+      # resolves (invariant 58).
       def resolve_callback(envelope, now:)
-        reference = envelope.fetch('text').to_s
+        action, reference = split_callback(envelope.fetch('text').to_s)
         digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
         prompt = @store.prompt(reference_digest: digest)
 
@@ -215,13 +216,24 @@ module Tamoz
         decision = Comms::DecisionRecord.build(
           thread_id: prompt.fetch('thread_id'), occurrence_id: prompt.fetch('occurrence_id'),
           interrupts: [], interrupt_digest: prompt.fetch('interrupt_digest'),
-          direction: :deny, actor_kind: 'telegram_user',
+          direction: action, actor_kind: 'telegram_user',
           actor_id: envelope.fetch('correspondent_id'), source: 'telegram',
           decided_at: now, ttl_s: @descriptor.approvals.fetch(:prompt_ttl_s)
         )
         outcome = @store.consume_prompt(reference_digest: digest, decision_wire: decision.wire, now:)
         @store.disposition_only(envelope, surface_id:, bot_id:,
                                           disposition: 'decision', reason: outcome.to_s, now:)
+      end
+
+      # `approve:<reference>` / `deny:<reference>` → [action, reference]; a
+      # bare reference (v1 wire) means deny.
+      def split_callback(text)
+        if text.start_with?('approve:', 'deny:')
+          action, reference = text.split(':', 2)
+          [action, reference.to_s]
+        else
+          [:deny, text]
+        end
       end
 
       # Authority binding precedes work (design §5): the deterministic thread

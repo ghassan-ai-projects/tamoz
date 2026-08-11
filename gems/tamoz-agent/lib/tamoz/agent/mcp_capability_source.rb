@@ -53,6 +53,7 @@ module Tamoz
         validator: nil,
         previewer: nil,
         effect_intent_builder: nil,
+        closer: nil,
         maximum_effect_output_bytes: DEFAULT_MAX_OUTPUT_BYTES
       )
         unless catalogs.is_a?(Hash)
@@ -75,6 +76,7 @@ module Tamoz
         @validator = validator
         @previewer = previewer
         @effect_intent_builder = effect_intent_builder
+        @closer = closer
         @maximum_effect_output_bytes = maximum_effect_output_bytes
         @mcp_catalogs = @catalogs
                         .sort
@@ -85,6 +87,11 @@ module Tamoz
                                         .map(&:id).freeze
         @name_index = @descriptors.to_h { |entry| [entry.id, entry] }.freeze
         freeze
+      end
+
+      def close
+        @closer&.call
+        nil
       end
 
       # P10 §5 epoch pin: {server_id => snapshot_digest}. The session record pins
