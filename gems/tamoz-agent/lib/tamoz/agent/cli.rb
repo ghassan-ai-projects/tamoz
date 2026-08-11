@@ -546,7 +546,8 @@ module Tamoz
             checkpointer: adapter,
             profile:,
             profile_roles: resolve_profile_roles(profile, options),
-            profile_budgets: profile && profile.budgets
+            profile_budgets: profile && profile.budgets,
+            routing: options[:experimental_routing] ? :experimental : :legacy
           )
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid

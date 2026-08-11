@@ -333,6 +333,21 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  def test_experimental_routing_selects_the_v2_worker_graph
+    with_runtime do |rt|
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) },
+        routing: :experimental
+      )
+
+      assert_equal '2', runtime.session_for('experimental').definition.version
+      assert_includes runtime.session_for('experimental').definition.nodes.keys, :route
+    ensure
+      runtime&.close
+    end
+  end
+
   def test_worker_processes_several_threads_with_bounded_concurrency
     with_runtime do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
