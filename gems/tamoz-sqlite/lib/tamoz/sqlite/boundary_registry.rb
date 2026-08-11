@@ -228,6 +228,12 @@ module Tamoz
           "statements" => [READ.call("checkpoint.latest")].freeze
         },
         {
+          "operation" => "checkpoint.latest_graph_version",
+          "phase" => 2,
+          "kill_required" => false,
+          "statements" => [READ.call("checkpoint.latest_graph_version")].freeze
+        },
+        {
           "operation" => "checkpoint.find",
           "phase" => 2,
           "kill_required" => false,

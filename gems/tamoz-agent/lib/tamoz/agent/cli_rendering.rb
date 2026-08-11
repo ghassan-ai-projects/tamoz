@@ -68,8 +68,13 @@ module Tamoz
         case view.status
         when :completed then render_verification(view)
         when :failed
+          failure = if @stream_error
+                      "tamoz: session failed: #{@stream_error}"
+                    else
+                      'tamoz: session failed before verified completion'
+                    end
+          @err.puts failure
           @err.puts "tamoz: #{TerminalProgress.progress_line(view)}"
-          @err.puts 'tamoz: session failed before verified completion'
           @err.puts "tamoz: Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"
         when :blocked
           @err.puts "tamoz: #{TerminalProgress.progress_line(view)}"

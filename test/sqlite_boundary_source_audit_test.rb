@@ -19,13 +19,15 @@ class SQLiteBoundarySourceAuditTest < Minitest::Test
     )
 
     assert result.frozen?
-    # 20 -> 22 and 105 -> 107: the worker added two READ-ONLY operations to
+    # 20 -> 23 and 105 -> 108: the worker added two READ-ONLY operations to
     # checkpoint_store.rb — `request.pending_threads` (where is there work) and
-    # `effect.census` (what does the journal say). Neither leases, writes, or
-    # needs a kill probe. These counts are a tripwire on the storage boundary:
+    # `effect.census` (what does the journal say) — and durable routing added
+    # `checkpoint.latest_graph_version` (which graph codec can decode the head).
+    # None leases, writes, or needs a kill probe. These counts are a tripwire on
+    # the storage boundary:
     # moving them is a deliberate act, not a rubber stamp.
-    assert_equal 22, result.length
-    assert_equal 107, result.values.sum(&:length)
+    assert_equal 23, result.length
+    assert_equal 108, result.values.sum(&:length)
     assert_equal(
       {
         "checkpoint.commit.consume.{index}" => "write",
