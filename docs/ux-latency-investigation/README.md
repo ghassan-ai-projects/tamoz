@@ -38,4 +38,6 @@ confidence. Every conclusion is labeled:
 | 3 | Complex multi-step task (completion failure) | [iteration-03-complex-task-completion.md](iteration-03-complex-task-completion.md) |
 | 4 | Runtime latency experiments (live model) | [iteration-04-live-latency-runs.md](iteration-04-live-latency-runs.md) |
 
-Final synthesis: [FINAL_PLAN.md](FINAL_PLAN.md)
+Final implementation plan: [FINAL_PLAN.md](FINAL_PLAN.md)
+
+Code-level review and corrections: [PLAN_REVIEW.md](PLAN_REVIEW.md)
