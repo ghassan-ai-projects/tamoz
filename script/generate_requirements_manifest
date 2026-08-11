@@ -8,7 +8,7 @@
 # FIRST, from the authoritative sources, so a row cannot drift from the document
 # that defines it:
 #
-#   invariants   docs/design-v0.1/INVARIANTS.md         (all 55 clauses)
+#   invariants   docs/design-v0.1/INVARIANTS.md         (all 61 clauses)
 #   ADRs         docs/design-v0.1/DECISIONS.md          (accepted ADRs only)
 #   phases       docs/PRODUCT_EXECUTION_ROADMAP.md §2   (exit criteria)
 #   public API   docs/public-api.json                   (every documented entry)
@@ -539,6 +539,30 @@ EVIDENCE = {
                "adversarial approval suite in slice H converts this row to direct " \
                "evidence."
   },
+  "INV-59" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "The bounded catalog, recorder isolation, and drop accounting are " \
+               "implemented and covered by observability tests, but the full " \
+               "four-way byte-identity, hanging-collector, and end-to-end latency " \
+               "proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. " \
+               "The slice-B conformance suite closes this residual."
+  },
+  "INV-60" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Default omission, digest/size metadata, Secret rejection, and " \
+               "classification-gated bounded capture are implemented and covered. " \
+               "The all-surface property test for journal and exporter payloads " \
+               "from OBSERVABILITY_PLAN slice D remains outstanding and closes this " \
+               "residual."
+  },
+  "INV-61" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Deterministic trace identity, ordering-only spans, derived local " \
+               "metrics, and usage-cost basis are implemented and covered. The " \
+               "authoritative SQLite reconstruction, resume/fork/backup proof, " \
+               "divergence accounting, and durable usage prerequisite from " \
+               "OBSERVABILITY_PLAN slices F/G remain outstanding."
+  },
 
   # ---- ADRs ---------------------------------------------------------------
   "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice"},
@@ -632,6 +656,29 @@ EVIDENCE = {
     rationale: "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The " \
                "adversarial approval suite in slice H converts this row to direct " \
                "evidence."
+  },
+  "ADR-044" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Observability gem split (OBSERVABILITY_PLAN slices A/I). The " \
+               "packaging and dependency-isolation proof for tamoz-observability/" \
+               "tamoz-otel lands with the gems themselves."
+  },
+  "ADR-045" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The " \
+               "migration-count proof and the separately authorized model usage " \
+               "persistence land with slice E."
+  },
+  "ADR-046" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-" \
+               "default and classification-refusal suite lands with the content " \
+               "policy slice."
+  },
+  "ADR-047" => {
+    test: nil, classification: "pending-owner-residual",
+    rationale: "Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-" \
+               "first retention proof lands with the sampling slice."
   },
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
@@ -736,6 +783,13 @@ EVIDENCE = {
                     supporting: ["test/agent_unattended_policy_test.rb#test_a_denied_approval_stops_without_mutating",
                                  "test/agent_unattended_policy_test.rb#test_approving_an_unknown_request_is_refused",
                                  "test/agent_unattended_policy_test.rb#test_an_approval_does_not_carry_to_the_next_occurrence"]},
+
+  "CLI-comms" => {test: "test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly",
+                  supporting: ["test/comms_cli_test.rb#test_comms_list_shows_bindings_routes_and_outbox_depth"]},
+  "CLI-config" => {test: "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
+                   supporting: ["test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"]},
+  "CLI-observe" => {test: "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal"},
+  "CLI-trace" => {test: "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal"},
 
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",

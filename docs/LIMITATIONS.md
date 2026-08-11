@@ -93,6 +93,22 @@ Until then: the only surface is the operator CLI, and there is no way for a
 message from Telegram (or any other channel) to reach a runtime, and no way for
 agent output to reach a human outside the terminal.
 
+### Observability remains partial (invariants 59–61, ADR-044–047)
+
+The closed signal catalog, deterministic correlation, bounded local journal,
+content policy, derived local metrics, model cost basis, worker producers,
+`observe` commands, and hardened optional OTLP/HTTP adapter are implemented.
+
+The full observability contract is not yet release-complete. The authoritative
+SQLite read-only telemetry adapter and durable model-usage persistence are not
+implemented, so `tamoz trace` currently reconstructs only journal documents and
+cannot claim the complete checkpoint/effect tree. The four-way crash/non-
+interference proof, full all-surface secret property test, export sampling,
+divergence accounting, and benchmark remain outstanding. The local journal is
+observer-only and every bounded bulk drop is counted; it is not a second source
+of truth. Alerting and automated response are intentionally outside this phase
+and require separate authorization under phase 5 / ADR-048.
+
 ## Deliberate non-goals
 
 These are not gaps to be filled later; they are decisions.

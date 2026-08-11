@@ -99,6 +99,32 @@ class CoreInstrumentationTest < Minitest::Test
     end
   end
 
+  def test_malformed_payload_under_a_null_notifier_does_not_raise
+    context = ContextStub.new(nil)
+
+    assert_equal :result, Tamoz.instrument(
+      "tamoz.test.v1",
+      {"secret" => Tamoz::Secret.new("token")},
+      context:
+    ) { :result }
+    refute Tamoz.instrument(
+      "tamoz.test.v1",
+      {"secret" => Tamoz::Secret.new("token")},
+      context:
+    )
+  end
+
+  def test_malformed_payload_with_a_notifier_still_raises
+    context = ContextStub.new(RecordingNotifier.new)
+
+    assert_raises(Tamoz::SensitiveValueError) do
+      Tamoz.instrument("tamoz.test.v1", {"secret" => Tamoz::Secret.new("token")}, context:)
+    end
+    assert_raises(Tamoz::StateLimitError) do
+      Tamoz.instrument("tamoz.test.v1", {"blob" => "x" * 8_192}, context:)
+    end
+  end
+
   def test_event_names_are_safe_stable_identifiers
     context = ContextStub.new(RecordingNotifier.new)
 

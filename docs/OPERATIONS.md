@@ -85,8 +85,19 @@ reached the outside world.
 
 ## Observability
 
-`--json` emits newline-delimited JSON events for every plan, review, approval,
-tool call, receipt and terminal transition. Two properties hold by construction:
+The worker's `--json` stdout remains the compatibility stream for its lifecycle
+events. Operational telemetry is written separately to bounded, rotating journal
+files in the runtime directory and can be inspected without a collector:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir DIR observe tail --follow --json
+rbenv exec bundle exec tamoz --runtime-dir DIR observe metrics --format prometheus
+rbenv exec bundle exec tamoz --runtime-dir DIR observe doctor --json
+```
+
+`tamoz status --json` includes journal size, policy digest and counted drops. The
+durable SQLite record remains authoritative for safety and recovery; telemetry is
+observer-only and never a second writer. Two properties hold by construction:
 
 - **Secrets never appear.** Secret values are rejected from checkpoints, streams
   and instrumentation rather than scrubbed by key name, credential-shaped

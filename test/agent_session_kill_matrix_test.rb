@@ -704,7 +704,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
     # `tamoz/scheduler` and `tamoz/stream`, and this is where that shows.
     load_paths = %w[
       tamoz-comms tamoz-core tamoz-graph tamoz-scheduler tamoz-stream
-      tamoz-sqlite tamoz-tools tamoz-agent
+      tamoz-sqlite tamoz-tools tamoz-observability tamoz-agent
     ].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]
     end

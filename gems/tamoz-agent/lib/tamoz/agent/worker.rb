@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "digest"
 require "securerandom"
 require "set"
 
@@ -51,7 +52,9 @@ module Tamoz
         concurrency: DEFAULT_CONCURRENCY,
         poll_interval: DEFAULT_POLL_INTERVAL,
         batch: DEFAULT_BATCH,
-        cancellation: nil
+        cancellation: nil,
+        recorder: Tamoz::Observability::Recorder::Null::INSTANCE,
+        content_policy: Tamoz::Observability::ContentPolicy::NONE
       )
         @runtime = runtime
         @session_builder = session_builder
@@ -61,6 +64,7 @@ module Tamoz
         @poll_interval = Float(poll_interval)
         @batch = Integer(batch)
         @cancellation = cancellation || Tamoz::CancellationToken.new
+        @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -341,7 +345,8 @@ module Tamoz
         end
 
         emit("request.#{granted ? "approved" : "denied"}",
-             thread: thread_id, request_id: occurrence_id, actor: decision.actor_id)
+             thread: thread_id, request_id: occurrence_id, actor: decision.actor_id,
+             observability: {execution_id: view.execution_id})
         notify_sink(thread_id, granted ? "request.approved" : "request.denied",
                     granted ? "Approved." : "Denied.", request_id: occurrence_id)
         unpark(thread_id)
@@ -415,7 +420,8 @@ module Tamoz
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.completed",
-               thread: thread_id, request_id: occurrence_id, status: "completed")
+               thread: thread_id, request_id: occurrence_id, status: "completed",
+               observability: {execution_id: view.execution_id})
           PROGRESSED
         when :failed
           # A correspondent gets a generic phrase, never the failure's own text:
@@ -428,12 +434,14 @@ module Tamoz
           unpark(thread_id)
           emit("request.failed",
                thread: thread_id, request_id: occurrence_id,
-               reason: view.respond_to?(:error) ? view.error.to_s : "failed")
+               reason: view.respond_to?(:error) ? view.error.to_s : "failed",
+               observability: {execution_id: view.execution_id})
           PROGRESSED
         when :paused
           if view.interrupts.empty?
             emit("request.paused",
-                 thread: thread_id, request_id: occurrence_id, reason: "paused")
+                 thread: thread_id, request_id: occurrence_id, reason: "paused",
+                 observability: {execution_id: view.execution_id})
           else
             notify_sink(thread_id, "request.approval_request", "Approval requested.",
                         request_id: occurrence_id, interrupts: interrupt_facts(view))
@@ -451,7 +459,8 @@ module Tamoz
              thread: thread_id,
              request_id: occurrence_id,
              reason: "approval_required",
-             interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) })
+             interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
+             observability: {execution_id: view.execution_id})
       end
 
       # The channel projection: lifecycle events become outbox rows BEFORE the
@@ -555,9 +564,42 @@ module Tamoz
       end
 
       def emit(event, **fields)
-        @emitter.call({"event" => event, "ts" => Time.now.utc.iso8601}.merge(
+        observability = fields.delete(:observability) || fields.delete("observability") || {}
+        document = {"event" => event, "ts" => Time.now.utc.iso8601}.merge(
           fields.transform_keys(&:to_s)
-        ))
+        )
+        emit_observability(event, document, observability:)
+        @emitter.call(document)
+      end
+
+      def emit_observability(event, document, observability: {})
+        name = {
+          "worker.started" => "tamoz.worker.started",
+          "worker.stopped" => "tamoz.worker.stopped",
+          "worker.error" => "tamoz.worker.error",
+          "schedule.materialized" => "tamoz.worker.schedule.materialized",
+          "schedule.error" => "tamoz.worker.schedule.error"
+        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil }
+        return unless name && Tamoz::Observability::Catalog.registered?(name)
+
+        correlation = {}
+        correlation[:thread_id] = document["thread"] if document["thread"]
+        correlation[:occurrence_id] = document["request_id"] if document["request_id"]
+        correlation[:execution_id] = observability[:execution_id] if observability[:execution_id]
+        attributes = Tamoz::Observability::Catalog.fetch(name).optional.keys.filter_map do |key|
+          key = key.to_s
+          next unless document.key?(key)
+
+          value = document.fetch(key)
+          declaration = Tamoz::Observability::Catalog.fetch(name).optional.fetch(key.to_sym)
+          if declaration == :low_cardinality && !value.to_s.match?(Tamoz::Observability::SignalCatalog::LOW_CARDINALITY_PATTERN)
+            value = "sha256:#{Digest::SHA256.hexdigest(value.to_s)}"
+          end
+          [key, value]
+        end.to_h
+        @observability.emit(name, correlation:, attributes:)
+      rescue StandardError
+        :dropped
       end
     end
   end

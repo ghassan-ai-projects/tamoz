@@ -3,13 +3,13 @@
 module Tamoz
   module Instrumentation
     MAX_EVENT_NAME_BYTES = 128
+    MAX_SIGNAL_STRING_BYTES = 4_096
     EVENT_NAME_PATTERN = /\A[a-z0-9][a-z0-9._-]*\z/
 
     module_function
 
     def instrument(name, payload = {}, context:, &application)
       event_name = normalize_name(name)
-      safe_payload = Immutable.copy(payload)
       notifier = context&.notifier
 
       unless notifier&.respond_to?(:instrument)
@@ -17,6 +17,8 @@ module Tamoz
 
         return false
       end
+
+      safe_payload = Immutable.copy(payload, max_string_bytes: MAX_SIGNAL_STRING_BYTES)
 
       return notify_without_block(notifier, event_name, safe_payload) unless application
 

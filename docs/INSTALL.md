@@ -49,9 +49,11 @@ named example task in a clean subprocess.
 | `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core` |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
+| `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core` |
+| `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools` |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools`, `tamoz-observability` |
 | `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
@@ -125,6 +127,8 @@ request inboxes and the checkpoints.
 | `status` | Report pending work, capability sources and safety counters |
 | `schedule` | `add`, `list`, `show`, `pause`, `resume`, `remove`, `run-now`, `occurrences` |
 | `approve` | Grant (or `--deny`) a paused approval so its occurrence can resume |
+| `observe` | Tail the local journal, render metrics, or run the redaction self-test |
+| `trace` | Reconstruct the journal view for one thread from durable correlation identity |
 | `comms` | The channel surface: `serve`, `list`, `pair`, `delivery resolve`, `doctor` (below) |
 | `config` | Explicit configuration migration (`migrate`) |
 
@@ -153,6 +157,23 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz worker --json
 or from a test. `--concurrency N` bounds how many threads are worked in parallel;
 one thread is never worked by two workers at once, because each claim takes a
 fenced lease.
+
+### Observability
+
+Workers write bounded, rotating signal journals under the runtime directory. The
+journal is observer-only and does not share the SQLite writer path.
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe tail --follow --json
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe metrics --format prometheus
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz observe doctor --json
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz trace THREAD --json
+```
+
+Content capture is disabled by default. Signals carry a policy digest and a digest/size
+pair for omitted content. `tamoz-otel` is optional; its exporter refuses redirects,
+non-HTTPS endpoints, proxy environment variables, and private destinations unless the
+operator explicitly opts into local delivery.
 
 A worker never answers a question on your behalf. Work that needs an approval
 pauses durably and is reported by `status`; being headless is not a reason to

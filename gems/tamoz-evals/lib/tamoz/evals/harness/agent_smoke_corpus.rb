@@ -534,7 +534,7 @@ module Tamoz
         # exercises the production binary path without network access.
         class CliSubprocessHarness
           REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
-          LOAD_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent].flat_map do |gem|
+          LOAD_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-observability tamoz-agent].flat_map do |gem|
             ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
           end.freeze
           PROMPT_TIMEOUT = 60.0

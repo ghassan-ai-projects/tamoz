@@ -13,7 +13,7 @@ Bundler/OrderedGems:
   Exclude:
     - 'Gemfile'
 
-# Offense count: 9
+# Offense count: 10
 Gemspec/RequiredRubyVersion:
   Exclude:
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
@@ -23,6 +23,7 @@ Gemspec/RequiredRubyVersion:
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
     - 'gems/tamoz-graph/tamoz-graph.gemspec'
     - 'gems/tamoz-mcp/tamoz-mcp.gemspec'
+    - 'gems/tamoz-observability/tamoz-observability.gemspec'
     - 'gems/tamoz-scheduler/tamoz-scheduler.gemspec'
     - 'gems/tamoz-sqlite/tamoz-sqlite.gemspec'
     - 'gems/tamoz-stream/tamoz-stream.gemspec'

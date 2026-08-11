@@ -65,8 +65,8 @@ end
 
 invariants = File.read(File.join(root, "INVARIANTS.md"), encoding: Encoding::UTF_8)
 numbers = invariants.scan(/^\| (\d+) \| \*\*/).flatten.map(&:to_i)
-expected_numbers = (1..58).to_a
-failures << "invariants must be numbered 1..58; found #{numbers.inspect}" unless numbers == expected_numbers
+expected_numbers = (1..61).to_a
+failures << "invariants must be numbered 1..61; found #{numbers.inspect}" unless numbers == expected_numbers
 
 conformance = invariants.split("## Required conformance tests", 2).last.to_s
 covered_numbers = conformance.scan(/^\| ([\d, ]+) \|/).flatten
@@ -129,8 +129,8 @@ end
 
 decisions = File.read(File.join(root, "DECISIONS.md"), encoding: Encoding::UTF_8)
 adr_numbers = decisions.scan(/^### ADR-(\d{3}) /).flatten.map(&:to_i)
-expected_adrs = (1..43).to_a
-failures << "ADRs must be numbered 001..043; found #{adr_numbers.inspect}" unless adr_numbers == expected_adrs
+expected_adrs = (1..47).to_a
+failures << "ADRs must be numbered 001..047; found #{adr_numbers.inspect}" unless adr_numbers == expected_adrs
 
 required_terms = {
   "ARCHITECTURE.md" => %w[effect fence definition_digest tamoz-evals production],
@@ -162,7 +162,7 @@ required_terms.each do |name, terms|
 end
 
 if failures.empty?
-  puts "design validation passed (#{markdown_files.length} documents, 58 invariants, 43 ADRs)"
+  puts "design validation passed (#{markdown_files.length} documents, 61 invariants, 47 ADRs)"
   exit 0
 end
 

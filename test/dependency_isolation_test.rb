@@ -111,6 +111,40 @@ class DependencyIsolationTest < Minitest::Test
     end
   end
 
+  # tamoz-observability is the signal-plane contract gem: core only, no HTTP
+  # client and no exporter in a minimal boot (dependency rule 5).
+  def test_observability_loads_core_only_and_no_http_or_agent
+    script = <<~RUBY
+      require "json"
+      require "tamoz/observability"
+      puts JSON.generate(
+        "observability" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/observability") },
+        "core" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/core") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "openssl" => $LOADED_FEATURES.any? { |path| path.include?("openssl") },
+        "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
+        "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
+        "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+        "evals" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/evals") },
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert result.fetch("observability")
+    assert result.fetch("core")
+    %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the load graph"
+    end
+  end
+
   def test_no_production_gemspec_depends_on_evals
     production = GEM_ROOTS.except("tamoz-evals")
 

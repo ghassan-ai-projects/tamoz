@@ -55,6 +55,134 @@ module Tamoz
         end
       end
 
+      def cmd_observe(options, argv)
+        action = argv.shift
+        case action
+        when "tail" then observe_tail(options, argv)
+        when "metrics" then observe_metrics(options, argv)
+        when "doctor" then observe_doctor(options, argv)
+        else
+          raise OptionParser::InvalidArgument, "usage: tamoz observe tail|metrics|doctor"
+        end
+      end
+
+      def cmd_trace(options, argv)
+        thread_id = argv.shift
+        raise OptionParser::MissingArgument, "THREAD" if thread_id.to_s.empty?
+
+        execution_id = nil
+        OptionParser.new do |value|
+          value.banner = "Usage: tamoz trace THREAD [--execution ID]"
+          accept_json(value, options)
+          value.on("--execution ID", "Execution identity") { |entry| execution_id = entry }
+        end.parse!(argv)
+        directory = runtime_dir_path(options)
+        documents = Tamoz::Observability::Recorder::Journal.read(directory, thread_id: thread_id)
+        trace = Tamoz::Observability::Trace.from_documents(documents, thread_id:, execution_id:)
+        if options[:json]
+          @out.puts JSON.generate(trace.to_h)
+        else
+          trace.spans.each do |span|
+            @out.puts "#{span.name} span=#{span.span_id} timing=#{span.timing} outcome=#{span.outcome}"
+          end
+        end
+        0
+      end
+
+      def observe_tail(options, argv)
+        follow = false
+        thread_id = nil
+        kind = nil
+        since_ms = nil
+        OptionParser.new do |value|
+          value.banner = "Usage: tamoz observe tail [--follow] [--thread ID] [--kind KIND] [--since MS]"
+          accept_json(value, options)
+          value.on("--follow", "Follow new journal entries") { follow = true }
+          value.on("--thread ID", "Filter by thread") { |entry| thread_id = entry }
+          value.on("--kind KIND", "Filter by signal kind") { |entry| kind = entry }
+          value.on("--since MS", Integer, "Only entries observed after this millisecond") { |entry| since_ms = entry }
+        end.parse!(argv)
+        directory = runtime_dir_path(options)
+        seen = {}
+        loop do
+          entries = Tamoz::Observability::Recorder::Journal.read_entries(
+            directory, thread_id:, kind:, since_ms:
+          )
+          entries.each do |document, identity|
+            next if seen[identity]
+
+            if options[:json]
+              @out.puts JSON.generate(document)
+            else
+              @out.puts format_observation(document)
+            end
+            seen[identity] = true
+          end
+          @out.flush
+          break unless follow
+
+          sleep 0.2
+        end
+        0
+      end
+
+      def observe_metrics(options, argv)
+        format = "json"
+        OptionParser.new do |value|
+          value.banner = "Usage: tamoz observe metrics [--format json|prometheus]"
+          accept_json(value, options)
+          value.on("--format FORMAT", %w[json prometheus], "Output format") { |entry| format = entry }
+        end.parse!(argv)
+        documents = Tamoz::Observability::Recorder::Journal.read(runtime_dir_path(options))
+        metrics = Tamoz::Observability::Metrics.from_documents(documents)
+        if format == "prometheus"
+          @out.write(metrics.prometheus)
+        else
+          @out.puts JSON.generate(metrics.to_h)
+        end
+        0
+      end
+
+      def observe_doctor(options, argv)
+        OptionParser.new do |value|
+          value.banner = "Usage: tamoz observe doctor"
+          accept_json(value, options)
+        end.parse!(argv)
+        directory = runtime_dir_path(options)
+        recorder = Tamoz::Observability::Recorder::Journal.new(directory:, role: "doctor", max_file_bytes: 1_024)
+        producer = Tamoz::Observability::Producer.new(recorder:)
+        secret = Tamoz::Secret.new("doctor-secret")
+        token = "doctor-token-shaped-value"
+        secret_result = producer.emit(
+          "tamoz.worker.error", attributes: {reason: "doctor"},
+          content: {error_detail: {"secret" => secret}}
+        )
+        token_result = producer.emit(
+          "tamoz.worker.error", attributes: {reason: "doctor"},
+          content: {error_detail: {"token" => token}}
+        )
+        recorder.flush(deadline_ms: 1_000)
+        body = File.exist?(recorder.path) ? File.read(recorder.path) : ""
+        recorder.close
+        clean = !body.include?(secret.reveal) && !body.include?(token)
+        document = {
+          "ok" => clean && secret_result == :dropped && token_result == :recorded,
+          "redaction" => clean,
+          "policy_digest" => Tamoz::Observability::ContentPolicy::NONE.digest,
+          "health" => recorder.health
+        }
+        options[:json] ? @out.puts(JSON.generate(document)) : @out.puts("observability doctor: #{document.fetch("ok") ? "ok" : "failed"}")
+        document.fetch("ok") ? 0 : 1
+      rescue Tamoz::SensitiveValueError
+        options[:json] ? @out.puts(JSON.generate("ok" => false, "redaction" => false)) : @out.puts("observability doctor: failed")
+        1
+      end
+
+      def format_observation(document)
+        correlation = document.fetch("correlation", {}).map { |key, value| "#{key}=#{value}" }.join(" ")
+        "#{document.fetch("observed_at_ms")} #{document.fetch("name")} #{correlation}".strip
+      end
+
       def queue_add(options, argv)
         task = nil
         profile_id = nil
@@ -140,11 +268,12 @@ module Tamoz
         end.parse!(argv)
 
         with_worker_runtime(options) do |runtime|
+          recorder = observability_recorder(runtime)
           worker = Worker.new(
             runtime:,
             session_builder: ->(thread_id) { runtime.session_for(thread_id) },
             emitter: worker_emitter(options),
-            once:, concurrency:, poll_interval:
+            once:, concurrency:, poll_interval:, recorder:
           )
           # SIGINT/SIGTERM ask the worker to stop claiming and finish what it has.
           # The previous handlers are restored on the way out so this is safe to
@@ -161,6 +290,7 @@ module Tamoz
           ensure
             Signal.trap("INT", old_int) if old_int
             Signal.trap("TERM", old_term) if old_term
+            recorder.close if recorder.respond_to?(:close)
           end
           EXIT_WORKER_STOPPED
         end
@@ -283,7 +413,8 @@ module Tamoz
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
                                       .map { |row| {"effect_key" => row[:effect_key], "status" => "unknown"} },
           "budget_exhaustions" => runtime.budget_exhaustions,
-          "channels" => comms_status(runtime)
+          "channels" => comms_status(runtime),
+          "observability" => observability_status(runtime.path)
         }
       end
 
@@ -368,6 +499,8 @@ module Tamoz
         @out.puts "sources:   #{document["capability_sources"].join(", ")}" unless document["capability_sources"].empty?
         counters = document["safety_counters"]
         @out.puts "safety:    #{counters.map { |name, count| "#{name}=#{count}" }.join(" ")}"
+        observation = document.fetch("observability")
+        @out.puts "telemetry: files=#{observation.fetch("files")} bytes=#{observation.fetch("bytes")} drops=#{observation.fetch("drops")}"
         channels = document["channels"]
         return if channels.fetch("surfaces").empty?
 
@@ -431,6 +564,25 @@ module Tamoz
         else
           ->(event) { emit_line(format_worker_event(event)) }
         end
+      end
+
+      def observability_recorder(runtime)
+        Tamoz::Observability::Recorder::Journal.new(directory: runtime.path, role: "worker")
+      rescue StandardError => error
+        @err.puts "tamoz: observability disabled: #{error.message}" if @env["TAMOZ_OBSERVABILITY_DEBUG"]
+        Tamoz::Observability::Recorder::Null::INSTANCE
+      end
+
+      def observability_status(directory)
+        inventory = Tamoz::Observability::Recorder::Journal.inventory(directory)
+        {
+          "files" => inventory.fetch("files"),
+          "bytes" => inventory.fetch("bytes"),
+          "drops" => inventory.fetch("drops", 0),
+          "policy_digest" => Tamoz::Observability::ContentPolicy::NONE.digest
+        }
+      rescue StandardError
+        {"files" => 0, "bytes" => 0, "drops" => 0, "policy_digest" => nil}
       end
 
       def emit_line(line)

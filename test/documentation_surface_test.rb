@@ -54,7 +54,8 @@ class DocumentationSurfaceTest < Minitest::Test
     [%w[init], %w[worker], %w[status], %w[queue add], %w[queue list],
      %w[schedule add], %w[schedule list], %w[comms serve], %w[comms list],
      %w[comms doctor], %w[comms pair list], %w[comms delivery resolve],
-     %w[config migrate]].each do |argv|
+     %w[config migrate], %w[observe tail], %w[observe metrics],
+     %w[observe doctor]].each do |argv|
       help << capture_help(argv + ["--help"])
     end
 
@@ -123,6 +124,13 @@ class DocumentationSurfaceTest < Minitest::Test
     'ADR-041' => 'Channel communications (invariants 56–58, ADR-041–043)',
     'ADR-042' => 'Channel communications (invariants 56–58, ADR-041–043)',
     'ADR-043' => 'Channel communications (invariants 56–58, ADR-041–043)',
+    'ADR-044' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'ADR-045' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'ADR-046' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'ADR-047' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'INV-59' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'INV-60' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
+    'INV-61' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
     'OBJ-7' => '## Release readiness'
   }.freeze
 

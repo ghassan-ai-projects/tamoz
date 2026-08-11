@@ -130,7 +130,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -470,6 +470,43 @@ class PackagingTest < Minitest::Test
       assert result.fetch("channel_digest").start_with?("sha256:")
       assert result.fetch("payload_hash").start_with?("sha256:")
       assert_equal 105, result.fetch("replay_now")
+      assert_equal "nil", result.fetch("sqlite_defined")
+      assert_equal "nil", result.fetch("agent_defined")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_observability_runs_with_only_core_installed
+    with_isolated_install(%w[tamoz-core tamoz-observability], "observability") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/observability"
+        entry = Tamoz::Observability::Catalog.fetch("tamoz.model.call")
+        signal = Tamoz::Observability::Signal.build(
+          kind: :event, name: entry.name, timing: :point,
+          correlation: {thread_id: "thread.1", execution_id: "execution.1"},
+          observed_at_ms: 1, attributes: {provider: "fake"}
+        )
+        puts JSON.generate(
+          "schema_version" => Tamoz::Observability::SCHEMA_VERSION,
+          "signal_names" => Tamoz::Observability::Catalog.names.length,
+          "trace_id" => Tamoz::Observability::Correlation.trace_id(
+            thread_id: "thread.1", execution_id: "execution.1"
+          ),
+          "signal_frozen" => signal.frozen?,
+          "sqlite_defined" => defined?(Tamoz::SQLite).inspect,
+          "agent_defined" => defined?(Tamoz::Agent).inspect
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+
+      assert_equal 1, result.fetch("schema_version")
+      assert_equal 67, result.fetch("signal_names")
+      assert_equal 16, result.fetch("trace_id").length
+      assert_equal true, result.fetch("signal_frozen")
       assert_equal "nil", result.fetch("sqlite_defined")
       assert_equal "nil", result.fetch("agent_defined")
       assert_empty stderr
