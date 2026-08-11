@@ -35,6 +35,11 @@ module Tamoz
         end
 
         unless context_factory
+          # RubyLLM reads its bundled model registry with File.read. A C locale
+          # tags that UTF-8 JSON as US-ASCII, so JSON.parse fails before the first
+          # provider request. Tamoz's model and prompt contracts are UTF-8.
+          Encoding.default_external = Encoding::UTF_8 unless
+            Encoding.default_external == Encoding::UTF_8
           require "ruby_llm"
           context_factory = RubyLLM.method(:context)
         end

@@ -68,4 +68,34 @@ class AgentRubyLLMModelTest < Minitest::Test
 
     assert_match(/OPENAI_API_KEY/, error.message)
   end
+
+  def test_ruby_llm_model_registry_loads_under_a_c_locale
+    script = <<~RUBY
+      require "tamoz/agent"
+      model = Tamoz::Agent::RubyLLMModel.new(
+        model: "deepseek-chat",
+        provider: :deepseek,
+        api_key: "test-key"
+      )
+      model.instance_variable_get(:@context).chat(
+        model: "deepseek-chat", provider: :deepseek, assume_model_exists: false
+      )
+      puts Encoding.default_external.name
+    RUBY
+    load_paths = %w[
+      tamoz-core tamoz-graph tamoz-tools tamoz-observability tamoz-comms tamoz-agent
+    ].map do |name|
+      "-I#{GEM_ROOTS.fetch(name).join('lib')}"
+    end
+    stdout, stderr, status = Open3.capture3(
+      {"LC_ALL" => "C", "LANG" => "C"},
+      RbConfig.ruby,
+      *load_paths,
+      "-e",
+      script
+    )
+
+    assert_predicate status, :success?, "#{stdout}\n#{stderr}"
+    assert_equal "UTF-8\n", stdout
+  end
 end
