@@ -12,10 +12,11 @@ module TamozSQLiteOracle
   # P11: the schema moved 1 -> 2 through the checksummed MIGRATION_2 (the
   # lexical memory index). P13: 2 -> 3 through MIGRATION_3 (scheduler tables).
   # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
-  # MIGRATION_6 (channel tables). The oracle is a second, independent
-  # read-only verifier: it must agree with the migrated schema or every
-  # scenario database is schema_invalid.
-  SCHEMA_VERSION = 7
+  # MIGRATION_6 (channel tables). Delivery pacing moved 7 -> 8 through
+  # MIGRATION_8. The oracle is a second, independent read-only verifier: it
+  # must agree with the migrated schema or every scenario database is
+  # schema_invalid.
+  SCHEMA_VERSION = 8
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -34,6 +35,8 @@ module TamozSQLiteOracle
   # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its receipt column.
   MIGRATION_7_CHECKSUM =
     "4646a74aaf093face3b371a5e5dc7b0dead7c8967f21dd6f0c965ce57b89d055"
+  MIGRATION_8_CHECKSUM =
+    "58a81f647cff8be4b952c8dc75ec0ce41c0a0018744997360a515f62cd873da1"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -754,7 +757,8 @@ module TamozSQLiteOracle
         [4, MIGRATION_4_CHECKSUM],
         [5, MIGRATION_5_CHECKSUM],
         [6, MIGRATION_6_CHECKSUM],
-        [7, MIGRATION_7_CHECKSUM]
+        [7, MIGRATION_7_CHECKSUM],
+        [8, MIGRATION_8_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"
