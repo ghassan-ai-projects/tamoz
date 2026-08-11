@@ -400,12 +400,13 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
-  # A request queued behind a genuinely paused turn is claim-rejected (the
-  # thread's latest checkpoint is paused, not terminal). The worker must NOT
-  # turn that stale rejection into a fresh approval prompt from the OLD paused
-  # view — the request is terminal-failed and can never resume, so a prompt
-  # would only dangle a decision forever.
-  def test_claim_rejected_turn_emits_failed_without_a_phantom_approval_prompt
+  # A request queued behind a genuinely paused turn must WAIT, not die: the
+  # thread's latest checkpoint is paused, so claiming it today would be stale —
+  # but the paused occurrence still owes the thread its settle, and once the
+  # human answers, the queued message runs against a terminal checkpoint.
+  # Failing it dropped a message the user sent in good faith; closing the
+  # paused occurrence out from under the approval stranded the thread forever.
+  def test_a_turn_queued_behind_a_paused_turn_waits_then_runs_after_approval
     with_runtime(unattended: {"reconcilable" => []}) do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       # First turn pauses for approval (apply_patch is not preauthorized).
@@ -414,17 +415,27 @@ class AgentWorkerTest < Minitest::Test
       paused = rt.events.select { |event| event["event"] == "request.paused" }
       assert_equal 1, paused.length, "the first turn must pause for approval"
 
-      # Second turn on the same thread is claim-rejected as stale.
+      # The second message is admitted while the first waits on the human.
       rt.cli(%W[queue add --task Read\ note.txt --thread t1 --profile trusted], factory: read_only_factory)
       before = rt.events.length
       rt.cli(%w[worker --once --json], factory: edit_factory)
 
       events = rt.events[before..]
-      failed = events.select { |event| event["event"] == "request.failed" }
-      assert_equal 1, failed.length, "the stale claim must be reported as failed"
-      assert_equal "latest checkpoint is not terminal", failed.first.fetch("reason")
-      refute events.any? { |event| event["event"] == "request.paused" },
-             "a claim-rejected request must not create a phantom approval pause"
+      refute events.any? { |event| event["event"] == "request.failed" },
+             "a message that arrives during an approval pause must wait, not fail"
+      refute events.any? { |event| event["event"] == "request.claimed" },
+             "the waiting message must not be claimed against a paused checkpoint"
+
+      # The human approves the first turn; the SAME occurrence resumes, and the
+      # queued message runs once the thread settles.
+      approval = rt.pending_approvals.first.fetch("request_id")
+      assert_equal 0, rt.cli(%W[approve #{approval} --json]), rt.err
+      rt.cli(%w[worker --once --json], factory: read_only_factory)
+
+      completed = rt.events.select { |event| event["event"] == "request.completed" }
+      assert_equal 2, completed.length, "both the approved turn and the queued message must complete"
+      assert_equal 1, rt.events.count { |event| event["event"] == "request.paused" },
+                    "the read-only follow-up must not pause for approval"
     end
   end
 

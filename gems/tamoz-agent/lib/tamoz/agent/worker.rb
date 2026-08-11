@@ -202,13 +202,20 @@ module Tamoz
       # — so an unfinished occurrence can leave the inbox entirely. The durable
       # open-occurrence records are the other half, and they survive a restart,
       # which an in-memory set would not.
+      #
+      # An open occurrence wins the thread's slot over anything queued: a turn
+      # claimed while the latest checkpoint is non-terminal is stale by
+      # definition, so a message that arrives mid-turn or mid-approval must WAIT
+      # behind the occurrence that is still owed a settle — not be failed for
+      # arriving early. Once the occurrence closes, the queued request claims
+      # against a terminal checkpoint and runs.
       def work_list
-        queued = @runtime.checkpoints.pending_threads(limit: @batch)
-        seen = queued.map { |entry| entry.fetch(:thread_id) }.to_set
-        open = @runtime.open_occurrences(limit: @batch).reject do |record|
-          seen.include?(record.fetch(:thread_id))
+        open = @runtime.open_occurrences(limit: @batch)
+        busy = open.map { |record| record.fetch(:thread_id) }.to_set
+        queued = @runtime.checkpoints.pending_threads(limit: @batch).reject do |entry|
+          busy.include?(entry.fetch(:thread_id))
         end
-        queued + open.map do |record|
+        open.map do |record|
           {
             thread_id: record.fetch(:thread_id),
             namespace: [],
@@ -216,7 +223,7 @@ module Tamoz
             head_status: :open,
             enqueue_sequence: -1
           }
-        end
+        end + queued
       end
 
       # Everything that can go wrong with one thread is contained to that thread.
@@ -253,10 +260,19 @@ module Tamoz
             return apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
           end
 
-          # An open occurrence with nothing in the inbox and no interrupt is a
-          # thread that finished while this worker was not looking; settle it so
-          # its record closes rather than being polled forever.
-          return settle(session, thread_id:, occurrence_id:) if entry.fetch(:head_status) == :open
+          # An open occurrence whose thread has no checkpoint at all is the
+          # crash window between `open_occurrence` and the first commit: the
+          # queued request is still waiting and only a fresh claim starts it.
+          # A terminal view is a thread that finished while this worker was
+          # not looking; settle closes the record. Anything else mid-flight is
+          # a worker that died holding the turn — re-enter THAT execution,
+          # exactly like a claimed inbox entry.
+          if entry.fetch(:head_status) == :open
+            return claim_and_run(session, thread_id:, occurrence_id:) unless view
+            return settle(session, thread_id:, occurrence_id:) if %i[completed failed blocked].include?(view.status)
+
+            return recover(session, thread_id:, occurrence_id:)
+          end
 
           recover(session, thread_id:, occurrence_id:)
         else
@@ -279,6 +295,9 @@ module Tamoz
         if entry.fetch(:head_status) == :queued
           begin
             @runtime.durably_fail_request(thread_id, occurrence_id, reason: bounded_reason(error))
+            # The message is terminally dead; the channel must hear about it
+            # rather than wait on a reply that never comes.
+            notify_sink(thread_id, "request.failed", crashed_text(error), request_id: occurrence_id)
           rescue StandardError
             # The claim may have completed under a concurrent pass; the failed
             # park below still stops the hot loop for claimed entries.
@@ -441,8 +460,16 @@ module Tamoz
         # whose view is the thread's OLD latest checkpoint — never this
         # occurrence's. Interpreting that view as THIS turn's pause would create
         # an approval prompt for an occurrence that can never resume (the
-        # decision would dangle forever). Fail it closed instead.
+        # decision would dangle forever). Fail it closed instead. The
+        # correspondent still gets a terminal answer: the work_list precedence
+        # makes this a genuine race, not a message that merely arrived early,
+        # and the terminal projection also releases the admission reservation
+        # (design §12) so lost races cannot silently saturate the channel.
         if request && request.status == :failed && view.execution_id != request.execution_id
+          notify_sink(thread_id, "request.failed",
+                      'That message could not be started because earlier work in this conversation ' \
+                      'never settled. Please send it again.',
+                      request_id: occurrence_id)
           @runtime.close_occurrence(thread_id)
           unpark(thread_id)
           emit("request.failed",
@@ -573,6 +600,20 @@ module Tamoz
          "Next action: #{TerminalProgress.next_action(reason, budget:)}"].compact.join("\n") + '.'
       end
       # rubocop:enable Style/StringConcatenation
+
+      # What a correspondent receives when a turn dies by raising (never by
+      # settling): static phrases only. The error's own text stays in the
+      # worker's event stream — a plan rejection's reviewer feedback is model
+      # output, and model output is never echoed to the channel.
+      # :reek:UtilityFunction -- a pure function of the error class.
+      def crashed_text(error)
+        if error.is_a?(PlanRejectedError)
+          'I could not form a plan for that request that passed my own review. ' \
+            'Try rephrasing it or adding more detail about what you want done.'
+        else
+          'That request failed before it could finish. Please try sending it again.'
+        end
+      end
 
       def describe_interrupt(interrupt)
         {

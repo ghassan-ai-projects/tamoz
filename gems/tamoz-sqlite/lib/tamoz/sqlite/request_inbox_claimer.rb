@@ -26,6 +26,15 @@ module Tamoz
         row && wire.materialize_request(row)
       end
 
+      # The staleness verdict that means EARLY, not invalid: a fresh turn whose
+      # thread has not settled yet arrived while earlier work was still running
+      # or waiting on a human. It is left queued; the string is the graph's
+      # RequestStaleness verdict for exactly that case.
+      EARLY_TURN_REASON = 'latest checkpoint is not terminal'
+      # Only turns defer. A fork is an operator action on a specific execution;
+      # failing it loudly at claim is the feedback the operator needs.
+      EARLY_TURN_OPERATIONS = %w[turn].freeze
+
       # :nodoc: Shared by claim and recovery while their transaction is open.
       # rubocop:disable Metrics/ParameterLists -- the validation context is the durable claim contract.
       def fail_if_stale!(
@@ -151,20 +160,37 @@ module Tamoz
       def claim_request_in_transaction(tx, lease:, validator:, execution_id:)
         now = adapter.__send__(:backend_time, tx, 'request.claim.time')
         validate_claim_lease!(tx, lease, now)
-        row = next_request(tx, lease)
-        return row unless row && row.fetch(7) == 'queued'
+        candidate_rows(tx, lease).each do |row|
+          return row unless row.fetch(7) == 'queued'
+          next if early_turn?(tx, lease:, row:, validator:)
 
-        stale = fail_if_stale(
-          tx,
-          lease:,
-          row:,
-          validator:,
-          now:,
-          execution_id:
+          stale = fail_if_stale(
+            tx,
+            lease:,
+            row:,
+            validator:,
+            now:,
+            execution_id:
+          )
+          return stale if stale
+
+          return claim_queued_request!(tx, lease:, row:, execution_id:, now:)
+        end
+        nil
+      end
+
+      # A queued turn/fork whose only verdict is "the checkpoint has not
+      # settled" is skipped, not failed: the message arrived while the thread
+      # was busy, and killing it would drop work the sender sees as accepted.
+      # Skipping also unblocks whatever sits behind it — a resume answering the
+      # open turn must reach the claim ahead of the next fresh turn.
+      def early_turn?(tx, lease:, row:, validator:) # rubocop:disable Naming/MethodParameterName
+        return false unless validator && EARLY_TURN_OPERATIONS.include?(row.fetch(5))
+
+        checkpoint = @store.latest_checkpoint_in_transaction(
+          tx, lease.thread_id, lease.namespace, 'request.claim.early_checkpoint'
         )
-        return stale if stale
-
-        claim_queued_request!(tx, lease:, row:, execution_id:, now:)
+        @staleness.reason_for(validator, wire.materialize_request(row), checkpoint) == EARLY_TURN_REASON
       end
 
       def validate_claim_lease!(tx, lease, now)
@@ -177,17 +203,21 @@ module Tamoz
         )
       end
 
-      def next_request(tx, lease)
-        tx.first(
-          'request.claim.next',
+      # The oldest non-terminal requests, oldest first. More than one row is
+      # needed because an early turn is skipped and the claim must see what
+      # waits behind it; the scan is bounded so a backed-up inbox never turns
+      # the claim into a table walk.
+      def candidate_rows(tx, lease, limit: 8) # rubocop:disable Naming/MethodParameterName
+        tx.rows(
+          'request.claim.candidates',
           <<~SQL,
             #{RequestInboxRows::REQUEST_SELECT}
             WHERE thread_id = ? AND namespace = ?
               AND status NOT IN ('completed', 'failed')
             ORDER BY enqueue_sequence
-            LIMIT 1
+            LIMIT ?
           SQL
-          [lease.thread_id, lease.namespace]
+          [lease.thread_id, lease.namespace, limit]
         )
       end
 
