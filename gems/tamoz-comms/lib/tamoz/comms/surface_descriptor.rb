@@ -32,7 +32,7 @@ module Tamoz
       POLL_MODES = %w[long_poll].freeze
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
-      APPROVAL_MODES = %w[none deny_only].freeze
+      APPROVAL_MODES = %w[none deny_only affirmative].freeze
       RENDER_FORMATS = %w[plain restricted_html].freeze
       RENDER_OVERFLOWS = %w[truncate].freeze
       CLASSIFICATIONS = %w[restricted].freeze
@@ -206,6 +206,19 @@ module Tamoz
         raise ValidationError, "approval mode must be one of #{APPROVAL_MODES.join(', ')}" unless Shapes.member?(
           approvals.fetch(:mode), APPROVAL_MODES
         )
+        # T7.1 (PLAN_TAMOZ_STREAM_BUILD T7.1): affirmative approval is a
+        # material security-boundary change (PROTOCOL §5.3/§10) — a human's
+        # answer travels a trust boundary, so the descriptor must name who may
+        # approve. An empty approver list is a configuration error, exactly
+        # like an empty admission allowlist: affirmative approval with nobody
+        # allowed to approve is not a deployment.
+        if approvals.fetch(:mode) == 'affirmative'
+          roles = Array(approvals[:approver_roles])
+          unless !roles.empty? && roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
+            raise ValidationError,
+                  'affirmative approval requires a non-empty approver_roles allowlist'
+          end
+        end
         return if approvals.fetch(:prompt_ttl_s).is_a?(Integer) && approvals.fetch(:prompt_ttl_s).positive?
 
         raise ValidationError,
