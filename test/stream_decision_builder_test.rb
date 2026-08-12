@@ -89,4 +89,49 @@ class StreamDecisionBuilderTest < Minitest::Test
     decision, = build(primary_hypothesis: "x", confidence: 1.7)
     assert_equal 1.0, decision.fetch("confidence")
   end
+
+  # F-1 (security review): a risk ceiling below the action's class, or an
+  # allowlist without the action type, demotes the proposal to an
+  # observation — the worker never escalates beyond what the runtime allowed.
+  def test_a_low_risk_ceiling_never_proposes_a_consequential_action
+    r0_envelope = Stream::EpisodeRequestEnvelope.new(
+      Agenticstream::Runtime::V1::EpisodeRequest.new(
+        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
+        kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
+        risk_ceiling: :RISK_CLASS_R0,
+        allowed_intent_types: ["install_watch_condition"]
+      ),
+      worker
+    )
+    decision, = Stream::DecisionBuilder.new(
+      envelope: r0_envelope, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "seems bad", confidence: 0.9}
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "install_watch_condition", intent.fetch("type"),
+                 "a confident episode under an R0 ceiling must still observe"
+    assert_equal "R0", intent.fetch("risk_class")
+  end
+
+  def test_an_allowlist_without_the_action_type_demotes_the_proposal
+    allowlist_envelope = Stream::EpisodeRequestEnvelope.new(
+      Agenticstream::Runtime::V1::EpisodeRequest.new(
+        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
+        kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
+        risk_ceiling: :RISK_CLASS_R2,
+        allowed_intent_types: ["install_watch_condition"]
+      ),
+      worker
+    )
+    decision, = Stream::DecisionBuilder.new(
+      envelope: allowlist_envelope, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "seems bad", confidence: 0.9}
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "install_watch_condition", intent.fetch("type")
+  end
 end

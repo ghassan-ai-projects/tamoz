@@ -13,6 +13,13 @@ module Tamoz
     class DecisionBuilder
       # Below this confidence the builder proposes install_watch_condition.
       CONFIDENCE_WATCH_FLOOR = 0.5
+      # The risk class of the consequential action the builder can propose.
+      ACTION_RISK = "r2"
+      RISK_ORDER = {
+        "r0" => 0, "r1" => 1, "r2" => 2, "r3" => 3, "r4" => 4
+      }.freeze
+      MAX_FACTS = 64
+      MAX_ALTERNATIVES = 16
 
       def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, now: Time.now)
         new(envelope:, snapshot:, snapshot_digest:, outcome:, now:).build
@@ -40,8 +47,8 @@ module Tamoz
           "primary_hypothesis" => String(@outcome.fetch(:primary_hypothesis, "")).byteslice(0, 1024),
           "confidence" => confidence,
           "summary" => String(@outcome.fetch(:summary, "")).byteslice(0, 4096),
-          "facts_used" => Array(@outcome.fetch(:facts_used, [])),
-          "alternatives" => Array(@outcome.fetch(:alternatives, [])),
+          "facts_used" => Array(@outcome.fetch(:facts_used, [])).first(MAX_FACTS),
+          "alternatives" => Array(@outcome.fetch(:alternatives, [])).first(MAX_ALTERNATIVES),
           "intents" => intents,
           "valid_until" => @now.utc.iso8601
         }
@@ -57,13 +64,29 @@ module Tamoz
 
       def confidence
         value = @outcome.fetch(:confidence, 0.0)
-        value.is_a?(Numeric) ? [[value.to_f, 0.0].max, 1.0].min : 0.0
+        if value.is_a?(Numeric) && value.finite?
+          [[value.to_f, 0.0].max, 1.0].min
+        else
+          0.0
+        end
       end
 
+      # The intent set respects the episode's own risk ceiling and intent
+      # allowlist (T1.3): a ceiling below the action's risk class, or an
+      # allowlist without the action type, demotes the proposal to an
+      # observation — never escalates.
       def intents
         return [watch_condition_intent] if confidence < CONFIDENCE_WATCH_FLOOR
+        return [watch_condition_intent] if RISK_ORDER.fetch(@envelope.risk_ceiling) <
+                                           RISK_ORDER.fetch(ACTION_RISK)
+        return [watch_condition_intent] unless allowed_intent_type?("maintenance.ticket")
 
         [action_intent]
+      end
+
+      def allowed_intent_type?(type)
+        allowed = @envelope.wire.allowed_intent_types
+        allowed.empty? || allowed.include?(type)
       end
 
       # The consequential intent (R2) for a confident episode.
@@ -81,7 +104,7 @@ module Tamoz
       # The observation intent (R0) for an uncertain episode: install a CEL
       # watch condition on the situation, never touch the entity.
       def watch_condition_intent
-        metric = String(@outcome.fetch(:watch_metric, "condition_score"))
+        metric = String(@outcome.fetch(:watch_metric, "condition_score")).byteslice(0, 128)
         threshold = @outcome.fetch(:watch_threshold, 0.8)
         build_intent(
           type: "install_watch_condition",

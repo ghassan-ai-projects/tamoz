@@ -78,8 +78,9 @@ module Tamoz
 
       # The durable payload the graph executes against. The episode metadata
       # nests under one declared channel ("episode") and the runner injects the
-      # verified snapshot under "snapshot" after ReceivedSnapshot passes; the
-      # capability token stays opaque.
+      # verified snapshot under "snapshot" after ReceivedSnapshot passes. The
+      # capability token stays in memory only (on the envelope) — it is never
+      # persisted in the durable payload or the checkpoint state.
       def payload
         {
           "episode" => {
@@ -92,7 +93,6 @@ module Tamoz
             "tenant_id" => tenant_id,
             "situation_id" => @wire.situation_id,
             "situation_version" => @wire.situation_version,
-            "capability_token" => capability_token,
             "evidence_tools_endpoint" => @wire.evidence_tools_endpoint,
             "allowed_intent_types" => @wire.allowed_intent_types.to_a.freeze,
             "supersession_key" => @wire.supersession_key,
@@ -121,18 +121,32 @@ module Tamoz
         end
         # The ids are joined with "." into the durable request id; a dot in
         # either id would alias different (episode, attempt) pairs. The fence
-        # guarantee depends on an unambiguous join.
-        if @wire.episode_id.include?(".") || @wire.attempt_id.include?(".")
-          raise EpisodeRequestInvalidError,
-                "episode_id and attempt_id must not contain '.'"
-        end
-        if @wire.tenant_id.empty?
-          raise EpisodeRequestInvalidError, "tenant_id is required"
+        # guarantee depends on an unambiguous join. They are also bounded and
+        # control-char-free — an oversized identity would otherwise amplify
+        # into unbounded wire events.
+        %w[episode_id attempt_id tenant_id].each do |field|
+          value = @wire.public_send(field)
+          if value.empty?
+            raise EpisodeRequestInvalidError, "#{field} is required"
+          end
+          if field != "tenant_id" && value.include?(".")
+            raise EpisodeRequestInvalidError,
+                  "#{field} must not contain '.'"
+          end
+          if value.bytesize > 200 || value.match?(/[\x00-\x1F\x7F]/)
+            raise EpisodeRequestInvalidError,
+                  "#{field} must be at most 200 bytes with no control characters"
+          end
         end
         unless @wire.fence.is_a?(Integer) && @wire.fence >= 1
           raise EpisodeRequestInvalidError,
                 "episode fence must be a positive integer"
         end
+        unless @wire.allowed_intent_types.to_a.length <= 16
+          raise EpisodeRequestInvalidError,
+                "allowed_intent_types must not exceed 16 entries"
+        end
+        validate_budget!
         unless KIND_NAMES.key?(@wire.kind)
           raise EpisodeRequestInvalidError,
                 "unsupported episode kind #{@wire.kind.inspect}"
@@ -144,6 +158,28 @@ module Tamoz
         unless RISK_NAMES.key?(@wire.risk_ceiling)
           raise EpisodeRequestInvalidError,
                 "unsupported risk ceiling #{@wire.risk_ceiling.inspect}"
+        end
+
+        true
+      end
+
+      # F-2 (security review): the budget is the worker's only resource
+      # control — a hostile budget must not be able to disable it. Values are
+      # clamped to worker maxima, fail-closed.
+      MAX_WALL_TIME_SECONDS = 600
+      MAX_MODEL_CALLS = 50
+
+      def validate_budget!
+        budget = @wire.budget
+        return if budget.nil?
+
+        if budget.wall_time&.seconds && budget.wall_time.seconds > MAX_WALL_TIME_SECONDS
+          raise EpisodeRequestInvalidError,
+                "wall_time exceeds the worker maximum of #{MAX_WALL_TIME_SECONDS}s"
+        end
+        if budget.max_model_calls.to_i > MAX_MODEL_CALLS
+          raise EpisodeRequestInvalidError,
+                "max_model_calls exceeds the worker maximum of #{MAX_MODEL_CALLS}"
         end
 
         true
@@ -175,6 +211,15 @@ module Tamoz
             snapshot = ReceivedSnapshot.verify(
               wire_request.snapshot_json, wire_request.snapshot_sha256
             )
+            # F-5: the durable row and the decision carry the SNAPSHOT's
+            # tenant/situation identity — a mismatched wire header is a
+            # cross-tenant identity confusion, refused here.
+            if wire_request.tenant_id != snapshot.fetch("tenant_id") ||
+               wire_request.situation_id != snapshot.fetch("situation_id") ||
+               wire_request.situation_version != snapshot.fetch("situation_version")
+              raise EpisodeRequestInvalidError,
+                    "request identity does not match the verified snapshot"
+            end
             stream = EpisodeStream.new(
               envelope, worker_name: @worker&.worker_name, worker_version: @worker&.worker_version
             )

@@ -169,7 +169,7 @@ module Tamoz
           input_tokens: 0, output_tokens: 0,
           cached_input_tokens: 0, reasoning_tokens: 0, cost_microunits: 0
         }
-        @started_at = Time.now.to_i
+        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       attr_reader :stream
@@ -215,6 +215,7 @@ module Tamoz
 
       def model_completed(data)
         @model_calls += 1
+        enforce_mid_run_budget!
         accumulate(data[:usage] || {})
         @stream.model_completed(ordinal: data[:ordinal], usage: wire_usage)
         emit_budget
@@ -254,7 +255,7 @@ module Tamoz
       def wall_time_exceeded?
         return false unless @budget&.respond_to?(:wall_time) && @budget.wall_time
 
-        elapsed = Time.now.to_i - @started_at
+        elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started_at
         elapsed > @budget.wall_time.seconds
       end
 
@@ -262,6 +263,21 @@ module Tamoz
         return false unless @budget&.respond_to?(:max_model_calls) && @budget.max_model_calls&.positive?
 
         @model_calls > @budget.max_model_calls
+      end
+
+      # F-2: a ceiling crossed MID-RUN aborts the run (the raise fails the
+      # graph node and the episode terminates typed) instead of only labelling
+      # the terminal after the spend happened.
+      def enforce_mid_run_budget!
+        return if @budget.nil?
+
+        if model_calls_exceeded?
+          raise BudgetExceededError,
+                "model call budget exhausted at #{@model_calls} calls"
+        end
+        if wall_time_exceeded?
+          raise BudgetExceededError, "episode wall time budget exhausted"
+        end
       end
 
       private

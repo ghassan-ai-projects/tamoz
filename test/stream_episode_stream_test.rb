@@ -126,7 +126,7 @@ class StreamEpisodeStreamTest < Minitest::Test
     end
   end
 
-  def test_a_model_call_budget_ceiling_reports_budget_exhausted
+  def test_a_model_call_budget_ceiling_aborts_mid_run
     stream = Stream::EpisodeStream.new(
       Stream::EpisodeRequestEnvelope.new(wire_request, worker)
     )
@@ -134,12 +134,11 @@ class StreamEpisodeStreamTest < Minitest::Test
     adapter = Stream::EpisodeStreamAdapter.new(stream, budget:)
     adapter.model_started(ordinal: 0, provider: "test", model_id: "flash")
     adapter.model_completed(ordinal: 0, usage: {input_tokens: 5})
-    adapter.model_started(ordinal: 1, provider: "test", model_id: "flash")
-    adapter.model_completed(ordinal: 1, usage: {input_tokens: 5})
 
-    status, reason = adapter.terminal_status(nil)
-    assert_equal :TERMINAL_STATUS_BUDGET_EXHAUSTED, status
-    assert_equal "max_model_calls", reason
+    error = assert_raises(Tamoz::Stream::BudgetExceededError) do
+      adapter.model_completed(ordinal: 1, usage: {input_tokens: 5})
+    end
+    assert_equal "stream_budget_exceeded", error.class::CATEGORY
   end
 
   def test_a_wall_time_ceiling_reports_timed_out
@@ -150,7 +149,10 @@ class StreamEpisodeStreamTest < Minitest::Test
       wall_time: Google::Protobuf::Duration.new(seconds: 1)
     )
     adapter = Stream::EpisodeStreamAdapter.new(stream, budget:)
-    adapter.instance_variable_set(:@started_at, Time.now.to_i - 5)
+    adapter.instance_variable_set(
+      :@started_at,
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - 5
+    )
 
     status, reason = adapter.terminal_status(nil)
     assert_equal :TERMINAL_STATUS_TIMED_OUT, status

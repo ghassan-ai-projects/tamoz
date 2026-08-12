@@ -63,5 +63,10 @@ module Tamoz
     class EpisodeRequestInvalidError < StreamError
       CATEGORY = "stream_episode_request_invalid"
     end
+
+    # T2.2: a budget ceiling was crossed mid-run; the episode aborts typed.
+    class BudgetExceededError < StreamError
+      CATEGORY = "stream_budget_exceeded"
+    end
   end
 end
