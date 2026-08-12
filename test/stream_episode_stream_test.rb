@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tamoz/stream/episode_worker"
 
 # T2.1/T2.2 (PLAN_TAMOZ_STREAM_BUILD): the wire event vocabulary. The episode
 # stream builds EpisodeEvent payloads with exact sequence 1..N, identity on

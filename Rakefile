@@ -346,9 +346,13 @@ namespace :stream do
     "#{GEN_DIR}/runtime-v1_services_pb.rb"
   ].freeze
 
+  def stream_protoc
+    Gem.bin_path("grpc-tools", "grpc_tools_ruby_protoc")
+  end
+
   desc 'Regenerate the vendored gRPC stubs from the pinned runtime-v1 proto'
   task :proto do
-    sh "grpc_tools_ruby_protoc",
+    sh stream_protoc,
        "-I", "gems/tamoz-stream/contracts",
        "--ruby_out=#{GEN_DIR}",
        "--grpc_out=#{GEN_DIR}",
@@ -359,7 +363,7 @@ namespace :stream do
   task "proto:check" do
     require "tmpdir"
     Dir.mktmpdir("tamoz-proto") do |directory|
-      sh "grpc_tools_ruby_protoc",
+      sh stream_protoc,
          "-I", "gems/tamoz-stream/contracts",
          "--ruby_out=#{directory}",
          "--grpc_out=#{directory}",

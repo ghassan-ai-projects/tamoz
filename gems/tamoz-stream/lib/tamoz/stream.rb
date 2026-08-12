@@ -17,7 +17,6 @@ require_relative "stream/stream_store"
 require_relative "stream/capability_host"
 require_relative "stream/situation_snapshot"
 require_relative "stream/situation_request"
-require_relative "stream/episode_worker"
 
 module Tamoz
   # P14 — streaming input and simulated physical-world assistance

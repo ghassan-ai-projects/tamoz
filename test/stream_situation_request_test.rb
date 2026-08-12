@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tamoz/stream/episode_worker"
 
 # T1.3'/T1.4 (PLAN_TAMOZ_STREAM_BUILD): the episode request origin. The wire
 # EpisodeRequest is validated (contract, identity, kind, lane, risk ceiling);

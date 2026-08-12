@@ -19,7 +19,14 @@ module Tamoz
       def self.load!
         return if @loaded
 
-        $LOAD_PATH.unshift(DIR) unless $LOAD_PATH.include?(DIR)
+        # A second vendor of the same proto package would silently redefine
+        # the constants — fail loud instead.
+        if defined?(Agenticstream::Runtime::V1)
+          raise StreamError,
+                "Agenticstream::Runtime::V1 is already defined by another vendor"
+        end
+
+        $LOAD_PATH.push(DIR) unless $LOAD_PATH.include?(DIR)
         require "runtime-v1_pb"
         require "runtime-v1_services_pb"
         @loaded = true

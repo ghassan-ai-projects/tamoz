@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tamoz/stream/episode_worker"
 
 # T1.2 (PLAN_TAMOZ_STREAM_BUILD T1.2): the EpisodeWorker service negotiates
 # the handshake over a real in-process gRPC round trip and refuses a contract
@@ -41,12 +42,13 @@ class StreamEpisodeWorkerTest < Minitest::Test
     )
   end
 
-  def test_handshake_negotiates_and_echoes_the_identity
+  def test_handshake_negotiates_and_reports_the_workers_own_name
     response = client.handshake(valid_handshake)
 
     assert_equal "1.0", response.protocol_version
     assert_equal "1.0", response.contract_version
-    assert_equal "tamoz-worker-1", response.worker_name
+    # The worker's name is its OWN identity — never the peer-claimed worker_id.
+    assert_equal "tamoz", response.worker_name
     assert_equal "0.1.0.alpha.1", response.worker_version
     assert_equal 4 * 1024 * 1024, response.max_request_bytes
     assert_equal 1 * 1024 * 1024, response.max_event_bytes
@@ -88,9 +90,48 @@ class StreamEpisodeWorkerTest < Minitest::Test
       protocol_version: "1.0",
       episode_id: "ep-1",
       attempt_id: "at-1",
-      fence: 1
+      fence: 1,
+      kind: :EPISODE_KIND_DIAGNOSE
     )
     error = assert_raises(GRPC::BadStatus) { client.execute(request).each.to_a }
     assert_equal GRPC::Core::StatusCodes::UNIMPLEMENTED, error.code
+  end
+
+  def test_execute_refuses_a_contract_or_identity_mismatch_before_the_runner
+    # A bad protocol version is refused by the worker boundary, not the runner.
+    request = Agenticstream::Runtime::V1::EpisodeRequest.new(
+      protocol_version: "2.0", episode_id: "ep-1", attempt_id: "at-1", fence: 1
+    )
+    error = assert_raises(GRPC::BadStatus) { client.execute(request).each.to_a }
+    assert_equal GRPC::Core::StatusCodes::FAILED_PRECONDITION, error.code
+
+    incomplete = Agenticstream::Runtime::V1::EpisodeRequest.new(
+      protocol_version: "1.0", episode_id: "", attempt_id: "", fence: 0
+    )
+    error = assert_raises(GRPC::BadStatus) { client.execute(incomplete).each.to_a }
+    assert_equal GRPC::Core::StatusCodes::INVALID_ARGUMENT, error.code
+
+    unspecified = Agenticstream::Runtime::V1::EpisodeRequest.new(
+      protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+      fence: 1, kind: :EPISODE_KIND_UNSPECIFIED
+    )
+    error = assert_raises(GRPC::BadStatus) { client.execute(unspecified).each.to_a }
+    assert_equal GRPC::Core::StatusCodes::FAILED_PRECONDITION, error.code
+  end
+
+  def test_handshake_refuses_an_unsupported_required_feature
+    request = valid_handshake
+    request.requested_features.push("evidence_tools.v1")
+    error = assert_raises(GRPC::BadStatus) { client.handshake(request) }
+    assert_equal GRPC::Core::StatusCodes::FAILED_PRECONDITION, error.code
+  end
+
+  def test_handshake_refuses_an_empty_worker_identity
+    request = Agenticstream::Runtime::V1::HandshakeRequest.new(
+      protocol_version: "1.0", contract_version: "1.0",
+      non_interactive: true, worker_id: "", runtime_instance_id: ""
+    )
+    error = assert_raises(GRPC::BadStatus) { client.handshake(request) }
+    assert_equal GRPC::Core::StatusCodes::INVALID_ARGUMENT, error.code
   end
 end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tamoz/stream/episode_worker"
 
 # THE BAR (docs/PLAN_TAMOZ_STREAM_BUILD.md §7): a supervised DIAGNOSE episode
 # runs end to end on the Tamoz side. A stub stream client (the runtime's role,
@@ -136,7 +137,8 @@ class StreamEpisodeEndToEndTest < Minitest::Test
     response = client.handshake(
       Agenticstream::Runtime::V1::HandshakeRequest.new(
         protocol_version: "1.0", contract_version: "1.0",
-        worker_id: "tamoz-e2e", non_interactive: true
+        worker_id: "tamoz-e2e", runtime_instance_id: "runtime-1",
+        non_interactive: true
       )
     )
     assert_equal "1.0", response.protocol_version

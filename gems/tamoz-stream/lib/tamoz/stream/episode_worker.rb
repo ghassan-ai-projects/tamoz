@@ -13,19 +13,22 @@ module Tamoz
     # graphs inside the containment host (T4.1) and an interrupting skill is a
     # typed terminal failure (T0.4), never a wait.
     #
-    # The runner (injected, T1.4/T2 wiring) executes one episode and yields
-    # the wire event vocabulary. Until the runner is wired, Execute refuses
-    # with Unimplemented.
+    # The worker OWNS the wire contract on both RPCs (mirroring the Go
+    # server.go boundary): the handshake refuses unsupported features, and
+    # execute validates the request and the event stream itself — a runner
+    # bug (missing started, sequence gap, missing terminal, oversized event)
+    # never reaches the wire.
     class EpisodeWorker < Agenticstream::Runtime::V1::EpisodeWorker::Service
       PROTOCOL_VERSION = "1.0"
       CONTRACT_VERSION = "1.0"
       WORKER_NAME = "tamoz"
       MAX_REQUEST_BYTES = 4 * 1024 * 1024
       MAX_EVENT_BYTES = 1 * 1024 * 1024
-      SUPPORTED_KINDS = [
-        Agenticstream::Runtime::V1::EpisodeKind::EPISODE_KIND_DIAGNOSE,
-        Agenticstream::Runtime::V1::EpisodeKind::EPISODE_KIND_RECONSIDER
-      ].freeze
+      # Advertised features the worker can back. Evidence tools (T3) will add
+      # their feature here when the client is wired; until then a runtime that
+      # requires one is refused at the handshake, exactly like the Go worker.
+      SUPPORTED_FEATURES = [].freeze
+      SUPPORTED_KINDS = %i[EPISODE_KIND_DIAGNOSE EPISODE_KIND_RECONSIDER].freeze
 
       def initialize(worker_version:, runner: nil, lane_config: nil)
         @worker_version = worker_version
@@ -37,26 +40,35 @@ module Tamoz
 
       # The runtime's WorkerExecutor calls Handshake with the worker's declared
       # protocol/contract versions and identity; the worker refuses a contract
-      # major mismatch and echoes the negotiated identity back.
+      # major mismatch or an unsupported required feature, and reports its OWN
+      # name (never the peer-claimed identity — the socket path, not the
+      # request, is the worker's identity).
       def handshake(request, _call)
         validate_contract!(request)
+        if request.worker_id.empty? || request.runtime_instance_id.empty?
+          raise GRPC::InvalidArgument,
+                "worker_id and runtime_instance_id are required"
+        end
+
         Agenticstream::Runtime::V1::HandshakeResponse.new(
           protocol_version: PROTOCOL_VERSION,
           contract_version: CONTRACT_VERSION,
-          worker_name: request.worker_id.empty? ? WORKER_NAME : request.worker_id,
+          worker_name: WORKER_NAME,
           worker_version: @worker_version,
-          supported_features: [].freeze,
+          supported_features: SUPPORTED_FEATURES.dup,
           max_request_bytes: MAX_REQUEST_BYTES,
           max_event_bytes: MAX_EVENT_BYTES
         )
       end
 
-      # Server-streaming: the worker yields the wire event vocabulary for one
-      # episode (started → … → terminal). The runner owns the event stream.
+      # Server-streaming: the worker validates the request and the stream
+      # contract, then yields the runner's wire events. The runner (injected,
+      # T1.4/T2 wiring) executes one episode; until wired, Unimplemented.
       def execute(request, call)
+        validate_request!(request)
         raise GRPC::Unimplemented, "episode execution is not wired" unless @runner
 
-        @runner.run(request, call)
+        validate_stream(@runner.run(request, call))
       end
 
       private
@@ -74,8 +86,74 @@ module Tamoz
           raise GRPC::FailedPrecondition,
                 "the tamoz worker only serves non-interactive episodes"
         end
+        request.requested_features.each do |feature|
+          next if SUPPORTED_FEATURES.include?(feature)
+
+          raise GRPC::FailedPrecondition,
+                "unsupported required feature #{feature.inspect}"
+        end
 
         true
+      end
+
+      # T1.3'/T1.2 parity with the Go validateRequest: the RPC that spends
+      # model budget is validated at the worker boundary, never only in the
+      # runner. (non_interactive is handshake-only — the request itself has no
+      # such field.)
+      def validate_request!(request)
+        unless request.protocol_version == PROTOCOL_VERSION
+          raise GRPC::FailedPrecondition,
+                "unsupported protocol version #{request.protocol_version.inspect}"
+        end
+        if request.episode_id.empty? || request.attempt_id.empty?
+          raise GRPC::InvalidArgument,
+                "episode_id and attempt_id are required"
+        end
+        unless request.fence.is_a?(Integer) && request.fence >= 1
+          raise GRPC::InvalidArgument, "fence must be a positive integer"
+        end
+        unless SUPPORTED_KINDS.include?(request.kind)
+          raise GRPC::FailedPrecondition,
+                "unsupported episode kind #{request.kind.inspect}"
+        end
+        size = request.to_proto.bytesize
+        if size > MAX_REQUEST_BYTES
+          raise GRPC::ResourceExhausted,
+                "episode request exceeds #{MAX_REQUEST_BYTES} bytes"
+        end
+
+        true
+      end
+
+      # The worker owns the stream contract (Go streamValidator parity): the
+      # runner's events are validated for exact sequence, one terminal, no
+      # event after the terminal, and the event-size bound — and the terminal
+      # is forced when the runner forgets it.
+      def validate_stream(enumerator)
+        Enumerator.new do |yielder|
+          expected = 1
+          terminal_seen = false
+          enumerator.each do |event|
+            unless event.sequence == expected
+              raise GRPC::Internal,
+                    "episode event sequence mismatch: got #{event.sequence}, expected #{expected}"
+            end
+            expected += 1
+            if event.to_proto.bytesize > MAX_EVENT_BYTES
+              raise GRPC::ResourceExhausted,
+                    "episode event exceeds #{MAX_EVENT_BYTES} bytes"
+            end
+            if terminal_seen
+              raise GRPC::Internal, "episode emitted an event after its terminal"
+            end
+
+            terminal_seen = true if event.terminal != nil
+            yielder << event
+          end
+          unless terminal_seen
+            raise GRPC::Internal, "episode stream ended without a terminal"
+          end
+        end
       end
     end
   end

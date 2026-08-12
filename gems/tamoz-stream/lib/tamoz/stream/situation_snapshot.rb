@@ -37,12 +37,15 @@ module Tamoz
           raise SnapshotDigestMismatchError,
                 "received situation snapshot digest does not match its payload"
         end
+        unless value.is_a?(Hash)
+          raise SnapshotIdentityError, "situation snapshot must be a JSON object"
+        end
 
         missing = REQUIRED_IDENTITY.reject do |key|
-          if value[key].is_a?(String)
-            !value[key].empty?
+          if key == "situation_version"
+            value[key].is_a?(Integer)
           else
-            !value[key].nil?
+            value[key].is_a?(String) && !value[key].empty?
           end
         end
         entity = value["entity"]

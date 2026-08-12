@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "tamoz/stream/episode_worker"
 
 # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision — decision-v1 shape,
 # domain digest, and the watch-condition preference at low confidence.
