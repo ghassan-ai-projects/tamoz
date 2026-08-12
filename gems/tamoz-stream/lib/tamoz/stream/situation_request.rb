@@ -9,6 +9,10 @@ require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
 require "tamoz/stream/verification_store"
 require "tamoz/stream/artifact_store"
+# The runner composes episodes for the worker and reports the worker's
+# contract version on the artifact manifest — the worker's constant is the
+# single source of truth for the protocol version.
+require "tamoz/stream/episode_worker"
 require "json"
 
 Tamoz::Stream::Gen.load!
