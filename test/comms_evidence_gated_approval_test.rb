@@ -161,14 +161,84 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C2 / INV-C (pending): `required_evidence` must be a trusted, deterministic
-  # function of the pinned interrupt/effect digest — never model-settable, and
-  # part of the callback comparison. The surface for this does not exist yet;
-  # this test is a placeholder for the ADR-049 §7 adoption step that adds it.
+  # C2 / INV-C (GREEN since Phase 6): `required_evidence` is a trusted,
+  # deterministic function of the pinned interrupts — never model-settable. A
+  # hostile interrupt descriptor that tries to declare itself cheap is
+  # ignored by the constant policy.
   def test_required_evidence_is_trusted_and_not_model_settable
-    skip 'ADR-049 §2 INV-C / §7 step 1: `required_evidence` policy not implemented yet. ' \
-         'When it lands, assert it is reproducible offline from the interrupt digest, is ' \
-         'part of the callback comparison, and ignores any model-supplied value.'
+    hostile = [{ task_id: 't', call_index: 0,
+                 descriptor: { 'kind' => 'approve_tool', 'required_evidence' => 'chat_bound' } }]
+    reference, prompt = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
+      thread_id: 'tg.ops.abc', occurrence_id: 'req-1', interrupts: hostile,
+      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+    )
+
+    assert_equal 'filesystem_operator', prompt.required_evidence,
+                 'the model-supplied requirement in the descriptor is ignored (INV-C)'
+    refute_nil reference
+  end
+
+  # C3 / INV-E extension: an approve on an unknown reference (missing
+  # evidence) never creates a decision — the single-use reference is the only
+  # key to a prompt, and there is no prompt here.
+  def test_an_approve_on_an_unknown_reference_never_approves
+    with_engine do |adapter, checkpoints|
+      _store, gateway = boot(adapter, checkpoints)
+      press(gateway, "approve:#{'0' * 32}", update_id: 90)
+
+      decision_store = adapter.bind_comms_decision_store
+      rows = decision_store.each_decision(thread_id: 'tg.ops.abc')
+
+      assert_empty rows, 'no prompt, no evidence, no decision (ADR-049 INV-E)'
+    end
+  end
+
+  # C4 / the gate is evidence-driven, not a hardcoded transport block: an
+  # approve on a prompt whose pinned requirement `chat_bound` evidence can
+  # meet is granted, while the same press on a `filesystem_operator` prompt is
+  # refused (the Phase 3 asymmetry, driven by the pinned value, not by which
+  # transport pressed).
+  def test_an_approve_is_granted_when_the_requirement_meets_chat_bound_evidence
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      store.__send__(:transaction, operation: 'test.prompt.repin') do |txn|
+        txn.execute('test.prompt.repin', <<~SQL, ['chat_bound', prompt.reference_digest])
+          UPDATE tamoz_comms_approval_prompts SET required_evidence = ? WHERE reference_digest = ?
+        SQL
+      end
+
+      press(gateway, "approve:#{reference}", update_id: 95)
+
+      decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 4))
+
+      assert_equal 'approve', decision.fetch('direction'),
+                   'chat_bound evidence meets a chat_bound requirement (ADR-049 INV-B)'
+    end
+  end
+
+  # C4 / exact binding across surfaces: a press whose surface does not match
+  # the prompt's bound surface records a durable refusal and creates no
+  # decision.
+  def test_a_cross_surface_press_is_refused
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      press(gateway, "approve:#{reference}", update_id: 96,
+                                             surface_id: 'telegram-other', surface_revision: 3)
+
+      decision = pending(adapter, prompt)
+
+      assert_nil decision, 'a press on the wrong surface never resolves (contract §7.1)'
+      rows = inbound_dispositions(adapter, surface: 'telegram-other')
+
+      assert rows.any? { |row| row[0] == 'rejected' && row[1] == 'binding_mismatch' },
+             'the cross-surface press must record a durable binding refusal'
+    end
   end
 
   private
@@ -197,12 +267,21 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     [reference, prompt]
   end
 
+  # rubocop:disable Metrics/ParameterLists -- the callback's bound context
+  # (correspondent + surface) is exactly what the binding oracles vary.
   def press(gateway, data, update_id:, correspondent_id: 111_111_11,
+            surface_id: 'telegram-ops', surface_revision: 1,
             now: Time.utc(2026, 8, 10, 12, 0, 2))
-    gateway.instance_variable_get(:@transport).batch([callback_update(data, update_id, correspondent_id:)])
-    gateway.instance_variable_get(:@transport).receipt = { 'message_id' => 1, 'date' => 1 }
+    transport = gateway.instance_variable_get(:@transport)
+    unless surface_id == 'telegram-ops' && surface_revision == 1
+      transport = ScriptedTransport.new(surface_id:, surface_revision:)
+      gateway.instance_variable_set(:@transport, transport)
+    end
+    transport.batch([callback_update(data, update_id, correspondent_id:)])
+    transport.receipt = { 'message_id' => 1, 'date' => 1 }
     gateway.serve_once(now:)
   end
+  # rubocop:enable Metrics/ParameterLists
 
   def pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 3))
     adapter.bind_comms_decision_store.pending_decision_for(
@@ -213,9 +292,9 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
   # The durable inbound ledger for this surface, newest first — the refusal
   # records of the bar's C1 are rows here, not assertions in prose.
-  def inbound_dispositions(adapter)
+  def inbound_dispositions(adapter, surface: 'telegram-ops')
     adapter.__send__(:read, operation: 'test.inbound.dispositions') do |txn|
-      txn.rows('test.inbound.dispositions', <<~SQL, ['telegram-ops'])
+      txn.rows('test.inbound.dispositions', <<~SQL, [surface])
         SELECT disposition, reason FROM tamoz_comms_inbound
         WHERE surface_id = ? ORDER BY ingested_at_ms DESC
       SQL
@@ -231,6 +310,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
   class ScriptedTransport
     attr_accessor :receipt
+
+    def initialize(surface_id: 'telegram-ops', surface_revision: 1)
+      @surface_id = surface_id
+      @surface_revision = surface_revision
+    end
 
     def batch(updates)
       @updates = updates
@@ -249,7 +333,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       callback = update['callback_query']
       message = callback['message']
       Comms::InboundEnvelope.new(
-        surface_id: 'telegram-ops', surface_revision: 1,
+        surface_id: @surface_id, surface_revision: @surface_revision,
         update_id: update.fetch('update_id'), raw_payload_hash: 'd' * 64,
         parser_version: 1, kind: 'callback',
         correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
