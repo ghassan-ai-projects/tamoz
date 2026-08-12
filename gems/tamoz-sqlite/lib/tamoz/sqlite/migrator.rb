@@ -28,7 +28,10 @@ module Tamoz
       # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1): 10 -> 11 through
       # MIGRATION_11, which registers the digest epoch and clears the rows whose
       # digests embedded the pre-RFC-8785 canonical serialization.
-      CURRENT_VERSION = 11
+      # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 through
+      # MIGRATION_12, which adds the situation/entity scope columns to the
+      # memory index.
+      CURRENT_VERSION = 12
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -924,6 +927,82 @@ module Tamoz
         MIGRATION_11.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3, §5.6): the
+      # memory index gains the situation/entity dimension so an episode's
+      # Experience can be scoped to (situation_type, entity_type, entity_id).
+      # The table rebuild (SQLite cannot ADD a CHECK) enforces the all-or-none
+      # invariant at the schema level: a row is either fully situation-scoped
+      # or fully ordinary. Rows written before this migration carry NULL
+      # situation scopes, which the retrieval boundary keeps outside the
+      # situation dimension.
+      MIGRATION_12 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_memory_index_new (
+            store_namespace TEXT NOT NULL,
+            memory_id TEXT NOT NULL,
+            record_version INTEGER NOT NULL CHECK (record_version > 0),
+            layer TEXT NOT NULL,
+            class TEXT NOT NULL,
+            state TEXT NOT NULL,
+            scopes_tenant TEXT NOT NULL,
+            scopes_user TEXT NOT NULL,
+            scopes_project TEXT NOT NULL,
+            sensitivity TEXT NOT NULL CHECK (
+              sensitivity IN ('public', 'internal', 'sensitive')
+            ),
+            valid_until_ms INTEGER,
+            compatibility_graph TEXT NOT NULL,
+            compatibility_behavior TEXT NOT NULL,
+            statement_search TEXT,
+            searchable INTEGER NOT NULL CHECK (searchable IN (0, 1)),
+            scopes_situation_type TEXT,
+            scopes_entity_type TEXT,
+            scopes_entity_id TEXT,
+            PRIMARY KEY (store_namespace, memory_id, record_version),
+            CHECK (
+              (scopes_situation_type IS NULL AND scopes_entity_type IS NULL AND scopes_entity_id IS NULL)
+              OR
+              (scopes_situation_type IS NOT NULL AND scopes_entity_type IS NOT NULL AND scopes_entity_id IS NOT NULL)
+            )
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          INSERT INTO tamoz_memory_index_new(
+            store_namespace, memory_id, record_version, layer, class, state,
+            scopes_tenant, scopes_user, scopes_project, sensitivity,
+            valid_until_ms, compatibility_graph, compatibility_behavior,
+            statement_search, searchable,
+            scopes_situation_type, scopes_entity_type, scopes_entity_id
+          )
+          SELECT store_namespace, memory_id, record_version, layer, class, state,
+                 scopes_tenant, scopes_user, scopes_project, sensitivity,
+                 valid_until_ms, compatibility_graph, compatibility_behavior,
+                 statement_search, searchable,
+                 NULL, NULL, NULL
+          FROM tamoz_memory_index
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_memory_index
+        SQL
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_memory_index_new RENAME TO tamoz_memory_index
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_memory_index_scope
+            ON tamoz_memory_index(
+              store_namespace, state, scopes_tenant, scopes_user, scopes_project
+            )
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_memory_index_situation
+            ON tamoz_memory_index(store_namespace, state, scopes_entity_type, scopes_tenant)
+        SQL
+      ].freeze
+
+      MIGRATION_12_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_12.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -937,7 +1016,8 @@ module Tamoz
         8 => [MIGRATION_8, MIGRATION_8_CHECKSUM],
         9 => [MIGRATION_9, MIGRATION_9_CHECKSUM],
         10 => [MIGRATION_10, MIGRATION_10_CHECKSUM],
-        11 => [MIGRATION_11, MIGRATION_11_CHECKSUM]
+        11 => [MIGRATION_11, MIGRATION_11_CHECKSUM],
+        12 => [MIGRATION_12, MIGRATION_12_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1097,6 +1177,8 @@ module Tamoz
                        :MIGRATION_8, :MIGRATION_8_CHECKSUM,
                        :MIGRATION_9, :MIGRATION_9_CHECKSUM,
                        :MIGRATION_10, :MIGRATION_10_CHECKSUM,
+                       :MIGRATION_11, :MIGRATION_11_CHECKSUM,
+                       :MIGRATION_12, :MIGRATION_12_CHECKSUM,
                        :MIGRATIONS
     end
   end

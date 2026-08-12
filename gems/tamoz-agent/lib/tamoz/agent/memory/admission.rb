@@ -276,6 +276,21 @@ module Tamoz
           plan_digest = episode.fetch(:plan_digest)
           task = episode.fetch(:task)
           observed = episode.fetch(:observed_outcome)
+          unless observed.is_a?(Hash)
+            raise MemoryPolicyError, "observed_outcome must be an object"
+          end
+
+          # Canonicalize to string keys ONCE: production episodes are
+          # string-keyed (session_memory), workers and tests may use symbols.
+          # Every downstream read uses the string form, so a symbol-keyed
+          # outcome never loses its values to a symbol-only fetch.
+          observed = observed.transform_keys(&:to_s)
+          # Episodes are :observed ONLY when the outcome was independently
+          # observed (an authenticated reconciled-outcome reference, T5.3). A
+          # self-certified episode defaults to :reported — the admission path
+          # must never infer observation (T0.2). Strict boolean: a truthy
+          # string or integer must not upgrade a self-certified episode.
+          kind = observed.fetch("independently_observed", false) == true ? :observed : :reported
           # An explicitly provided statement (key observations + decisions +
           # corrections) is the memory content; otherwise a bounded summary of
           # the episode's grounded parts is built. Never a transcript, never
@@ -283,7 +298,7 @@ module Tamoz
           statement = if episode[:statement]
                         episode.fetch(:statement)
                       else
-                        build_statement(task, observed, episode)
+                        build_statement(task, observed, episode, kind)
                       end
           source_refs = [
             {
@@ -292,8 +307,6 @@ module Tamoz
               "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
             }
           ]
-          # Episodes are :observed when the outcome was independently observed.
-          kind = observed.fetch(:independently_observed, true) ? :observed : :reported
           MemoryRecord.new(
             memory_id: MemoryRecordDigest.identity(statement),
             record_version: 1,
@@ -308,7 +321,7 @@ module Tamoz
             scopes: episode.fetch(:scopes),
             sensitivity: episode.fetch(:sensitivity, :internal),
             disclosure_policy: "default",
-            confidence: observed.fetch(:confidence, 0.8),
+            confidence: observed.fetch("confidence", 0.8),
             confidence_method: "observed_outcome",
             valid_from: episode.fetch(:completed_at, Time.now.to_i),
             valid_until: episode[:valid_until],
@@ -319,13 +332,16 @@ module Tamoz
           )
         end
 
-        def build_statement(task, observed, episode)
-          outcome = observed.fetch(:outcome, "completed")
-          # Bounded, grounded: the task, the observed outcome, and the effect
-          # receipts — never a transcript, never recalled content.
+        def build_statement(task, observed, episode, kind)
+          outcome = observed.fetch("outcome", "completed")
+          # A :reported record must not claim its outcome was observed; the
+          # label says which epistemic kind the statement is bound to.
+          label = kind == :observed ? "observed outcome" : "reported outcome"
+          # Bounded, grounded: the task, the outcome, and the effect receipts —
+          # never a transcript, never recalled content.
           parts = [
             "Episode for task #{task}",
-            "observed outcome: #{outcome}",
+            "#{label}: #{outcome}",
             "decisions: #{Array(episode.fetch(:decisions, [])).join("; ")}",
             "corrections: #{Array(episode.fetch(:corrections, [])).join("; ")}"
           ]
@@ -333,10 +349,12 @@ module Tamoz
         end
 
         def episode_evidence(episode)
+          observed = episode.fetch(:observed_outcome, {})
+          observed = observed.transform_keys(&:to_s) if observed.is_a?(Hash)
           {
             "session_id" => episode.fetch(:session_id),
             "plan_digest" => episode.fetch(:plan_digest),
-            "observed_outcome" => episode.fetch(:observed_outcome, {}).fetch(:outcome, nil)
+            "observed_outcome" => observed["outcome"]
           }
         end
 

@@ -39,12 +39,14 @@ module Tamoz
         :store_namespace, :memory_id, :record_version, :layer, :klass, :state,
         :scopes_tenant, :scopes_user, :scopes_project, :sensitivity,
         :valid_until_ms, :compatibility_graph, :compatibility_behavior,
-        :statement_search, :searchable
+        :statement_search, :searchable,
+        :scopes_situation_type, :scopes_entity_type, :scopes_entity_id
       ) do
         def initialize(store_namespace:, memory_id:, record_version:, layer:, klass:, state:,
                        scopes_tenant:, scopes_user:, scopes_project:, sensitivity:,
                        valid_until_ms:, compatibility_graph:, compatibility_behavior:,
-                       statement_search:, searchable:)
+                       statement_search:, searchable:,
+                       scopes_situation_type: nil, scopes_entity_type: nil, scopes_entity_id: nil)
           super
         end
 
@@ -69,7 +71,10 @@ module Tamoz
             "compatibility_graph" => compatibility_graph,
             "compatibility_behavior" => compatibility_behavior,
             "statement_search" => statement_search,
-            "searchable" => searchable
+            "searchable" => searchable,
+            "scopes_situation_type" => scopes_situation_type,
+            "scopes_entity_type" => scopes_entity_type,
+            "scopes_entity_id" => scopes_entity_id
           }
         end
       end
@@ -137,9 +142,10 @@ module Tamoz
                 store_namespace, memory_id, record_version, layer, class, state,
                 scopes_tenant, scopes_user, scopes_project, sensitivity,
                 valid_until_ms, compatibility_graph, compatibility_behavior,
-                statement_search, searchable
+                statement_search, searchable,
+                scopes_situation_type, scopes_entity_type, scopes_entity_id
               )
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(store_namespace, memory_id, record_version) DO UPDATE SET
                 layer = excluded.layer,
                 class = excluded.class,
@@ -152,7 +158,10 @@ module Tamoz
                 compatibility_graph = excluded.compatibility_graph,
                 compatibility_behavior = excluded.compatibility_behavior,
                 statement_search = excluded.statement_search,
-                searchable = excluded.searchable
+                searchable = excluded.searchable,
+                scopes_situation_type = excluded.scopes_situation_type,
+                scopes_entity_type = excluded.scopes_entity_type,
+                scopes_entity_id = excluded.scopes_entity_id
             SQL
             index_row_binds(index)
           )
@@ -211,6 +220,13 @@ module Tamoz
           caller_values.fetch(:compatibility_behavior),
           now_ms
         ]
+        # T0.3 situation boundary: a situation-scoped caller retrieves only
+        # rows of the same entity type (default relatedness authority: same
+        # tenant AND same entity type); an ordinary caller never sees rows in
+        # the situation dimension. Both sides are explicit — zero cross-
+        # boundary recall either way.
+        situation_filter, situation_binds =
+          situation_boundary(caller_values)
         matches_sql, match_binds = match_clause(terms, layer, klass)
         rows = nil
         store.open_transaction(label: "memory.search") do |tx|
@@ -220,7 +236,8 @@ module Tamoz
               SELECT i.memory_id, i.record_version, i.layer, i.class, i.state,
                      i.scopes_tenant, i.scopes_user, i.scopes_project,
                      i.sensitivity, i.valid_until_ms, i.compatibility_graph,
-                     i.compatibility_behavior, i.searchable
+                     i.compatibility_behavior, i.searchable,
+                     i.scopes_situation_type, i.scopes_entity_type, i.scopes_entity_id
               FROM tamoz_memory_index i
               JOIN tamoz_store_heads h
                 ON h.namespace = i.store_namespace
@@ -236,11 +253,12 @@ module Tamoz
                 AND i.compatibility_graph = ?
                 AND i.compatibility_behavior = ?
                 AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
+                #{situation_filter}
                 #{matches_sql}
               ORDER BY i.layer, i.memory_id, i.record_version DESC
               LIMIT ?
             SQL
-            [*binds, *match_binds, normalized_limit]
+            [*binds, *situation_binds, *match_binds, normalized_limit]
           )
         end
         candidates = rows.map { |row| index_row_from_row(row).to_h }.freeze
@@ -249,7 +267,7 @@ module Tamoz
                        []
                      else
                        scan_matched_restricted(
-                         namespace, terms, layer, klass, now_ms
+                         namespace, caller_values, terms, layer, klass, now_ms
                        )
                      end
         SearchResult.new(candidates:, matched_restricted: restricted)
@@ -257,9 +275,14 @@ module Tamoz
 
       # Head-eligible rows that matched the searchable dimensions but carry
       # sensitivity `sensitive` — the hard-zero signal that the filter path
-      # fired without any materialization or decryption (invariant 24/30).
-      def scan_matched_restricted(namespace, terms, layer, klass, now_ms)
+      # fired without any materialization or decryption (invariant 24/30). The
+      # same caller authority as `search` applies: the signal must not cross
+      # the situation boundary, the user/project scope, or the eligible-state
+      # set (otherwise it becomes an existence oracle for the far side).
+      def scan_matched_restricted(namespace, caller_values, terms, layer, klass, now_ms)
         matches_sql, match_binds = match_clause(terms, layer, klass)
+        situation_filter, situation_binds =
+          situation_boundary(caller_values)
         rows = nil
         store.open_transaction(label: "memory.search.restricted") do |tx|
           rows = tx.rows(
@@ -275,12 +298,20 @@ module Tamoz
                AND h.current_version = i.record_version
                AND h.deleted = 0
               WHERE i.store_namespace = ?
+                AND i.state IN ('active', 'consolidated')
+                AND i.scopes_user = ?
+                AND i.scopes_project = ?
                 AND i.sensitivity = 'sensitive'
                 AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
+                #{situation_filter}
                 #{matches_sql}
               ORDER BY i.layer, i.memory_id, i.record_version DESC
             SQL
-            [namespace, now_ms, *match_binds]
+            [
+              namespace,
+              caller_values.fetch(:user), caller_values.fetch(:project),
+              now_ms, *situation_binds, *match_binds
+            ]
           )
         end
         rows.map do |row|
@@ -305,7 +336,8 @@ module Tamoz
               SELECT store_namespace, memory_id, record_version, layer, class,
                      state, scopes_tenant, scopes_user, scopes_project,
                      sensitivity, valid_until_ms, compatibility_graph,
-                     compatibility_behavior, statement_search, searchable
+                     compatibility_behavior, statement_search, searchable,
+                     scopes_situation_type, scopes_entity_type, scopes_entity_id
               FROM tamoz_memory_index
               WHERE store_namespace = ? AND memory_id = ? AND record_version = ?
             SQL
@@ -329,7 +361,10 @@ module Tamoz
           compatibility_graph: row.fetch(11),
           compatibility_behavior: row.fetch(12),
           statement_search: row.fetch(13),
-          searchable: row.fetch(14) == 1
+          searchable: row.fetch(14) == 1,
+          scopes_situation_type: row.fetch(15),
+          scopes_entity_type: row.fetch(16),
+          scopes_entity_id: row.fetch(17)
         )
       end
 
@@ -529,7 +564,8 @@ module Tamoz
           index.scopes_tenant, index.scopes_user, index.scopes_project,
           index.sensitivity, index.valid_until_ms,
           index.compatibility_graph, index.compatibility_behavior,
-          index.statement_search, index.searchable ? 1 : 0
+          index.statement_search, index.searchable ? 1 : 0,
+          index.scopes_situation_type, index.scopes_entity_type, index.scopes_entity_id
         ]
       end
 
@@ -549,7 +585,10 @@ module Tamoz
           compatibility_graph: row.fetch(10),
           compatibility_behavior: row.fetch(11),
           statement_search: nil,
-          searchable: row.fetch(12) == 1
+          searchable: row.fetch(12) == 1,
+          scopes_situation_type: row.fetch(13),
+          scopes_entity_type: row.fetch(14),
+          scopes_entity_id: row.fetch(15)
         )
       end
 
@@ -566,7 +605,44 @@ module Tamoz
         end
         graph = text_value(caller.fetch(:compatibility_graph), "caller compatibility graph")
         behavior = text_value(caller.fetch(:compatibility_behavior), "caller compatibility behavior")
-        {tenant:, user:, project:, sensitivity:, compatibility_graph: graph, compatibility_behavior: behavior}
+        # T0.3: the situation authority accepts both key conventions (symbols
+        # and strings) and requires the identity complete BY VALUE — a nil or
+        # empty entity key cannot silently widen or narrow the boundary. The
+        # values are normalized like the other caller fields (bounded, no
+        # empty strings).
+        situation_type = caller[:situation_type] || caller["situation_type"]
+        entity_type = caller[:entity_type] || caller["entity_type"]
+        entity_id = caller[:entity_id] || caller["entity_id"]
+        if situation_type || entity_type || entity_id
+          situation_type = text_value(situation_type, "caller situation_type")
+          entity_type = text_value(entity_type, "caller entity_type")
+          entity_id = text_value(entity_id, "caller entity_id")
+        end
+        present = [situation_type, entity_type, entity_id].compact
+        unless present.empty? || present.length == 3
+          raise ConfigurationError,
+                "caller situation identity must be complete: situation_type, entity_type, entity_id"
+        end
+        {
+          tenant:, user:, project:, sensitivity:,
+          compatibility_graph: graph, compatibility_behavior: behavior,
+          situation_type:, entity_type:, entity_id:
+        }
+      end
+
+      # The T0.3 situation boundary as SQL: same entity type for a
+      # situation-scoped caller, nothing from the situation dimension for an
+      # ordinary caller. `situation_type` and `entity_id` are validated caller
+      # identity (metadata for the episode), but only `entity_type` binds —
+      # the default relatedness authority is "same tenant AND same entity
+      # type"; the boundary widens per config only when a later phase adds an
+      # entity_id or situation_type term to this fragment.
+      def situation_boundary(caller_values)
+        if caller_values.fetch(:entity_type)
+          ["AND i.scopes_entity_type = ?", [caller_values.fetch(:entity_type)]]
+        else
+          ["AND i.scopes_entity_type IS NULL", []]
+        end
       end
 
       def validate_query!(query)

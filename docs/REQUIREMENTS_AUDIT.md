@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 436 | 269 | 16 | **no** |
+| 437 | 270 | 16 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 16 |
-| pass | 405 |
+| pass | 406 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -436,6 +436,7 @@ generating run.
 | `MIG-1` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
 | `MIG-10` | migration | yes | pass | `test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store` |
 | `MIG-11` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
+| `MIG-12` | migration | yes | pass | `test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
 | `MIG-2` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes` |

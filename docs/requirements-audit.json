@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-12T17:52:22Z",
-  "manifest_requirements": 436,
-  "named_cases_run": 269,
+  "generated_at": "2026-08-12T18:12:50Z",
+  "manifest_requirements": 437,
+  "named_cases_run": 270,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 16,
-    "pass": 405
+    "pass": 406
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -6482,6 +6482,23 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+      "supporting_tests": [
+        "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-12",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_12",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
       "supporting_tests": [
         "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"
       ],

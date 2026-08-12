@@ -95,13 +95,14 @@ class MemoryRepositoryTest < Minitest::Test
     # P14: CURRENT_VERSION moved 3 -> 4 through MIGRATION_4 (stream tables);
     # comms moved 5 -> 6 through MIGRATION_6; ADR-049 moved 8 -> 9 and 9 -> 10
     # through MIGRATION_9/10; the JCS digest-rule cutover moved 10 -> 11
-    # through MIGRATION_11. The monotonic-ordering guard makes ordinal reuse
+    # through MIGRATION_11; situation scopes moved 11 -> 12 through
+    # MIGRATION_12. The monotonic-ordering guard makes ordinal reuse
     # impossible.
-    assert_equal 11, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], Tamoz::SQLite::Migrator.migration_ordinals
+    assert_equal 12, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 11, database.get_first_value("PRAGMA user_version")
+    assert_equal 12, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -111,6 +112,7 @@ class MemoryRepositoryTest < Minitest::Test
       store_namespace memory_id record_version layer class state scopes_tenant
       scopes_user scopes_project sensitivity valid_until_ms compatibility_graph
       compatibility_behavior statement_search searchable
+      scopes_situation_type scopes_entity_type scopes_entity_id
     ], columns
     database.close
 
@@ -142,11 +144,11 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 11, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 12, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 
@@ -166,9 +168,44 @@ class MemoryRepositoryTest < Minitest::Test
       "INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms) VALUES (?, ?, 1, 0, 0, 1)",
       ["tamoz.circuit.test", "sha256:#{"b" * 64}"]
     )
+    # Rebuild the memory index in its pre-MIGRATION_12 shape (15 columns) with
+    # a REAL ordinary row, then downgrade the migration state to 10: the reopen
+    # must run MIGRATION_11 (epoch + clears) AND MIGRATION_12 (situation
+    # columns via the table rebuild) against old rows.
+    database.execute("DROP TABLE tamoz_memory_index")
+    database.execute(<<~SQL)
+      CREATE TABLE tamoz_memory_index (
+        store_namespace TEXT NOT NULL,
+        memory_id TEXT NOT NULL,
+        record_version INTEGER NOT NULL CHECK (record_version > 0),
+        layer TEXT NOT NULL,
+        class TEXT NOT NULL,
+        state TEXT NOT NULL,
+        scopes_tenant TEXT NOT NULL,
+        scopes_user TEXT NOT NULL,
+        scopes_project TEXT NOT NULL,
+        sensitivity TEXT NOT NULL,
+        valid_until_ms INTEGER,
+        compatibility_graph TEXT NOT NULL,
+        compatibility_behavior TEXT NOT NULL,
+        statement_search TEXT,
+        searchable INTEGER NOT NULL CHECK (searchable IN (0, 1)),
+        PRIMARY KEY (store_namespace, memory_id, record_version)
+      ) STRICT
+    SQL
+    database.execute(<<~SQL)
+      INSERT INTO tamoz_memory_index(
+        store_namespace, memory_id, record_version, layer, class, state,
+        scopes_tenant, scopes_user, scopes_project, sensitivity,
+        valid_until_ms, compatibility_graph, compatibility_behavior,
+        statement_search, searchable
+      ) VALUES ('tamoz.memory.acme', 'm-pre12', 1, 'experience', 'runbook', 'active',
+                'acme', 'u', 'p', 'public', NULL, '1', 'tamoz.agent.session/1',
+                'retained', 1)
+    SQL
     database.execute("DROP TABLE tamoz_digest_epoch")
     database.execute("PRAGMA user_version = 10")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version = 11")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12)")
     database.close
     adapter.close
 
@@ -179,9 +216,132 @@ class MemoryRepositoryTest < Minitest::Test
     assert_equal 0, database.get_first_value(
       "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
     )
+    # The pre-12 row survives the rebuild with NULL situation scopes, and the
+    # scope indexes are recreated.
+    preserved = database.get_first_value(
+      "SELECT statement_search FROM tamoz_memory_index WHERE memory_id = 'm-pre12'"
+    )
+    assert_equal "retained", preserved
+    situation_columns = %w[scopes_situation_type scopes_entity_type scopes_entity_id]
+    columns = database.execute("PRAGMA table_info(tamoz_memory_index)").map { |row| row.fetch(1) }
+    assert_empty situation_columns - columns
+    indexes = database.execute("SELECT name FROM sqlite_schema WHERE type = 'index'").flatten
+    assert_includes indexes, "idx_tamoz_memory_index_scope"
+    assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal 11, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 12, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
+  end
+
+  # T0.3: situation-scoped records are bound by entity type (default
+  # relatedness authority: same tenant AND same entity type). A situation-
+  # scoped caller retrieves only its own entity type; an ordinary caller never
+  # sees the situation dimension at all.
+  def test_situation_scoped_records_are_bound_by_entity_type
+    admit(memory_id: "s1",
+          scopes_situation_type: "equipment", scopes_entity_type: "compressor",
+          scopes_entity_id: "c-01", statement_search: "oil pressure")
+    admit(memory_id: "s2",
+          scopes_situation_type: "equipment", scopes_entity_type: "pump",
+          scopes_entity_id: "p-01", statement_search: "cavitation")
+
+    compressor_caller = CALLER.merge(
+      situation_type: "equipment", entity_type: "compressor", entity_id: "c-02"
+    )
+    pump_caller = CALLER.merge(
+      situation_type: "equipment", entity_type: "pump", entity_id: "p-02"
+    )
+
+    found = @repo.search(caller: compressor_caller, query: {terms: ["pressure"]}).candidates
+    assert_equal ["s1"], found.map { |row| row.fetch("memory_id") }
+    found = @repo.search(caller: compressor_caller, query: {terms: ["cavitation"]}).candidates
+    assert_empty found, "an entity must not recall another entity type's experience"
+
+    found = @repo.search(caller: pump_caller, query: {terms: ["cavitation"]}).candidates
+    assert_equal ["s2"], found.map { |row| row.fetch("memory_id") }
+
+    # An ordinary (non-situation) caller is outside the situation boundary.
+    found = @repo.search(caller: CALLER, query: {terms: ["pressure"]}).candidates
+    assert_empty found
+  end
+
+  # T0.3: ordinary memory and situation memory are disjoint. The boundary is
+  # enforced on BOTH sides of the retrieve — a situation caller never falls
+  # back to general memory, and a general caller never inherits situation
+  # experience.
+  def test_situation_and_ordinary_memory_are_disjoint
+    admit(memory_id: "general", statement_search: "deployment canary")
+    admit(memory_id: "situation",
+          scopes_situation_type: "equipment", scopes_entity_type: "compressor",
+          scopes_entity_id: "c-01", statement_search: "deployment canary")
+
+    ordinary = @repo.search(caller: CALLER, query: {terms: ["deployment"]}).candidates
+    assert_equal ["general"], ordinary.map { |row| row.fetch("memory_id") }
+
+    situation_caller = CALLER.merge(
+      situation_type: "equipment", entity_type: "compressor", entity_id: "c-01"
+    )
+    situation = @repo.search(caller: situation_caller, query: {terms: ["deployment"]}).candidates
+    assert_equal ["situation"], situation.map { |row| row.fetch("memory_id") }
+  end
+
+  # T0.3: a partial situation identity is a boundary that cannot be enforced,
+  # so retrieval refuses it instead of silently widening. An explicit nil is
+  # the same as a missing key (value-blind completeness would leak).
+  def test_partial_situation_identity_is_refused
+    assert_raises(Tamoz::ConfigurationError) do
+      @repo.search(caller: CALLER.merge(entity_type: "compressor"), query: {})
+    end
+    assert_raises(Tamoz::ConfigurationError) do
+      @repo.search(caller: CALLER.merge(situation_type: "equipment"), query: {})
+    end
+    assert_raises(Tamoz::ConfigurationError) do
+      @repo.search(
+        caller: CALLER.merge(situation_type: "equipment", entity_type: nil, entity_id: "c-01"),
+        query: {}
+      )
+    end
+  end
+
+  # Security review finding: symbol-keyed situation scopes must land in the
+  # situation dimension (string-key canonicalization), and a situation caller
+  # using string keys must resolve identically.
+  def test_symbol_and_string_keyed_situation_authorities_resolve_identically
+    admit(memory_id: "sym",
+          scopes_situation_type: "equipment", scopes_entity_type: "compressor",
+          scopes_entity_id: "c-01", statement_search: "oil pressure")
+
+    symbol_caller = CALLER.merge(
+      situation_type: "equipment", entity_type: "compressor", entity_id: "c-02"
+    )
+    string_caller = CALLER.merge(
+      "situation_type" => "equipment", "entity_type" => "compressor", "entity_id" => "c-02"
+    )
+    assert_equal ["sym"], @repo.search(caller: symbol_caller, query: {terms: ["pressure"]}).candidates.map { |r| r.fetch("memory_id") }
+    assert_equal ["sym"], @repo.search(caller: string_caller, query: {terms: ["pressure"]}).candidates.map { |r| r.fetch("memory_id") }
+  end
+
+  # Security review finding: the sensitive-only restricted scan must honor the
+  # same caller authority — otherwise matched_restricted_ids becomes an
+  # existence oracle across the boundary.
+  def test_restricted_scan_never_crosses_the_situation_boundary
+    admit(memory_id: "secret-situation", sensitivity: "sensitive",
+          scopes_situation_type: "equipment", scopes_entity_type: "compressor",
+          scopes_entity_id: "c-01", statement_search: "burst disk rupture")
+    admit(memory_id: "secret-general", sensitivity: "sensitive",
+          statement_search: "burst disk rupture")
+
+    ordinary = @repo.search(caller: CALLER, query: {terms: ["burst"]})
+    assert_empty ordinary.candidates
+    refute_includes ordinary.matched_restricted.map { |row| row.fetch("memory_id") }, "secret-situation"
+    assert_includes ordinary.matched_restricted.map { |row| row.fetch("memory_id") }, "secret-general"
+
+    compressor_caller = CALLER.merge(
+      situation_type: "equipment", entity_type: "compressor", entity_id: "c-02"
+    )
+    situation = @repo.search(caller: compressor_caller, query: {terms: ["burst"]})
+    refute_includes situation.matched_restricted.map { |row| row.fetch("memory_id") }, "secret-general"
+    assert_includes situation.matched_restricted.map { |row| row.fetch("memory_id") }, "secret-situation"
   end
 
   def test_append_writes_store_version_and_index_row_in_one_transaction

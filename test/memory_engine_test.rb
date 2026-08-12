@@ -119,6 +119,93 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "Canary 2%, then monitor", corrected_again.statement
   end
 
+  # T0.2: a self-certified episode never admits as :observed. The admission
+  # path must not infer independent observation from the absence of a flag;
+  # only an explicit independently_observed: true (which T5.3 replaces with an
+  # authenticated reconciled-outcome reference) admits an episode as :observed.
+  def test_episodes_without_independent_observation_admit_only_as_reported
+    unmarked = @engine.admission.admit_episode(
+      episode: episode(statement: "Self-certified observation").merge(
+        observed_outcome: {"outcome" => "the model saw it", "confidence" => 0.8}
+      ),
+      owner: "alice"
+    )
+    assert unmarked.accepted?
+    assert_equal :reported, unmarked.record.epistemic_kind
+
+    self_certified = @engine.admission.admit_episode(
+      episode: episode(statement: "Self-claimed observation").merge(
+        observed_outcome: {"outcome" => "claimed", "independently_observed" => false, "confidence" => 0.8}
+      ),
+      owner: "alice"
+    )
+    assert self_certified.accepted?
+    assert_equal :reported, self_certified.record.epistemic_kind
+
+    independent = @engine.admission.admit_episode(
+      episode: episode(statement: "Independently observed").merge(
+        observed_outcome: {"outcome" => "seen", "independently_observed" => true, "confidence" => 0.9}
+      ),
+      owner: "alice"
+    )
+    assert independent.accepted?
+    assert_equal :observed, independent.record.epistemic_kind
+
+    # A truthy string must not upgrade a self-certified episode (strict
+    # boolean, not Ruby truthiness).
+    stringy = @engine.admission.admit_episode(
+      episode: episode(statement: "String-flagged observation").merge(
+        observed_outcome: {"outcome" => "claimed", "independently_observed" => "true", "confidence" => 0.8}
+      ),
+      owner: "alice"
+    )
+    assert stringy.accepted?
+    assert_equal :reported, stringy.record.epistemic_kind
+  end
+
+  # T0.3: situation scopes are complete by VALUE, canonicalized to string keys.
+  # A nil entity identity is the same as a missing key and is refused; symbol
+  # keys are normalized so the episode lands in the situation dimension.
+  def test_situation_scopes_are_value_complete_and_key_canonicalized
+    partial = episode(statement: "Partial situation scope").merge(
+      scopes: scopes(user: "alice").merge(
+        "situation_type" => "equipment", "entity_type" => nil, "entity_id" => "c-01"
+      )
+    )
+    assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+      @engine.admission.admit_episode(episode: partial, owner: "alice")
+    end
+
+    symbolized = episode(statement: "Symbol-keyed situation scope").merge(
+      scopes: scopes(user: "alice").merge(
+        situation_type: "equipment", entity_type: "compressor", entity_id: "c-01"
+      )
+    )
+    result = @engine.admission.admit_episode(episode: symbolized, owner: "alice")
+    assert result.accepted?
+    assert_equal "compressor", result.record.scopes.fetch("entity_type")
+  end
+
+  # T0.2 code-review finding: string-keyed episodes must not lose their
+  # outcome/confidence to symbol-only fetches, and a :reported record must not
+  # claim an "observed outcome" in its durable statement.
+  def test_episode_statement_preserves_the_outcome_and_says_reported
+    result = @engine.admission.admit_episode(
+      episode: episode(statement: nil, user: "alice").merge(
+        observed_outcome: {
+          "outcome" => "the check passed with 2 retries",
+          "confidence" => 0.9
+        }
+      ),
+      owner: "alice"
+    )
+    assert result.accepted?
+    assert_equal :reported, result.record.epistemic_kind
+    assert_includes result.record.statement, "reported outcome: the check passed with 2 retries"
+    refute_includes result.record.statement, "observed outcome: completed"
+    assert_equal 0.9, result.record.confidence
+  end
+
   def test_pre_p11_sessions_resume_with_memory_epoch_none
     # P11-03 at the record layer: a pre-P11 session record loads with
     # memory_epoch "none" and RECORD_VERSION stays 1.

@@ -282,15 +282,26 @@ module Tamoz
           unless value.is_a?(Hash)
             raise MemoryPolicyError, "scopes must be an object"
           end
-          %w[tenant user project session].each do |key|
-            next if value[key].nil?
+          # T0.3: canonicalize keys to strings so symbol- and string-keyed
+          # scopes validate identically, then require the situation dimension
+          # to be all-or-none by VALUE: any non-nil situation key must come
+          # with a non-nil entity identity, and an explicit nil is the same as
+          # an absent key.
+          normalized = value.to_h { |key, entry| [String(key), entry] }
+          present = %w[situation_type entity_type entity_id].reject { |key| normalized[key].nil? }
+          unless present.empty? || present.length == 3
+            raise MemoryPolicyError,
+                  "situation scopes must be complete: situation_type, entity_type, entity_id"
+          end
+          %w[tenant user project session situation_type entity_type entity_id].each do |key|
+            next if normalized[key].nil?
 
             SafeText.normalize(
-              value[key], name: "scope #{key}", max_bytes: MAX_ID_BYTES,
+              normalized[key], name: "scope #{key}", max_bytes: MAX_ID_BYTES,
               error_class: MemoryPolicyError
             )
           end
-          value
+          normalized
         end
 
         def validate_quality(value)

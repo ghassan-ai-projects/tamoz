@@ -18,7 +18,7 @@ module TamozSQLiteOracle
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 11
+  SCHEMA_VERSION = 12
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -51,6 +51,11 @@ module TamozSQLiteOracle
   # digest epoch marker plus the pre-JCS canonical-digest row clear.
   MIGRATION_11_CHECKSUM =
     "73de39e7283bc6d562f03ae8747c47bef104357e022833bd2e963c7a6c079af0"
+  # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 — the
+  # situation/entity scope columns on the memory index (table rebuild with the
+  # all-or-none CHECK).
+  MIGRATION_12_CHECKSUM =
+    "d455430d1d2423fd604a43e6c1c12598bbde5600e38bc09105ea089ce073fec2"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -775,7 +780,8 @@ module TamozSQLiteOracle
         [8, MIGRATION_8_CHECKSUM],
         [9, MIGRATION_9_CHECKSUM],
         [10, MIGRATION_10_CHECKSUM],
-        [11, MIGRATION_11_CHECKSUM]
+        [11, MIGRATION_11_CHECKSUM],
+        [12, MIGRATION_12_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

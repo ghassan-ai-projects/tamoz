@@ -116,7 +116,6 @@ module Tamoz
           corrections: [],
           observed_outcome: {
             'outcome' => verification.fetch('answer'),
-            'independently_observed' => true,
             'confidence' => 0.9
           }
         }
