@@ -113,7 +113,8 @@ module Tamoz
           profile_roles:,
           profile_budgets:,
           memory:,
-          memory_owner:
+          memory_owner:,
+          transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
         }
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
@@ -350,13 +351,18 @@ module Tamoz
       end
       private :current_egress_pin
 
+      # Reads the conversation transcript a channel turn carries in its
+      # request payload, through the compiled app's BOUND checkpointer (what
+      # arrives at the constructor is the unbound adapter).
+      def conversation_transcript(thread_id:, request_id:)
+        SessionPlanningContext.transcript_from(@app.checkpointer, thread_id:, request_id:)
+      end
+      private :conversation_transcript
+
       def self.build_definition(nodes, version: GRAPH_VERSION)
         routed = String(version) == CURRENT_GRAPH_VERSION
         Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
           state :task, default: ""
-          # The conversation transcript the task arrived with (channel turns
-          # only; the CLI delivers a bare task and the default applies).
-          state :conversation, default: []
           state :phase, default: ""
           state :next_node, default: "intake"
           state :terminal_reason, default: "no_check"

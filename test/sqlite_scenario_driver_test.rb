@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteScenarioDriverTest < Minitest::Test
   REGISTRY_DIGEST =
-    "sha256:4e9e83ec3b3eeeb5b6c85217709243e347aef845bcbf000fb4a6090361d00249"
+    "sha256:a2b591135254351bd4893d2a1eef79b10d90000fdc9cc70f92d4595e19a41c07"
   DRIVER_DIGEST =
     "sha256:25afc66329481cfa7abaff6aec9d32ebaf8b621eec1cb2f7ebf82dfe9d0bac5d"
 

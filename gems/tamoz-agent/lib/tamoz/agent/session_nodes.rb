@@ -71,6 +71,7 @@ module Tamoz
         profile_budgets: nil,
         memory: nil,
         memory_owner: nil,
+        transcript_reader: nil,
         graph_version: GRAPH_VERSION
       )
         @model = model
@@ -111,7 +112,8 @@ module Tamoz
         )
         @planning_context = SessionPlanningContext.new(
           configuration:,
-          memory: @memory_nodes
+          memory: @memory_nodes,
+          transcript_reader:
         )
         @plan_outcomes = SessionPlanOutcomes.new(configuration:)
         @effects = SessionEffects.new(configuration:)

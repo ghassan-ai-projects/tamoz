@@ -97,7 +97,6 @@ module Tamoz
             READ.call("request.claim.lease.thread"),
             READ.call("request.claim.lease.row"),
             READ.call("request.claim.candidates"),
-            READ.call("request.claim.early_checkpoint"),
             READ.call("request.claim.latest_checkpoint"),
             READ.call("request.claim.active_execution"),
             READ.call("request.claim.redirect_target"),

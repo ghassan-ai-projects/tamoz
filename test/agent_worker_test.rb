@@ -435,7 +435,7 @@ class AgentWorkerTest < Minitest::Test
       completed = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 2, completed.length, "both the approved turn and the queued message must complete"
       assert_equal 1, rt.events.count { |event| event["event"] == "request.paused" },
-                    "the read-only follow-up must not pause for approval"
+                   "the read-only follow-up must not pause for approval"
     end
   end
 

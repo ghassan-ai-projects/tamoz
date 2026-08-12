@@ -70,10 +70,11 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
-  # A channel turn carries the conversation transcript in its payload (the
-  # comms gateway puts it there); the planner AND the reviewer must both see
-  # it, or a follow-up like "and the font?" is reviewed as if it stood alone.
-  def test_a_turn_with_conversation_state_plans_and_reviews_with_the_transcript
+  # A channel turn carries the conversation transcript nested in its task
+  # payload (the comms gateway puts it there); the planner AND the reviewer
+  # must both see it, or a follow-up like "and the font?" is reviewed as if
+  # it stood alone.
+  def test_a_turn_with_a_conversation_payload_plans_and_reviews_with_the_transcript
     with_workspace do |root, adapter|
       File.write(File.join(root, "note.txt"), "blue\n")
       model = ScriptedModel.new(
@@ -84,16 +85,21 @@ class AgentSessionTest < Minitest::Test
       session = build_session(model:, root:, adapter:)
 
       request = session.app.durable_runner.deliver(
-        {"task" => "and the font?",
-         "conversation" => [
-           {"role" => "user", "text" => "make it blue"},
-           {"role" => "assistant", "text" => "done, it is blue"}
-         ]},
+        {"task" => {
+          "text" => "and the font?",
+          "conversation" => [
+            {"role" => "user", "text" => "make it blue"},
+            {"role" => "assistant", "text" => "done, it is blue"}
+          ]
+        }},
         thread: "session.conversation",
         request_id: "request.1"
       )
 
       assert_equal :completed, request.status
+      assert_equal "and the font?",
+                   session.view(thread: "session.conversation").state.fetch(:task),
+                   'the state channel keeps the bare text, not the payload Hash'
       %i[plan review].each do |stage|
         prompt = model.calls.find { |call| call.fetch(:stage) == stage }.fetch(:prompt)
         assert_includes prompt, "make it blue", "the #{stage} prompt must see the transcript"

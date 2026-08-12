@@ -162,35 +162,45 @@ module Tamoz
         validate_claim_lease!(tx, lease, now)
         candidate_rows(tx, lease).each do |row|
           return row unless row.fetch(7) == 'queued'
-          next if early_turn?(tx, lease:, row:, validator:)
 
-          stale = fail_if_stale(
-            tx,
-            lease:,
-            row:,
-            validator:,
-            now:,
-            execution_id:
-          )
-          return stale if stale
+          if validator
+            checkpoint = @store.latest_checkpoint_in_transaction(
+              tx, lease.thread_id, lease.namespace, 'request.claim.latest_checkpoint'
+            )
+            reason = @staleness.reason_for(validator, wire.materialize_request(row), checkpoint)
+            if reason
+              next if early_turn?(row, reason)
+
+              return fail_stale_claim!(tx, lease:, row:, reason:, checkpoint:, now:, execution_id:)
+            end
+          end
 
           return claim_queued_request!(tx, lease:, row:, execution_id:, now:)
         end
         nil
       end
 
-      # A queued turn/fork whose only verdict is "the checkpoint has not
-      # settled" is skipped, not failed: the message arrived while the thread
-      # was busy, and killing it would drop work the sender sees as accepted.
-      # Skipping also unblocks whatever sits behind it — a resume answering the
-      # open turn must reach the claim ahead of the next fresh turn.
-      def early_turn?(tx, lease:, row:, validator:) # rubocop:disable Naming/MethodParameterName
-        return false unless validator && EARLY_TURN_OPERATIONS.include?(row.fetch(5))
+      # A queued turn whose only verdict is "the checkpoint has not settled"
+      # is deferred, not failed: the message arrived while the thread was
+      # busy, and killing it would drop work the sender sees as accepted.
+      # Deferring also unblocks whatever sits behind it — a resume answering
+      # the open turn must reach the claim ahead of the next fresh turn.
+      def early_turn?(row, reason)
+        EARLY_TURN_OPERATIONS.include?(row.fetch(5)) && reason == EARLY_TURN_REASON
+      end
 
-        checkpoint = @store.latest_checkpoint_in_transaction(
-          tx, lease.thread_id, lease.namespace, 'request.claim.early_checkpoint'
+      def fail_stale_claim!(tx, lease:, row:, reason:, checkpoint:, now:, execution_id:) # rubocop:disable Metrics/ParameterLists -- one atomic stale failure keeps the write and transition together.
+        terminal_fail_in_transaction!(
+          tx,
+          lease:,
+          row:,
+          operation: row.fetch(5).to_sym,
+          reason:,
+          execution_id:,
+          checkpoint_id: checkpoint&.id,
+          now:
         )
-        @staleness.reason_for(validator, wire.materialize_request(row), checkpoint) == EARLY_TURN_REASON
+        rows.request_row(tx, lease.thread_id, lease.namespace, row.fetch(2), 'request.claim.result')
       end
 
       def validate_claim_lease!(tx, lease, now)
@@ -218,19 +228,6 @@ module Tamoz
             LIMIT ?
           SQL
           [lease.thread_id, lease.namespace, limit]
-        )
-      end
-
-      def fail_if_stale(tx, lease:, row:, validator:, now:, execution_id:) # rubocop:disable Metrics/ParameterLists -- forwards the stale-check transaction context.
-        fail_if_stale!(
-          tx,
-          lease:,
-          row:,
-          validator:,
-          now:,
-          execution_id:,
-          checkpoint_label: 'request.claim.latest_checkpoint',
-          result_label: 'request.claim.result'
         )
       end
 

@@ -86,11 +86,14 @@ module Tamoz
       # admitted-but-unfinished requests must stay under `capacity`, so the
       # reserved terminal row can always append.
       # `history` is the conversation transcript so far (see
-      # `conversation_history`); it rides the request payload so the turn is
-      # planned with the thread's context, not with one message alone.
+      # `conversation_history`); it rides inside the payload's `task` entry
+      # (the same Hash shape a cancel payload uses, since payload keys map
+      # onto state channels one-to-one) so the turn is planned with the
+      # thread's context, not with one message alone.
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:, history: [])
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:,
+                            history: [])
         transaction('comms.admit.enqueue') do |txn|
           next :duplicate if inbound_row(txn, envelope_wire, bot_id)
           next :capacity_refused if capacity_saturated?(txn, surface_id, reservation, capacity)
@@ -107,9 +110,9 @@ module Tamoz
               created_at_ms, updated_at_ms
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?)
           SQL
-          payload = { 'task' => envelope_wire.fetch('text') }
-          payload['conversation'] = history unless history.empty?
-          payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(REQUEST_OPERATION, payload)
+          payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
+            REQUEST_OPERATION, turn_payload(envelope_wire.fetch('text'), history)
+          )
           payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
           input_digest = Wire.digest(
             JSON.generate([REQUEST_OPERATION, REQUEST_DELIVERY, payload_bytes]),
@@ -143,6 +146,17 @@ module Tamoz
       # reservations.
       def capacity_saturated?(txn, surface_id, reservation, capacity)
         pending_claimed_count(txn, surface_id) + open_reservations(txn, surface_id) + reservation > capacity
+      end
+
+      # A bare task string for a first contact; once the conversation has a
+      # transcript the text nests with it under the task Hash — the shape the
+      # graph's payload-to-channel mapping tolerates (payload keys map onto
+      # state channels one-to-one, and `task` already carries Hashes).
+      # :reek:UtilityFunction -- pure payload shaping for the admission above.
+      def turn_payload(text, history)
+        return { 'task' => text } if history.empty?
+
+        { 'task' => { 'text' => text, 'conversation' => history } }
       end
 
       # ===== poll state =====
@@ -289,7 +303,7 @@ module Tamoz
         entries = recent_request_tasks(surface_id:, conversation_id:, limit:) +
                   recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
         entries.sort_by { |entry| entry.fetch(:at) }.last(limit).map do |entry|
-          {'role' => entry.fetch(:role), 'text' => entry.fetch(:text)}
+          { 'role' => entry.fetch(:role), 'text' => entry.fetch(:text) }
         end
       end
 
@@ -559,17 +573,19 @@ module Tamoz
         end
         rows.filter_map do |request_id, thread_id, at|
           task = request_task(request_id, thread_id)
-          task && {role: 'user', text: task[0, HISTORY_TEXT_CHARACTERS], at:}
+          task && { role: 'user', text: task[0, HISTORY_TEXT_CHARACTERS], at: }
         end
       end
 
       # The task text of one admitted request, read back from the graph inbox
-      # payload. A non-text turn (a redirect payload is a Hash) has no
+      # payload. A channel turn with history nests the text under the task
+      # Hash; any other non-text turn (a cancel or redirect payload) has no
       # transcript line, and a row that cannot be read back must not take the
       # admission down with it.
       def request_task(request_id, thread_id)
         request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
         task = request&.payload&.fetch('task', nil)
+        task = task.fetch('text', nil) if task.is_a?(Hash)
         task.is_a?(String) ? task : nil
       rescue StandardError
         nil
@@ -585,7 +601,7 @@ module Tamoz
           SQL
         end
         rows.map do |text, at|
-          {role: 'assistant', text: text[0, HISTORY_TEXT_CHARACTERS], at:}
+          { role: 'assistant', text: text[0, HISTORY_TEXT_CHARACTERS], at: }
         end
       end
 

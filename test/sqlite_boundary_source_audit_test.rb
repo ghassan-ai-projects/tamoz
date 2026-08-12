@@ -23,15 +23,15 @@ class SQLiteBoundarySourceAuditTest < Minitest::Test
     # checkpoint_store.rb — `request.pending_threads` (where is there work) and
     # `effect.census` (what does the journal say) — and durable routing added
     # `checkpoint.latest_graph_version` (which graph codec can decode the head).
-    # 108 -> 110: the early-turn deferral scans claim candidates (`request.claim.candidates`
-    # + `request.claim.early_checkpoint`, replacing `request.claim.next`), and the
+    # 108 -> 109: the early-turn deferral scans claim candidates
+    # (`request.claim.candidates`, replacing `request.claim.next`), and the
     # registry caught up to the claimer's fenced WRITE `request.terminal_fail`,
     # which the post-claim backstop already routed through.
     # None leases, writes, or needs a kill probe. These counts are a tripwire on
     # the storage boundary:
     # moving them is a deliberate act, not a rubber stamp.
     assert_equal 23, result.length
-    assert_equal 110, result.values.sum(&:length)
+    assert_equal 109, result.values.sum(&:length)
     assert_equal(
       {
         "checkpoint.commit.consume.{index}" => "write",
