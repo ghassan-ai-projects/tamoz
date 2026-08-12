@@ -16,6 +16,7 @@ require_relative "stream/connector"
 require_relative "stream/stream_store"
 require_relative "stream/capability_host"
 require_relative "stream/situation_snapshot"
+require_relative "stream/situation_request"
 require_relative "stream/episode_worker"
 
 module Tamoz

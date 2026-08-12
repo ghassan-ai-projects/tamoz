@@ -57,5 +57,11 @@ module Tamoz
     class ContractMismatchError < StreamError
       CATEGORY = "stream_contract_mismatch"
     end
+
+    # T1.3': an EpisodeRequest failed validation (identity, kind, lane, risk
+    # ceiling). The episode terminates before any model call.
+    class EpisodeRequestInvalidError < StreamError
+      CATEGORY = "stream_episode_request_invalid"
+    end
   end
 end

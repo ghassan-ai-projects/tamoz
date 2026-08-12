@@ -27,10 +27,13 @@ module Tamoz
         Agenticstream::Runtime::V1::EpisodeKind::EPISODE_KIND_RECONSIDER
       ].freeze
 
-      def initialize(worker_version:, runner: nil)
+      def initialize(worker_version:, runner: nil, lane_config: nil)
         @worker_version = worker_version
         @runner = runner
+        @lane_config = lane_config
       end
+
+      attr_reader :lane_config
 
       # The runtime's WorkerExecutor calls Handshake with the worker's declared
       # protocol/contract versions and identity; the worker refuses a contract
