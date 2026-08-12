@@ -196,12 +196,16 @@ module Tamoz
 
       private
 
-      # v2 approve+deny (ADR-043 v1 was deny-only): the callback text encodes
-      # `action:reference`; its domain-separated digest resolves exactly one
-      # ACTIVE prompt, and consumption inserts an approve/deny decision for the
-      # worker in the SAME transaction. A bare reference (v1 wire) resolves as
-      # deny. A replayed reference, an expiry, or a swapped binding never
-      # resolves (invariant 58).
+      # ADR-049 (INV-A/B/D, contract §7.1): an approve is refused unless the
+      # presser's evidence meets the prompt's pinned requirement. A Telegram
+      # callback supplies `chat_bound` — under the v1 policy every effect
+      # requires `filesystem_operator`, so an approve is always refused with a
+      # durable refusal and NO decision; deny remains unconditional (INV-A).
+      # A refusal never consumes the prompt, so a legitimate deny on the same
+      # reference stays possible. The binding is exact: surface id+revision,
+      # correspondent and conversation must match the prompt row the reference
+      # resolved to. Consumption still inserts the decision in the SAME store
+      # transaction (single-use CAS), so a replay never resolves twice.
       def resolve_callback(envelope, now:)
         action, reference = split_callback(envelope.fetch('text').to_s)
         digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
@@ -210,6 +214,18 @@ module Tamoz
         unless prompt && prompt.fetch('status') == 'active'
           @store.disposition_only(envelope, surface_id:, bot_id:,
                                             disposition: 'ignored', reason: 'unknown_reference', now:)
+          return
+        end
+
+        unless prompt_binding_matches?(prompt, envelope)
+          @store.disposition_only(envelope, surface_id:, bot_id:,
+                                            disposition: 'rejected', reason: 'binding_mismatch', now:)
+          return
+        end
+
+        if action == 'approve' && approval_insufficient_evidence?(prompt)
+          @store.disposition_only(envelope, surface_id:, bot_id:,
+                                            disposition: 'rejected', reason: 'insufficient_evidence', now:)
           return
         end
 
@@ -223,6 +239,24 @@ module Tamoz
         outcome = @store.consume_prompt(reference_digest: digest, decision_wire: decision.wire, now:)
         @store.disposition_only(envelope, surface_id:, bot_id:,
                                           disposition: 'decision', reason: outcome.to_s, now:)
+      end
+
+      # Contract §7.1 exact binding: the callback's surface id+revision,
+      # correspondent and conversation must match the prompt row. A prompt
+      # without a surface binding (pre-Phase-3 row) fails closed.
+      def prompt_binding_matches?(prompt, envelope)
+        prompt.fetch('surface_id') == envelope.fetch('surface_id') &&
+          prompt.fetch('surface_revision') == envelope.fetch('surface_revision') &&
+          prompt.fetch('correspondent_id') == envelope.fetch('correspondent_id') &&
+          prompt.fetch('conversation_id') == envelope.fetch('conversation_id')
+      end
+
+      # ADR-049 INV-B: the presser's evidence is a property of the trusted
+      # callback path (a Telegram press is chat_bound), never of the wire
+      # text. chat_bound < required_evidence refuses the approve.
+      def approval_insufficient_evidence?(prompt)
+        Comms::AuthorityEvidence.chat_bound <
+          Comms::AuthorityEvidence.from(prompt.fetch('required_evidence'))
       end
 
       # `approve:<reference>` / `deny:<reference>` → [action, reference]; a

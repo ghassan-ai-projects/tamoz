@@ -112,6 +112,7 @@ module Tamoz
         return nil unless binding
 
         reference, prompt = Comms::ApprovalPrompt.build(
+          surface_id: route.fetch('surface_id'), surface_revision: surface.fetch('revision'),
           thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
           interrupts: event.fetch(:interrupts),
           correspondent_id: binding.fetch('correspondent_id'),

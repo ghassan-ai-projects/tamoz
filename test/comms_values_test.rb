@@ -209,12 +209,14 @@ class CommsValuesTest < Minitest::Test
 
   def test_prompt_reference_is_single_use_and_digest_only
     reference_a, prompt_a = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
     reference_b, prompt_b = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -231,6 +233,7 @@ class CommsValuesTest < Minitest::Test
 
   def test_prompt_pins_required_evidence_from_the_trusted_policy
     _reference, prompt = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -250,6 +253,7 @@ class CommsValuesTest < Minitest::Test
 
   def test_prompt_rejects_a_non_lattice_required_evidence
     prompt = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -264,6 +268,7 @@ class CommsValuesTest < Minitest::Test
 
   def test_prompt_validates_lifecycle_fields
     prompt = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',

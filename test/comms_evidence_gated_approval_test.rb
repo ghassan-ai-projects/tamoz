@@ -6,12 +6,9 @@ require_relative 'test_helper'
 # authority evidence, not on transport. These are the bar's group-C oracles
 # (TELEGRAM_COMMUNICATION_BAR C1-C3) as executable tests.
 #
-# C1 is SKIPPED until ADR-049's evidence check is implemented (plan Phase 3):
-# the shipped `resolve_callback` records a Telegram `approve` unconditionally —
-# the defect ADR-049 repairs — so the oracle would fail against current code.
-# It is skipped, not red, so `rake ci` keeps its meaning ("no regression in
-# what already works"; cf. AUTONOMY_TESTS). Un-skip C1 when the v1 policy
-# function and the callback lattice comparison land; it then goes green.
+# C1 is GREEN since plan Phase 3: `resolve_callback` refuses a chat_bound
+# approve under the v1 policy with a durable refusal and no decision, and
+# deny remains unconditional (INV-A).
 # rubocop:disable Lint/UnusedMethodArgument
 class CommsEvidenceGatedApprovalTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -53,21 +50,15 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     )
   end
 
-  # C1 / INV-B + INV-D (SKIPPED until ADR-049 implementation lands, plan
-  # Phase 3): under the v1 policy every effect requires `filesystem_operator`,
-  # so a chat_bound Telegram approve must be refused and must NOT put an
-  # approve decision in front of the worker. The shipped code records one
-  # anyway; that is the defect. Skipped rather than red so `rake ci` stays
-  # green; un-skip when the evidence check exists.
+  # C1 / INV-B + INV-D (GREEN since Phase 3): under the v1 policy every effect
+  # requires `filesystem_operator`, so a chat_bound Telegram approve must be
+  # refused and must NOT put an approve decision in front of the worker.
   def test_a_chat_bound_approve_is_refused_under_v1_policy
-    skip 'ADR-049 §2 INV-B/INV-D / bar C1: the evidence check is not implemented yet. ' \
-         'Un-skip when the v1 policy function and the callback lattice comparison land; ' \
-         'this test then asserts a chat_bound approve is refused and records no decision.'
     with_engine do |adapter, checkpoints|
       store, gateway = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, store, "approve:#{reference}", update_id: 60)
+      press(gateway, "approve:#{reference}", update_id: 60)
 
       decision = pending(adapter, prompt)
       approve_reached_worker = !decision.nil? && decision.fetch('direction') == 'approve'
@@ -78,6 +69,65 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
+  # C1 / refusal is durable and non-destructive (contract §7.1): the weak
+  # approve records a `rejected`/`insufficient_evidence` inbound row and the
+  # prompt stays ACTIVE — a refusal never consumes it.
+  def test_a_refused_approve_records_a_durable_refusal_and_leaves_the_prompt_active
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      press(gateway, "approve:#{reference}", update_id: 70)
+
+      rows = inbound_dispositions(adapter)
+      refusal = rows.find { |row| row[1] == 'insufficient_evidence' }
+
+      refute_nil refusal, 'the weak approve must record a durable refusal'
+      assert_equal 'rejected', refusal[0]
+
+      stored = store.prompt(reference_digest: prompt.reference_digest)
+
+      assert_equal 'active', stored.fetch('status'),
+                   'a refusal must not consume the prompt; a later deny stays possible'
+    end
+  end
+
+  # INV-A after a refused approve: the same bound correspondent can still
+  # deny the same prompt — the refusal did not burn the single-use reference.
+  def test_a_deny_after_a_refused_approve_still_succeeds
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      press(gateway, "approve:#{reference}", update_id: 70)
+      press(gateway, "deny:#{reference}", update_id: 71)
+
+      decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 0, 4))
+
+      assert_equal 'deny', decision.fetch('direction')
+    end
+  end
+
+  # C1 / exact binding (contract §7.1): a press whose correspondent does not
+  # match the prompt's bound correspondent records a durable refusal and
+  # creates no decision.
+  def test_a_cross_correspondent_press_is_refused
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      press(gateway, "approve:#{reference}", update_id: 80, correspondent_id: 222_222_22)
+
+      decision = pending(adapter, prompt)
+
+      assert_nil decision, 'a press outside the prompt binding never resolves'
+      rows = inbound_dispositions(adapter)
+
+      assert rows.any? { |row| row[0] == 'rejected' && row[1] == 'binding_mismatch' },
+             'the cross-correspondent press must record a durable binding refusal'
+    end
+  end
+
   # C1 / INV-A (asymmetry control, GREEN): the equivalent denial still
   # succeeds. Deny is fail-safe and unconditional for the bound correspondent.
   def test_the_equivalent_deny_still_succeeds
@@ -85,7 +135,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       store, gateway = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
 
-      press(gateway, store, "deny:#{reference}", update_id: 61)
+      press(gateway, "deny:#{reference}", update_id: 61)
 
       decision = pending(adapter, prompt)
 
@@ -102,7 +152,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       reference, prompt = active_prompt(store, ttl_s: 1)
 
       # Press well after the TTL window.
-      press(gateway, store, "approve:#{reference}", update_id: 62, now: Time.utc(2026, 8, 10, 12, 30, 0))
+      press(gateway, "approve:#{reference}", update_id: 62, now: Time.utc(2026, 8, 10, 12, 30, 0))
 
       decision = pending(adapter, prompt, now: Time.utc(2026, 8, 10, 12, 30, 1))
       approve_reached_worker = !decision.nil? && decision.fetch('direction') == 'approve'
@@ -136,6 +186,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
   def active_prompt(store, ttl_s: 900)
     reference, prompt = Comms::ApprovalPrompt.build(
+      surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -146,8 +197,9 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     [reference, prompt]
   end
 
-  def press(gateway, _store, data, update_id:, now: Time.utc(2026, 8, 10, 12, 0, 2))
-    gateway.instance_variable_get(:@transport).batch([callback_update(data, update_id)])
+  def press(gateway, data, update_id:, correspondent_id: 111_111_11,
+            now: Time.utc(2026, 8, 10, 12, 0, 2))
+    gateway.instance_variable_get(:@transport).batch([callback_update(data, update_id, correspondent_id:)])
     gateway.instance_variable_get(:@transport).receipt = { 'message_id' => 1, 'date' => 1 }
     gateway.serve_once(now:)
   end
@@ -159,9 +211,20 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     )
   end
 
-  def callback_update(data, id)
+  # The durable inbound ledger for this surface, newest first — the refusal
+  # records of the bar's C1 are rows here, not assertions in prose.
+  def inbound_dispositions(adapter)
+    adapter.__send__(:read, operation: 'test.inbound.dispositions') do |txn|
+      txn.rows('test.inbound.dispositions', <<~SQL, ['telegram-ops'])
+        SELECT disposition, reason FROM tamoz_comms_inbound
+        WHERE surface_id = ? ORDER BY ingested_at_ms DESC
+      SQL
+    end
+  end
+
+  def callback_update(data, id, correspondent_id: 111_111_11)
     { 'update_id' => id,
-      'callback_query' => { 'id' => "q-#{id}", 'from' => { 'id' => 111_111_11 },
+      'callback_query' => { 'id' => "q-#{id}", 'from' => { 'id' => correspondent_id },
                             'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' } },
                             'data' => data } }
   end

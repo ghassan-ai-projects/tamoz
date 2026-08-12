@@ -71,15 +71,16 @@ module Tamoz
       # ever stored. The plaintext reference lives in memory for exactly one
       # control-send attempt (design §7). The requirement is pinned at build
       # time from the trusted policy (INV-C), in the same value as the
-      # interrupt digest.
+      # interrupt digest, and the surface binding is captured so the callback
+      # comparison can verify it (contract §7.1).
       def self.build(
-        thread_id:, occurrence_id:, interrupts:, correspondent_id:,
-        conversation_id:, prompt_ttl_s:, created_at: Time.now.utc
+        surface_id:, surface_revision:, thread_id:, occurrence_id:, interrupts:,
+        correspondent_id:, conversation_id:, prompt_ttl_s:, created_at: Time.now.utc
       )
         reference = SecureRandom.random_bytes(16).unpack1('H*')
         digest = Canonical.hexdigest(REFERENCE_DOMAIN, reference)
         prompt = new(
-          reference_digest: digest, surface_id: nil, surface_revision: nil,
+          reference_digest: digest, surface_id:, surface_revision:,
           thread_id:, occurrence_id:, interrupt_digest: InterruptDigest.of(interrupts),
           correspondent_id:, conversation_id:,
           required_evidence: ApprovalPolicy.required_evidence(interrupts).to_s,

@@ -59,6 +59,7 @@ class CommsDenyCallbackTest < Minitest::Test
       transport.batch([])
 
       reference, prompt = Comms::ApprovalPrompt.build(
+        surface_id: 'telegram-ops', surface_revision: 1,
         thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
@@ -132,6 +133,7 @@ class CommsDenyCallbackTest < Minitest::Test
       transport.batch([])
 
       _reference, prompt = Comms::ApprovalPrompt.build(
+        surface_id: 'telegram-ops', surface_revision: 1,
         thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
