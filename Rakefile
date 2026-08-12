@@ -63,6 +63,7 @@ SERIAL_TESTS = %w[
   test/release_rehearsal_evidence_test.rb
   test/stream_episode_worker_test.rb
   test/stream_episode_end_to_end_test.rb
+  test/stream_evidence_client_test.rb
 ].freeze
 
 EXCLUDED_FROM_DEFAULT = (AUTONOMY_TESTS + SLOW_TESTS + SERIAL_TESTS).freeze

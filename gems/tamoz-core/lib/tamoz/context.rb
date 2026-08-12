@@ -12,7 +12,7 @@ module Tamoz
     ATTRIBUTES = %i[
       run_id parent_run_id execution_id request_id thread_id namespace task_id tags metadata
       deadline cancellation clock notifier emitter store effects interrupts graph_runtime
-      interrupt_mode
+      interrupt_mode episode_tools
     ].freeze
 
     attr_reader(*ATTRIBUTES)
@@ -36,7 +36,8 @@ module Tamoz
       effects: nil,
       interrupts: nil,
       graph_runtime: nil,
-      interrupt_mode: :interactive
+      interrupt_mode: :interactive,
+      episode_tools: nil
     )
       @run_id = identity!(run_id, :run_id)
       @parent_run_id = optional_identity!(parent_run_id, :parent_run_id)
@@ -69,6 +70,9 @@ module Tamoz
       if graph_runtime && !graph_runtime.respond_to?(:call)
         raise ConfigurationError, "graph_runtime must respond to call"
       end
+      if episode_tools && !episode_tools.respond_to?(:execute)
+        raise ConfigurationError, "episode_tools must respond to execute"
+      end
 
       @cancellation = cancellation
       @clock = clock
@@ -78,6 +82,7 @@ module Tamoz
       @effects = effects
       @interrupts = interrupts
       @graph_runtime = graph_runtime
+      @episode_tools = episode_tools
       freeze
     end
 

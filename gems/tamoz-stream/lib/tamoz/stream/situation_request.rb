@@ -4,6 +4,8 @@ require "tamoz/core"
 require "tamoz/stream/gen"
 require "tamoz/stream/episode_stream"
 require "tamoz/stream/decision_builder"
+require "tamoz/stream/capability_host"
+require "tamoz/stream/evidence_client"
 require "json"
 
 Tamoz::Stream::Gen.load!
@@ -230,7 +232,8 @@ module Tamoz
               execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
               request_id: envelope.request_id,
               interrupt_mode: :non_interactive,
-              emitter: adapter
+              emitter: adapter,
+              episode_tools: build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
             result = @durable_runner.deliver(
@@ -299,6 +302,42 @@ module Tamoz
           decision_json: JSON.generate(decision),
           decision_sha256: digest
         )
+      end
+
+      # T3.2: the episode tool surface. The containment host (T4.1) binds the
+      # fixed seven-name allowlist; the evidence channel (when the request
+      # carries an endpoint and a token) is the reverse-channel client scoped
+      # to the VERIFIED snapshot's identity — otherwise the surface is bound
+      # to refusal adapters and evidence refuses. The host is read-only and
+      # bounded by construction; the graph reaches it only through
+      # context.episode_tools.
+      def build_capability_host(wire_request, snapshot)
+        if wire_request.evidence_tools_endpoint.to_s.empty? ||
+           wire_request.capability_token.to_s.empty?
+          implementations = EpisodeCapabilityHost::PERMITTED.to_h do |name|
+            [name, EvidenceUnavailableAdapter.new(tool_name: name)]
+          end
+        else
+          client = EvidenceClient.new(
+            endpoint: wire_request.evidence_tools_endpoint,
+            capability_token: wire_request.capability_token,
+            episode_id: wire_request.episode_id,
+            attempt_id: wire_request.attempt_id,
+            fence: wire_request.fence,
+            tenant_id: snapshot.fetch("tenant_id"),
+            situation_id: snapshot.fetch("situation_id"),
+            situation_version: snapshot.fetch("situation_version"),
+            entity_id: snapshot.fetch("entity").fetch("id"),
+            max_rows: wire_request.budget&.max_tool_result_bytes,
+            max_bytes: wire_request.budget&.max_tool_result_bytes,
+            time_from: wire_request.evidence_time_range&.from&.seconds,
+            time_until: wire_request.evidence_time_range&.until&.seconds
+          )
+          implementations = EpisodeCapabilityHost::PERMITTED.to_h do |name|
+            [name, EvidenceToolAdapter.new(client, tool_name: name)]
+          end
+        end
+        EpisodeCapabilityHost.new(implementations)
       end
 
       # T2.2: an RPC-context cancellation (supersession) cancels the run's
