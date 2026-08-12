@@ -1,14 +1,15 @@
 # ADR-049 — Telegram approval is evidence-gated, not transport-gated
 
-- **Status:** Proposed (draft). Not authority until accepted.
+- **Status:** Accepted 2026-08-12 (reviewed and approved; the amendment and §18 entry below are applied).
 - **Date:** 2026-08-12
 - **Relates to:** ADR-043 (Telegram v1 is deny-only and reference-bound) — this ADR is the
   "new ADR" ADR-043 requires before any grant mode; ADR-042 (the gateway is the only
   process that talks to the transport); `TELEGRAM_COMMUNICATION_FLOW_CONTRACT_2026-08-12.md`
   §2/§7.1; `TELEGRAM_COMMUNICATION_BAR.md` group C.
-- **On acceptance:** add the one-line entry (below) to `COMMS_DESIGN.md` §18, and apply the
-  ADR-043 amendment (below). Both are held until acceptance because ADR-043 is live
-  authority and this ADR is a draft; authority must not defer to an unaccepted decision.
+- **On acceptance (applied 2026-08-12):** the one-line entry (below) was added to
+  `COMMS_DESIGN.md` §18 and the ADR-043 amendment (below) was applied. Both were held
+  until acceptance because ADR-043 is live authority and this ADR was a draft; authority
+  must not defer to an unaccepted decision.
 
 ## ADR-043 amendment (apply to `COMMS_DESIGN.md` §18 on acceptance)
 
@@ -88,7 +89,7 @@ supplies `filesystem_operator`. Each gated action carries a `required_evidence` 
   scope), reproducible offline, and part of the prompt context the callback comparison must
   match. The model never sets it, and a plan cannot be re-bound to a cheaper authority after
   the prompt is shown.
-- **INV-D — v1 policy is deny-only by evaluation.** The shipped policy returns
+- **INV-D — v1 policy is deny-only by evaluation.** The v1 policy returns
   `required_evidence = filesystem_operator` for every effect class. So a `chat_bound`
   approve is refused for every action, and Telegram is deny-only in practice — without a
   hardcoded transport special-case.

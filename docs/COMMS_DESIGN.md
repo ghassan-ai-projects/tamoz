@@ -845,7 +845,7 @@ step with a manifest regeneration attached, not an edit that can be slipped in.
 | 57 | **Channel delivery is ordered, bounded, and ambiguity-safe** | Outbound work is a bounded durable outbox claimed under a fenced lease; a transport offset is persisted only after durable disposition of the returned prefix; terminal capacity is reserved at admission; agent output is journaled and an ambiguous non-idempotent send becomes `:unknown` with no automatic retry | Lost answers, unbounded queues, invisible duplicate messages, and blind retry of an ambiguous send |
 | 58 | **A channel decision is exact, expiring, and cannot widen authority** | A callback resolves a single-use expiring reference to exactly one `(thread, occurrence, interrupt digest, correspondent, prompt receipt)` and consumption is atomic; v1 accepts denial only, and no channel component may answer on a human's behalf | Replayed buttons, decisions on changed questions, chat-derived privilege escalation, and headless auto-approval |
 
-**Proposed ADRs 041–043:**
+**Proposed ADRs 041–043; ADR-049 (accepted):**
 
 - **ADR-041 — Communication channels are a contract gem plus per-transport adapter gems.**
   `tamoz-comms` owns values, admission, rendering and the `CommsStore` contract;
@@ -855,9 +855,21 @@ step with a manifest regeneration attached, not an edit that can be slipped in.
   the transport credential and makes the only outbound channel calls; it never loads a
   model, a toolbox or the workspace, and it reaches the agent only through the request
   inbox and the delivery outbox.
-- **ADR-043 — Telegram v1 is deny-only and reference-bound.** A chat identity is weaker
+- **ADR-043 — Telegram is deny-only by default, reference-bound.** A chat identity is weaker
   evidence than filesystem authority. The channel may submit an exact, attributable,
-  expiring denial but cannot grant an approval; any future grant mode requires a new ADR.
+  expiring denial. It may not grant an approval by default: under the evidence-gated policy
+  of **ADR-049**, every effect requires `filesystem_operator` evidence, which a chat
+  identity does not supply. Lowering a specific, reversible, argument-bounded effect to
+  `chat_bound` approval is possible only through a follow-up ADR meeting ADR-049 §4; absent
+  such an ADR, Telegram remains deny-only in practice.
+- **ADR-049 — Telegram approval is evidence-gated, not transport-gated.** Approval authority
+  is a function of evidence strength (`chat_bound < filesystem_operator`), not of which
+  transport pressed a button. Denial is unconditional; approval requires
+  `approver_evidence >= required_evidence`, computed by trusted code from the pinned effect
+  digest. The v1 policy requires `filesystem_operator` for every effect, so Telegram is
+  deny-only in practice; lowering any effect to `chat_bound` requires a follow-up ADR
+  meeting the bar in ADR-049 §7. Supersedes the shipped approve-everything path, which
+  skipped the check.
 
 ## 19. Non-goals for v1
 

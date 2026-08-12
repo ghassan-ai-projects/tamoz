@@ -441,7 +441,7 @@ supplies `filesystem_operator`. Each gated action carries a `required_evidence` 
   offline. It is part of the prompt context the callback comparison must match, so a plan
   cannot be re-bound to a cheaper authority after the prompt is shown. The model never sets
   it.
-- **INV-D — v1 policy is deny-only by evaluation.** The shipped policy sets
+- **INV-D — v1 policy is deny-only by evaluation.** The v1 policy sets
   `required_evidence = filesystem_operator` for every effect class. So a `chat_bound`
   approve is refused for every action, and Telegram is deny-only in practice — without a
   hardcoded transport special-case. Lowering any effect's requirement to `chat_bound`
