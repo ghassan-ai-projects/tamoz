@@ -11,13 +11,16 @@ the current plan. Implementation remains blocked only on the explicit Phase 0 ow
 
 Session status (2026-08-12): ADR-049 accepted; P1–P7 shipped (one commit each) plus the
 gap-closing C4 receipt binding, C5/C6 oracles, the Phase 0 doc-consistency check, and C7
-credential separation. The contract test has zero skips; bar C1–C6 met. Remaining: the
-Phase 5 `DeliveryJournalContext` table (MIG-11+) and its effect-key wiring — the journal
-machinery itself (`tamoz_effects`, `EffectJournal#prepare/start/complete/reconcile/
+credential separation. The contract test has zero skips; bar C1–C6 met.
+
+DECIDED NOT TO BUILD (owner directive, AGENTS.md "Working conventions"): the Phase 5
+`DeliveryJournalContext` table (MIG-11+) and its task-scoped effect keys. The journal
+machinery that exists (`tamoz_effects`, `EffectJournal#prepare/start/complete/reconcile/
 resolve`, the drainer's claim/bind/send_started/mark/reconcile path, UNKNOWN non-retry
-proven by scorecard case 15) already exists; only the persisted context table and the
-plan-specified `EffectJournalKey.build` inputs are outstanding. Phase 8 (T4 live gate)
-waits on live Telegram/ALMS infrastructure and the owner go-ahead.
+proven by scorecard case 15) already delivers the required property with the simple
+delivery-scoped effect key; the context table is reconciliation hardening for a case that
+has not occurred. It is recorded here, not built. Phase 8 (T4 live gate) waits on live
+Telegram/ALMS infrastructure and the owner go-ahead.
 
 ## Design invariants this plan must preserve
 

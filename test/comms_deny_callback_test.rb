@@ -163,7 +163,7 @@ class CommsDenyCallbackTest < Minitest::Test
       reference_digest: digest, surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupt_digest: 'c' * 64, correspondent_id: 'telegram:user:11111111',
-      conversation_id: 'telegram:chat:22222222',
+      conversation_id: 'telegram:chat:22222222', required_evidence: 'filesystem_operator',
       created_at: Time.utc(2026, 8, 10, 12, 0, 0),
       expires_at: Time.utc(2026, 8, 10, 12, 15, 0)
     )

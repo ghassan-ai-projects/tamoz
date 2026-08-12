@@ -243,12 +243,6 @@ class CommsValuesTest < Minitest::Test
     assert_equal 'filesystem_operator', prompt.required_evidence,
                  'under v1 policy every prompt pins filesystem_operator (ADR-049 INV-D)'
     assert_equal prompt.required_evidence, Comms::ApprovalPrompt.from_wire(prompt.wire).required_evidence
-
-    legacy_wire = prompt.wire.except('required_evidence')
-
-    assert_equal 'filesystem_operator',
-                 Comms::ApprovalPrompt.from_wire(legacy_wire).required_evidence,
-                 'a pre-migration wire without the field reads the safe default (never under-gated)'
   end
 
   def test_prompt_rejects_a_non_lattice_required_evidence

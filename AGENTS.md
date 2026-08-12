@@ -16,6 +16,20 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tam
 - Everyday gate: `rake ci` + `rubocop` + `enola check` (see the state doc's gate
   policy — `ci_full` both locales only for durability/MCP/packaging/evidence slices).
 
+## Working conventions (owner directive)
+
+- **No backwards compatibility.** Databases are free to be reset or cleaned whenever
+  a change needs it; never write legacy-row handling, compatibility shims, or
+  read-time tolerances for old rows. Migration ordinals are still consumed
+  monotonically (they are checksummed and manifest-pinned), but each new migration
+  assumes a fresh schema — the previous rows do not exist.
+- **Choose the simple solution over the complicated one.** When two designs both
+  work, take the one with less machinery. A plan's elaborate sub-item is not
+  obligatory if the simple path already delivers the required property.
+- **Do not cover rare cases.** If a scenario cannot happen by construction (or only
+  in a case that has never occurred), do not write code for it. Fix it when it
+  actually shows up, not preemptively.
+
 ## Comments
 
 Default to none. Name things so the code reads without them; if it does not read,

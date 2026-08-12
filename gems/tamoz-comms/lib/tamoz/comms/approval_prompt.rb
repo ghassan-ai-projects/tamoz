@@ -42,12 +42,11 @@ module Tamoz
         reference_digest:, surface_id:, surface_revision:, thread_id:,
         occurrence_id:, interrupt_digest:, correspondent_id:, conversation_id:,
         created_at:, expires_at:, prompt_receipt: nil, status: 'inactive',
-        required_evidence: nil, activated_at: nil, consumed_at: nil
+        required_evidence:, activated_at: nil, consumed_at: nil
       )
-        evidence = (required_evidence || AuthorityEvidence::FILESYSTEM_OPERATOR).to_s
         validate!(reference_digest:, surface_id:, surface_revision:, thread_id:,
                   occurrence_id:, interrupt_digest:, correspondent_id:,
-                  conversation_id:, prompt_receipt:, required_evidence: evidence, status:,
+                  conversation_id:, prompt_receipt:, required_evidence:, status:,
                   created_at:, activated_at:, consumed_at:, expires_at:)
         @reference_digest = reference_digest
         @surface_id = surface_id
@@ -58,7 +57,7 @@ module Tamoz
         @correspondent_id = correspondent_id
         @conversation_id = conversation_id
         @prompt_receipt = prompt_receipt
-        @required_evidence = evidence
+        @required_evidence = required_evidence
         @status = status
         @created_at = created_at.utc
         @activated_at = activated_at&.utc
@@ -126,7 +125,7 @@ module Tamoz
           correspondent_id: wire.fetch('correspondent_id'),
           conversation_id: wire.fetch('conversation_id'),
           prompt_receipt: wire['prompt_receipt'],
-          required_evidence: wire['required_evidence'],
+          required_evidence: wire.fetch('required_evidence'),
           status: wire.fetch('status'),
           created_at: Time.parse(wire.fetch('created_at')),
           activated_at: wire_time(wire, 'activated_at'),
