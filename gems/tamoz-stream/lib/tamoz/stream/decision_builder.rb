@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "tamoz/core"
+require "tamoz/stream/errors"
+require "tamoz/stream/reconsideration"
 
 module Tamoz
   module Stream
@@ -74,8 +76,37 @@ module Tamoz
       # The intent set respects the episode's own risk ceiling and intent
       # allowlist (T1.3): a ceiling below the action's risk class, or an
       # allowlist without the action type, demotes the proposal to an
-      # observation — never escalates.
+      # observation — never escalates. A RECONSIDER episode proposes the
+      # compensating intents from its judgment instead (T6.1).
       def intents
+        return reconsideration_intents if @envelope.kind == :reconsider
+
+        diagnose_intents
+      end
+
+      # T6.1: the compensating intents the judgment produced. Each is
+      # re-validated at the decision boundary — its own verified digest and a
+      # risk class within the ceiling — because the graph's outcome is agent
+      # output and the worker owns the wire contract. A malformed compensation
+      # is a typed failure, never a silent omission that leaves the effect
+      # uncompensated behind a PRODUCED terminal.
+      def reconsideration_intents
+        compensations = Array(@outcome.fetch(:compensating_intents, []))
+        invalid = compensations.reject do |intent|
+          Reconsideration.valid_compensation?(
+            intent, risk_ceiling: @envelope.risk_ceiling
+          )
+        end
+        unless invalid.empty?
+          raise StreamError,
+                "a compensating intent failed the decision boundary " \
+                "(bad digest, missing compensates, or risk above the ceiling)"
+        end
+
+        compensations.first(Reconsideration::MAX_INTENTS)
+      end
+
+      def diagnose_intents
         return [watch_condition_intent] if confidence < CONFIDENCE_WATCH_FLOOR
         return [watch_condition_intent] if RISK_ORDER.fetch(@envelope.risk_ceiling) <
                                            RISK_ORDER.fetch(ACTION_RISK)

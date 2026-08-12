@@ -6,6 +6,7 @@ require "tamoz/stream/episode_stream"
 require "tamoz/stream/decision_builder"
 require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
+require "tamoz/stream/reconsideration"
 require "json"
 
 Tamoz::Stream::Gen.load!
@@ -153,6 +154,12 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "unsupported episode kind #{@wire.kind.inspect}"
         end
+        # T6: a RECONSIDER episode judges a prior action — without the prior
+        # Decision/commands/outcomes/correction it cannot judge. Fail closed.
+        if KIND_NAMES.fetch(@wire.kind) == :reconsider && @wire.reconsideration.nil?
+          raise EpisodeRequestInvalidError,
+                "a RECONSIDER episode requires the reconsideration payload"
+        end
         unless LANE_NAMES.key?(@wire.lane)
           raise EpisodeRequestInvalidError,
                 "unsupported episode lane #{@wire.lane.inspect}"
@@ -236,8 +243,16 @@ module Tamoz
               episode_tools: build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
+            payload = envelope.payload.merge("snapshot" => snapshot)
+            if envelope.kind == :reconsider
+              payload = payload.merge(
+                "reconsideration" => Reconsideration.parse(
+                  wire_request.reconsideration
+                ).to_h
+              )
+            end
             result = @durable_runner.deliver(
-              envelope.payload.merge("snapshot" => snapshot),
+              payload,
               thread: envelope.thread_id,
               request_id: envelope.request_id,
               operation: :turn,
