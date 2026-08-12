@@ -154,12 +154,6 @@ module AutonomyCase
     # What the agent can actually dispatch, as opposed to what configuration
     # merely names. A source that appears here is wired into the capability host.
     def capability_catalog = status_document.fetch("capability_catalog", [])
-    def queue_depth = status_document.dig("stream", "queue_depth") || 0
-    def spool_bytes = status_document.dig("stream", "spool_bytes") || 0
-
-    def publish_burst(count:, bytes:)
-      cli(%W[stream publish --channel probe --count #{count} --bytes #{bytes}])
-    end
 
     # Enabling skills changes the tool catalog (the skill verbs join it), and a
     # profile pins the exact catalog. Re-pinning is what an operator does after
@@ -215,7 +209,7 @@ module AutonomyCase
 
   # -------------------------------------------------------------- fixtures
 
-  def with_runtime(unattended: nil, budgets: nil, stream: nil, channels: nil)
+  def with_runtime(unattended: nil, budgets: nil, channels: nil)
     Dir.mktmpdir("tamoz-autonomy") do |directory|
       runtime_dir = File.join(directory, "runtime")
       workspace = File.join(directory, "workspace")
@@ -223,7 +217,7 @@ module AutonomyCase
       FileUtils.mkdir_p(runtime_dir, mode: 0o700)
       File.chmod(0o700, runtime_dir)
 
-      write_config(runtime_dir, workspace, stream:, channels:)
+      write_config(runtime_dir, workspace, channels:)
       write_trusted_profile(runtime_dir, workspace, unattended:, budgets:)
 
       runtime = Runtime.new(dir: runtime_dir, workspace:)
@@ -250,14 +244,13 @@ module AutonomyCase
     directory
   end
 
-  def write_config(runtime_dir, workspace, stream: nil, channels: nil)
+  def write_config(runtime_dir, workspace, channels: nil)
     document = {
       "runtime" => {"schema_version" => channels ? 2 : 1},
       "workspace" => {"root" => workspace},
       "sources" => {}
     }
     document["channels"] = channels if channels
-    document["stream"] = stream if stream
     File.write(File.join(runtime_dir, "config.yaml"), Psych.dump(document))
     File.chmod(0o600, File.join(runtime_dir, "config.yaml"))
   end

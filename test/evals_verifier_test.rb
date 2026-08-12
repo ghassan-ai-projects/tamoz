@@ -103,11 +103,13 @@ class EvalsVerifierTest < Minitest::Test
     end
   end
 
-  def test_all_twenty_two_agent_smoke_cases_are_public_verified_and_digest_pinned
+  # T8.3: the P14 streaming case was retired with the engine, so the corpus is
+  # 21 cases.
+  def test_all_twenty_one_agent_smoke_cases_are_public_verified_and_digest_pinned
     cases = AGENT_SMOKE_ROOT.glob("*.case.json").sort
 
-    assert_equal 22, cases.length
-    assert_equal 22, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
+    assert_equal 21, cases.length
+    assert_equal 21, cases.map { |path| Tamoz::Evals::Case.load(path).digest }.uniq.length
     cases.each do |path|
       artifact = Tamoz::Evals::Case.load(path)
       assert_equal "tamoz.agent.smoke", artifact["suite_id"]

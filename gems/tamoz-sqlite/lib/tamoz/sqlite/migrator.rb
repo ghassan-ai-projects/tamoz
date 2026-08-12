@@ -31,7 +31,7 @@ module Tamoz
       # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 through
       # MIGRATION_12, which adds the situation/entity scope columns to the
       # memory index.
-      CURRENT_VERSION = 12
+      CURRENT_VERSION = 13
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -867,17 +867,16 @@ module Tamoz
       # the canonical rule moved to RFC 8785 (`Tamoz::Core.jcs`), so digests
       # that embedded the old canonical-JSON serialization are re-sealed.
       #
-      # The stream-engine tables (MIGRATION_4/5) carry canonical-JSON digests
-      # that can differ under JCS (their situations may contain floats) and the
-      # engine itself is retired by a later forward migration (T8.3). Clearing
-      # them here ACCEPTS the loss of undrained outbox items and resets the
-      # per-partition watermarks, so post-cutover the stream replays from the
-      # source's earliest retained offset; the upstream replay window must
-      # cover that reset (cutover runbook). Circuit rows are keyed by the old
-      # canonical scope digest and are re-keyed on first use, so they are
-      # cleared too. Scheduler/occurrence and comms identities were NOT
-      # migrated to the JCS rule (they never cross the product boundary), so
-      # their stored rows stay valid because their derivation is unchanged.
+      # The stream-engine tables (MIGRATION_4/5) carried canonical-JSON digests
+      # that could differ under JCS (their situations may contain floats);
+      # clearing them here ACCEPTS the loss of undrained outbox items and
+      # resets the per-partition watermarks. MIGRATION_13 then DROPS those
+      # tables outright — the P14 engine is retired (T8.3). Circuit rows are
+      # keyed by the old canonical scope digest and are re-keyed on first use,
+      # so they are cleared too. Scheduler/occurrence and comms identities
+      # were NOT migrated to the JCS rule (they never cross the product
+      # boundary), so their stored rows stay valid because their derivation is
+      # unchanged.
       # Checkpoints are the deliberate exception to the clears: they are kept
       # so resume stops typed at the graph-identity guard rather than silently
       # reinterpreting digests sealed under a different rule. The epoch row
@@ -1003,6 +1002,27 @@ module Tamoz
         MIGRATION_12.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # T8.3 (PLAN_TAMOZ_STREAM_BUILD T8.3): the old P14 streaming engine is
+      # retired by forward migration — no backward compatibility (owner
+      # convention). MIGRATION_4/5's stream tables are dropped outright; the
+      # supervised episode worker keeps nothing of the old engine's durable
+      # state. MIGRATION_11 already cleared the rows; this migration removes
+      # the tables so a fresh schema carries no trace of the old engine.
+      MIGRATION_13 = %w[
+        tamoz_stream_outbox
+        tamoz_stream_triggers
+        tamoz_stream_situation_current
+        tamoz_stream_situations
+        tamoz_stream_operator_state
+        tamoz_stream_partitions
+        tamoz_stream_events
+        tamoz_stream_channels
+      ].map { |table| "DROP TABLE IF EXISTS #{table}" }.freeze
+
+      MIGRATION_13_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_13.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1017,7 +1037,8 @@ module Tamoz
         9 => [MIGRATION_9, MIGRATION_9_CHECKSUM],
         10 => [MIGRATION_10, MIGRATION_10_CHECKSUM],
         11 => [MIGRATION_11, MIGRATION_11_CHECKSUM],
-        12 => [MIGRATION_12, MIGRATION_12_CHECKSUM]
+        12 => [MIGRATION_12, MIGRATION_12_CHECKSUM],
+        13 => [MIGRATION_13, MIGRATION_13_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

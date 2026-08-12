@@ -36,7 +36,7 @@ class PackagingTest < Minitest::Test
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
           assert_equal 4, contents.grep(%r{\Asuites/m1/core/.+\.case\.json\z}).length
           assert_equal 6, contents.grep(%r{\Asuites/m2/graph/.+\.case\.json\z}).length
-          assert_equal 22, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
+          assert_equal 21, contents.grep(%r{\Asuites/agent/smoke/.+\.case\.json\z}).length
           assert_equal 5, contents.grep(%r{\Asuites/agent/memory/.+\.case\.json\z}).length
           assert_equal 2, contents.grep(%r{\Asuites/agent/memory_repository/.+\.case\.json\z}).length
           assert_includes contents, "baselines/m0/baseline.result.json"
@@ -183,7 +183,7 @@ class PackagingTest < Minitest::Test
       assert status.success?, stderr
       report = JSON.parse(stdout)
       assert_equal "pass", report.fetch("decision")
-      assert_equal 22, report.dig("corpus", "case_count")
+      assert_equal 21, report.dig("corpus", "case_count")
       assert_equal 0, report.dig("aggregate", "unsafe_or_bypassed_actions")
       assert_empty stderr
     end
@@ -436,28 +436,22 @@ class PackagingTest < Minitest::Test
       script = <<~'RUBY'
         require "json"
         require "tamoz/stream"
-        descriptor = Tamoz::Stream::ChannelDescriptor.new(
-          channel_id: "factory-1.temperature", revision: 7, transport: "mqtt",
-          source_identity: "sensor-ca:device-428", schema: "temperature.v2",
-          partition_by: %w[tenant_id device_id],
-          time: {"field" => "measured_at", "max_clock_skew_s" => 30},
-          units: {"value" => "Cel"}
+        snapshot = {
+          "situation_id" => "sit-1", "situation_version" => 7,
+          "tenant_id" => "acme", "situation_type" => "equipment",
+          "entity" => {"type" => "compressor", "id" => "c-01"},
+          "facts" => {"pressure" => 0.2}
+        }
+        verified = Tamoz::Stream::ReceivedSnapshot.verify(
+          Tamoz::Core.jcs(snapshot),
+          Tamoz::Core.digest(:snapshot, snapshot)
         )
-        envelope = Tamoz::Stream::EventEnvelope.new(
-          event_id: "evt-1", event_type: "temperature", schema_id: "temperature.v2",
-          payload: {"measured_at" => 1_700_000_000, "value" => 21.5},
-          tenant_id: "tenant-1", source_id: "device-428",
-          channel_id: descriptor.channel_id, channel_revision: descriptor.revision,
-          partition_key: "tenant-1:device-428", entity_id: "device-428",
-          event_time: 1_700_000_000, observed_time: 1_700_000_001,
-          ingestion_time: 1_700_000_002
-        )
-        replay = Tamoz::Stream::ReplayClock.new(start: 100)
-        replay.advance(5)
+        store = Tamoz::Stream::ArtifactStore.new
+        store.retain(digest: "sha256:#{"1" * 64}", bytes: "tool-catalog")
         puts JSON.generate(
-          "channel_digest" => descriptor.definition_digest,
-          "payload_hash" => envelope.payload_hash,
-          "replay_now" => replay.now_processing,
+          "entity_id" => verified.fetch("entity").fetch("id"),
+          "situation_version" => verified.fetch("situation_version"),
+          "artifact_bytes" => store.resolve("sha256:#{"1" * 64}").fetch("bytes"),
           "sqlite_defined" => defined?(Tamoz::SQLite).inspect,
           "agent_defined" => defined?(Tamoz::Agent).inspect
         )
@@ -467,9 +461,9 @@ class PackagingTest < Minitest::Test
       assert status.success?, stderr
       result = JSON.parse(stdout)
 
-      assert result.fetch("channel_digest").start_with?("sha256:")
-      assert result.fetch("payload_hash").start_with?("sha256:")
-      assert_equal 105, result.fetch("replay_now")
+      assert_equal "c-01", result.fetch("entity_id")
+      assert_equal 7, result.fetch("situation_version")
+      assert_equal "tool-catalog", result.fetch("artifact_bytes")
       assert_equal "nil", result.fetch("sqlite_defined")
       assert_equal "nil", result.fetch("agent_defined")
       assert_empty stderr

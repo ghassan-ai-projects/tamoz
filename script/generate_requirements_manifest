@@ -64,6 +64,9 @@ CONDITIONAL = {
   "tamoz-scheduler" => [38, 39, 40],
   "tamoz-stream" => [44, 45, 46, 47, 48, 49, 50, 51]
 }.freeze
+# The P14 streaming-input engine is retired (T8.3); its invariant clauses are
+# no longer generated as manifest requirements (INVARIANTS.md keeps them).
+RETIRED_STREAM_CLAUSES = [44, 45, 46, 47, 48, 49, 50, 51].freeze
 # The promotion matrix (plan §3, correction 3), arbitrated here at P15-A.
 # Each optional package that SHIPS as a gem in the release surface is promoted,
 # so its conditional clauses are release-blocking. A feature that does not ship
@@ -95,13 +98,7 @@ PROMOTION_EXCLUSIONS = {
               "clause has direct evidence; the civil-time half is unavailable.",
   "INV-43" => "Skill install/update/self-improvement staging is not implemented " \
               "(P9-C/D2/E deferred); the shipped surface is operator-configured " \
-              "catalogs only. No install path exists to claim or fail this clause.",
-  "INV-50" => "The only effector is the simulator (P14 owner constraint). The " \
-              "typed-intent/policy/dispatch half is proven against the simulated " \
-              "effector; no real actuator is reachable in the release surface.",
-  "INV-51" => "Real safety-critical control hardware is out of the release " \
-              "surface; the clause is proven for replay/shadow credential " \
-              "isolation and advisory-only R4 against the simulator."
+              "catalogs only. No install path exists to claim or fail this clause."
 }.freeze
 
 # --- the curated evidence table ---------------------------------------------
@@ -420,75 +417,6 @@ EVIDENCE = {
                "failed. Catalogs are operator-configured only."
   },
 
-  # ---- Streaming input and physical-world action (44-51) -----------------
-  "INV-44" => {
-    test: "test/sqlite_stream_golden_trace_test.rb#test_kill_between_outbox_and_enqueue_is_exactly_one_episode",
-    supporting: [
-      "test/stream_cognition_test.rb#test_bridge_namespace_and_request_id_are_deterministic_and_bounded",
-      "test/sqlite_stream_critic_fix_test.rb#test_drain_outbox_uses_the_situation_namespace"
-    ]
-  },
-  "INV-45" => {
-    test: "test/sqlite_stream_store_test.rb#test_same_identity_different_hash_is_quarantined_never_overwritten",
-    supporting: [
-      "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes",
-      "test/stream_values_test.rb#test_event_envelope_identity_and_payload_hash_are_deterministic",
-      "test/stream_connector_test.rb#test_forged_identity_is_rejected_durably"
-    ]
-  },
-  "INV-46" => {
-    test: "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic",
-    supporting: [
-      "test/sqlite_stream_process_partition_test.rb#test_idle_watermark_advances_after_the_idle_window",
-      "test/sqlite_stream_store_test.rb#test_partition_watermark_is_monotonic_per_partition",
-      "test/stream_values_test.rb#test_clocks_are_monotonic_and_replay_is_injected"
-    ]
-  },
-  "INV-47" => {
-    test: "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything",
-    supporting: [
-      "test/sqlite_stream_process_partition_test.rb#test_situations_are_immutable_versions_and_correction_appends",
-      "test/sqlite_stream_golden_trace_test.rb#test_restart_produces_the_same_situation_state"
-    ]
-  },
-  "INV-48" => {
-    test: "test/sqlite_stream_store_test.rb#test_invalid_data_is_rejected_at_the_typed_boundary_never_silent",
-    supporting: ["test/sqlite_stream_golden_trace_test.rb#test_sequence_case_good_then_same_id_different_hash_is_quarantined"],
-    classification: "pending-owner-residual",
-    rationale: "The durable-admission, quarantine, typed-rejection and " \
-               "never-silent halves are directly evidenced. The backpressure " \
-               "half is NOT implemented: `ChannelDescriptor` validates and " \
-               "digests `queue_capacity`, `spool_capacity_bytes` and " \
-               "`overflow` (block/retry/spill_then_reject/sample/coalesce/" \
-               "reject), but no code outside the descriptor reads any of the " \
-               "three — measured at the release head by searching " \
-               "gems/tamoz-stream and gems/tamoz-sqlite. The declaration is " \
-               "recorded, never enforced, so no saturation test can exist yet. " \
-               "Owner decision required at P15-I: implement enforcement, or " \
-               "exclude the backpressure clause from the v0.1 surface."
-  },
-  "INV-49" => {
-    test: "test/stream_cognition_test.rb#test_expiry_and_supersession_reject_across_the_adversarial_window",
-    supporting: [
-      "test/stream_cognition_test.rb#test_admission_outcomes_admitted_debounced_coalesced_and_ignored",
-      "test/stream_cognition_test.rb#test_snapshot_is_content_addressed_and_binds_the_situation_version"
-    ]
-  },
-  "INV-50" => {
-    test: "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery",
-    supporting: [
-      "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
-      "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only"
-    ]
-  },
-  "INV-51" => {
-    test: "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode",
-    supporting: [
-      "test/stream_replay_isolation_test.rb#test_replay_constructor_accepts_no_credential_argument",
-      "test/stream_action_boundary_test.rb#test_dependency_direction_production_cannot_see_the_mutable_harness"
-    ]
-  },
-
   # ---- Cross-cutting implementation blockers (52-55) ---------------------
   "INV-52" => {
     test: "test/graph_identity_test.rb#test_activation_survives_new_base_while_attempt_identity_changes",
@@ -631,13 +559,18 @@ EVIDENCE = {
                            "supply-chain activation half is the deferred P9-C/D2/E " \
                            "install pipeline — invariant 43, which the invariants " \
                            "document assigns to v0.2. No install path exists to test."},
-  "ADR-035" => {test: "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary",
-                supporting: ["test/stream_values_test.rb#test_channel_descriptor_is_content_addressed_and_validated"]},
-  "ADR-036" => {test: "test/stream_cognition_test.rb#test_snapshot_is_content_addressed_and_binds_the_situation_version"},
-  "ADR-037" => {test: "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode",
-                supporting: ["test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic"]},
-  "ADR-038" => {test: "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"},
-  "ADR-039" => {test: "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides"},
+  "ADR-035" => {test: "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary"},
+  "ADR-036" => {test: "test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused",
+                supporting: [
+                  "test/stream_situation_snapshot_test.rb#test_a_verified_snapshot_returns_the_parsed_value",
+                  "test/stream_situation_snapshot_test.rb#test_the_digest_rule_agrees_with_the_shared_snapshot_vector"
+                ]},
+  "ADR-037" => {test: "test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts",
+                supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
+  "ADR-038" => {test: "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
+                supporting: ["test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent"]},
+  "ADR-039" => {test: "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
+                supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
   "ADR-040" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"},
   "ADR-041" => {
     test: nil, classification: "pending-owner-residual",
@@ -719,14 +652,14 @@ EVIDENCE = {
       "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
       "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
       "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
-      "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode"
+      "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
     ]
   },
   "OBJ-6" => {
-    test: "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
+    test: "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
     supporting: [
-      "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only",
-      "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"
+      "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent",
+      "test/stream_decision_builder_test.rb#test_a_low_risk_ceiling_never_proposes_a_consequential_action"
     ]
   },
   "OBJ-7" => {
@@ -796,8 +729,8 @@ EVIDENCE = {
               supporting: ["test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"]},
   "MIG-2" => {test: "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
   "MIG-3" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic"},
-  "MIG-4" => {test: "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes"},
-  "MIG-5" => {test: "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything"},
+  "MIG-4" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
+  "MIG-5" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
   "MIG-6" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-7" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-8" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
@@ -815,8 +748,8 @@ EVIDENCE = {
   "NG-arbitrary-shell" => {test: "test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments",
                            supporting: ["test/agent_toolbox_test.rb#test_relative_check_program_rejected",
                                         "test/subprocess_runner_test.rb#test_rejects_shell_lookup_nul_and_ambient_environment"]},
-  "NG-real-actuator" => {test: "test/stream_replay_isolation_test.rb#test_deliver_command_requires_counterfactual_mode_and_a_simulator",
-                         supporting: ["test/stream_action_boundary_test.rb#test_dependency_direction_production_cannot_see_the_mutable_harness"]},
+  "NG-real-actuator" => {test: "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
+                         supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
   "NG-content-authority" => {test: "test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing",
                              supporting: ["test/agent_skills_adversarial_test.rb#test_a29_declared_risk_is_an_author_claim_that_changes_no_classification"]},
   "NG-self-promotion" => {test: "test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself",
@@ -849,7 +782,7 @@ PHASE_EVIDENCE = {
   "PHASE-P11" => "test/memory_session_integration_test.rb#test_memory_enabled_session_records_epoch_and_writes_episode_memory",
   "PHASE-P12" => "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle",
   "PHASE-P13" => "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
-  "PHASE-P14" => "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic",
+  "PHASE-P14" => "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
   "PHASE-P16" => "test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent",
   "PHASE-P17" => "test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic",
   "PHASE-P18" => "test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture",
@@ -1047,6 +980,8 @@ requirements = []
 
 parse_invariants.each do |invariant|
   number = invariant[:number]
+  next if RETIRED_STREAM_CLAUSES.include?(number)
+
   id = format("INV-%02d", number)
   conditional_package = CONDITIONAL.find { |_name, list| list.include?(number) }&.first
   release_blocking =

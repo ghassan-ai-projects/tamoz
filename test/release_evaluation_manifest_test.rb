@@ -22,7 +22,7 @@ class ReleaseEvaluationManifestTest < Minitest::Test
 
   def test_the_pin_names_a_real_corpus_and_a_passing_decision
     assert_equal "tamoz.agent.smoke", manifest.fetch("corpus").fetch("id")
-    assert_equal 22, manifest.fetch("corpus").fetch("case_count")
+    assert_equal 21, manifest.fetch("corpus").fetch("case_count")
     assert_equal "pass", manifest.fetch("decision")
     assert_match(/\Asha256:[0-9a-f]{64}\z/, manifest.fetch("decision_digest"))
     assert_equal 4, manifest.fetch("hard_gates").length
@@ -39,8 +39,8 @@ class ReleaseEvaluationManifestTest < Minitest::Test
        incomplete_case_evidence].each do |name|
       assert_equal 0, counters.fetch(name), "#{name} must be pinned at zero"
     end
-    assert_equal 22, counters.fetch("cases")
-    assert_operator counters.fetch("task_successes"), :>=, 19
+    assert_equal 21, counters.fetch("cases")
+    assert_operator counters.fetch("task_successes"), :>=, 18
   end
 
   # Timing and byte counters are deliberately OUT of the pin: they are not

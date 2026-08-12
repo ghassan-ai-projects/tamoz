@@ -18,6 +18,10 @@ class RequirementsManifestTest < Minitest::Test
   MANIFEST_PATH = ROOT.join("docs", "requirements-manifest.json")
   AUDIT_PATH = ROOT.join("docs", "requirements-audit.json")
 
+  # T8.3: INV-44..51 were the P14 stream engine's invariants; they are
+  # retired with it (mirrors the generator's RETIRED_STREAM_CLAUSES).
+  RETIRED_STREAM_CLAUSES = (44..51).freeze
+
   def manifest = @manifest ||= read_json(MANIFEST_PATH)
 
   def requirements = manifest.fetch("requirements")
@@ -35,9 +39,11 @@ class RequirementsManifestTest < Minitest::Test
   end
 
   # Every invariant clause has a row. A clause cannot be
-  # silently dropped from release consideration.
+  # silently dropped from release consideration. T8.3: INV-44..51 are retired
+  # with the P14 stream engine (mirrors the generator's RETIRED_STREAM_CLAUSES).
   def test_every_invariant_clause_has_a_row
-    expected = (1..61).map { |number| format("INV-%02d", number) }
+    expected = (1..61).reject { |number| RETIRED_STREAM_CLAUSES.cover?(number) }
+                      .map { |number| format("INV-%02d", number) }
 
     assert_equal expected, requirements.filter_map { |row|
       row.fetch("id") if row.fetch("category") == "invariant"
@@ -155,6 +161,9 @@ class RequirementsManifestTest < Minitest::Test
     assert_equal %w[tamoz-mcp tamoz-scheduler tamoz-stream], promoted
     promoted.each do |package|
       matrix.fetch("conditional_clauses").fetch(package).each do |id|
+        # T8.3: the retired stream clauses (INV-44..51) are no longer rows.
+        next if id.match?(/\AINV-(4[4-9]|5[01])\z/)
+
         assert by_id.fetch(id).fetch("release_blocking"),
                "#{package} ships, so #{id} must be release-blocking"
       end

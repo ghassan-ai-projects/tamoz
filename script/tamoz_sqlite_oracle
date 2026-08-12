@@ -14,11 +14,12 @@ module TamozSQLiteOracle
   # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
   # MIGRATION_6 (channel tables). Delivery pacing moved 7 -> 8 through
   # MIGRATION_8. ADR-049: 8 -> 9 (prompt required_evidence) and 9 -> 10
-  # (decision audit evidence/reason).
+  # (decision audit evidence/reason). T8.3: 12 -> 13 retires the old stream
+  # engine (MIGRATION_13 drops its tables).
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 12
+  SCHEMA_VERSION = 13
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -56,6 +57,10 @@ module TamozSQLiteOracle
   # all-or-none CHECK).
   MIGRATION_12_CHECKSUM =
     "d455430d1d2423fd604a43e6c1c12598bbde5600e38bc09105ea089ce073fec2"
+  # T8.3 (PLAN_TAMOZ_STREAM_BUILD T8.3): 12 -> 13 — the old P14 stream engine
+  # is retired; MIGRATION_13 drops its eight tables.
+  MIGRATION_13_CHECKSUM =
+    "d0d5556d510bccb1792cfe05a4f293885b7ee28cb7b56e3468d34e926619160d"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -781,7 +786,8 @@ module TamozSQLiteOracle
         [9, MIGRATION_9_CHECKSUM],
         [10, MIGRATION_10_CHECKSUM],
         [11, MIGRATION_11_CHECKSUM],
-        [12, MIGRATION_12_CHECKSUM]
+        [12, MIGRATION_12_CHECKSUM],
+        [13, MIGRATION_13_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

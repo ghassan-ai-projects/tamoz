@@ -118,7 +118,6 @@ class DocumentationSurfaceTest < Minitest::Test
     'ADR-015' => 'Durable barrier timing remains partial (ADR-015)',
     'INV-20' => 'Single-writer recovery evidence remains partial (invariant 20)',
     'INV-39' => 'Cron and civil-time scheduling (invariant 39)',
-    'INV-48' => 'Channel backpressure enforcement (invariant 48)',
     'INV-43' => 'Skill installation and update (invariant 43)',
     'INV-56' => 'Channel communications (invariants 56–58, ADR-041–043)',
     'INV-57' => 'Channel communications (invariants 56–58, ADR-041–043)',
@@ -146,9 +145,7 @@ class DocumentationSurfaceTest < Minitest::Test
     body = text(LIMITATIONS)
 
     if body.include?("Nothing reads them.")
-      readers = Dir[ROOT.join("gems", "tamoz-{stream,sqlite}", "lib", "**", "*.rb")].reject do |path|
-        path.end_with?("channel_descriptor.rb")
-      end.select do |path|
+      readers = Dir[ROOT.join("gems", "tamoz-{stream,sqlite}", "lib", "**", "*.rb")].select do |path|
         File.read(path, encoding: Encoding::UTF_8).match?(/queue_capacity|spool_capacity_bytes/)
       end
 

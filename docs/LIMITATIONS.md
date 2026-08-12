@@ -43,13 +43,18 @@ cross-cutting query today — the circuit store is per scope and scope id with n
 enumeration, and terminal requests leave the pending view by design. Both need a
 new read-only storage query and a boundary-registry entry.
 
-### Streaming input is not reachable from the worker, and its bounds are not enforced
+### The P14 streaming-input engine is retired (T8.3)
 
-All four capability sources — skills, memory, MCP and websearch — are now
-operator-configurable and reach the worker. **Streams are not.** No
-operator-facing configuration constructs a channel, so an autonomous run cannot
-consume a continuous input at all, and the backpressure declaration below is
-still unenforced.
+The supervised episode worker does not consume a continuous input stream —
+that was the retired P14 engine's job. Tamoz now runs one sealed, digest-
+verified Situation snapshot per episode; the stream (the agentic-stream
+runtime) owns the continuous plane (event time, watermarks, windows,
+channels, replay) and hands Tamoz the snapshot. **Tamoz computes no watermark,
+no event time, no lateness, and no window membership** — the deterministic
+plane is the stream's. The old engine's channel vocabulary, backpressure
+declarations, connector contract, and replay runtime were deleted with it by
+forward migration (MIGRATION_13); nothing reads the old `queue_capacity` /
+`spool_capacity_bytes` / `overflow` vocabulary because the vocabulary is gone.
 
 ### Cron and civil-time scheduling (invariant 39)
 
@@ -62,24 +67,6 @@ claimed as a whole.
 
 If you need "every weekday at 09:00 local time", Tamoz cannot express it.
 
-### Channel backpressure enforcement (invariant 48)
-
-`Tamoz::Stream::ChannelDescriptor` accepts, validates and digests
-`queue_capacity`, `spool_capacity_bytes` and `overflow`
-(`block`/`retry`/`spill_then_reject`/`sample`/`coalesce`/`reject`). **Nothing
-reads them.** The declaration is recorded in the channel's content-addressed
-identity and never enforced at runtime.
-
-What IS implemented and tested: durable admission, idempotent dedup, quarantine
-on identity reuse with a differing payload hash, typed rejection records, and
-acknowledgement only after durable admission. What is not: any bound on queue
-or spool growth, and any of the six overflow behaviours. `OVERFLOW_POLICIES` is
-deliberately excluded from the documented public API for this reason — an
-unenforced policy vocabulary is not an API.
-
-If you feed a faster producer than your storage can absorb, Tamoz will not
-apply the policy you declared.
-
 ### Skill installation and update (invariant 43)
 
 Skills are compiled from operator-configured directories into immutable,
@@ -88,13 +75,16 @@ no install, update, or self-improvement pipeline**: no quarantine staging, no
 provenance checks on a downloaded artifact, no atomic activation of a new
 digest. You place skill trees on disk yourself, out of band.
 
-### Real physical actuation (invariants 50, 51)
+### Real physical actuation (T8.3)
 
-The only effector is the simulator. Typed intent, current-state policy,
-approval, interlock checks, TOCTOU closure and command journalling are all
-implemented and exercised against it, and replay/shadow scopes provably hold no
-effector credentials. **No real actuator adapter exists**, and connecting one
-requires an explicit owner decision and a separate safety review.
+The supervised worker proposes typed Decisions (intents); it holds no effector
+at all. Actuation belongs to the stream: the stream executes the accepted
+intent against its own effector surface (in the joint system, the simulator),
+and Tamoz's only bridge to it is the approval relay (R2 answers) and the
+reconsideration judgment (compensations). **No actuator adapter exists on the
+Tamoz side**, and none can be reached from the episode path — the containment
+host is read-only and the artifact/verification stores hold no effectful
+reference.
 
 ### Channel communications (invariants 56–58, ADR-041–043)
 
