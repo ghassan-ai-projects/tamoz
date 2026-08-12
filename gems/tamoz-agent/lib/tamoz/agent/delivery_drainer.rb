@@ -92,7 +92,9 @@ module Tamoz
           receipt: outcome[:receipt],
           now: scheduled_at
         )
-        activate_after_receipt(row, now: scheduled_at) if outcome.fetch(:status) == 'succeeded'
+        if outcome.fetch(:status) == 'succeeded'
+          activate_after_receipt(row, receipt: outcome[:receipt], now: scheduled_at)
+        end
       rescue Comms::ThrottledError => e
         @store.defer_delivery(
           surface_id:,
@@ -106,12 +108,16 @@ module Tamoz
         raise
       end
 
-      def activate_after_receipt(row, now:)
+      # The receipt comes from the send outcome directly — the outbox row is
+      # the pre-send projection and cannot carry it. The prompt's originating
+      # message receipt is what the callback comparison binds to (§7.1).
+      def activate_after_receipt(row, receipt:, now:)
         return unless row.fetch('kind') == 'approval_request' && row['markup']
 
         reference = JSON.parse(row.fetch('markup')).fetch('reference')
         digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
-        @store.activate_prompt(reference_digest: digest, now:)
+        @store.activate_prompt(reference_digest: digest, now:,
+                               receipt: receipt && receipt.fetch('message_id').to_s)
       end
 
       def send_delivery(row)

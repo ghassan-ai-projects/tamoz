@@ -374,8 +374,11 @@ module Tamoz
         end
       end
 
-      # Activate one approval prompt only after its send receipt is durable.
-      def activate_prompt(reference_digest:, now:)
+      # Activate one approval prompt only after its send receipt is durable,
+      # pinning the originating message receipt (contract §7.1) so the
+      # callback comparison can bind the press to the exact message the
+      # buttons were attached to.
+      def activate_prompt(reference_digest:, now:, receipt: nil)
         transaction('comms.prompt.activate') do |txn|
           row = txn.first('comms.prompt.activate.state', <<~SQL, [reference_digest])
             SELECT status, expires_at_ms FROM tamoz_comms_approval_prompts
@@ -385,9 +388,9 @@ module Tamoz
           next :expired if row[1] <= now_ms(now)
           next :already_active if row[0] == 'active'
 
-          txn.execute('comms.prompt.activate', <<~SQL, [now_ms(now), reference_digest])
+          txn.execute('comms.prompt.activate', <<~SQL, [receipt, now_ms(now), reference_digest])
             UPDATE tamoz_comms_approval_prompts
-            SET status = 'active', activated_at_ms = ?
+            SET status = 'active', prompt_receipt = ?, activated_at_ms = ?
             WHERE reference_digest = ? AND status = 'inactive'
           SQL
           txn.changes == 1 ? :activated : :not_consumable

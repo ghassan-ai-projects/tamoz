@@ -66,18 +66,21 @@ class CommsDenyCallbackTest < Minitest::Test
         prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
       )
       store.insert_prompt(prompt.wire)
-      store.activate_prompt(reference_digest: prompt.reference_digest, now: Time.utc(2026, 8, 10, 12, 0, 1))
+      store.activate_prompt(reference_digest: prompt.reference_digest,
+                            now: Time.utc(2026, 8, 10, 12, 0, 1), receipt: '2001')
 
       Comms::InboundEnvelope.new(
         surface_id: 'telegram-ops', surface_revision: 1, update_id: 55,
         raw_payload_hash: 'b' * 64, parser_version: 1, kind: 'callback',
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        callback_message_id: 2001,
         text: reference, observed_time: Time.utc(2026, 8, 10, 12, 0, 2)
       ).wire
       transport.batch([{ 'update_id' => 55,
                          'callback_query' => { 'id' => 'q-1',
                                                'from' => { 'id' => 111_111_11 },
-                                               'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' } },
+                                               'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                              'message_id' => 2001 },
                                                'data' => reference } }])
       transport.receipt = { 'message_id' => 1, 'date' => 1 }
 
@@ -109,7 +112,7 @@ class CommsDenyCallbackTest < Minitest::Test
       reference = 'fixed-reference'
       digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, reference)
       store.insert_prompt(prompt_for(reference, digest).wire)
-      store.activate_prompt(reference_digest: digest, now: Time.utc(2026, 8, 10, 12, 0, 1))
+      store.activate_prompt(reference_digest: digest, now: Time.utc(2026, 8, 10, 12, 0, 1), receipt: '2001')
 
       transport.batch([callback_update(reference, 100)])
       gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
@@ -140,7 +143,8 @@ class CommsDenyCallbackTest < Minitest::Test
         prompt_ttl_s: 1, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
       )
       store.insert_prompt(prompt.wire)
-      store.activate_prompt(reference_digest: prompt.reference_digest, now: Time.utc(2026, 8, 10, 12, 0, 1))
+      store.activate_prompt(reference_digest: prompt.reference_digest,
+                            now: Time.utc(2026, 8, 10, 12, 0, 1), receipt: '2001')
 
       # A press after the TTL: the prompt is expired and must not resolve.
       transport.batch([callback_update('x', 200)])
@@ -177,7 +181,8 @@ class CommsDenyCallbackTest < Minitest::Test
   def callback_update(reference, id)
     { 'update_id' => id,
       'callback_query' => { 'id' => "q-#{id}", 'from' => { 'id' => 111_111_11 },
-                            'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' } },
+                            'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                           'message_id' => 2001 },
                             'data' => reference } }
   end
 
@@ -209,6 +214,7 @@ class CommsDenyCallbackTest < Minitest::Test
         parser_version: 1, kind: 'callback',
         correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
         conversation_id: "telegram:chat:#{message.fetch('chat').fetch('id')}",
+        callback_message_id: message.fetch('message_id'),
         text: callback.fetch('data'), observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
       ).wire
     end

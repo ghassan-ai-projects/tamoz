@@ -71,6 +71,7 @@ module Tamoz
           text: callback['data'].to_s,
           correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
           conversation_id: chat_id(chat),
+          callback_message_id: message.fetch('message_id'),
           observed_at: observed
         )
       end
@@ -97,12 +98,13 @@ module Tamoz
       # :reek:LongParameterList -- the normalized envelope binds every fact
       #   design §6.2 makes durable.
       # rubocop:disable Metrics/ParameterLists
-      def envelope(update_id:, kind:, text:, correspondent_id:, conversation_id:, observed_at:, reply_to: nil)
+      def envelope(update_id:, kind:, text:, correspondent_id:, conversation_id:,
+                   observed_at:, reply_to: nil, callback_message_id: nil)
         Comms::InboundEnvelope.new(
           surface_id: @surface_id, surface_revision: @surface_revision, update_id:,
           raw_payload_hash: digest(update_id), parser_version: PARSER_VERSION,
-          kind:, correspondent_id:, conversation_id:, reply_to:, text:,
-          observed_time: observed_at
+          kind:, correspondent_id:, conversation_id:, reply_to:, callback_message_id:,
+          text:, observed_time: observed_at
         )
       end
       # rubocop:enable Metrics/ParameterLists

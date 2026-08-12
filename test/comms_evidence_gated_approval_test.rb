@@ -241,6 +241,26 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
+  # C4 / exact binding across messages (contract §7.1): a press whose
+  # callback message is not the prompt's originating message (the receipt
+  # pinned at activation) is refused with a durable binding refusal.
+  def test_a_cross_message_press_is_refused
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store)
+
+      press(gateway, "approve:#{reference}", update_id: 97, message_id: 9009)
+
+      decision = pending(adapter, prompt)
+
+      assert_nil decision, 'a press on the wrong message never resolves (contract §7.1)'
+      rows = inbound_dispositions(adapter)
+
+      assert rows.any? { |row| row[0] == 'rejected' && row[1] == 'binding_mismatch' },
+             'the cross-message press must record a durable binding refusal'
+    end
+  end
+
   private
 
   def boot(adapter, checkpoints)
@@ -263,21 +283,22 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
       prompt_ttl_s: ttl_s, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
     store.insert_prompt(prompt.wire)
-    store.activate_prompt(reference_digest: prompt.reference_digest, now: Time.utc(2026, 8, 10, 12, 0, 1))
+    store.activate_prompt(reference_digest: prompt.reference_digest,
+                          now: Time.utc(2026, 8, 10, 12, 0, 1), receipt: '2001')
     [reference, prompt]
   end
 
   # rubocop:disable Metrics/ParameterLists -- the callback's bound context
   # (correspondent + surface) is exactly what the binding oracles vary.
   def press(gateway, data, update_id:, correspondent_id: 111_111_11,
-            surface_id: 'telegram-ops', surface_revision: 1,
+            surface_id: 'telegram-ops', surface_revision: 1, message_id: 2001,
             now: Time.utc(2026, 8, 10, 12, 0, 2))
     transport = gateway.instance_variable_get(:@transport)
     unless surface_id == 'telegram-ops' && surface_revision == 1
       transport = ScriptedTransport.new(surface_id:, surface_revision:)
       gateway.instance_variable_set(:@transport, transport)
     end
-    transport.batch([callback_update(data, update_id, correspondent_id:)])
+    transport.batch([callback_update(data, update_id, correspondent_id:, message_id:)])
     transport.receipt = { 'message_id' => 1, 'date' => 1 }
     gateway.serve_once(now:)
   end
@@ -301,10 +322,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  def callback_update(data, id, correspondent_id: 111_111_11)
+  def callback_update(data, id, correspondent_id: 111_111_11, message_id: 2001)
     { 'update_id' => id,
       'callback_query' => { 'id' => "q-#{id}", 'from' => { 'id' => correspondent_id },
-                            'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' } },
+                            'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                           'message_id' => message_id },
                             'data' => data } }
   end
 
@@ -338,6 +360,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
         parser_version: 1, kind: 'callback',
         correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
         conversation_id: "telegram:chat:#{message.fetch('chat').fetch('id')}",
+        callback_message_id: message.fetch('message_id'),
         text: callback.fetch('data'), observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
       ).wire
     end

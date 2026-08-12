@@ -314,7 +314,9 @@ class AutonomyScorecardTest < Minitest::Test
       refute_nil deny, "the prompt message must carry a Deny button"
       reference = deny.fetch("callback_data")
       refute_empty reference, "the Deny button must carry the single-use reference"
-      rt.client.updates = [callback_update(2, reference)]
+      # The fixture's sendMessage receipt numbers messages from 1, so the
+      # prompt's originating message id equals how many messages were sent.
+      rt.client.updates = [callback_update(2, reference, message_id: rt.client.sent.length)]
 
       # The Deny press resolves exactly one active prompt to a deny decision.
       serve_once(rt, factory: edit_factory)
@@ -524,10 +526,11 @@ class AutonomyScorecardTest < Minitest::Test
                    "from" => {"id" => user_id}, "text" => text}}
   end
 
-  def callback_update(id, reference)
+  def callback_update(id, reference, message_id: 2)
     {"update_id" => id,
      "callback_query" => {"id" => "q-#{id}", "from" => {"id" => 111_111_11},
-                          "message" => {"chat" => {"id" => 222_222_22, "type" => "private"}},
+                          "message" => {"chat" => {"id" => 222_222_22, "type" => "private"},
+                                        "message_id" => message_id},
                           "data" => reference}}
   end
 end

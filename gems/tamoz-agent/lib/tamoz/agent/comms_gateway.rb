@@ -242,13 +242,15 @@ module Tamoz
       end
 
       # Contract §7.1 exact binding: the callback's surface id+revision,
-      # correspondent and conversation must match the prompt row. A prompt
-      # without a surface binding (pre-Phase-3 row) fails closed.
+      # correspondent, conversation and originating message receipt must match
+      # the prompt row. A prompt without a surface binding or a receipt
+      # (pre-Phase-3 row) fails closed.
       def prompt_binding_matches?(prompt, envelope)
         prompt.fetch('surface_id') == envelope.fetch('surface_id') &&
           prompt.fetch('surface_revision') == envelope.fetch('surface_revision') &&
           prompt.fetch('correspondent_id') == envelope.fetch('correspondent_id') &&
-          prompt.fetch('conversation_id') == envelope.fetch('conversation_id')
+          prompt.fetch('conversation_id') == envelope.fetch('conversation_id') &&
+          prompt.fetch('prompt_receipt').to_s == envelope.fetch('callback_message_id').to_s
       end
 
       # ADR-049 INV-B: the presser's evidence is a property of the trusted
