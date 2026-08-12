@@ -71,8 +71,8 @@ PATH
   remote: gems/tamoz-stream
   specs:
     tamoz-stream (0.1.0.alpha.1)
-      google-protobuf (>= 4.35)
-      grpc (>= 1.83)
+      google-protobuf (~> 4.35)
+      grpc (~> 1.83)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
