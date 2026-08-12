@@ -35,10 +35,11 @@ class ChildEnvironmentsTest < Minitest::Test
     env = ChildEnvironments.worker_env(BASE, runtime_dir: '/srv/runtime')
 
     assert_equal 'model-secret', env.fetch('DEEPSEEK_API_KEY')
-    assert_equal 'http://alms.internal', env.fetch('TAMOZ_ALMS_MCP_ENDPOINT')
     assert_equal 'deepseek', env.fetch('TAMOZ_PROVIDER')
     assert_equal 'deepseek-chat', env.fetch('TAMOZ_MODEL')
     refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN'), 'the worker must not carry the bot token'
+    refute env.key?('TAMOZ_ALMS_MCP_ENDPOINT'),
+           'the worker resolves the ALMS endpoint from the MCP config, not the environment'
   end
 
   def test_queue_and_status_see_neither_credential
@@ -51,12 +52,10 @@ class ChildEnvironmentsTest < Minitest::Test
 
   def test_the_harness_gets_only_sanitized_pointers
     env = ChildEnvironments.harness_env(BASE, runtime_dir: '/srv/runtime',
-                                              database_path: '/srv/runtime/runtime.sqlite3',
-                                              endpoint: 'http://alms.internal')
+                                              database_path: '/srv/runtime/runtime.sqlite3')
 
     assert_equal '/srv/runtime', env.fetch('TAMOZ_RUNTIME_DIR')
     assert_equal '/srv/runtime/runtime.sqlite3', env.fetch('TAMOZ_DATABASE_PATH')
-    assert_equal 'http://alms.internal', env.fetch('TAMOZ_ALMS_MCP_ENDPOINT')
     refute env.key?('TAMOZ_ENV_FILE'), 'the harness must not pass the env-file path'
     refute env.key?('TAMOZ_TELEGRAM_BOT_TOKEN')
     refute env.key?('DEEPSEEK_API_KEY')
