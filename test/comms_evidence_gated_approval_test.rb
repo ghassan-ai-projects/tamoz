@@ -261,6 +261,42 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
+  # C5 / the single-use CAS (bar C5): two competing presses of one prompt in
+  # one batch yield at most one decision — the reference is consumed once, and
+  # the loser resolves as nothing.
+  def test_competing_presses_of_one_prompt_yield_at_most_one_decision
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, _prompt = active_prompt(store)
+
+      transport = gateway.instance_variable_get(:@transport)
+      transport.batch([
+        callback_update("deny:#{reference}", 110),
+        callback_update("deny:#{reference}", 111)
+      ])
+      transport.receipt = { 'message_id' => 1, 'date' => 1 }
+      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
+
+      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+
+      assert_equal 1, decisions.length,
+                   'the single-use CAS yields at most one decision (bar C5)'
+      assert_equal 'deny', decisions.first.fetch('direction')
+    end
+  end
+
+  # C6 / ADR-042 (bar C6): the worker path holds no transport handle — the
+  # gateway is the only process that talks to the transport, and the worker's
+  # channel projection is the store-backed sink.
+  def test_the_worker_runtime_holds_no_transport_handle
+    worker = Tamoz::Agent::WorkerRuntime
+
+    refute worker.method_defined?(:transport, false),
+           'the worker must not expose a transport handle (ADR-042, bar C6)'
+    assert_includes worker.instance_methods(false), :delivery_sink,
+                    'the worker channel projection is the store-backed sink'
+  end
+
   private
 
   def boot(adapter, checkpoints)
