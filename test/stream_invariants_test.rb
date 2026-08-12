@@ -302,7 +302,10 @@ class StreamInvariantsTest < Minitest::Test
   # (the executable spec for RFC 8785 + the domain digest).
   def test_invariant_9_every_shared_contract_vector_reproduces_exactly
     vectors = JSON.parse(
-      File.read(ROOT.join("gems/tamoz-stream/contracts/canonicalization-vectors.json"))
+      File.read(
+        ROOT.join("gems/tamoz-stream/contracts/canonicalization-vectors.json"),
+        encoding: Encoding::UTF_8
+      )
     )
     vectors.fetch("accept").each do |vector|
       document = vector.fetch("input")
