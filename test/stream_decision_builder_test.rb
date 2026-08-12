@@ -1,0 +1,91 @@
+# frozen_string_literal: true
+
+require_relative "test_helper"
+
+# T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision — decision-v1 shape,
+# domain digest, and the watch-condition preference at low confidence.
+class StreamDecisionBuilderTest < Minitest::Test
+  Stream = Tamoz::Stream
+
+  def worker
+    Stream::EpisodeWorker.new(
+      worker_version: "0.1.0.alpha.1",
+      lane_config: Tamoz::Agent::LaneConfig.build(
+        "fast" => "flash", "deep" => "pro", "batch" => "flash"
+      )
+    )
+  end
+
+  def envelope
+    Stream::EpisodeRequestEnvelope.new(
+      Agenticstream::Runtime::V1::EpisodeRequest.new(
+        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
+        kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
+        risk_ceiling: :RISK_CLASS_R2
+      ),
+      worker
+    )
+  end
+
+  def snapshot
+    {
+      "situation_id" => "sit-1", "situation_version" => 7,
+      "tenant_id" => "acme", "situation_type" => "equipment",
+      "entity" => {"type" => "compressor", "id" => "c-01"},
+      "facts" => {"pressure" => 1e-7}
+    }
+  end
+
+  def build(outcome)
+    Stream::DecisionBuilder.new(
+      envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}", outcome:
+    ).build
+  end
+
+  def test_a_confident_episode_proposes_a_consequential_intent
+    decision, digest = build(
+      primary_hypothesis: "bearing wear", confidence: 0.9,
+      summary: "pressure trend", facts_used: [{"pressure" => 1e-7}]
+    )
+
+    assert_equal "decision.ep-1.at-1.1", decision.fetch("decision_id")
+    assert_equal "sha256:#{"0" * 64}", decision.fetch("snapshot_digest")
+    assert_equal 0.9, decision.fetch("confidence")
+    assert_equal "bearing wear", decision.fetch("primary_hypothesis")
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "maintenance.ticket", intent.fetch("type")
+    assert_equal "R2", intent.fetch("risk_class")
+    assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
+
+    # The decision digest verifies against the shared decision domain.
+    assert Tamoz::Core.verify_digest(:decision, decision, digest)
+    # Each intent carries its own digest over its content.
+    intent_digest = intent.fetch("intent_digest")
+    assert Tamoz::Core.verify_digest(
+      :intent, intent.reject { |key, _| key == "intent_digest" }, intent_digest
+    )
+  end
+
+  def test_an_uncertain_episode_prefers_a_watch_condition_over_an_action
+    decision, = build(
+      primary_hypothesis: "possible drift", confidence: 0.3,
+      watch_metric: "condition_score", watch_threshold: 0.8
+    )
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "install_watch_condition", intent.fetch("type"),
+                 "at low confidence the episode must observe, not act"
+    assert_equal "R0", intent.fetch("risk_class")
+    assert_equal(
+      "situation.condition_score >= 0.8",
+      intent.fetch("parameters").fetch("expression")
+    )
+  end
+
+  def test_confidence_is_clamped_to_the_unit_interval
+    decision, = build(primary_hypothesis: "x", confidence: 1.7)
+    assert_equal 1.0, decision.fetch("confidence")
+  end
+end

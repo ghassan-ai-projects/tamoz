@@ -3,6 +3,8 @@
 require "tamoz/core"
 require "tamoz/stream/gen"
 require "tamoz/stream/episode_stream"
+require "tamoz/stream/decision_builder"
+require "json"
 
 Tamoz::Stream::Gen.load!
 
@@ -153,39 +155,78 @@ module Tamoz
       attr_reader :worker
 
       def run(wire_request, call = nil)
-        envelope = EpisodeRequestEnvelope.new(wire_request, @worker)
-        snapshot = ReceivedSnapshot.verify(
-          wire_request.snapshot_json, wire_request.snapshot_sha256
-        )
         Enumerator.new do |yielder|
-          stream = EpisodeStream.new(envelope)
-          adapter = EpisodeStreamAdapter.new(stream, budget: wire_request.budget)
-          stream.started
-          context = Tamoz::Context.new(
-            run_id: envelope.request_id,
-            execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
-            request_id: envelope.request_id,
-            interrupt_mode: :non_interactive,
-            emitter: adapter
-          )
-          watcher = watch_cancellation(call, context)
-          result = @durable_runner.deliver(
-            envelope.payload.merge("snapshot" => snapshot),
-            thread: envelope.thread_id,
-            request_id: envelope.request_id,
-            operation: :turn,
-            delivery: :queue,
-            namespace: envelope.namespace,
-            context:
-          )
-          watcher&.kill
-          # T2.4 inserts the decision event here when a Decision was produced.
-          adapter.terminal(result)
+          envelope = nil
+          begin
+            envelope = EpisodeRequestEnvelope.new(wire_request, @worker)
+            snapshot = ReceivedSnapshot.verify(
+              wire_request.snapshot_json, wire_request.snapshot_sha256
+            )
+            stream = EpisodeStream.new(envelope)
+            adapter = EpisodeStreamAdapter.new(stream, budget: wire_request.budget)
+            stream.started
+            context = Tamoz::Context.new(
+              run_id: envelope.request_id,
+              execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
+              request_id: envelope.request_id,
+              interrupt_mode: :non_interactive,
+              emitter: adapter
+            )
+            watcher = watch_cancellation(call, context)
+            result = @durable_runner.deliver(
+              envelope.payload.merge("snapshot" => snapshot),
+              thread: envelope.thread_id,
+              request_id: envelope.request_id,
+              operation: :turn,
+              delivery: :queue,
+              namespace: envelope.namespace,
+              context:
+            )
+            watcher&.kill
+            emit_decision(stream, envelope, snapshot, wire_request, result)
+            adapter.terminal(result)
+          rescue Tamoz::Stream::StreamError => error
+            # A refused episode still terminates the wire stream with a typed
+            # FAILED terminal — never a bare RPC error, and never a model call.
+            stream ||= EpisodeStream.new(identity_for(wire_request))
+            adapter ||= EpisodeStreamAdapter.new(stream)
+            stream.diagnostic(code: error.class::CATEGORY, message: error.message)
+            stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: error.class::CATEGORY)
+          end
           stream.events.each { |event| yielder << event }
         end
       end
 
       private
+
+      # The failure path has no valid envelope, but the wire stream still needs
+      # the episode identity for every event.
+      def identity_for(wire_request)
+        Struct.new(:episode_id, :attempt_id, :fence).new(
+          wire_request.episode_id, wire_request.attempt_id, wire_request.fence
+        )
+      end
+
+      # T2.4: a completed episode proposes a typed Decision (built from the
+      # graph's terminal state) BEFORE the PRODUCED terminal — the stream
+      # refuses a produced episode without one.
+      def emit_decision(stream, envelope, snapshot, wire_request, result)
+        return unless result.status == :completed
+
+        checkpoint = @durable_runner.compiled.checkpointer.latest(
+          thread_id: envelope.thread_id, namespace: envelope.namespace
+        )
+        outcome = checkpoint.state.to_h
+        decision, digest = DecisionBuilder.build(
+          envelope:, snapshot:,
+          snapshot_digest: wire_request.snapshot_sha256,
+          outcome: outcome.transform_keys(&:to_sym)
+        )
+        stream.decision(
+          decision_json: JSON.generate(decision),
+          decision_sha256: digest
+        )
+      end
 
       # T2.2: an RPC-context cancellation (supersession) cancels the run's
       # token; the executor aborts at its next check, leaving a resumable

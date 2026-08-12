@@ -166,9 +166,10 @@ class StreamSituationRequestTest < Minitest::Test
       tampered = wire_request
       tampered.snapshot_json = tampered.snapshot_json.sub("sit-1", "sit-9")
 
-      assert_raises(Tamoz::Stream::SnapshotDigestMismatchError) do
-        runner.run(tampered)
-      end
+      events = runner.run(tampered).to_a
+      assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status
+      refute events.any? { |event| event.model_started != nil },
+             "no model call may run for a tampered snapshot"
       history = request_history(adapter, app)
       assert_empty history, "no request may be enqueued for a tampered snapshot"
     end

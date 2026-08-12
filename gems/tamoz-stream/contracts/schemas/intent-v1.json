@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:situation-runtime:schema:intent:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["intent_id", "intent_digest", "decision_id", "tenant_id", "situation_id", "situation_version", "type", "risk_class", "parameters", "expires_at"],
+  "properties": {
+    "intent_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "intent_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "decision_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "tenant_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "situation_id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "situation_version": {"type": "integer", "minimum": 1},
+    "type": {"type": "string", "pattern": "^[a-z][a-z0-9_.-]{0,127}$"},
+    "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]},
+    "parameters": {"type": "object", "maxProperties": 128},
+    "evidence_ids": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+    "expires_at": {"type": "string", "format": "date-time"},
+    "compensates": {"type": "string", "maxLength": 256}
+  }
+}
