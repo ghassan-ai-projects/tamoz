@@ -52,13 +52,24 @@ module Tamoz
         # digest, key observations, decisions, effect receipts, the observed
         # outcome, corrections/human feedback, and links to the protected
         # trajectory — NEVER a raw transcript or recalled content.
-        def admit_episode(episode:, owner:, actor: nil)
+        #
+        # T5.3: an episode is :observed ONLY with an authenticated
+        # reconciled-outcome reference (`reconciled_outcome:` + the
+        # `verify_source_authority` callable). The reference names the stream's
+        # reconciled Outcome — the independent observer Tamoz alone cannot be.
+        # Absent: the episode admits as :reported (self-certified turns). A
+        # CLAIMED reference that does not verify is REFUSED — there is no
+        # silent downgrade of a forged claim.
+        def admit_episode(episode:, owner:, actor: nil, reconciled_outcome: nil,
+                          verify_source_authority: nil)
           max = MemoryLimits.fetch(:max_statement_bytes)
           if episode[:statement] && episode[:statement].bytesize > max
             return oversized_rejected(episode[:statement], owner:, actor:)
           end
 
-          record = build_from_episode(episode, owner:, actor:)
+          record = build_from_episode(
+            episode, owner:, actor:, reconciled_outcome:, verify_source_authority:
+          )
           # Anti self-ingestion (P11-A): recalled content is excluded as new
           # Experience evidence. A recall trace mark is not enough — the
           # admission boundary itself rejects the loop (probe P11-A2).
@@ -272,7 +283,8 @@ module Tamoz
           nil
         end
 
-        def build_from_episode(episode, owner:, actor: nil)
+        def build_from_episode(episode, owner:, actor: nil, reconciled_outcome: nil,
+                               verify_source_authority: nil)
           plan_digest = episode.fetch(:plan_digest)
           task = episode.fetch(:task)
           observed = episode.fetch(:observed_outcome)
@@ -285,12 +297,24 @@ module Tamoz
           # Every downstream read uses the string form, so a symbol-keyed
           # outcome never loses its values to a symbol-only fetch.
           observed = observed.transform_keys(&:to_s)
-          # Episodes are :observed ONLY when the outcome was independently
-          # observed (an authenticated reconciled-outcome reference, T5.3). A
-          # self-certified episode defaults to :reported — the admission path
-          # must never infer observation (T0.2). Strict boolean: a truthy
-          # string or integer must not upgrade a self-certified episode.
-          kind = observed.fetch("independently_observed", false) == true ? :observed : :reported
+          # T5.3: an episode is :observed ONLY with an authenticated
+          # reconciled-outcome reference. The independently_observed boolean
+          # has NO power — a bare truthy flag is a self-certified claim and
+          # admits as :reported (regression-pinned). A CLAIMED reference that
+          # does not authenticate is refused: the admission boundary never
+          # silently downgrades a forged claim to :reported.
+          reason = VerifiedOutcomeReference.reason(
+            reconciled_outcome, episode:, verify_source_authority:
+          )
+          if reason
+            unless reconciled_outcome.nil?
+              raise MemoryPolicyError, "admission refused: #{reason}"
+            end
+
+            kind = :reported
+          else
+            kind = :observed
+          end
           # An explicitly provided statement (key observations + decisions +
           # corrections) is the memory content; otherwise a bounded summary of
           # the episode's grounded parts is built. Never a transcript, never
@@ -307,6 +331,12 @@ module Tamoz
               "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
             }
           ]
+          # T5.3: the :observed record cites the Outcome id, command id,
+          # source authority, and reconciliation version, so provenance
+          # survives the gap between the episode and the Friday outcome.
+          if kind == :observed
+            source_refs << VerifiedOutcomeReference.provenance(reconciled_outcome)
+          end
           MemoryRecord.new(
             memory_id: MemoryRecordDigest.identity(statement),
             record_version: 1,

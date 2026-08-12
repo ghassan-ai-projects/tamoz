@@ -7,6 +7,7 @@ require "tamoz/stream/decision_builder"
 require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
+require "tamoz/stream/verification_store"
 require "json"
 
 Tamoz::Stream::Gen.load!
@@ -202,9 +203,10 @@ module Tamoz
     # run into EpisodeEvent payloads; the runner here returns the durable
     # RequestRecord.
     class EpisodeRunner
-      def initialize(durable_runner:, worker:)
+      def initialize(durable_runner:, worker:, verification_store: nil)
         @durable_runner = durable_runner
         @worker = worker
+        @verification_store = verification_store
       end
 
       attr_reader :worker
@@ -262,7 +264,10 @@ module Tamoz
             )
             status, reason = adapter.terminal_status(result)
             if status == :TERMINAL_STATUS_PRODUCED
-              emit_decision(stream, envelope, snapshot, wire_request, result)
+              decision, digest = emit_decision(
+                stream, envelope, snapshot, wire_request, result
+              )
+              open_verifications(envelope, snapshot, decision, digest)
             end
             stream.terminal(status, reason_code: reason, usage: adapter.wire_usage)
           rescue Tamoz::Stream::StreamError => error
@@ -298,9 +303,10 @@ module Tamoz
       # graph's terminal state) BEFORE the PRODUCED terminal — the stream
       # refuses a produced episode without one. The checkpoint is the request's
       # OWN terminal checkpoint (never the thread's `latest`, which a
-      # concurrent fence+1 redispatch could have moved past).
+      # concurrent fence+1 redispatch could have moved past). Returns the
+      # [decision, digest] pair so T5.2 can open verification rows per intent.
       def emit_decision(stream, envelope, snapshot, wire_request, result)
-        return unless result.checkpoint_id
+        return [nil, nil] unless result.checkpoint_id
 
         checkpoint = @durable_runner.compiled.checkpointer.find(
           thread_id: envelope.thread_id,
@@ -317,6 +323,51 @@ module Tamoz
           decision_json: JSON.generate(decision),
           decision_sha256: digest
         )
+        [decision, digest]
+      end
+
+      # T5.2: a produced episode opens an :awaiting verification row per
+      # intent. The row carries everything the subscriber needs to admit the
+      # Experience when outcome.reconciled arrives (possibly days later), with
+      # the situation scopes so the Experience is reachable by the T5.4
+      # situation-scoped retrieval path.
+      def open_verifications(envelope, snapshot, decision, digest)
+        return unless @verification_store && decision
+
+        entity = snapshot.fetch("entity")
+        episode_content = {
+          session_id: envelope.episode_id,
+          episode_id: envelope.episode_id,
+          attempt_id: envelope.attempt_id,
+          task: "stream episode #{envelope.episode_id} " \
+                "attempt #{envelope.attempt_id}",
+          plan_digest: digest,
+          completed_at: Time.now.to_i,
+          scopes: {
+            "tenant" => envelope.tenant_id,
+            "user" => "stream",
+            "project" => "stream",
+            "situation_type" => snapshot.fetch("situation_type"),
+            "entity_type" => entity.fetch("type"),
+            "entity_id" => entity.fetch("id")
+          },
+          sensitivity: :internal,
+          decisions: [String(decision.fetch("primary_hypothesis", ""))],
+          corrections: []
+        }
+        decision.fetch("intents", []).each do |intent|
+          # A watch condition (R0) has no command and no outcome to verify —
+          # verification rows open only for consequential intents.
+          next if intent.fetch("risk_class", "R0").to_s.upcase == "R0"
+
+          @verification_store.open(
+            intent_id: intent.fetch("intent_id"),
+            episode_id: envelope.episode_id,
+            attempt_id: envelope.attempt_id,
+            decision_digest: digest,
+            episode: episode_content
+          )
+        end
       end
 
       # T3.2: the episode tool surface. The containment host (T4.1) binds the

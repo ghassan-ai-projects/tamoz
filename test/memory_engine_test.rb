@@ -68,6 +68,8 @@ class MemoryEngineTest < Minitest::Test
   def episode(statement: "Deploy canary first, then monitor", user: "alice", session_id: "s1", valid_until: nil)
     {
       session_id:,
+      episode_id: "s1",
+      attempt_id: "at-1",
       statement:,
       task: "rollout the deployment",
       plan_digest: "sha256:plan-#{statement}",
@@ -77,12 +79,35 @@ class MemoryEngineTest < Minitest::Test
       sensitivity: :internal,
       decisions: ["canary 10%"],
       corrections: [],
-      observed_outcome: {"outcome" => "deployment staged", "independently_observed" => true, "confidence" => 0.9}
+      observed_outcome: {"outcome" => "deployment staged", "confidence" => 0.9}
     }
   end
 
+  # T5.3: the authenticated reconciled-outcome reference that admits an
+  # episode as :observed — the stream's reconciled Outcome is the independent
+  # observer Tamoz alone cannot be.
+  def reconciled_outcome(overrides = {})
+    {
+      "outcome_id" => "out-1",
+      "outcome_digest" => "sha256:#{"c" * 64}",
+      "command_id" => "cmd-1",
+      "source_authority" => "stream-1",
+      "reconciliation_version" => "1",
+      "observation_status" => "verified",
+      "episode_id" => "s1",
+      "attempt_id" => "at-1"
+    }.merge(overrides)
+  end
+
+  def verify_source_authority = ->(authority) { authority == "stream-1" }
+
   def admit_episode(statement: "Deploy canary first, then monitor", user: "alice")
-    @engine.admission.admit_episode(episode: episode(statement:, user:), owner: user)
+    @engine.admission.admit_episode(
+      episode: episode(statement:, user:),
+      owner: user,
+      reconciled_outcome: reconciled_outcome,
+      verify_source_authority:
+    )
   end
 
   def test_record_is_immutable_versioned_and_codec_registered
@@ -119,10 +144,12 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "Canary 2%, then monitor", corrected_again.statement
   end
 
-  # T0.2: a self-certified episode never admits as :observed. The admission
-  # path must not infer independent observation from the absence of a flag;
-  # only an explicit independently_observed: true (which T5.3 replaces with an
-  # authenticated reconciled-outcome reference) admits an episode as :observed.
+  # T0.2 + T5.3: a self-certified episode never admits as :observed. The
+  # admission path must not infer independent observation from a flag; the
+  # independently_observed boolean has NO power at all — only the
+  # authenticated reconciled-outcome reference admits an episode as :observed,
+  # and a CLAIMED reference that does not verify is refused, never silently
+  # downgraded to :reported.
   def test_episodes_without_independent_observation_admit_only_as_reported
     unmarked = @engine.admission.admit_episode(
       episode: episode(statement: "Self-certified observation").merge(
@@ -142,15 +169,6 @@ class MemoryEngineTest < Minitest::Test
     assert self_certified.accepted?
     assert_equal :reported, self_certified.record.epistemic_kind
 
-    independent = @engine.admission.admit_episode(
-      episode: episode(statement: "Independently observed").merge(
-        observed_outcome: {"outcome" => "seen", "independently_observed" => true, "confidence" => 0.9}
-      ),
-      owner: "alice"
-    )
-    assert independent.accepted?
-    assert_equal :observed, independent.record.epistemic_kind
-
     # A truthy string must not upgrade a self-certified episode (strict
     # boolean, not Ruby truthiness).
     stringy = @engine.admission.admit_episode(
@@ -161,6 +179,27 @@ class MemoryEngineTest < Minitest::Test
     )
     assert stringy.accepted?
     assert_equal :reported, stringy.record.epistemic_kind
+
+    # T5.3 regression pin: a bare truthy boolean is a self-certified claim —
+    # the flag no longer grants :observed.
+    flagged = @engine.admission.admit_episode(
+      episode: episode(statement: "Boolean-flagged observation").merge(
+        observed_outcome: {"outcome" => "claimed", "independently_observed" => true, "confidence" => 0.9}
+      ),
+      owner: "alice"
+    )
+    assert flagged.accepted?
+    assert_equal :reported, flagged.record.epistemic_kind
+
+    # Only the authenticated reconciled-outcome reference admits :observed.
+    independent = @engine.admission.admit_episode(
+      episode: episode(statement: "Independently observed"),
+      owner: "alice",
+      reconciled_outcome: reconciled_outcome,
+      verify_source_authority:
+    )
+    assert independent.accepted?
+    assert_equal :observed, independent.record.epistemic_kind
   end
 
   # T0.3: situation scopes are complete by VALUE, canonicalized to string keys.
@@ -291,7 +330,11 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "secret_shaped", result.reason
 
     speculation = episode(statement: "The build probably failed because the cache was stale?")
-    result = @engine.admission.admit_episode(episode: speculation, owner: "alice")
+    result = @engine.admission.admit_episode(
+      episode: speculation, owner: "alice",
+      reconciled_outcome: reconciled_outcome,
+      verify_source_authority:
+    )
     assert result.rejected?
     assert_equal "speculation_as_fact", result.reason
 
