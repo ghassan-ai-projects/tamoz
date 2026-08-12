@@ -502,7 +502,7 @@ module Tamoz
           emit("request.failed",
                thread: thread_id, request_id: occurrence_id,
                duration_ms:,
-               reason: view.respond_to?(:error) ? view.error.to_s : "failed",
+               reason: settled_failure_reason(view),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :blocked
@@ -592,6 +592,34 @@ module Tamoz
         [TerminalProgress.progress_line(view), TerminalProgress.artifact_line(view),
          'Work failed before verified completion.',
          "Next action: #{TerminalProgress.next_action('failed')}"].compact.join("\n") + '.'
+      end
+
+      # The reason a settled turn failed, derived from the session state the
+      # view carries: the first bounded tool-failure signature, or the terminal
+      # reason (e.g. `repair_plan_rejected`). For a plan rejection the first
+      # three STRUCTURAL review issues are included — the same bounded
+      # disclosure the raised PlanRejectedError path already makes.
+      # Semantic/protocol feedback and the reviewer's prose stay hidden: model
+      # output is never echoed, but an operator now sees the failure class.
+      def settled_failure_reason(view)
+        failure = Array(view.state[:observations]).reverse.find { |record| record['failure'] }
+        if failure
+          record = failure.fetch('failure')
+          return "#{record.fetch('error_class')}:#{record.fetch('reason')}"
+        end
+
+        terminal = view.state[:terminal_reason]
+        return 'failed' unless terminal
+
+        issues = structural_review_issues(view.state)
+        issues.empty? ? terminal : "#{terminal}: #{issues.first(3).join('; ')}"
+      end
+
+      def structural_review_issues(state)
+        review = Array(state[:plan_reviews]).last
+        return [] unless review && review['layer'] == 'structural' && review['decision'] == 'revise'
+
+        Array(review['issues'])
       end
 
       def stop_text(view, reason:, budget: nil)
