@@ -285,6 +285,31 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
+  # C5 / approve+deny racing in one batch (bar C5): the approve is refused by
+  # the evidence gate before the CAS, the deny consumes exactly once — one
+  # decision, and it is the deny (INV-A wins over a weak approve).
+  def test_an_approve_and_a_deny_in_one_batch_yield_exactly_one_decision
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, _prompt = active_prompt(store)
+
+      transport = gateway.instance_variable_get(:@transport)
+      transport.batch([
+        callback_update("approve:#{reference}", 120),
+        callback_update("deny:#{reference}", 121)
+      ])
+      transport.receipt = { 'message_id' => 1, 'date' => 1 }
+      gateway.serve_once(now: Time.utc(2026, 8, 10, 12, 0, 2))
+
+      decisions = adapter.bind_comms_decision_store.each_decision(thread_id: 'tg.ops.abc')
+
+      assert_equal 1, decisions.length,
+                   'the approve+deny race yields at most one decision (bar C5)'
+      assert_equal 'deny', decisions.first.fetch('direction'),
+                   'the unconditional deny wins over the weak approve (INV-A/INV-B)'
+    end
+  end
+
   # C6 / ADR-042 (bar C6): the worker path holds no transport handle — the
   # gateway is the only process that talks to the transport, and the worker's
   # channel projection is the store-backed sink.
