@@ -105,8 +105,8 @@ module Tamoz
         else
           # An unknown control event is a protocol drift — recorded and
           # skipped, never a wedge: one bad frame does not halt the
-          # subscription.
-          record_audit(@skipped, cursor: frame.cursor,
+          # subscription. The skip shape is uniform with the poison skips.
+          record_audit(@skipped, cursor: frame.cursor, id: nil, type: nil,
                                  control: frame.control, reason: "unknown_control_event")
           @cursor_store.write(frame.cursor)
         end
@@ -158,7 +158,8 @@ module Tamoz
         retry_count = (@poison[key] || 0) + 1
         if retry_count > @max_poison_retries
           record_audit(@skipped, cursor: frame.cursor, id: key.last,
-                                 type: frame.event, reason: "poison_after_#{@max_poison_retries}_retries: #{reason}")
+                                 type: frame.event, control: nil,
+                                 reason: "poison_after_#{@max_poison_retries}_retries: #{reason}")
           remember(key)
           @cursor_store.write(frame.cursor)
           @poison.delete(key)
