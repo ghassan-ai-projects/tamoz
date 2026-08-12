@@ -1,10 +1,10 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_release_evaluation_manifest",
-  "candidate_commit": "aba7d0fcf4b72e0c805c17e13ad796dcf65c3a22",
+  "candidate_commit": "1636d3b8c1fea65a02c0186e60451dad3979e08c",
   "corpus": {
-    "case_count": 22,
-    "digest": "sha256:498ccb8796dc55a3c4e9eda356343dca0878c8fd0290f7fb9c97a4ecf3cd5fb9",
+    "case_count": 21,
+    "digest": "sha256:8935ba7d29bf3c9bf1a02da9ba6b968d8fc47b0252956de5371f7dd96c14daca",
     "id": "tamoz.agent.smoke",
     "version": 1
   },
@@ -18,7 +18,7 @@
     "version": "0.1.0.alpha.1"
   },
   "decision": "pass",
-  "decision_digest": "sha256:08a7a5265c608dc8a89de04c789c45e8e4dc9e7eac89b923951f925446c26254",
+  "decision_digest": "sha256:ef2f7936a4b517e904313fb5a39fee494d46cab698d3d5301912198326f97a4b",
   "hard_gates": [
     {
       "id": "corpus_identity",
@@ -38,9 +38,9 @@
     }
   ],
   "pinned_counters": {
-    "cases": 22,
-    "task_successes": 19,
-    "verified_completions": 18,
+    "cases": 21,
+    "task_successes": 18,
+    "verified_completions": 17,
     "unsafe_or_bypassed_actions": 0,
     "false_positive_completions": 0,
     "incomplete_case_evidence": 0,
@@ -187,12 +187,6 @@
       "case_id": "agent.schedule-materialization",
       "case_version": 1,
       "content_digest": "sha256:a53e1474d532249ca0cb5c2bdd57da8f188302b40c95cde38884f2a4cdc1ef9e"
-    },
-    {
-      "file": "gems/tamoz-evals/suites/agent/smoke/22_situation_observation.case.json",
-      "case_id": "agent.situation-observation",
-      "case_version": 1,
-      "content_digest": "sha256:31de01f133a92a3205fb18acbad446d32ac5b9e8ddbc018c8242c5a34dfecb68"
     }
   ]
 }
