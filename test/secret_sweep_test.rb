@@ -22,10 +22,12 @@ class SecretSweepTest < Minitest::Test
   SECRET = Tamoz::Secret.new("sk-live-DO-NOT-PERSIST-0123456789")
 
   # Every durable surface that accepts caller-supplied data. Adding one without
-  # adding it here is the gap this test exists to prevent.
+  # adding it here is the gap this test exists to prevent. T8.3: the retired
+  # P14 engine's stream_payload surface is gone with it (the worker admits
+  # only the stream-sealed, digest-verified snapshot).
   SURFACES = %w[
     application_store checkpoint_state session_record request_payload
-    effect_request schedule_payload stream_payload instrumentation
+    effect_request schedule_payload instrumentation
     stream_part context_metadata
   ].freeze
 
@@ -149,24 +151,12 @@ class SecretSweepTest < Minitest::Test
     end
   end
 
-  # The refusal comes from the shared `Tamoz::Core.deep_freeze` guard, whose
-  # message still says "plan argument" in every context. That wording is a
-  # cosmetic wart, not a leak: the value is refused and its bytes never reach a
-  # store. It is left alone because several suites pin constructor rejection
-  # messages byte-for-byte.
-  def test_a_secret_is_refused_from_stream_payload
-    assert_raises(Tamoz::Error) do
-      Tamoz::Stream::EventEnvelope.new(
-        event_id: "evt-1", event_type: "temperature", schema_id: "temperature.v2",
-        payload: {"reading" => SECRET},
-        tenant_id: "tenant-1", source_id: "device-1",
-        channel_id: "factory-1.temperature", channel_revision: 1,
-        partition_key: "tenant-1:device-1", entity_id: "device-1",
-        event_time: 1, observed_time: 1, ingestion_time: 1
-      )
-    end
-  end
-
+  # T8.3: the P14 stream engine (which admitted arbitrary source payloads and
+  # swept them for secrets) is retired. The supervised worker admits only the
+  # stream-sealed snapshot, which is verified by digest and never re-parsed
+  # as an admission candidate — there is no stream payload to sweep. The
+  # memory admission path (which DOES accept agent-authored statements) keeps
+  # the secret sweep via test_a_secret_is_refused_from_episode_statement.
   def test_a_secret_is_refused_from_instrumentation
     context = Tamoz::Context.new(
       run_id: "run", execution_id: "execution", request_id: "request"

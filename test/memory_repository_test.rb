@@ -96,13 +96,15 @@ class MemoryRepositoryTest < Minitest::Test
     # comms moved 5 -> 6 through MIGRATION_6; ADR-049 moved 8 -> 9 and 9 -> 10
     # through MIGRATION_9/10; the JCS digest-rule cutover moved 10 -> 11
     # through MIGRATION_11; situation scopes moved 11 -> 12 through
-    # MIGRATION_12. The monotonic-ordering guard makes ordinal reuse
+    # MIGRATION_12; the old stream engine's retirement moved 12 -> 13 through
+    # MIGRATION_13 (T8.3). The monotonic-ordering guard makes ordinal reuse
     # impossible.
-    assert_equal 12, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], Tamoz::SQLite::Migrator.migration_ordinals
+    assert_equal 13, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+                 Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 12, database.get_first_value("PRAGMA user_version")
+    assert_equal 13, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -144,26 +146,23 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 12, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 13, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 
   # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1). A pre-JCS database
-  # carrying stream-engine rows and circuit rows migrates forward: MIGRATION_11
-  # registers the digest epoch, clears the canonical-JSON-digest rows, and the
-  # reopened connection verifies.
+  # carrying circuit rows migrates forward: MIGRATION_11 registers the digest
+  # epoch, clears the canonical-JSON-digest circuit rows, and the reopened
+  # connection verifies. (The stream-engine rows MIGRATION_11 once cleared are
+  # gone with the tables themselves — MIGRATION_13 retires them, T8.3.)
   def test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows
     path = File.join(@directory, "cutover.db")
     adapter = Tamoz::SQLite::Adapter.new(path:)
     database = SQLite3::Database.new(path)
-    database.execute(
-      "INSERT INTO tamoz_stream_channels(channel_id, revision, definition_digest, payload, payload_digest, deleted, created_at_ms, updated_at_ms) VALUES (?, 1, ?, ?, ?, 0, 1, 1)",
-      ["ch", "sha256:#{"a" * 64}", "{}", "sha256:#{"c" * 64}"]
-    )
     database.execute(
       "INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms) VALUES (?, ?, 1, 0, 0, 1)",
       ["tamoz.circuit.test", "sha256:#{"b" * 64}"]
@@ -204,18 +203,30 @@ class MemoryRepositoryTest < Minitest::Test
                 'retained', 1)
     SQL
     database.execute("DROP TABLE tamoz_digest_epoch")
+    # The DB was built at v13, which already dropped the old stream tables;
+    # recreate them from the real migration definitions so the downgrade can
+    # exercise MIGRATION_11's stream clears, then let MIGRATION_13 drop them
+    # again on the way back up.
+    (Tamoz::SQLite::Migrator.const_get(:MIGRATION_4) +
+     Tamoz::SQLite::Migrator.const_get(:MIGRATION_5)).each do |statement|
+      database.execute(statement)
+    end
     database.execute("PRAGMA user_version = 10")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13)")
     database.close
     adapter.close
 
     upgraded = Tamoz::SQLite::Adapter.new(path:)
     database = SQLite3::Database.new(path)
     assert_equal 1, database.get_first_value("SELECT epoch FROM tamoz_digest_epoch")
-    assert_equal 0, database.get_first_value("SELECT COUNT(*) FROM tamoz_stream_channels")
     assert_equal 0, database.get_first_value(
       "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
     )
+    # T8.3: the old engine's tables are gone entirely after MIGRATION_13.
+    stream_tables = database.execute(
+      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name LIKE 'tamoz_stream_%'"
+    )
+    assert_empty stream_tables, "MIGRATION_13 must drop every old stream table"
     # The pre-12 row survives the rebuild with NULL situation scopes, and the
     # scope indexes are recreated.
     preserved = database.get_first_value(
@@ -229,7 +240,7 @@ class MemoryRepositoryTest < Minitest::Test
     assert_includes indexes, "idx_tamoz_memory_index_scope"
     assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal 12, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 13, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

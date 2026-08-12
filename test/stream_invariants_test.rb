@@ -15,10 +15,9 @@ class StreamInvariantsTest < Minitest::Test
 
   # Invariant 1: the supervised episode path computes no watermark, event
   # time, lateness, or window membership — the deterministic plane belongs to
-  # the stream (§2, §6.2). The scan covers the new worker files; the OLD P14
-  # engine (clock, stream_clock, connector, stream_store, event_envelope,
-  # cognition_admission, ...) still carries those concepts and is retired by
-  # the T8.3 forward migration, not by this invariant.
+  # the stream (§2, §6.2). T8.3 retired the old P14 engine (which carried
+  # those concepts) by forward migration; the scan covers the surviving
+  # worker files.
   def test_invariant_1_the_episode_path_computes_no_stream_plane_concepts
     episode_files = ROOT.glob(
       "gems/tamoz-stream/lib/tamoz/stream/{episode_*,evidence_*,situation_*,capability_host,reconsideration,approval_relay,outcome_subscriber,verification_store,situation_memory,artifact_store,decision_builder}*.rb"

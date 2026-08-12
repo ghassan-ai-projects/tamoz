@@ -50,7 +50,9 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
   register as four built-in sources at session construction and are then sealed.
   The authority intersection is computed once from policy; content never grants.
 - **Evaluated skills, governed MCP, three-layer memory, bounded self-healing,
-  durable scheduling, and streaming observation** with a simulated effector.
+  durable scheduling, and the supervised episode worker** (gRPC EpisodeWorker
+  for the stream runtime, with evidence pull, the learning loop, and approval
+  relay on the reverse channel).
 
 ```bash
 export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"

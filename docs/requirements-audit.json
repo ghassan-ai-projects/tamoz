@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-12T18:12:50Z",
-  "manifest_requirements": 437,
-  "named_cases_run": 270,
+  "generated_at": "2026-08-12T22:28:56Z",
+  "manifest_requirements": 426,
+  "named_cases_run": 254,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
-    "missing": 16,
-    "pass": 406
+    "missing": 15,
+    "pass": 396
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -19,7 +19,6 @@
     "ADR-046",
     "ADR-047",
     "INV-39",
-    "INV-48",
     "INV-56",
     "INV-57",
     "INV-58",
@@ -617,9 +616,7 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary",
-      "supporting_tests": [
-        "test/stream_values_test.rb#test_channel_descriptor_is_content_addressed_and_validated"
-      ],
+      "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -634,8 +631,11 @@
       "title": "Situation is the boundary between continuous evidence and episodic cognition",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_cognition_test.rb#test_snapshot_is_content_addressed_and_binds_the_situation_version",
-      "supporting_tests": [],
+      "named_test": "test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused",
+      "supporting_tests": [
+        "test/stream_situation_snapshot_test.rb#test_a_verified_snapshot_returns_the_parsed_value",
+        "test/stream_situation_snapshot_test.rb#test_the_digest_rule_agrees_with_the_shared_snapshot_vector"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -650,9 +650,9 @@
       "title": "Event time, explicit backpressure, and effect-disabled replay are contracts",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode",
+      "named_test": "test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts",
       "supporting_tests": [
-        "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic"
+        "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
       ],
       "classification": "direct",
       "rationale": null,
@@ -668,8 +668,10 @@
       "title": "Physical action is typed intent plus current-state policy, never model effect",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery",
-      "supporting_tests": [],
+      "named_test": "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
+      "supporting_tests": [
+        "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -684,8 +686,10 @@
       "title": "Tamoz is supervisory; certified safety and real-time control stay external",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
-      "supporting_tests": [],
+      "named_test": "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
+      "supporting_tests": [
+        "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4118,10 +4122,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::ActionBoundary",
+      "id": "API-tamoz-stream-Tamoz::Stream::ApprovalRelay",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::ActionBoundary",
+      "title": "Tamoz::Stream::ApprovalRelay",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4134,10 +4138,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::AuthenticationError",
+      "id": "API-tamoz-stream-Tamoz::Stream::ArtifactStore",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::AuthenticationError",
+      "title": "Tamoz::Stream::ArtifactStore",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4150,10 +4154,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::CLASSIFICATIONS",
+      "id": "API-tamoz-stream-Tamoz::Stream::BudgetExceededError",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::CLASSIFICATIONS",
+      "title": "Tamoz::Stream::BudgetExceededError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4166,10 +4170,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::ChannelConnector",
+      "id": "API-tamoz-stream-Tamoz::Stream::ContractMismatchError",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::ChannelConnector",
+      "title": "Tamoz::Stream::ContractMismatchError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4182,10 +4186,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::ChannelDescriptor",
+      "id": "API-tamoz-stream-Tamoz::Stream::DecisionBuilder",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::ChannelDescriptor",
+      "title": "Tamoz::Stream::DecisionBuilder",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4198,10 +4202,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::CognitionAdmission",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeCapabilityHost",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::CognitionAdmission",
+      "title": "Tamoz::Stream::EpisodeCapabilityHost",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4214,10 +4218,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::DELIVERY_MODES",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeRequestEnvelope",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::DELIVERY_MODES",
+      "title": "Tamoz::Stream::EpisodeRequestEnvelope",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4230,10 +4234,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::EventEnvelope",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeRequestInvalidError",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::EventEnvelope",
+      "title": "Tamoz::Stream::EpisodeRequestInvalidError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4246,10 +4250,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::InterlockReader",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeRunner",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::InterlockReader",
+      "title": "Tamoz::Stream::EpisodeRunner",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4262,10 +4266,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::InterlockUnavailableError",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeStream",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::InterlockUnavailableError",
+      "title": "Tamoz::Stream::EpisodeStream",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4278,10 +4282,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::LATE_DATA_POLICIES",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeStreamAdapter",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::LATE_DATA_POLICIES",
+      "title": "Tamoz::Stream::EpisodeStreamAdapter",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4294,10 +4298,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::QuarantineOverflowError",
+      "id": "API-tamoz-stream-Tamoz::Stream::EpisodeWorker",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::QuarantineOverflowError",
+      "title": "Tamoz::Stream::EpisodeWorker",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4310,10 +4314,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::RISK_CLASSES",
+      "id": "API-tamoz-stream-Tamoz::Stream::EvidenceClient",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::RISK_CLASSES",
+      "title": "Tamoz::Stream::EvidenceClient",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4326,10 +4330,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::ReplayClock",
+      "id": "API-tamoz-stream-Tamoz::Stream::OutcomeSubscriber",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::ReplayClock",
+      "title": "Tamoz::Stream::OutcomeSubscriber",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4342,10 +4346,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::ReplayRuntime",
+      "id": "API-tamoz-stream-Tamoz::Stream::ReceivedSnapshot",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::ReplayRuntime",
+      "title": "Tamoz::Stream::ReceivedSnapshot",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4358,10 +4362,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::RequestIdTooLongError",
+      "id": "API-tamoz-stream-Tamoz::Stream::Reconsideration",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::RequestIdTooLongError",
+      "title": "Tamoz::Stream::Reconsideration",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4374,10 +4378,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::SituationSnapshot",
+      "id": "API-tamoz-stream-Tamoz::Stream::SituationMemory",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::SituationSnapshot",
+      "title": "Tamoz::Stream::SituationMemory",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4390,10 +4394,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::SituationSpec",
+      "id": "API-tamoz-stream-Tamoz::Stream::SnapshotDigestMismatchError",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::SituationSpec",
+      "title": "Tamoz::Stream::SnapshotDigestMismatchError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4406,42 +4410,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::SourceSession",
+      "id": "API-tamoz-stream-Tamoz::Stream::SnapshotIdentityError",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::SourceSession",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "API-tamoz-stream-Tamoz::Stream::StreamClock",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::StreamClock",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "API-tamoz-stream-Tamoz::Stream::StreamClockError",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::StreamClockError",
+      "title": "Tamoz::Stream::SnapshotIdentityError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4470,22 +4442,6 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::StreamStore",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::StreamStore",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
       "id": "API-tamoz-stream-Tamoz::Stream::VERSION",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -4502,10 +4458,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::WallClock",
+      "id": "API-tamoz-stream-Tamoz::Stream::VerificationStore",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::WallClock",
+      "title": "Tamoz::Stream::VerificationStore",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -4518,10 +4474,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-stream-Tamoz::Stream::WatermarkRegressionError",
+      "id": "API-tamoz-stream-Tamoz::Stream::WorkerServer",
       "category": "public_api",
       "source": "docs/public-api.json",
-      "title": "Tamoz::Stream::WatermarkRegressionError",
+      "title": "Tamoz::Stream::WorkerServer",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -6127,159 +6083,6 @@
       "owner_signature": null
     },
     {
-      "id": "INV-44",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Input streams are not execution streams or user channels",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/sqlite_stream_golden_trace_test.rb#test_kill_between_outbox_and_enqueue_is_exactly_one_episode",
-      "supporting_tests": [
-        "test/stream_cognition_test.rb#test_bridge_namespace_and_request_id_are_deterministic_and_bounded",
-        "test/sqlite_stream_critic_fix_test.rb#test_drain_outbox_uses_the_situation_namespace"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-45",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Every observation is authenticated, typed, bounded, and durably admitted",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/sqlite_stream_store_test.rb#test_same_identity_different_hash_is_quarantined_never_overwritten",
-      "supporting_tests": [
-        "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes",
-        "test/stream_values_test.rb#test_event_envelope_identity_and_payload_hash_are_deterministic",
-        "test/stream_connector_test.rb#test_forged_identity_is_rejected_durably"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-46",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Temporal truth is explicit and replayable",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic",
-      "supporting_tests": [
-        "test/sqlite_stream_process_partition_test.rb#test_idle_watermark_advances_after_the_idle_window",
-        "test/sqlite_stream_store_test.rb#test_partition_watermark_is_monotonic_per_partition",
-        "test/stream_values_test.rb#test_clocks_are_monotonic_and_replay_is_injected"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-47",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Partition transitions and Situations are deterministic and atomic",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything",
-      "supporting_tests": [
-        "test/sqlite_stream_process_partition_test.rb#test_situations_are_immutable_versions_and_correction_appends",
-        "test/sqlite_stream_golden_trace_test.rb#test_restart_produces_the_same_situation_state"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-48",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Backpressure and evidence gaps are bounded and visible",
-      "release_blocking": true,
-      "status": "missing",
-      "named_test": "test/sqlite_stream_store_test.rb#test_invalid_data_is_rejected_at_the_typed_boundary_never_silent",
-      "supporting_tests": [
-        "test/sqlite_stream_golden_trace_test.rb#test_sequence_case_good_then_same_id_different_hash_is_quarantined"
-      ],
-      "classification": "pending-owner-residual",
-      "rationale": "The durable-admission, quarantine, typed-rejection and never-silent halves are directly evidenced. The backpressure half is NOT implemented: `ChannelDescriptor` validates and digests `queue_capacity`, `spool_capacity_bytes` and `overflow` (block/retry/spill_then_reject/sample/coalesce/reject), but no code outside the descriptor reads any of the three — measured at the release head by searching gems/tamoz-stream and gems/tamoz-sqlite. The declaration is recorded, never enforced, so no saturation test can exist yet. Owner decision required at P15-I: implement enforcement, or exclude the backpressure clause from the v0.1 surface.",
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-49",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Cognition is admitted against one immutable Situation snapshot",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/stream_cognition_test.rb#test_expiry_and_supersession_reject_across_the_adversarial_window",
-      "supporting_tests": [
-        "test/stream_cognition_test.rb#test_admission_outcomes_admitted_debounced_coalesced_and_ignored",
-        "test/stream_cognition_test.rb#test_snapshot_is_content_addressed_and_binds_the_situation_version"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-50",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Models propose typed intents; current deterministic policy owns physical dispatch",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery",
-      "supporting_tests": [
-        "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
-        "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": "The only effector is the simulator (P14 owner constraint). The typed-intent/policy/dispatch half is proven against the simulated effector; no real actuator is reachable in the release surface.",
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "INV-51",
-      "category": "invariant",
-      "source": "docs/design-v0.1/INVARIANTS.md",
-      "title": "Safety control and replay authority remain outside cognition",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode",
-      "supporting_tests": [
-        "test/stream_replay_isolation_test.rb#test_replay_constructor_accepts_no_credential_argument",
-        "test/stream_action_boundary_test.rb#test_dependency_direction_production_cannot_see_the_mutable_harness"
-      ],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": "Real safety-critical control hardware is out of the release surface; the clause is proven for replay/shadow credential isolation and advisory-only R4 against the simulator.",
-      "conditional_package": "tamoz-stream",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
       "id": "INV-52",
       "category": "invariant",
       "source": "docs/design-v0.1/INVARIANTS.md",
@@ -6545,7 +6348,7 @@
       "title": "MIGRATION_4",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes",
+      "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -6560,7 +6363,7 @@
       "title": "MIGRATION_5",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/sqlite_stream_process_partition_test.rb#test_six_steps_are_atomic_and_a_fault_rolls_back_everything",
+      "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
@@ -6688,9 +6491,9 @@
       "title": "No real physical actuator; the simulator is the only effector",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_replay_isolation_test.rb#test_deliver_command_requires_counterfactual_mode_and_a_simulator",
+      "named_test": "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
       "supporting_tests": [
-        "test/stream_action_boundary_test.rb#test_dependency_direction_production_cannot_see_the_mutable_harness"
+        "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
       ],
       "classification": "direct",
       "rationale": null,
@@ -6814,7 +6617,7 @@
         "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
         "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
         "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
-        "test/stream_replay_isolation_test.rb#test_poison_credential_resolver_is_never_called_in_any_replay_mode"
+        "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
       ],
       "classification": "direct",
       "rationale": null,
@@ -6829,10 +6632,10 @@
       "title": "physical-world output remains supervisory, typed, current-state checked, simulated first, and externally interlocked",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/stream_action_boundary_test.rb#test_interlock_trip_fails_closed_and_toctou_is_closed_both_sides",
+      "named_test": "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
       "supporting_tests": [
-        "test/stream_replay_isolation_test.rb#test_counterfactual_routes_commands_to_the_simulator_only",
-        "test/stream_action_boundary_test.rb#test_revalidation_and_interlock_gate_delivery"
+        "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent",
+        "test/stream_decision_builder_test.rb#test_a_low_risk_ceiling_never_proposes_a_consequential_action"
       ],
       "classification": "direct",
       "rationale": null,
@@ -6859,7 +6662,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -7019,7 +6822,7 @@
       "title": "Streaming physical-world input — tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval)",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/sqlite_stream_process_partition_test.rb#test_replay_equals_live_is_byte_deterministic",
+      "named_test": "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

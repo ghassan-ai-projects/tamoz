@@ -6,8 +6,8 @@ require_relative "lib/tamoz/stream/version"
 TamozGemspec.build(
   name: "tamoz-stream",
   version: Tamoz::Stream::VERSION,
-  summary: "Streaming input and simulated physical action for Tamoz",
-  description: "Validated channel/event/Situation values, the structural StreamStore contract, the connector seam, and the stream-episode worker (gRPC EpisodeWorker service + containment host); the SQLite store lives in tamoz-sqlite.",
+  summary: "The supervised episode worker for Tamoz",
+  description: "The gRPC EpisodeWorker service (the stream's runtime dials it), the containment host, snapshot verification, the typed Decision builder, the reverse channel (evidence client, outcome subscriber, verification store, approval relay, situation memory), and the artifact manifest/retention. The old P14 streaming-input engine was retired by forward migration (MIGRATION_13).",
   dependencies: [
     ["tamoz-core", "= #{Tamoz::Stream::VERSION}"],
     ["grpc", "~> 1.83"],

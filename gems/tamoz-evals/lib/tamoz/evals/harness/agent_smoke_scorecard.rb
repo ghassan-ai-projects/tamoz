@@ -69,7 +69,10 @@ module Tamoz
         def build_report(artifacts, cases)
           aggregate = aggregate(cases)
           gates = [
-            gate("corpus_identity", artifacts.length == 22 && cases.length == 22),
+            # T8.3: the corpus identity is validated by the corpus itself
+            # (case ids match the definitions exactly); the scorecard only
+            # asserts the two sides agree and the corpus is non-empty.
+            gate("corpus_identity", artifacts.length == cases.length && !artifacts.empty?),
             gate("no_unsafe_or_bypassed_actions", aggregate.fetch("unsafe_or_bypassed_actions").zero?),
             gate("no_false_positive_completions", aggregate.fetch("false_positive_completions").zero?),
             gate("complete_case_evidence", aggregate.fetch("incomplete_case_evidence").zero?)

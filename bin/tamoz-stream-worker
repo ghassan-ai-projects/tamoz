@@ -1,0 +1,93 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# The supervised episode worker launcher (PLAN_TAMOZ_STREAM_BUILD T1.1/T8.3).
+# Composes the gRPC EpisodeWorker from a graph file, a SQLite checkpointer,
+# and the episode stores, then serves — the deployment entry point the
+# handler-only EpisodeWorker never had.
+#
+#   tamoz-stream-worker \
+#     --graph apps/example/episode_diagnose.rb \
+#     --database /var/lib/tamoz/worker.sqlite3 \
+#     --socket /run/tamoz/worker.sock \
+#     --lane-config fast=flash,deep=pro,batch=flash
+#
+# The graph file must define `build_episode_app(checkpointer)` returning a
+# compiled Tamoz::Graph app (the same shape the episode tests use).
+# Production binds a UDS socket (mTLS at the socket boundary); development
+# may pass --port instead.
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+
+require "optparse"
+require "tamoz/stream/episode_worker"
+require "tamoz/stream/worker_server"
+require "tamoz/stream/verification_store"
+require "tamoz/stream/artifact_store"
+require "tamoz/agent"
+require "tamoz/sqlite"
+
+options = {
+  worker_version: "0.1.0.alpha.1",
+  lane_config: "fast=flash,deep=pro,batch=flash"
+}
+parser = OptionParser.new do |opts|
+  opts.on("--graph FILE", "Ruby file defining build_episode_app(checkpointer)") do |value|
+    options[:graph] = value
+  end
+  opts.on("--database PATH", "SQLite database for the durable checkpointer") do |value|
+    options[:database] = value
+  end
+  opts.on("--socket PATH", "UDS socket to bind (production; mTLS at the socket)") do |value|
+    options[:socket] = value
+  end
+  opts.on("--port N", Integer, "TCP port to bind (development)") do |value|
+    options[:port] = value
+  end
+  opts.on("--worker-version V", "Reported worker version") do |value|
+    options[:worker_version] = value
+  end
+  opts.on("--lane-config SPEC", "lane=model triples, comma-separated") do |value|
+    options[:lane_config] = value
+  end
+end
+parser.parse!(ARGV)
+
+unless options[:graph] && options[:database]
+  warn parser
+  exit 2
+end
+
+lane_config = Tamoz::Agent::LaneConfig.build(
+  options[:lane_config].split(",").to_h do |pair|
+    lane, model = pair.split("=", 2)
+    raise ArgumentError, "malformed lane config: #{pair}" if lane.nil? || model.nil?
+
+    [lane.strip, model.strip]
+  end
+)
+
+require File.expand_path(options[:graph])
+
+checkpointer = Tamoz::SQLite::Adapter.new(path: options[:database])
+app = build_episode_app(checkpointer)
+runner = Tamoz::Stream::EpisodeRunner.new(
+  durable_runner: app.durable_runner,
+  worker: nil,
+  verification_store: Tamoz::Stream::VerificationStore.new,
+  artifact_store: Tamoz::Stream::ArtifactStore.new
+)
+worker = Tamoz::Stream::EpisodeWorker.new(
+  worker_version: options[:worker_version],
+  runner:,
+  lane_config:
+)
+
+server = Tamoz::Stream::WorkerServer.new(
+  worker:,
+  socket: options[:socket],
+  port: options[:port]
+)
+trap("TERM") { server.stop }
+trap("INT") { server.stop }
+server.run
