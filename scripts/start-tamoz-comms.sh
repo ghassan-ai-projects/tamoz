@@ -7,10 +7,14 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 export PATH="$HOME/.rbenv/shims:/usr/bin:/bin:/usr/sbin:/sbin"
 
-# Load .env. Format seen in this repo: "KEY = value" (spaces around =, values are
-# bare, no quotes). Handles trailing space in the key name and preserves the value
-# as-is (stripping surrounding whitespace but not quote characters, since values
-# here are unquoted).
+# Load .env WITHOUT exporting wholesale: C7 (PLAN_ADR049 Phase 6) gives each
+# child exactly its own environment via `env -i`, so the whole file must
+# never reach a process. The parent may hold the values; the children get
+# only their allowlists.
+# Format seen in this repo: "KEY = value" (spaces around =, values are
+# bare, no quotes). Handles trailing space in the key name and preserves the
+# value as-is (stripping surrounding whitespace but not quote characters,
+# since values here are unquoted).
 load_env() {
   local file="$1"
   [ -f "$file" ] || return 0
@@ -80,9 +84,15 @@ stop_all() {
 start_one() {
   local name="$1"; shift
   local log="$1"; shift
+  # Env entries come before `--`, the command after it.
+  local envs=()
+  while [ "${1:-}" != "--" ]; do
+    envs+=("$1"); shift
+  done
+  shift
   # Fully detach: double-fork via a subshell + nohup + disown. The redirected
   # stdin means it never blocks on a tty, and nohup keeps it after this shell.
-  ( nohup "$@" > "$log" 2>&1 < /dev/null & )
+  ( nohup env -i "${envs[@]}" "$@" > "$log" 2>&1 < /dev/null & )
   echo "$name started (log: $log)"
 }
 
@@ -126,6 +136,12 @@ stop_all
 sleep 1
 
 start_one "gateway" "$GATEWAY_LOG" \
+  "PATH=$PATH" "HOME=$HOME" "LANG=${LANG:-C}" "LC_ALL=${LC_ALL:-}" \
+  "TMPDIR=${TMPDIR:-/tmp}" "GEM_HOME=$GEM_HOME" "GEM_PATH=$GEM_PATH" \
+  "RUBYLIB=$RUBYLIB" "TAMOZ_RUNTIME_DIR=$TAMOZ_RUNTIME_DIR" \
+  "TAMOZ_TELEGRAM_SURFACE=$TAMOZ_TELEGRAM_SURFACE" \
+  "TAMOZ_TELEGRAM_BOT_TOKEN=$TAMOZ_TELEGRAM_BOT_TOKEN" \
+  -- \
   "$RUBY_BIN" "$EXE" \
   --runtime-dir "$TAMOZ_RUNTIME_DIR" \
   --provider "$TAMOZ_PROVIDER" --model "$TAMOZ_MODEL" \
@@ -137,6 +153,13 @@ start_one "gateway" "$GATEWAY_LOG" \
 sleep 2
 
 start_one "worker" "$WORKER_LOG" \
+  "PATH=$PATH" "HOME=$HOME" "LANG=${LANG:-C}" "LC_ALL=${LC_ALL:-}" \
+  "TMPDIR=${TMPDIR:-/tmp}" "GEM_HOME=$GEM_HOME" "GEM_PATH=$GEM_PATH" \
+  "RUBYLIB=$RUBYLIB" "TAMOZ_RUNTIME_DIR=$TAMOZ_RUNTIME_DIR" \
+  "TAMOZ_PROVIDER=$TAMOZ_PROVIDER" "TAMOZ_MODEL=$TAMOZ_MODEL" \
+  "DEEPSEEK_API_KEY=$DEEPSEEK_API_KEY" \
+  "TAMOZ_ALMS_MCP_ENDPOINT=$ALMS_MCP_ENDPOINT" \
+  -- \
   "$RUBY_BIN" "$EXE" \
   --runtime-dir "$TAMOZ_RUNTIME_DIR" \
   --provider "$TAMOZ_PROVIDER" --model "$TAMOZ_MODEL" \

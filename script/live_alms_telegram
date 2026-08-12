@@ -15,8 +15,16 @@ require 'uri'
 # Operator-facing ALMS and Telegram acceptance harness. It uses the same CLI
 # commands as an operator and only reads the outbox to verify the final receipt.
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-LIVE_ALMS_ENVIRONMENT_LOADER = lambda do
-  values = ENV.to_h
+# C7 (PLAN_ADR049 Phase 6): the harness resolves values from the .env FILE and
+# the standard runtime allowlist — never ENV.to_h — and routes each child
+# exactly its own command environment. TAMOZ_ENV_FILE is a location the
+# harness consumes, never a value it passes down.
+SANITIZED_ENVIRONMENT_LOADER = lambda do
+  values = {}
+  %w[PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB].each do |name|
+    value = ENV[name]
+    values[name] = value unless value.nil?
+  end
   path = ENV.fetch('TAMOZ_ENV_FILE', File.expand_path('../.env', __dir__))
   if File.file?(path)
     File.foreach(path) do |line|
@@ -57,7 +65,7 @@ class LiveAlmsTelegram
 
   def initialize(argv)
     @options = parse(argv)
-    @env = LIVE_ALMS_ENVIRONMENT_LOADER.call
+    @env = SANITIZED_ENVIRONMENT_LOADER.call
     @env['TAMOZ_PROVIDER'] = @env.fetch('TAMOZ_PROVIDER', 'deepseek')
     @env['TAMOZ_MODEL'] = @env.fetch('TAMOZ_MODEL', 'deepseek-chat')
     @run_id = "alms-live-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{SecureRandom.hex(4)}"
@@ -317,11 +325,29 @@ class LiveAlmsTelegram
 
   def run_cli(args, allow_failure: false)
     command = @cli + ['--runtime-dir', @runtime_dir] + args
-    stdout, stderr, status = Open3.capture3(@env, *command)
+    stdout, stderr, status = Open3.capture3(child_env_for(args), *command)
     warn "tamoz #{args.first}: #{stderr.lines.last(3).join.strip}" unless status.success? || stderr.empty?
     raise "tamoz #{args.first} exited #{status.exitstatus}" unless status.success? || allow_failure
 
     CommandResult.new(stdout, stderr, status)
+  end
+
+  # C7: each child receives only its own command environment. The comms
+  # family (serve/doctor/list) holds the bot token, the worker holds the
+  # model credential and ALMS endpoint, and the read-only commands hold
+  # neither.
+  def child_env_for(args)
+    require 'tamoz/agent' unless defined?(Tamoz::Agent::ChildEnvironments)
+    builders = Tamoz::Agent::ChildEnvironments
+    case args.first
+    when 'worker'
+      builders.worker_env(@env, runtime_dir: @runtime_dir)
+    when 'comms'
+      builders.gateway_env(@env, runtime_dir: @runtime_dir,
+                                 surface: @options.fetch(:surface))
+    else
+      builders.queue_status_env(@env, runtime_dir: @runtime_dir)
+    end
   end
 
   def parse_json(text)
