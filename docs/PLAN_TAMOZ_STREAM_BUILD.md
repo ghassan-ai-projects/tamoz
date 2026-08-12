@@ -271,3 +271,26 @@ T3 evidence pull (client exists for the EvidenceTools socket; end-to-end needs t
 T5 learning loop (needs stream Channel B outcome emitters); T6 reconsideration; T7 approval relay
 (needs stream approval events); T8 efficiency/evals/retire (incl. the old-engine forward-migration
 drop after a retention decision).
+
+**Audit-fix pass (2026-08-12, commits b76cd88..404a844):** the independent audit
+(`docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md`) found the BAR-MET claim covered only the
+forward path. Its gaps are now implemented and tested on the tamoz side:
+- **T3** — `evidence_client.rb` (EvidenceTools gRPC client, token-scoped, digest-verified, deadline
+  + cancellation aware) wired through the containment host as `context.episode_tools`; the host's
+  result cap honours the wire budget. Live end-to-end still needs the stream's EvidenceTools host.
+- **T5** — `outcome_subscriber.rb` (durable resume, dedup, audited resnapshot, poison-skip,
+  backpressure), `verification_store.rb` (awaiting → observed → reconciled; learnable only on a
+  settled verdict), `admit_episode` requires the authenticated reconciled-outcome reference (the
+  `independently_observed` boolean has no power), `situation_memory.rb` (same-tenant-AND-same-
+  entity-type boundary). The loop is closed end-to-end against a scripted Channel B; the live SSE
+  endpoint is the stream's.
+- **T6** — `reconsideration.rb`: withdraw/downgrade/let-stand with own-risk compensating intents;
+  the freezer trace downgrades.
+- **T7** — `approval_relay.rb` + `SurfaceDescriptor` affirmative-approval mode (approver_roles
+  allowlist); assertion-bound Channel C submission; live submission needs the stream's approval
+  events.
+- **T2.3** — artifact manifest on the terminal + bounded retention keyed on the stream's digests.
+- **T1.3** — the worker holds no signing secret (regression suite pins the custody guarantees).
+- **T8.2** — the nine stream invariants as executable tests (`test/stream_invariants_test.rb`).
+- **T8.1/T8.3** — prompt-cache wiring and the old-engine retirement migration remain (T8.1 is an
+  efficiency lever, T8.3 needs an owner retention decision).

@@ -74,12 +74,17 @@ module Tamoz
 
       # PROTOCOL §5.1.3: the prompt carries the Situation summary, the delta
       # since the last reasoned version, the hypothesis, the evidence, what
-      # the action does, and what happens if declined. Returns the delivery
-      # receipt (the durable handle for edit-in-place and audit).
+      # the action does, and what happens if declined — all six are REQUIRED,
+      # so a malformed approval is refused instead of delivered as a
+      # convincing but empty prompt. Returns the delivery receipt (the durable
+      # handle for edit-in-place and audit).
       def deliver(approval:, conversation_id:)
         approval = stringify(approval)
         require_field!(approval, "approval_id")
         require_field!(approval, "situation_id")
+        %w[summary delta hypothesis evidence action decline_consequence].each do |field|
+          require_field!(approval, field)
+        end
         @delivery.deliver(
           conversation_id:,
           kind: "approval_request",
@@ -114,6 +119,13 @@ module Tamoz
           raise ApprovalRelayError,
                 "the relaying service may never be the asserted approver"
         end
+        # Fail closed on an expired approval: the stream revalidates too, but
+        # a signed answer for an approval that already lapsed must not leave
+        # the relay at all.
+        expires_at = require_field!(approval, "expires_at")
+        if @clock.call.to_i > expiry_epoch(expires_at)
+          raise ApprovalRelayError, "approval #{approval.fetch("approval_id")} has expired"
+        end
 
         nonce = SecureRandom.uuid
         unless @nonce_store.claim(nonce)
@@ -127,7 +139,7 @@ module Tamoz
           "intent_digest" => require_digest!(approval, "intent_digest"),
           "snapshot_digest" => require_digest!(approval, "snapshot_digest"),
           "decision" => decision.to_s,
-          "expires_at" => require_field!(approval, "expires_at"),
+          "expires_at" => expires_at,
           "nonce" => nonce,
           "audience" => require_field!(approval, "audience"),
           "relay_id" => @relay_id,
@@ -139,7 +151,7 @@ module Tamoz
           approval_id: assertion.fetch("approval_id"),
           decision: assertion.fetch("decision"),
           reason: reason.to_s.byteslice(0, 1024),
-          idempotency_key: idempotency_key(assertion),
+          idempotency_key: idempotency_key(assertion, reason),
           assertion: assertion.merge("signature" => signed)
         )
       end
@@ -197,11 +209,17 @@ module Tamoz
 
       def require_digest!(approval, key)
         value = approval[key].to_s
-        if value.empty? || value.bytesize > MAX_DIGEST_BYTES || !value.start_with?("sha256:")
-          raise ApprovalRelayError, "approval #{key} must be a sha256: digest"
+        unless value.match?(/\Asha256:[0-9a-f]{64}\z/)
+          raise ApprovalRelayError, "#{key} must be a sha256: hex digest"
         end
 
         value
+      end
+
+      def expiry_epoch(iso8601)
+        Time.iso8601(iso8601).to_i
+      rescue ArgumentError
+        raise ApprovalRelayError, "expires_at must be an ISO-8601 timestamp"
       end
 
       def bounded!(value, name)
@@ -213,14 +231,21 @@ module Tamoz
         text
       end
 
-      # Idempotent transport retries are keyed on the DECISION, not the nonce:
-      # a retry of the same answer deduplicates; a replayed assertion (new
-      # nonce) is refused by the stream.
-      def idempotency_key(assertion)
-        Tamoz::Core.digest(
-          "situation-runtime/approval-submission/v1\n",
-          assertion.reject { |key, _| key == "nonce" }
-        )
+      # Idempotent transport retries are keyed on the DECISION and its reason,
+      # not the nonce: a retry of the same answer deduplicates; a replayed
+      # assertion (new nonce) is refused by the stream. Two distinct answers
+      # to the same approval never collide on the key.
+      def idempotency_key(assertion, reason)
+        keyed = assertion.reject { |key, _| key == "nonce" }
+        unless reason.nil? || reason.to_s.empty?
+          keyed = keyed.merge(
+            "reason_digest" => Tamoz::Core.digest(
+              "situation-runtime/approval-submission/v1\n",
+              {"reason" => reason.to_s}
+            )
+          )
+        end
+        Tamoz::Core.digest("situation-runtime/approval-submission/v1\n", keyed)
       end
 
       def stringify(hash)

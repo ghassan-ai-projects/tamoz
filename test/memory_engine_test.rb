@@ -99,7 +99,11 @@ class MemoryEngineTest < Minitest::Test
     }.merge(overrides)
   end
 
-  def verify_source_authority = ->(authority) { authority == "stream-1" }
+  def verify_source_authority
+    lambda do |reference|
+      reference.fetch("source_authority") == "stream-1"
+    end
+  end
 
   def admit_episode(statement: "Deploy canary first, then monitor", user: "alice")
     @engine.admission.admit_episode(

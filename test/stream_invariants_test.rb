@@ -119,7 +119,7 @@ class StreamInvariantsTest < Minitest::Test
     assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
       engine.admission.admit_episode(
         episode:, owner: "stream",
-        reconciled_outcome: forged, verify_source_authority: ->(a) { a == "stream-1" }
+        reconciled_outcome: forged, verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
       )
     end
   ensure

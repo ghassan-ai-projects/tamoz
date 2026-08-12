@@ -292,7 +292,7 @@ class StreamLearningLoopTest < Minitest::Test
     }
     result = engine.admission.admit_episode(
       episode:, owner: "stream",
-      reconciled_outcome: reference_for, verify_source_authority: ->(a) { a == "stream-1" }
+      reconciled_outcome: reference_for, verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
     )
     assert result.accepted?
     assert_equal :observed, result.record.epistemic_kind
@@ -366,7 +366,7 @@ class StreamLearningLoopTest < Minitest::Test
     forged = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
       engine.admission.admit_episode(
         episode:, owner: "stream",
-        reconciled_outcome: reference_for, verify_source_authority: ->(_a) { false }
+        reconciled_outcome: reference_for, verify_source_authority: ->(_reference) { false }
       )
     end
     assert_includes forged.message, "forged_source_authority"
@@ -375,7 +375,7 @@ class StreamLearningLoopTest < Minitest::Test
       engine.admission.admit_episode(
         episode:, owner: "stream",
         reconciled_outcome: reference_for.merge("observation_status" => "inconclusive"),
-        verify_source_authority: ->(_a) { true }
+        verify_source_authority: ->(_reference) { true }
       )
     end
     assert_includes unlearnable.message, "unlearnable_verdict"
@@ -384,10 +384,52 @@ class StreamLearningLoopTest < Minitest::Test
       engine.admission.admit_episode(
         episode:, owner: "stream",
         reconciled_outcome: reference_for.merge("episode_id" => "s9"),
-        verify_source_authority: ->(_a) { true }
+        verify_source_authority: ->(_reference) { true }
       )
     end
     assert_includes foreign.message, "foreign_episode"
+  ensure
+    adapter&.close
+    FileUtils.remove_entry(directory) if directory
+  end
+
+  # The verifier interface contract (security-audit finding): the callable
+  # receives the WHOLE normalized reference — so production can bind an HMAC
+  # or signature over all eight fields — and a RAISING verifier is a forgery,
+  # never a crash.
+  def test_the_verifier_sees_the_whole_reference_and_a_raising_verifier_refuses
+    engine, adapter, directory = memory_engine
+    episode = {
+      session_id: "s1", episode_id: "s1", attempt_id: "at-1",
+      statement: "learned", task: "t", plan_digest: "sha256:#{"p" * 64}",
+      completed_at: 1, scopes: {"tenant" => "acme", "user" => "stream", "project" => "stream"},
+      sensitivity: :internal, decisions: [], corrections: [],
+      observed_outcome: {"outcome" => "confirmed", "confidence" => 0.9}
+    }
+    seen = nil
+    result = engine.admission.admit_episode(
+      episode:, owner: "stream",
+      reconciled_outcome: reference_for,
+      verify_source_authority: lambda do |reference|
+        seen = reference
+        reference.fetch("source_authority") == "stream-1"
+      end
+    )
+    assert result.accepted?
+    assert_equal :observed, result.record.epistemic_kind
+    assert_equal "out-1", seen.fetch("outcome_id"),
+                 "the verifier must see the WHOLE reference, not just the authority name"
+    assert_equal "verified", seen.fetch("observation_status")
+
+    raising = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+      engine.admission.admit_episode(
+        episode:, owner: "stream",
+        reconciled_outcome: reference_for,
+        verify_source_authority: ->(_reference) { raise "verifier boom" }
+      )
+    end
+    assert_includes raising.message, "forged_source_authority",
+                    "a raising verifier is a forgery, never a crash"
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -496,7 +538,7 @@ class StreamLearningLoopTest < Minitest::Test
           ),
           owner: "stream",
           reconciled_outcome: handler_store.reference(intent_id: data.fetch("intent_id")),
-          verify_source_authority: ->(authority) { authority == "stream-1" }
+          verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
         )
         admitted = result.accepted? ? result.record : false
       end

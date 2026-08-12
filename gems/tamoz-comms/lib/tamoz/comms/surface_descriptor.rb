@@ -33,6 +33,7 @@ module Tamoz
       ADMISSION_MODES = %w[disabled allowlist pairing].freeze
       THREADING_MODES = %w[conversation per_message].freeze
       APPROVAL_MODES = %w[none deny_only affirmative].freeze
+      MAX_APPROVER_ROLES = 64
       RENDER_FORMATS = %w[plain restricted_html].freeze
       RENDER_OVERFLOWS = %w[truncate].freeze
       CLASSIFICATIONS = %w[restricted].freeze
@@ -211,12 +212,17 @@ module Tamoz
         # answer travels a trust boundary, so the descriptor must name who may
         # approve. An empty approver list is a configuration error, exactly
         # like an empty admission allowlist: affirmative approval with nobody
-        # allowed to approve is not a deployment.
+        # allowed to approve is not a deployment. The list must be an actual
+        # array (a bare string is a configuration error, not a one-element
+        # list) and is bounded.
         if approvals.fetch(:mode) == 'affirmative'
-          roles = Array(approvals[:approver_roles])
-          unless !roles.empty? && roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
+          roles = approvals[:approver_roles]
+          unless roles.is_a?(Array) && !roles.empty? && roles.length <= MAX_APPROVER_ROLES &&
+                 roles.all? { |role| Shapes.bounded_string?(role, max_bytes: MAX_IDS) }
             raise ValidationError,
-                  'affirmative approval requires a non-empty approver_roles allowlist'
+                  'affirmative approval requires a non-empty approver_roles ' \
+                  'array with at most ' \
+                  "#{MAX_APPROVER_ROLES} bounded entries"
           end
         end
         return if approvals.fetch(:prompt_ttl_s).is_a?(Integer) && approvals.fetch(:prompt_ttl_s).positive?

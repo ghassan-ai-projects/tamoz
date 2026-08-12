@@ -98,6 +98,7 @@ module Tamoz
       # its own policy pipeline anyway (PROTOCOL §4.2).
       def reconsideration_intents
         compensations = Array(@outcome.fetch(:compensating_intents, []))
+                          .first(Reconsideration::MAX_INTENTS)
         invalid = compensations.reject do |intent|
           Reconsideration.valid_compensation?(
             intent, risk_ceiling: @envelope.risk_ceiling
@@ -106,10 +107,11 @@ module Tamoz
         unless invalid.empty?
           raise StreamError,
                 "a compensating intent failed the decision boundary " \
-                "(bad digest, missing compensates, or risk above the ceiling)"
+                "(bad digest, missing compensates, wrong risk class, " \
+                "or risk above the ceiling)"
         end
 
-        compensations.first(Reconsideration::MAX_INTENTS)
+        compensations
       end
 
       def diagnose_intents

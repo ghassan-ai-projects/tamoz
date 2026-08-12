@@ -13,8 +13,15 @@ module Tamoz
       # to an executed effect, proves Tamoz executed the episode, and
       # restricts learning to verdicts that actually settled the question.
       #
-      # All seven fields are required; absent or unverifiable, admission is
+      # All eight fields are required; absent or unverifiable, admission is
       # refused — there is no default, only a verified reference or a refusal.
+      #
+      # The verifier receives the NORMALIZED reference (the whole event, not
+      # just the authority name) so production can authenticate it the way the
+      # deployment requires — an HMAC or signature over the canonical form of
+      # all eight fields, keyed by the stream instance's key. A verifier that
+      # raises is treated as a forgery, never as a crash: `verify_source_
+      # authority` failing closed is the admission boundary's whole point.
       module VerifiedOutcomeReference
         REQUIRED_FIELDS = %w[
           outcome_id outcome_digest command_id source_authority
@@ -54,12 +61,22 @@ module Tamoz
             return "foreign_episode"
           end
           unless verify_source_authority.respond_to?(:call) &&
-                 verify_source_authority.call(normalized.fetch("source_authority"))
+                 verified?(verify_source_authority, normalized)
             return "forged_source_authority"
           end
 
           nil
         end
+
+        # A raising verifier is a forgery, not a crash — the boundary refuses
+        # rather than propagating the verifier's failure mode. The verifier's
+        # boolean is the verdict; a non-true return refuses.
+        def verified?(verify_source_authority, normalized)
+          verify_source_authority.call(normalized) == true
+        rescue StandardError
+          false
+        end
+        private_class_method :verified?
 
         # The provenance block appended to the :observed record's source_refs
         # (PROTOCOL §6.2: the Experience cites the episode id, Decision

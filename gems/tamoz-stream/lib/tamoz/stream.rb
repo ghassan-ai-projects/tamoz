@@ -17,6 +17,9 @@ require_relative "stream/stream_store"
 require_relative "stream/capability_host"
 require_relative "stream/situation_snapshot"
 require_relative "stream/situation_request"
+require_relative "stream/approval_relay"
+require_relative "stream/outcome_subscriber"
+require_relative "stream/situation_memory"
 
 module Tamoz
   # P14 — streaming input and simulated physical-world assistance

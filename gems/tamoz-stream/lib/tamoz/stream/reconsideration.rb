@@ -129,8 +129,8 @@ module Tamoz
         parsed.commands.first(MAX_COMMANDS).map do |command|
           unless invalidated.include?(command.fetch("command_id"))
             next Judgement.new(
-              command_id: command.fetch("command_id"),
-              intent_type: command.fetch("intent_type", ""),
+              command_id: command.fetch("command_id").to_s.byteslice(0, 256),
+              intent_type: command.fetch("intent_type", "").to_s.byteslice(0, 256),
               decision: :let_stand,
               reason: "correction does not reference this command"
             )
@@ -138,15 +138,15 @@ module Tamoz
 
           if pending?(command)
             Judgement.new(
-              command_id: command.fetch("command_id"),
-              intent_type: command.fetch("intent_type", ""),
+              command_id: command.fetch("command_id").to_s.byteslice(0, 256),
+              intent_type: command.fetch("intent_type", "").to_s.byteslice(0, 256),
               decision: :withdraw,
               reason: "corrected before dispatch"
             )
           else
             Judgement.new(
-              command_id: command.fetch("command_id"),
-              intent_type: command.fetch("intent_type", ""),
+              command_id: command.fetch("command_id").to_s.byteslice(0, 256),
+              intent_type: command.fetch("intent_type", "").to_s.byteslice(0, 256),
               decision: :downgrade,
               reason: "effect exists; correction explains the initial signal"
             )
@@ -212,8 +212,11 @@ module Tamoz
       end
 
       # Validation used by the decision builder at its boundary: a
-      # compensating intent offered by the graph must carry its own
-      # verified digest, a known type, and a risk class within the ceiling.
+      # compensating intent offered by the graph must carry its own verified
+      # digest, a known type, a compensates target, a risk class WITHIN the
+      # ceiling, AND the family's OWN class — a graph labeling
+      # cancel_product_transfer as R1 is refused, not honored (the "own risk
+      # class" property is enforced here, not merely by convention).
       def self.valid_compensation?(intent, risk_ceiling:)
         return false unless intent.is_a?(Hash)
         return false unless intent.fetch("compensates", "").is_a?(String) &&
@@ -222,6 +225,10 @@ module Tamoz
           :intent, intent.reject { |key, _| key == "intent_digest" },
           intent.fetch("intent_digest", "")
         )
+
+        family = family_for(intent.fetch("type", ""))
+        expected = COMPENSATION_RISK.fetch(family, DEFAULT_COMPENSATION_RISK)
+        return false unless intent.fetch("risk_class", "").to_s == expected
 
         !above_ceiling?(intent.fetch("risk_class", ""), risk_ceiling)
       end

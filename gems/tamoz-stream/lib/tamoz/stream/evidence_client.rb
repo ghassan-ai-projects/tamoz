@@ -34,7 +34,7 @@ module Tamoz
 
       MAX_ARGUMENTS_BYTES = 256 * 1024
       MAX_ID_BYTES = 256
-      MAX_ENTITY_BYTES = 512
+      MAX_RESULT_RECEIVE_BYTES = 4 * 1024 * 1024
 
       # An evidence call refused by the host surface, the result verification,
       # or the peer. Typed (ToolError) so the capability host passes it
@@ -78,8 +78,11 @@ module Tamoz
         # :this_channel_is_insecure — the deployment socket is the trust
         # boundary (UDS + mTLS in production); the client never calls connect
         # explicitly (GRPC::Core::Channel#connect segfaults on this platform).
+        # The receive cap is set explicitly: the client alone must never
+        # accept an unbounded result even when it is reached outside the host.
         @stub = Agenticstream::Runtime::V1::EvidenceTools::Stub.new(
-          endpoint, :this_channel_is_insecure
+          endpoint, :this_channel_is_insecure,
+          channel_args: {"grpc.max_receive_message_length" => MAX_RESULT_RECEIVE_BYTES}
         )
         freeze
       end
@@ -89,7 +92,10 @@ module Tamoz
       # hash with the parsed document under "json" and the host/truncation
       # facts alongside, so the capability host can bound it.
       def call(tool_name:, arguments:, call_id: SecureRandom.uuid, deadline: nil)
-        tool_name = String(tool_name).byteslice(0, MAX_ID_BYTES)
+        tool_name = String(tool_name)
+        if tool_name.empty? || tool_name.bytesize > MAX_ID_BYTES
+          raise EvidenceError, "evidence tool name must be bounded and non-empty"
+        end
         call_id = identity!(call_id, "call_id")
         document = Tamoz::Core.jcs(arguments)
         if document.bytesize > MAX_ARGUMENTS_BYTES
@@ -121,6 +127,7 @@ module Tamoz
         result = call_with_deadline(request, deadline)
         if result.is_error
           code = result.error_code.to_s.byteslice(0, 256)
+          code = code.gsub(/[\x00-\x1F\x7F]/, " ").strip
           raise EvidenceError,
                 "evidence tool refused: #{code.empty? ? "error" : code}"
         end
@@ -153,16 +160,18 @@ module Tamoz
       # attempt/fence, same call id — a crossed or replayed result is refused.
       # A data result must also carry a digest that verifies under the shared
       # evidence domain; a missing digest on a data result is a refusal, never
-      # a silent accept.
+      # a silent accept. For a data result the attempt/fence echo is REQUIRED
+      # (a result that omits its own attempt/fence is refused, not tolerated —
+      # the identity guarantee is not weaker than the header claims).
       def verify!(result, call_id:)
-        unless result.episode_id == @episode_id &&
-               result.call_id == call_id &&
-               (result.attempt_id.nil? || result.attempt_id.empty? ||
-                result.attempt_id == @attempt_id) &&
-               (result.fence.nil? || result.fence.zero? || result.fence == @fence)
+        unless result.episode_id == @episode_id && result.call_id == call_id
           raise EvidenceError, "evidence result identity does not match the call"
         end
         return if result.is_error
+
+        unless result.attempt_id == @attempt_id && result.fence == @fence
+          raise EvidenceError, "evidence result identity does not match the call"
+        end
 
         if result.result_json.nil? || result.result_json.empty?
           raise EvidenceError, "evidence result carries no document"

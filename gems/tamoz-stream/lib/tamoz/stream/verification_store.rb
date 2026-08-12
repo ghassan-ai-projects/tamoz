@@ -74,8 +74,15 @@ module Tamoz
         self
       end
 
+      # At-least-once redelivery (a crash between the handler and the cursor
+      # write) re-applies the same outcome — idempotent on the outcome id,
+      # never a spurious poison skip. A DIFFERENT outcome for the same intent
+      # is still a typed refusal.
       def record_outcome(intent_id:, outcome_id:, outcome_digest:, command_id: nil)
         row = fetch(intent_id:)
+        if row.state == :observed && row.outcome_id == outcome_id
+          return self
+        end
         unless row.state == :awaiting
           raise VerificationError,
                 "cannot record an outcome for a #{row.state} verification"
@@ -87,13 +94,21 @@ module Tamoz
       end
 
       # Closes the row on outcome.reconciled. Only learnable verdicts make the
-      # row feed admission; the others are recorded and terminal.
+      # row feed admission; the others are recorded and terminal. A row is
+      # learnable only when it also carries an outcome id — a reconciled row
+      # whose recorded outcome never arrived cannot produce a reference. The
+      # same verdict re-applied by redelivery is a no-op.
       def reconcile(intent_id:, verdict:, reconciliation_version:, source_authority:)
         unless VERDICTS.include?(verdict.to_s)
           raise VerificationError,
                 "unknown verdict #{verdict.inspect}"
         end
         row = fetch(intent_id:)
+        if row.state == :reconciled &&
+           row.verdict == verdict.to_s &&
+           row.reconciliation_version == reconciliation_version.to_s
+          return self
+        end
         unless %i[awaiting observed].include?(row.state)
           raise VerificationError,
                 "cannot reconcile a #{row.state} verification"
@@ -105,7 +120,7 @@ module Tamoz
           reconciliation_version: reconciliation_version.to_s,
           source_authority: source_authority.to_s,
           reconciled_at: @clock.call.to_i,
-          learnable: LEARNABLE_VERDICTS.include?(verdict.to_s)
+          learnable: LEARNABLE_VERDICTS.include?(verdict.to_s) && !row.outcome_id.nil?
         )
       end
 
@@ -115,7 +130,7 @@ module Tamoz
       def reference(intent_id:)
         row = fetch(intent_id:)
         return nil unless row.learnable?
-        raise VerificationError, "outcome id is missing" unless row.outcome_id
+        return nil if row.outcome_id.nil?
 
         {
           "outcome_id" => row.outcome_id,
