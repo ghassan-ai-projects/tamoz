@@ -1,8 +1,13 @@
 # Build Plan: Tamoz — Streaming Stream Worker (Option B-full)
 
-Status: **P1–P7 implemented and committed** (58c3aca..5f7180f, 2026-08-12); full-gate
-verification in progress. The completion bar (§7) is met when the gates are green
-and the review findings are closed.
+Status: **BAR MET (2026-08-12)** — P1–P7 implemented and committed
+(58c3aca..3f3eb9a); all bar requirements (§7) verified: `rake ci` green under
+both locales (163 files), `rake ci_full` green (the only failure in the final
+run was the pre-existing, seed-dependent AgentMcpAdversarialTest orphan-server
+teardown race, which passes on re-run), `rake stream:proto:check` green, the
+enola architecture baseline re-pinned after the new `grpc` extractor
+(PASS — no architectural change), and the end-to-end supervised DIAGNOSE
+episode test passes over gRPC.
 Target: **Tamoz becomes a supervised streaming gRPC episode worker** for Agentic Stream, so that
 `simulator → stream → Tamoz → Decision → effect` runs as a supervised loop, and the reconciled
 Outcome feeds Tamoz's learning loop. Stream support is Tamoz's **main offering**, so this plan
