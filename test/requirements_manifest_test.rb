@@ -69,7 +69,7 @@ class RequirementsManifestTest < Minitest::Test
       encoding: Encoding::UTF_8
     ).scan(/^\s*MIGRATION_(\d+)\s*=\s*\[/).flatten.map(&:to_i).sort.uniq
 
-    assert_equal ordinals.map { |ordinal| "MIG-#{ordinal}" }, requirements.filter_map { |row|
+    assert_equal ordinals.map { |ordinal| "MIG-#{ordinal}" }.sort, requirements.filter_map { |row|
       row.fetch("id") if row.fetch("category") == "migration"
     }.sort
   end

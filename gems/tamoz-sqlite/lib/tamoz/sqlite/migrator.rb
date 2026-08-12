@@ -24,7 +24,11 @@ module Tamoz
       # the prompt's required_evidence (INV-C); pre-migration in-flight
       # prompts read NULL and normalize to filesystem_operator at the store
       # boundary — never under-gated.
-      CURRENT_VERSION = 9
+      # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 through MIGRATION_10, which
+      # records the decision audit trail — the evidence level that made an
+      # approve legal and why (contract §7.1); old rows read NULL evidence,
+      # which is missing evidence, never a grant.
+      CURRENT_VERSION = 10
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -837,6 +841,22 @@ module Tamoz
         MIGRATION_9.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # ADR-049 (PLAN_ADR049 Phase 4): the decision audit records the evidence
+      # level that made an approve legal and why (contract §7.1). Old rows are
+      # NULL: missing evidence, which never approves (INV-E).
+      MIGRATION_10 = [
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_comms_decisions ADD COLUMN evidence TEXT
+        SQL
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_comms_decisions ADD COLUMN reason TEXT
+        SQL
+      ].freeze
+
+      MIGRATION_10_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_10.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -848,7 +868,8 @@ module Tamoz
         6 => [MIGRATION_6, MIGRATION_6_CHECKSUM],
         7 => [MIGRATION_7, MIGRATION_7_CHECKSUM],
         8 => [MIGRATION_8, MIGRATION_8_CHECKSUM],
-        9 => [MIGRATION_9, MIGRATION_9_CHECKSUM]
+        9 => [MIGRATION_9, MIGRATION_9_CHECKSUM],
+        10 => [MIGRATION_10, MIGRATION_10_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1003,6 +1024,7 @@ module Tamoz
                        :MIGRATION_7, :MIGRATION_7_CHECKSUM,
                        :MIGRATION_8, :MIGRATION_8_CHECKSUM,
                        :MIGRATION_9, :MIGRATION_9_CHECKSUM,
+                       :MIGRATION_10, :MIGRATION_10_CHECKSUM,
                        :MIGRATIONS
     end
   end

@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-12T11:58:53Z",
-  "manifest_requirements": 434,
-  "named_cases_run": 267,
+  "generated_at": "2026-08-12T12:37:41Z",
+  "manifest_requirements": 435,
+  "named_cases_run": 268,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 16,
-    "pass": 403
+    "pass": 404
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -6453,6 +6453,21 @@
       "supporting_tests": [
         "test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"
       ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-10",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_10",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store",
+      "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

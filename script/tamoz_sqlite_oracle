@@ -13,11 +13,12 @@ module TamozSQLiteOracle
   # lexical memory index). P13: 2 -> 3 through MIGRATION_3 (scheduler tables).
   # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
   # MIGRATION_6 (channel tables). Delivery pacing moved 7 -> 8 through
-  # MIGRATION_8. ADR-049: 8 -> 9 through MIGRATION_9 (prompt required_evidence).
+  # MIGRATION_8. ADR-049: 8 -> 9 (prompt required_evidence) and 9 -> 10
+  # (decision audit evidence/reason).
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 9
+  SCHEMA_VERSION = 10
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -42,6 +43,10 @@ module TamozSQLiteOracle
   # required_evidence (INV-C).
   MIGRATION_9_CHECKSUM =
     "8605de5469129ba1a4dc3a9a8c74b39dd10a05bc5c1269d16a57e22756c32991"
+  # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 — the decision audit records the
+  # evidence level that made an approve legal and why (contract §7.1).
+  MIGRATION_10_CHECKSUM =
+    "b97f0a8181fab69f4f36a51009574184e8ad45b4f735dbbec82d39f035522dcc"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -764,7 +769,8 @@ module TamozSQLiteOracle
         [6, MIGRATION_6_CHECKSUM],
         [7, MIGRATION_7_CHECKSUM],
         [8, MIGRATION_8_CHECKSUM],
-        [9, MIGRATION_9_CHECKSUM]
+        [9, MIGRATION_9_CHECKSUM],
+        [10, MIGRATION_10_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

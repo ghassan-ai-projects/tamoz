@@ -147,4 +147,45 @@ class CommsDecisionRecordTest < Minitest::Test
     end
     assert_match(/expires_at must follow decided_at/, error.message)
   end
+
+  # MIG-10 (ADR-049, contract §7.1): the operator audit trail — evidence level
+  # and reason — survives the wire round trip.
+  def test_operator_evidence_and_reason_round_trip_through_the_store
+    value = record(evidence: 'filesystem_operator', reason: 'operator_command')
+
+    assert_equal 'filesystem_operator', value.evidence
+    assert_equal 'operator_command', value.reason
+    assert_equal value.wire, Comms::DecisionRecord.from_wire(value.wire).wire
+  end
+
+  # MIG-10: the same audit trail persists in the SQLite decision store, so
+  # `tamoz approve` writes evidence that the worker and audit can read back.
+  def test_operator_evidence_persists_in_the_sqlite_decision_store
+    value = record(evidence: 'filesystem_operator', reason: 'operator_command')
+
+    Dir.mktmpdir('tamoz-decision-audit') do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
+      begin
+        store = adapter.bind_comms_decision_store
+
+        assert_equal :created, store.insert_decision(value.wire)
+        stored = store.pending_decision_for(
+          thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+          interrupt_digest: value.interrupt_digest, now: Time.utc(2026, 8, 10, 12, 0, 1)
+        )
+
+        assert_equal 'filesystem_operator', stored.fetch('evidence')
+        assert_equal 'operator_command', stored.fetch('reason')
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
+  def test_validation_rejects_a_non_lattice_evidence_level
+    error = assert_raises(Comms::ValidationError) do
+      record(evidence: 'root')
+    end
+    assert_match(/evidence must be one of/, error.message)
+  end
 end

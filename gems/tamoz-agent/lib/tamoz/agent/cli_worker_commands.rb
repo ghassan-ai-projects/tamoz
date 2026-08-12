@@ -387,7 +387,12 @@ module Tamoz
           direction:,
           actor_kind: "os_user",
           actor_id: os_user_id,
-          source: "cli"
+          source: "cli",
+          # ADR-049 INV-B audit (contract §7.1): the local operator path is
+          # the trusted boundary that issues filesystem_operator evidence. It
+          # is set by this code, never taken from CLI arguments or any wire.
+          evidence: Tamoz::Comms::AuthorityEvidence.filesystem_operator.to_s,
+          reason: "operator_command"
         )
         runtime.record_decision(record)
         record

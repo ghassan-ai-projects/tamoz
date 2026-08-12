@@ -5711,6 +5711,19 @@
       "promotion_exclusion": null
     },
     {
+      "id": "MIG-10",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_10",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "MIG-2",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
