@@ -2,6 +2,7 @@
 
 require "tamoz/core"
 require "tamoz/stream/gen"
+require "tamoz/stream/episode_stream"
 
 Tamoz::Stream::Gen.load!
 
@@ -151,26 +152,55 @@ module Tamoz
 
       attr_reader :worker
 
-      def run(wire_request, _call = nil)
+      def run(wire_request, call = nil)
         envelope = EpisodeRequestEnvelope.new(wire_request, @worker)
         snapshot = ReceivedSnapshot.verify(
           wire_request.snapshot_json, wire_request.snapshot_sha256
         )
-        context = Tamoz::Context.new(
-          run_id: envelope.request_id,
-          execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
-          request_id: envelope.request_id,
-          interrupt_mode: :non_interactive
-        )
-        @durable_runner.deliver(
-          envelope.payload.merge("snapshot" => snapshot),
-          thread: envelope.thread_id,
-          request_id: envelope.request_id,
-          operation: :turn,
-          delivery: :queue,
-          namespace: envelope.namespace,
-          context:
-        )
+        Enumerator.new do |yielder|
+          stream = EpisodeStream.new(envelope)
+          adapter = EpisodeStreamAdapter.new(stream, budget: wire_request.budget)
+          stream.started
+          context = Tamoz::Context.new(
+            run_id: envelope.request_id,
+            execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
+            request_id: envelope.request_id,
+            interrupt_mode: :non_interactive,
+            emitter: adapter
+          )
+          watcher = watch_cancellation(call, context)
+          result = @durable_runner.deliver(
+            envelope.payload.merge("snapshot" => snapshot),
+            thread: envelope.thread_id,
+            request_id: envelope.request_id,
+            operation: :turn,
+            delivery: :queue,
+            namespace: envelope.namespace,
+            context:
+          )
+          watcher&.kill
+          # T2.4 inserts the decision event here when a Decision was produced.
+          adapter.terminal(result)
+          stream.events.each { |event| yielder << event }
+        end
+      end
+
+      private
+
+      # T2.2: an RPC-context cancellation (supersession) cancels the run's
+      # token; the executor aborts at its next check, leaving a resumable
+      # checkpoint, and the terminal reports CANCELLED.
+      def watch_cancellation(call, context)
+        return nil unless call&.respond_to?(:cancelled?)
+
+        Thread.new do
+          until call.cancelled?
+            sleep 0.1
+            break if context.cancellation.cancelled?
+          end
+          context.cancellation.cancel(reason: "rpc cancelled") unless
+            context.cancellation.cancelled?
+        end
       end
     end
   end

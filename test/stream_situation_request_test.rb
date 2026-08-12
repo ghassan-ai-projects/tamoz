@@ -134,14 +134,13 @@ class StreamSituationRequestTest < Minitest::Test
 
   def test_the_runner_delivers_durably_and_redelivery_is_idempotent
     with_durable_app do |adapter, app, runner|
-      first = runner.run(wire_request)
+      events = runner.run(wire_request).to_a
 
-      assert first.terminal?
-      assert_equal :completed, first.status
-      assert_equal "episode.ep-1.at-1.1", first.request_id
+      refute_empty events
+      assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
 
-      redelivered = runner.run(wire_request)
-      assert_equal first.request_id, redelivered.request_id
+      redelivered = runner.run(wire_request).to_a
+      assert_equal :TERMINAL_STATUS_PRODUCED, redelivered.last.terminal.status
 
       history = request_history(adapter, app)
       assert_equal 1, history.length,
@@ -152,13 +151,13 @@ class StreamSituationRequestTest < Minitest::Test
 
   def test_a_fence_plus_one_redispatch_executes_freshly
     with_durable_app do |_adapter, _app, runner|
-      attempt_1 = runner.run(wire_request)
-      attempt_2 = runner.run(wire_request(fence: 2))
+      attempt_1 = runner.run(wire_request).to_a
+      attempt_2 = runner.run(wire_request(fence: 2)).to_a
 
-      assert attempt_1.terminal?
-      assert attempt_2.terminal?
-      assert_equal :completed, attempt_2.status
-      refute_equal attempt_1.request_id, attempt_2.request_id
+      assert_equal :TERMINAL_STATUS_PRODUCED, attempt_1.last.terminal.status
+      assert_equal :TERMINAL_STATUS_PRODUCED, attempt_2.last.terminal.status
+      assert_equal 1, attempt_1.first.sequence
+      assert_equal 1, attempt_2.first.sequence
     end
   end
 
