@@ -61,7 +61,9 @@ module Tamoz
         return nil unless surface
 
         if kind == 'approval_request'
-          return nil unless surface.fetch('approvals').fetch('mode') == 'deny_only'
+          unless surface.fetch('approvals').fetch('mode') == 'deny_only'
+            return push_approval_unavailable_notice(event, route, surface)
+          end
 
           return push_approval_prompt(event, route, surface)
         end
@@ -79,7 +81,13 @@ module Tamoz
               text: part.fetch('text'), part_index: part.fetch('part_index'),
               part_count: part.fetch('part_count'), journaled: kind != 'control',
               render_version: @rendering::RENDER_VERSION,
-              content_digest: part.fetch('content_digest')
+              content_digest: part.fetch('content_digest'),
+              # Two occurrences may honestly produce the same text (ask twice,
+              # answered twice); the occurrence belongs in the identity so the
+              # second answer is not content-deduped into silence. A RE-PUSH of
+              # the same occurrence still dedups — that is the crash window the
+              # derived id exists for.
+              identity_key: event[:request_id]
             ).wire,
             surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
             reserved_request_id:, now: Time.now.utc
@@ -104,6 +112,7 @@ module Tamoz
         return nil unless binding
 
         reference, prompt = Comms::ApprovalPrompt.build(
+          surface_id: route.fetch('surface_id'), surface_revision: surface.fetch('revision'),
           thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
           interrupts: event.fetch(:interrupts),
           correspondent_id: binding.fetch('correspondent_id'),
@@ -111,7 +120,7 @@ module Tamoz
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
         @store.insert_prompt(prompt.wire)
-        markup = JSON.generate('reference' => reference, 'actions' => %w[approve deny])
+        markup = JSON.generate('reference' => reference, 'actions' => offered_actions(event.fetch(:interrupts)))
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
@@ -125,6 +134,43 @@ module Tamoz
           reserved_request_id: event.fetch(:request_id), now: Time.now.utc
         )
         :accepted
+      end
+
+      # The turn is parked on a human answer this channel cannot collect:
+      # with approvals disabled the prompt machinery never runs, and without
+      # this notice the correspondent watches the work go silent. A control
+      # row, not an answer — the request is still open, so nothing terminal
+      # is owed yet — and deduped per occurrence by identity_key, like the
+      # prompt itself.
+      def push_approval_unavailable_notice(event, route, surface)
+        text = 'This work is waiting for approval, but approvals are not enabled on this ' \
+               'channel. An operator can approve it with `tamoz approve`, or set ' \
+               'approvals.mode: deny_only in the channel config.'
+        @store.append_delivery(
+          Comms::Delivery.build(
+            conversation_id: route.fetch('conversation_id'), kind: 'control',
+            text:, part_index: 0, part_count: 1, journaled: false,
+            render_version: @rendering::RENDER_VERSION,
+            content_digest: @rendering.content_digest(text),
+            identity_key: event.fetch(:request_id)
+          ).wire,
+          surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
+          now: Time.now.utc
+        )
+        :accepted
+      end
+
+      # ADR-049 INV-D (Phase 5): the markup reflects the policy, not a
+      # hardcoded list. An approve button is offered only when some interrupt
+      # in the prompt is approvable by `chat_bound` evidence; under the v1
+      # policy every effect requires `filesystem_operator`, so the prompt
+      # renders Deny-only. A stray `approve:` callback is still refused by the
+      # Phase 3 gate — the button's absence is UX, not the security boundary.
+      def offered_actions(interrupts)
+        approvable = interrupts.any? do |interrupt|
+          Comms::AuthorityEvidence.chat_bound >= Comms::ApprovalPolicy.required_evidence([interrupt])
+        end
+        approvable ? %w[approve deny] : %w[deny]
       end
 
       def outbox_capacity(surface)

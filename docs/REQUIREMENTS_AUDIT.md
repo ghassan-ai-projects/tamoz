@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 433 | 266 | 16 | **no** |
+| 435 | 268 | 16 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 16 |
-| pass | 402 |
+| pass | 404 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -434,6 +434,7 @@ generating run.
 | `INV-60` | invariant | yes | missing | `—` |
 | `INV-61` | invariant | yes | missing | `—` |
 | `MIG-1` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
+| `MIG-10` | migration | yes | pass | `test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store` |
 | `MIG-2` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_stream_store_test.rb#test_admit_is_durable_and_idempotent_for_same_bytes` |
@@ -441,6 +442,7 @@ generating run.
 | `MIG-6` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `MIG-7` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
 | `MIG-8` | migration | yes | pass | `test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly` |
+| `MIG-9` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store` |
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |

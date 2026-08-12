@@ -9,16 +9,42 @@ module Tamoz
       ACTION_PHASES = %i[action repair].freeze
       ACTION_RECORD_PHASES = %w[action repair].freeze
 
-      def initialize(configuration:, memory:)
-        @configuration = configuration
-        @memory = memory
+      # The transcript a channel turn carries in its request payload (nested
+      # under the task Hash — the shape CommsStore#admit_and_enqueue writes).
+      # A checkpointer without a request inbox answers [].
+      # :reek:TooManyStatements :reek:ManualDispatch -- one durable row's
+      #   payload decoding; every step is a nil-tolerant read.
+      def self.transcript_from(checkpointer, thread_id:, request_id:)
+        return [] unless checkpointer.respond_to?(:fetch_request)
+
+        request = checkpointer.fetch_request(thread_id:, request_id:, namespace: [])
+        task = request&.payload&.fetch('task', nil)
+        transcript = task.is_a?(Hash) ? task.fetch('conversation', nil) : nil
+        transcript.is_a?(Array) ? transcript : []
       end
 
-      def planning_context_for(state, phase)
-        context = action_context(state, phase)
-        add_behavior_snapshot(context, state)
-        add_memory_context(context, state, phase)
-        context
+      def initialize(configuration:, memory:, transcript_reader: nil)
+        @configuration = configuration
+        @memory = memory
+        @transcript_reader = transcript_reader
+      end
+
+      def planning_context_for(state, phase, conversation: [])
+        prompt_context = action_context(state, phase)
+        add_conversation_context(prompt_context, conversation)
+        add_behavior_snapshot(prompt_context, state)
+        add_memory_context(prompt_context, state, phase)
+        prompt_context
+      end
+
+      # The transcript the channel gateway snapshotted into this turn's
+      # request payload at admission, read back through the durable inbox so
+      # a re-executed node sees the same input. CLI and ephemeral turns have
+      # no reader and no transcript.
+      def conversation_transcript(context)
+        return [] unless @transcript_reader && context
+
+        @transcript_reader.call(thread_id: context.thread_id, request_id: context.request_id)
       end
 
       def memory_caller(_state)
@@ -66,6 +92,23 @@ module Tamoz
             'rationale' => record.fetch('rationale', '')
           }
         end
+      end
+
+      # The transcript the current task arrived with, for EVERY phase: a
+      # follow-up like "yes, do that" or "make it blue instead" only reads
+      # as a task when the planner and the reviewer can see what came
+      # before it. Channel turns carry it in the request payload; CLI turns
+      # have none. It is not graph state: a new channel would change the
+      # definition digest and orphan every durable checkpoint written
+      # before it existed.
+      def add_conversation_context(context, conversation)
+        return if conversation.empty?
+
+        context['conversation'] = {
+          'note' => 'Recent messages in this conversation, oldest first. The task is ' \
+                    'the latest user message; use the earlier ones to interpret it.',
+          'messages' => conversation
+        }
       end
 
       def add_behavior_snapshot(context, state)

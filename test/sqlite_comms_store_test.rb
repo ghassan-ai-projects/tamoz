@@ -75,11 +75,13 @@ class SQLiteCommsStoreTest < Minitest::Test
     ).wire
   end
 
-  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'tg.ops.abc')
+  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'tg.ops.abc',
+                  required_evidence: 'filesystem_operator')
     {
       'reference_digest' => reference, 'surface_id' => 'telegram-ops',
       'surface_revision' => 1, 'thread_id' => thread, 'occurrence_id' => 'req-1',
-      'interrupt_digest' => 'c' * 64, 'correspondent_id' => 'telegram:user:11111111',
+      'interrupt_digest' => 'c' * 64, 'required_evidence' => required_evidence,
+      'correspondent_id' => 'telegram:user:11111111',
       'conversation_id' => 'telegram:chat:22222222', 'prompt_receipt' => 'msg-1',
       'status' => status, 'created_at' => now.iso8601(6),
       'activated_at' => status == 'active' ? now.iso8601(6) : nil,
@@ -92,11 +94,26 @@ class SQLiteCommsStoreTest < Minitest::Test
       tx.execute('test.prompt.insert', <<~SQL, prompt_binds(prompt_wire(reference:, status:, expires_at:)))
         INSERT INTO tamoz_comms_approval_prompts (
           reference_digest, surface_id, surface_revision, thread_id,
-          occurrence_id, interrupt_digest, correspondent_id, conversation_id,
-          prompt_receipt, status, created_at_ms, activated_at_ms, consumed_at_ms,
-          expires_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          occurrence_id, interrupt_digest, required_evidence,
+          correspondent_id, conversation_id, prompt_receipt, status,
+          created_at_ms, activated_at_ms, consumed_at_ms, expires_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       SQL
+    end
+  end
+
+  # MIG-9 (ADR-049 INV-C): the prompt pins its required_evidence and the
+  # column round-trips through the store — a prompt always carries the
+  # requirement it was built with.
+  def test_a_prompt_round_trips_its_required_evidence_through_the_store
+    with_engine do |store, adapter, _checkpoints, _path|
+      store.insert_prompt(prompt_wire(reference: 'a' * 64, required_evidence: 'chat_bound'))
+
+      row = store.prompt(reference_digest: 'a' * 64)
+
+      refute_nil row, 'the prompt row must be readable'
+      assert_equal 'chat_bound', row.fetch('required_evidence')
+      refute_nil adapter
     end
   end
 
@@ -104,6 +121,7 @@ class SQLiteCommsStoreTest < Minitest::Test
     [
       wire.fetch('reference_digest'), wire['surface_id'], wire['surface_revision'],
       wire.fetch('thread_id'), wire.fetch('occurrence_id'), wire.fetch('interrupt_digest'),
+      wire.fetch('required_evidence'),
       wire.fetch('correspondent_id'), wire.fetch('conversation_id'), wire['prompt_receipt'],
       wire.fetch('status'), ms(wire.fetch('created_at')), ms(wire['activated_at']),
       ms(wire['consumed_at']), ms(wire.fetch('expires_at'))
@@ -156,6 +174,63 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_equal 1, requests.length, 'the replay must not enqueue twice'
       assert_equal :turn, requests.first.operation
+      refute requests.first.payload.key?('conversation'),
+             'a first contact has no transcript; the payload stays bare'
+    end
+  end
+
+  # The transcript a turn is planned with: admitted task texts interleaved
+  # with the terminal replies the correspondent saw. Control deliveries
+  # ('Accepted…') and non-admitted messages never enter it.
+  def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
+    with_engine do |store, _adapter, _checkpoints|
+      store.admit_and_enqueue(
+        envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
+                                                      bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                      reservation: 1, capacity: 500, now:
+      )
+      store.append_delivery(delivery(text: 'done, it is blue'),
+                            surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      store.append_delivery(
+        delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
+                 journaled: false, content_digest: 'c' * 64),
+        surface_id: 'telegram-ops', capacity: 10, now: now + 1
+      )
+      store.admit_and_enqueue(
+        envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
+                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                       reservation: 1, capacity: 500, now: now + 2
+      )
+
+      history = store.conversation_history(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+      )
+
+      assert_equal(
+        [
+          { 'role' => 'user', 'text' => 'make it blue' },
+          { 'role' => 'assistant', 'text' => 'done, it is blue' },
+          { 'role' => 'user', 'text' => 'and the font?' }
+        ],
+        history
+      )
+    end
+  end
+
+  # The history rides inside the payload's task entry, so the worker — which
+  # never sees the comms store — plans the turn with the thread's context.
+  def test_admit_and_enqueue_carries_the_history_in_the_turn_payload
+    with_engine do |store, _adapter, checkpoints|
+      history = [{ 'role' => 'user', 'text' => 'earlier' }]
+      store.admit_and_enqueue(
+        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
+                  capacity: 500, now:, history:
+      )
+
+      payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload
+
+      assert_equal({ 'text' => 'hello', 'conversation' => history }, payload.fetch('task'))
     end
   end
 
@@ -254,10 +329,10 @@ class SQLiteCommsStoreTest < Minitest::Test
       insert_prompt!(store, reference: 'd' * 64, status: 'active')
       insert_prompt!(store, reference: 'e' * 64, expires_at: now - 1)
 
-      assert_equal :activated, store.activate_prompt(reference_digest: 'c' * 64, now: now + 1)
-      assert_equal :already_active, store.activate_prompt(reference_digest: 'd' * 64, now: now + 1)
-      assert_equal :expired, store.activate_prompt(reference_digest: 'e' * 64, now: now + 1)
-      assert_equal :missing, store.activate_prompt(reference_digest: 'f' * 64, now: now + 1)
+      assert_equal :activated, store.activate_prompt(reference_digest: 'c' * 64, now: now + 1, receipt: '2001')
+      assert_equal :already_active, store.activate_prompt(reference_digest: 'd' * 64, now: now + 1, receipt: '2002')
+      assert_equal :expired, store.activate_prompt(reference_digest: 'e' * 64, now: now + 1, receipt: '2003')
+      assert_equal :missing, store.activate_prompt(reference_digest: 'f' * 64, now: now + 1, receipt: '2004')
     end
   end
 

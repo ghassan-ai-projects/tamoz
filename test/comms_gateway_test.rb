@@ -91,6 +91,38 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # A follow-up message is planned with the thread's transcript: the gateway
+  # reads the conversation history and it rides the second turn's payload
+  # (the first contact stays bare — there is nothing to recall yet). And the
+  # synchronous reply says what will actually happen: while the first
+  # request is still open the follow-up QUEUES behind it — "Accepted" alone
+  # would read as "starting now".
+  def test_a_follow_up_message_queues_and_carries_the_transcript
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      start = Time.utc(2026, 8, 10, 12, 0, 0)
+      transport.batch([update(101, text: 'make it blue')])
+
+      assert_equal :served, gateway.serve_once(now: start)
+
+      transport.batch([update(102, text: 'and the font?')])
+
+      assert_equal :served, gateway.serve_once(now: start + 2)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      requests = checkpoints.request_history(thread_id: thread)
+
+      assert_equal 2, requests.length
+      assert_equal 'make it blue', requests.first.payload.fetch('task')
+      assert_equal({ 'text' => 'and the font?', 'conversation' => [{ 'role' => 'user', 'text' => 'make it blue' }] },
+                   requests.last.payload.fetch('task'))
+      replies = transport.deliveries.map(&:text)
+
+      assert_equal 'Accepted. I will report committed progress.', replies.first
+      assert_match(/Queued behind earlier work/, replies.last)
+    end
+  end
+
   # A long poll that times out is the normal weather of long polling, not the
   # end of the gateway: nothing was observed, the durable offset is untouched,
   # and the very next pass still admits the message that was waiting.

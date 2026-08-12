@@ -30,7 +30,8 @@ module Tamoz
         return {} if cancelled?(state)
 
         @services.memory.finalize_behavior_claim(state)
-        loop_state = build_loop_state(state)
+        conversation = @services.planning_context.conversation_transcript(context)
+        loop_state = build_loop_state(state, conversation)
         run_attempts(state, context, loop_state)
       end
 
@@ -41,13 +42,13 @@ module Tamoz
           state.fetch(:terminal_reason) == 'cancelled_by_user'
       end
 
-      def build_loop_state(state)
+      def build_loop_state(state, conversation)
         phase = state.fetch(:phase).to_sym
         effects = @services.effects
         evidence = state.fetch(:observations).map { |record| observation_payload(record) }
         allowed_tools = effects.allowed_tool_names(phase)
         mcp_tools = effects.mcp_planning_surface(allowed_tools)
-        planning_context = @services.planning_context.planning_context_for(state, phase)
+        planning_context = @services.planning_context.planning_context_for(state, phase, conversation:)
         LoopState.new(
           phase:,
           repair_attempt: state.fetch(:repair_attempt),

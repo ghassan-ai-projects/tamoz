@@ -67,7 +67,7 @@ module Tamoz
           request.claim.time
           request.claim.lease.thread
           request.claim.lease.row
-          request.claim.next
+          request.claim.candidates
         ].freeze
         REQUEST_CLAIM_TAIL = %w[
           request.claim.update

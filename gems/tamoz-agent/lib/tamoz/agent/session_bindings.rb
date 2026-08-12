@@ -80,8 +80,10 @@ module Tamoz
         { next_node: 'terminal', terminal_reason: 'cancelled_by_user' }
       end
 
+      # Channel turns with a transcript nest the text under the task Hash
+      # (see CommsStore#admit_and_enqueue); the graph state keeps the text.
       def validated_task(raw_task)
-        task = String(raw_task).strip
+        task = String(raw_task.is_a?(Hash) ? raw_task['text'] : raw_task).strip
         raise ArgumentError, 'task must not be empty' if task.empty?
         if task.bytesize > SessionNodes::MAX_TASK_BYTES
           raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes"

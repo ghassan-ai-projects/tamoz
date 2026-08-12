@@ -9,6 +9,8 @@ require_relative "test_helper"
 # the StaleRequestError class boundary (C2), the checkpointer-owned single-transaction
 # terminal-fail (D2/C5), the recover-path validation (C4), the FIFO unblock, the
 # atomicity at the new seams (F3/F5), and the CLI typed-reason rendering (D3).
+# The one exception: a :turn whose only verdict is "not terminal" is EARLY, not
+# stale — the claim defers it instead of failing it (see the early-turn case below).
 class SQLiteStaleRequestTest < Minitest::Test
   # F1 shape 1 (compiled.rb:938 path): a resume whose answers no longer match the
   # current interrupts terminal-fails at claim; no exception, thread untouched,
@@ -110,8 +112,12 @@ class SQLiteStaleRequestTest < Minitest::Test
     end
   end
 
-  # F6 P2: stale :turn / :continue / :fork all terminal-fail at claim.
-  def test_stale_turn_does_not_fork_the_live_execution_chain
+  # F6 P2: stale :continue / :fork terminal-fail at claim. A :turn whose only
+  # verdict is "not terminal" is EARLY, not stale — it arrived while the thread
+  # was still working. The claim skips it (it stays queued, never forks the
+  # live chain) and it runs once the thread settles, so a message sent mid-turn
+  # is deferred rather than dropped.
+  def test_an_early_turn_waits_for_the_thread_to_settle_then_runs
     with_runner(multi_interrupt_definition) do |store, app, runner|
       thread = "thread.stale-turn"
       runner.deliver({}, thread:, request_id: "request.start")
@@ -119,22 +125,27 @@ class SQLiteStaleRequestTest < Minitest::Test
       execution_before = app.state(thread:).execution_id
 
       runner.submit(
-        {"task" => "follow up"},
+        {},
         thread:,
         request_id: "request.turn",
         operation: :turn,
         delivery: :queue
       )
-      failed = runner.run_next(thread:, owner_id: "owner.a")
 
-      assert_equal :failed, failed.status
-      assert_equal "latest checkpoint is not terminal",
-                   failed.terminal_error.fetch("reason")
+      assert_nil runner.run_next(thread:, owner_id: "owner.a"),
+                 "an early turn is skipped, not claimed and not failed"
+      waiting = runner.fetch(thread:, request_id: "request.turn")
+      assert_equal :queued, waiting.status
       assert_equal history_before, app.history(thread:, limit: 100).length,
-                   "a stale turn must never append or fork a checkpoint"
+                   "an early turn must never append or fork a checkpoint"
       assert_equal execution_before, app.state(thread:).execution_id
-      # The active thread's own work remains claimable.
-      assert_nil runner.run_next(thread:, owner_id: "owner.a2")
+
+      # Once the thread settles, the waiting turn claims and runs normally.
+      advance_to_completed(app, store, thread)
+      claimed = runner.run_next(thread:, owner_id: "owner.a2")
+      refute_nil claimed
+      assert_equal "request.turn", claimed.request_id
+      refute_equal execution_before, app.state(thread:).execution_id
     end
   end
 

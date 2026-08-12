@@ -314,7 +314,9 @@ class AutonomyScorecardTest < Minitest::Test
       refute_nil deny, "the prompt message must carry a Deny button"
       reference = deny.fetch("callback_data")
       refute_empty reference, "the Deny button must carry the single-use reference"
-      rt.client.updates = [callback_update(2, reference)]
+      # The fixture's sendMessage receipt numbers messages from 1, so the
+      # prompt's originating message id equals how many messages were sent.
+      rt.client.updates = [callback_update(2, reference, message_id: rt.client.sent.length)]
 
       # The Deny press resolves exactly one active prompt to a deny decision.
       serve_once(rt, factory: edit_factory)
@@ -415,6 +417,79 @@ class AutonomyScorecardTest < Minitest::Test
     end
   end
 
+  # ------------------------------------------------ 17. conversational turn
+
+  # Rapid-fire messages are not dropped and not context-free: the follow-up
+  # queues behind the running turn, is told so, and is planned with the
+  # thread's transcript (design §16's channel case, conversational bar).
+  def test_case_17_follow_up_messages_queue_and_carry_the_transcript
+    with_runtime(channels: channel_map(limits: {"per_chat_messages_per_s" => 100.0})) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      model = ScriptedModel.new(
+        plan: [plan_step("read_file", {"path" => "note.txt"})],
+        review: [accepted_review],
+        verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+      )
+      factory = ->(_options) { model }
+      rt.client.updates = [message_update(1, "Read note.txt"),
+                           message_update(2, "and what does it start with?")]
+
+      serve_once(rt, factory:)
+      worker_once(rt, factory:)
+      serve_once(rt, factory:)
+
+      answers = rt.client.sent.select { |delivery| delivery.fetch("text") == "hello" }
+      assert_equal 2, answers.length, "every message must get a terminal answer"
+      assert(rt.client.sent.any? { |delivery| delivery.fetch("text").include?("Queued behind earlier work") },
+             "the follow-up must be told it queued, not that it started")
+      refute rt.events.any? { |event| event["event"] == "request.failed" },
+             "no message may be dropped"
+      plan_prompts = model.calls.select { |call| call.fetch(:stage) == :plan }
+                                .map { |call| call.fetch(:prompt) }
+      assert(plan_prompts.any? { |prompt| prompt.include?('"conversation"') && prompt.include?("Read note.txt") },
+             "the follow-up must be planned with the transcript")
+      assert_hard_counters_zero(rt)
+    end
+  end
+
+  # -------------------------------------- 18. approval pause without prompts
+
+  # A turn parked on approval on a surface where approvals are DISABLED used
+  # to go silent — and every message after it died at claim. Now the channel
+  # hears why the work is waiting, follow-ups wait instead of dying, and the
+  # thread resumes cleanly when the operator approves out of band.
+  def test_case_18_an_approval_pause_without_prompts_notifies_and_never_strands
+    with_runtime(channels: channel_map, unattended: {"reconcilable" => []}) do |rt|
+      File.write(File.join(rt.workspace, "note.txt"), "hello\n")
+      rt.client.updates = [message_update(1, "Fix note.txt")]
+
+      serve_once(rt, factory: edit_factory)
+      worker_once(rt, factory: edit_factory)
+      serve_once(rt, factory: edit_factory)
+
+      assert(rt.client.sent.any? { |delivery| delivery.fetch("text").include?("approvals are not enabled") },
+             "a parked turn on a surface without approvals must say why it waits")
+
+      rt.client.updates = [message_update(2, "Read note.txt")]
+      serve_once(rt, factory: edit_factory)
+      worker_once(rt, factory: edit_factory)
+
+      refute rt.events.any? { |event| event["event"] == "request.failed" },
+             "a follow-up during an approval pause must wait, not die"
+
+      approval = rt.pending_approvals.first.fetch("request_id")
+      assert_equal 0, rt.cli(%W[approve #{approval} --json]), rt.err
+      worker_once(rt, factory: read_only_factory)
+      serve_once(rt, factory: read_only_factory)
+
+      assert_equal "fixed\n", File.read(File.join(rt.workspace, "note.txt")),
+                   "the approved occurrence must resume and edit"
+      assert_equal(2, rt.events.count { |event| event["event"] == "request.completed" },
+                   "both the approved turn and the queued follow-up must complete")
+      assert_hard_counters_zero(rt)
+    end
+  end
+
   private
 
   # The channel cases drive the public CLI; these helpers keep the expected
@@ -451,10 +526,11 @@ class AutonomyScorecardTest < Minitest::Test
                    "from" => {"id" => user_id}, "text" => text}}
   end
 
-  def callback_update(id, reference)
+  def callback_update(id, reference, message_id: 2)
     {"update_id" => id,
      "callback_query" => {"id" => "q-#{id}", "from" => {"id" => 111_111_11},
-                          "message" => {"chat" => {"id" => 222_222_22, "type" => "private"}},
+                          "message" => {"chat" => {"id" => 222_222_22, "type" => "private"},
+                                        "message_id" => message_id},
                           "data" => reference}}
   end
 end

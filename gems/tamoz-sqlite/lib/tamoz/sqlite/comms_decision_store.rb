@@ -43,10 +43,10 @@ module Tamoz
         txn.execute('comms.decision.insert', <<~SQL, decision_binds(wire))
           INSERT INTO tamoz_comms_decisions (
             decision_id, thread_id, occurrence_id, interrupt_digest,
-            direction, actor_kind, actor_id, source,
+            direction, actor_kind, actor_id, source, evidence, reason,
             decided_at_ms, expires_at_ms, status,
             claim_owner, claim_fence, claim_expires_at_ms, consumed_at_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         SQL
         :created
       end
@@ -120,8 +120,8 @@ module Tamoz
 
       DECISION_COLUMNS = %w[
         decision_id thread_id occurrence_id interrupt_digest direction actor_kind
-        actor_id source decided_at_ms expires_at_ms status claim_owner claim_fence
-        claim_expires_at_ms consumed_at_ms
+        actor_id source evidence reason decided_at_ms expires_at_ms status
+        claim_owner claim_fence claim_expires_at_ms consumed_at_ms
       ].freeze
 
       def select_columns = DECISION_COLUMNS.join(', ')
@@ -136,7 +136,7 @@ module Tamoz
         [
           wire.fetch('decision_id'), wire.fetch('thread_id'), wire.fetch('occurrence_id'),
           wire.fetch('interrupt_digest'), wire.fetch('direction'), wire.fetch('actor_kind'),
-          wire.fetch('actor_id'), wire.fetch('source'),
+          wire.fetch('actor_id'), wire.fetch('source'), wire['evidence'], wire['reason'],
           now_ms(Time.parse(wire.fetch('decided_at'))), now_ms(Time.parse(wire.fetch('expires_at'))),
           wire.fetch('status'),
           wire['claim_owner'], wire['claim_fence'],
@@ -156,6 +156,8 @@ module Tamoz
           'actor_kind' => values.fetch('actor_kind'),
           'actor_id' => values.fetch('actor_id'),
           'source' => values.fetch('source'),
+          'evidence' => values['evidence'],
+          'reason' => values['reason'],
           'decided_at' => wire_time(values.fetch('decided_at_ms')),
           'expires_at' => wire_time(values.fetch('expires_at_ms')),
           'status' => values.fetch('status'),

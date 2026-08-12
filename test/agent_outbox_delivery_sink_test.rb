@@ -6,7 +6,7 @@ require_relative 'test_helper'
 # lifecycle events become bounded outbox rows via the CommsStore, an unbound
 # thread delivers nothing (nil-safe), and the worker pushes before the
 # occurrence closes.
-# rubocop:disable Minitest/MultipleAssertions
+# rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize
 class AgentOutboxDeliverySinkTest < Minitest::Test
   Comms = Tamoz::Comms
 
@@ -34,7 +34,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     adapter.bind_comms_store(checkpoints)
   end
 
-  def descriptor
+  def descriptor(**overrides)
     Comms::SurfaceDescriptor.build(
       surface_id: 'telegram-ops', revision: 1,
       transport: { mode: 'long_poll',
@@ -48,13 +48,14 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       limits: { max_inbound_bytes: 8192, max_open_requests: 50,
                 max_denial_prompts_per_request: 4, outbox_capacity: 500,
                 control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 }
+                global_messages_per_s: 25.0 },
+      **overrides
     )
   end
 
-  def bind_thread_to_conversation(store, thread: 'tg.ops.abc')
+  def bind_thread_to_conversation(store, thread: 'tg.ops.abc', surface: descriptor)
     now = Time.utc(2026, 8, 10, 12, 0, 0)
-    store.deploy_surface(descriptor.wire, now:)
+    store.deploy_surface(surface.wire, now:)
     store.bind_correspondent(binding_wire(now), now:)
     envelope = Comms::InboundEnvelope.new(
       surface_id: 'telegram-ops', surface_revision: 1, update_id: 1,
@@ -133,6 +134,78 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  def approval_event(request_id)
+    { thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
+      request_id:,
+      interrupts: [{ task_id: 'task', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }] }
+  end
+
+  # ADR-049 Phase 5 (defense in depth): under the v1 policy every interrupt
+  # requires filesystem_operator evidence, so the rendered keyboard offers
+  # Deny only — the markup reflects the policy, never a hardcoded list. A
+  # stray approve callback is still refused by the Phase 3 gate; the button's
+  # absence is UX, not the security boundary.
+  def test_an_approval_request_renders_a_deny_only_keyboard_under_v1_policy
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1'))
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
+
+      markup = JSON.parse(row.fetch('markup'))
+
+      assert_equal %w[deny], markup.fetch('actions'),
+                   'a v1-policy prompt must not render an approve button (ADR-049 INV-D)'
+      assert_match(/\A[0-9a-f]{32}\z/, markup.fetch('reference'))
+    end
+  end
+
+  # A turn parked on approval on a surface where approvals are DISABLED used
+  # to go silent: no prompt machinery, no message, every later message
+  # queueing behind a pause the correspondent could not see. The sink owes
+  # the channel a notice instead — control, not terminal, and deduped per
+  # occurrence so a worker restart never double-tells.
+  def test_an_approval_request_on_a_surface_without_approvals_delivers_a_notice
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(
+        store, surface: descriptor(approvals: { mode: 'none', prompt_ttl_s: 900 })
+      )
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1'))
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal 1, rows.length
+      assert_equal 'control', rows.first.fetch('kind')
+      assert_match(/approvals are not enabled/, rows.first.fetch('text'))
+
+      sink.push(approval_event('occurrence-1'))
+
+      assert_equal 1, store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).length,
+                   'the notice is deduped per occurrence'
+    end
+  end
+
+  # Two occurrences that honestly produce the same answer text must BOTH
+  # deliver: content-addressed dedup covers the crash re-push of ONE
+  # occurrence, never two different requests that said the same thing.
+  def test_identical_answers_from_different_occurrences_both_deliver
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      2.times do |index|
+        sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'hello',
+                  request_id: "occurrence-#{index + 1}")
+      end
+
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+
+      assert_equal 2, rows.length
+    end
+  end
+
   def test_an_unbound_thread_delivers_nothing
     with_engine do |sink, adapter, checkpoints|
       result = sink.push(thread_id: 'tg.unbound', kind: 'request.completed', text: 'hi')
@@ -164,4 +237,4 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 end
-# rubocop:enable Minitest/MultipleAssertions
+# rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

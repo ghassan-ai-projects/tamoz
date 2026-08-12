@@ -5,6 +5,7 @@ require 'time'
 require_relative 'canonical'
 require_relative 'errors'
 require_relative 'interrupt_digest'
+require_relative 'authority_evidence'
 
 module Tamoz
   module Comms
@@ -48,22 +49,27 @@ module Tamoz
       attr_reader :decision_id, :thread_id, :occurrence_id, :interrupt_digest,
                   :direction, :actor_kind, :actor_id, :source,
                   :decided_at, :expires_at, :status,
-                  :claim_owner, :claim_fence, :claim_expires_at, :consumed_at
+                  :claim_owner, :claim_fence, :claim_expires_at, :consumed_at,
+                  :evidence, :reason
 
-      # The decision's fifteen fields ARE the value: design §9 binds every one
-      # of them into the record the store persists as one row, so splitting
+      # The decision's seventeen fields ARE the value: design §9 binds every
+      # one of them into the record the store persists as one row, so splitting
       # them into sub-values would fragment the contract rather than simplify
-      # it.
-      # rubocop:disable Metrics/ParameterLists, Metrics/MethodLength
+      # it. `evidence` and `reason` are the ADR-049 audit trail (contract
+      # §7.1): the stronger operator path records the evidence level that made
+      # the approve legal, and why.
+      # rubocop:disable Metrics/ParameterLists, Metrics/MethodLength, Metrics/AbcSize
       def initialize(
         decision_id:, thread_id:, occurrence_id:, interrupt_digest:,
         direction:, actor_kind:, actor_id:, source:,
         decided_at:, expires_at:, status:,
-        claim_owner: nil, claim_fence: nil, claim_expires_at: nil, consumed_at: nil
+        claim_owner: nil, claim_fence: nil, claim_expires_at: nil, consumed_at: nil,
+        evidence: nil, reason: nil
       )
         validate_identity!(thread_id:, occurrence_id:, interrupt_digest:)
         validate_direction!(direction)
         validate_actor!(actor_kind:, actor_id:, source:)
+        validate_audit!(evidence:, reason:)
         validate_times!(decided_at:, expires_at:)
         validate_status!(status)
         validate_claim!(status:, claim_owner:, claim_fence:, claim_expires_at:)
@@ -84,9 +90,11 @@ module Tamoz
         @claim_fence = claim_fence
         @claim_expires_at = claim_expires_at&.utc
         @consumed_at = consumed_at&.utc
+        @evidence = evidence
+        @reason = reason
         freeze
       end
-      # rubocop:enable Metrics/ParameterLists, Metrics/MethodLength
+      # rubocop:enable Metrics/ParameterLists, Metrics/MethodLength, Metrics/AbcSize
 
       # Builds a pending decision from a live interrupt set, deriving the
       # interrupt digest and the decision id. `decided_at` defaults to now and
@@ -98,7 +106,7 @@ module Tamoz
       def self.build(
         thread_id:, occurrence_id:, interrupts:, direction:,
         actor_kind:, actor_id:, source:, decided_at: Time.now.utc, ttl_s: DEFAULT_TTL_S,
-        interrupt_digest: nil
+        interrupt_digest: nil, evidence: nil, reason: nil
       )
         digest = interrupt_digest || InterruptDigest.of(interrupts)
         direction_text = direction.to_s
@@ -111,7 +119,8 @@ module Tamoz
           ),
           thread_id:, occurrence_id:, interrupt_digest: digest,
           direction: direction_text, actor_kind:, actor_id:, source:,
-          decided_at: decided, expires_at: expires, status: 'pending'
+          decided_at: decided, expires_at: expires, status: 'pending',
+          evidence:, reason:
         )
       end
       # rubocop:enable Metrics/ParameterLists
@@ -172,7 +181,9 @@ module Tamoz
           'claim_owner' => @claim_owner,
           'claim_fence' => @claim_fence,
           'claim_expires_at' => @claim_expires_at&.strftime(WIRE_TIME),
-          'consumed_at' => @consumed_at&.strftime(WIRE_TIME)
+          'consumed_at' => @consumed_at&.strftime(WIRE_TIME),
+          'evidence' => @evidence,
+          'reason' => @reason
         }
       end
 
@@ -194,7 +205,9 @@ module Tamoz
           claim_owner: wire['claim_owner'],
           claim_fence: wire['claim_fence'],
           claim_expires_at: wire_time(wire, 'claim_expires_at'),
-          consumed_at: wire_time(wire, 'consumed_at')
+          consumed_at: wire_time(wire, 'consumed_at'),
+          evidence: wire['evidence'],
+          reason: wire['reason']
         )
       end
 
@@ -240,6 +253,16 @@ module Tamoz
         return if SOURCES.include?(source)
 
         raise ValidationError, "source must be one of #{SOURCES.join(', ')}"
+      end
+
+      # The audit trail (ADR-049, contract §7.1): an evidence level, when
+      # recorded, must be a lattice member — a non-member is rejected, never
+      # coerced — and a reason is a bounded string.
+      def validate_audit!(evidence:, reason:)
+        AuthorityEvidence.from(evidence) unless evidence.nil?
+        return if reason.nil? || bounded_string?(reason)
+
+        raise ValidationError, 'reason must be a bounded string'
       end
 
       def validate_times!(decided_at:, expires_at:)

@@ -26,6 +26,15 @@ module Tamoz
         row && wire.materialize_request(row)
       end
 
+      # The staleness verdict that means EARLY, not invalid: a fresh turn whose
+      # thread has not settled yet arrived while earlier work was still running
+      # or waiting on a human. It is left queued; the string is the graph's
+      # RequestStaleness verdict for exactly that case.
+      EARLY_TURN_REASON = 'latest checkpoint is not terminal'
+      # Only turns defer. A fork is an operator action on a specific execution;
+      # failing it loudly at claim is the feedback the operator needs.
+      EARLY_TURN_OPERATIONS = %w[turn].freeze
+
       # :nodoc: Shared by claim and recovery while their transaction is open.
       # rubocop:disable Metrics/ParameterLists -- the validation context is the durable claim contract.
       def fail_if_stale!(
@@ -151,20 +160,47 @@ module Tamoz
       def claim_request_in_transaction(tx, lease:, validator:, execution_id:)
         now = adapter.__send__(:backend_time, tx, 'request.claim.time')
         validate_claim_lease!(tx, lease, now)
-        row = next_request(tx, lease)
-        return row unless row && row.fetch(7) == 'queued'
+        candidate_rows(tx, lease).each do |row|
+          return row unless row.fetch(7) == 'queued'
 
-        stale = fail_if_stale(
+          if validator
+            checkpoint = @store.latest_checkpoint_in_transaction(
+              tx, lease.thread_id, lease.namespace, 'request.claim.latest_checkpoint'
+            )
+            reason = @staleness.reason_for(validator, wire.materialize_request(row), checkpoint)
+            if reason
+              next if early_turn?(row, reason)
+
+              return fail_stale_claim!(tx, lease:, row:, reason:, checkpoint:, now:, execution_id:)
+            end
+          end
+
+          return claim_queued_request!(tx, lease:, row:, execution_id:, now:)
+        end
+        nil
+      end
+
+      # A queued turn whose only verdict is "the checkpoint has not settled"
+      # is deferred, not failed: the message arrived while the thread was
+      # busy, and killing it would drop work the sender sees as accepted.
+      # Deferring also unblocks whatever sits behind it — a resume answering
+      # the open turn must reach the claim ahead of the next fresh turn.
+      def early_turn?(row, reason)
+        EARLY_TURN_OPERATIONS.include?(row.fetch(5)) && reason == EARLY_TURN_REASON
+      end
+
+      def fail_stale_claim!(tx, lease:, row:, reason:, checkpoint:, now:, execution_id:) # rubocop:disable Metrics/ParameterLists -- one atomic stale failure keeps the write and transition together.
+        terminal_fail_in_transaction!(
           tx,
           lease:,
           row:,
-          validator:,
-          now:,
-          execution_id:
+          operation: row.fetch(5).to_sym,
+          reason:,
+          execution_id:,
+          checkpoint_id: checkpoint&.id,
+          now:
         )
-        return stale if stale
-
-        claim_queued_request!(tx, lease:, row:, execution_id:, now:)
+        rows.request_row(tx, lease.thread_id, lease.namespace, row.fetch(2), 'request.claim.result')
       end
 
       def validate_claim_lease!(tx, lease, now)
@@ -177,30 +213,21 @@ module Tamoz
         )
       end
 
-      def next_request(tx, lease)
-        tx.first(
-          'request.claim.next',
+      # The oldest non-terminal requests, oldest first. More than one row is
+      # needed because an early turn is skipped and the claim must see what
+      # waits behind it; the scan is bounded so a backed-up inbox never turns
+      # the claim into a table walk.
+      def candidate_rows(tx, lease, limit: 8) # rubocop:disable Naming/MethodParameterName
+        tx.rows(
+          'request.claim.candidates',
           <<~SQL,
             #{RequestInboxRows::REQUEST_SELECT}
             WHERE thread_id = ? AND namespace = ?
               AND status NOT IN ('completed', 'failed')
             ORDER BY enqueue_sequence
-            LIMIT 1
+            LIMIT ?
           SQL
-          [lease.thread_id, lease.namespace]
-        )
-      end
-
-      def fail_if_stale(tx, lease:, row:, validator:, now:, execution_id:) # rubocop:disable Metrics/ParameterLists -- forwards the stale-check transaction context.
-        fail_if_stale!(
-          tx,
-          lease:,
-          row:,
-          validator:,
-          now:,
-          execution_id:,
-          checkpoint_label: 'request.claim.latest_checkpoint',
-          result_label: 'request.claim.result'
+          [lease.thread_id, lease.namespace, limit]
         )
       end
 

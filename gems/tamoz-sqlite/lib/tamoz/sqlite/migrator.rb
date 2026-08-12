@@ -20,7 +20,12 @@ module Tamoz
       # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the ten
       # channel-store tables. Ordinals are consumed monotonically and never
       # reused; the monotonic-ordering test pins the exact ordinal list.
-      CURRENT_VERSION = 8
+      # ADR-049 (PLAN_ADR049 Phase 2): 8 -> 9 through MIGRATION_9, which pins
+      # the prompt's required_evidence (INV-C).
+      # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 through MIGRATION_10, which
+      # records the decision audit trail — the evidence level that made an
+      # approve legal and why (contract §7.1).
+      CURRENT_VERSION = 10
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -819,6 +824,35 @@ module Tamoz
         MIGRATION_8.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # ADR-049 (PLAN_ADR049 Phase 2): the approval prompt pins the evidence
+      # an approver must present (INV-C). The column is nullable only because
+      # SQLite cannot ALTER-ADD a NOT NULL column; every prompt row written
+      # carries the pinned value.
+      MIGRATION_9 = [
+        <<~SQL.freeze
+          ALTER TABLE tamoz_comms_approval_prompts ADD COLUMN required_evidence TEXT
+        SQL
+      ].freeze
+
+      MIGRATION_9_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_9.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
+      # ADR-049 (PLAN_ADR049 Phase 4): the decision audit records the evidence
+      # level that made an approve legal and why (contract §7.1).
+      MIGRATION_10 = [
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_comms_decisions ADD COLUMN evidence TEXT
+        SQL
+        <<~SQL.freeze,
+          ALTER TABLE tamoz_comms_decisions ADD COLUMN reason TEXT
+        SQL
+      ].freeze
+
+      MIGRATION_10_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_10.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -829,7 +863,9 @@ module Tamoz
         5 => [MIGRATION_5, MIGRATION_5_CHECKSUM],
         6 => [MIGRATION_6, MIGRATION_6_CHECKSUM],
         7 => [MIGRATION_7, MIGRATION_7_CHECKSUM],
-        8 => [MIGRATION_8, MIGRATION_8_CHECKSUM]
+        8 => [MIGRATION_8, MIGRATION_8_CHECKSUM],
+        9 => [MIGRATION_9, MIGRATION_9_CHECKSUM],
+        10 => [MIGRATION_10, MIGRATION_10_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -980,6 +1016,11 @@ module Tamoz
                        :MIGRATION_3, :MIGRATION_3_CHECKSUM,
                        :MIGRATION_4, :MIGRATION_4_CHECKSUM,
                        :MIGRATION_5, :MIGRATION_5_CHECKSUM,
+                       :MIGRATION_6, :MIGRATION_6_CHECKSUM,
+                       :MIGRATION_7, :MIGRATION_7_CHECKSUM,
+                       :MIGRATION_8, :MIGRATION_8_CHECKSUM,
+                       :MIGRATION_9, :MIGRATION_9_CHECKSUM,
+                       :MIGRATION_10, :MIGRATION_10_CHECKSUM,
                        :MIGRATIONS
     end
   end

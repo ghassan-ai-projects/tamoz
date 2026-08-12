@@ -4,7 +4,7 @@ require_relative "test_helper"
 
 class SQLiteBoundaryRegistryTest < Minitest::Test
   REGISTRY_DIGEST =
-    "sha256:5a02e47dc1f72efcc99f36f8e8e4357c97882a495c36b2b672d15f0b69eafce6"
+    "sha256:f8a3cd8d02b014e53f64ece4663b9b8240fd299130d8d94245f2c8f816c86a01"
 
   def test_registry_is_deeply_frozen_unique_and_digest_stable
     registry = boundary_registry

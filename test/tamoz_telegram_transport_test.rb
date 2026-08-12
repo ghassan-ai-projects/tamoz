@@ -236,5 +236,19 @@ class TamozTelegramTransportTest < Minitest::Test
       assert_equal 'membership', membership.fetch('kind')
     end
   end
+
+  # The callback envelope binds the originating message id (contract §7.1) so
+  # the gateway can compare a press to the exact prompt message.
+  def test_normalizer_binds_the_callback_message_id
+    callback = { 'update_id' => 3,
+                 'callback_query' => { 'id' => 'q-3', 'from' => { 'id' => 111_111_11 },
+                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                      'message_id' => 2001 },
+                                       'data' => 'deny:abc' } }
+    wire = Tamoz::Telegram::Normalizer.new(surface_id: 's', surface_revision: 1).normalize(callback).wire
+
+    assert_equal 'callback', wire.fetch('kind')
+    assert_equal 2001, wire.fetch('callback_message_id')
+  end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize
