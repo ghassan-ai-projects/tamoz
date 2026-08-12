@@ -82,6 +82,9 @@ class StreamEpisodeEndToEndTest < Minitest::Test
         )
       )
       server = GRPC::RpcServer.new
+      # The e2e dials over TCP (the grpc-ruby server binding does not accept
+      # unix:// URIs); the production worker socket (UDS + mTLS) is the server
+      # wiring task, not the wire-contract test.
       port = server.add_http2_port("127.0.0.1:0", :this_port_is_insecure)
       server.handle(server_worker)
       thread = Thread.new { server.run_till_terminated }
@@ -126,6 +129,7 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
       capability_token: "opaque.hmac.token",
+      budget: Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 5),
       snapshot_json:,
       snapshot_sha256:
     )

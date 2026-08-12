@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "json_schemer"
 require "tamoz/stream/episode_worker"
 
 # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision — decision-v1 shape,
@@ -133,5 +134,26 @@ class StreamDecisionBuilderTest < Minitest::Test
 
     intent = decision.fetch("intents").fetch(0)
     assert_equal "install_watch_condition", intent.fetch("type")
+  end
+
+  # F4 (coverage audit): the vendored decision-v1 schema is EXECUTED, not just
+  # matched by shape — a schema drift fails the builder test.
+  def test_the_decision_conforms_to_the_vendored_decision_v1_schema
+    decision, = build(
+      primary_hypothesis: "bearing wear", confidence: 0.9,
+      summary: "pressure trend", facts_used: [{"pressure" => 1e-7}]
+    )
+    schema = JSONSchemer.schema(
+      File.read(ROOT.join("gems/tamoz-stream/contracts/schemas/decision-v1.json"))
+    )
+    assert schema.valid?(decision),
+           "the decision must conform to the vendored decision-v1 schema"
+    intent_schema = JSONSchemer.schema(
+      File.read(ROOT.join("gems/tamoz-stream/contracts/schemas/intent-v1.json"))
+    )
+    decision.fetch("intents").each do |intent|
+      assert intent_schema.valid?(intent),
+             "each intent must conform to the vendored intent-v1 schema"
+    end
   end
 end
