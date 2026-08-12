@@ -33,13 +33,25 @@ module Tamoz
 
       def retain(digest:, bytes:, media_type: "application/json")
         digest = String(digest)
-        if digest.empty?
-          raise ArtifactStoreError, "artifact retention requires a digest"
+        unless digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+          raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
         end
-        # Idempotent: retaining the same digest again is a no-op.
-        return @artifacts.fetch(digest) if @artifacts.key?(digest)
+        unless bytes.is_a?(String)
+          raise ArtifactStoreError, "artifact retention requires a String document"
+        end
+        # Idempotent per digest, but never keep-first on a collision: the same
+        # digest with DIFFERENT bytes is a lying or corrupted peer, and
+        # keeping the first silently poisons every later shadow comparison.
+        if @artifacts.key?(digest)
+          stored = @artifacts.fetch(digest)
+          unless stored.fetch("bytes") == bytes
+            raise ArtifactStoreError,
+                  "artifact digest collision: #{digest} resolves to different bytes"
+          end
+          return stored
+        end
 
-        size = bytes.to_s.bytesize
+        size = bytes.bytesize
         if size.zero?
           raise ArtifactStoreError, "artifact retention requires bytes"
         end
@@ -52,7 +64,7 @@ module Tamoz
 
         @artifacts[digest] = {
           "digest" => digest,
-          "bytes" => bytes.to_s,
+          "bytes" => bytes,
           "media_type" => media_type,
           "retained_at" => Time.now.to_i
         }.freeze

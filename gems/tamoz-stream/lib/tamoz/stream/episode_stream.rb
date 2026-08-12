@@ -224,12 +224,31 @@ module Tamoz
         emit_budget
       end
 
+      # The graph error event carries the ORIGINAL error class (the adapter
+      # owns the safe-message disclosure). When that class is a Tamoz error
+      # with a typed category — the non-interactive interrupt, for instance —
+      # the category crosses the wire instead of a generic graph_step_failed,
+      # so a consumer can act on the real reason.
       def diagnostic(data)
+        code = typed_code(data["error_class"].to_s)
         @stream.diagnostic(
-          code: "graph_step_failed",
+          code:,
           message: data.fetch("safe_message", "graph step failed"),
           retryable: false
         )
+      end
+
+      def typed_code(error_class_name)
+        return "graph_step_failed" unless error_class_name.start_with?("Tamoz::")
+
+        klass = error_class_name.split("::").reduce(Object) do |acc, part|
+          acc.const_get(part, false)
+        end
+        return "graph_step_failed" unless klass.const_defined?(:CATEGORY, false)
+
+        klass::CATEGORY
+      rescue NameError
+        "graph_step_failed"
       end
 
       def emit_budget

@@ -13,11 +13,15 @@ require "json"
 class StreamInvariantsTest < Minitest::Test
   Reconsideration = Tamoz::Stream::Reconsideration
 
-  # Invariant 1: Tamoz computes no watermark, event time, lateness, or window
-  # membership — the deterministic plane belongs to the stream (§2, §6.2).
+  # Invariant 1: the supervised episode path computes no watermark, event
+  # time, lateness, or window membership — the deterministic plane belongs to
+  # the stream (§2, §6.2). The scan covers the new worker files; the OLD P14
+  # engine (clock, stream_clock, connector, stream_store, event_envelope,
+  # cognition_admission, ...) still carries those concepts and is retired by
+  # the T8.3 forward migration, not by this invariant.
   def test_invariant_1_the_episode_path_computes_no_stream_plane_concepts
     episode_files = ROOT.glob(
-      "gems/tamoz-stream/lib/tamoz/stream/{episode_*,evidence_*,situation_*,capability_host,reconsideration,approval_relay,outcome_subscriber,verification_store,artifact_store,decision_builder}*.rb"
+      "gems/tamoz-stream/lib/tamoz/stream/{episode_*,evidence_*,situation_*,capability_host,reconsideration,approval_relay,outcome_subscriber,verification_store,situation_memory,artifact_store,decision_builder}*.rb"
     )
     refute_empty episode_files
     %w[watermark event_time lateness window partition_key].each do |token|
@@ -47,6 +51,10 @@ class StreamInvariantsTest < Minitest::Test
     assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status
     assert_empty events.select { |event| event.model_started != nil },
                  "no model call may run for a tampered snapshot"
+    diagnostic = events.find { |event| event.diagnostic != nil }
+    refute_nil diagnostic, "the mismatch must fail loudly with a diagnostic"
+    assert_equal "stream_snapshot_digest_mismatch", diagnostic.diagnostic.code,
+                 "the mismatch must fail loudly with its typed diagnostic"
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -78,6 +86,8 @@ class StreamInvariantsTest < Minitest::Test
                  "a non-interactive episode interrupt is a typed terminal failure"
     diagnostic = events.find { |event| event.diagnostic != nil }
     refute_nil diagnostic, "the interrupt must surface a diagnostic"
+    assert_equal "interrupt_in_non_interactive_episode", diagnostic.diagnostic.code,
+                 "the interrupt's typed category must cross the wire, not a bare internal_error"
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -116,12 +126,34 @@ class StreamInvariantsTest < Minitest::Test
       "reconciliation_version" => "1", "observation_status" => "verified",
       "episode_id" => "s1", "attempt_id" => "at-1"
     }
-    assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+    forged_error = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
       engine.admission.admit_episode(
         episode:, owner: "stream",
-        reconciled_outcome: forged, verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
+        reconciled_outcome: forged,
+        verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
       )
     end
+    assert_includes forged_error.message, "forged_source_authority"
+
+    # An unreconciled verdict is never learned from.
+    unlearnable = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+      engine.admission.admit_episode(
+        episode:, owner: "stream",
+        reconciled_outcome: forged.merge("observation_status" => "inconclusive"),
+        verify_source_authority: ->(_reference) { true }
+      )
+    end
+    assert_includes unlearnable.message, "unlearnable_verdict"
+
+    # A reference for ANOTHER executor's episode is foreign.
+    foreign = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+      engine.admission.admit_episode(
+        episode:, owner: "stream",
+        reconciled_outcome: forged.merge("episode_id" => "s9"),
+        verify_source_authority: ->(_reference) { true }
+      )
+    end
+    assert_includes foreign.message, "foreign_episode"
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -262,7 +294,7 @@ class StreamInvariantsTest < Minitest::Test
     assert intent.fetch("parameters").fetch("expression").start_with?("situation."),
            "the expression is situation-scoped, never a tenant or spec"
     assert intent.key?("expires_at"), "a watch condition is expiring"
-    assert_operator decision.fetch("intents").length, :<=, 16,
+    assert_operator decision.fetch("intents").length, :<=, Reconsideration::MAX_INTENTS,
                     "watch conditions are count-bounded"
   end
 

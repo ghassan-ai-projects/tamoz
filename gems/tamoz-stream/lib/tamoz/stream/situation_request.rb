@@ -272,8 +272,14 @@ module Tamoz
               )
               open_verifications(envelope, snapshot, decision, digest)
             end
-            manifest = build_artifact_manifest(wire_request, result)
-            retain_manifest_artifacts(wire_request) if @artifact_store
+            # T2.3: the manifest and its retention are for PRODUCED episodes
+            # only — a FAILED/BUDGET_EXHAUSTED episode has no accepted
+            # Decision to reproduce, and its inputs are not retained.
+            manifest = nil
+            if status == :TERMINAL_STATUS_PRODUCED
+              manifest = build_artifact_manifest(envelope, wire_request, result)
+              retain_manifest_artifacts(wire_request) if @artifact_store
+            end
             stream.terminal(
               status, reason_code: reason, usage: adapter.wire_usage,
               artifact_manifest: manifest
@@ -286,10 +292,18 @@ module Tamoz
             stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: error.class::CATEGORY)
           rescue StandardError => error
             # ANY other failure terminates the stream typed — the "exactly one
-            # terminal" contract holds even when the builder misbehaves.
+            # terminal" contract holds even when the builder misbehaves. A
+            # Tamoz::Error carries its typed category (the non-interactive
+            # interrupt is interrupt_in_non_interactive_episode, never a bare
+            # internal_error); everything else stays class-named.
+            code = if error.class.const_defined?(:CATEGORY)
+                     error.class::CATEGORY
+                   else
+                     "internal_error"
+                   end
             stream ||= EpisodeStream.new(identity_for(wire_request))
-            stream.diagnostic(code: "internal_error", message: error.class.name)
-            stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: "internal_error")
+            stream.diagnostic(code:, message: error.class.name)
+            stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
           ensure
             watcher&.kill
           end
@@ -382,13 +396,14 @@ module Tamoz
       # a shadow run needs to compare (PROTOCOL §2). The digests are the
       # STREAM's own (the sha256 values the wire carried), never locally
       # re-derived; the contract version and the memory records the episode
-      # grounded on complete the manifest.
-      def build_artifact_manifest(wire_request, result)
+      # grounded on complete the manifest. The checkpoint lookup uses the
+      # envelope's own thread/namespace, matching emit_decision.
+      def build_artifact_manifest(envelope, wire_request, result)
         memory_digests = []
         if result&.checkpoint_id
           checkpoint = @durable_runner.compiled.checkpointer.find(
-            thread_id: "episode.#{wire_request.episode_id}",
-            namespace: [wire_request.tenant_id],
+            thread_id: envelope.thread_id,
+            namespace: envelope.namespace,
             checkpoint_id: result.checkpoint_id
           )
           memory_digests = Array(checkpoint&.state&.to_h&.fetch(:memory_record_digests, []))
@@ -405,11 +420,13 @@ module Tamoz
 
       # T2.3: retains the documents the manifest names, keyed on the STREAM's
       # digests, so a shadow run can resolve them without re-running Tamoz.
+      # Each document is keyed under ITS OWN named digest — the objective
+      # under objective_sha256, never under the prompt's digest.
       def retain_manifest_artifacts(wire_request)
         {
           wire_request.tool_catalog_sha256.to_s => wire_request.tool_catalog_json,
           wire_request.decision_schema_sha256.to_s => wire_request.decision_schema_json,
-          wire_request.prompt_sha256.to_s => wire_request.objective
+          wire_request.objective_sha256.to_s => wire_request.objective
         }.each do |digest, bytes|
           next if digest.empty? || bytes.to_s.empty?
 
@@ -455,7 +472,9 @@ module Tamoz
             situation_id: snapshot.fetch("situation_id"),
             situation_version: snapshot.fetch("situation_version"),
             entity_id: snapshot.fetch("entity").fetch("id"),
-            max_rows: wire_request.budget&.max_tool_result_bytes,
+            # The wire budget has no row cap — max_rows stays unset (a byte
+            # budget must never masquerade as a row count).
+            max_rows: nil,
             max_bytes: wire_request.budget&.max_tool_result_bytes,
             time_from: wire_request.evidence_time_range&.from&.seconds,
             time_until: wire_request.evidence_time_range&.until&.seconds

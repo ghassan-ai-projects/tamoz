@@ -82,13 +82,14 @@ class StreamArtifactManifestTest < Minitest::Test
     )
 
     tool_catalog = JSON.generate({"tools" => ["evidence.get"]})
-    tool_digest = "sha256:#{"t" * 64}"
+    tool_digest = "sha256:#{"a" * 64}"
     schema = JSON.generate({"$schema" => "x"})
-    schema_digest = "sha256:#{"s" * 64}"
+    schema_digest = "sha256:#{"b" * 64}"
+    objective_digest = "sha256:#{"c" * 64}"
     wire = wire_request(
       tool_catalog_json: tool_catalog, tool_catalog_sha256: tool_digest,
       decision_schema_json: schema, decision_schema_sha256: schema_digest,
-      prompt_sha256: "sha256:#{"p" * 64}", objective: "diagnose the compressor"
+      objective_sha256: objective_digest, objective: "diagnose the compressor"
     )
 
     events = runner.run(wire).each.to_a
@@ -100,11 +101,12 @@ class StreamArtifactManifestTest < Minitest::Test
     assert_equal "sha256:#{"m" * 64}", manifest.memory_record_sha256.fetch(0),
                  "the manifest names the memory records the episode grounded on"
 
-    # The named documents are retained, resolvable by the STREAM's digests.
+    # The named documents are retained, resolvable by the STREAM's digests —
+    # each under ITS OWN digest (the objective under objective_sha256).
     retained = store.resolve(tool_digest)
     assert_equal tool_catalog, retained.fetch("bytes")
     assert_equal schema, store.resolve(schema_digest).fetch("bytes")
-    assert_equal "diagnose the compressor", store.resolve("sha256:#{"p" * 64}").fetch("bytes")
+    assert_equal "diagnose the compressor", store.resolve(objective_digest).fetch("bytes")
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -130,8 +132,26 @@ class StreamArtifactManifestTest < Minitest::Test
   def test_retention_is_idempotent_per_digest
     store = Tamoz::Stream::ArtifactStore.new
     store.retain(digest: "sha256:#{"1" * 64}", bytes: "a")
-    store.retain(digest: "sha256:#{"1" * 64}", bytes: "b")
+    store.retain(digest: "sha256:#{"1" * 64}", bytes: "a")
     assert_equal 1, store.size
     assert_equal "a", store.resolve("sha256:#{"1" * 64}").fetch("bytes")
+  end
+
+  def test_a_digest_collision_with_different_bytes_is_refused
+    store = Tamoz::Stream::ArtifactStore.new
+    store.retain(digest: "sha256:#{"1" * 64}", bytes: "a")
+    assert_raises(Tamoz::Stream::ArtifactStore::ArtifactStoreError) do
+      store.retain(digest: "sha256:#{"1" * 64}", bytes: "b")
+    end
+  end
+
+  def test_retention_requires_a_sha256_digest_and_a_string_document
+    store = Tamoz::Stream::ArtifactStore.new
+    assert_raises(Tamoz::Stream::ArtifactStore::ArtifactStoreError) do
+      store.retain(digest: "not-a-digest", bytes: "a")
+    end
+    assert_raises(Tamoz::Stream::ArtifactStore::ArtifactStoreError) do
+      store.retain(digest: "sha256:#{"1" * 64}", bytes: {"a" => 1})
+    end
   end
 end

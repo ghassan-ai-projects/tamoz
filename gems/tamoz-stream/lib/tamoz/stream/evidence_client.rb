@@ -258,12 +258,16 @@ module Tamoz
 
       # The context deadline is on the monotonic clock; the evidence RPC needs
       # an absolute Time (for the wire field) and seconds-from-now (for the
-      # gRPC option). Time.now + remaining is both.
+      # gRPC option). Time.now + remaining is both. A deadline already past is
+      # a typed refusal — the call never leaves, and the episode fails with
+      # the typed category, not a mislabeled internal error.
       def absolute_deadline(monotonic_deadline)
         return nil unless monotonic_deadline.is_a?(Numeric)
 
         remaining = monotonic_deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-        return nil if remaining <= 0
+        if remaining <= 0
+          raise EvidenceClient::EvidenceError, "evidence call deadline exceeded"
+        end
 
         Time.now + remaining
       end

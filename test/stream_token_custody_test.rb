@@ -100,11 +100,13 @@ class StreamTokenCustodyTest < Minitest::Test
 
   # The audit's §4.5 closing question: the worker holds no signing secret.
   # The episode path carries the token verbatim to EvidenceTools but defines
-  # no key material and computes no signature anywhere on the worker.
+  # no key material and computes no signature anywhere on the worker. The
+  # whole stream gem is scanned (minus the vendored generated stubs), so a
+  # new file cannot silently bypass the check.
   def test_the_episode_path_holds_no_signing_secret
     episode_files = ROOT.glob(
-      "gems/tamoz-stream/lib/tamoz/stream/{episode_*,evidence_*,situation_*,capability_host,reconsideration,approval_relay,outcome_subscriber,verification_store,artifact_store}*.rb"
-    )
+      "gems/tamoz-stream/lib/tamoz/stream/*.rb"
+    ).reject { |path| path.to_s.include?("/gen/") }
     refute_empty episode_files
     episode_files.each do |path|
       content = File.read(path)
@@ -113,5 +115,40 @@ class StreamTokenCustodyTest < Minitest::Test
       refute_includes content, "HMAC",
                       "#{path} must not compute an HMAC (no worker-side mint)"
     end
+  end
+
+  # The token never lands in the DURABLE checkpoint state of a full run —
+  # the state that survives crashes and redeliveries.
+  def test_the_token_never_enters_the_durable_checkpoint_state
+    directory = Dir.mktmpdir("tamoz-custody")
+    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+    app = Tamoz.graph(name: "episode-custody", version: "1") do
+      state :episode, default: {}
+      state :snapshot, default: {}
+      state :primary_hypothesis, default: nil
+      state :confidence, default: nil
+      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
+        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
+        context.emit(:model_completed,
+                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
+        {primary_hypothesis: "x", confidence: 0.9}
+      end
+      edge Tamoz::START, :analyze
+      edge :analyze, Tamoz::END
+    end.compile(checkpointer: adapter)
+    runner = Tamoz::Stream::EpisodeRunner.new(
+      durable_runner: app.durable_runner, worker: nil
+    )
+
+    runner.run(wire_request).each.to_a
+    checkpoint = app.durable_runner.compiled.checkpointer.latest(
+      thread_id: "episode.ep-custody", namespace: ["acme"]
+    )
+    refute_includes JSON.generate(checkpoint.state.to_h), TOKEN,
+                    "the durable checkpoint must not carry the capability token"
+    refute_includes JSON.generate(checkpoint.state.to_h), "capability_token"
+  ensure
+    adapter&.close
+    FileUtils.remove_entry(directory) if directory
   end
 end
