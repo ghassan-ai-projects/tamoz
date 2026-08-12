@@ -75,11 +75,12 @@ class SQLiteCommsStoreTest < Minitest::Test
     ).wire
   end
 
-  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'tg.ops.abc')
+  def prompt_wire(reference:, status: 'inactive', expires_at: now + 900, thread: 'tg.ops.abc',
+                  required_evidence: 'filesystem_operator')
     {
       'reference_digest' => reference, 'surface_id' => 'telegram-ops',
       'surface_revision' => 1, 'thread_id' => thread, 'occurrence_id' => 'req-1',
-      'interrupt_digest' => 'c' * 64, 'required_evidence' => 'filesystem_operator',
+      'interrupt_digest' => 'c' * 64, 'required_evidence' => required_evidence,
       'correspondent_id' => 'telegram:user:11111111',
       'conversation_id' => 'telegram:chat:22222222', 'prompt_receipt' => 'msg-1',
       'status' => status, 'created_at' => now.iso8601(6),
@@ -101,29 +102,18 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
-  # MIG-9 (ADR-049 INV-D/E): a pre-migration in-flight prompt carries NULL
-  # required_evidence; the store normalizes it to filesystem_operator — the
-  # safe default — so a legacy prompt is never under-gated.
-  def test_a_pre_migration_prompt_row_normalizes_null_required_evidence_to_filesystem_operator
+  # MIG-9 (ADR-049 INV-C): the prompt pins its required_evidence and the
+  # column round-trips through the store — a prompt always carries the
+  # requirement it was built with.
+  def test_a_prompt_round_trips_its_required_evidence_through_the_store
     with_engine do |store, adapter, _checkpoints, _path|
-      binds = prompt_binds(prompt_wire(reference: 'a' * 64))
-      binds[6] = nil # required_evidence: the pre-migration value
-      adapter.__send__(:transaction, operation: 'test.prompt.null_insert') do |tx|
-        tx.execute('test.prompt.null_insert', <<~SQL, binds)
-          INSERT INTO tamoz_comms_approval_prompts (
-            reference_digest, surface_id, surface_revision, thread_id,
-            occurrence_id, interrupt_digest, required_evidence,
-            correspondent_id, conversation_id, prompt_receipt, status,
-            created_at_ms, activated_at_ms, consumed_at_ms, expires_at_ms
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        SQL
-      end
+      store.insert_prompt(prompt_wire(reference: 'a' * 64, required_evidence: 'chat_bound'))
 
       row = store.prompt(reference_digest: 'a' * 64)
 
-      refute_nil row, 'the pre-migration prompt row must still be readable'
-      assert_equal 'filesystem_operator', row.fetch('required_evidence'),
-                   'NULL required_evidence reads as filesystem_operator (never under-gated)'
+      refute_nil row, 'the prompt row must be readable'
+      assert_equal 'chat_bound', row.fetch('required_evidence')
+      refute_nil adapter
     end
   end
 
@@ -339,10 +329,10 @@ class SQLiteCommsStoreTest < Minitest::Test
       insert_prompt!(store, reference: 'd' * 64, status: 'active')
       insert_prompt!(store, reference: 'e' * 64, expires_at: now - 1)
 
-      assert_equal :activated, store.activate_prompt(reference_digest: 'c' * 64, now: now + 1)
-      assert_equal :already_active, store.activate_prompt(reference_digest: 'd' * 64, now: now + 1)
-      assert_equal :expired, store.activate_prompt(reference_digest: 'e' * 64, now: now + 1)
-      assert_equal :missing, store.activate_prompt(reference_digest: 'f' * 64, now: now + 1)
+      assert_equal :activated, store.activate_prompt(reference_digest: 'c' * 64, now: now + 1, receipt: '2001')
+      assert_equal :already_active, store.activate_prompt(reference_digest: 'd' * 64, now: now + 1, receipt: '2002')
+      assert_equal :expired, store.activate_prompt(reference_digest: 'e' * 64, now: now + 1, receipt: '2003')
+      assert_equal :missing, store.activate_prompt(reference_digest: 'f' * 64, now: now + 1, receipt: '2004')
     end
   end
 

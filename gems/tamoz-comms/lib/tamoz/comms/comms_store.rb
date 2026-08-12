@@ -121,7 +121,7 @@ module Tamoz
 
       # Activate one approval prompt after its send receipt is durable.
       # @return [:activated, :already_active, :missing, :expired]
-      def activate_prompt(reference_digest:, now:)
+      def activate_prompt(reference_digest:, now:, receipt:)
         raise NotImplementedError
       end
 

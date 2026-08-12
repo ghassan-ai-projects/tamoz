@@ -21,13 +21,10 @@ module Tamoz
       # channel-store tables. Ordinals are consumed monotonically and never
       # reused; the monotonic-ordering test pins the exact ordinal list.
       # ADR-049 (PLAN_ADR049 Phase 2): 8 -> 9 through MIGRATION_9, which pins
-      # the prompt's required_evidence (INV-C); pre-migration in-flight
-      # prompts read NULL and normalize to filesystem_operator at the store
-      # boundary — never under-gated.
+      # the prompt's required_evidence (INV-C).
       # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 through MIGRATION_10, which
       # records the decision audit trail — the evidence level that made an
-      # approve legal and why (contract §7.1); old rows read NULL evidence,
-      # which is missing evidence, never a grant.
+      # approve legal and why (contract §7.1).
       CURRENT_VERSION = 10
 
       MIGRATION_1 = [
@@ -828,9 +825,9 @@ module Tamoz
       ).freeze
 
       # ADR-049 (PLAN_ADR049 Phase 2): the approval prompt pins the evidence
-      # an approver must present (INV-C). Existing rows are NULL — normalized
-      # to filesystem_operator by the store, the safe default, so an
-      # in-flight pre-migration prompt can never be under-gated.
+      # an approver must present (INV-C). The column is nullable only because
+      # SQLite cannot ALTER-ADD a NOT NULL column; every prompt row written
+      # carries the pinned value.
       MIGRATION_9 = [
         <<~SQL.freeze
           ALTER TABLE tamoz_comms_approval_prompts ADD COLUMN required_evidence TEXT
@@ -842,8 +839,7 @@ module Tamoz
       ).freeze
 
       # ADR-049 (PLAN_ADR049 Phase 4): the decision audit records the evidence
-      # level that made an approve legal and why (contract §7.1). Old rows are
-      # NULL: missing evidence, which never approves (INV-E).
+      # level that made an approve legal and why (contract §7.1).
       MIGRATION_10 = [
         <<~SQL.freeze,
           ALTER TABLE tamoz_comms_decisions ADD COLUMN evidence TEXT

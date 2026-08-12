@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-12T12:37:41Z",
+  "generated_at": "2026-08-12T14:26:54Z",
   "manifest_requirements": 435,
   "named_cases_run": 268,
   "counts": {
@@ -6586,7 +6586,7 @@
       "title": "MIGRATION_9",
       "release_blocking": true,
       "status": "pass",
-      "named_test": "test/sqlite_comms_store_test.rb#test_a_pre_migration_prompt_row_normalizes_null_required_evidence_to_filesystem_operator",
+      "named_test": "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

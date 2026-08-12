@@ -801,7 +801,7 @@ EVIDENCE = {
   "MIG-6" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-7" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-8" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
-  "MIG-9" => {test: "test/sqlite_comms_store_test.rb#test_a_pre_migration_prompt_row_normalizes_null_required_evidence_to_filesystem_operator"},
+  "MIG-9" => {test: "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store"},
   "MIG-10" => {test: "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store"},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----

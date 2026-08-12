@@ -243,8 +243,8 @@ module Tamoz
 
       # Contract §7.1 exact binding: the callback's surface id+revision,
       # correspondent, conversation and originating message receipt must match
-      # the prompt row. A prompt without a surface binding or a receipt
-      # (pre-Phase-3 row) fails closed.
+      # the prompt row. Every prompt row carries them, so a mismatch is a
+      # press outside the bound context, never resolvable.
       def prompt_binding_matches?(prompt, envelope)
         prompt.fetch('surface_id') == envelope.fetch('surface_id') &&
           prompt.fetch('surface_revision') == envelope.fetch('surface_revision') &&

@@ -377,8 +377,9 @@ module Tamoz
       # Activate one approval prompt only after its send receipt is durable,
       # pinning the originating message receipt (contract §7.1) so the
       # callback comparison can bind the press to the exact message the
-      # buttons were attached to.
-      def activate_prompt(reference_digest:, now:, receipt: nil)
+      # buttons were attached to. A prompt without a receipt is never
+      # activatable.
+      def activate_prompt(reference_digest:, now:, receipt:)
         transaction('comms.prompt.activate') do |txn|
           row = txn.first('comms.prompt.activate.state', <<~SQL, [reference_digest])
             SELECT status, expires_at_ms FROM tamoz_comms_approval_prompts
@@ -427,18 +428,8 @@ module Tamoz
             SELECT #{PROMPT_COLUMNS.join(', ')} FROM tamoz_comms_approval_prompts
             WHERE reference_digest = ?
           SQL
-          row && normalize_prompt_row(PROMPT_COLUMNS.zip(row).to_h)
+          row && PROMPT_COLUMNS.zip(row).to_h
         end
-      end
-
-      # A pre-migration in-flight prompt carries NULL required_evidence
-      # (MIGRATION_9): it reads as filesystem_operator — the safe default —
-      # so a legacy prompt is never under-gated (INV-E/INV-D).
-      # :reek:UtilityFunction -- a pure row-shape normalization; it belongs
-      #   next to the read that owns the NULL default, not in the rows module.
-      def normalize_prompt_row(row)
-        row['required_evidence'] = 'filesystem_operator' if row['required_evidence'].nil?
-        row
       end
 
       # ===== operator surface (COMMS_DESIGN §14) =====
