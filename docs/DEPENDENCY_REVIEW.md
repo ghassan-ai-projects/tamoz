@@ -17,9 +17,9 @@ until this file is regenerated.
 | `faraday-multipart` | 1.2.0 | MIT | transitive |  | https://github.com/lostisland/faraday-multipart |
 | `faraday-net_http` | 3.4.4 | MIT | transitive |  | https://github.com/lostisland/faraday-net_http |
 | `faraday-retry` | 2.4.0 | MIT | transitive |  | https://github.com/lostisland/faraday-retry |
-| `google-protobuf` | 4.35.1 | BSD-3-Clause | yes | tamoz-stream >= 4.35 | https://developers.google.com/protocol-buffers |
+| `google-protobuf` | 4.35.1 | BSD-3-Clause | yes | tamoz-stream ~> 4.35 | https://developers.google.com/protocol-buffers |
 | `googleapis-common-protos-types` | 1.23.0 | Apache-2.0 | transitive |  | https://github.com/googleapis/common-protos-ruby |
-| `grpc` | 1.83.0 | Apache-2.0 | yes | tamoz-stream >= 1.83 | https://github.com/google/grpc/tree/master/src/ruby |
+| `grpc` | 1.83.0 | Apache-2.0 | yes | tamoz-stream ~> 1.83 | https://github.com/google/grpc/tree/master/src/ruby |
 | `hana` | 1.3.7 | MIT | transitive |  | http://github.com/tenderlove/hana |
 | `json` | 2.21.2 | Ruby | transitive |  | https://github.com/ruby/json |
 | `json_schemer` | 2.5.0 | MIT | transitive |  | https://github.com/davishmcclurg/json_schemer |

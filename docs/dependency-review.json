@@ -11,7 +11,7 @@
     "MIT/Apache-2.0"
   ],
   "runtime_exceptions": {
-    "rake": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it — build tooling only"
+    "rake": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it - build tooling only"
   },
   "runtime": [
     {
@@ -101,7 +101,7 @@
       ],
       "homepage": "https://developers.google.com/protocol-buffers",
       "required_by": [
-        "tamoz-stream >= 4.35"
+        "tamoz-stream ~> 4.35"
       ],
       "direct": true,
       "exception": null
@@ -125,7 +125,7 @@
       ],
       "homepage": "https://github.com/google/grpc/tree/master/src/ruby",
       "required_by": [
-        "tamoz-stream >= 1.83"
+        "tamoz-stream ~> 1.83"
       ],
       "direct": true,
       "exception": null
@@ -243,7 +243,7 @@
       "homepage": "https://github.com/ruby/rake",
       "required_by": [],
       "direct": false,
-      "exception": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it — build tooling only"
+      "exception": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it - build tooling only"
     },
     {
       "name": "regexp_parser",

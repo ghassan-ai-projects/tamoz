@@ -43,7 +43,7 @@ PERMISSIVE = [
 # a new un-excepted dev-tool leak still fails.
 RUNTIME_EXCEPTIONS = {
   "rake" => "google-protobuf's own gemspec declares rake as a runtime " \
-            "dependency (upstream quirk); Tamoz runtime code never invokes it — " \
+            "dependency (upstream quirk); Tamoz runtime code never invokes it - " \
             "build tooling only"
 }.freeze
 
