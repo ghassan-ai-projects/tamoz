@@ -38,6 +38,10 @@ module Tamoz
 
       attr_reader :lane_config
 
+      def worker_name = WORKER_NAME
+
+      def worker_version = @worker_version
+
       # The runtime's WorkerExecutor calls Handshake with the worker's declared
       # protocol/contract versions and identity; the worker refuses a contract
       # major mismatch or an unsupported required feature, and reports its OWN

@@ -166,4 +166,74 @@ class StreamEpisodeStreamTest < Minitest::Test
     assert stream.terminal_emitted?
     assert_raises(Tamoz::Stream::StreamError) { adapter.terminal(nil) }
   end
+
+  # T2.2 blocker regression: the cancellation watcher cancels the run's token
+  # with the token's actual API (cancel!, positional reason).
+  def test_the_cancellation_watcher_cancels_the_run_token
+    flag = false
+    call = Object.new
+    call.define_singleton_method(:cancelled?) { flag }
+    envelope = Stream::EpisodeRequestEnvelope.new(wire_request, worker)
+    context = Tamoz::Context.new(
+      run_id: envelope.request_id,
+      execution_id: "episode.ep-1.at-1.1",
+      request_id: envelope.request_id
+    )
+    runner = Stream::EpisodeRunner.new(durable_runner: nil, worker:)
+    watcher = runner.send(:watch_cancellation, call, context)
+    sleep 0.15
+    assert_equal false, context.cancellation.cancelled?,
+                 "no cancellation before the call is cancelled"
+    flag = true
+    sleep 0.2
+    assert context.cancellation.cancelled?,
+           "the watcher must cancel the run token when the RPC is cancelled"
+    assert_equal "rpc cancelled", context.cancellation.reason
+    watcher.kill
+  end
+
+  # T2.1 blocker regression: RubyLLMModel#generate surfaces usage through the
+  # emitter (data must land in the third positional slot, and the usage must
+  # cross to the wire).
+  def test_the_model_client_surfaces_usage_through_the_emitter
+    response = Object.new
+    response.define_singleton_method(:content) { "analysis" }
+    response.define_singleton_method(:usage) do
+      usage = Object.new
+      usage.define_singleton_method(:input_tokens) { 12 }
+      usage.define_singleton_method(:output_tokens) { 4 }
+      usage.define_singleton_method(:cached_input_tokens) { 0 }
+      usage.define_singleton_method(:reasoning_tokens) { 0 }
+      usage.define_singleton_method(:cost) { 0.00003 }
+      usage
+    end
+    chat = Object.new
+    chat.define_singleton_method(:with_instructions) { |_| chat }
+    chat.define_singleton_method(:ask) { |_| response }
+    model_context = Object.new
+    model_context.define_singleton_method(:chat) { |**_kwargs| chat }
+    context_factory = Object.new
+    context_factory.define_singleton_method(:call) { |&_block| model_context }
+
+    model = Tamoz::Agent::RubyLLMModel.new(
+      model: "flash", provider: "ollama", context_factory:
+    )
+    stream = Stream::EpisodeStream.new(
+      Stream::EpisodeRequestEnvelope.new(wire_request, worker)
+    )
+    adapter = Stream::EpisodeStreamAdapter.new(stream)
+    content = model.generate(
+      stage: "episode", system: "s", prompt: "p", emitter: adapter
+    )
+
+    assert_equal "analysis", content
+    completed = stream.events.find { |event| event.model_completed != nil }
+    refute_nil completed, "a model_completed event must cross from the model client"
+    assert_equal 12, completed.model_completed.usage.input_tokens
+    assert_equal 4, completed.model_completed.usage.output_tokens
+    assert_equal 30, completed.model_completed.usage.cost_microunits
+    started = stream.events.find { |event| event.model_started != nil }
+    refute_nil started
+    assert_equal "flash", started.model_started.model_id
+  end
 end

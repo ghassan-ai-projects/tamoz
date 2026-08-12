@@ -80,7 +80,9 @@ module Tamoz
       private
 
       def emit_model_event(emitter, type, data)
-        emitter.emit(type, data, run_id: nil, task_id: nil)
+        # Emitter contract: emit(type, namespace, data, run_id:, task_id:).
+        # The namespace is nil here — the model event has no graph namespace.
+        emitter.emit(type, nil, data, run_id: nil, task_id: nil)
       end
 
       # Raw usage extraction: the episode stream adapter maps this hash to the

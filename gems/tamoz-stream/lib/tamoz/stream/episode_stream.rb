@@ -275,6 +275,7 @@ module Tamoz
       def wire_usage
         Agenticstream::Runtime::V1::Usage.new(**@usage)
       end
+      public :wire_usage
     end
   end
 end

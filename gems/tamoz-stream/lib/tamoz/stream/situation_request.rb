@@ -119,6 +119,16 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "episode identity is incomplete (episode_id and attempt_id required)"
         end
+        # The ids are joined with "." into the durable request id; a dot in
+        # either id would alias different (episode, attempt) pairs. The fence
+        # guarantee depends on an unambiguous join.
+        if @wire.episode_id.include?(".") || @wire.attempt_id.include?(".")
+          raise EpisodeRequestInvalidError,
+                "episode_id and attempt_id must not contain '.'"
+        end
+        if @wire.tenant_id.empty?
+          raise EpisodeRequestInvalidError, "tenant_id is required"
+        end
         unless @wire.fence.is_a?(Integer) && @wire.fence >= 1
           raise EpisodeRequestInvalidError,
                 "episode fence must be a positive integer"
@@ -157,12 +167,17 @@ module Tamoz
       def run(wire_request, call = nil)
         Enumerator.new do |yielder|
           envelope = nil
+          stream = nil
+          adapter = nil
+          watcher = nil
           begin
             envelope = EpisodeRequestEnvelope.new(wire_request, @worker)
             snapshot = ReceivedSnapshot.verify(
               wire_request.snapshot_json, wire_request.snapshot_sha256
             )
-            stream = EpisodeStream.new(envelope)
+            stream = EpisodeStream.new(
+              envelope, worker_name: @worker&.worker_name, worker_version: @worker&.worker_version
+            )
             adapter = EpisodeStreamAdapter.new(stream, budget: wire_request.budget)
             stream.started
             context = Tamoz::Context.new(
@@ -182,16 +197,25 @@ module Tamoz
               namespace: envelope.namespace,
               context:
             )
-            watcher&.kill
-            emit_decision(stream, envelope, snapshot, wire_request, result)
-            adapter.terminal(result)
+            status, reason = adapter.terminal_status(result)
+            if status == :TERMINAL_STATUS_PRODUCED
+              emit_decision(stream, envelope, snapshot, wire_request, result)
+            end
+            stream.terminal(status, reason_code: reason, usage: adapter.wire_usage)
           rescue Tamoz::Stream::StreamError => error
             # A refused episode still terminates the wire stream with a typed
             # FAILED terminal — never a bare RPC error, and never a model call.
             stream ||= EpisodeStream.new(identity_for(wire_request))
-            adapter ||= EpisodeStreamAdapter.new(stream)
             stream.diagnostic(code: error.class::CATEGORY, message: error.message)
             stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: error.class::CATEGORY)
+          rescue StandardError => error
+            # ANY other failure terminates the stream typed — the "exactly one
+            # terminal" contract holds even when the builder misbehaves.
+            stream ||= EpisodeStream.new(identity_for(wire_request))
+            stream.diagnostic(code: "internal_error", message: error.class.name)
+            stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: "internal_error")
+          ensure
+            watcher&.kill
           end
           stream.events.each { |event| yielder << event }
         end
@@ -209,12 +233,16 @@ module Tamoz
 
       # T2.4: a completed episode proposes a typed Decision (built from the
       # graph's terminal state) BEFORE the PRODUCED terminal — the stream
-      # refuses a produced episode without one.
+      # refuses a produced episode without one. The checkpoint is the request's
+      # OWN terminal checkpoint (never the thread's `latest`, which a
+      # concurrent fence+1 redispatch could have moved past).
       def emit_decision(stream, envelope, snapshot, wire_request, result)
-        return unless result.status == :completed
+        return unless result.checkpoint_id
 
-        checkpoint = @durable_runner.compiled.checkpointer.latest(
-          thread_id: envelope.thread_id, namespace: envelope.namespace
+        checkpoint = @durable_runner.compiled.checkpointer.find(
+          thread_id: envelope.thread_id,
+          namespace: envelope.namespace,
+          checkpoint_id: result.checkpoint_id
         )
         outcome = checkpoint.state.to_h
         decision, digest = DecisionBuilder.build(
@@ -235,11 +263,12 @@ module Tamoz
         return nil unless call&.respond_to?(:cancelled?)
 
         Thread.new do
-          until call.cancelled?
+          loop do
+            break if call.cancelled? || context.cancellation.cancelled?
+
             sleep 0.1
-            break if context.cancellation.cancelled?
           end
-          context.cancellation.cancel(reason: "rpc cancelled") unless
+          context.cancellation.cancel!("rpc cancelled") unless
             context.cancellation.cancelled?
         end
       end
