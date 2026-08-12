@@ -152,14 +152,6 @@ class CommsDenyCallbackTest < Minitest::Test
     end
   end
 
-  # NOTE: the former `test_an_approve_press_records_an_approve_decision` pinned
-  # the shipped approve-everything behavior — a chat_bound Telegram approve
-  # releasing any action. ADR-049 identifies that as the defect: approval is
-  # evidence-gated, and under v1 policy every effect requires filesystem_operator,
-  # so a Telegram approve must be refused. The target contract now lives in
-  # `comms_evidence_gated_approval_test.rb` (bar C1-C3). This test was removed
-  # rather than inverted so no green test asserts the defect.
-
   private
 
   def prompt_for(_reference, digest)

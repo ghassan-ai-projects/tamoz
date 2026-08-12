@@ -91,7 +91,7 @@ Each row names the proof that satisfies it.
 
 | # | Criterion | Proof |
 |---|---|---|
-| C1 | **Approval is evidence-gated (INV-A/B).** Denial is unconditional for the bound correspondent; approval requires `approver_evidence >= required_evidence`; deny and approve never share an unguarded path | A `chat_bound` approve at a `filesystem_operator` action is refused and records a durable refusal; the equivalent deny succeeds. Under v1 policy every effect requires `filesystem_operator`, so Telegram is deny-only in practice — the shipped approve-everything path fails this row |
+| C1 | **Approval is evidence-gated (INV-A/B).** Denial is unconditional for the bound correspondent; approval requires `approver_evidence >= required_evidence`; deny and approve never share an unguarded path | A `chat_bound` approve at a `filesystem_operator` action is refused and records a durable refusal; the equivalent deny succeeds. Under v1 policy every effect requires `filesystem_operator`, so Telegram is deny-only in practice — **met** (`comms_evidence_gated_approval_test.rb`, bar §7.2) |
 | C2 | **`required_evidence` is trusted and pinned (INV-C).** It is a deterministic function of the pinned interrupt/effect digest, computed by trusted code, never set by the model, and part of the callback comparison | Assert the value is reproducible offline from the digest; assert a plan cannot lower it after the prompt is shown; a model-supplied requirement is ignored |
 | C3 | **Absent or ambiguous evidence never approves (INV-E).** Missing, expired, or `UNKNOWN` approver evidence resolves as withheld | Feed each case; assert no approve decision is created and the prompt stays gated |
 | C4 | **Every callback is bound to the exact prompt context** — status, unexpired time, reference digest, surface id+revision, correspondent, chat, message, thread, occurrence, interrupt digest, `required_evidence`, action | Cross-user, cross-chat, cross-surface, expired, and replayed presses each record a durable refusal and create no decision |
@@ -162,11 +162,12 @@ Grounded in the current branch, not aspiration.
 
 ### 7.2 What is missing or contradicted
 
-- **C1 fails today.** The merged approve path is approve-*everything*: `resolve_callback`
-  records an `approve` decision with no `required_evidence` check, so a `chat_bound`
-  identity can release a `filesystem_operator` action — the fail-dangerous symmetry C1
-  forbids. No ADR ratifies it (contract §2). This is the blocking gate; nothing else in
-  section C grades green while it is open. The fix is exit 2 in §8, not a level.
+- **C1 met (ADR-049, exit 2).** The merged approve-everything path is replaced:
+  `resolve_callback` refuses a `chat_bound` approve at a `filesystem_operator` action with
+  a durable refusal and no decision, and the equivalent deny succeeds
+  (`test/comms_evidence_gated_approval_test.rb`, bar C1–C4). The Deny-only keyboard
+  renders under the v1 policy. C1 is evidence-gated by the pinned `required_evidence`,
+  not by a transport special-case.
 - **A1/A2 fail today.** The first message still says "Accepted," which collapses the two
   axes and reads as success.
 - **A5 partial.** There is next-action text but no closed, versioned reason-code registry;
@@ -182,15 +183,15 @@ Grounded in the current branch, not aspiration.
 
 The channel is at **T0** with real T1/T3 substrate already in place. The cheapest path to
 T1 is the state vocabulary and receipt wording (contract §11: change the contract and
-vocabulary before wording or retries). **C1 is not a level; it is a gate — the bar cannot
-reach a passing grade at any level while merged behavior contradicts the contract.**
+vocabulary before wording or retries). **C1 is not a level; it is a gate — and it now
+grades green (ADR-049, exit 2).** The remaining section-C rows grade the delivery and
+resolution machinery, not the approval authority.
 
 ## 8. How the design will be graded
 
-1. Close the §2 reconciliation — either revert the approve path, or (recommended) replace
-   approve-everything with evidence-gated approval whose v1 policy requires
-   `filesystem_operator` for every effect (contract §7.1). Either restores deny-only
-   behavior; the second keeps the door ratifiable. Until one lands, grade = blocked.
+1. Close the §2 reconciliation — done via exit 2 (ADR-049): evidence-gated approval whose
+   v1 policy requires `filesystem_operator` for every effect (contract §7.1). Deny-only
+   behavior is restored; the door stays ratifiable. Grade is no longer blocked on C1.
 2. Grade each criterion A–E strictly by executed proof. A criterion with a partial today
    is not a pass; it is a partial with a named remaining test.
 3. State the level each slice reaches, and do not claim a level whose lower levels have an

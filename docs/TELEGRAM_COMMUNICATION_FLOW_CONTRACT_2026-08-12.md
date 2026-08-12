@@ -4,11 +4,11 @@ Status: design approved as an implementation *target* after four review iteratio
 (three review rounds plus a final three-way pass; see §10). This document is
 deliberately implementation-free.
 
-**Conditional on one blocking reconciliation.** Approval is evidence-gated and deny-only
-in practice under v1 policy (§2, §7.1). The current branch has already merged an
-approve-everything path that no ADR ratifies and that skips the authority check. Until that
-is resolved (§2), the contract is not implementable as written and "approved" means
-"approved pending §2," not "ready to build."
+**§2 reconciliation resolved via exit 2 (ADR-049).** Approval is evidence-gated and
+deny-only in practice under v1 policy (§2, §7.1): `resolve_callback` now refuses a
+`chat_bound` approve with a durable refusal and no decision, and the Deny-only keyboard
+renders under the v1 policy (ADR-049, phases P3/P5). "Approved" here means "implementable
+as written."
 
 Authority this contract inherits and must not silently override: **ADR-041** (comms is a
 contract gem plus per-transport adapters), **ADR-042** (the gateway is the only process
@@ -105,14 +105,17 @@ taken before any implementation slice lands:
    (`request_route`: `direct_response`/`read_only_work` produce no approval interrupt), and
    only `managed_action` reaches an approval gate.
 
-Either exit closes the defect. Exit 2 is recommended because it keeps deny-only behavior
-today while making the eventual policy change small, auditable, and ADR-gated rather than a
-second rewrite. Ratifying any non-`filesystem_operator` requirement still requires the new
-ADR and threat model ADR-043 demands; until such an ADR exists, every effect requires
-operator evidence and Telegram remains deny-only in practice.
+**Resolved 2026-08-12 via exit 2 (ADR-049):** `approve` is routed through an authority
+check whose v1 policy requires `filesystem_operator` evidence for every effect, so Telegram
+is deny-only *by evaluation, not by hardcode* (§7.1). Either exit closes the defect; exit 2
+was taken because it keeps deny-only behavior today while making the eventual policy change
+small, auditable, and ADR-gated rather than a second rewrite. Ratifying any
+non-`filesystem_operator` requirement still requires the new ADR and threat model ADR-043
+demands; until such an ADR exists, every effect requires operator evidence and Telegram
+remains deny-only in practice.
 
-`TELEGRAM_COMMUNICATION_BAR.md` treats this reconciliation as a hard gate: the bar cannot
-pass while merged behavior contradicts the contract (approve-everything fails criterion C1).
+`TELEGRAM_COMMUNICATION_BAR.md` treats this reconciliation as a hard gate; it now grades
+green (criterion C1 is met — bar §7.2).
 
 ## 3. Current user flow
 
@@ -688,12 +691,14 @@ application, and terminal denial. The final three-way pass returned `APPROVED`
 from UX, reliability, and security.
 
 A later grounding pass read the merged branch rather than the design in isolation and
-found one thing the review rounds had not: the deny-only contract now contradicts
-already-merged approve+deny code that no ADR ratifies (§2). That is recorded here as a
-blocking reconciliation, not a re-litigation of the two-axis model, which stands. The pass
-also corrected the §3.3 evidence (failures are already actionable; the gap is the missing
-reason code), the §4.3 receipt state (a receipt is never `Running`), and tied the §6
-taxonomy and §4.1 delivery machine back to existing authority instead of duplicating it.
+found one thing the review rounds had not: the deny-only contract then contradicted
+already-merged approve+deny code that no ADR ratified (§2). That was recorded as a
+blocking reconciliation, not a re-litigation of the two-axis model, which stands; ADR-049
+accepted 2026-08-12 resolves it via exit 2 (evidence-gated approval, deny-only under the
+v1 policy). The pass also corrected the §3.3 evidence (failures are already actionable;
+the gap is the missing reason code), the §4.3 receipt state (a receipt is never
+`Running`), and tied the §6 taxonomy and §4.1 delivery machine back to existing authority
+instead of duplicating it.
 
 ## 11. Design conclusion
 
@@ -709,8 +714,8 @@ state. The first implementation slice should therefore change the communication
 contract and state vocabulary before changing message wording or adding retries.
 
 No code change is authorized by this document. The communication contract is approved as
-the implementation target **conditional on the §2 reconciliation**; implementation
-requires a separate explicit request, must clear the §2 blocker first, and must preserve
-the state machines and oracles in this report. `TELEGRAM_COMMUNICATION_BAR.md` is the
-gradeable instrument the implementation is measured against; a slice is done when the bar
+the implementation target; the §2 reconciliation is resolved (ADR-049, exit 2), and
+implementation slices preserve the state machines and oracles in this report.
+`TELEGRAM_COMMUNICATION_BAR.md` is the gradeable instrument the implementation is measured
+against; a slice is done when the bar
 passes, not when the wording merely reads better.
