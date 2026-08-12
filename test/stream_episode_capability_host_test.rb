@@ -175,9 +175,9 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
         tamoz/(tools|agent|sqlite|mcp|comms|scheduler|telegram|observability|otel|evals)
       }x)
       abort "effectful gem loaded: \#{effectful.join(", ")}" unless effectful.empty?
-      host = Tamoz::Stream::EpisodeCapabilityHost.new(
+      host = Tamoz::Stream::EpisodeCapabilityHost.new({
         #{PERMITTED.map { |id| "\"#{id}\" => ->(_a, _c) { 1 }" }.join(", ")}
-      )
+      })
       puts host.names.join(",")
     RUBY
     env = ENV.each_key.grep(/\A(?:BUNDLE|BUNDLER)/).to_h { |key| [key, nil] }

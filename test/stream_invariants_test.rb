@@ -214,7 +214,7 @@ class StreamInvariantsTest < Minitest::Test
       )
     )
     parsed = Reconsideration.parse(wire)
-    judgements = Reconsideration.judge(parsed:, risk_ceiling: "r4")
+    judgements = Reconsideration.judge(parsed:)
     intents = Reconsideration.build_compensating_intents(
       judgements,
       episode: {

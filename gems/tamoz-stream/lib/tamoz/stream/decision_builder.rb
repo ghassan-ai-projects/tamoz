@@ -90,6 +90,12 @@ module Tamoz
       # output and the worker owns the wire contract. A malformed compensation
       # is a typed failure, never a silent omission that leaves the effect
       # uncompensated behind a PRODUCED terminal.
+      #
+      # Compensations deliberately bypass the allowed_intent_types allowlist
+      # that gates the DIAGNOSE path: the allowlist names the actions a tenant
+      # lets the worker PROPOSE; a compensation is the worker's corrective
+      # answer to an already-executed effect, and the stream validates it under
+      # its own policy pipeline anyway (PROTOCOL §4.2).
       def reconsideration_intents
         compensations = Array(@outcome.fetch(:compensating_intents, []))
         invalid = compensations.reject do |intent|

@@ -223,7 +223,10 @@ module Tamoz
 
     # T3.2: the adapter that binds one allowed tool name to the EvidenceTools
     # client inside the containment host. Arguments are canonicalized before
-    # the call; the parsed result (bounded by the host) is returned.
+    # the call; the parsed result (bounded by the host) is returned. The
+    # episode context's deadline and cancellation are honored: a call cannot
+    # hang past the episode deadline, and a supersession cancel aborts at the
+    # call boundary.
     class EvidenceToolAdapter
       def initialize(client, tool_name:)
         @client = client
@@ -231,8 +234,36 @@ module Tamoz
         freeze
       end
 
-      def call(arguments, _context)
-        @client.call(tool_name: @tool_name, arguments: arguments)
+      def call(arguments, context)
+        check_cancellation!(context[:cancellation])
+        result = @client.call(
+          tool_name: @tool_name,
+          arguments: arguments,
+          deadline: absolute_deadline(context[:deadline])
+        )
+        check_cancellation!(context[:cancellation])
+        result
+      end
+
+      private
+
+      # The context deadline is on the monotonic clock; the evidence RPC needs
+      # an absolute Time (for the wire field) and seconds-from-now (for the
+      # gRPC option). Time.now + remaining is both.
+      def absolute_deadline(monotonic_deadline)
+        return nil unless monotonic_deadline.is_a?(Numeric)
+
+        remaining = monotonic_deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+        return nil if remaining <= 0
+
+        Time.now + remaining
+      end
+
+      def check_cancellation!(cancellation)
+        return unless cancellation
+
+        raise EvidenceClient::EvidenceError, "evidence call cancelled" if
+          cancellation.cancelled?
       end
     end
 

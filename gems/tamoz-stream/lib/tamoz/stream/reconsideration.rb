@@ -58,7 +58,8 @@ module Tamoz
         "transfer" => "cancel_product_transfer"
       }.freeze
       DOWNGRADE_TYPES = {
-        "maintenance" => "downgrade_maintenance_ticket"
+        "maintenance" => "downgrade_maintenance_ticket",
+        "transfer" => "downgrade_product_transfer"
       }.freeze
 
       MAX_COMMANDS = 64
@@ -92,13 +93,22 @@ module Tamoz
       # Rebuilds a Parsed value from the runner-injected payload hash (the
       # durable payload carries the parsed form, never the wire bytes). Key
       # normalization mirrors the memory admission convention: the payload may
-      # arrive symbol- or string-keyed.
+      # arrive symbol- or string-keyed. A missing member is a typed refusal —
+      # the durable payload must never be half-shaped.
       def self.from_hash(hash)
         unless hash.is_a?(Hash)
           raise ReconsiderationError, "reconsideration payload is not an object"
         end
 
         normalized = hash.transform_keys(&:to_s)
+        missing = %w[prior_decision commands outcomes correction].reject do |key|
+          normalized.key?(key)
+        end
+        unless missing.empty?
+          raise ReconsiderationError,
+                "reconsideration payload is missing: #{missing.join(", ")}"
+        end
+
         Parsed.new(
           prior_decision: normalized.fetch("prior_decision"),
           commands: Array(normalized["commands"]),
@@ -111,8 +121,10 @@ module Tamoz
       # is invalidated only when the correction names it (invalidates/refutes/
       # explains references the command id or the intent digest it executed).
       # Invalidated: pending commands are withdrawn, dispatched commands are
-      # downgraded, everything else stands.
-      def self.judge(parsed:, risk_ceiling:)
+      # downgraded, everything else stands. The judgment itself never gates on
+      # the risk ceiling — that is the compensation builder's decision (a
+      # ceiling too low for a compensation leaves the command standing).
+      def self.judge(parsed:)
         invalidated = invalidated_command_ids(parsed)
         parsed.commands.first(MAX_COMMANDS).map do |command|
           unless invalidated.include?(command.fetch("command_id"))
@@ -162,7 +174,7 @@ module Tamoz
             risk_class:,
             decision_id:,
             episode:, snapshot:, now:,
-            compensates: judgement.command_id,
+            compensates: judgement.command_id.to_s.byteslice(0, 256),
             parameters: compensation_parameters(judgement)
           )
         end
@@ -217,7 +229,10 @@ module Tamoz
       def self.family_for(intent_type)
         case intent_type.to_s
         when /^maintenance\./ then "maintenance"
-        when /transfer|shipment|move/ then "transfer"
+        # Word-bounded: "move_asset" or "remove" must not be classified as a
+        # physical transfer — misclassification would escalate the compensation
+        # risk class.
+        when /\b(?:transfer|shipment|move)\b/ then "transfer"
         else "maintenance"
         end
       end

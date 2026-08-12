@@ -150,7 +150,11 @@ module Tamoz
       # or the first entry when the current approver is not in the roster, or
       # nil when the roster is spent (the stream owns the deadline).
       def escalate(roster:, current_approver: nil)
-        entries = roster.map { |entry| entry.transform_keys(&:to_s) }
+        entries = roster.map do |entry|
+          raise ApprovalRelayError, "escalation roster entries must be objects" unless entry.is_a?(Hash)
+
+          entry.transform_keys(&:to_s)
+        end
         index = entries.index { |entry| entry.fetch("approver_id") == current_approver }
         candidate = index ? entries[index + 1] : entries.first
         return nil unless candidate
@@ -185,7 +189,7 @@ module Tamoz
       def require_field!(approval, key)
         value = approval[key]
         if value.nil? || value.to_s.empty? || value.to_s.bytesize > MAX_ID_BYTES
-          raise ApprovalRelayError, "approval #{key} is required and bounded"
+          raise ApprovalRelayError, "#{key} is required and bounded"
         end
 
         value.to_s

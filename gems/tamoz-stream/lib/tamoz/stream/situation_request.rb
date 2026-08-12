@@ -244,6 +244,7 @@ module Tamoz
               request_id: envelope.request_id,
               interrupt_mode: :non_interactive,
               emitter: adapter,
+              deadline: monotonic_deadline(wire_request.deadline),
               episode_tools: build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
@@ -420,13 +421,23 @@ module Tamoz
         value.to_s.empty? ? nil : value.to_s
       end
 
+      # The wire deadline is a wall-clock Timestamp; the Context deadline is on
+      # the monotonic clock. The offset converts once at admission.
+      def monotonic_deadline(wire_timestamp)
+        return nil unless wire_timestamp
+
+        wall = wire_timestamp.seconds + wire_timestamp.nanos.to_f / 1_000_000_000
+        wall - (Time.now.to_f - Process.clock_gettime(Process::CLOCK_MONOTONIC))
+      end
+
       # T3.2: the episode tool surface. The containment host (T4.1) binds the
       # fixed seven-name allowlist; the evidence channel (when the request
       # carries an endpoint and a token) is the reverse-channel client scoped
       # to the VERIFIED snapshot's identity — otherwise the surface is bound
       # to refusal adapters and evidence refuses. The host is read-only and
       # bounded by construction; the graph reaches it only through
-      # context.episode_tools.
+      # context.episode_tools. The host's result cap is the tighter of the
+      # hard ceiling and the wire budget's max_tool_result_bytes.
       def build_capability_host(wire_request, snapshot)
         if wire_request.evidence_tools_endpoint.to_s.empty? ||
            wire_request.capability_token.to_s.empty?
@@ -453,7 +464,18 @@ module Tamoz
             [name, EvidenceToolAdapter.new(client, tool_name: name)]
           end
         end
-        EpisodeCapabilityHost.new(implementations)
+        EpisodeCapabilityHost.new(
+          implementations,
+          max_result_bytes: host_result_cap(wire_request)
+        )
+      end
+
+      def host_result_cap(wire_request)
+        budget = wire_request.budget
+        return EpisodeCapabilityHost::MAX_RESULT_BYTES if budget.nil?
+
+        [EpisodeCapabilityHost::MAX_RESULT_BYTES,
+         budget.max_tool_result_bytes.to_i].reject(&:zero?).min
       end
 
       # T2.2: an RPC-context cancellation (supersession) cancels the run's

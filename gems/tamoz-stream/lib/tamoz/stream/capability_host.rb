@@ -44,11 +44,20 @@ module Tamoz
       MAX_RESULT_BYTES = 4 * 1024 * 1024
       MAX_NAME_BYTES = 256
 
-      def initialize(implementations)
+      # The per-host result cap. The worker composition passes the tighter of
+      # the hard ceiling and the episode's wire budget (max_tool_result_bytes),
+      # so a small budget is enforced HERE, not merely declared — the host
+      # bounds results, not just the client.
+      def initialize(implementations, max_result_bytes: MAX_RESULT_BYTES)
         unless implementations.is_a?(Hash)
           raise Tamoz::ConfigurationError,
                 "episode capability host requires an implementation map"
         end
+        unless max_result_bytes.is_a?(Integer) && max_result_bytes.positive?
+          raise Tamoz::ConfigurationError,
+                "episode capability host result cap must be a positive integer"
+        end
+        @max_result_bytes = max_result_bytes
 
         missing = PERMITTED - implementations.keys
         unless missing.empty?
@@ -154,10 +163,10 @@ module Tamoz
 
       def enforce_result_bounds!(name, result)
         bytes = result.is_a?(String) ? result.bytesize : JSON.generate(result).bytesize
-        return if bytes <= MAX_RESULT_BYTES
+        return if bytes <= @max_result_bytes
 
         raise Tamoz::Core::ToolError,
-              "episode tool #{name} returned #{bytes} bytes; limit is #{MAX_RESULT_BYTES}"
+              "episode tool #{name} returned #{bytes} bytes; limit is #{@max_result_bytes}"
       rescue JSON::GeneratorError
         raise Tamoz::Core::ToolError,
               "episode tool #{name} returned an unserializable result"

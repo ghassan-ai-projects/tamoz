@@ -39,6 +39,10 @@ module Tamoz
       # handlers: { "io.agenticstream.<type>.v1" => ->(event) {} }
       # credential: the per-subscriber Channel B credential (distinct from
       #   the worker's capability token; never the same secret).
+      MAX_FRAME_BYTES = 1 * 1024 * 1024
+      MAX_DEDUPE_ENTRIES = 4096
+      MAX_AUDIT_ENTRIES = 256
+
       def initialize(cursor_store:, handlers:, credential:, max_poison_retries: 3)
         unless cursor_store.respond_to?(:read) && cursor_store.respond_to?(:write)
           raise SubscriptionError, "cursor store must implement read and write"
@@ -92,20 +96,36 @@ module Tamoz
           # consequence of reconnecting.
           fresh = transport.resnapshot(cursor: frame.cursor, credential: @credential)
           @cursor_store.write(fresh)
-          @resnapshots << {from: frame.cursor, to: fresh, at: Time.now.to_i}
+          record_audit(@resnapshots, from: frame.cursor, to: fresh)
         when "subscriber_too_slow"
           # Backpressure: the pass ends here; the next pass resumes from the
           # last acknowledged cursor. The stream never grows unbounded memory
           # for a slow reader.
           nil
         else
-          raise SubscriptionError, "unknown Channel B control event #{frame.control.inspect}"
+          # An unknown control event is a protocol drift — recorded and
+          # skipped, never a wedge: one bad frame does not halt the
+          # subscription.
+          record_audit(@skipped, cursor: frame.cursor,
+                                 control: frame.control, reason: "unknown_control_event")
+          @cursor_store.write(frame.cursor)
         end
       end
 
       # Returns false to end the pass (poison retry), true to continue.
       def handle_event(frame)
-        event = parse_cloud_event(frame)
+        key = ["frame", frame.cursor]
+        begin
+          raise SubscriptionError, "frame exceeds #{MAX_FRAME_BYTES} bytes" if
+            frame.data.to_s.bytesize > MAX_FRAME_BYTES
+
+          dispatch(parse_cloud_event(frame), frame)
+        rescue SubscriptionError => error
+          handle_poison(frame, key:, reason: error.message)
+        end
+      end
+
+      def dispatch(event, frame)
         key = [event.source, event.id]
         if @dedupe.key?(key)
           # A redelivered (source, id) is acknowledged — it was already
@@ -118,33 +138,49 @@ module Tamoz
         if handler.nil?
           # An unhandled type is acknowledged cleanly (the subscriber scope
           # has an event-type allowlist); it is never a poison event.
-          @dedupe[key] = true
+          remember(key)
           @cursor_store.write(frame.cursor)
           return true
         end
 
         begin
           handler.call(event)
-          @dedupe[key] = true
+          remember(key)
           @cursor_store.write(frame.cursor)
           @poison.delete(key)
           true
         rescue StandardError => error
-          retry_count = (@poison[key] || 0) + 1
-          if retry_count > @max_poison_retries
-            @skipped << {
-              cursor: frame.cursor, id: event.id, type: event.type,
-              reason: "poison_after_#{@max_poison_retries}_retries: #{error.class}"
-            }
-            @dedupe[key] = true
-            @cursor_store.write(frame.cursor)
-            @poison.delete(key)
-            true
-          else
-            @poison[key] = retry_count
-            false
-          end
+          handle_poison(frame, key:, reason: "handler_error: #{error.class}")
         end
+      end
+
+      def handle_poison(frame, key:, reason:)
+        retry_count = (@poison[key] || 0) + 1
+        if retry_count > @max_poison_retries
+          record_audit(@skipped, cursor: frame.cursor, id: key.last,
+                                 type: frame.event, reason: "poison_after_#{@max_poison_retries}_retries: #{reason}")
+          remember(key)
+          @cursor_store.write(frame.cursor)
+          @poison.delete(key)
+          true
+        else
+          @poison[key] = retry_count
+          false
+        end
+      end
+
+      # Bounded retention: the in-memory dedupe covers within-pass
+      # duplicates (the cursor is the durable at-least-once guarantee), and
+      # the audit lists are rings — a long-lived subscription never grows
+      # unbounded memory.
+      def remember(key)
+        @dedupe.shift if @dedupe.length >= MAX_DEDUPE_ENTRIES
+        @dedupe[key] = true
+      end
+
+      def record_audit(list, **entry)
+        list << entry
+        list.shift if list.length > MAX_AUDIT_ENTRIES
       end
 
       def parse_cloud_event(frame)

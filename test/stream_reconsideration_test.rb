@@ -122,9 +122,7 @@ class StreamReconsiderationTest < Minitest::Test
   end
 
   def test_the_freezer_trace_downgrades_the_dispatched_ticket_not_withdraws
-    judgements = Reconsideration.judge(
-      parsed:, risk_ceiling: "r2"
-    )
+    judgements = Reconsideration.judge(parsed:)
 
     assert_equal 1, judgements.length
     judgement = judgements.fetch(0)
@@ -137,23 +135,21 @@ class StreamReconsiderationTest < Minitest::Test
     judgement = Reconsideration.judge(
       parsed: Reconsideration.parse(
         wire_reconsideration(command: executed_command(status: "pending"))
-      ),
-      risk_ceiling: "r2"
+      )
     ).fetch(0)
     assert_equal :withdraw, judgement.decision
   end
 
   def test_a_command_the_correction_does_not_reference_stands
     judgements = Reconsideration.judge(
-      parsed: Reconsideration.parse(wire_reconsideration(invalidates: [])),
-      risk_ceiling: "r2"
+      parsed: Reconsideration.parse(wire_reconsideration(invalidates: []))
     )
     assert judgements.fetch(0).let_stand?
   end
 
   def test_the_downgrade_intent_carries_its_own_risk_class_and_compensates
     intents = Reconsideration.build_compensating_intents(
-      Reconsideration.judge(parsed:, risk_ceiling: "r2"),
+      Reconsideration.judge(parsed:),
       episode:, snapshot:, now: Time.utc(2026, 8, 12)
     )
 
@@ -179,8 +175,7 @@ class StreamReconsiderationTest < Minitest::Test
         wire_reconsideration(
           invalidates: ["cmd_transfer_1"], command: transfer_command
         )
-      ),
-      risk_ceiling: "r4"
+      )
     ).fetch(0)
     assert_equal :downgrade, judgement.decision
 
@@ -193,7 +188,7 @@ class StreamReconsiderationTest < Minitest::Test
 
   def test_a_compensation_above_the_risk_ceiling_is_never_proposed
     intents = Reconsideration.build_compensating_intents(
-      Reconsideration.judge(parsed:, risk_ceiling: "r0"),
+      Reconsideration.judge(parsed:),
       episode: episode(risk_ceiling: "r0"), snapshot:
     )
     assert_empty intents,
@@ -202,7 +197,7 @@ class StreamReconsiderationTest < Minitest::Test
 
   def test_the_decision_builder_includes_valid_compensations
     intents = Reconsideration.build_compensating_intents(
-      Reconsideration.judge(parsed:, risk_ceiling: "r2"),
+      Reconsideration.judge(parsed:),
       episode:, snapshot:
     )
     decision, digest = Tamoz::Stream::DecisionBuilder.build(
@@ -257,8 +252,7 @@ class StreamReconsiderationTest < Minitest::Test
       node(:judge, implementation_name: "episode.judge", version: "1") do |state, context|
         data = state.fetch(:reconsideration)
         judgements = Reconsideration.judge(
-          parsed: Reconsideration.from_hash(data),
-          risk_ceiling: "r2"
+          parsed: Reconsideration.from_hash(data)
         )
         context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
         context.emit(:model_completed, {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})

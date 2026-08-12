@@ -30,7 +30,10 @@ module Tamoz
 
         # Returns nil when the reference authenticates against the episode,
         # or a bounded reason string when it does not. The caller (admission)
-        # refuses on any non-nil reason when a reference was CLAIMED.
+        # refuses on any non-nil reason when a reference was CLAIMED. Episode
+        # keys are canonicalized to strings first — production episodes may be
+        # symbol- or string-keyed, and the match must not silently refuse a
+        # well-formed claim from the string-keyed path.
         def reason(reference, episode:, verify_source_authority:)
           return "missing_reconciled_outcome_reference" if reference.nil?
           return "malformed_reconciled_outcome_reference" unless reference.is_a?(Hash)
@@ -41,12 +44,13 @@ module Tamoz
           end
           return "missing_reconciled_outcome_fields: #{missing.join(",")}" unless missing.empty?
 
+          episode_identity = episode.transform_keys(&:to_s)
           verdict = normalized.fetch("observation_status")
           unless LEARNABLE_VERDICTS.include?(verdict)
             return "unlearnable_verdict: #{verdict.byteslice(0, 64)}"
           end
-          unless normalized.fetch("episode_id") == episode[:episode_id].to_s &&
-                 normalized.fetch("attempt_id") == episode[:attempt_id].to_s
+          unless normalized.fetch("episode_id") == episode_identity["episode_id"].to_s &&
+                 normalized.fetch("attempt_id") == episode_identity["attempt_id"].to_s
             return "foreign_episode"
           end
           unless verify_source_authority.respond_to?(:call) &&
