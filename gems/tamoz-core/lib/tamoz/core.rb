@@ -73,6 +73,12 @@ module Tamoz
       JCS.canonicalize_json(raw)
     end
 
+    # Strict-parse raw JSON and return the VALUE (no canonicalization). Use
+    # when a verifier needs both the parsed document and its digest.
+    def parse_json_strict(raw)
+      JCS.parse(raw)
+    end
+
     # Domain-separated digest: "sha256:" + hex(SHA256(domain || jcs)).
     def digest(domain, value)
       JCS.digest(domain, value)

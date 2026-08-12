@@ -7,6 +7,10 @@ TamozGemspec.build(
   name: "tamoz-stream",
   version: Tamoz::Stream::VERSION,
   summary: "Streaming input and simulated physical action for Tamoz",
-  description: "Validated channel/event/Situation values, the structural StreamStore contract, and the connector seam; the SQLite store lives in tamoz-sqlite.",
-  dependencies: [["tamoz-core", "= #{Tamoz::Stream::VERSION}"]]
+  description: "Validated channel/event/Situation values, the structural StreamStore contract, the connector seam, and the stream-episode worker (gRPC EpisodeWorker service + containment host); the SQLite store lives in tamoz-sqlite.",
+  dependencies: [
+    ["tamoz-core", "= #{Tamoz::Stream::VERSION}"],
+    ["grpc", ">= 1.83"],
+    ["google-protobuf", ">= 4.35"]
+  ]
 )

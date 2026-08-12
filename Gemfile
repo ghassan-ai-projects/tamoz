@@ -24,6 +24,7 @@ gem "zeitwerk", "~> 2.6"
 
 # Development/test-only quality tooling (Q0 of the quality program).
 group :development, :test do
+  gem "grpc-tools", ">= 1.83"
   gem "reek", "~> 6.5"
   gem "rubocop", "~> 1.87"
   gem "rubocop-minitest", "~> 0.38"

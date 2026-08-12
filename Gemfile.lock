@@ -71,6 +71,8 @@ PATH
   remote: gems/tamoz-stream
   specs:
     tamoz-stream (0.1.0.alpha.1)
+      google-protobuf (>= 4.35)
+      grpc (>= 1.83)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
@@ -134,6 +136,21 @@ GEM
       net-http (~> 0.5)
     faraday-retry (2.4.0)
       faraday (~> 2.0)
+    google-protobuf (4.35.1)
+      bigdecimal
+      rake (~> 13.3)
+    google-protobuf (4.35.1-arm64-darwin)
+      bigdecimal
+      rake (~> 13.3)
+    googleapis-common-protos-types (1.23.0)
+      google-protobuf (~> 4.26)
+    grpc (1.83.0)
+      google-protobuf (>= 3.25, < 5.0)
+      googleapis-common-protos-types (~> 1.0)
+    grpc (1.83.0-arm64-darwin)
+      google-protobuf (>= 3.25, < 5.0)
+      googleapis-common-protos-types (~> 1.0)
+    grpc-tools (1.83.0)
     hana (1.3.7)
     json (2.21.2)
     json_schemer (2.5.0)
@@ -225,6 +242,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  grpc-tools (>= 1.83)
   mcp (~> 1.1)
   minitest (~> 6.0)
   rake (~> 13.2)
@@ -268,6 +286,12 @@ CHECKSUMS
   faraday-multipart (1.2.0) sha256=7d89a949693714176f612323ca13746a2ded204031a6ba528adee788694ef757
   faraday-net_http (3.4.4) sha256=0e78af151747ed1b00f33e25973b4bc220d7f16c00c39676817c8b12331eb588
   faraday-retry (2.4.0) sha256=7b79c48fb7e56526faf247b12d94a680071ff40c9fda7cf1ec1549439ad11ebe
+  google-protobuf (4.35.1) sha256=a3a6471331d918f58dfa4d014a8f6286f0af2cf4840216bde52fcf2ea3fe3726
+  google-protobuf (4.35.1-arm64-darwin) sha256=d9c957df04fa89c749fa9a72a7b383eb4296efc9b2303dc6fd6fbe39c698ad6b
+  googleapis-common-protos-types (1.23.0) sha256=992e740a523794d9fc5f29a504465d8fc737aaa16c930fe7228e3346860faf0a
+  grpc (1.83.0) sha256=38119e7f9f7cbc98e79145201da4be470a7542b0befad454651d35015ea55c59
+  grpc (1.83.0-arm64-darwin) sha256=25dd772aa80529f014d70da069787cd39b469c9edacbe493da4ff19952a147e2
+  grpc-tools (1.83.0) sha256=d73ad7d181f32aa0bc53b797b55fa9eaca1c3f391bb624ac3d11f4069ce5ee9a
   hana (1.3.7) sha256=5425db42d651fea08859811c29d20446f16af196308162894db208cac5ce9b0d
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
   json_schemer (2.5.0) sha256=2f01fb4cce721a4e08dd068fc2030cffd0702a7f333f1ea2be6e8991f00ae396

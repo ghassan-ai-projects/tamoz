@@ -17,15 +17,19 @@ until this file is regenerated.
 | `faraday-multipart` | 1.2.0 | MIT | transitive |  | https://github.com/lostisland/faraday-multipart |
 | `faraday-net_http` | 3.4.4 | MIT | transitive |  | https://github.com/lostisland/faraday-net_http |
 | `faraday-retry` | 2.4.0 | MIT | transitive |  | https://github.com/lostisland/faraday-retry |
+| `google-protobuf` | 4.35.1 | BSD-3-Clause | yes | tamoz-stream >= 4.35 | https://developers.google.com/protocol-buffers |
+| `googleapis-common-protos-types` | 1.23.0 | Apache-2.0 | transitive |  | https://github.com/googleapis/common-protos-ruby |
+| `grpc` | 1.83.0 | Apache-2.0 | yes | tamoz-stream >= 1.83 | https://github.com/google/grpc/tree/master/src/ruby |
 | `hana` | 1.3.7 | MIT | transitive |  | http://github.com/tenderlove/hana |
 | `json` | 2.21.2 | Ruby | transitive |  | https://github.com/ruby/json |
 | `json_schemer` | 2.5.0 | MIT | transitive |  | https://github.com/davishmcclurg/json_schemer |
 | `logger` | 1.7.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/logger |
 | `marcel` | 1.2.1 | MIT, Apache-2.0 | transitive |  | https://github.com/rails/marcel |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
-| `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
+| `mini_portile2` | 2.8.9 | MIT | transitive |  |  |
 | `multipart-post` | 2.4.1 | MIT | transitive |  | https://github.com/socketry/multipart-post |
 | `net-http` | 0.9.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/net-http |
+| `rake` | 13.4.2 | MIT | transitive |  | https://github.com/ruby/rake |
 | `regexp_parser` | 2.12.0 | MIT | transitive |  | https://github.com/ammar/regexp_parser |
 | `ruby_llm` | 1.16.0 | MIT | yes | tamoz-agent ~> 1.16.0 | https://rubyllm.com |
 | `ruby_llm-schema` | 0.4.0 | MIT | transitive |  | https://github.com/crmne/ruby_llm-schema#readme |
@@ -56,6 +60,7 @@ arriving silently.
 | `dry-logic` | 1.6.0 | MIT |
 | `dry-schema` | 1.16.0 | MIT |
 | `dry-types` | 1.9.1 | MIT |
+| `grpc-tools` | 1.83.0 | Apache-2.0 |
 | `language_server-protocol` | 3.17.0.5 | MIT |
 | `lint_roller` | 1.1.0 | MIT |
 | `minitest` | 6.0.6 | MIT |
@@ -64,7 +69,6 @@ arriving silently.
 | `prism` | 1.9.0 | MIT |
 | `racc` | 1.8.1 | Ruby, BSD-2-Clause |
 | `rainbow` | 3.1.1 | MIT |
-| `rake` | 13.4.2 | MIT |
 | `reek` | 6.5.0 | MIT |
 | `rexml` | 3.4.4 | BSD-2-Clause |
 | `rubocop` | 1.87.0 | MIT |

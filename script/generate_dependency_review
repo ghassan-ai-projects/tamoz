@@ -38,6 +38,23 @@ PERMISSIVE = [
   "Ruby/BSD-2-Clause", "MIT/Apache-2.0"
 ].freeze
 
+# Runtime-closure gems that are NOT invoked by Tamoz runtime code, with the
+# documented reason. The gate test allows a row ONLY when this map explains it;
+# a new un-excepted dev-tool leak still fails.
+RUNTIME_EXCEPTIONS = {
+  "rake" => "google-protobuf's own gemspec declares rake as a runtime " \
+            "dependency (upstream quirk); Tamoz runtime code never invokes it — " \
+            "build tooling only"
+}.freeze
+
+# Licences pinned for closure gems whose spec cannot be resolved in the
+# bundler environment (never installed on the platforms that ship). Pinned
+# entries must name the permissive licence explicitly; an entry here without a
+# matching permissive value still fails the gate.
+KNOWN_LICENSES = {
+  "mini_portile2" => ["MIT"]
+}.freeze
+
 lock = Bundler::LockfileParser.new(File.read(File.join(ROOT, "Gemfile.lock")))
 
 # A gem with a precompiled variant appears twice in the lockfile, and the two
@@ -103,8 +120,9 @@ def carried_row(name, version)
   row if row && row["version"] == version
 end
 
-def licences_for(installed, carried)
+def licences_for(installed, carried, name)
   declared = installed&.licenses.to_a
+  declared = Array(KNOWN_LICENSES[name]) if declared.empty? && KNOWN_LICENSES.key?(name)
   declared = carried["licenses"].to_a if declared.empty? && carried
   declared.empty? ? ["UNDECLARED"] : declared
 end
@@ -116,10 +134,11 @@ def describe(name, locked_spec, declared)
   {
     "name" => name,
     "version" => version,
-    "licenses" => licences_for(installed, carried),
+    "licenses" => licences_for(installed, carried, name),
     "homepage" => installed&.homepage || carried&.[]("homepage"),
     "required_by" => (declared[name] || []).map { |gem_name, requirement| "#{gem_name} #{requirement}" },
-    "direct" => declared.key?(name)
+    "direct" => declared.key?(name),
+    "exception" => RUNTIME_EXCEPTIONS[name]
   }
 end
 
@@ -134,6 +153,7 @@ document = {
   "format_version" => 1,
   "generated_by" => "script/generate_dependency_review",
   "permissive_licenses" => PERMISSIVE,
+  "runtime_exceptions" => RUNTIME_EXCEPTIONS,
   "runtime" => runtime_rows,
   "development" => development_rows,
   "license_violations" => violations.map { |row| row.fetch("name") }

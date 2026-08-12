@@ -41,6 +41,12 @@ module Tamoz
       end
 
       def canonicalize_json(raw)
+        parse(raw).then { |value| emit(value, +"") }
+      end
+
+      # Strict-parse raw JSON and return the VALUE (no canonicalization).
+      # Used by verifiers that need both the parsed document and its digest.
+      def parse(raw)
         unless raw.dup.force_encoding(Encoding::UTF_8).valid_encoding?
           raise Error, "document is not valid UTF-8"
         end
@@ -48,7 +54,7 @@ module Tamoz
         scanner = Scanner.new(raw)
         value = scanner.parse_value
         scanner.eof!
-        emit(value, +"")
+        value
       end
 
       # "sha256:" + hex(SHA256(domain_bytes || jcs_bytes)). domain is either a

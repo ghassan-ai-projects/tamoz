@@ -10,6 +10,9 @@
     "Ruby/BSD-2-Clause",
     "MIT/Apache-2.0"
   ],
+  "runtime_exceptions": {
+    "rake": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it — build tooling only"
+  },
   "runtime": [
     {
       "name": "base64",
@@ -20,7 +23,8 @@
       ],
       "homepage": "https://github.com/ruby/base64",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "bigdecimal",
@@ -31,7 +35,8 @@
       ],
       "homepage": "https://github.com/ruby/bigdecimal",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "event_stream_parser",
@@ -41,7 +46,8 @@
       ],
       "homepage": "https://github.com/Shopify/event_stream_parser",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "faraday",
@@ -51,7 +57,8 @@
       ],
       "homepage": "https://lostisland.github.io/faraday",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "faraday-multipart",
@@ -61,7 +68,8 @@
       ],
       "homepage": "https://github.com/lostisland/faraday-multipart",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "faraday-net_http",
@@ -71,7 +79,8 @@
       ],
       "homepage": "https://github.com/lostisland/faraday-net_http",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "faraday-retry",
@@ -81,7 +90,45 @@
       ],
       "homepage": "https://github.com/lostisland/faraday-retry",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "google-protobuf",
+      "version": "4.35.1",
+      "licenses": [
+        "BSD-3-Clause"
+      ],
+      "homepage": "https://developers.google.com/protocol-buffers",
+      "required_by": [
+        "tamoz-stream >= 4.35"
+      ],
+      "direct": true,
+      "exception": null
+    },
+    {
+      "name": "googleapis-common-protos-types",
+      "version": "1.23.0",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "homepage": "https://github.com/googleapis/common-protos-ruby",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "grpc",
+      "version": "1.83.0",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "homepage": "https://github.com/google/grpc/tree/master/src/ruby",
+      "required_by": [
+        "tamoz-stream >= 1.83"
+      ],
+      "direct": true,
+      "exception": null
     },
     {
       "name": "hana",
@@ -91,7 +138,8 @@
       ],
       "homepage": "http://github.com/tenderlove/hana",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "json",
@@ -101,7 +149,8 @@
       ],
       "homepage": "https://github.com/ruby/json",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "json_schemer",
@@ -111,7 +160,8 @@
       ],
       "homepage": "https://github.com/davishmcclurg/json_schemer",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "logger",
@@ -122,7 +172,8 @@
       ],
       "homepage": "https://github.com/ruby/logger",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "marcel",
@@ -133,7 +184,8 @@
       ],
       "homepage": "https://github.com/rails/marcel",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "mcp",
@@ -145,7 +197,8 @@
       "required_by": [
         "tamoz-mcp ~> 1.1"
       ],
-      "direct": true
+      "direct": true,
+      "exception": null
     },
     {
       "name": "mini_portile2",
@@ -153,9 +206,10 @@
       "licenses": [
         "MIT"
       ],
-      "homepage": "https://github.com/flavorjones/mini_portile",
+      "homepage": null,
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "multipart-post",
@@ -165,7 +219,8 @@
       ],
       "homepage": "https://github.com/socketry/multipart-post",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "net-http",
@@ -176,7 +231,19 @@
       ],
       "homepage": "https://github.com/ruby/net-http",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "rake",
+      "version": "13.4.2",
+      "licenses": [
+        "MIT"
+      ],
+      "homepage": "https://github.com/ruby/rake",
+      "required_by": [],
+      "direct": false,
+      "exception": "google-protobuf's own gemspec declares rake as a runtime dependency (upstream quirk); Tamoz runtime code never invokes it — build tooling only"
     },
     {
       "name": "regexp_parser",
@@ -186,7 +253,8 @@
       ],
       "homepage": "https://github.com/ammar/regexp_parser",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "ruby_llm",
@@ -198,7 +266,8 @@
       "required_by": [
         "tamoz-agent ~> 1.16.0"
       ],
-      "direct": true
+      "direct": true,
+      "exception": null
     },
     {
       "name": "ruby_llm-schema",
@@ -208,7 +277,8 @@
       ],
       "homepage": "https://github.com/crmne/ruby_llm-schema#readme",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "simpleidn",
@@ -218,7 +288,8 @@
       ],
       "homepage": "https://github.com/mmriis/simpleidn",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "sqlite3",
@@ -230,7 +301,8 @@
       "required_by": [
         "tamoz-sqlite ~> 2.9"
       ],
-      "direct": true
+      "direct": true,
+      "exception": null
     },
     {
       "name": "uri",
@@ -241,7 +313,8 @@
       ],
       "homepage": "https://github.com/ruby/uri",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "zeitwerk",
@@ -254,7 +327,8 @@
         "tamoz-core ~> 2.6",
         "tamoz-graph ~> 2.6"
       ],
-      "direct": true
+      "direct": true,
+      "exception": null
     }
   ],
   "development": [
@@ -266,7 +340,8 @@
       ],
       "homepage": "https://whitequark.github.io/ast/",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "concurrent-ruby",
@@ -276,7 +351,8 @@
       ],
       "homepage": "http://www.concurrent-ruby.com",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "docile",
@@ -286,7 +362,8 @@
       ],
       "homepage": "https://ms-ati.github.io/docile/",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "drb",
@@ -297,7 +374,8 @@
       ],
       "homepage": "https://github.com/ruby/drb",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-configurable",
@@ -307,7 +385,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-configurable",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-core",
@@ -317,7 +396,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-core",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-inflector",
@@ -327,7 +407,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-inflector",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-initializer",
@@ -337,7 +418,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-initializer",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-logic",
@@ -347,7 +429,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-logic",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-schema",
@@ -357,7 +440,8 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-schema",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "dry-types",
@@ -367,7 +451,19 @@
       ],
       "homepage": "https://dry-rb.org/gems/dry-types",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "grpc-tools",
+      "version": "1.83.0",
+      "licenses": [
+        "Apache-2.0"
+      ],
+      "homepage": "https://github.com/google/grpc/tree/master/src/ruby/tools",
+      "required_by": [],
+      "direct": false,
+      "exception": null
     },
     {
       "name": "language_server-protocol",
@@ -377,7 +473,8 @@
       ],
       "homepage": "https://github.com/mtsmfm/language_server-protocol-ruby",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "lint_roller",
@@ -387,7 +484,8 @@
       ],
       "homepage": "https://github.com/standardrb/lint_roller",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "minitest",
@@ -397,7 +495,8 @@
       ],
       "homepage": "https://minite.st/",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "parallel",
@@ -407,7 +506,8 @@
       ],
       "homepage": "https://github.com/grosser/parallel",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "parser",
@@ -417,7 +517,8 @@
       ],
       "homepage": "https://github.com/whitequark/parser",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "prism",
@@ -427,7 +528,8 @@
       ],
       "homepage": "https://github.com/ruby/prism",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "racc",
@@ -438,7 +540,8 @@
       ],
       "homepage": "https://github.com/ruby/racc",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rainbow",
@@ -448,17 +551,8 @@
       ],
       "homepage": "https://github.com/sickill/rainbow",
       "required_by": [],
-      "direct": false
-    },
-    {
-      "name": "rake",
-      "version": "13.4.2",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/ruby/rake",
-      "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "reek",
@@ -468,7 +562,8 @@
       ],
       "homepage": "https://github.com/troessner/reek",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rexml",
@@ -478,7 +573,8 @@
       ],
       "homepage": "https://github.com/ruby/rexml",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rubocop",
@@ -488,7 +584,8 @@
       ],
       "homepage": "https://github.com/rubocop/rubocop",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rubocop-ast",
@@ -498,7 +595,8 @@
       ],
       "homepage": "https://github.com/rubocop/rubocop-ast",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rubocop-minitest",
@@ -508,7 +606,8 @@
       ],
       "homepage": null,
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "rubocop-performance",
@@ -518,7 +617,8 @@
       ],
       "homepage": "https://github.com/rubocop/rubocop-performance",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "ruby-progressbar",
@@ -528,7 +628,8 @@
       ],
       "homepage": "https://github.com/jfelchner/ruby-progressbar",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "simplecov",
@@ -538,7 +639,8 @@
       ],
       "homepage": "https://github.com/simplecov-ruby/simplecov",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "simplecov-html",
@@ -548,7 +650,8 @@
       ],
       "homepage": "https://github.com/simplecov-ruby/simplecov-html",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "simplecov_json_formatter",
@@ -558,7 +661,8 @@
       ],
       "homepage": "https://github.com/fede-moya/simplecov_json_formatter",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "unicode-display_width",
@@ -568,7 +672,8 @@
       ],
       "homepage": "https://github.com/janlelis/unicode-display_width",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     },
     {
       "name": "unicode-emoji",
@@ -578,7 +683,8 @@
       ],
       "homepage": "https://github.com/janlelis/unicode-emoji",
       "required_by": [],
-      "direct": false
+      "direct": false,
+      "exception": null
     }
   ],
   "license_violations": []

@@ -333,11 +333,50 @@ namespace :quality do
   end
 end
 
+# T1.1 — the vendored gRPC stubs are regenerated from the pinned proto and the
+# committed copies must never drift. `proto` rewrites, `proto:check` proves
+# (the check runs in the everyday gate).
+namespace :stream do
+  PROTO = "gems/tamoz-stream/contracts/runtime-v1.proto"
+  GEN_DIR = "gems/tamoz-stream/lib/tamoz/stream/gen"
+  GEN_FILES = [
+    "#{GEN_DIR}/runtime-v1_pb.rb",
+    "#{GEN_DIR}/runtime-v1_services_pb.rb"
+  ].freeze
+
+  desc 'Regenerate the vendored gRPC stubs from the pinned runtime-v1 proto'
+  task :proto do
+    sh "grpc_tools_ruby_protoc",
+       "-I", "gems/tamoz-stream/contracts",
+       "--ruby_out=#{GEN_DIR}",
+       "--grpc_out=#{GEN_DIR}",
+       PROTO
+  end
+
+  desc 'Drift check: the committed stubs must match a fresh codegen'
+  task "proto:check" do
+    require "tmpdir"
+    Dir.mktmpdir("tamoz-proto") do |directory|
+      sh "grpc_tools_ruby_protoc",
+         "-I", "gems/tamoz-stream/contracts",
+         "--ruby_out=#{directory}",
+         "--grpc_out=#{directory}",
+         PROTO
+      GEN_FILES.each do |path|
+        fresh = File.join(directory, File.basename(path))
+        unless File.read(fresh) == File.read(path)
+          raise "proto drift: #{path} diverges from the vendored proto; run `rake stream:proto`"
+        end
+      end
+    end
+  end
+end
+
 desc 'The full quality gate: architecture'
 task quality: ['quality:architecture']
 
 desc "The everyday gate — fast, and honest about what it skips"
-task ci: ['design:validate', :syntax, :test_fast,
+task ci: ['design:validate', :syntax, :test_fast, 'stream:proto:check',
           'quality:architecture'] do
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
   warn ""

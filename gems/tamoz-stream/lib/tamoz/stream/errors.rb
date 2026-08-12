@@ -38,5 +38,24 @@ module Tamoz
     class StreamClockError < StreamError
       CATEGORY = "stream_clock"
     end
+
+    # T1.5: a received situation snapshot failed its digest verification
+    # (tampered or drifted). The episode terminates before any model call.
+    class SnapshotDigestMismatchError < StreamError
+      CATEGORY = "stream_snapshot_digest_mismatch"
+    end
+
+    # T1.5: a received situation snapshot lacks the identity fields the worker
+    # needs to scope the episode (situation_id, situation_version, tenant,
+    # entity identity).
+    class SnapshotIdentityError < StreamError
+      CATEGORY = "stream_snapshot_identity"
+    end
+
+    # T1.2: the runtime's handshake or request does not match the worker's
+    # contract major (protocol/contract version, non-interactive mode).
+    class ContractMismatchError < StreamError
+      CATEGORY = "stream_contract_mismatch"
+    end
   end
 end

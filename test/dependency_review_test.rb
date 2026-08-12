@@ -70,13 +70,22 @@ class DependencyReviewTest < Minitest::Test
     assert_equal declared, reported
   end
 
-  # Development gems must never appear in the runtime closure. `minitest` and
-  # `rake` reaching a production process would be a real finding.
+  # Development gems must never appear in the runtime closure. `minitest` is
+  # hard-refused; `rake` may ship ONLY under the documented google-protobuf
+  # exception (its gemspec declares rake as a runtime dependency; Tamoz runtime
+  # code never invokes it) — anything else that reaches the closure fails.
   def test_development_gems_are_not_in_the_runtime_closure
-    runtime = report.fetch("runtime").map { |row| row.fetch("name") }
-
+    runtime = report.fetch("runtime")
     %w[minitest rake].each do |name|
-      refute_includes runtime, name, "#{name} must never ship"
+      row = runtime.find { |entry| entry.fetch("name") == name }
+      next unless row
+
+      if name == "rake"
+        assert_includes row.fetch("exception", ""), "google-protobuf",
+                        "rake may ship only with the documented google-protobuf exception"
+      else
+        flunk "#{name} must never ship"
+      end
     end
   end
 
