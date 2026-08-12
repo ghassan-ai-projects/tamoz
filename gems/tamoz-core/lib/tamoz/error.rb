@@ -265,5 +265,28 @@ module Tamoz
     include Error::Metadata
   end
 
+  # T0.4 (PLAN_TAMOZ_STREAM_BUILD §5.5): a graph interrupt inside a
+  # non-interactive episode is a typed terminal failure, never a wait. The
+  # episode worker maps this to the wire terminal; it must not consume
+  # wall-clock budget waiting for a resume value that will never arrive.
+  class InterruptInNonInteractiveEpisodeError < Error
+    CATEGORY = "interrupt_in_non_interactive_episode"
+    RETRYABLE = false
+    USER_VISIBLE = true
+    SAFE_MESSAGE = "An interrupting skill ran inside a non-interactive episode."
+
+    # The message is built from Tamoz literals (graph name + category), so it
+    # is safe to surface through NodeError#safe_message.
+    include DisclosableMessage
+
+    attr_reader :task_id, :descriptor
+
+    def initialize(message = nil, task_id: nil, descriptor: nil)
+      @task_id = task_id
+      @descriptor = descriptor
+      super(message || SAFE_MESSAGE)
+    end
+  end
+
   Error.private_constant :Metadata
 end

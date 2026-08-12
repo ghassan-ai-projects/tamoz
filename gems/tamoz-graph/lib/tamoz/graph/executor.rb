@@ -88,6 +88,21 @@ module Tamoz
           end
 
           unless interruptions.empty?
+            if context.interrupt_mode == :non_interactive
+              return non_interactive_interrupt(
+                current,
+                interruptions,
+                tasks:,
+                pending: all_successes,
+                writer:,
+                context:,
+                attempts:,
+                resume_values:,
+                total_tasks:,
+                durable_request_id:
+              )
+            end
+
             current = append_noncommitting(
               current,
               writer:,
@@ -409,6 +424,67 @@ module Tamoz
             "safe_message" => error.safe_message
           }.freeze
         end.freeze
+      end
+
+      # T0.4: in a non-interactive episode an interrupt is a typed terminal
+      # failure — the graph fails fast with a durable failed checkpoint and
+      # never waits for a resume value that cannot arrive (no wall-clock
+      # budget consumed waiting).
+      def non_interactive_interrupt(
+        current,
+        interruptions,
+        tasks:,
+        pending:,
+        writer:,
+        context:,
+        attempts:,
+        resume_values:,
+        total_tasks:,
+        durable_request_id:
+      )
+        first = interruptions.first
+        interrupted_task = tasks.find { |task| task.id == first.task_id }
+        node = interrupted_task ? interrupted_task.node : first.task_id
+        error = InterruptInNonInteractiveEpisodeError.new(
+          "graph #{compiled.name} node interrupted in non-interactive episode",
+          task_id: first.task_id,
+          descriptor: first.descriptor
+        )
+        node_failure = NodeError.new(
+          error.message,
+          graph_name: compiled.name,
+          node:,
+          task_id: first.task_id,
+          attempt_id: nil,
+          original: error
+        )
+        failed = append_noncommitting(
+          current,
+          writer:,
+          status: :failed,
+          pending:,
+          interrupts: interruptions,
+          attempts:,
+          resume_values:,
+          total_tasks:,
+          failure: failure_descriptors([node_failure]),
+          request_transition: terminal_request_transition(
+            writer,
+            request_id: durable_request_id,
+            execution_id: current.execution_id,
+            action: :failed,
+            graph_status: :failed,
+            retryable: false
+          )
+        )
+        emit_errors(context, [node_failure])
+        emit_checkpoint(context, failed)
+        RunResult.new(
+          status: :failed,
+          snapshot: compiled.snapshot(failed),
+          interrupts: interruptions,
+          errors: [node_failure].freeze
+        )
       end
 
       def completed(checkpoint)

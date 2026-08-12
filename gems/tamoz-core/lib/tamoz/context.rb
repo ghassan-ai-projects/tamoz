@@ -12,6 +12,7 @@ module Tamoz
     ATTRIBUTES = %i[
       run_id parent_run_id execution_id request_id thread_id namespace task_id tags metadata
       deadline cancellation clock notifier emitter store effects interrupts graph_runtime
+      interrupt_mode
     ].freeze
 
     attr_reader(*ATTRIBUTES)
@@ -34,7 +35,8 @@ module Tamoz
       store: nil,
       effects: nil,
       interrupts: nil,
-      graph_runtime: nil
+      graph_runtime: nil,
+      interrupt_mode: :interactive
     )
       @run_id = identity!(run_id, :run_id)
       @parent_run_id = optional_identity!(parent_run_id, :parent_run_id)
@@ -42,6 +44,11 @@ module Tamoz
       @request_id = identity!(request_id, :request_id)
       @thread_id = optional_identity!(thread_id, :thread_id)
       @task_id = optional_identity!(task_id, :task_id)
+      unless %i[interactive non_interactive].include?(interrupt_mode)
+        raise ConfigurationError,
+              "interrupt_mode must be :interactive or :non_interactive"
+      end
+      @interrupt_mode = interrupt_mode
       @namespace = normalize_list(namespace, :namespace, NAMESPACE_MAX_PARTS)
       @tags = normalize_list(tags, :tags, TAGS_MAX_ITEMS)
       @metadata = Immutable.copy(metadata)

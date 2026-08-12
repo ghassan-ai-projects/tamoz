@@ -14,6 +14,7 @@ require_relative "stream/action_boundary"
 require_relative "stream/replay_runtime"
 require_relative "stream/connector"
 require_relative "stream/stream_store"
+require_relative "stream/capability_host"
 
 module Tamoz
   # P14 — streaming input and simulated physical-world assistance

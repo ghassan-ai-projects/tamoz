@@ -138,6 +138,147 @@ class GraphInterruptTest < Minitest::Test
     end
   end
 
+  # T0.4: in a non-interactive episode an interrupt is a typed terminal
+  # failure — the graph fails fast with the interrupted task and never pauses
+  # waiting for a resume value that cannot arrive.
+  def test_non_interactive_episode_turns_an_interrupt_into_a_typed_failure
+    definition = Tamoz.graph(name: "non-interactive-interrupt", version: "1") do
+      state :answer
+      node(
+        :ask,
+        implementation_name: "episode.ask",
+        version: "1"
+      ) do |_state, context|
+        {answer: Tamoz.interrupt({"question" => "approve"}, context)}
+      end
+      edge Tamoz::START, :ask
+      edge :ask, Tamoz::END
+    end
+    app = definition.compile
+    context = Tamoz::Context.new(
+      run_id: "run.1",
+      execution_id: "execution.1",
+      request_id: "request.1",
+      interrupt_mode: :non_interactive
+    )
+    result = app.invoke(
+      {},
+      thread: "thread.non-interactive",
+      request_id: "request.1",
+      execution_id: "execution.1",
+      concurrency: :inline,
+      context:
+    )
+
+    refute result.paused?
+    assert result.failed?
+    failure = result.errors.first
+    assert_instance_of Tamoz::NodeError, failure
+    assert_instance_of Tamoz::InterruptInNonInteractiveEpisodeError, failure.original
+    assert_equal({"question" => "approve"}, failure.original.descriptor)
+  end
+
+  # T0.4: interactive mode is unchanged — the same graph pauses for resume.
+  def test_interactive_episode_still_pauses_on_an_interrupt
+    definition = Tamoz.graph(name: "interactive-interrupt", version: "1") do
+      state :answer
+      node(
+        :ask,
+        implementation_name: "episode.ask",
+        version: "1"
+      ) do |_state, context|
+        {answer: Tamoz.interrupt({"question" => "approve"}, context)}
+      end
+      edge Tamoz::START, :ask
+      edge :ask, Tamoz::END
+    end
+    app = definition.compile
+    result = app.invoke(
+      {},
+      thread: "thread.interactive",
+      request_id: "request.1",
+      execution_id: "execution.1",
+      concurrency: :inline
+    )
+
+    assert result.paused?
+    assert_equal 1, result.interrupts.length
+  end
+
+  # T0.4: an invalid interrupt mode is refused at context construction.
+  def test_invalid_interrupt_mode_is_refused
+    assert_raises(Tamoz::ConfigurationError) do
+      Tamoz::Context.new(
+        run_id: "run.1",
+        execution_id: "execution.1",
+        request_id: "request.1",
+        interrupt_mode: :maybe
+      )
+    end
+  end
+
+  # T0.4 through a DURABLE writer: the non-interactive interrupt lands a
+  # failed checkpoint and a non-retryable failed request transition — the
+  # semantics the episode worker depends on (no resume wait, ever).
+  def test_non_interactive_interrupt_is_durable_and_non_retryable
+    calls = Hash.new(0)
+    definition = Tamoz.graph(name: "durable-non-interactive", version: "1") do
+      state :answers, reduce: :merge, default: {}
+      node(
+        :sibling,
+        implementation_name: "episode.sibling",
+        version: "1"
+      ) do |_state, _context|
+        calls[:sibling] += 1
+        {answers: {"sibling" => calls[:sibling]}}
+      end
+      node(
+        :ask,
+        implementation_name: "episode.ask",
+        version: "1"
+      ) do |_state, context|
+        {answers: {"ask" => Tamoz.interrupt({"question" => "approve"}, context)}}
+      end
+      edge Tamoz::START, :sibling
+      edge Tamoz::START, :ask
+      edge :sibling, Tamoz::END
+      edge :ask, Tamoz::END
+    end
+
+    Dir.mktmpdir("tamoz-non-interactive") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      app = definition.compile(checkpointer: adapter)
+      context = Tamoz::Context.new(
+        run_id: "run.1",
+        execution_id: "execution.1",
+        request_id: "request.1",
+        interrupt_mode: :non_interactive
+      )
+      request = app.durable_runner.deliver(
+        {},
+        thread: "thread.episode",
+        request_id: "request.episode",
+        context:
+      )
+
+      assert request.terminal?
+      assert_equal :failed, request.status
+      assert_equal false, request.retryable
+      assert_equal({"graph_status" => "failed"}, request.terminal_error)
+
+      checkpoint = app.checkpointer.latest(thread_id: "thread.episode")
+      assert_equal :failed, checkpoint.status
+      failure = checkpoint.failure.fetch(0)
+      assert_equal "ask", failure.fetch("node")
+      assert_equal "Tamoz::InterruptInNonInteractiveEpisodeError",
+                   failure.fetch("error_class")
+      assert_includes failure.fetch("safe_message"),
+                      "interrupted in non-interactive episode"
+
+      adapter.close
+    end
+  end
+
   private
 
   def exercise_sequential_interrupts(concurrency)
