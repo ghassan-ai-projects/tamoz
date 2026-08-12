@@ -229,6 +229,39 @@ class CommsValuesTest < Minitest::Test
     assert_equal prompt_a.wire, Comms::ApprovalPrompt.from_wire(prompt_a.wire).wire
   end
 
+  def test_prompt_pins_required_evidence_from_the_trusted_policy
+    _reference, prompt = Comms::ApprovalPrompt.build(
+      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+    )
+
+    assert_equal 'filesystem_operator', prompt.required_evidence,
+                 'under v1 policy every prompt pins filesystem_operator (ADR-049 INV-D)'
+    assert_equal prompt.required_evidence, Comms::ApprovalPrompt.from_wire(prompt.wire).required_evidence
+
+    legacy_wire = prompt.wire.except('required_evidence')
+
+    assert_equal 'filesystem_operator',
+                 Comms::ApprovalPrompt.from_wire(legacy_wire).required_evidence,
+                 'a pre-migration wire without the field reads the safe default (never under-gated)'
+  end
+
+  def test_prompt_rejects_a_non_lattice_required_evidence
+    prompt = Comms::ApprovalPrompt.build(
+      thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+      interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+      prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+    ).last
+
+    error = assert_raises(Comms::ValidationError) do
+      Comms::ApprovalPrompt.from_wire(prompt.wire.merge('required_evidence' => 'root'))
+    end
+    assert_match(/evidence must be one of/, error.message)
+  end
+
   def test_prompt_validates_lifecycle_fields
     prompt = Comms::ApprovalPrompt.build(
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',

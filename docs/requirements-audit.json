@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-11T12:08:40Z",
-  "manifest_requirements": 433,
-  "named_cases_run": 266,
+  "generated_at": "2026-08-12T11:58:53Z",
+  "manifest_requirements": 434,
+  "named_cases_run": 267,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 16,
-    "pass": 402
+    "pass": 403
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -6557,6 +6557,21 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-9",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_9",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/sqlite_comms_store_test.rb#test_a_pre_migration_prompt_row_normalizes_null_required_evidence_to_filesystem_operator",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,

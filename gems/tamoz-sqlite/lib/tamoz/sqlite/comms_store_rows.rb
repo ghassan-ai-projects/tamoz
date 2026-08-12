@@ -28,8 +28,9 @@ module Tamoz
       ].freeze
       PROMPT_COLUMNS = %w[
         reference_digest surface_id surface_revision thread_id occurrence_id
-        interrupt_digest correspondent_id conversation_id prompt_receipt status
-        created_at_ms activated_at_ms consumed_at_ms expires_at_ms
+        interrupt_digest required_evidence correspondent_id conversation_id
+        prompt_receipt status created_at_ms activated_at_ms consumed_at_ms
+        expires_at_ms
       ].freeze
       BINDING_COLUMNS = %w[
         surface_id correspondent_id conversation_id status bound_by bound_at_ms
@@ -140,6 +141,7 @@ module Tamoz
         [
           wire.fetch('reference_digest'), wire['surface_id'], wire['surface_revision'],
           wire.fetch('thread_id'), wire.fetch('occurrence_id'), wire.fetch('interrupt_digest'),
+          wire.fetch('required_evidence'),
           wire.fetch('correspondent_id'), wire.fetch('conversation_id'), wire['prompt_receipt'],
           wire.fetch('status'), wire_time_ms(wire.fetch('created_at')),
           wire_time_ms(wire['activated_at']), wire_time_ms(wire['consumed_at']),

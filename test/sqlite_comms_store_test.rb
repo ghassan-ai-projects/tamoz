@@ -79,7 +79,8 @@ class SQLiteCommsStoreTest < Minitest::Test
     {
       'reference_digest' => reference, 'surface_id' => 'telegram-ops',
       'surface_revision' => 1, 'thread_id' => thread, 'occurrence_id' => 'req-1',
-      'interrupt_digest' => 'c' * 64, 'correspondent_id' => 'telegram:user:11111111',
+      'interrupt_digest' => 'c' * 64, 'required_evidence' => 'filesystem_operator',
+      'correspondent_id' => 'telegram:user:11111111',
       'conversation_id' => 'telegram:chat:22222222', 'prompt_receipt' => 'msg-1',
       'status' => status, 'created_at' => now.iso8601(6),
       'activated_at' => status == 'active' ? now.iso8601(6) : nil,
@@ -92,11 +93,37 @@ class SQLiteCommsStoreTest < Minitest::Test
       tx.execute('test.prompt.insert', <<~SQL, prompt_binds(prompt_wire(reference:, status:, expires_at:)))
         INSERT INTO tamoz_comms_approval_prompts (
           reference_digest, surface_id, surface_revision, thread_id,
-          occurrence_id, interrupt_digest, correspondent_id, conversation_id,
-          prompt_receipt, status, created_at_ms, activated_at_ms, consumed_at_ms,
-          expires_at_ms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          occurrence_id, interrupt_digest, required_evidence,
+          correspondent_id, conversation_id, prompt_receipt, status,
+          created_at_ms, activated_at_ms, consumed_at_ms, expires_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       SQL
+    end
+  end
+
+  # MIG-9 (ADR-049 INV-D/E): a pre-migration in-flight prompt carries NULL
+  # required_evidence; the store normalizes it to filesystem_operator — the
+  # safe default — so a legacy prompt is never under-gated.
+  def test_a_pre_migration_prompt_row_normalizes_null_required_evidence_to_filesystem_operator
+    with_engine do |store, adapter, _checkpoints, _path|
+      binds = prompt_binds(prompt_wire(reference: 'a' * 64))
+      binds[6] = nil # required_evidence: the pre-migration value
+      adapter.__send__(:transaction, operation: 'test.prompt.null_insert') do |tx|
+        tx.execute('test.prompt.null_insert', <<~SQL, binds)
+          INSERT INTO tamoz_comms_approval_prompts (
+            reference_digest, surface_id, surface_revision, thread_id,
+            occurrence_id, interrupt_digest, required_evidence,
+            correspondent_id, conversation_id, prompt_receipt, status,
+            created_at_ms, activated_at_ms, consumed_at_ms, expires_at_ms
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        SQL
+      end
+
+      row = store.prompt(reference_digest: 'a' * 64)
+
+      refute_nil row, 'the pre-migration prompt row must still be readable'
+      assert_equal 'filesystem_operator', row.fetch('required_evidence'),
+                   'NULL required_evidence reads as filesystem_operator (never under-gated)'
     end
   end
 
@@ -104,6 +131,7 @@ class SQLiteCommsStoreTest < Minitest::Test
     [
       wire.fetch('reference_digest'), wire['surface_id'], wire['surface_revision'],
       wire.fetch('thread_id'), wire.fetch('occurrence_id'), wire.fetch('interrupt_digest'),
+      wire.fetch('required_evidence'),
       wire.fetch('correspondent_id'), wire.fetch('conversation_id'), wire['prompt_receipt'],
       wire.fetch('status'), ms(wire.fetch('created_at')), ms(wire['activated_at']),
       ms(wire['consumed_at']), ms(wire.fetch('expires_at'))
