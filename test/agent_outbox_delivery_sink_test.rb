@@ -140,6 +140,27 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       interrupts: [{ task_id: 'task', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }] }
   end
 
+  # ADR-049 Phase 5 (defense in depth): under the v1 policy every interrupt
+  # requires filesystem_operator evidence, so the rendered keyboard offers
+  # Deny only — the markup reflects the policy, never a hardcoded list. A
+  # stray approve callback is still refused by the Phase 3 gate; the button's
+  # absence is UX, not the security boundary.
+  def test_an_approval_request_renders_a_deny_only_keyboard_under_v1_policy
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1'))
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
+
+      markup = JSON.parse(row.fetch('markup'))
+
+      assert_equal %w[deny], markup.fetch('actions'),
+                   'a v1-policy prompt must not render an approve button (ADR-049 INV-D)'
+      assert_match(/\A[0-9a-f]{32}\z/, markup.fetch('reference'))
+    end
+  end
+
   # A turn parked on approval on a surface where approvals are DISABLED used
   # to go silent: no prompt machinery, no message, every later message
   # queueing behind a pause the correspondent could not see. The sink owes

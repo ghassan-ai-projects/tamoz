@@ -120,7 +120,7 @@ module Tamoz
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
         @store.insert_prompt(prompt.wire)
-        markup = JSON.generate('reference' => reference, 'actions' => %w[approve deny])
+        markup = JSON.generate('reference' => reference, 'actions' => offered_actions(event.fetch(:interrupts)))
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
@@ -158,6 +158,19 @@ module Tamoz
           now: Time.now.utc
         )
         :accepted
+      end
+
+      # ADR-049 INV-D (Phase 5): the markup reflects the policy, not a
+      # hardcoded list. An approve button is offered only when some interrupt
+      # in the prompt is approvable by `chat_bound` evidence; under the v1
+      # policy every effect requires `filesystem_operator`, so the prompt
+      # renders Deny-only. A stray `approve:` callback is still refused by the
+      # Phase 3 gate — the button's absence is UX, not the security boundary.
+      def offered_actions(interrupts)
+        approvable = interrupts.any? do |interrupt|
+          Comms::AuthorityEvidence.chat_bound >= Comms::ApprovalPolicy.required_evidence([interrupt])
+        end
+        approvable ? %w[approve deny] : %w[deny]
       end
 
       def outbox_capacity(surface)
