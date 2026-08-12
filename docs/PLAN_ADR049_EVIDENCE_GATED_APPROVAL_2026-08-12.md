@@ -9,6 +9,16 @@ Review state: rounds 1 and 2 rejected by UX, reliability, and security reviewers
 iterating through six review rounds, the UX, reliability, and security reviewers all approved
 the current plan. Implementation remains blocked only on the explicit Phase 0 owner decision.
 
+Session status (2026-08-12): ADR-049 accepted; P1–P7 shipped (one commit each) plus the
+gap-closing C4 receipt binding, C5/C6 oracles, the Phase 0 doc-consistency check, and C7
+credential separation. The contract test has zero skips; bar C1–C6 met. Remaining: the
+Phase 5 `DeliveryJournalContext` table (MIG-11+) and its effect-key wiring — the journal
+machinery itself (`tamoz_effects`, `EffectJournal#prepare/start/complete/reconcile/
+resolve`, the drainer's claim/bind/send_started/mark/reconcile path, UNKNOWN non-retry
+proven by scorecard case 15) already exists; only the persisted context table and the
+plan-specified `EffectJournalKey.build` inputs are outstanding. Phase 8 (T4 live gate)
+waits on live Telegram/ALMS infrastructure and the owner go-ahead.
+
 ## Design invariants this plan must preserve
 
 - **INV-A** denial is unconditional for the bound correspondent.
