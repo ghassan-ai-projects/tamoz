@@ -1,6 +1,8 @@
 # Build Plan: Tamoz — Streaming Stream Worker (Option B-full)
 
-Status: revised after dual-repo audit (2026-08-12) — corrections below; implementation loop live
+Status: **P1–P7 implemented and committed** (58c3aca..5f7180f, 2026-08-12); full-gate
+verification in progress. The completion bar (§7) is met when the gates are green
+and the review findings are closed.
 Target: **Tamoz becomes a supervised streaming gRPC episode worker** for Agentic Stream, so that
 `simulator → stream → Tamoz → Decision → effect` runs as a supervised loop, and the reconciled
 Outcome feeds Tamoz's learning loop. Stream support is Tamoz's **main offering**, so this plan
