@@ -111,8 +111,11 @@ module Tamoz
         end
       end
 
-      # Exactly one terminal per episode; a second call raises.
-      def terminal(status, reason_code: nil, usage: nil)
+      # Exactly one terminal per episode; a second call raises. T2.3: a
+      # produced episode's terminal carries the artifact manifest (the digests
+      # a shadow run needs to reproduce the Decision without re-running
+      # Tamoz), and the named artifacts are retained by the runner.
+      def terminal(status, reason_code: nil, usage: nil, artifact_manifest: nil)
         if @terminal_emitted
           raise StreamError, "episode stream already emitted its terminal"
         end
@@ -120,7 +123,7 @@ module Tamoz
         @terminal_emitted = true
         build do |event|
           event.terminal = Agenticstream::Runtime::V1::Terminal.new(
-            status:, reason_code:, usage:
+            status:, reason_code:, usage:, artifact_manifest:
           )
         end
       end

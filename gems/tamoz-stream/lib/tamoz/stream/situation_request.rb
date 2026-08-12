@@ -8,6 +8,7 @@ require "tamoz/stream/capability_host"
 require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
 require "tamoz/stream/verification_store"
+require "tamoz/stream/artifact_store"
 require "json"
 
 Tamoz::Stream::Gen.load!
@@ -203,10 +204,11 @@ module Tamoz
     # run into EpisodeEvent payloads; the runner here returns the durable
     # RequestRecord.
     class EpisodeRunner
-      def initialize(durable_runner:, worker:, verification_store: nil)
+      def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil)
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
+        @artifact_store = artifact_store
       end
 
       attr_reader :worker
@@ -269,7 +271,12 @@ module Tamoz
               )
               open_verifications(envelope, snapshot, decision, digest)
             end
-            stream.terminal(status, reason_code: reason, usage: adapter.wire_usage)
+            manifest = build_artifact_manifest(wire_request, result)
+            retain_manifest_artifacts(wire_request) if @artifact_store
+            stream.terminal(
+              status, reason_code: reason, usage: adapter.wire_usage,
+              artifact_manifest: manifest
+            )
           rescue Tamoz::Stream::StreamError => error
             # A refused episode still terminates the wire stream with a typed
             # FAILED terminal — never a bare RPC error, and never a model call.
@@ -368,6 +375,49 @@ module Tamoz
             episode: episode_content
           )
         end
+      end
+
+      # T2.3: the per-episode artifact manifest on the terminal — the digests
+      # a shadow run needs to compare (PROTOCOL §2). The digests are the
+      # STREAM's own (the sha256 values the wire carried), never locally
+      # re-derived; the contract version and the memory records the episode
+      # grounded on complete the manifest.
+      def build_artifact_manifest(wire_request, result)
+        memory_digests = []
+        if result&.checkpoint_id
+          checkpoint = @durable_runner.compiled.checkpointer.find(
+            thread_id: "episode.#{wire_request.episode_id}",
+            namespace: [wire_request.tenant_id],
+            checkpoint_id: result.checkpoint_id
+          )
+          memory_digests = Array(checkpoint&.state&.to_h&.fetch(:memory_record_digests, []))
+        end
+        Agenticstream::Runtime::V1::ArtifactManifest.new(
+          prompt_sha256: blank_to_nil(wire_request.prompt_sha256),
+          skill_set_sha256: nil,
+          tool_catalog_sha256: blank_to_nil(wire_request.tool_catalog_sha256),
+          model_policy: blank_to_nil(wire_request.model_policy),
+          contract_version: EpisodeWorker::CONTRACT_VERSION,
+          memory_record_sha256: memory_digests
+        )
+      end
+
+      # T2.3: retains the documents the manifest names, keyed on the STREAM's
+      # digests, so a shadow run can resolve them without re-running Tamoz.
+      def retain_manifest_artifacts(wire_request)
+        {
+          wire_request.tool_catalog_sha256.to_s => wire_request.tool_catalog_json,
+          wire_request.decision_schema_sha256.to_s => wire_request.decision_schema_json,
+          wire_request.prompt_sha256.to_s => wire_request.objective
+        }.each do |digest, bytes|
+          next if digest.empty? || bytes.to_s.empty?
+
+          @artifact_store.retain(digest:, bytes: bytes.to_s, media_type: "application/json")
+        end
+      end
+
+      def blank_to_nil(value)
+        value.to_s.empty? ? nil : value.to_s
       end
 
       # T3.2: the episode tool surface. The containment host (T4.1) binds the
