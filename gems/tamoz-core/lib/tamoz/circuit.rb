@@ -28,10 +28,10 @@ module Tamoz
     FORMAT_VERSION = 1
 
     NAMESPACE_PREFIX = "tamoz.circuit."
-    SCOPE_DIGEST_DOMAIN = "tamoz.circuit.scope.v1"
-    EVIDENCE_DIGEST_DOMAIN = "tamoz.circuit.evidence.v1"
-    CONTEXT_DIGEST_DOMAIN = "tamoz.circuit.context.v1"
-    CONDITIONS_DIGEST_DOMAIN = "tamoz.circuit.conditions.v1"
+    SCOPE_DIGEST_DOMAIN = "tamoz.circuit.scope.v1\n"
+    EVIDENCE_DIGEST_DOMAIN = "tamoz.circuit.evidence.v1\n"
+    CONTEXT_DIGEST_DOMAIN = "tamoz.circuit.context.v1\n"
+    CONDITIONS_DIGEST_DOMAIN = "tamoz.circuit.conditions.v1\n"
 
     # Explicit bounds (DR-2 §2/§9.3). `MAX_CIRCUIT_OWNERS` is the plan's
     # mandated minimum of 64 (the P13 2–50 poller proof needs >= 50).
@@ -77,9 +77,7 @@ module Tamoz
     # A domain-separated, canonical-JSON digest. Locale-independent: every
     # literal is ASCII and the payload is generated, never read from a file.
     def digest_of(value, domain:)
-      body = "#{domain}\0v#{FORMAT_VERSION}\0"
-      canonical = JSON.generate(Tamoz::Core.canonical(digestable(value)))
-      "sha256:#{Digest::SHA256.hexdigest(body.b + canonical.b)}".freeze
+      Tamoz::Core.digest(domain, digestable(value))
     end
 
     # Caller context never enters a record verbatim — only this digest does.

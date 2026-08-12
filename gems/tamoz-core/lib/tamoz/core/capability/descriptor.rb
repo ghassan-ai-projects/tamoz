@@ -65,9 +65,7 @@ module Tamoz
 
         def compute_digest(fields)
           definition = fields.reject { |key, _value| key == :definition_digest }
-          "sha256:#{Digest::SHA256.hexdigest(
-            DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(definition))
-          )}"
+          Tamoz::Core.digest(DIGEST_DOMAIN, definition)
         end
 
         def validate!(**fields)

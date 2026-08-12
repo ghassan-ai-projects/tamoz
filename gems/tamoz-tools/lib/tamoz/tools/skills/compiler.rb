@@ -189,8 +189,8 @@ module Tamoz
             extra: Tamoz::Core.deep_freeze(fields.fetch('extra')),
             requested_capabilities: Tamoz::Core.deep_freeze(fields.fetch('allowed-tools')),
             body: body.dup.freeze,
-            manifest_digest: Skills.digest_of(
-              MANIFEST_DIGEST_DOMAIN, JSON.generate(Skills.canonical(fields.fetch('raw')))
+            manifest_digest: Tamoz::Core.digest(
+              MANIFEST_DIGEST_DOMAIN, fields.fetch('raw')
             ),
             description_digest: Skills.digest_of(DESCRIPTION_DIGEST_DOMAIN, description),
             tree_digest: tree_digest(entries),

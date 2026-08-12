@@ -131,9 +131,9 @@ module Tamoz
           # Identity of the ROLLBACK candidate: content-addressed on what is
           # being undone, so a retried rollback is idempotent at the row level
           # and a second, different rollback is a different row.
-          candidate_digest = "sha256:#{Digest::SHA256.hexdigest(
-            ACTOR_DOMAIN + JSON.generate(["rollback", transition_id, before, target_digest])
-          )}"
+          candidate_digest = Tamoz::Core.digest(
+            ACTOR_DOMAIN, ["rollback", transition_id, before, target_digest]
+          )
 
           transition, reserved = @registry.record(
             kind: KIND,

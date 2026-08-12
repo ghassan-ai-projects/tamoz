@@ -25,7 +25,7 @@ module Tamoz
 
       def compile
         validate!
-        digest = Canonical.digest(descriptor, domain: "tamoz.graph.definition")
+        digest = Canonical.digest(descriptor, domain: "tamoz.graph.definition\n")
         Compiled.new(
           definition:,
           definition_digest: digest,

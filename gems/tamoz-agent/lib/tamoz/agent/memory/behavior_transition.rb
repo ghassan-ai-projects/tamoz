@@ -149,7 +149,7 @@ module Tamoz
         end
 
         def snapshot_digest(snapshot)
-          "sha256:#{Digest::SHA256.hexdigest(JSON.generate(Tamoz::Core.canonical(snapshot)))}"
+          Tamoz::Core.digest("tamoz.agent.memory.behavior_snapshot.v1\n", snapshot)
         end
 
         # DR-1 §4: the extended prompt-surface identity — the invariant-16
@@ -157,14 +157,14 @@ module Tamoz
         # snapshot. Identical inputs to the toolbox's own digest, plus the
         # behavior-snapshot digest.
         def extended_prompt_surface_digest(toolbox:, behavior_snapshot_digest:)
-          "sha256:#{Digest::SHA256.hexdigest(
-            Tamoz::Tools::Toolbox::PROMPT_SURFACE_DOMAIN +
-            JSON.generate([
+          Tamoz::Core.digest(
+            Tamoz::Tools::Toolbox::PROMPT_SURFACE_DOMAIN,
+            [
               toolbox.catalog_digest,
               toolbox.skills.catalog_digest,
               behavior_snapshot_digest
-            ])
-          )}"
+            ]
+          )
         end
       end
     end

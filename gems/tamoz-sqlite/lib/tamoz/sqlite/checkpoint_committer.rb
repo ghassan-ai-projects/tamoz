@@ -83,6 +83,10 @@ module Tamoz
             execution_id:
           )
           sequence = head.fetch(1)
+          # digest_version 2 names the JCS (RFC 8785) rule for definition_digest
+          # only; payload_digest stays Wire-framed (domain + "\0v1\0") and is
+          # verified with its own framing. A reader must never select a digest
+          # rule for the payload from the digest_version column.
           tx.execute(
             'checkpoint.commit.insert',
             <<~SQL,
@@ -92,7 +96,7 @@ module Tamoz
                 definition_digest, fence, status, payload, payload_digest,
                 created_at_ms
               )
-              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+              VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, 2, ?, ?, ?, ?, ?, ?)
             SQL
             [
               checkpoint_id, lease.thread_id, lease.namespace, execution_id,

@@ -14,7 +14,7 @@ module Tamoz
     # one layer earlier so the failure names the record rather than a JSON path.
     module SessionRecords
       RECORD_VERSION = 1
-      DIGEST_DOMAIN = "tamoz.agent.session_record"
+      DIGEST_DOMAIN = "tamoz.agent.session_record.v1"
       LEGACY_PROFILE_ID = "legacy"
       LEGACY_PROFILE_DIGEST = "legacy:none"
       # P16: `LEGACY_SKILL_EPOCH` moved to tamoz-core (`Tamoz::Core::LEGACY_SKILL_EPOCH`),
@@ -409,9 +409,7 @@ module Tamoz
       end
 
       def digest(value)
-        Digest::SHA256.hexdigest(
-          "#{DIGEST_DOMAIN}\n#{JSON.generate(Deliberation.canonical(value))}"
-        )
+        Tamoz::Core.digest("#{DIGEST_DOMAIN}\n", value)
       end
 
       def validate_fields!(value, kind)

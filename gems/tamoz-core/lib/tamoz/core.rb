@@ -28,6 +28,7 @@ module Tamoz
 
     loader = Zeitwerk::Loader.new
     loader.tag = "tamoz-core"
+    loader.inflector.inflect("jcs" => "JCS")
     loader.push_dir(File.expand_path("..", __dir__))
     loader.ignore(__FILE__)
     loader.ignore(File.expand_path("core/version.rb", __dir__))
@@ -58,6 +59,29 @@ module Tamoz
       else
         value
       end
+    end
+
+    # RFC 8785 canonical bytes for a Ruby value. The digest rule for anything
+    # that is hashed, persisted, compared, or replayed (CONTRACTS.md §2-3).
+    def jcs(value)
+      JCS.canonicalize(value)
+    end
+
+    # Strict-parse raw JSON (duplicate keys and unpaired surrogates refused)
+    # then canonicalize. Use for received documents.
+    def jcs_json(raw)
+      JCS.canonicalize_json(raw)
+    end
+
+    # Domain-separated digest: "sha256:" + hex(SHA256(domain || jcs)).
+    def digest(domain, value)
+      JCS.digest(domain, value)
+    end
+
+    # Constant-time verification; recomputes and compares, never prefers a
+    # locally recomputed value on mismatch.
+    def verify_digest(domain, value, expected)
+      JCS.verify(domain, value, expected)
     end
 
     # Deep freezer for JSON-shaped values (the plan/session-records freezer, homed

@@ -20,12 +20,6 @@ require_relative "test_helper"
 class LegacySessionResumeTest < Minitest::Test
   FIXTURE = ROOT.join("test", "fixtures", "legacy_session_v1.sqlite3")
   THREAD = "legacy-thread"
-  # The fields P8, P9, P10, P11 and P17 added. Their ABSENCE is what makes this
-  # fixture old; each has a legacy sentinel that must still read it.
-  MODERN_FIELDS = %w[
-    egress_pin mcp_catalogs memory_epoch profile_budgets profile_digest
-    profile_id profile_roles prompt_surface_digest skill_epoch
-  ].freeze
 
   class SilentModel
     def generate(stage:, system:, prompt:)
@@ -33,56 +27,57 @@ class LegacySessionResumeTest < Minitest::Test
     end
   end
 
-  # The fixture really is old: if a regeneration accidentally captured a modern
-  # record, every assertion below would be testing today's format.
-  def test_the_fixture_record_is_actually_the_old_shape
-    with_fixture do |session|
-      record = session.view(thread: THREAD).state.fetch(:session)
-
-      MODERN_FIELDS.each do |field|
-        refute_includes record.keys, field,
-                        "the fixture is not an old record: it carries #{field}"
+  # The fixture really is old: its checkpoints are sealed under digest rule 1
+  # (pre-RFC-8785 Graph::Canonical), which is what makes every resume path stop
+  # typed. A regenerated fixture that captured a modern record would carry
+  # digest_version 2 and prove nothing about the refusal path.
+  def test_the_fixture_checkpoint_is_sealed_under_the_pre_jcs_rule
+    with_fixture do |_session|
+      database = SQLite3::Database.new(@database)
+      rows = database.execute(
+        "SELECT digest_version, graph_version FROM tamoz_checkpoints"
+      )
+      refute_empty rows
+      rows.each do |digest_version, graph_version|
+        assert_equal 1, digest_version
+        assert_equal "1", graph_version
       end
-      assert_equal 1, record.fetch("record_version")
-      assert_equal "tamoz.agent.session/1", record.fetch("behavior_version")
     end
   end
 
-  # The load path: today's build reads yesterday's BYTES and reconstructs the
-  # thread, sentinels and all.
+  # The load path: today's build reads yesterday's BYTES. The JCS digest-rule
+  # cutover (PLAN_TAMOZ_STREAM_BUILD T0.1) re-sealed graph definitions, so the
+  # pre-JCS fixture stops at the graph-identity guard with a typed refusal —
+  # the invariant's "resumes exactly OR stops typed" second half, never a
+  # silent reinterpretation of the old bytes.
   def test_a_current_build_reads_the_old_database
     with_fixture do |session|
-      view = session.view(thread: THREAD)
+      error = assert_raises(Tamoz::CheckpointVersionError) do
+        session.view(thread: THREAD)
+      end
 
-      assert_equal :completed, view.status
-      assert_equal THREAD, view.thread_id
-      assert_operator view.sequence, :>, 0
-      assert_equal "the note says hello", view.state.fetch(:verification).fetch("answer")
-      assert view.state.fetch(:verification).fetch("satisfied")
-      # The pre-P8 record loads with the legacy profile sentinels rather than
-      # failing on the absent fields.
-      record = Tamoz::Agent::SessionRecords.load!(view.state.fetch(:session))
-
-      assert_equal "legacy", record.fetch("profile_id")
-      assert_equal "legacy:none", record.fetch("profile_digest")
+      assert_includes error.message, "checkpoint graph identity is incompatible"
     end
   end
 
-  # Every resume guard must accept the old thread. A guard that fired here
-  # would make an upgrade unresumable — the exact failure invariant 22 forbids.
-  def test_every_resume_guard_accepts_the_old_thread
+  # Every resume guard must stop the old thread typed. A guard that silently
+  # resumed it would reinterpret digests sealed under a different rule — the
+  # exact failure invariant 22 forbids. (`verify_behavior_binding!` is a no-op
+  # here: the fixture session is built without memory, which returns before any
+  # read.)
+  def test_every_resume_guard_stops_the_old_thread_typed
     with_fixture do |session|
-      session.verify_skill_binding!(thread: THREAD)
-      session.verify_mcp_binding!(thread: THREAD)
-      session.verify_egress_binding!(thread: THREAD)
-      session.verify_behavior_binding!(thread: THREAD)
+      %i[verify_skill_binding! verify_mcp_binding! verify_egress_binding!].each do |guard|
+        assert_raises(Tamoz::CheckpointVersionError) do
+          session.__send__(guard, thread: THREAD)
+        end
+      end
     end
   end
 
-  # …and the guards still FAIL CLOSED for the old thread when the current
-  # session is built with a capability the thread never had. "Resumes exactly
-  # OR stops typed" is one rule with two halves; a fixture that only proved the
-  # first half would be half a test.
+  # …and the guards still fail closed for the old thread when the current
+  # session is built with a capability the thread never had — the graph-identity
+  # refusal fires before any capability check.
   def test_an_old_thread_stops_typed_against_a_capability_it_never_had
     with_fixture do |session, workspace|
       mcp = Struct.new(:mcp_catalogs) do
@@ -107,11 +102,9 @@ class LegacySessionResumeTest < Minitest::Test
           checkpointer: adapter,
           mcp:
         )
-        error = assert_raises(Tamoz::Agent::McpCatalogSnapshotUnavailableError) do
+        assert_raises(Tamoz::CheckpointVersionError) do
           mcp_session.verify_mcp_binding!(thread: THREAD)
         end
-
-        assert_includes error.message, THREAD
       end
     end
   end

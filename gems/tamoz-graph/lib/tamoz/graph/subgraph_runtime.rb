@@ -126,7 +126,7 @@ module Tamoz
             "call_index" => call_index,
             "child_definition_digest" => child.definition_digest
           },
-          domain: "tamoz.graph.subgraph.execution"
+          domain: "tamoz.graph.subgraph.execution\n"
         )
       end
 

@@ -88,9 +88,7 @@ module Tamoz
         # identity: a heuristic with different evidence is a different
         # candidate.
         def digest
-          "sha256:#{Digest::SHA256.hexdigest(
-            DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(to_h))
-          )}"
+          Tamoz::Core.digest(DIGEST_DOMAIN, to_h)
         end
 
         def to_h

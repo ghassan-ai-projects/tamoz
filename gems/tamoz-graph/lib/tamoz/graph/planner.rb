@@ -39,7 +39,7 @@ module Tamoz
             "kind" => entry.kind.to_s,
             "path" => entry.path
           },
-          domain: "tamoz.graph.activation"
+          domain: "tamoz.graph.activation\n"
         )
       end
 
@@ -50,7 +50,7 @@ module Tamoz
             "attempt" => attempt,
             "base_checkpoint_id" => base_checkpoint_id
           },
-          domain: "tamoz.graph.attempt"
+          domain: "tamoz.graph.attempt\n"
         )
       end
     end

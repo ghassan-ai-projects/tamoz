@@ -25,7 +25,14 @@ module Tamoz
       # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 through MIGRATION_10, which
       # records the decision audit trail — the evidence level that made an
       # approve legal and why (contract §7.1).
-      CURRENT_VERSION = 10
+      # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1): 10 -> 11 through
+      # MIGRATION_11, which registers the digest epoch and clears the rows whose
+      # digests embedded the pre-RFC-8785 canonical serialization.
+      CURRENT_VERSION = 11
+
+      # The digest rule generation marker written by MIGRATION_11. Bumped by a
+      # future forward migration whenever the canonical digest rule changes.
+      DIGEST_EPOCH = 1
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -853,6 +860,70 @@ module Tamoz
         MIGRATION_10.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1, CONTRACTS §13):
+      # the canonical rule moved to RFC 8785 (`Tamoz::Core.jcs`), so digests
+      # that embedded the old canonical-JSON serialization are re-sealed.
+      #
+      # The stream-engine tables (MIGRATION_4/5) carry canonical-JSON digests
+      # that can differ under JCS (their situations may contain floats) and the
+      # engine itself is retired by a later forward migration (T8.3). Clearing
+      # them here ACCEPTS the loss of undrained outbox items and resets the
+      # per-partition watermarks, so post-cutover the stream replays from the
+      # source's earliest retained offset; the upstream replay window must
+      # cover that reset (cutover runbook). Circuit rows are keyed by the old
+      # canonical scope digest and are re-keyed on first use, so they are
+      # cleared too. Scheduler/occurrence and comms identities were NOT
+      # migrated to the JCS rule (they never cross the product boundary), so
+      # their stored rows stay valid because their derivation is unchanged.
+      # Checkpoints are the deliberate exception to the clears: they are kept
+      # so resume stops typed at the graph-identity guard rather than silently
+      # reinterpreting digests sealed under a different rule. The epoch row
+      # records this cutover for any future digest-rule change.
+      MIGRATION_11 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_digest_epoch (
+            epoch INTEGER NOT NULL CHECK (epoch > 0)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          INSERT INTO tamoz_digest_epoch (epoch) VALUES (1)
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_channels
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_events
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_partitions
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_operator_state
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_situations
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_situation_current
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_triggers
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_stream_outbox
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_store_versions WHERE namespace GLOB 'tamoz.circuit.*'
+        SQL
+        <<~SQL.freeze,
+          DELETE FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'
+        SQL
+      ].freeze
+
+      MIGRATION_11_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_11.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -865,7 +936,8 @@ module Tamoz
         7 => [MIGRATION_7, MIGRATION_7_CHECKSUM],
         8 => [MIGRATION_8, MIGRATION_8_CHECKSUM],
         9 => [MIGRATION_9, MIGRATION_9_CHECKSUM],
-        10 => [MIGRATION_10, MIGRATION_10_CHECKSUM]
+        10 => [MIGRATION_10, MIGRATION_10_CHECKSUM],
+        11 => [MIGRATION_11, MIGRATION_11_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -878,6 +950,10 @@ module Tamoz
         end
         unless version == CURRENT_VERSION
           raise MigrationError, "SQLite schema version is invalid"
+        end
+        epoch = connection.get_first_value("SELECT epoch FROM tamoz_digest_epoch")
+        unless epoch == DIGEST_EPOCH
+          raise MigrationError, "SQLite digest epoch is invalid"
         end
         (1..CURRENT_VERSION).each do |ordinal|
           verify_migration_row!(connection, ordinal)

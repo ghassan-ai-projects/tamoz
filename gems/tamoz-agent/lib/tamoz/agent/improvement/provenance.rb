@@ -133,9 +133,7 @@ module Tamoz
         # `BehaviorTransition.transition_id`: identity does not include time).
         def digest
           content = to_h.reject { |key, _| key == "recorded_at" }
-          "sha256:#{Digest::SHA256.hexdigest(
-            DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(content))
-          )}"
+          Tamoz::Core.digest(DIGEST_DOMAIN, content)
         end
 
         private

@@ -18,7 +18,7 @@ module TamozSQLiteOracle
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 10
+  SCHEMA_VERSION = 11
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -47,6 +47,10 @@ module TamozSQLiteOracle
   # evidence level that made an approve legal and why (contract §7.1).
   MIGRATION_10_CHECKSUM =
     "b97f0a8181fab69f4f36a51009574184e8ad45b4f735dbbec82d39f035522dcc"
+  # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1): 10 -> 11 — the
+  # digest epoch marker plus the pre-JCS canonical-digest row clear.
+  MIGRATION_11_CHECKSUM =
+    "73de39e7283bc6d562f03ae8747c47bef104357e022833bd2e963c7a6c079af0"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -770,7 +774,8 @@ module TamozSQLiteOracle
         [7, MIGRATION_7_CHECKSUM],
         [8, MIGRATION_8_CHECKSUM],
         [9, MIGRATION_9_CHECKSUM],
-        [10, MIGRATION_10_CHECKSUM]
+        [10, MIGRATION_10_CHECKSUM],
+        [11, MIGRATION_11_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"
@@ -867,7 +872,7 @@ module TamozSQLiteOracle
         end
         unless row.fetch("namespace") == NAMESPACE &&
                row.fetch("format_version") == 1 &&
-               row.fetch("digest_version") == 1 &&
+               row.fetch("digest_version") == 2 &&
                %w[running paused failed completed].include?(row.fetch("status"))
           raise OracleError, "relation_invalid"
         end

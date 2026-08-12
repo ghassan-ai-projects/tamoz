@@ -556,9 +556,7 @@ module Tamoz
       end
 
       def self.canonical_digest(hash)
-        "sha256:#{Digest::SHA256.hexdigest(
-          DIGEST_DOMAIN + JSON.generate(Deliberation.canonical(hash))
-        )}"
+        Tamoz::Core.digest(DIGEST_DOMAIN, hash)
       end
 
       def self.deep_freeze(value)

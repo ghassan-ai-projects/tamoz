@@ -70,7 +70,11 @@ module Tamoz
       end
 
       def digest(value)
-        "sha256:#{Digest::SHA256.hexdigest(value.is_a?(String) ? value : JSON.generate(value))}".freeze
+        if value.is_a?(String)
+          "sha256:#{Digest::SHA256.hexdigest(value)}".freeze
+        else
+          Tamoz::Core.digest(PROMPT_SURFACE_DOMAIN, value)
+        end
       end
     end
     # rubocop:enable Layout/LineLength, Metrics/AbcSize, Metrics/ParameterLists

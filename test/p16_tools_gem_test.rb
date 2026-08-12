@@ -13,7 +13,7 @@ class P16ToolsGemTest < Minitest::Test
 
   # ---- P16-start reference pins (captured from the pre-move code) -----------
 
-  MATRIX_DIGEST = "sha256:2b6d0f7df23e4f8a28692c257c04300646dd02ce1033b48f59aa63e6552cc59b"
+  MATRIX_DIGEST = "sha256:0abe59c234364da6f595f2bf261adb964e31dc54ffccc5830e18b0d08ad7565e"
 
   REJECTION_MESSAGES = {
     "bad_skills_type" => "skills must be a Tamoz::Agent::Skills::SkillSnapshot",

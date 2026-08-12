@@ -303,7 +303,7 @@ module Tamoz
 
           {"tool" => step.tool, "arguments" => canonicalize_apply_patch_arguments(step.arguments)}
         end
-        Digest::SHA256.hexdigest(JSON.generate(canonical(actions)))
+        Tamoz::Core.digest("tamoz.agent.deliberation.actions.v1\n", actions)
       end
 
       def canonicalize_apply_patch_arguments(arguments)

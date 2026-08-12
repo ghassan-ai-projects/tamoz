@@ -18,5 +18,5 @@
     "read_file": "Read UTF-8 text with its SHA-256 digest. Arguments: {\"path\": \"relative/file\"}.",
     "search_text": "Find literal text. Arguments: {\"query\": \"text\", \"path\": \"relative/path\"}; path is optional."
   },
-  "catalog_digest": "sha256:15955ce12f49ae5b2f535a7a225c8ac87c15e747322fa61aab3b8a403ab24903"
+  "catalog_digest": "sha256:cc9ff0938855948f1e5e1d7131fa3108a79c3a53f93329940b810e206615d97d"
 }

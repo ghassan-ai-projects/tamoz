@@ -702,7 +702,7 @@ module Tamoz
           correlation: @correlation.merge(effect_key:),
           attributes: {
             tool:,
-            argument_digest: "sha256:#{Digest::SHA256.hexdigest(JSON.generate(Deliberation.canonical(arguments)))}"
+            argument_digest: Tamoz::Core.digest("tamoz.agent.tool_arguments.v1\n", arguments)
           }
         ) { toolbox.execute(tool, arguments) }
       end

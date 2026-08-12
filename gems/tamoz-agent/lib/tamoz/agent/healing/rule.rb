@@ -203,9 +203,7 @@ module Tamoz
         def budget(name) = budgets.fetch(String(name))
 
         def digest
-          "sha256:#{Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}\n#{JSON.generate(Tamoz::Core.canonical(to_h))}"
-          )}"
+          Tamoz::Core.digest("#{DIGEST_DOMAIN}.v1\n", to_h)
         end
 
         # The identity a promotion record must be bound to (invariant 34): the rule
@@ -213,9 +211,7 @@ module Tamoz
         # never silently reuse another rule's evidence.
         def contract_digest
           body = to_h.reject { |key, _| %w[lifecycle_mode promotion_evidence].include?(key) }
-          "sha256:#{Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}.contract\n#{JSON.generate(Tamoz::Core.canonical(body))}"
-          )}"
+          Tamoz::Core.digest("#{DIGEST_DOMAIN}.contract.v1\n", body)
         end
 
         def to_h

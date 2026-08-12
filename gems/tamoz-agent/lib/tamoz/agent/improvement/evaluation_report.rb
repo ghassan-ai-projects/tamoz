@@ -61,9 +61,7 @@ module Tamoz
         # Compute the seal over the canonical report body. Called by the
         # evaluator principal in `tamoz-evals`; recomputed by `verify!` here.
         def seal(body)
-          "sha256:#{Digest::SHA256.hexdigest(
-            SEAL_DOMAIN + JSON.generate(Tamoz::Core.canonical(body))
-          )}"
+          Tamoz::Core.digest(SEAL_DOMAIN, body)
         end
 
         def sealed(body)
@@ -165,9 +163,9 @@ module Tamoz
         # computes it with this same function, so there is one definition of
         # "these are the exams that were sat".
         def paired_task_digest(development_digest, holdout_digest)
-          "sha256:#{Digest::SHA256.hexdigest(
-            SEAL_DOMAIN + JSON.generate([String(development_digest), String(holdout_digest)])
-          )}"
+          Tamoz::Core.digest(
+            SEAL_DOMAIN, [String(development_digest), String(holdout_digest)]
+          )
         end
 
         def assert_arm!(partition, arm, scores)

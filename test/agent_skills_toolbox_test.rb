@@ -8,13 +8,15 @@ class AgentSkillsToolboxTest < Minitest::Test
   Skills = Tamoz::Agent::Skills
   Toolbox = Tamoz::Agent::Toolbox
 
-  # Measured at 6dee1b6, before skills.rb existed. These pin the compatibility
-  # half of plan review finding C-1: a toolbox with no skills must be
-  # byte-identical to the pre-P9 surface, so every P8 profile keeps validating.
+  # Measured at 6dee1b6, before skills.rb existed; re-measured when the tool
+  # catalog digest moved to the RFC 8785 rule (PLAN_TAMOZ_STREAM_BUILD T0.1).
+  # These pin the compatibility half of plan review finding C-1: a toolbox with
+  # no skills must be byte-identical to the pre-P9 surface, so every P8 profile
+  # keeps validating.
   PRE_P9_READ_ONLY_DIGEST =
-    "sha256:0a3043f33e643f9d8f48f8c54bdd06cffeafec62538938e8bfb227f2ef0a86ee"
+    "sha256:5767fd2ac01e89f578e4e440c50b6b57f6763376d3df46587fe99043e2860511"
   PRE_P9_READ_WRITE_DIGEST =
-    "sha256:a496742d64a97472be306d280f90397524989587f77ea82bc9e627bffa97b0ae"
+    "sha256:24a55e8ebb4bfc4efab57b68a60ffff7bf6e7eae25c7b39295459b691c903121"
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills-toolbox")

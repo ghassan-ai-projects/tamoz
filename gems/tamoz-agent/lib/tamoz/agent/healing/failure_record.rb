@@ -185,22 +185,21 @@ module Tamoz
         # fingerprint is typed-only, so a changed provider message does not make a
         # recurring failure look new.
         def fingerprint
-          "sha256:#{Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}.fingerprint\n#{JSON.generate(Tamoz::Core.canonical(
+          Tamoz::Core.digest(
+            "#{DIGEST_DOMAIN}.fingerprint.v1\n",
+            {
               "failure_code" => failure_code,
               "category" => category.to_s,
               "operation" => operation,
               "tool" => tool,
               "target_resource" => target_resource,
               "capability_absent" => capability_absent
-            ))}"
-          )}"
+            }
+          )
         end
 
         def digest
-          "sha256:#{Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}\n#{JSON.generate(Tamoz::Core.canonical(to_h))}"
-          )}"
+          Tamoz::Core.digest("#{DIGEST_DOMAIN}.v1\n", to_h)
         end
 
         def pre_dispatch? = retryability["pre_dispatch"] == true

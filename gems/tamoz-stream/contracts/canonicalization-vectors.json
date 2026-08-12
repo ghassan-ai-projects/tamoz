@@ -1,0 +1,273 @@
+{
+  "$comment": "Executable agreement for CONTRACTS.md sections 2-3. Both products MUST reproduce every accept vector exactly and MUST refuse every reject vector.",
+  "canonicalization": "RFC 8785 (JCS)",
+  "hash": "SHA-256",
+  "digest_rule": "sha256:<hex> of SHA256(utf8(domain) || utf8(jcs(document)))",
+  "generated_by": "Node v26.7.0 JSON.stringify for ES6 Number::toString; Array.prototype.sort for UTF-16 key order",
+  "native_only": [
+    {
+      "name": "double-integral-value",
+      "construct": "the IEEE-754 double 1.0, typed as a float (not an integer)",
+      "domain": "situation-runtime/test/v1\n",
+      "document": "{ \"n\": <double 1.0> }",
+      "canonical": "{\"n\":1}",
+      "reason": "JSON cannot distinguish the double 1.0 from the integer 1, so this case cannot be carried in this file and MUST be constructed natively by each harness. ruby-json emits 1.0 and fails."
+    },
+    {
+      "name": "double-integral-negative",
+      "construct": "the IEEE-754 double -2.0, typed as a float",
+      "domain": "situation-runtime/test/v1\n",
+      "document": "{ \"n\": <double -2.0> }",
+      "canonical": "{\"n\":-2}",
+      "reason": "same as above"
+    }
+  ],
+  "accept": [
+    {
+      "name": "number-tiny-exponent",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 1e-7
+      },
+      "canonical": "{\"n\":1e-7}",
+      "digest": "sha256:b215fe688d2d414d5c8b7f626aaaa7430719288e468ffc6861422fd34d67f86e",
+      "catches": "ruby-json emits 1.0e-07"
+    },
+    {
+      "name": "number-large-exponent",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 1e+21
+      },
+      "canonical": "{\"n\":1e+21}",
+      "digest": "sha256:90232584ea62477a619d8ae0a2464744d2040df2822e602932ac7c81181a243d",
+      "catches": "ruby-json emits 1.0e+21"
+    },
+    {
+      "name": "number-exponent-boundary-low",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 0.000001
+      },
+      "canonical": "{\"n\":0.000001}",
+      "digest": "sha256:7460afc8e3de51521a91d0b35d783028ce2be6762fe787ef2e5ffab3b2a8bcd8",
+      "catches": "ruby-json emits 1.0e-06; JCS uses plain notation at 1e-6"
+    },
+    {
+      "name": "integer-below-exponent-threshold",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 100000000000000000000
+      },
+      "canonical": "{\"n\":100000000000000000000}",
+      "digest": "sha256:50a75fc52c24e301e3a03c0cb6a68859374f9ac953a57e4288b0bc7d085d737b"
+    },
+    {
+      "name": "number-min-denormal",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 5e-324
+      },
+      "canonical": "{\"n\":5e-324}",
+      "digest": "sha256:eb6f1759dbf19154b830a6653dc653a6d77d4816997ec8969270e0cd960c1468",
+      "catches": "ruby-json emits 5.0e-324"
+    },
+    {
+      "name": "number-max-double",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 1.7976931348623157e+308
+      },
+      "canonical": "{\"n\":1.7976931348623157e+308}",
+      "digest": "sha256:d3acfe3a103361d539010cbbb5fc035e13a774104e6cc6132f64c4a13d0dd7b3",
+      "catches": "exponent sign and shortest round-trip"
+    },
+    {
+      "name": "integer-max-safe",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 9007199254740991
+      },
+      "canonical": "{\"n\":9007199254740991}",
+      "digest": "sha256:03545dd522fd032b97eb100e4ff47b90d8345cd4312aeadcebf4ffa13f024dd4"
+    },
+    {
+      "name": "number-long-fraction",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "n": 333333333.3333333
+      },
+      "canonical": "{\"n\":333333333.3333333}",
+      "digest": "sha256:64a8fa554d13d85973eda05576a2a225278872f0c56b47a576a014a46076add5",
+      "catches": "shortest round-trip fraction"
+    },
+    {
+      "name": "key-order-utf16-surrogate",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "😀": 1,
+        "שּׁ": 2
+      },
+      "canonical": "{\"😀\":1,\"שּׁ\":2}",
+      "digest": "sha256:ac3776e1a4a9bc72a93ef174ed4ec57b21d6b2ced69935d1203ebaecfea8cd83",
+      "catches": "code-point sort puts U+FB2C first; UTF-16 puts the surrogate pair first"
+    },
+    {
+      "name": "key-order-ascii",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "b": 1,
+        "a": 2,
+        "A": 3
+      },
+      "canonical": "{\"A\":3,\"a\":2,\"b\":1}",
+      "digest": "sha256:c506364847ac19898b54e7d587e18c153bbff60a6883bb71351eefc61df3ec5b"
+    },
+    {
+      "name": "float-negative",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "value": -17.2
+      },
+      "canonical": "{\"value\":-17.2}",
+      "digest": "sha256:985faddf9f6fd3da389a0702cfce14891d2c6fb4f580aae19a5d0ba7c1d8fa0f"
+    },
+    {
+      "name": "float-confidence",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "confidence": 0.72
+      },
+      "canonical": "{\"confidence\":0.72}",
+      "digest": "sha256:d2770a56b9cec1bda8a2a4a488506ae33e72877eb5ab1290e3f54a81ebe8d30b"
+    },
+    {
+      "name": "empty-object",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {},
+      "canonical": "{}",
+      "digest": "sha256:97769a0b47f68788146ba01f39d19c2f846e4232b15ce77ef5f80f0387f62c05"
+    },
+    {
+      "name": "nested-and-array",
+      "domain": "situation-runtime/test/v1\n",
+      "input": {
+        "z": [
+          3,
+          1,
+          2
+        ],
+        "a": {
+          "n": null,
+          "t": true
+        }
+      },
+      "canonical": "{\"a\":{\"n\":null,\"t\":true},\"z\":[3,1,2]}",
+      "digest": "sha256:31e628a134dc604b18d35ddc81cf7a0d41087717a42716cc2e216c828e2f2d8c"
+    },
+    {
+      "name": "snapshot-v1",
+      "domain": "situation-runtime/snapshot/v1\n",
+      "input": {
+        "situation_id": "sit_zone3_refrig_0091",
+        "situation_version": 7,
+        "situation_type": "refrigeration_degradation",
+        "tenant_id": "acme",
+        "entity": {
+          "type": "freezer_zone",
+          "id": "zone-3"
+        },
+        "phase": "watch",
+        "severity": 30,
+        "completeness": "on_time",
+        "uncertainty": 0.28,
+        "event_horizon": "2026-08-04T22:26:00.000000000Z",
+        "spec_digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "facts": {
+          "room_temp_c": -17.2,
+          "room_temp_slope_c_per_h": 1.15,
+          "compressor_current_a": 18.4,
+          "condenser_approach_c": 9.6,
+          "leak_rate_kg_s": 1e-7,
+          "confidence_floor": 1
+        }
+      },
+      "canonical": "{\"completeness\":\"on_time\",\"entity\":{\"id\":\"zone-3\",\"type\":\"freezer_zone\"},\"event_horizon\":\"2026-08-04T22:26:00.000000000Z\",\"facts\":{\"compressor_current_a\":18.4,\"condenser_approach_c\":9.6,\"confidence_floor\":1,\"leak_rate_kg_s\":1e-7,\"room_temp_c\":-17.2,\"room_temp_slope_c_per_h\":1.15},\"phase\":\"watch\",\"severity\":30,\"situation_id\":\"sit_zone3_refrig_0091\",\"situation_type\":\"refrigeration_degradation\",\"situation_version\":7,\"spec_digest\":\"sha256:1111111111111111111111111111111111111111111111111111111111111111\",\"tenant_id\":\"acme\",\"uncertainty\":0.28}",
+      "digest": "sha256:4b0d9bf0b0621766aaa3cd0d4abc6a060cec31cb0de77fbcdf77505aa7ffc64d",
+      "catches": "realistic snapshot that itself contains 1e-7 and 1.0"
+    },
+    {
+      "name": "decision-v1",
+      "domain": "situation-runtime/decision/v1\n",
+      "input": {
+        "decision_id": "dec_0091_a",
+        "episode_id": "epi_0091_a",
+        "snapshot_digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "primary_hypothesis": "condenser_fouling",
+        "confidence": 0.72,
+        "alternatives": [
+          {
+            "hypothesis": "refrigerant_undercharge",
+            "confidence": 0.18
+          }
+        ],
+        "intents": [
+          "create_maintenance_ticket",
+          "install_watch_condition"
+        ]
+      },
+      "canonical": "{\"alternatives\":[{\"confidence\":0.18,\"hypothesis\":\"refrigerant_undercharge\"}],\"confidence\":0.72,\"decision_id\":\"dec_0091_a\",\"episode_id\":\"epi_0091_a\",\"intents\":[\"create_maintenance_ticket\",\"install_watch_condition\"],\"primary_hypothesis\":\"condenser_fouling\",\"snapshot_digest\":\"sha256:2222222222222222222222222222222222222222222222222222222222222222\"}",
+      "digest": "sha256:a687a337e5c0125513a5c67809f97705c92124ff3b472eacf07ab21675f05669"
+    }
+  ],
+  "reject": [
+    {
+      "name": "reject-nan",
+      "input_form": "native",
+      "input": "NaN",
+      "reason": "non-finite; not representable in JSON"
+    },
+    {
+      "name": "reject-positive-infinity",
+      "input_form": "native",
+      "input": "Infinity",
+      "reason": "non-finite"
+    },
+    {
+      "name": "reject-negative-infinity",
+      "input_form": "native",
+      "input": "-Infinity",
+      "reason": "non-finite"
+    },
+    {
+      "name": "reject-negative-zero",
+      "input_form": "native",
+      "input": "-0",
+      "reason": "product rule: ES6 serializes -0 as \"0\", so the value does not round-trip; producers must reject rather than silently normalize"
+    },
+    {
+      "name": "reject-lone-high-surrogate",
+      "input_form": "raw_json",
+      "input": "{\"k\":\"\\ud800\"}",
+      "reason": "unpaired surrogate is not well-formed Unicode"
+    },
+    {
+      "name": "reject-lone-low-surrogate",
+      "input_form": "raw_json",
+      "input": "{\"k\":\"\\udc00\"}",
+      "reason": "unpaired surrogate"
+    },
+    {
+      "name": "reject-duplicate-keys",
+      "input_form": "raw_json",
+      "input": "{\"a\":1,\"a\":2}",
+      "reason": "ambiguous; last-wins parsing hides a contract violation"
+    },
+    {
+      "name": "reject-unsafe-integer",
+      "input_form": "raw_json",
+      "input": "{\"n\":9007199254740993}",
+      "reason": "2^53+1 is not exactly representable as an IEEE-754 double"
+    }
+  ]
+}

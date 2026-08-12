@@ -215,7 +215,7 @@ module Tamoz
                        end
           [key.to_s, normalized]
         end
-        Canonical.digest(serializable, domain: "tamoz.graph.checkpoint")
+        Canonical.digest(serializable, domain: "tamoz.graph.checkpoint\n")
       end
 
       def descriptor_for(value)

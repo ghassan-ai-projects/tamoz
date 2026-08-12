@@ -1,42 +1,30 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
+require "tamoz/core"
 
 module Tamoz
   module Graph
+    # Canonical digest rule for graph definitions and checkpoint identities.
+    # Version 2 is RFC 8785 (JCS) via Tamoz::Core, so definition digests agree
+    # with the shared contract package (CONTRACTS.md §2-3). Version 1 used the
+    # local sort + JSON.generate rule; a checkpoint carrying the older version
+    # in its digest_version column was sealed under that rule.
     module Canonical
-      DIGEST_VERSION = 1
+      DIGEST_VERSION = 2
 
       module_function
 
       def json(value)
-        JSON.generate(sort(value))
+        Tamoz::Core.jcs(value)
       end
 
       def digest(value, domain:)
-        body = "#{domain}\0v#{DIGEST_VERSION}\0#{json(value)}"
-        "sha256:#{Digest::SHA256.hexdigest(body)}"
-      end
-
-      def sort(value)
-        case value
-        when Hash
-          value.keys.map(&:to_s).sort.to_h do |key|
-            source_key = value.key?(key) ? key : key.to_sym
-            [key, sort(value.fetch(source_key))]
-          end
-        when Array
-          value.map { |entry| sort(entry) }
-        when Symbol
-          value.to_s
-        when NilClass, TrueClass, FalseClass, Integer, Float, String
-          value
-        else
-          raise GraphDefinitionError, "non-canonical definition value #{value.class}"
+        unless domain.is_a?(String) && domain.end_with?("\n")
+          raise GraphDefinitionError, "Canonical digest domain must end with a newline"
         end
+
+        Tamoz::Core.digest(domain, value)
       end
-      private_class_method :sort
     end
 
     private_constant :Canonical

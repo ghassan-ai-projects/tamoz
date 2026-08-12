@@ -94,13 +94,14 @@ class MemoryRepositoryTest < Minitest::Test
     # P13: CURRENT_VERSION moved 2 -> 3 through MIGRATION_3 (scheduler tables);
     # P14: CURRENT_VERSION moved 3 -> 4 through MIGRATION_4 (stream tables);
     # comms moved 5 -> 6 through MIGRATION_6; ADR-049 moved 8 -> 9 and 9 -> 10
-    # through MIGRATION_9/10. The monotonic-ordering guard makes ordinal
-    # reuse impossible.
-    assert_equal 10, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], Tamoz::SQLite::Migrator.migration_ordinals
+    # through MIGRATION_9/10; the JCS digest-rule cutover moved 10 -> 11
+    # through MIGRATION_11. The monotonic-ordering guard makes ordinal reuse
+    # impossible.
+    assert_equal 11, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 10, database.get_first_value("PRAGMA user_version")
+    assert_equal 11, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -121,6 +122,7 @@ class MemoryRepositoryTest < Minitest::Test
     legacy.close
     database = SQLite3::Database.new(old)
     database.execute("DROP TABLE tamoz_memory_index")
+    database.execute("DROP TABLE IF EXISTS tamoz_digest_epoch")
     database.execute("DROP TABLE IF EXISTS tamoz_schedules")
     database.execute("DROP TABLE IF EXISTS tamoz_occurrences")
     database.execute("DROP TABLE IF EXISTS tamoz_stream_channels")
@@ -140,11 +142,45 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 10, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 11, upgraded.integrity_check.fetch("schema_version")
+    upgraded.close
+  end
+
+  # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1). A pre-JCS database
+  # carrying stream-engine rows and circuit rows migrates forward: MIGRATION_11
+  # registers the digest epoch, clears the canonical-JSON-digest rows, and the
+  # reopened connection verifies.
+  def test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows
+    path = File.join(@directory, "cutover.db")
+    adapter = Tamoz::SQLite::Adapter.new(path:)
+    database = SQLite3::Database.new(path)
+    database.execute(
+      "INSERT INTO tamoz_stream_channels(channel_id, revision, definition_digest, payload, payload_digest, deleted, created_at_ms, updated_at_ms) VALUES (?, 1, ?, ?, ?, 0, 1, 1)",
+      ["ch", "sha256:#{"a" * 64}", "{}", "sha256:#{"c" * 64}"]
+    )
+    database.execute(
+      "INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms) VALUES (?, ?, 1, 0, 0, 1)",
+      ["tamoz.circuit.test", "sha256:#{"b" * 64}"]
+    )
+    database.execute("DROP TABLE tamoz_digest_epoch")
+    database.execute("PRAGMA user_version = 10")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version = 11")
+    database.close
+    adapter.close
+
+    upgraded = Tamoz::SQLite::Adapter.new(path:)
+    database = SQLite3::Database.new(path)
+    assert_equal 1, database.get_first_value("SELECT epoch FROM tamoz_digest_epoch")
+    assert_equal 0, database.get_first_value("SELECT COUNT(*) FROM tamoz_stream_channels")
+    assert_equal 0, database.get_first_value(
+      "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
+    )
+    database.close
+    assert_equal 11, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

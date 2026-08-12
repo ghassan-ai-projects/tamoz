@@ -21,9 +21,7 @@ module Tamoz
           end
 
           def digest(value, label)
-            canonical = JSON.generate(Tamoz::Core.canonical(value))
-            body = "tamoz.agent.healing.#{label}.v1\n#{canonical}"
-            "sha256:#{Digest::SHA256.hexdigest(body)}"
+            Tamoz::Core.digest("tamoz.agent.healing.#{label}.v1\n", value)
           end
 
           def record(state, plan_digest:, review_digest:, evidence:)

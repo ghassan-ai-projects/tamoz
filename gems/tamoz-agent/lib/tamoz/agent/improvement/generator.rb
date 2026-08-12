@@ -80,11 +80,10 @@ module Tamoz
         # the capability surface it held. A generator with a different grant is
         # a different generator, and the provenance records which one ran.
         def digest
-          "sha256:#{Digest::SHA256.hexdigest(
-            PRINCIPAL_DOMAIN + JSON.generate([
-              @principal, @toolbox.catalog_digest, MIN_TRIALS, MIN_SUPPORT, MIN_CONFIDENCE
-            ])
-          )}"
+          Tamoz::Core.digest(
+            PRINCIPAL_DOMAIN,
+            [@principal, @toolbox.catalog_digest, MIN_TRIALS, MIN_SUPPORT, MIN_CONFIDENCE]
+          )
         end
 
         # Read one trajectory through the CAPABILITY. `relative_path` is
@@ -154,9 +153,7 @@ module Tamoz
 
             {
               "trajectory_id" => entry.fetch("trajectory_id"),
-              "digest" => "sha256:#{Digest::SHA256.hexdigest(
-                JSON.generate(Tamoz::Core.canonical(entry))
-              )}",
+              "digest" => Tamoz::Core.digest(PRINCIPAL_DOMAIN, entry),
               "partition" => "train",
               "verified" => true
             }

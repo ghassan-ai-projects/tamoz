@@ -128,7 +128,9 @@ class AgentScorecardTest < Minitest::Test
         # The reviewed tool surface and phase-specific review rules are included
         # in every plan review prompt. The behavior counters remain unchanged;
         # only the measured prompt bytes grow with that explicit context.
-        "model_input_bytes" => 276_936,
+        # Re-measured after the JCS digest-rule cutover (T0.1): the reviewed
+        # surface rendering carries RFC 8785 canonical bytes.
+        "model_input_bytes" => 276_992,
         "model_output_bytes" => 21_472,
         "tool_output_bytes" => 4_946,
         "mutations" => 10,

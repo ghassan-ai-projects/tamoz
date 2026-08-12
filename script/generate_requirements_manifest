@@ -222,7 +222,7 @@ EVIDENCE = {
     supporting: [
       "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
       "test/graph_checkpoint_codec_test.rb#test_rejects_graph_identity_before_decoding_user_values",
-      "test/legacy_session_resume_test.rb#test_every_resume_guard_accepts_the_old_thread",
+      "test/legacy_session_resume_test.rb#test_every_resume_guard_stops_the_old_thread_typed",
       "test/legacy_session_resume_test.rb#test_an_old_thread_stops_typed_against_a_capability_it_never_had",
       "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
       "test/sqlite_stale_request_test.rb#test_a_stale_request_does_not_poison_an_unrelated_thread"
@@ -803,6 +803,8 @@ EVIDENCE = {
   "MIG-8" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-9" => {test: "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store"},
   "MIG-10" => {test: "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store"},
+  "MIG-11" => {test: "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+               supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",

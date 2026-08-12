@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-12T14:26:54Z",
-  "manifest_requirements": 435,
-  "named_cases_run": 268,
+  "generated_at": "2026-08-12T17:52:22Z",
+  "manifest_requirements": 436,
+  "named_cases_run": 269,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 16,
-    "pass": 404
+    "pass": 405
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -5718,7 +5718,7 @@
       "supporting_tests": [
         "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
         "test/graph_checkpoint_codec_test.rb#test_rejects_graph_identity_before_decoding_user_values",
-        "test/legacy_session_resume_test.rb#test_every_resume_guard_accepts_the_old_thread",
+        "test/legacy_session_resume_test.rb#test_every_resume_guard_stops_the_old_thread_typed",
         "test/legacy_session_resume_test.rb#test_an_old_thread_stops_typed_against_a_capability_it_never_had",
         "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
         "test/sqlite_stale_request_test.rb#test_a_stale_request_does_not_poison_an_unrelated_thread"
@@ -6468,6 +6468,23 @@
       "status": "pass",
       "named_test": "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-11",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_11",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+      "supporting_tests": [
+        "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

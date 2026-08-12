@@ -45,7 +45,7 @@ module Tamoz
         SENSITIVITIES = %i[public internal sensitive].freeze
         # P11 §3 (C5): retrieval-eligible state set.
         ELIGIBLE_STATES = %i[active consolidated].freeze
-        DIGEST_DOMAIN = "tamoz.agent.memory_record"
+        DIGEST_DOMAIN = "tamoz.agent.memory_record.v1\n"
         MAX_ID_BYTES = 256
 
         def initialize(
@@ -129,9 +129,7 @@ module Tamoz
         end
 
         def digest
-          Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}\n#{Tamoz::Core.canonical(to_h)}"
-          )
+          Tamoz::Core.digest(DIGEST_DOMAIN, to_h)
         end
 
         # Canonical storage hash (string keys).

@@ -55,9 +55,7 @@ module Tamoz
                   "be a configured check (invariant 33)"
           end
 
-          "sha256:#{Digest::SHA256.hexdigest(
-            "#{DIGEST_DOMAIN}\n#{JSON.generate(Tamoz::Core.canonical([String(check_name), argv]))}"
-          )}"
+          Tamoz::Core.digest("#{DIGEST_DOMAIN}\n", [String(check_name), argv])
         end
 
         # Runs the rule's pinned oracle. Returns a `Result`; NEVER raises for a
