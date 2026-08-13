@@ -33,6 +33,10 @@ class StreamArtifactManifestTest < Minitest::Test
     )
   end
 
+  def raw_digest(digest)
+    [digest.delete_prefix("sha256:")].pack("H*")
+  end
+
   def graph
     Tamoz.graph(name: "episode-artifact", version: "1") do
       state :episode, default: {}
@@ -87,18 +91,24 @@ class StreamArtifactManifestTest < Minitest::Test
     schema_digest = "sha256:#{"b" * 64}"
     objective_digest = "sha256:#{"c" * 64}"
     wire = wire_request(
-      tool_catalog_json: tool_catalog, tool_catalog_sha256: tool_digest,
-      decision_schema_json: schema, decision_schema_sha256: schema_digest,
-      objective_sha256: objective_digest, objective: "diagnose the compressor"
+      snapshot_sha256: raw_digest(Tamoz::Core.digest(:snapshot, snapshot)),
+      tool_catalog_json: tool_catalog, tool_catalog_sha256: raw_digest(tool_digest),
+      decision_schema_json: schema, decision_schema_sha256: raw_digest(schema_digest),
+      objective_sha256: raw_digest(objective_digest), objective: "diagnose the compressor"
     )
 
     events = runner.run(wire).each.to_a
     terminal = events.last.terminal
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+    decision_event = events.find { |event| event.decision }
+    refute_nil decision_event
+    assert_equal 32, decision_event.decision.decision_sha256.bytesize
     manifest = terminal.artifact_manifest
     assert_equal "1.0", manifest.contract_version
-    assert_equal tool_digest, manifest.tool_catalog_sha256
-    assert_equal "sha256:#{"m" * 64}", manifest.memory_record_sha256.fetch(0),
+    assert_equal 32, manifest.tool_catalog_sha256.bytesize
+    assert_equal tool_digest, Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
+    assert_equal "sha256:#{"m" * 64}",
+                 Tamoz::Core.normalize_digest(manifest.memory_record_sha256.fetch(0)),
                  "the manifest names the memory records the episode grounded on"
 
     # The named documents are retained, resolvable by the STREAM's digests —
@@ -153,5 +163,16 @@ class StreamArtifactManifestTest < Minitest::Test
     assert_raises(Tamoz::Stream::ArtifactStore::ArtifactStoreError) do
       store.retain(digest: "sha256:#{"1" * 64}", bytes: {"a" => 1})
     end
+  end
+
+  def test_retention_accepts_a_raw_wire_digest
+    store = Tamoz::Stream::ArtifactStore.new
+    digest = "sha256:#{"a" * 64}"
+    raw_digest = [digest.delete_prefix("sha256:")].pack("H*")
+
+    retained = store.retain(digest: raw_digest, bytes: "a")
+
+    assert_equal digest, retained.fetch("digest")
+    assert_equal "a", store.resolve(raw_digest).fetch("bytes")
   end
 end

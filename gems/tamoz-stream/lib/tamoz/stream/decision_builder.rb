@@ -8,20 +8,20 @@ module Tamoz
   module Stream
     # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision, built to the
     # frozen decision-v1 schema and digested with the shared rule
-    # (situation-runtime/decision/v1). At low confidence a watch condition
-    # (R0, CEL-compilable expression) is preferred over a consequential action
-    # (R2) — the episode proposes observation, not intervention, when it is
-    # not sure.
+    # (situation-runtime/decision/v1). The builder selects the safest
+    # expressible action from the wire allowlist and falls back to a watch
+    # condition when no action can be expressed.
     class DecisionBuilder
-      # Below this confidence the builder proposes install_watch_condition.
-      CONFIDENCE_WATCH_FLOOR = 0.5
-      # The risk class of the consequential action the builder can propose.
-      ACTION_RISK = "r2"
       RISK_ORDER = {
         "r0" => 0, "r1" => 1, "r2" => 2, "r3" => 3, "r4" => 4
       }.freeze
+      ACTION_RISKS = {
+        "create_maintenance_ticket" => "r1",
+        "recommend_operating_limit" => "r2"
+      }.freeze
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
+      VALIDITY_WINDOW_SECONDS = 86_400
 
       def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, now: Time.now)
         new(envelope:, snapshot:, snapshot_digest:, outcome:, now:).build
@@ -52,7 +52,7 @@ module Tamoz
           "facts_used" => Array(@outcome.fetch(:facts_used, [])).first(MAX_FACTS),
           "alternatives" => Array(@outcome.fetch(:alternatives, [])).first(MAX_ALTERNATIVES),
           "intents" => intents,
-          "valid_until" => @now.utc.iso8601
+          "valid_until" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601
         }
         digest = Tamoz::Core.digest(:decision, decision)
         [decision, digest]
@@ -115,24 +115,34 @@ module Tamoz
       end
 
       def diagnose_intents
-        return [watch_condition_intent] if confidence < CONFIDENCE_WATCH_FLOOR
-        return [watch_condition_intent] if RISK_ORDER.fetch(@envelope.risk_ceiling) <
-                                           RISK_ORDER.fetch(ACTION_RISK)
-        return [watch_condition_intent] unless allowed_intent_type?("maintenance.ticket")
+        type = expressible_action_type
+        return [action_intent(type:)] if type
 
-        [action_intent]
+        [watch_condition_intent]
       end
 
-      def allowed_intent_type?(type)
-        allowed = @envelope.wire.allowed_intent_types
-        allowed.empty? || allowed.include?(type)
+      def expressible_action_type
+        candidates = allowed_intent_types.filter_map do |type|
+          risk_class = ACTION_RISKS[type]
+          next unless risk_class
+          next if RISK_ORDER.fetch(risk_class) > RISK_ORDER.fetch(@envelope.risk_ceiling)
+
+          [type, risk_class]
+        end
+        candidate = candidates.min_by { |_type, risk_class| RISK_ORDER.fetch(risk_class) }
+        candidate&.first
       end
 
-      # The consequential intent (R2) for a confident episode.
-      def action_intent
+      def allowed_intent_types
+        allowed = @envelope.wire.allowed_intent_types.to_a
+        allowed.empty? ? ACTION_RISKS.keys : allowed
+      end
+
+      # The consequential intent uses the risk class declared for its wire
+      # type, rather than the builder's former fixed R2 vocabulary.
+      def action_intent(type:)
         build_intent(
-          type: "maintenance.ticket",
-          risk_class: "R2",
+          type:, risk_class: ACTION_RISKS.fetch(type).upcase,
           parameters: {
             "entity_id" => @snapshot.fetch("entity").fetch("id"),
             "hypothesis" => String(@outcome.fetch(:primary_hypothesis, "")).byteslice(0, 512)
@@ -167,7 +177,7 @@ module Tamoz
           "type" => type,
           "risk_class" => risk_class,
           "parameters" => parameters,
-          "expires_at" => (@now + 86_400).utc.iso8601
+          "expires_at" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601
         }
         # The intent digest covers the intent WITHOUT its own digest.
         intent.merge("intent_digest" => Tamoz::Core.digest(

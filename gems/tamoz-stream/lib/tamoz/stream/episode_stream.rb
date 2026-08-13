@@ -69,7 +69,9 @@ module Tamoz
                is_error: false, execution_started: nil, error_code: nil)
         build do |event|
           event.tool = Agenticstream::Runtime::V1::ToolLifecycle.new(
-            call_id:, tool_name:, state:, arguments_sha256:, result_sha256:,
+            call_id:, tool_name:, state:,
+            arguments_sha256: Tamoz::Core.digest_bytes(arguments_sha256),
+            result_sha256: Tamoz::Core.digest_bytes(result_sha256),
             is_error:, execution_started:, error_code:
           )
         end
@@ -87,7 +89,7 @@ module Tamoz
         build do |event|
           event.decision = Agenticstream::Runtime::V1::DecisionProposed.new(
             decision_json: decision_json.to_s.b,
-            decision_sha256:,
+            decision_sha256: Tamoz::Core.digest_bytes(decision_sha256),
             episode_id: @envelope.episode_id,
             attempt_id: @envelope.attempt_id,
             fence: @envelope.fence

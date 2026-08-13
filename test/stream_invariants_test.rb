@@ -356,7 +356,7 @@ class StreamInvariantsTest < Minitest::Test
       tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
       kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
-      allowed_intent_types: ["maintenance.ticket"],
+      allowed_intent_types: ["create_maintenance_ticket"],
       capability_token: "opaque.hmac.token",
       snapshot_json: Tamoz::Core.jcs(snapshot),
       snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)

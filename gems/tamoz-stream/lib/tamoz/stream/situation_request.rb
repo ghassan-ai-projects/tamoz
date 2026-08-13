@@ -70,6 +70,12 @@ module Tamoz
       def lane = LANE_NAMES.fetch(@wire.lane)
       def risk_ceiling = RISK_NAMES.fetch(@wire.risk_ceiling)
       def capability_token = @wire.capability_token
+      def snapshot_sha256 = Tamoz::Core.normalize_digest(@wire.snapshot_sha256)
+      def decision_schema_sha256 = Tamoz::Core.normalize_digest(@wire.decision_schema_sha256)
+      def tool_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.tool_catalog_sha256)
+      def spec_sha256 = Tamoz::Core.normalize_digest(@wire.spec_sha256)
+      def prompt_sha256 = Tamoz::Core.normalize_digest(@wire.prompt_sha256)
+      def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
 
       # The durable request identity. The fence is part of the id, so a
       # superseded attempt (fence+1) is never confused with the in-flight one.
@@ -107,7 +113,7 @@ module Tamoz
             "supersession_key" => @wire.supersession_key,
             "cancellation_key" => @wire.cancellation_key,
             "snapshot_json" => @wire.snapshot_json,
-            "snapshot_sha256" => @wire.snapshot_sha256
+            "snapshot_sha256" => snapshot_sha256
           }.freeze
         }.freeze
       end
@@ -226,7 +232,7 @@ module Tamoz
           begin
             envelope = EpisodeRequestEnvelope.new(wire_request, @worker)
             snapshot = ReceivedSnapshot.verify(
-              wire_request.snapshot_json, wire_request.snapshot_sha256
+              wire_request.snapshot_json, envelope.snapshot_sha256
             )
             # F-5: the durable row and the decision carry the SNAPSHOT's
             # tenant/situation identity — a mismatched wire header is a
@@ -272,7 +278,7 @@ module Tamoz
             status, reason = adapter.terminal_status(result)
             if status == :TERMINAL_STATUS_PRODUCED
               decision, digest = emit_decision(
-                stream, envelope, snapshot, wire_request, result
+                stream, envelope, snapshot, result
               )
               open_verifications(envelope, snapshot, decision, digest)
             end
@@ -281,8 +287,8 @@ module Tamoz
             # Decision to reproduce, and its inputs are not retained.
             manifest = nil
             if status == :TERMINAL_STATUS_PRODUCED
-              manifest = build_artifact_manifest(envelope, wire_request, result)
-              retain_manifest_artifacts(wire_request) if @artifact_store
+              manifest = build_artifact_manifest(envelope, result)
+              retain_manifest_artifacts(envelope) if @artifact_store
             end
             stream.terminal(
               status, reason_code: reason, usage: adapter.wire_usage,
@@ -331,7 +337,7 @@ module Tamoz
       # OWN terminal checkpoint (never the thread's `latest`, which a
       # concurrent fence+1 redispatch could have moved past). Returns the
       # [decision, digest] pair so T5.2 can open verification rows per intent.
-      def emit_decision(stream, envelope, snapshot, wire_request, result)
+      def emit_decision(stream, envelope, snapshot, result)
         return [nil, nil] unless result.checkpoint_id
 
         checkpoint = @durable_runner.compiled.checkpointer.find(
@@ -342,7 +348,7 @@ module Tamoz
         outcome = checkpoint.state.to_h
         decision, digest = DecisionBuilder.build(
           envelope:, snapshot:,
-          snapshot_digest: wire_request.snapshot_sha256,
+          snapshot_digest: envelope.snapshot_sha256,
           outcome: outcome.transform_keys(&:to_sym)
         )
         stream.decision(
@@ -391,7 +397,8 @@ module Tamoz
             episode_id: envelope.episode_id,
             attempt_id: envelope.attempt_id,
             decision_digest: digest,
-            episode: episode_content
+            episode: episode_content,
+            decision_id: intent["decision_id"]
           )
         end
       end
@@ -402,7 +409,7 @@ module Tamoz
       # re-derived; the contract version and the memory records the episode
       # grounded on complete the manifest. The checkpoint lookup uses the
       # envelope's own thread/namespace, matching emit_decision.
-      def build_artifact_manifest(envelope, wire_request, result)
+      def build_artifact_manifest(envelope, result)
         memory_digests = []
         if result&.checkpoint_id
           checkpoint = @durable_runner.compiled.checkpointer.find(
@@ -413,12 +420,12 @@ module Tamoz
           memory_digests = Array(checkpoint&.state&.to_h&.fetch(:memory_record_digests, []))
         end
         Agenticstream::Runtime::V1::ArtifactManifest.new(
-          prompt_sha256: blank_to_nil(wire_request.prompt_sha256),
+          prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
           skill_set_sha256: nil,
-          tool_catalog_sha256: blank_to_nil(wire_request.tool_catalog_sha256),
-          model_policy: blank_to_nil(wire_request.model_policy),
+          tool_catalog_sha256: digest_bytes_or_nil(envelope.tool_catalog_sha256),
+          model_policy: blank_to_nil(envelope.wire.model_policy),
           contract_version: EpisodeWorker::CONTRACT_VERSION,
-          memory_record_sha256: memory_digests
+          memory_record_sha256: memory_digests.map { |digest| Tamoz::Core.digest_bytes(digest) }
         )
       end
 
@@ -426,13 +433,13 @@ module Tamoz
       # digests, so a shadow run can resolve them without re-running Tamoz.
       # Each document is keyed under ITS OWN named digest — the objective
       # under objective_sha256, never under the prompt's digest.
-      def retain_manifest_artifacts(wire_request)
+      def retain_manifest_artifacts(envelope)
         {
-          wire_request.tool_catalog_sha256.to_s => wire_request.tool_catalog_json,
-          wire_request.decision_schema_sha256.to_s => wire_request.decision_schema_json,
-          wire_request.objective_sha256.to_s => wire_request.objective
+          envelope.tool_catalog_sha256 => envelope.wire.tool_catalog_json,
+          envelope.decision_schema_sha256 => envelope.wire.decision_schema_json,
+          envelope.objective_sha256 => envelope.wire.objective
         }.each do |digest, bytes|
-          next if digest.empty? || bytes.to_s.empty?
+          next if digest.to_s.empty? || bytes.to_s.empty?
 
           @artifact_store.retain(digest:, bytes: bytes.to_s, media_type: "application/json")
         end
@@ -440,6 +447,12 @@ module Tamoz
 
       def blank_to_nil(value)
         value.to_s.empty? ? nil : value.to_s
+      end
+
+      def digest_bytes_or_nil(value)
+        return nil if value.to_s.empty?
+
+        Tamoz::Core.digest_bytes(value)
       end
 
       # The wire deadline is a wall-clock Timestamp; the Context deadline is on

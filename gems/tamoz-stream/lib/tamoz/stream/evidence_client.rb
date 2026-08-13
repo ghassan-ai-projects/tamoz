@@ -180,7 +180,7 @@ module Tamoz
         unless document.valid_encoding?
           raise EvidenceError, "evidence result is not valid UTF-8"
         end
-        expected = result.result_sha256.to_s
+        expected = Tamoz::Core.normalize_digest(result.result_sha256).to_s
         if expected.empty?
           raise EvidenceError, "evidence result carries no digest"
         end
@@ -209,7 +209,7 @@ module Tamoz
           "id" => artifact.id,
           "media_type" => artifact.media_type,
           "size_bytes" => artifact.size_bytes,
-          "sha256" => artifact.sha256.to_s
+          "sha256" => Tamoz::Core.normalize_digest(artifact.sha256).to_s
         }
       end
 

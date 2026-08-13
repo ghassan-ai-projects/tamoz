@@ -3,9 +3,10 @@
 require_relative "test_helper"
 require "json_schemer"
 require "tamoz/stream/episode_worker"
+require "time"
 
 # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision — decision-v1 shape,
-# domain digest, and the watch-condition preference at low confidence.
+# domain digest, wire-allowlisted action selection, and watch fallback.
 class StreamDecisionBuilderTest < Minitest::Test
   Stream = Tamoz::Stream
 
@@ -19,12 +20,18 @@ class StreamDecisionBuilderTest < Minitest::Test
   end
 
   def envelope
+    envelope_with
+  end
+
+  def envelope_with(risk_ceiling: :RISK_CLASS_R2, allowed_intent_types: [
+    "create_maintenance_ticket", "recommend_operating_limit"
+  ])
     Stream::EpisodeRequestEnvelope.new(
       Agenticstream::Runtime::V1::EpisodeRequest.new(
         protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
         fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
         kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-        risk_ceiling: :RISK_CLASS_R2
+        risk_ceiling:, allowed_intent_types:
       ),
       worker
     )
@@ -57,8 +64,8 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "bearing wear", decision.fetch("primary_hypothesis")
 
     intent = decision.fetch("intents").fetch(0)
-    assert_equal "maintenance.ticket", intent.fetch("type")
-    assert_equal "R2", intent.fetch("risk_class")
+    assert_equal "create_maintenance_ticket", intent.fetch("type")
+    assert_equal "R1", intent.fetch("risk_class")
     assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
 
     # The decision digest verifies against the shared decision domain.
@@ -70,15 +77,29 @@ class StreamDecisionBuilderTest < Minitest::Test
     )
   end
 
-  def test_an_uncertain_episode_prefers_a_watch_condition_over_an_action
+  def test_a_low_confidence_episode_uses_an_allowlisted_action_when_watch_is_not_allowed
     decision, = build(
-      primary_hypothesis: "possible drift", confidence: 0.3,
-      watch_metric: "condition_score", watch_threshold: 0.8
+      primary_hypothesis: "possible drift", confidence: 0.3
     )
 
     intent = decision.fetch("intents").fetch(0)
+    assert_equal "create_maintenance_ticket", intent.fetch("type")
+    assert_equal "R1", intent.fetch("risk_class")
+  end
+
+  def test_an_uncertain_episode_uses_watch_when_no_action_is_allowlisted
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(allowed_intent_types: ["install_watch_condition"]),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3,
+        watch_metric: "condition_score", watch_threshold: 0.8
+      }
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
     assert_equal "install_watch_condition", intent.fetch("type"),
-                 "at low confidence the episode must observe, not act"
+                 "at low confidence the episode must observe when allowed"
     assert_equal "R0", intent.fetch("risk_class")
     assert_equal(
       "situation.condition_score >= 0.8",
@@ -89,6 +110,47 @@ class StreamDecisionBuilderTest < Minitest::Test
   def test_confidence_is_clamped_to_the_unit_interval
     decision, = build(primary_hypothesis: "x", confidence: 1.7)
     assert_equal 1.0, decision.fetch("confidence")
+  end
+
+  def test_decision_validity_survives_stream_expiry_validation_after_build
+    now = Time.utc(2026, 8, 13, 12)
+    decision, = Stream::DecisionBuilder.new(
+      envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.9}, now:
+    ).build
+
+    valid_until = Time.iso8601(decision.fetch("valid_until"))
+    validation_now = now + 1
+
+    assert_equal now + 86_400, valid_until
+    assert_operator valid_until, :>, now
+    assert_operator valid_until, :>, validation_now,
+                    "stream validation must not reject the decision as expired"
+    assert_equal valid_until, Time.iso8601(decision.fetch("intents").first.fetch("expires_at"))
+  end
+
+  def test_a_r1_ceiling_excludes_the_r2_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(risk_ceiling: :RISK_CLASS_R1), snapshot:,
+      snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.9}
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "create_maintenance_ticket", intent.fetch("type")
+    assert_equal "R1", intent.fetch("risk_class")
+  end
+
+  def test_a_recommendation_is_proposed_when_it_is_the_only_allowlisted_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(allowed_intent_types: ["recommend_operating_limit"]),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.9}
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "recommend_operating_limit", intent.fetch("type")
+    assert_equal "R2", intent.fetch("risk_class")
   end
 
   # F-1 (security review): a risk ceiling below the action's class, or an

@@ -8,6 +8,7 @@ require_relative "stream/situation_snapshot"
 require_relative "stream/situation_request"
 require_relative "stream/approval_relay"
 require_relative "stream/outcome_subscriber"
+require_relative "stream/sse_transport"
 require_relative "stream/situation_memory"
 require_relative "stream/worker_server"
 
