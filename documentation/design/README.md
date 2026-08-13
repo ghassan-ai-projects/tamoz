@@ -5,7 +5,7 @@ Public summaries of how Tamoz is designed and why. Each page below covers one su
 ## Two layers of design documentation
 
 - **`documentation/design/*.md` (this directory)** — public summaries. Written for readers who want the shape, the contracts, and the reasoning without the full internal record. Every page states its source and links to it.
-- **`docs/design-v0.1/`** — the authoritative, CI-validated design record. It holds the full design documents (`GRAPH_DESIGN.md`, `MEMORY_DESIGN.md`, `SCHEDULER_DESIGN.md`, `MCP_DESIGN.md`, `STREAMING_INPUT_DESIGN.md`, `SELF_HEALING_DESIGN.md`, `SKILLS_DESIGN.md`, and the architecture, persistence, agent, and evaluation documents), the 55-clause invariant contract (`INVARIANTS.md`), and the decision record (`DECISIONS.md`). `rake design:validate` checks its local links, required documents, invariant numbering, README coverage, and stale disproven guarantees.
+- **`docs/design-v0.1/`** — the authoritative, CI-validated design record. It holds the full design documents (`GRAPH_DESIGN.md`, `MEMORY_DESIGN.md`, `SCHEDULER_DESIGN.md`, `MCP_DESIGN.md`, `STREAMING_INPUT_DESIGN.md`, `SELF_HEALING_DESIGN.md`, `SKILLS_DESIGN.md`, and the architecture, persistence, agent, and evaluation documents), the 61-clause invariant contract (`INVARIANTS.md`), and the decision record (`DECISIONS.md`). `rake design:validate` checks its local links, required documents, invariant numbering, README coverage, and stale disproven guarantees.
 
 The archive remains the source of truth. If a summary and the authoritative record disagree, the archive wins; a summary that drifts is a documentation bug.
 

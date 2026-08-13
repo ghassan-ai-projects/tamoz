@@ -20,6 +20,17 @@ class DocumentationTreeTest < Minitest::Test
   README = ROOT.join("README.md")
   ARCHIVE_MARKER = ROOT.join("docs", "README.md")
 
+  # Root-level pages are part of the public surface too: their links must
+  # resolve and they must stay free of internal-environment leaks.
+  ROOT_MD = [
+    ROOT.join("README.md"),
+    ROOT.join("CONTRIBUTING.md"),
+    ROOT.join("SECURITY.md"),
+    ROOT.join("SUPPORT.md"),
+    ROOT.join("CHANGELOG.md"),
+    ROOT.join("CODE_OF_CONDUCT.md")
+  ].freeze
+
   # Internal-environment leakage that must never appear in public docs.
   # `~/.tamoz` is public surface (the operator runtime directory) and is fine.
   # The patterns match filesystem-style paths (`~/ai-projects/...`,
@@ -72,7 +83,7 @@ class DocumentationTreeTest < Minitest::Test
   end
 
   def test_every_relative_link_resolves
-    (md_files_under(DOC_ROOT) + [README]).each do |path|
+    (md_files_under(DOC_ROOT) + ROOT_MD).each do |path|
       link_targets(text(path)).each do |target|
         resolved = resolve(path, target)
         assert_path_exists resolved,
@@ -109,7 +120,7 @@ class DocumentationTreeTest < Minitest::Test
   end
 
   def test_public_docs_contain_no_internal_environment_leaks
-    md_files_under(DOC_ROOT).each do |path|
+    (md_files_under(DOC_ROOT) + ROOT_MD).each do |path|
       body = text(path)
       INTERNAL_PATTERNS.each do |pattern|
         refute_match pattern, body,
@@ -117,5 +128,28 @@ class DocumentationTreeTest < Minitest::Test
                      "(#{pattern.inspect})"
       end
     end
+  end
+
+  def test_documentation_files_are_substantive
+    # A title-only stub passes the link and reachability checks; it must not
+    # pass the documentation bar. Every page needs a heading and real content.
+    md_files_under(DOC_ROOT).each do |path|
+      body = text(path)
+      assert_match %r{\A# }, body,
+                   "#{path.relative_path_from(DOC_ROOT)} has no H1 heading"
+      assert_operator body.length, :>=, 200,
+                      "#{path.relative_path_from(DOC_ROOT)} looks like a stub " \
+                      "(#{body.length} characters)"
+    end
+  end
+
+  def test_consistency_pins_hold
+    # Cross-page numbers the reviewers of the release pinned; if the product
+    # legitimately moves past them, update these pins with the change.
+    assert_includes text(DOC_ROOT.join("design", "README.md")), "61-clause"
+    assert_includes text(DOC_ROOT.join("architecture", "invariants.md")), "61"
+    assert_includes text(DOC_ROOT.join("overview", "compatibility.md")), "61"
+    assert_includes text(DOC_ROOT.join("operations", "operations.md")), "thirteen"
+    assert_includes text(DOC_ROOT.join("architecture", "data-model.md")), "13 checksummed"
   end
 end

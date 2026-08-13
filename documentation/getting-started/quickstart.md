@@ -1,7 +1,8 @@
 # Quickstart
 
 The golden path: clone Tamoz, verify the gate, ask a read-only question, then
-let it make a reviewed change. You should get value within ten minutes.
+let it make a reviewed change. Allow time for `bundle install` (gRPC and sqlite3
+native builds) and one gate run before the first question.
 
 Current version: `0.1.0.alpha.1` (pre-release).
 

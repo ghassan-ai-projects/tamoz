@@ -63,7 +63,7 @@ Two edges deserve emphasis:
 | `tamoz-scheduler` | Durable scheduling values and the `ScheduleStore` contract (the SQLite implementation lives in `tamoz-sqlite`). Never executes work itself | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC `EpisodeWorker`: containment host, snapshot verification, typed Decision builder, reverse channel for evidence/outcomes/approvals, artifact manifest. One sealed, digest-verified Situation snapshot per episode (the old streaming-input engine was retired by `MIGRATION_13`) | `tamoz-core`, `grpc ~> 1.83`, `google-protobuf ~> 4.35` |
 | `tamoz-sqlite` | SQLite persistence: checkpoints, request inbox, effect journal, leases, schedules, comms, circuit, memory index, backup/restore. Migrator `CURRENT_VERSION = 13` | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3 ~> 2.9` |
-| `tamoz-tools` | Workspace toolbox, the skills compiler, and the P18 capability host | `tamoz-core` |
+| `tamoz-tools` | Workspace toolbox, the skills compiler, and the sealed capability host | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host over the official Ruby SDK, plus governed websearch (an MCP server with the reserved id `websearch`) | `tamoz-core`, `mcp ~> 1.1` |
 | `tamoz-comms` | Channel contract gem: values, identity/admission policy, rendering, the `Transport` seam, and the structural `CommsStore` contract. Never opens a socket | `tamoz-core` |
 | `tamoz-observability` | Closed versioned signal catalog, correlation identity, immutable signals, bounded recorders, local journal, content/secret policy, metrics and trace projection. `SCHEMA_VERSION = 1` | `tamoz-core` |

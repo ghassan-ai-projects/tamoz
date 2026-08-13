@@ -51,7 +51,7 @@ retried blindly.
 rbenv exec bundle exec tamoz --session-dir DIR resolve THREAD EFFECT_KEY succeeded
 ```
 
-The status is `succeeded`, `abandoned` or `unknown`. The decision is journalled
+The status is `succeeded`, `failed` or `abandoned`. The decision is journalled
 as a durable transition with your actor identity — it is an audited record, not
 a status flip.
 
@@ -178,10 +178,10 @@ next pass. Deny with `--deny`. The evidence model is in
 
 Schema migrations are numbered, checksummed and applied in one transaction; a
 failed migration rolls back every statement, and checksum tampering is refused.
-There are seven: the base runtime, the memory index, the scheduler, the stream
-admission tables, the stream processing plane, the communications tables, and
-the outbox receipt column. A database from an older Tamoz migrates forward on
-open; a database from a NEWER Tamoz fails before any partial load.
+There are thirteen; the full list and the retirement of the old streaming-engine
+tables are in [`../architecture/data-model.md`](../architecture/data-model.md). A
+database from an older Tamoz migrates forward on open; a database from a NEWER
+Tamoz fails before any partial load.
 
 Runtime configuration schema migrations are separate and explicit: `tamoz
 config migrate` moves schema 1 ("no channels") to schema 2 (`channels:`) with

@@ -68,7 +68,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 - **Superseded.** ADR-012 (MCP as a deferred integration strategy) is superseded in detail by ADR-029 (MCP native at the edge); its post-v0.1 timing is retained.
 - **Revised.** ADR-002, ADR-004, ADR-010, and ADR-013 were revised after review or counterexample; their entries in `DECISIONS.md` record what changed.
-- **Standalone page.** ADR-049 is published as a standalone public page because it amends the shipped channel approval path; it also appears in the [`../design/comms.md`](../design/comms.md) decision list and the `DECISIONS.md` companion text.
+- **Standalone page.** ADR-049 is published as a standalone public page because it amends the shipped channel approval path; it also appears in the [`../design/comms.md`](../design/comms.md) decision list.
 - The `DECISIONS.md` file also carries open product questions (the first physical environment for Tamoz Agent) that are not ADRs.
 
 ## Next reads

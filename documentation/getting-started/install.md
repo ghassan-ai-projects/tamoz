@@ -21,6 +21,11 @@ must exist, and the gem list must match what the repository actually packages.
 | Model access | any provider RubyLLM supports, through its own API key |
 | Locale | either a UTF-8 locale or `LC_ALL=C` — both are gated in CI |
 
+The documented commands assume `rbenv exec` (the repository pins Ruby `3.3.11`
+in `.ruby-version`); any Ruby `>= 3.3, < 5.0` with Bundler works, but the
+system Ruby on macOS (/usr/bin/ruby) is too old — install and use a
+version-managed Ruby such as rbenv before running anything below.
+
 ## From the repository
 
 ```bash

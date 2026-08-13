@@ -86,7 +86,7 @@ At session construction, the capability registry is built from four built-in sou
 ## The rest of the model in one list
 
 - **Three-layer memory.** Experience | Knowledge | Wisdom — distinct versioned layers with provenance, authority, and promotion rules. Wisdom changes only through evaluated behavior transition.
-- **Bounded self-healing.** The DR-2 durable circuit spans four scopes (`server`, `rule_target`, `schedule`, `egress`); remediation is typed, reviewed, and bounded.
+- **Bounded self-healing.** The durable-recovery circuit (internal name DR-2) spans four scopes (`server`, `rule_target`, `schedule`, `egress`); remediation is typed, reviewed, and bounded.
 - **Durable scheduling.** A due occurrence is materialized as an ordinary request into the request inbox — the scheduler never executes work itself.
 - **Observability.** A closed signal catalog, a bounded local journal, and metrics/trace projection; secrets are rejected from signals by construction.
 - **The stream runtime.** One sealed, digest-verified Situation snapshot per episode, delivered through the gRPC EpisodeWorker. The continuous plane (event time, watermarks, windows, replay) belongs to the stream runtime, not to Tamoz.

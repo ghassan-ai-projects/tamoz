@@ -111,7 +111,7 @@ new read-only storage query and a boundary-registry entry.
 
 ## Retired and absent capability areas
 
-### The P14 streaming-input engine is retired (T8.3)
+### The P14 streaming-input engine is retired
 
 The supervised episode worker does not consume a continuous input stream —
 that was the retired P14 engine's job. Tamoz now runs one sealed, digest-
@@ -124,7 +124,7 @@ declarations, connector contract, and replay runtime were deleted with it by
 forward migration (MIGRATION_13); nothing reads the old `queue_capacity` /
 `spool_capacity_bytes` / `overflow` vocabulary because the vocabulary is gone.
 
-### Real physical actuation (T8.3)
+### Real physical actuation
 
 The supervised worker proposes typed Decisions (intents); it holds no effector
 at all. Actuation belongs to the stream: the stream executes the accepted

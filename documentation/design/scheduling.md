@@ -24,7 +24,7 @@ A `Schedule` is a validated value: id and revision, owner, enabled flag, kind (`
 - Creating the occurrence and claiming its stable request id is atomic; enqueue shares the adapter transaction with the request inbox (or uses an outbox record). A crash at any seam can repeat delivery, but the inbox commits one logical turn.
 - The scheduler records delivery; the agent records execution. A green enqueue is never reported as a successful task.
 
-Schedule kinds: `at` fires at most one logical occurrence; `interval` is elapsed-time cadence from an explicit anchor; `cron` is civil-time recurrence with a strict expression and pinned IANA timezone. Calendar rules, event streams, filesystem watchers, natural language, and arbitrary trigger scripts are not schedule kinds — they belong to the stream runtime, and high-frequency control timing belongs to independently safe automation.
+Schedule kinds: `at` fires at most one logical occurrence; `interval` is elapsed-time cadence from an explicit anchor; `cron` is civil-time recurrence with a strict expression and pinned IANA timezone. In the current release `cron` is a recorded deferral — the shipped kinds are `at` and `interval` (see [limitations.md](../limitations.md), invariant 39, for implementation status). Calendar rules, event streams, filesystem watchers, natural language, and arbitrary trigger scripts are not schedule kinds — they belong to the stream runtime, and high-frequency control timing belongs to independently safe automation.
 
 ## The ScheduleStore contract
 
