@@ -192,7 +192,7 @@ class StreamLearningLoopTest < Minitest::Test
       intent_id: "intent.ep-1.at-1.1.maintenance.ticket",
       episode_id: "ep-1", attempt_id: "at-1",
       decision_digest: "sha256:#{"d" * 64}",
-      episode: {task: "t"}
+      episode: {task: "t"}, decision_id: "decision-7"
     )
     assert_equal :awaiting, store.fetch(intent_id: "intent.ep-1.at-1.1.maintenance.ticket").state
 
@@ -213,6 +213,7 @@ class StreamLearningLoopTest < Minitest::Test
     assert_equal "out-9", reference.fetch("outcome_id")
     assert_equal "verified", reference.fetch("observation_status")
     assert_equal "cmd-7", reference.fetch("command_id")
+    assert_equal "decision-7", reference.fetch("decision_id")
   end
 
   def test_unlearnable_verdicts_are_recorded_and_never_learned_from
@@ -269,7 +270,8 @@ class StreamLearningLoopTest < Minitest::Test
   def reference_for(episode_id: "s1", attempt_id: "at-1")
     {
       "outcome_id" => "out-1", "outcome_digest" => "sha256:#{"c" * 64}",
-      "command_id" => "cmd-1", "source_authority" => "stream-1",
+      "command_id" => "cmd-1", "decision_id" => "decision-1",
+      "source_authority" => "stream-1",
       "reconciliation_version" => "1", "observation_status" => "verified",
       "episode_id" => episode_id, "attempt_id" => attempt_id
     }
@@ -489,7 +491,7 @@ class StreamLearningLoopTest < Minitest::Test
       tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
       kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
-      allowed_intent_types: ["maintenance.ticket"],
+      allowed_intent_types: ["create_maintenance_ticket"],
       capability_token: "opaque.hmac.token",
       snapshot_json: Tamoz::Core.jcs(snapshot),
       snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)
@@ -564,6 +566,7 @@ class StreamLearningLoopTest < Minitest::Test
     assert_equal :observed, admitted.epistemic_kind
     provenance = admitted.source_refs.find { |ref| ref.key?("command_id") }
     assert_equal "cmd-7", provenance.fetch("command_id")
+    assert_equal decision.fetch("decision_id"), provenance.fetch("decision_id")
     assert_equal "out-9", provenance.fetch("identity").split(":").last
     assert_equal "2", cursor.cursor, "both outcome frames are acknowledged"
   ensure

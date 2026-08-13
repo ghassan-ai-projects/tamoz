@@ -84,6 +84,14 @@ module Tamoz
       JCS.digest(domain, value)
     end
 
+    def normalize_digest(expected)
+      JCS.normalize_digest(expected)
+    end
+
+    def digest_bytes(expected)
+      JCS.digest_bytes(expected)
+    end
+
     # Constant-time verification; recomputes and compares, never prefers a
     # locally recomputed value on mismatch.
     def verify_digest(domain, value, expected)

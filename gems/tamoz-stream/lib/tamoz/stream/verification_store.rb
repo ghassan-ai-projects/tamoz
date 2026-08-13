@@ -34,7 +34,7 @@ module Tamoz
       # needs when the outcome finally reconciles, so a Friday outcome admits
       # a Tuesday episode with provenance intact.
       Row = Data.define(
-        :intent_id, :command_id, :episode_id, :attempt_id, :decision_digest,
+        :intent_id, :command_id, :decision_id, :episode_id, :attempt_id, :decision_digest,
         :episode, :state, :outcome_id, :outcome_digest, :verdict,
         :reconciliation_version, :source_authority, :opened_at, :reconciled_at,
         :learnable
@@ -58,14 +58,14 @@ module Tamoz
       # sensitivity, plan digest) — everything the subscriber needs at
       # reconcile time except the observed outcome itself.
       def open(intent_id:, episode_id:, attempt_id:, decision_digest:, episode:,
-               command_id: nil)
+               command_id: nil, decision_id: nil)
         if @rows.key?(intent_id)
           raise VerificationError,
                 "verification already open for intent #{intent_id}"
         end
 
         @rows[intent_id] = Row.new(
-          intent_id:, command_id:, episode_id:, attempt_id:, decision_digest:,
+          intent_id:, command_id:, decision_id:, episode_id:, attempt_id:, decision_digest:,
           episode:, state: :awaiting,
           outcome_id: nil, outcome_digest: nil, verdict: nil,
           reconciliation_version: nil, source_authority: nil,
@@ -136,6 +136,7 @@ module Tamoz
           "outcome_id" => row.outcome_id,
           "outcome_digest" => row.outcome_digest,
           "command_id" => row.command_id.to_s,
+          "decision_id" => row.decision_id.to_s,
           "source_authority" => row.source_authority,
           "reconciliation_version" => row.reconciliation_version,
           "observation_status" => row.verdict,

@@ -13,18 +13,18 @@ module Tamoz
       # to an executed effect, proves Tamoz executed the episode, and
       # restricts learning to verdicts that actually settled the question.
       #
-      # All eight fields are required; absent or unverifiable, admission is
+      # All nine fields are required; absent or unverifiable, admission is
       # refused — there is no default, only a verified reference or a refusal.
       #
       # The verifier receives the NORMALIZED reference (the whole event, not
       # just the authority name) so production can authenticate it the way the
       # deployment requires — an HMAC or signature over the canonical form of
-      # all eight fields, keyed by the stream instance's key. A verifier that
+      # all nine fields, keyed by the stream instance's key. A verifier that
       # raises is treated as a forgery, never as a crash: `verify_source_
       # authority` failing closed is the admission boundary's whole point.
       module VerifiedOutcomeReference
         REQUIRED_FIELDS = %w[
-          outcome_id outcome_digest command_id source_authority
+          outcome_id outcome_digest command_id decision_id source_authority
           reconciliation_version observation_status episode_id attempt_id
         ].freeze
 
@@ -87,6 +87,7 @@ module Tamoz
             "identity" => "outcome:#{normalized.fetch("outcome_id")}",
             "digest" => normalized.fetch("outcome_digest"),
             "command_id" => normalized.fetch("command_id"),
+            "decision_id" => normalized.fetch("decision_id"),
             "source_authority" => normalized.fetch("source_authority"),
             "reconciliation_version" => normalized.fetch("reconciliation_version")
           }

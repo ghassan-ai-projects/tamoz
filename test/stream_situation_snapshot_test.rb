@@ -37,6 +37,15 @@ class StreamSituationSnapshotTest < Minitest::Test
     assert_equal "compressor", parsed.fetch("entity").fetch("type")
   end
 
+  def test_received_snapshot_accepts_a_raw_wire_digest
+    json, digest = snapshot_with_digest
+    raw_digest = [digest.delete_prefix("sha256:")].pack("H*")
+
+    parsed = Tamoz::Stream::ReceivedSnapshot.verify(json, raw_digest)
+
+    assert_equal valid_snapshot, parsed
+  end
+
   def test_a_tampered_snapshot_fails_before_any_model_call
     json, digest = snapshot_with_digest
     tampered = json.sub("c-01", "c-99")

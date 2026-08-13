@@ -68,9 +68,25 @@ module Tamoz
         "sha256:" + Digest::SHA256.hexdigest(domain + canonicalize(value))
       end
 
+      def normalize_digest(expected)
+        return expected unless expected.is_a?(String)
+        return "sha256:#{expected.unpack1("H*")}" if expected.bytesize == 32
+
+        expected
+      end
+
+      def digest_bytes(expected)
+        normalized = normalize_digest(expected)
+        return normalized unless normalized.is_a?(String) &&
+                                 normalized.match?(/\Asha256:[0-9a-f]{64}\z/)
+
+        [normalized.delete_prefix("sha256:")].pack("H*")
+      end
+
       # Constant-time comparison; verification is recomputation, never a
       # locally-preferred value on mismatch.
       def verify(domain, value, expected)
+        expected = normalize_digest(expected)
         return false unless expected.is_a?(String) && expected.start_with?("sha256:")
 
         actual = digest(domain, value)

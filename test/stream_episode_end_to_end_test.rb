@@ -73,7 +73,10 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       directory = Dir.mktmpdir("tamoz-episode-e2e")
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
       app = episode_graph.compile(checkpointer: adapter)
-      runner = Stream::EpisodeRunner.new(durable_runner: app.durable_runner, worker: nil)
+      artifact_store = Stream::ArtifactStore.new
+      runner = Stream::EpisodeRunner.new(
+        durable_runner: app.durable_runner, worker: nil, artifact_store:
+      )
       server_worker = Stream::EpisodeWorker.new(
         worker_version: "0.1.0.alpha.1",
         runner:,
@@ -96,7 +99,7 @@ class StreamEpisodeEndToEndTest < Minitest::Test
         thread.join(5)
         adapter.close
       end
-      {client:, adapter:}
+      {client:, adapter:, artifact_store:}
     end
   end
 
@@ -127,12 +130,30 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       situation_version: 7,
       kind: :EPISODE_KIND_DIAGNOSE,
       lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R2,
+      risk_ceiling: :RISK_CLASS_R1,
+      allowed_intent_types: ["create_maintenance_ticket", "recommend_operating_limit"],
       capability_token: "opaque.hmac.token",
       budget: Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 5),
       snapshot_json:,
       snapshot_sha256:
     )
+  end
+
+  def raw_digest(digest)
+    [digest.delete_prefix("sha256:")].pack("H*")
+  end
+
+  def raw_digest_episode_request(suffix)
+    request = episode_request(suffix)
+    request.snapshot_sha256 = raw_digest(request.snapshot_sha256)
+    request.prompt_sha256 = raw_digest("sha256:#{"p" * 64}")
+    request.tool_catalog_sha256 = raw_digest("sha256:#{"t" * 64}")
+    request.decision_schema_sha256 = raw_digest("sha256:#{"s" * 64}")
+    request.objective_sha256 = raw_digest("sha256:#{"o" * 64}")
+    request.tool_catalog_json = JSON.generate({"tools" => ["compressor.read"]})
+    request.decision_schema_json = JSON.generate({"type" => "object"})
+    request.objective = "diagnose the compressor"
+    request
   end
 
   def test_a_full_diagnose_episode_streams_a_decision_and_one_terminal
@@ -173,8 +194,9 @@ class StreamEpisodeEndToEndTest < Minitest::Test
       :decision, decision, decision_event.decision.decision_sha256
     )
     assert_equal request.episode_id, decision.fetch("episode_id")
-    assert_equal "install_watch_condition", decision.fetch("intents").fetch(0).fetch("type"),
-                 "the low-confidence episode must propose a watch, not an action"
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type"),
+                 "the spec allowlist must determine the admissible low-confidence action"
+    assert_equal "R1", decision.fetch("intents").fetch(0).fetch("risk_class")
     assert_operator decision_event.sequence, :<, events.last.sequence
 
     # Budget telemetry crossed after the model call.
@@ -192,5 +214,26 @@ class StreamEpisodeEndToEndTest < Minitest::Test
     assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status
     model_events = events.select { |event| event.model_started != nil }
     assert_empty model_events, "no model call may run for a tampered snapshot"
+  end
+
+  def test_raw_wire_digests_run_to_a_decision_and_retain_artifacts
+    request = raw_digest_episode_request("raw-digests")
+
+    events = client.execute(request).each.to_a
+
+    assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
+    refute_nil events.find { |event| event.decision != nil }
+    manifest = events.last.terminal.artifact_manifest
+    assert_equal "sha256:#{"p" * 64}", Tamoz::Core.normalize_digest(manifest.prompt_sha256)
+    assert_equal "sha256:#{"t" * 64}",
+                 Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
+
+    store = self.class.rpc.fetch(:artifact_store)
+    assert_equal JSON.generate({"tools" => ["compressor.read"]}),
+                 store.resolve("sha256:#{"t" * 64}").fetch("bytes")
+    assert_equal JSON.generate({"type" => "object"}),
+                 store.resolve("sha256:#{"s" * 64}").fetch("bytes")
+    assert_equal "diagnose the compressor",
+                 store.resolve("sha256:#{"o" * 64}").fetch("bytes")
   end
 end

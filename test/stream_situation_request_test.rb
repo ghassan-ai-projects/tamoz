@@ -48,7 +48,7 @@ class StreamSituationRequestTest < Minitest::Test
       lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
       capability_token: "opaque.hmac.token",
-      allowed_intent_types: ["maintenance.ticket"],
+      allowed_intent_types: ["create_maintenance_ticket"],
       supersession_key: "sup-1",
       snapshot_json:,
       snapshot_sha256:,

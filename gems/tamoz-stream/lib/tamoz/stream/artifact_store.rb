@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tamoz/stream/errors"
+require "tamoz/core"
 
 module Tamoz
   module Stream
@@ -32,7 +33,7 @@ module Tamoz
       attr_reader :total_bytes
 
       def retain(digest:, bytes:, media_type: "application/json")
-        digest = String(digest)
+        digest = String(Tamoz::Core.normalize_digest(digest))
         unless digest.match?(/\Asha256:[0-9a-f]{64}\z/)
           raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
         end
@@ -73,7 +74,7 @@ module Tamoz
       end
 
       def resolve(digest)
-        @artifacts[String(digest)]
+        @artifacts[String(Tamoz::Core.normalize_digest(digest))]
       end
 
       def size = @artifacts.length
