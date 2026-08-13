@@ -1,7 +1,7 @@
-# Tamoz operator manual
+# Agent operator manual
 
-This is the short runbook for an agent or operator driving Tamoz from a
-checkout. Tamoz has two execution surfaces:
+The short runbook for an agent or operator driving Tamoz from a checkout. Tamoz
+has two execution surfaces:
 
 - one-shot or interactive sessions for work you are watching;
 - an operator-owned runtime directory for queued, scheduled, or channel work.
@@ -10,6 +10,8 @@ Read-only behavior is the default. Workspace changes require `--allow-changes`,
 a reviewed plan, and approval. MCP and websearch are operator capabilities:
 the workspace, task text, model output, and MCP server metadata cannot enable
 them.
+
+Current version: `0.1.0.alpha.1` (pre-release).
 
 ## 1. Set the model explicitly
 
@@ -38,10 +40,8 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 For a watched, read-only question:
 
 ```bash
-TAMOZ_ROOT=/path/to/tamoz
 WORKSPACE=/path/to/project
 
-cd "$TAMOZ_ROOT"
 rbenv exec bundle exec tamoz --root "$WORKSPACE" \
   "Explain the persistence boundary and cite local files"
 ```
@@ -269,10 +269,13 @@ is sufficient.
 
 ## 6. Telegram gateway
 
-The Telegram gateway is a separate operator process. It owns the bot token,
-the durable poller lease, inbound admission, and outbound delivery; the worker
-does not poll Telegram directly. Run the doctor before starting a long-lived
-gateway:
+The Telegram gateway is a separate operator process. It owns the bot token, the
+durable poller lease, inbound admission, and outbound delivery; the worker does
+not poll Telegram directly. Run the doctor before starting a long-lived
+gateway, keep exactly one long-running gateway per bot token (a second `comms
+serve` against the same bot, or a Telegram webhook alongside long polling, is
+refused), and use `--once` only for a bounded smoke test or supervisor health
+check:
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms doctor
@@ -280,25 +283,11 @@ rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve --once --json
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve
 ```
 
-`comms serve` stays in the foreground. It renews the fenced poller lease,
-retries transient API/network failures with bounded backoff, honors Telegram's
-`retry_after` value, and drains durable outbound rows independently. A send
-that reaches Telegram and then fails is recorded as `unknown`, never blindly
-resent. Authentication failures and a competing poller/webhook stop the
-process with a named error so a service supervisor can alert or restart it
-after the operator fixes the cause.
-
-Use these commands while it runs:
-
-```bash
-rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms list --json
-rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json | jq '.channels'
-```
-
-There must be exactly one long-running gateway for a bot token. Do not run a
-second `comms serve` against the same Telegram bot, and do not configure a
-Telegram webhook at the same time as long polling. Use `--once` only for a
-bounded smoke test or supervisor health check.
+A send that reaches Telegram and then fails is recorded as `unknown`, never
+blindly resent; authentication failures and a competing poller/webhook stop
+the process with a named error so a supervisor can alert or restart it. The
+full walkthrough — creating the bot, the allowlist, the config, and the
+deny-only approval flow — is in [`telegram.md`](telegram.md).
 
 ## 7. Debugging checklist
 
@@ -319,9 +308,10 @@ Check, in order:
 7. Telegram doctor output, token, webhook conflict, and `comms list --json`;
 8. `status --json` for a durable approval or budget pause.
 
-Useful references:
+## Next reads
 
-- [`docs/INSTALL.md`](INSTALL.md) — complete CLI surface;
-- [`docs/OPERATIONS.md`](OPERATIONS.md) — recovery, approvals, and backups;
-- [`docs/LIMITATIONS.md`](LIMITATIONS.md) — measured gaps and non-goals;
-- [`docs/P10_MCP_PLAN.md`](P10_MCP_PLAN.md) and [`docs/P17_WEBSEARCH_PLAN.md`](P17_WEBSEARCH_PLAN.md) — implementation contracts.
+- [`../getting-started/install.md`](../getting-started/install.md) — complete CLI surface.
+- [`../operations/operations.md`](../operations/operations.md) — recovery, approvals, and backups.
+- [`telegram.md`](telegram.md) — the Telegram channel runbook.
+- [`../limitations.md`](../limitations.md) — measured gaps and non-goals.
+- [`../../docs/P10_MCP_PLAN.md`](../../docs/P10_MCP_PLAN.md) and [`../../docs/P17_WEBSEARCH_PLAN.md`](../../docs/P17_WEBSEARCH_PLAN.md) — implementation contracts (repository-internal).

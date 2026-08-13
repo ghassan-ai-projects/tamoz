@@ -13,14 +13,14 @@ class CommsAdr049ConsistencyTest < Minitest::Test
   end
 
   def test_adr_049_is_accepted
-    adr = read_utf8('docs/ADR-049_TELEGRAM_APPROVAL_AUTHORITY.md')
+    adr = read_utf8('documentation/adr/adr-049-telegram-approval.md')
 
     assert_match(/\*\*Status:\*\* Accepted 2026-08-12/, adr)
     assert_match(/INV-D — v1 policy is deny-only by evaluation\.\*\* The v1 policy returns/, adr)
   end
 
   def test_comms_design_carries_the_amended_adr_043_and_the_adr_049_entry
-    design = read_utf8('docs/COMMS_DESIGN.md')
+    design = read_utf8('documentation/design/comms.md')
 
     assert_match(/ADR-049 — Telegram approval is evidence-gated/, design,
                  'the §18 ADR list must carry the ADR-049 one-liner')

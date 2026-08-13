@@ -14,9 +14,9 @@ require_relative "test_helper"
 # So every claim these pages make about the surface is derived from the surface
 # here, and every gap they disclose is derived from the measured audit.
 class DocumentationSurfaceTest < Minitest::Test
-  INSTALL = ROOT.join("docs", "INSTALL.md")
-  LIMITATIONS = ROOT.join("docs", "LIMITATIONS.md")
-  OPERATIONS = ROOT.join("docs", "OPERATIONS.md")
+  INSTALL = ROOT.join("documentation", "getting-started", "install.md")
+  LIMITATIONS = ROOT.join("documentation", "limitations.md")
+  OPERATIONS = ROOT.join("documentation", "operations", "operations.md")
   README = ROOT.join("README.md")
 
   def text(path) = File.read(path, encoding: Encoding::UTF_8)
@@ -178,7 +178,7 @@ class DocumentationSurfaceTest < Minitest::Test
       refute_includes body, phrase,
                       "README denies a capability that shipped: #{phrase.inspect}"
     end
-    assert_includes body, "docs/LIMITATIONS.md",
+    assert_includes body, "documentation/limitations.md",
                     "the README must point at the honest limitations page"
   end
 

@@ -3,6 +3,12 @@
 Tamoz is pre-release software and must not yet control production systems or
 physical devices.
 
+## Supported versions
+
+The current release line is `0.1.0.alpha.1` (pre-release) and is supported for
+security reports. As pre-release software it must not yet control production
+systems or physical devices.
+
 Report vulnerabilities privately through GitHub security advisories for the
 `ghassan-ai-projects/tamoz` repository. Do not include credentials, private
 prompts, user content, or production traces in a public issue.
@@ -43,7 +49,7 @@ boundary below is what constrains it.
 
 ## Known gaps
 
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) lists what is not implemented, what
-carries weaker evidence, and which parts of the system have never had an
-independent adversarial review. It is bound to the measured release audit, so it
-cannot fall silently behind the product.
+[`documentation/limitations.md`](documentation/limitations.md) lists what is not
+implemented, what carries weaker evidence, and which parts of the system have
+never had an independent adversarial review. It is bound to the measured release
+audit, so it cannot fall silently behind the product.

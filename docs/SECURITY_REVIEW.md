@@ -107,7 +107,7 @@ this phase DID open are recorded where they belong:
 3. **Backpressure is declared and never enforced** (invariant 48). A hostile or
    merely fast producer is bounded by nothing in the stream path. This is a
    release-blocking gap and an owner decision, disclosed in
-   [`LIMITATIONS.md`](LIMITATIONS.md).
+   [`LIMITATIONS.md`](../documentation/limitations.md).
 4. **The corpus is ASCII-heavy by default.** Round 29 added non-ASCII coverage
    across the durable path and pinned the canonicality-comparison set, but the
    scorecard corpus itself remains ASCII, and three defect classes in this

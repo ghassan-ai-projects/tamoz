@@ -122,7 +122,7 @@ counted signal.
    the model credential. The honest cost is in §25.
 
 The lazy-load shape is modelled on `tamoz-telegram`
-([`COMMS_DESIGN.md`](COMMS_DESIGN.md) §1). That is a **proposed** package, not a shipped
+([`COMMS_DESIGN.md`](../documentation/design/comms.md) §1). That is a **proposed** package, not a shipped
 mechanism — `gems/` contains `tamoz-comms` only — so this design inherits a pattern under
 review, not a proven one.
 
@@ -243,7 +243,7 @@ gem passes to `Tamoz.instrument` must be registered, with a matching attribute s
 
 **Naming.** Framework signals use `tamoz.<area>.<noun>.<verb-or-state>`. Optional packages
 keep their own already-specified prefixes — `comms.*` from
-[`COMMS_DESIGN.md`](COMMS_DESIGN.md) §16, and `stream.*`, `scheduler.*`, `mcp.*` — because
+[`COMMS_DESIGN.md`](../documentation/design/comms.md) §16, and `stream.*`, `scheduler.*`, `mcp.*` — because
 renaming a name another accepted design has already published would be a gratuitous break.
 The catalog owns a closed list of permitted prefixes; both forms match the existing
 `EVENT_NAME_PATTERN`.
@@ -429,7 +429,7 @@ end
 ```
 
 Retry, backoff and self-disable belong to the recorder, so every exporter inherits one bounded
-policy — the reason [`COMMS_DESIGN.md`](COMMS_DESIGN.md) §10 refuses a second retry lifecycle
+policy — the reason [`COMMS_DESIGN.md`](../documentation/design/comms.md) §10 refuses a second retry lifecycle
 beside the effect journal.
 
 An `:unknown` export result is **not** an incident. Unlike a channel delivery, a lost or
@@ -587,7 +587,7 @@ every other, which is why it is measured rather than assumed away.
 
 ## 10. Cost and token accounting
 
-[`LIMITATIONS.md:126`](LIMITATIONS.md) records that only `model_calls` and
+[`LIMITATIONS.md:126`](../documentation/limitations.md) records that only `model_calls` and
 `wall_clock_seconds` are enforced, because `WorkerRuntime#budget_usage` can compute only those
 two ([`worker_runtime.rb:213`](../gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb)) while
 `Profile::BUDGET_KEYS` also declares `cost_usd`, `input_tokens`, `output_tokens` and `steps`.
@@ -946,7 +946,7 @@ errors" over a window with drops is not a fact; it is a lower bound.
 | **Remediate** | restart the stuck thing, raise an issue | a healing rule under invariants 32–34 | a typed failure source |
 
 **Notify** composes with work in flight: an alert is a `:control` delivery on an existing comms
-surface, which [`COMMS_DESIGN.md`](COMMS_DESIGN.md) §10 already classifies as ephemeral and
+surface, which [`COMMS_DESIGN.md`](../documentation/design/comms.md) §10 already classifies as ephemeral and
 unjournaled because losing or duplicating one is harmless. Bounded outbox, rate limiting and a
 redaction path for free; no new egress surface. Without a channel: stderr, a file, and a
 non-zero exit from `tamoz observe watch --once`, making cron or CI the delivery mechanism.
@@ -961,7 +961,7 @@ authority. **Refusing to do more work is categorically different from doing some
 is why this tier may be automatic and the two below may not.
 
 **Ask** is where "the agent investigates itself" belongs. An alert that enqueues an ordinary
-request is a fourth entry in [`COMMS_DESIGN.md`](COMMS_DESIGN.md) §2's user-surface table,
+request is a fourth entry in [`COMMS_DESIGN.md`](../documentation/design/comms.md) §2's user-surface table,
 beside the CLI, the scheduler and the chat channel. The alert text is a task string naming no
 profile, tool, root, model or budget — invariant 56 unchanged. The request id is derived from
 the rule identity and the window, so flapping or a restart cannot produce fifty turns. The
@@ -1021,7 +1021,7 @@ records, which is what a silence is.
   on the alerts it produced, so "why did this not fire in March" is answerable.
 - **No rule may reference model output or policy-captured content.** An alert whose condition can
   be rewritten by the thing it watches is not an alert — the rule
-  [`COMMS_DESIGN.md`](COMMS_DESIGN.md) §11 applies to approval prompts.
+  [`COMMS_DESIGN.md`](../documentation/design/comms.md) §11 applies to approval prompts.
 
 ### 18.6 What this refuses
 

@@ -5,7 +5,10 @@ Every durable thread is one SQLite file under `--session-dir`, named
 its request inbox, its leases, its effect journal, and its application store.
 Back up the file and you have backed up the thread.
 
-Read [`LIMITATIONS.md`](LIMITATIONS.md) for what is outside the fault model.
+Current version: `0.1.0.alpha.1` (pre-release).
+
+Read [`../limitations.md`](../limitations.md) for what is outside the fault
+model.
 
 ## Backup and restore
 
@@ -48,7 +51,7 @@ retried blindly.
 rbenv exec bundle exec tamoz --session-dir DIR resolve THREAD EFFECT_KEY succeeded
 ```
 
-The status is `succeeded`, `abandoned` or `unknown`. The decision is journalled
+The status is `succeeded`, `failed` or `abandoned`. The decision is journalled
 as a durable transition with your actor identity — it is an audited record, not
 a status flip.
 
@@ -108,6 +111,9 @@ observer-only and never a second writer. Two properties hold by construction:
   disclose only a generic phrase, so a hostile plan cannot use the error channel
   to echo content back.
 
+See [`observability-ops.md`](observability-ops.md) for the operator's
+observability surface.
+
 ## Channels
 
 The gateway is one foreground process per bot, supervised the way `tamoz worker`
@@ -152,15 +158,38 @@ rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms delivery resolve <ID> 
 journal and the outbox agree. An `:unknown` delivery stays visible in
 `tamoz status` until resolved, and blocks purge under invariant 54.
 
+### Approvals are deny-only from a channel
+
+Approval authority is a function of evidence strength, not of which transport
+pressed a button. A Telegram correspondent supplies `chat_bound` evidence and
+may deny any active prompt; under the current policy every effect requires
+`filesystem_operator` evidence, so no channel approve succeeds. The operator
+approval path is local, at the runtime directory:
+
+```bash
+rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz approve REQUEST_ID
+```
+
+An approval records a decision; the worker resumes the same occurrence on its
+next pass. Deny with `--deny`. The evidence model is in
+[`../adr/adr-049-telegram-approval.md`](../adr/adr-049-telegram-approval.md).
+
 ## Migrations
 
 Schema migrations are numbered, checksummed and applied in one transaction; a
 failed migration rolls back every statement, and checksum tampering is refused.
-There are seven: the base runtime, the memory index, the scheduler, the stream
-admission tables, the stream processing plane, the communications tables, and
-the outbox receipt column. A database from an older Tamoz migrates forward on
-open; a database from a NEWER Tamoz fails before any partial load.
+There are thirteen; the full list and the retirement of the old streaming-engine
+tables are in [`../architecture/data-model.md`](../architecture/data-model.md). A
+database from an older Tamoz migrates forward on open; a database from a NEWER
+Tamoz fails before any partial load.
 
 Runtime configuration schema migrations are separate and explicit: `tamoz
 config migrate` moves schema 1 ("no channels") to schema 2 (`channels:`) with
 a backup and an atomic rename, and startup never rewrites operator authority.
+
+## Next reads
+
+- [`../getting-started/sessions.md`](../getting-started/sessions.md) — multi-turn sessions and exit codes.
+- [`observability-ops.md`](observability-ops.md) — status, journal, metrics, traces.
+- [`../guides/telegram.md`](../guides/telegram.md) — the channel runbook.
+- [`../limitations.md`](../limitations.md) — measured gaps and non-goals.

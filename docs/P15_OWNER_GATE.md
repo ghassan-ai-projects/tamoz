@@ -90,7 +90,7 @@ proof for this phase.
 | [`DEPENDENCY_REVIEW.md`](DEPENDENCY_REVIEW.md) | 22 runtime gems, zero licence violations, provenance controls |
 | [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) | invariant-24 sweep, 216 adversarial cases, findings and dispositions |
 | [`BENCHMARK.md`](BENCHMARK.md) | gated counters and reported latency, offline model |
-| [`LIMITATIONS.md`](LIMITATIONS.md) | what v0.1 does not do, bound to the measured audit |
+| [`LIMITATIONS.md`](../documentation/limitations.md) | what v0.1 does not do, bound to the measured audit |
 
 ## Risks the owner should weigh
 

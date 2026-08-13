@@ -1,0 +1,89 @@
+# Gem map
+
+Tamoz is a monorepo of thirteen independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
+
+## The dependency chain
+
+Dependencies run one way, bottom-up: everything eventually rests on `tamoz-core`, and nothing may reach down into `tamoz-evals`.
+
+```mermaid
+flowchart BT
+    CORE["tamoz-core<br/>values · context · secrets · JCS · pool · DR-2 circuit"]
+
+    G["tamoz-graph<br/>BSP engine · interrupts · replay"]
+    SCH["tamoz-scheduler<br/>schedule values + store contract"]
+    STR["tamoz-stream<br/>EpisodeWorker (gRPC)"]
+    T["tamoz-tools<br/>toolbox · skills compiler · capability host"]
+    M["tamoz-mcp<br/>governed MCP + websearch"]
+    C["tamoz-comms<br/>channel contract"]
+    O["tamoz-observability<br/>signal catalog · journal"]
+
+    SQL["tamoz-sqlite<br/>SQLite persistence"]
+    OTEL["tamoz-otel<br/>OTLP/HTTP exporter"]
+    TG["tamoz-telegram<br/>Telegram transport"]
+
+    AGENT["tamoz-agent<br/>agent runtime + tamoz CLI"]
+
+    EVALS["tamoz-evals<br/>evaluation · release evidence"]
+
+    G --> CORE
+    SCH --> CORE
+    STR --> CORE
+    T --> CORE
+    M --> CORE
+    C --> CORE
+    O --> CORE
+
+    SQL --> G
+    SQL --> SCH
+    SQL --> STR
+    OTEL --> O
+    TG --> C
+
+    AGENT --> T
+    AGENT --> G
+    AGENT --> SQL
+    AGENT --> C
+    AGENT --> O
+
+    EVALS -. none .- AGENT
+```
+
+Two edges deserve emphasis:
+
+- **`tamoz-agent` is the only layer that knows RubyLLM** (`ruby_llm ~> 1.16.0`). It accepts a `RubyLLM::Agent`, `RubyLLM::Chat`, or a callable that produces a chat, and reuses their public messages and tools.
+- **`tamoz-evals` depends on nothing and nothing depends on it.** It is a non-runtime gem; the rule is enforced by `test/dependency_isolation_test.rb`. Evaluation code can never reach a production path.
+
+## The gem-by-gem map
+
+| Gem | Responsibility | Runtime dependencies |
+|---|---|---|
+| `tamoz-core` | Shared values, context, secrets, canonical/JCS digesting, the worker pool, and the DR-2 durable-circuit engine | stdlib, Zeitwerk |
+| `tamoz-graph` | Deterministic checkpointed graph runtime: BSP super-steps, interrupts, replay, subgraphs, durable-runner contracts. Never loads an LLM client (invariant 11) | `tamoz-core` |
+| `tamoz-scheduler` | Durable scheduling values and the `ScheduleStore` contract (the SQLite implementation lives in `tamoz-sqlite`). Never executes work itself | `tamoz-core` |
+| `tamoz-stream` | The supervised gRPC `EpisodeWorker`: containment host, snapshot verification, typed Decision builder, reverse channel for evidence/outcomes/approvals, artifact manifest. One sealed, digest-verified Situation snapshot per episode (the old streaming-input engine was retired by `MIGRATION_13`) | `tamoz-core`, `grpc ~> 1.83`, `google-protobuf ~> 4.35` |
+| `tamoz-sqlite` | SQLite persistence: checkpoints, request inbox, effect journal, leases, schedules, comms, circuit, memory index, backup/restore. Migrator `CURRENT_VERSION = 13` | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3 ~> 2.9` |
+| `tamoz-tools` | Workspace toolbox, the skills compiler, and the sealed capability host | `tamoz-core` |
+| `tamoz-mcp` | Governed MCP client/host over the official Ruby SDK, plus governed websearch (an MCP server with the reserved id `websearch`) | `tamoz-core`, `mcp ~> 1.1` |
+| `tamoz-comms` | Channel contract gem: values, identity/admission policy, rendering, the `Transport` seam, and the structural `CommsStore` contract. Never opens a socket | `tamoz-core` |
+| `tamoz-observability` | Closed versioned signal catalog, correlation identity, immutable signals, bounded recorders, local journal, content/secret policy, metrics and trace projection. `SCHEMA_VERSION = 1` | `tamoz-core` |
+| `tamoz-otel` | Bounded OTLP/HTTP exporter for observability signals | `tamoz-observability` |
+| `tamoz-telegram` | Telegram Bot API transport implementing the `Tamoz::Comms::Transport` seam; stdlib-only HTTP | `tamoz-comms` |
+| `tamoz-agent` | The deliberative agent runtime (plan/review/verify, memory, healing) and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
+| `tamoz-evals` | Evaluation and release evidence: conformance suites, scorecards, release gates. Non-runtime gem | stdlib only |
+
+## Dependency rules that are enforced, not suggested
+
+- `tamoz-core` has no runtime dependency beyond the standard library and Zeitwerk.
+- `tamoz-graph` never references RubyLLM, an HTTP client, a provider SDK, or an adapter — a clean process requiring `tamoz/graph` loads none of them and opens no socket.
+- Adapters implement published contracts and depend on contracts, never on runner internals.
+- Optional dependencies load only when their feature is selected. Fiber execution, OTLP export, and Telegram transport must not affect a minimal boot.
+- No mutable process-global runtime state: boot-time registries freeze after configuration; per-run state travels through `Context`; per-thread durable state travels through the checkpointer.
+- Optional persistence protocols (schedule, stream, comms) are structural and versioned: the feature gem owns the contract documentation; `tamoz-sqlite` implements it without a reverse runtime dependency.
+
+## Next reads
+
+- [overview.md](overview.md) — the layered stack these gems form
+- [../overview/compatibility.md](../overview/compatibility.md) — versions and supported surfaces
+- [data-model.md](data-model.md) — what `tamoz-sqlite` persists
+- [../getting-started/install.md](../getting-started/install.md) — installing the gems

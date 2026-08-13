@@ -167,7 +167,7 @@ record D1 as not met in `LIMITATIONS.md` and continue — the rest of phase 2 is
 **Follow-on, not in this plan:** with usage durable and attributed,
 `WorkerRuntime#budget_usage` can compute `input_tokens`, `output_tokens` and `steps` from the
 census it already reads, making three recorded-only budgets enforceable and retiring part of
-[`LIMITATIONS.md:126`](LIMITATIONS.md). That is a budget slice with its own review.
+[`LIMITATIONS.md:126`](../documentation/limitations.md). That is a budget slice with its own review.
 
 ### Slice F — reconstruction
 
