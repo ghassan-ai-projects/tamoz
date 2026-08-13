@@ -1,10 +1,15 @@
 # Installing and running Tamoz
 
+Tamoz is a Ruby-native durable agent framework. This page gets a working
+installation up and runs the agent against a workspace — first read-only, then
+with a reviewed change loop. Read [`../limitations.md`](../limitations.md)
+before you build on any of it.
+
+Current version: `0.1.0.alpha.1` (pre-release).
+
 Every command on this page is checked against the real surface by
 `test/documentation_surface_test.rb`: the CLI flags and subcommands shown here
 must exist, and the gem list must match what the repository actually packages.
-
-Read [`LIMITATIONS.md`](LIMITATIONS.md) before you build on any of it.
 
 ## Requirements
 
@@ -34,7 +39,7 @@ rbenv exec bundle exec rake ci
 file, and the whole test suite. It must be green before you trust anything else
 on this page.
 
-## The nine gems
+## The thirteen gems
 
 Tamoz is a monorepo of independently publishable gems. Each one installs and
 runs with only its declared dependencies — proven per gem by
@@ -46,14 +51,14 @@ named example task in a clean subprocess.
 | `tamoz-core` | Shared values, context, secrets, codec, pool | stdlib, Zeitwerk |
 | `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
-| `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core` |
+| `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools`, `tamoz-observability` |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
 | `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
@@ -129,6 +134,8 @@ The interactive subcommands drive one thread while you watch it.
 
 Add `--json` to any of them for a newline-delimited JSON event stream, and
 `--non-interactive` to fail instead of prompting.
+
+See [`sessions.md`](sessions.md) for the full multi-turn workflow.
 
 ## Running unattended
 
@@ -288,6 +295,8 @@ credential, or opens a file under the workspace root. Installations without the
 `tamoz-telegram` gem still run the agent and report a typed missing-adapter
 error for `tamoz comms serve`.
 
+See [`../guides/telegram.md`](../guides/telegram.md) for the full channel runbook.
+
 An MCP server is a supervised subprocess, so its configuration is explicit and
 nothing is inferred from the environment:
 
@@ -325,7 +334,7 @@ directory is never the agent's workspace, so it cannot run inside the tree under
 repair.
 
 Wired today: **skills**, **memory**, **MCP** and **websearch**. Streaming input
-is NOT reachable from the worker — see [`docs/LIMITATIONS.md`](LIMITATIONS.md).
+is NOT reachable from the worker — see [`../limitations.md`](../limitations.md).
 
 ### Budgets
 
@@ -348,7 +357,7 @@ on the next poll. Raising the ceiling and re-queueing is the deliberate way to
 continue.
 
 The other budget keys (`cost_usd`, `input_tokens`, `output_tokens`, `steps`) are
-recorded and pinned but NOT enforced — see [`docs/LIMITATIONS.md`](LIMITATIONS.md).
+recorded and pinned but NOT enforced — see [`../limitations.md`](../limitations.md).
 
 ### What may run without you
 
@@ -401,6 +410,9 @@ rbenv exec bundle exec tamoz profile import ./tamoz.suggested.yml
 An imported profile is inert until you activate it, and a changed profile
 re-prompts rather than silently taking effect on an existing thread.
 
+See [`../reference/config.md`](../reference/config.md) for the configuration
+reference.
+
 ## Verifying a release candidate
 
 ```bash
@@ -410,12 +422,20 @@ rbenv exec ruby script/release_rehearsal
 This clones the current commit into a temporary directory, provisions the
 pinned toolchain, installs offline, runs the full gate in both locales, runs the
 scorecard, installs every packaged gem in isolation, exercises durable
-restore/resume, and writes [`RELEASE_REHEARSAL.md`](RELEASE_REHEARSAL.md).
+restore/resume, and writes [`../../docs/RELEASE_REHEARSAL.md`](../../docs/RELEASE_REHEARSAL.md).
 
 ```bash
 rbenv exec bundle exec ruby script/generate_requirements_audit --jobs 4
 ```
 
 This runs every named test in the requirements manifest and regenerates
-[`REQUIREMENTS_AUDIT.md`](REQUIREMENTS_AUDIT.md). A row is `pass` only because
+[`../../docs/REQUIREMENTS_AUDIT.md`](../../docs/REQUIREMENTS_AUDIT.md). A row is `pass` only because
 its test executed and passed in that run.
+
+## Next reads
+
+- [`quickstart.md`](quickstart.md) — the ten-minute golden path.
+- [`sessions.md`](sessions.md) — durable multi-turn sessions and exit codes.
+- [`../reference/cli.md`](../reference/cli.md) — every subcommand and flag.
+- [`../reference/config.md`](../reference/config.md) — environment variables, profiles, runtime directory.
+- [`../limitations.md`](../limitations.md) — measured gaps and non-goals.

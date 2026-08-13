@@ -9,22 +9,26 @@ interrupted side effect from proven state rather than guessing. Nothing acts
 without a reviewed plan bound to its digest, and nothing changes a file without
 an approval you granted.
 
-**This is pre-release software.** Read
-[`docs/LIMITATIONS.md`](docs/LIMITATIONS.md) before building on it — it lists,
-with evidence, what Tamoz does not do.
+**This is pre-release software** (`0.1.0.alpha.1`). Read
+[`documentation/limitations.md`](documentation/limitations.md) before building
+on it — it lists, with evidence, what Tamoz does not do.
 
-## The nine gems
+## The thirteen gems
 
 | Package | Responsibility | Runtime dependencies |
 |---|---|---|
-| `tamoz-core` | Shared values, context, secrets, codec, worker pool | stdlib, Zeitwerk |
-| `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
-| `tamoz-scheduler` | Schedule and occurrence values, store contract | `tamoz-core` |
-| `tamoz-stream` | Channels, envelopes, Situations, the action boundary | `tamoz-core` |
-| `tamoz-sqlite` | Checkpoints, request inbox, effect journal, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
-| `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-graph`, `tamoz-tools` |
-| `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-core` | Shared values, context, secrets, canonical digests, worker pool, the durable-circuit engine | stdlib, Zeitwerk |
+| `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-core` |
+| `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
+| `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
+| `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
+| `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
+| `tamoz-mcp` | Governed MCP client/host and governed websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
+| `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
+| `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
+| `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
 Each gem installs and runs with only its declared dependencies, proven per gem
@@ -54,6 +58,8 @@ Tamoz Agent is the reference application under `apps/tamoz-agent`.
   for the stream runtime, with evidence pull, the learning loop, and approval
   relay on the reverse channel).
 
+## Quick start
+
 ```bash
 export OPENAI_API_KEY="..." && export TAMOZ_MODEL="gpt-5-mini"
 ```
@@ -66,12 +72,38 @@ rbenv exec bundle exec tamoz --root . "Explain the persistence boundary"
 rbenv exec bundle exec tamoz --root . --allow-changes --check 'test=rbenv exec bundle exec rake test' "Fix the failing test"
 ```
 
-Read-only is the default. See [`docs/INSTALL.md`](docs/INSTALL.md) for durable
-sessions, profiles and the full subcommand surface. For a copy-paste
-agent/operator runbook covering MCP and governed websearch, see
-[`docs/AGENT_OPERATOR_MANUAL.md`](docs/AGENT_OPERATOR_MANUAL.md), and see
-[`docs/OPERATIONS.md`](docs/OPERATIONS.md) for backup, restore and crash
-recovery.
+Read-only is the default. See
+[`documentation/getting-started/install.md`](documentation/getting-started/install.md)
+for requirements, durable sessions, profiles and the full subcommand surface.
+For a copy-paste agent/operator runbook covering MCP and governed websearch, see
+[`documentation/guides/agent-operator.md`](documentation/guides/agent-operator.md),
+and see [`documentation/operations/operations.md`](documentation/operations/operations.md)
+for backup, restore and crash recovery.
+
+## Documentation
+
+The full documentation set is under
+[`documentation/`](documentation/README.md), organized by topic and reachable
+from its index:
+
+- **Start here** — [product](documentation/overview/product.md),
+  [concepts](documentation/overview/concepts.md),
+  [quickstart](documentation/getting-started/quickstart.md)
+- **Architecture** — [overview](documentation/architecture/overview.md),
+  [gem map](documentation/architecture/gems.md),
+  [data model](documentation/architecture/data-model.md),
+  [security model](documentation/architecture/security-model.md),
+  [invariants](documentation/architecture/invariants.md)
+- **Design** — [the design docs](documentation/design/README.md),
+  [decisions/ADRs](documentation/adr/README.md)
+- **Guides** — [operator runbook](documentation/guides/agent-operator.md),
+  [Telegram](documentation/guides/telegram.md),
+  [evaluation](documentation/guides/evaluation.md)
+- **Operations** — [runbook](documentation/operations/operations.md),
+  [observability](documentation/operations/observability-ops.md)
+- **Reference** — [CLI](documentation/reference/cli.md),
+  [configuration](documentation/reference/config.md),
+  [public API](documentation/reference/public-api.md)
 
 ## Talking to it over Telegram
 
@@ -170,7 +202,10 @@ want from cron or a test; `comms serve --once --json` reports each surface's
 outcome for deterministic supervision.
 
 Revoking a correspondent, resolving an `:unknown` delivery, and the deny-only
-approval flow are in [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+approval flow are in
+[`documentation/operations/operations.md`](documentation/operations/operations.md).
+The full walkthrough is in
+[`documentation/guides/telegram.md`](documentation/guides/telegram.md).
 
 ## Evidence
 
@@ -192,13 +227,16 @@ rbenv exec bundle exec tamoz-eval scorecard agent-smoke
 The scorecard runs a fixed deterministic corpus and reports task success,
 verified completion, plan and repair attempts, approvals, call and byte proxies,
 unnecessary mutation and repeated-action stops, with hard-zero gates on unsafe
-actions, false-positive completions and incomplete evidence.
+actions, false-positive completions and incomplete evidence. See
+[`documentation/guides/evaluation.md`](documentation/guides/evaluation.md).
 
 [`docs/RELEASE_REHEARSAL.md`](docs/RELEASE_REHEARSAL.md) records a clean-clone
 rehearsal on a pinned toolchain outside the development checkout.
 
 The authoritative design is committed under
-[`docs/design-v0.1/`](docs/design-v0.1/); the build order and active phase are in
+[`docs/design-v0.1/`](docs/design-v0.1/) — the working archive, including plans,
+reviews and audits, is mapped in [`docs/README.md`](docs/README.md); the build
+order and active phase are in
 [`docs/PRODUCT_EXECUTION_ROADMAP.md`](docs/PRODUCT_EXECUTION_ROADMAP.md).
 
 ## Security and guarantees
@@ -206,9 +244,18 @@ The authoritative design is committed under
 Tamoz makes no exactly-once claim for arbitrary external effects. Replay-safe
 effects require idempotency, atomic participation, or reconciliation; ambiguous
 work stops rather than repeating. See [`SECURITY.md`](SECURITY.md) and
-[`docs/design-v0.1/INVARIANTS.md`](docs/design-v0.1/INVARIANTS.md) for the
-complete boundary.
+[`documentation/architecture/security-model.md`](documentation/architecture/security-model.md)
+for the complete boundary.
+
+## Status
+
+`0.1.0.alpha.1` — pre-release. The project is usable today and every claim about
+it is backed by executed evidence, but the public contract is still hardening;
+breaking changes are announced in [`CHANGELOG.md`](CHANGELOG.md). What is not
+implemented, what carries weaker evidence, and what has never had an independent
+adversarial review are listed in
+[`documentation/limitations.md`](documentation/limitations.md).
 
 ## License
 
-MIT.
+MIT. See [`LICENSE`](LICENSE).

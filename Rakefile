@@ -402,4 +402,9 @@ task ci_full: ["design:validate", :syntax, :test, :test_slow]
 desc "The complete gate with the test phase sharded across processes"
 task ci_fast: ["design:validate", :syntax, :test_parallel]
 
+desc "Documentation tree check: relative links resolve, index covers every file"
+task "docs:check" do
+  ruby "-Itest", "test/documentation_tree_test.rb"
+end
+
 task default: :ci

@@ -221,7 +221,7 @@ violation that exists precisely because the correct plane is empty.
 [`cli_worker_commands.rb:412`](../gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb).
 Three event names exist: `request.completed`, `request.failed`, `request.paused`. There is
 no schema, no version, no registry, no correlation beyond thread and request id, and no
-consumer other than stdout. [`OPERATIONS.md`](OPERATIONS.md) §Observability describes
+consumer other than stdout. [`OPERATIONS.md`](../documentation/operations/operations.md) §Observability describes
 `--json` as emitting an event "for every plan, review, approval, tool call, receipt and
 terminal transition"; that is true of the stream parts in the interactive CLI, and not true
 of the worker's event stream.
@@ -245,7 +245,7 @@ feature.** `Profile::BUDGET_KEYS` declares `cost_usd`, `input_tokens`, `output_t
 `WorkerRuntime#budget_usage`
 ([`worker_runtime.rb:213`](../gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb)) computes
 only `model_calls` (counted from the effect census) and `wall_clock_seconds`.
-[`LIMITATIONS.md:126`](LIMITATIONS.md) records the consequence honestly: "Only two budgets
+[`LIMITATIONS.md:126`](../documentation/limitations.md) records the consequence honestly: "Only two budgets
 are enforced… There is no spend cap in currency or tokens."
 
 That limitation is not a budgeting bug. It is a measurement gap. The enforcement code is

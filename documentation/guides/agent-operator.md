@@ -1,7 +1,7 @@
-# Tamoz operator manual
+# Agent operator manual
 
-This is the short runbook for an agent or operator driving Tamoz from a
-checkout. Tamoz has two execution surfaces:
+The short runbook for an agent or operator driving Tamoz from a checkout. Tamoz
+has two execution surfaces:
 
 - one-shot or interactive sessions for work you are watching;
 - an operator-owned runtime directory for queued, scheduled, or channel work.
@@ -10,6 +10,8 @@ Read-only behavior is the default. Workspace changes require `--allow-changes`,
 a reviewed plan, and approval. MCP and websearch are operator capabilities:
 the workspace, task text, model output, and MCP server metadata cannot enable
 them.
+
+Current version: `0.1.0.alpha.1` (pre-release).
 
 ## 1. Set the model explicitly
 
@@ -38,10 +40,8 @@ export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 For a watched, read-only question:
 
 ```bash
-TAMOZ_ROOT=/path/to/tamoz
 WORKSPACE=/path/to/project
 
-cd "$TAMOZ_ROOT"
 rbenv exec bundle exec tamoz --root "$WORKSPACE" \
   "Explain the persistence boundary and cite local files"
 ```
@@ -319,9 +319,10 @@ Check, in order:
 7. Telegram doctor output, token, webhook conflict, and `comms list --json`;
 8. `status --json` for a durable approval or budget pause.
 
-Useful references:
+## Next reads
 
-- [`docs/INSTALL.md`](INSTALL.md) — complete CLI surface;
-- [`docs/OPERATIONS.md`](OPERATIONS.md) — recovery, approvals, and backups;
-- [`docs/LIMITATIONS.md`](LIMITATIONS.md) — measured gaps and non-goals;
-- [`docs/P10_MCP_PLAN.md`](P10_MCP_PLAN.md) and [`docs/P17_WEBSEARCH_PLAN.md`](P17_WEBSEARCH_PLAN.md) — implementation contracts.
+- [`../getting-started/install.md`](../getting-started/install.md) — complete CLI surface.
+- [`../operations/operations.md`](../operations/operations.md) — recovery, approvals, and backups.
+- [`telegram.md`](telegram.md) — the Telegram channel runbook.
+- [`../limitations.md`](../limitations.md) — measured gaps and non-goals.
+- [`../../docs/P10_MCP_PLAN.md`](../../docs/P10_MCP_PLAN.md) and [`../../docs/P17_WEBSEARCH_PLAN.md`](../../docs/P17_WEBSEARCH_PLAN.md) — implementation contracts.

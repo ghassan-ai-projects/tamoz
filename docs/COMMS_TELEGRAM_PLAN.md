@@ -1,6 +1,6 @@
 # Communication channels and Telegram: implementation plan
 
-The build order for [`COMMS_DESIGN.md`](COMMS_DESIGN.md). Status: in progress — the
+The build order for [`COMMS_DESIGN.md`](../documentation/design/comms.md). Status: in progress — the
 design clauses are accepted (invariants 56–58, ADR-041–043, committed) and slice A
 (the exact decision machinery) is committed; slices B–J are being built in order.
 
