@@ -66,7 +66,7 @@ The remaining release evidence is a real-provider end-to-end qualification, broa
 surface-revision/coalescing proof, and aggregate subprocess/locale gate stability.
 See [`../docs/COMMS_TELEGRAM_PLAN.md`](../docs/COMMS_TELEGRAM_PLAN.md) and
 [`../docs/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md`](../docs/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md)
-for the current boundary.
+(repository-internal archive) for the current boundary.
 
 ### Observability remains partial (invariants 59–61, ADR-044–047)
 
@@ -202,7 +202,7 @@ is recorded rather than smoothed over:
   model reply. Green tests here are necessary and have repeatedly proven
   insufficient.
 
-[`../docs/GAUNTLET_PROGRESS.md`](../docs/GAUNTLET_PROGRESS.md) §5 carries the full open-gap list.
+[`../docs/GAUNTLET_PROGRESS.md`](../docs/GAUNTLET_PROGRESS.md) (repository-internal archive) §5 carries the full open-gap list.
 
 ## Next reads
 

@@ -45,8 +45,8 @@ The bet behind the project is that **LangGraph's invariants are the product, and
 
 ## Next reads
 
-- [../getting-started/quickstart.md](../getting-started/quickstart.md) — value in ten minutes
+- [../getting-started/quickstart.md](../getting-started/quickstart.md) — install, ask, and try an approved change
 - [concepts.md](concepts.md) — the core mental model
 - [../architecture/overview.md](../architecture/overview.md) — the layered stack
 - [../limitations.md](../limitations.md) — what Tamoz does not do
-- [../README.md](../README.md) — the repository entry point
+- [../../README.md](../../README.md) — the repository entry point

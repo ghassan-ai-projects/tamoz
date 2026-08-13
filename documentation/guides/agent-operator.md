@@ -269,10 +269,13 @@ is sufficient.
 
 ## 6. Telegram gateway
 
-The Telegram gateway is a separate operator process. It owns the bot token,
-the durable poller lease, inbound admission, and outbound delivery; the worker
-does not poll Telegram directly. Run the doctor before starting a long-lived
-gateway:
+The Telegram gateway is a separate operator process. It owns the bot token, the
+durable poller lease, inbound admission, and outbound delivery; the worker does
+not poll Telegram directly. Run the doctor before starting a long-lived
+gateway, keep exactly one long-running gateway per bot token (a second `comms
+serve` against the same bot, or a Telegram webhook alongside long polling, is
+refused), and use `--once` only for a bounded smoke test or supervisor health
+check:
 
 ```bash
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms doctor
@@ -280,25 +283,11 @@ rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve --once --json
 rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms serve
 ```
 
-`comms serve` stays in the foreground. It renews the fenced poller lease,
-retries transient API/network failures with bounded backoff, honors Telegram's
-`retry_after` value, and drains durable outbound rows independently. A send
-that reaches Telegram and then fails is recorded as `unknown`, never blindly
-resent. Authentication failures and a competing poller/webhook stop the
-process with a named error so a service supervisor can alert or restart it
-after the operator fixes the cause.
-
-Use these commands while it runs:
-
-```bash
-rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" comms list --json
-rbenv exec bundle exec tamoz --runtime-dir "$RUNTIME" status --json | jq '.channels'
-```
-
-There must be exactly one long-running gateway for a bot token. Do not run a
-second `comms serve` against the same Telegram bot, and do not configure a
-Telegram webhook at the same time as long polling. Use `--once` only for a
-bounded smoke test or supervisor health check.
+A send that reaches Telegram and then fails is recorded as `unknown`, never
+blindly resent; authentication failures and a competing poller/webhook stop
+the process with a named error so a supervisor can alert or restart it. The
+full walkthrough — creating the bot, the allowlist, the config, and the
+deny-only approval flow — is in [`telegram.md`](telegram.md).
 
 ## 7. Debugging checklist
 
@@ -325,4 +314,4 @@ Check, in order:
 - [`../operations/operations.md`](../operations/operations.md) — recovery, approvals, and backups.
 - [`telegram.md`](telegram.md) — the Telegram channel runbook.
 - [`../limitations.md`](../limitations.md) — measured gaps and non-goals.
-- [`../../docs/P10_MCP_PLAN.md`](../../docs/P10_MCP_PLAN.md) and [`../../docs/P17_WEBSEARCH_PLAN.md`](../../docs/P17_WEBSEARCH_PLAN.md) — implementation contracts.
+- [`../../docs/P10_MCP_PLAN.md`](../../docs/P10_MCP_PLAN.md) and [`../../docs/P17_WEBSEARCH_PLAN.md`](../../docs/P17_WEBSEARCH_PLAN.md) — implementation contracts (repository-internal).

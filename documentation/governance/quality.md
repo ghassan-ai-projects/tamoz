@@ -26,6 +26,12 @@ complete gate instead:
 rbenv exec bundle exec rake ci_full
 ```
 
+`rake ci_full` is `rake ci` with the fast-test phase replaced by the full test
+set — every fast, slow and serial test file, plus the same design validation,
+syntax, proto drift and architecture checks, and nothing skipped. The autonomy
+scorecard is a separate owner gate (`rake autonomy_strict`), not part of the
+CI gates.
+
 ## The ratchets
 
 The quality ratchets compare every run against committed baselines and fail

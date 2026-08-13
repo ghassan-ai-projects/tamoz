@@ -60,10 +60,12 @@ machine-readable release status:
 
 ## The gates
 
-- `rake ci` — the everyday gate: design validation, syntax pass, whole test
-  suite. Run it before trusting anything else.
-- `rake ci_full` — the whole gate, nothing skipped. Run it before committing
-  anything that touches durability, MCP, packaging or evidence.
+- `rake ci` — the everyday gate: design validation, syntax pass, the fast test
+  set (slow and serial sets skipped, with a warning), the proto drift check and
+  the architecture check.
+- `rake ci_full` — the complete gate, nothing skipped: the full test set (fast,
+  slow and serial) plus the same design validation, syntax, proto drift and
+  architecture checks.
 - `rake autonomy_strict` — the autonomy milestone gate: every scorecard case
   must pass.
 

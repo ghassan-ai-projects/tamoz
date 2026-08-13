@@ -258,49 +258,12 @@ performs the explicit, backup-and-atomic-rename migration:
 rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz config migrate
 ```
 
-First authenticate the bot and copy its numeric id into config — bootstrap
-prints it and never persists or trusts it automatically:
-
-```bash
-export TAMOZ_TELEGRAM_BOT_TOKEN=<token from BotFather>
-rbenv exec bundle exec tamoz comms doctor --bootstrap \
-  --credential-ref TAMOZ_TELEGRAM_BOT_TOKEN
-```
-
-Then configure the surface. The token is referenced by NAME, never by value:
-
-```yaml
-channels:
-  telegram-ops:
-    kind: telegram
-    revision: 1
-    enabled: true
-    profile: ops
-    credential_ref: {kind: env, name: TAMOZ_TELEGRAM_BOT_TOKEN}
-    expected_bot_id: 7463512990
-    threading: conversation
-    admission:
-      direct: allowlist
-      correspondents: ["telegram:user:11111111"]
-    approvals:
-      mode: deny_only
-      prompt_ttl_s: 900
-```
-
-`tamoz comms doctor` checks getMe against `expected_bot_id`, TLS, permissions,
-the webhook/poller conflict, and the token — each failure is named and exits 1.
-The gateway is a separate foreground process:
-
-```bash
-rbenv exec bundle exec tamoz --runtime-dir ~/.tamoz comms serve --json
-```
-
-The gateway holds the bot token and never constructs a session, loads a model
-credential, or opens a file under the workspace root. Installations without the
-`tamoz-telegram` gem still run the agent and report a typed missing-adapter
-error for `tamoz comms serve`.
-
-See [`../guides/telegram.md`](../guides/telegram.md) for the full channel runbook.
+The full channel walkthrough — creating the bot, authenticating it, collecting
+the allowlist, configuring the surface, and running the gateway and worker — is
+in [`../guides/telegram.md`](../guides/telegram.md). The gateway holds the bot
+token and never constructs a session, loads a model credential, or opens a file
+under the workspace root. Installations without the `tamoz-telegram` gem still
+run the agent and report a typed missing-adapter error for `tamoz comms serve`.
 
 An MCP server is a supervised subprocess, so its configuration is explicit and
 nothing is inferred from the environment:

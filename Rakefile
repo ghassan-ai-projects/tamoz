@@ -397,7 +397,8 @@ end
 # contended process table away from a false failure, and the gate that decides
 # whether something ships should not have that property.
 desc "The complete gate — nothing skipped (use before committing)"
-task ci_full: ["design:validate", :syntax, :test, :test_slow]
+task ci_full: ["design:validate", :syntax, :test, :test_slow,
+               "stream:proto:check", "quality:architecture"]
 
 desc "The complete gate with the test phase sharded across processes"
 task ci_fast: ["design:validate", :syntax, :test_parallel]
