@@ -123,12 +123,7 @@ module Tamoz
       end
 
       def diagnose_intents
-        if watch_preferred?
-          intents = [watch_condition_intent]
-          type = expressible_action_type(risk_class: "r1")
-          intents << action_intent(type:) if type
-          return intents
-        end
+        return watch_preferred_intents if watch_preferred?
 
         if confidence >= HIGH_CONFIDENCE
           types = expressible_action_types(limit: 2)
@@ -139,6 +134,15 @@ module Tamoz
         end
 
         [watch_condition_intent]
+      end
+
+      def watch_preferred_intents
+        return [watch_condition_intent] if @outcome.fetch(:watch_only, false)
+
+        intents = [watch_condition_intent]
+        type = expressible_action_type(risk_class: "r1")
+        intents << action_intent(type:) if type
+        intents
       end
 
       def watch_preferred?

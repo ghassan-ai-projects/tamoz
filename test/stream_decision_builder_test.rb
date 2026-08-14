@@ -103,6 +103,22 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "install_watch_condition", intent.fetch("type")
   end
 
+  def test_a_watch_only_low_confidence_episode_proposes_only_a_watch_condition
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["start_aerator", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3, watch_only: true
+      }
+    ).build
+
+    assert_equal ["install_watch_condition"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
   def test_a_high_confidence_episode_uses_the_action_when_watch_is_allowlisted
     decision, = Stream::DecisionBuilder.new(
       envelope: envelope_with(
@@ -232,7 +248,7 @@ class StreamDecisionBuilderTest < Minitest::Test
       outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
     ).build
 
-    assert_equal ["start_aerator"],
+    assert_equal %w[start_aerator halt_feeding],
                  decision.fetch("intents").map { |intent| intent.fetch("type") }
   end
 
