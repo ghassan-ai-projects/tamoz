@@ -115,10 +115,21 @@ module Tamoz
       end
 
       def diagnose_intents
+        return [watch_condition_intent] if watch_preferred?
+
         type = expressible_action_type
         return [action_intent(type:)] if type
 
         [watch_condition_intent]
+      end
+
+      def watch_preferred?
+        floor = @envelope.watch_confidence_floor
+        floor > 0.0 && confidence < floor && watch_allowlisted?
+      end
+
+      def watch_allowlisted?
+        allowed_intent_types.include?("install_watch_condition")
       end
 
       def expressible_action_type

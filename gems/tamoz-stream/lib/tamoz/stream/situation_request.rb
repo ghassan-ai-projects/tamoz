@@ -37,6 +37,7 @@ module Tamoz
     # redelivered attempt is idempotent on the SAME id.
     class EpisodeRequestEnvelope
       PROTOCOL_VERSION = "1.0"
+      WATCH_CONFIDENCE_FLOOR_DEFAULT = 0.5
 
       KIND_NAMES = {
         EPISODE_KIND_DIAGNOSE: :diagnose,
@@ -79,6 +80,20 @@ module Tamoz
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
       def traceparent = blank_to_nil(@wire.traceparent)
       def tracestate = blank_to_nil(@wire.tracestate)
+
+      def watch_confidence_floor
+        floor = if @wire.has_watch_confidence_floor?
+          @wire.watch_confidence_floor
+        else
+          WATCH_CONFIDENCE_FLOOR_DEFAULT
+        end
+        unless floor.is_a?(Numeric) && floor.finite? && floor >= 0
+          raise EpisodeRequestInvalidError,
+                "watch_confidence_floor must be finite and non-negative"
+        end
+
+        floor
+      end
 
       TRACEPARENT_PATTERN = /\A(?:00|[0-9a-f]{2})-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}\z/.freeze
 
@@ -164,6 +179,7 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "episode fence must be a positive integer"
         end
+        watch_confidence_floor
         unless @wire.allowed_intent_types.to_a.length <= 16
           raise EpisodeRequestInvalidError,
                 "allowed_intent_types must not exceed 16 entries"

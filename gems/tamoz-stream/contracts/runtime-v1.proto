@@ -94,6 +94,7 @@ message EpisodeRequest {
   Reconsideration reconsideration = 58;
   bytes prompt_sha256 = 59;
   bytes objective_sha256 = 60;
+  optional double watch_confidence_floor = 61;
 }
 
 enum EpisodeKind {

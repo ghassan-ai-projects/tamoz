@@ -25,16 +25,15 @@ class StreamDecisionBuilderTest < Minitest::Test
 
   def envelope_with(risk_ceiling: :RISK_CLASS_R2, allowed_intent_types: [
     "create_maintenance_ticket", "recommend_operating_limit"
-  ])
-    Stream::EpisodeRequestEnvelope.new(
-      Agenticstream::Runtime::V1::EpisodeRequest.new(
-        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
-        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-        kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-        risk_ceiling:, allowed_intent_types:
-      ),
-      worker
+  ], watch_confidence_floor: nil)
+    request = Agenticstream::Runtime::V1::EpisodeRequest.new(
+      protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+      fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
+      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
+      risk_ceiling:, allowed_intent_types:
     )
+    request.watch_confidence_floor = watch_confidence_floor unless watch_confidence_floor.nil?
+    Stream::EpisodeRequestEnvelope.new(request, worker)
   end
 
   def snapshot
@@ -85,6 +84,62 @@ class StreamDecisionBuilderTest < Minitest::Test
     intent = decision.fetch("intents").fetch(0)
     assert_equal "create_maintenance_ticket", intent.fetch("type")
     assert_equal "R1", intent.fetch("risk_class")
+  end
+
+  def test_a_low_confidence_episode_prefers_an_allowlisted_watch_condition
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3,
+        watch_metric: "condition_score", watch_threshold: 0.8
+      }
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "install_watch_condition", intent.fetch("type")
+  end
+
+  def test_a_high_confidence_episode_uses_the_action_when_watch_is_allowlisted
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.9}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_zero_watch_floor_opts_out_of_watch_preference
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.0
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "possible drift", confidence: 0.3}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_watch_floor_does_not_force_a_watch_that_is_not_allowlisted
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "possible drift", confidence: 0.3}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
   end
 
   def test_an_uncertain_episode_uses_watch_when_no_action_is_allowlisted
