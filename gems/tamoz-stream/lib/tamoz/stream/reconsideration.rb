@@ -48,6 +48,7 @@ module Tamoz
       # (PROTOCOL §4.2). Compensation is never "safe because it undoes".
       COMPENSATION_RISK = {
         "maintenance" => "R1",
+        "pond" => "R1",
         "transfer" => "R3"
       }.freeze
       DEFAULT_COMPENSATION_RISK = "R1"
@@ -55,10 +56,12 @@ module Tamoz
       # Compensating intent types, keyed by the original intent family.
       WITHDRAW_TYPES = {
         "maintenance" => "withdraw_maintenance_ticket",
+        "pond" => "withdraw_intervention",
         "transfer" => "cancel_product_transfer"
       }.freeze
       DOWNGRADE_TYPES = {
         "maintenance" => "downgrade_maintenance_ticket",
+        "pond" => "downgrade_intervention",
         "transfer" => "downgrade_product_transfer"
       }.freeze
 
@@ -240,6 +243,12 @@ module Tamoz
         # physical transfer — misclassification would escalate the compensation
         # risk class.
         when /\b(?:transfer|shipment|move)\b/ then "transfer"
+        when /\bemergency_water_exchange\b/,
+             /\bstart_aerator\b/,
+             /\bhalt_feeding\b/,
+             /\binstall_watch_condition\b/,
+             /\bdowngrade_intervention\b/,
+             /\bwithdraw_intervention\b/ then "pond"
         else "maintenance"
         end
       end

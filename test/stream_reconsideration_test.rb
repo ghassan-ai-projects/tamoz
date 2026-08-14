@@ -166,6 +166,27 @@ class StreamReconsiderationTest < Minitest::Test
     )
   end
 
+  def test_an_emergency_water_exchange_downgrades_as_a_valid_r1_intervention
+    command = executed_command(command_id: "cmd_pond_1").merge(
+      "intent_type" => "emergency_water_exchange"
+    )
+    judgement = Reconsideration.judge(
+      parsed: Reconsideration.parse(
+        wire_reconsideration(invalidates: ["cmd_pond_1"], command:)
+      )
+    ).fetch(0)
+
+    intent = Reconsideration.build_compensating_intents(
+      [judgement], episode: episode(risk_ceiling: "r1"), snapshot:
+    ).fetch(0)
+
+    assert_equal :downgrade, judgement.decision
+    assert_equal "downgrade_intervention", intent.fetch("type")
+    assert_equal "R1", intent.fetch("risk_class")
+    assert_equal "cmd_pond_1", intent.fetch("compensates")
+    assert Reconsideration.valid_compensation?(intent, risk_ceiling: "r1")
+  end
+
   def test_a_transfer_compensation_is_classified_at_r3
     transfer_command = executed_command(
       command_id: "cmd_transfer_1",
