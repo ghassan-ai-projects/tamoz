@@ -170,6 +170,7 @@ module Tamoz
         @budget = budget
         @model_calls = 0
         @tool_calls = 0
+        @budget_emitted = false
         @usage = {
           input_tokens: 0, output_tokens: 0,
           cached_input_tokens: 0, reasoning_tokens: 0, cost_microunits: 0
@@ -259,6 +260,7 @@ module Tamoz
           tool_calls_used: @tool_calls,
           cumulative_usage: wire_usage
         )
+        @budget_emitted = true
       end
 
       # The terminal for the durable run result, budget-aware (T2.2). The
@@ -269,6 +271,7 @@ module Tamoz
       end
 
       def terminal_status(result)
+        emit_budget if @budget && !@budget_emitted
         base = TERMINAL_BY_RESULT.fetch(result&.status, :TERMINAL_STATUS_FAILED)
         return [:TERMINAL_STATUS_TIMED_OUT, "wall_time"] if wall_time_exceeded?
         return [:TERMINAL_STATUS_BUDGET_EXHAUSTED, "max_model_calls"] if model_calls_exceeded?

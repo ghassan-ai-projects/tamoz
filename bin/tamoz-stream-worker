@@ -29,7 +29,8 @@ require "tamoz/sqlite"
 
 options = {
   worker_version: "0.1.0.alpha.1",
-  lane_config: "fast=flash,deep=pro,batch=flash"
+  lane_config: "fast=flash,deep=pro,batch=flash",
+  tenant: nil
 }
 parser = OptionParser.new do |opts|
   opts.on("--graph FILE", "Ruby file defining build_episode_app(checkpointer)") do |value|
@@ -37,6 +38,9 @@ parser = OptionParser.new do |opts|
   end
   opts.on("--database PATH", "SQLite database for the durable checkpointer") do |value|
     options[:database] = value
+  end
+  opts.on("--tenant TENANT", "Configured tenant for this worker") do |value|
+    options[:tenant] = value
   end
   opts.on("--socket PATH", "UDS socket to bind (production; mTLS at the socket)") do |value|
     options[:socket] = value
@@ -53,7 +57,7 @@ parser = OptionParser.new do |opts|
 end
 parser.parse!(ARGV)
 
-unless options[:graph] && options[:database]
+unless options[:graph] && options[:database] && options[:tenant]
   warn parser
   exit 2
 end
@@ -69,19 +73,31 @@ lane_config = Tamoz::Agent::LaneConfig.build(
 
 require File.expand_path(options[:graph])
 
-checkpointer = Tamoz::SQLite::Adapter.new(path: options[:database])
-app = build_episode_app(checkpointer)
-runner = Tamoz::Stream::EpisodeRunner.new(
-  durable_runner: app.durable_runner,
-  worker: nil,
-  verification_store: Tamoz::Stream::VerificationStore.new,
-  artifact_store: Tamoz::Stream::ArtifactStore.new
+checkpointer = Tamoz::SQLite::Adapter.new(
+  path: options[:database], state_codec: Tamoz::Agent::Memory::Surface.codec
 )
+app = build_episode_app(checkpointer)
+memory = Tamoz::Agent::Memory::Engine.new(
+  tenant: options.fetch(:tenant), adapter: checkpointer
+)
+recaller = Tamoz::Agent::Memory::SituationRecaller.new(engine: memory)
 worker = Tamoz::Stream::EpisodeWorker.new(
   worker_version: options[:worker_version],
-  runner:,
   lane_config:
 )
+runner = Tamoz::Stream::EpisodeRunner.new(
+  durable_runner: app.durable_runner,
+  worker:,
+  verification_store: checkpointer.bind_verification_store,
+  artifact_store: Tamoz::Stream::ArtifactStore.new,
+  situation_recaller: recaller,
+  configured_tenant: options.fetch(:tenant),
+  recall_caller: memory.caller(
+    user: "stream", project: "stream", sensitivity: :internal,
+    compatibility: {graph_version: "1", behavior_version: Tamoz::Agent::BEHAVIOR_VERSION}
+)
+  )
+worker.bind_runner(runner)
 
 server = Tamoz::Stream::WorkerServer.new(
   worker:,

@@ -9,6 +9,7 @@ require "tamoz/stream/evidence_client"
 require "tamoz/stream/reconsideration"
 require "tamoz/stream/verification_store"
 require "tamoz/stream/artifact_store"
+require "tamoz/stream/situation_recall"
 # The runner composes episodes for the worker and reports the worker's
 # contract version on the artifact manifest — the worker's constant is the
 # single source of truth for the protocol version.
@@ -76,6 +77,10 @@ module Tamoz
       def spec_sha256 = Tamoz::Core.normalize_digest(@wire.spec_sha256)
       def prompt_sha256 = Tamoz::Core.normalize_digest(@wire.prompt_sha256)
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
+      def traceparent = blank_to_nil(@wire.traceparent)
+      def tracestate = blank_to_nil(@wire.tracestate)
+
+      TRACEPARENT_PATTERN = /\A(?:00|[0-9a-f]{2})-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}\z/.freeze
 
       # The durable request identity. The fence is part of the id, so a
       # superseded attempt (fence+1) is never confused with the in-flight one.
@@ -113,7 +118,9 @@ module Tamoz
             "supersession_key" => @wire.supersession_key,
             "cancellation_key" => @wire.cancellation_key,
             "snapshot_json" => @wire.snapshot_json,
-            "snapshot_sha256" => snapshot_sha256
+            "snapshot_sha256" => snapshot_sha256,
+            "traceparent" => traceparent,
+            "tracestate" => tracestate
           }.freeze
         }.freeze
       end
@@ -162,6 +169,12 @@ module Tamoz
                 "allowed_intent_types must not exceed 16 entries"
         end
         validate_budget!
+        if traceparent && !traceparent.match?(TRACEPARENT_PATTERN)
+          raise EpisodeRequestInvalidError, "traceparent is malformed"
+        end
+        if tracestate && tracestate.bytesize > 512
+          raise EpisodeRequestInvalidError, "tracestate exceeds 512 bytes"
+        end
         unless KIND_NAMES.key?(@wire.kind)
           raise EpisodeRequestInvalidError,
                 "unsupported episode kind #{@wire.kind.inspect}"
@@ -205,6 +218,10 @@ module Tamoz
 
         true
       end
+
+      def blank_to_nil(value)
+        value.to_s.empty? ? nil : value.to_s
+      end
     end
 
     # T1.4: runs one episode as a durable request through the durable runner —
@@ -214,11 +231,16 @@ module Tamoz
     # run into EpisodeEvent payloads; the runner here returns the durable
     # RequestRecord.
     class EpisodeRunner
-      def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil)
+      def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
+                     situation_recaller: nil, configured_tenant: nil, recall_caller: nil)
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
         @artifact_store = artifact_store
+        @situation_recaller = situation_recaller
+        @configured_tenant = configured_tenant && String(configured_tenant).dup.freeze
+        @recall_caller = recall_caller
+        validate_graph_recall_contract!
       end
 
       attr_reader :worker
@@ -243,6 +265,12 @@ module Tamoz
               raise EpisodeRequestInvalidError,
                     "request identity does not match the verified snapshot"
             end
+            if @configured_tenant &&
+               (wire_request.tenant_id != @configured_tenant ||
+                snapshot.fetch("tenant_id") != @configured_tenant)
+              raise EpisodeRequestInvalidError, "request tenant does not match configured tenant"
+            end
+            recall = recall_for(snapshot, envelope)
             stream = EpisodeStream.new(
               envelope, worker_name: @worker&.worker_name, worker_version: @worker&.worker_version
             )
@@ -255,11 +283,18 @@ module Tamoz
               interrupt_mode: :non_interactive,
               emitter: adapter,
               deadline: monotonic_deadline(wire_request.deadline),
+              metadata: trace_metadata(envelope),
               episode_tools: build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
             payload = envelope.payload.merge("snapshot" => snapshot)
-            if envelope.kind == :reconsider
+            if recall_channels_declared?
+              payload = payload.merge(
+                "situation_memory" => recall.projections,
+                "memory_record_digests" => recall.record_digests
+              )
+            end
+            if envelope.kind == :reconsider && reconsideration_channel_declared?
               payload = payload.merge(
                 "reconsideration" => Reconsideration.parse(
                   wire_request.reconsideration
@@ -287,7 +322,7 @@ module Tamoz
             # Decision to reproduce, and its inputs are not retained.
             manifest = nil
             if status == :TERMINAL_STATUS_PRODUCED
-              manifest = build_artifact_manifest(envelope, result)
+              manifest = build_artifact_manifest(envelope, result, recall)
               retain_manifest_artifacts(envelope) if @artifact_store
             end
             stream.terminal(
@@ -375,6 +410,8 @@ module Tamoz
                 "attempt #{envelope.attempt_id}",
           plan_digest: digest,
           completed_at: Time.now.to_i,
+          traceparent: envelope.traceparent,
+          tracestate: envelope.tracestate,
           scopes: {
             "tenant" => envelope.tenant_id,
             "user" => "stream",
@@ -393,12 +430,13 @@ module Tamoz
           next if intent.fetch("risk_class", "R0").to_s.upcase == "R0"
 
           @verification_store.open(
+            tenant_id: envelope.tenant_id,
             intent_id: intent.fetch("intent_id"),
             episode_id: envelope.episode_id,
             attempt_id: envelope.attempt_id,
             decision_digest: digest,
             episode: episode_content,
-            decision_id: intent["decision_id"]
+            decision_id: intent.fetch("decision_id")
           )
         end
       end
@@ -409,15 +447,29 @@ module Tamoz
       # re-derived; the contract version and the memory records the episode
       # grounded on complete the manifest. The checkpoint lookup uses the
       # envelope's own thread/namespace, matching emit_decision.
-      def build_artifact_manifest(envelope, result)
-        memory_digests = []
+      def build_artifact_manifest(envelope, result, recall)
+        memory_digests = recall.record_digests
         if result&.checkpoint_id
           checkpoint = @durable_runner.compiled.checkpointer.find(
             thread_id: envelope.thread_id,
             namespace: envelope.namespace,
             checkpoint_id: result.checkpoint_id
           )
-          memory_digests = Array(checkpoint&.state&.to_h&.fetch(:memory_record_digests, []))
+          terminal_state = checkpoint&.state&.to_h || {}
+          terminal_digests = Array(terminal_state.fetch(:memory_record_digests, []))
+          if !@situation_recaller && (!terminal_digests.empty? || !Array(terminal_state.fetch(:situation_memory, [])).empty?)
+            raise EpisodeRequestInvalidError,
+                  "terminal memory requires an authorized situation recaller"
+          end
+          unless terminal_digests == memory_digests
+            raise EpisodeRequestInvalidError,
+                  "terminal memory digests do not match the authorized recall"
+          end
+          terminal_memory = Array(terminal_state.fetch(:situation_memory, []))
+          unless terminal_memory == recall.projections
+            raise EpisodeRequestInvalidError,
+                  "terminal situation memory does not match the authorized recall"
+          end
         end
         Agenticstream::Runtime::V1::ArtifactManifest.new(
           prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
@@ -494,7 +546,9 @@ module Tamoz
             max_rows: nil,
             max_bytes: wire_request.budget&.max_tool_result_bytes,
             time_from: wire_request.evidence_time_range&.from&.seconds,
-            time_until: wire_request.evidence_time_range&.until&.seconds
+            time_until: wire_request.evidence_time_range&.until&.seconds,
+            traceparent: wire_request.traceparent,
+            tracestate: wire_request.tracestate
           )
           implementations = EpisodeCapabilityHost::PERMITTED.to_h do |name|
             [name, EvidenceToolAdapter.new(client, tool_name: name)]
@@ -512,6 +566,56 @@ module Tamoz
 
         [EpisodeCapabilityHost::MAX_RESULT_BYTES,
          budget.max_tool_result_bytes.to_i].reject(&:zero?).min
+      end
+
+      def recall_channels_declared?
+        channels = @durable_runner.compiled.channels
+        channels.key?(:situation_memory) && channels.key?(:memory_record_digests)
+      end
+
+      def reconsideration_channel_declared?
+        @durable_runner.compiled.channels.key?(:reconsideration)
+      end
+
+      def validate_graph_recall_contract!
+        return unless @situation_recaller
+
+        compiled = @durable_runner.compiled
+        channels = compiled.channels
+        %i[situation_memory memory_record_digests].each do |channel|
+          next if channels.key?(channel)
+
+          raise ArgumentError, "recall-enabled episode graph must declare #{channel}"
+        end
+        %i[situation_memory memory_record_digests].each do |channel_name|
+          channel = channels.fetch(channel_name)
+          unless channel.immutable? && channel.reducer.nil? && channel.default(compiled.codec) == []
+            raise ArgumentError,
+                  "recall channel #{channel_name} must be immutable with a [] default and no reducer"
+          end
+        end
+      end
+
+      def recall_for(snapshot, envelope)
+        return SituationRecall::Result.new unless @situation_recaller
+        unless @recall_caller
+          raise ArgumentError, "recall-enabled EpisodeRunner requires recall_caller"
+        end
+        unless @recall_caller[:tenant] == envelope.tenant_id ||
+               @recall_caller["tenant"] == envelope.tenant_id
+          raise EpisodeRequestInvalidError, "recall caller tenant does not match the episode tenant"
+        end
+
+        SituationRecall.validate!(@situation_recaller.recall(
+          caller: @recall_caller, snapshot:, query: {terms: []}, limit: 64
+        ))
+      end
+
+      def trace_metadata(envelope)
+        {
+          "traceparent" => envelope.traceparent,
+          "tracestate" => envelope.tracestate
+        }.compact.freeze
       end
 
       # T2.2: an RPC-context cancellation (supersession) cancels the run's

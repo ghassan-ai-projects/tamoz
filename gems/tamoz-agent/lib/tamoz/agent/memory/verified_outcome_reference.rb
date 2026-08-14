@@ -46,9 +46,7 @@ module Tamoz
           return "malformed_reconciled_outcome_reference" unless reference.is_a?(Hash)
 
           normalized = reference.transform_keys(&:to_s)
-          missing = REQUIRED_FIELDS.reject do |field|
-            normalized[field].is_a?(String) && !normalized[field].empty?
-          end
+          missing = REQUIRED_FIELDS.reject { |field| present?(normalized, field) }
           return "missing_reconciled_outcome_fields: #{missing.join(",")}" unless missing.empty?
 
           episode_identity = episode.transform_keys(&:to_s)
@@ -77,6 +75,14 @@ module Tamoz
           false
         end
         private_class_method :verified?
+
+        def present?(reference, field)
+          value = reference[field]
+          return value.is_a?(Integer) && value.positive? if field == "reconciliation_version"
+
+          value.is_a?(String) && !value.empty?
+        end
+        private_class_method :present?
 
         # The provenance block appended to the :observed record's source_refs
         # (PROTOCOL §6.2: the Experience cites the episode id, Decision

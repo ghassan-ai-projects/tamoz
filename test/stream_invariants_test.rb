@@ -121,8 +121,8 @@ class StreamInvariantsTest < Minitest::Test
     # A forged source authority is refused.
     forged = {
       "outcome_id" => "o", "outcome_digest" => "sha256:#{"c" * 64}",
-      "command_id" => "c", "source_authority" => "attacker",
-      "reconciliation_version" => "1", "observation_status" => "verified",
+      "command_id" => "c", "decision_id" => "d-1", "source_authority" => "attacker",
+      "reconciliation_version" => 1, "observation_status" => "verified",
       "episode_id" => "s1", "attempt_id" => "at-1"
     }
     forged_error = assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do

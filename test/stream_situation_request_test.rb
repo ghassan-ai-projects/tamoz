@@ -123,6 +123,13 @@ class StreamSituationRequestTest < Minitest::Test
     app.checkpointer.request_history(thread_id: "episode.ep-1", namespace: ["acme"])
   end
 
+  def reconsideration_payload
+    Agenticstream::Runtime::V1::Reconsideration.new(
+      prior_decision_json: "{}",
+      correction_json: "{}"
+    )
+  end
+
   def with_durable_app
     Dir.mktmpdir("tamoz-episode-request") do |directory|
       adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
@@ -139,6 +146,10 @@ class StreamSituationRequestTest < Minitest::Test
 
       refute_empty events
       assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
+
+      state = app.state(thread: "episode.ep-1", namespace: ["acme"]).state
+      refute state.key?(:situation_memory)
+      refute state.key?(:memory_record_digests)
 
       redelivered = runner.run(wire_request).to_a
       assert_equal :TERMINAL_STATUS_PRODUCED, redelivered.last.terminal.status
@@ -159,6 +170,20 @@ class StreamSituationRequestTest < Minitest::Test
       assert_equal :TERMINAL_STATUS_PRODUCED, attempt_2.last.terminal.status
       assert_equal 1, attempt_1.first.sequence
       assert_equal 1, attempt_2.first.sequence
+    end
+  end
+
+  def test_reconsideration_payload_is_omitted_for_graph_without_channel
+    with_durable_app do |_adapter, _app, runner|
+      events = runner.run(
+        wire_request(
+          kind: :EPISODE_KIND_RECONSIDER,
+          reconsideration: reconsideration_payload
+        )
+      ).to_a
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
+      refute(events.any? { |event| event.diagnostic&.code == "invalid_update" })
     end
   end
 

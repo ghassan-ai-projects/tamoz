@@ -78,7 +78,7 @@ class StreamApprovalRelayTest < Minitest::Test
       "summary" => "pressure trend",
       "delta" => "pressure rose 0.2 since the last version",
       "hypothesis" => "bearing wear",
-      "evidence" => "pressure 0.9, vibration 2.1",
+      "evidence" => ["pressure 0.9, vibration 2.1"],
       "action" => "setpoint change on freezer zone 3",
       "decline_consequence" => "the zone runs hot and may fault"
     }.merge(overrides)
@@ -106,6 +106,48 @@ class StreamApprovalRelayTest < Minitest::Test
     end
     assert_includes text, "pressure trend"
     assert_includes text, "the zone runs hot and may fault"
+  end
+
+  def test_deliver_accepts_present_empty_evidence
+    delivery = FakeDelivery.new
+
+    receipt = relay(delivery:).deliver(
+      approval: approval("evidence" => []), conversation_id: "chat-1"
+    )
+
+    assert_equal "receipt-1", receipt
+    assert_includes delivery.delivered.fetch(0).fetch(:text), "Evidence: []"
+  end
+
+  def test_deliver_refuses_missing_or_nil_evidence
+    missing = approval
+    missing.delete("evidence")
+
+    [missing, approval("evidence" => nil)].each do |invalid_approval|
+      error = assert_raises(Relay::ApprovalRelayError) do
+        relay.deliver(approval: invalid_approval, conversation_id: "chat-1")
+      end
+      assert_includes error.message, "evidence"
+    end
+  end
+
+  def test_deliver_refuses_empty_required_fields
+    empty_values = {
+      "summary" => "",
+      "delta" => {},
+      "hypothesis" => "",
+      "action" => {},
+      "decline_consequence" => ""
+    }
+
+    empty_values.each do |field, value|
+      error = assert_raises(Relay::ApprovalRelayError) do
+        relay.deliver(
+          approval: approval(field => value), conversation_id: "chat-1"
+        )
+      end
+      assert_includes error.message, field
+    end
   end
 
   def test_withdraw_edits_the_delivered_message_in_place

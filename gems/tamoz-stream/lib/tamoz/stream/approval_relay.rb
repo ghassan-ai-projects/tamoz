@@ -48,7 +48,9 @@ module Tamoz
       # submission: submit(approval_id:, decision:, reason:, idempotency_key:, assertion:)
       # nonce_store: claim(nonce) -> true when first seen, false on replay
       # signer:     key_id; sign(canonical_bytes) -> signature hex
-      def initialize(delivery:, submission:, nonce_store:, signer:, relay_id:, clock: -> { Time.now })
+      # approval_state: optional durable state reader returning the receipt row
+      def initialize(delivery:, submission:, nonce_store:, signer:, relay_id:,
+                     approval_state: nil, clock: -> { Time.now })
         unless delivery.respond_to?(:deliver) && delivery.respond_to?(:edit_in_place)
           raise ApprovalRelayError, "approval delivery must implement deliver and edit_in_place"
         end
@@ -66,6 +68,7 @@ module Tamoz
         @nonce_store = nonce_store
         @signer = signer
         @relay_id = bounded!(relay_id, "relay_id")
+        @approval_state = approval_state
         @clock = clock
         freeze
       end
@@ -74,17 +77,18 @@ module Tamoz
 
       # PROTOCOL §5.1.3: the prompt carries the Situation summary, the delta
       # since the last reasoned version, the hypothesis, the evidence, what
-      # the action does, and what happens if declined — all six are REQUIRED,
-      # so a malformed approval is refused instead of delivered as a
-      # convincing but empty prompt. Returns the delivery receipt (the durable
-      # handle for edit-in-place and audit).
+      # the action does, and what happens if declined — all six are REQUIRED.
+      # Evidence must be present as an array, but may legitimately be empty.
+      # Returns the delivery receipt (the durable handle for edit-in-place and
+      # audit).
       def deliver(approval:, conversation_id:)
         approval = stringify(approval)
         require_field!(approval, "approval_id")
         require_field!(approval, "situation_id")
-        %w[summary delta hypothesis evidence action decline_consequence].each do |field|
+        %w[summary delta hypothesis action decline_consequence].each do |field|
           require_field!(approval, field)
         end
+        require_evidence!(approval)
         @delivery.deliver(
           conversation_id:,
           kind: "approval_request",
@@ -111,6 +115,13 @@ module Tamoz
       # the stream deduplicates retries without weakening the nonce.
       def submit_decision(approval:, approver_id:, decision:, reason: nil)
         approval = stringify(approval)
+        approval_id = require_field!(approval, "approval_id")
+        if @approval_state
+          row = @approval_state.fetch(approval_id)
+          unless row&.fetch("state") == "requested"
+            raise ApprovalRelayError, "approval is no longer actionable"
+          end
+        end
         unless DECISIONS.include?(decision.to_s)
           raise ApprovalRelayError, "approval decision must be approve or deny"
         end
@@ -124,7 +135,7 @@ module Tamoz
         # the relay at all.
         expires_at = require_field!(approval, "expires_at")
         if @clock.call.to_i > expiry_epoch(expires_at)
-          raise ApprovalRelayError, "approval #{approval.fetch("approval_id")} has expired"
+          raise ApprovalRelayError, "approval #{approval_id} has expired"
         end
 
         nonce = SecureRandom.uuid
@@ -135,7 +146,7 @@ module Tamoz
         assertion = {
           "approver_id" => approver_id,
           "tenant_id" => require_field!(approval, "tenant_id"),
-          "approval_id" => require_field!(approval, "approval_id"),
+          "approval_id" => approval_id,
           "intent_digest" => require_digest!(approval, "intent_digest"),
           "snapshot_digest" => require_digest!(approval, "snapshot_digest"),
           "decision" => decision.to_s,
@@ -200,11 +211,22 @@ module Tamoz
 
       def require_field!(approval, key)
         value = approval[key]
-        if value.nil? || value.to_s.empty? || value.to_s.bytesize > MAX_ID_BYTES
+        empty = value.respond_to?(:empty?) && value.empty?
+        if value.nil? || empty || value.to_s.empty? || value.to_s.bytesize > MAX_ID_BYTES
           raise ApprovalRelayError, "#{key} is required and bounded"
         end
 
         value.to_s
+      end
+
+      def require_evidence!(approval)
+        evidence = approval["evidence"]
+        valid = evidence.is_a?(Array) && evidence.all? do |entry|
+          entry.is_a?(String) && !entry.empty? && entry.bytesize <= MAX_ID_BYTES
+        end
+        raise ApprovalRelayError, "evidence is required and bounded" unless valid
+
+        evidence
       end
 
       def require_digest!(approval, key)

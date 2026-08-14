@@ -10,6 +10,22 @@ require "tamoz/stream/artifact_store"
 # the STREAM's own digests, and the runner retains the named documents so a
 # shadow run can resolve them without re-running Tamoz. Retention is bounded.
 class StreamArtifactManifestTest < Minitest::Test
+  class StubSituationRecaller
+    attr_reader :calls
+
+    def initialize(result)
+      @result = result
+      @calls = []
+    end
+
+    def recall(caller:, snapshot:, query:, limit:)
+      @calls << {caller:, snapshot:, query:, limit:}
+      @result
+    end
+  end
+
+  MEMORY_DIGEST = "sha256:#{"e" * 64}"
+
   def snapshot
     {
       "situation_id" => "sit-1", "situation_version" => 7,
@@ -45,7 +61,8 @@ class StreamArtifactManifestTest < Minitest::Test
       state :confidence, default: nil
       state :summary, default: nil
       state :facts_used, default: []
-      state :memory_record_digests, default: []
+      state :situation_memory, default: [], immutable: true
+      state :memory_record_digests, default: [], immutable: true
       node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
         context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
         context.emit(:model_completed,
@@ -53,7 +70,6 @@ class StreamArtifactManifestTest < Minitest::Test
         {
           primary_hypothesis: "bearing wear", confidence: 0.9,
           summary: "confirmed", facts_used: [],
-          memory_record_digests: ["sha256:#{"m" * 64}"]
         }
       end
       edge Tamoz::START, :analyze
@@ -81,8 +97,25 @@ class StreamArtifactManifestTest < Minitest::Test
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     store = Tamoz::Stream::ArtifactStore.new
     app = graph.compile(checkpointer: adapter)
+    recaller = StubSituationRecaller.new(
+      Tamoz::Stream::SituationRecall::Result.new(
+        records: [Tamoz::Stream::SituationRecall::Projection.new(
+          statement: "prior compressor pressure increased",
+          scopes: {
+            tenant: "acme", situation_type: "equipment", entity_type: "compressor", entity_id: "c-00"
+          },
+          provenance: {
+            episode_id: "ep-prior", decision_id: "decision-prior",
+            command_id: "command-prior", outcome_id: "outcome-prior"
+          },
+          digest: MEMORY_DIGEST
+        )],
+        record_digests: [MEMORY_DIGEST]
+      )
+    )
     runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil, artifact_store: store
+      durable_runner: app.durable_runner, worker: nil, artifact_store: store,
+      situation_recaller: recaller, recall_caller: {tenant: "acme"}
     )
 
     tool_catalog = JSON.generate({"tools" => ["evidence.get"]})
@@ -107,9 +140,10 @@ class StreamArtifactManifestTest < Minitest::Test
     assert_equal "1.0", manifest.contract_version
     assert_equal 32, manifest.tool_catalog_sha256.bytesize
     assert_equal tool_digest, Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
-    assert_equal "sha256:#{"m" * 64}",
+    assert_equal MEMORY_DIGEST,
                  Tamoz::Core.normalize_digest(manifest.memory_record_sha256.fetch(0)),
                  "the manifest names the memory records the episode grounded on"
+    assert_equal 1, recaller.calls.length
 
     # The named documents are retained, resolvable by the STREAM's digests —
     # each under ITS OWN digest (the objective under objective_sha256).

@@ -2,6 +2,7 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
+require_relative "fixtures/episode_diagnose"
 
 # T6 (PLAN_TAMOZ_STREAM_BUILD T6.1): RECONSIDER episodes. The worker routes
 # kind: RECONSIDER with the prior Decision/commands/outcomes/correction; the
@@ -242,44 +243,7 @@ class StreamReconsiderationTest < Minitest::Test
   def test_a_reconsider_episode_produces_a_downgrade_decision
     directory = Dir.mktmpdir("tamoz-reconsider-e2e")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    graph = Tamoz.graph(name: "episode-reconsider", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :reconsideration, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      state :compensating_intents, default: []
-      node(:judge, implementation_name: "episode.judge", version: "1") do |state, context|
-        data = state.fetch(:reconsideration)
-        judgements = Reconsideration.judge(
-          parsed: Reconsideration.from_hash(data)
-        )
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed, {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        episode = state.fetch(:episode)
-        snapshot = state.fetch(:snapshot)
-        {
-          primary_hypothesis: "correction explains the signal",
-          confidence: 0.9,
-          compensating_intents: Reconsideration.build_compensating_intents(
-            judgements,
-            episode: {
-              episode_id: episode.fetch("episode_id"),
-              attempt_id: episode.fetch("attempt_id"),
-              fence: episode.fetch("fence"),
-              tenant_id: episode.fetch("tenant_id"),
-              situation_id: snapshot.fetch("situation_id"),
-              situation_version: snapshot.fetch("situation_version"),
-              risk_ceiling: "r2"
-            },
-            snapshot:
-          )
-        }
-      end
-      edge Tamoz::START, :judge
-      edge :judge, Tamoz::END
-    end
-    app = graph.compile(checkpointer: adapter)
+    app = build_episode_app(adapter)
     runner = Tamoz::Stream::EpisodeRunner.new(
       durable_runner: app.durable_runner, worker: nil
     )
@@ -290,6 +254,7 @@ class StreamReconsiderationTest < Minitest::Test
       tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
       kind: :EPISODE_KIND_RECONSIDER, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
+      budget: Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 5),
       capability_token: "opaque.hmac.token",
       reconsideration: wire_reconsideration,
       snapshot_json: Tamoz::Core.jcs(snapshot),
@@ -297,12 +262,20 @@ class StreamReconsiderationTest < Minitest::Test
     )
 
     events = runner.run(wire).each.to_a
+    assert_empty events.select { |event| event.model_started != nil }
+    budget_events = events.select { |event| event.budget != nil }
+    assert_equal 1, budget_events.length
+    assert_equal 0, budget_events.fetch(0).budget.model_calls_used
+    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.input_tokens
+    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.output_tokens
+    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.cost_microunits
     assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
     decision_event = events.find { |event| event.decision != nil }
     refute_nil decision_event, "a produced reconsider episode must propose a decision"
     decision = JSON.parse(decision_event.decision.decision_json)
     assert_equal "downgrade_maintenance_ticket",
                  decision.fetch("intents").fetch(0).fetch("type")
+    assert_equal "R1", decision.fetch("intents").fetch(0).fetch("risk_class")
     assert_equal "cmd_0091_a", decision.fetch("intents").fetch(0).fetch("compensates")
     assert Tamoz::Core.verify_digest(
       :decision, decision, decision_event.decision.decision_sha256

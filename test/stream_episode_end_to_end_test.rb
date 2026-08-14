@@ -146,10 +146,10 @@ class StreamEpisodeEndToEndTest < Minitest::Test
   def raw_digest_episode_request(suffix)
     request = episode_request(suffix)
     request.snapshot_sha256 = raw_digest(request.snapshot_sha256)
-    request.prompt_sha256 = raw_digest("sha256:#{"p" * 64}")
-    request.tool_catalog_sha256 = raw_digest("sha256:#{"t" * 64}")
-    request.decision_schema_sha256 = raw_digest("sha256:#{"s" * 64}")
-    request.objective_sha256 = raw_digest("sha256:#{"o" * 64}")
+    request.prompt_sha256 = raw_digest("sha256:#{"a" * 64}")
+    request.tool_catalog_sha256 = raw_digest("sha256:#{"b" * 64}")
+    request.decision_schema_sha256 = raw_digest("sha256:#{"c" * 64}")
+    request.objective_sha256 = raw_digest("sha256:#{"d" * 64}")
     request.tool_catalog_json = JSON.generate({"tools" => ["compressor.read"]})
     request.decision_schema_json = JSON.generate({"type" => "object"})
     request.objective = "diagnose the compressor"
@@ -224,16 +224,16 @@ class StreamEpisodeEndToEndTest < Minitest::Test
     assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
     refute_nil events.find { |event| event.decision != nil }
     manifest = events.last.terminal.artifact_manifest
-    assert_equal "sha256:#{"p" * 64}", Tamoz::Core.normalize_digest(manifest.prompt_sha256)
-    assert_equal "sha256:#{"t" * 64}",
+    assert_equal "sha256:#{"a" * 64}", Tamoz::Core.normalize_digest(manifest.prompt_sha256)
+    assert_equal "sha256:#{"b" * 64}",
                  Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
 
     store = self.class.rpc.fetch(:artifact_store)
     assert_equal JSON.generate({"tools" => ["compressor.read"]}),
-                 store.resolve("sha256:#{"t" * 64}").fetch("bytes")
+                 store.resolve("sha256:#{"b" * 64}").fetch("bytes")
     assert_equal JSON.generate({"type" => "object"}),
-                 store.resolve("sha256:#{"s" * 64}").fetch("bytes")
+                 store.resolve("sha256:#{"c" * 64}").fetch("bytes")
     assert_equal "diagnose the compressor",
-                 store.resolve("sha256:#{"o" * 64}").fetch("bytes")
+                 store.resolve("sha256:#{"d" * 64}").fetch("bytes")
   end
 end
