@@ -63,8 +63,8 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "bearing wear", decision.fetch("primary_hypothesis")
 
     intent = decision.fetch("intents").fetch(0)
-    assert_equal "create_maintenance_ticket", intent.fetch("type")
-    assert_equal "R1", intent.fetch("risk_class")
+    assert_equal "recommend_operating_limit", intent.fetch("type")
+    assert_equal "R2", intent.fetch("risk_class")
     assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
 
     # The decision digest verifies against the shared decision domain.
@@ -140,6 +140,72 @@ class StreamDecisionBuilderTest < Minitest::Test
     ).build
 
     assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_low_confidence_pond_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "low oxygen", confidence: 0.3}
+    ).build
+
+    assert_equal %w[install_watch_condition start_aerator],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_moderate_confidence_pond_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "low oxygen", confidence: 0.6}
+    ).build
+
+    assert_equal ["start_aerator"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_pond_episode_proposes_the_highest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
+    ).build
+
+    assert_equal ["emergency_water_exchange"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_pond_episode_respects_an_r1_ceiling
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R1,
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
+    ).build
+
+    assert_equal ["start_aerator"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
   end
 
   def test_an_uncertain_episode_uses_watch_when_no_action_is_allowlisted

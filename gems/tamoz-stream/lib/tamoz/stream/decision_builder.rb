@@ -17,8 +17,14 @@ module Tamoz
       }.freeze
       ACTION_RISKS = {
         "create_maintenance_ticket" => "r1",
-        "recommend_operating_limit" => "r2"
+        "recommend_operating_limit" => "r2",
+        "start_aerator" => "r1",
+        "halt_feeding" => "r1",
+        "emergency_water_exchange" => "r2",
+        "downgrade_intervention" => "r1",
+        "withdraw_intervention" => "r1"
       }.freeze
+      HIGH_CONFIDENCE = 0.85
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
       VALIDITY_WINDOW_SECONDS = 86_400
@@ -115,9 +121,14 @@ module Tamoz
       end
 
       def diagnose_intents
-        return [watch_condition_intent] if watch_preferred?
+        if watch_preferred?
+          intents = [watch_condition_intent]
+          type = expressible_action_type(risk_class: "r1")
+          intents << action_intent(type:) if type
+          return intents
+        end
 
-        type = expressible_action_type
+        type = expressible_action_type(highest_risk: confidence >= HIGH_CONFIDENCE)
         return [action_intent(type:)] if type
 
         [watch_condition_intent]
@@ -132,16 +143,30 @@ module Tamoz
         allowed_intent_types.include?("install_watch_condition")
       end
 
-      def expressible_action_type
+      def expressible_action_type(highest_risk: false, risk_class: nil)
         candidates = allowed_intent_types.filter_map do |type|
-          risk_class = ACTION_RISKS[type]
-          next unless risk_class
-          next if RISK_ORDER.fetch(risk_class) > RISK_ORDER.fetch(@envelope.risk_ceiling)
+          candidate_risk = ACTION_RISKS[type]
+          next unless candidate_risk
+          next unless expressible_candidate?(candidate_risk, risk_class)
 
-          [type, risk_class]
+          [type, candidate_risk]
         end
-        candidate = candidates.min_by { |_type, risk_class| RISK_ORDER.fetch(risk_class) }
+        candidate = select_action_candidate(candidates, highest_risk:)
         candidate&.first
+      end
+
+      def expressible_candidate?(candidate_risk, required_risk)
+        return false if required_risk && candidate_risk != required_risk
+
+        RISK_ORDER.fetch(candidate_risk) <= RISK_ORDER.fetch(@envelope.risk_ceiling)
+      end
+
+      def select_action_candidate(candidates, highest_risk:)
+        if highest_risk
+          candidates.max_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
+        else
+          candidates.min_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
+        end
       end
 
       def allowed_intent_types
