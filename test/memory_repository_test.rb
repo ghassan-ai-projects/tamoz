@@ -149,6 +149,8 @@ class MemoryRepositoryTest < Minitest::Test
     database.execute("DROP TABLE IF EXISTS tamoz_stream_situation_current")
     database.execute("DROP TABLE IF EXISTS tamoz_stream_triggers")
     database.execute("DROP TABLE IF EXISTS tamoz_stream_outbox")
+    database.execute("DROP INDEX IF EXISTS idx_tamoz_stream_verifications_state")
+    database.execute("DROP TABLE IF EXISTS tamoz_stream_verifications")
     %w[
       tamoz_comms_surfaces tamoz_comms_bindings tamoz_comms_pairing_challenges
       tamoz_comms_conversations tamoz_comms_inbound tamoz_comms_requests
@@ -158,11 +160,11 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 13, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 14, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 
@@ -215,7 +217,9 @@ class MemoryRepositoryTest < Minitest::Test
                 'retained', 1)
     SQL
     database.execute("DROP TABLE tamoz_digest_epoch")
-    # The DB was built at v13, which already dropped the old stream tables;
+    database.execute("DROP INDEX IF EXISTS idx_tamoz_stream_verifications_state")
+    database.execute("DROP TABLE IF EXISTS tamoz_stream_verifications")
+    # The DB was built at v14, which already dropped the old stream tables;
     # recreate them from the real migration definitions so the downgrade can
     # exercise MIGRATION_11's stream clears, then let MIGRATION_13 drop them
     # again on the way back up.
@@ -224,7 +228,7 @@ class MemoryRepositoryTest < Minitest::Test
       database.execute(statement)
     end
     database.execute("PRAGMA user_version = 10")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13, 14)")
     database.close
     adapter.close
 
@@ -234,9 +238,11 @@ class MemoryRepositoryTest < Minitest::Test
     assert_equal 0, database.get_first_value(
       "SELECT COUNT(*) FROM tamoz_store_heads WHERE namespace GLOB 'tamoz.circuit.*'"
     )
-    # T8.3: the old engine's tables are gone entirely after MIGRATION_13.
+    # T8.3: the old engine's tables are gone after MIGRATION_13; v14 adds its
+    # verification table separately.
     stream_tables = database.execute(
-      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name LIKE 'tamoz_stream_%'"
+      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name LIKE 'tamoz_stream_%' " \
+      "AND name != 'tamoz_stream_verifications'"
     )
     assert_empty stream_tables, "MIGRATION_13 must drop every old stream table"
     # The pre-12 row survives the rebuild with NULL situation scopes, and the
@@ -252,7 +258,7 @@ class MemoryRepositoryTest < Minitest::Test
     assert_includes indexes, "idx_tamoz_memory_index_scope"
     assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal 13, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 14, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

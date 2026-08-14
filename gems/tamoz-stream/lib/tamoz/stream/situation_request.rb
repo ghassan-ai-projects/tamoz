@@ -287,12 +287,14 @@ module Tamoz
               episode_tools: build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
-            payload = envelope.payload.merge(
-              "snapshot" => snapshot,
-              "situation_memory" => recall.projections,
-              "memory_record_digests" => recall.record_digests
-            )
-            if envelope.kind == :reconsider
+            payload = envelope.payload.merge("snapshot" => snapshot)
+            if recall_channels_declared?
+              payload = payload.merge(
+                "situation_memory" => recall.projections,
+                "memory_record_digests" => recall.record_digests
+              )
+            end
+            if envelope.kind == :reconsider && reconsideration_channel_declared?
               payload = payload.merge(
                 "reconsideration" => Reconsideration.parse(
                   wire_request.reconsideration
@@ -564,6 +566,15 @@ module Tamoz
 
         [EpisodeCapabilityHost::MAX_RESULT_BYTES,
          budget.max_tool_result_bytes.to_i].reject(&:zero?).min
+      end
+
+      def recall_channels_declared?
+        channels = @durable_runner.compiled.channels
+        channels.key?(:situation_memory) && channels.key?(:memory_record_digests)
+      end
+
+      def reconsideration_channel_declared?
+        @durable_runner.compiled.channels.key?(:reconsideration)
       end
 
       def validate_graph_recall_contract!

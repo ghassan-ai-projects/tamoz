@@ -82,7 +82,7 @@ module Tamoz
             break
           when :control
             handle_control(frame, transport)
-            break if %w[cursor_expired subscriber_too_slow].include?(frame.control)
+            break if frame.control == "subscriber_too_slow"
           when :event
             break unless handle_event(frame)
           end
@@ -147,9 +147,7 @@ module Tamoz
           return true
         end
 
-        handler = if NotificationContract.known_family?(event.type)
-                    @handlers[event.type]
-                  end
+        handler = @handlers[event.type]
         if handler.nil?
           if NotificationContract.known_family?(event.type) &&
              !NotificationContract.supported_type?(event.type)
@@ -180,7 +178,7 @@ module Tamoz
         @cursor_store.event_state(
           source: event.source,
           event_id: event.id,
-          payload_digest: Tamoz::Core.digest("tamoz.stream.notification", event.envelope)
+          payload_digest: Tamoz::Core.digest("tamoz/stream/notification/v1\n", event.envelope)
         )
       end
 
@@ -190,7 +188,7 @@ module Tamoz
         @cursor_store.mark_event(
           source: event.source,
           event_id: event.id,
-          payload_digest: Tamoz::Core.digest("tamoz.stream.notification", event.envelope),
+          payload_digest: Tamoz::Core.digest("tamoz/stream/notification/v1\n", event.envelope),
           traceparent: event.traceparent,
           tracestate: event.tracestate
         )

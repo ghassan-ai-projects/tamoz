@@ -8,8 +8,8 @@ class McpServerConfigTest < Minitest::Test
   ValidationError = Tamoz::Mcp::ValidationError
 
   def setup
-    @dir = Dir.mktmpdir("tamoz-mcp-config")
-    @workspace = Dir.mktmpdir("tamoz-mcp-workspace")
+    @dir = Dir.mktmpdir("tamoz-mcp-config", "/private/tmp")
+    @workspace = Dir.mktmpdir("tamoz-mcp-workspace", "/private/tmp")
     @command = File.join(@dir, "server")
     File.write(@command, "#!/bin/sh\nexit 0\n")
     File.chmod(0o755, @command)

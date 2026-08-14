@@ -131,7 +131,7 @@ module Tamoz
       end
 
       def key(approval_id)
-        "approval/#{Tamoz::Core.digest("tamoz.stream.approval_id", approval_id.to_s)}"
+        "approval/#{Tamoz::Core.digest("tamoz/stream/approval-id/v1\n", approval_id.to_s)}"
       end
 
       def text!(value, name)

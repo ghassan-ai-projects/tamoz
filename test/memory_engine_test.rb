@@ -91,8 +91,9 @@ class MemoryEngineTest < Minitest::Test
       "outcome_id" => "out-1",
       "outcome_digest" => "sha256:#{"c" * 64}",
       "command_id" => "cmd-1",
+      "decision_id" => "decision-1",
       "source_authority" => "stream-1",
-      "reconciliation_version" => "1",
+      "reconciliation_version" => 1,
       "observation_status" => "verified",
       "episode_id" => "s1",
       "attempt_id" => "at-1"

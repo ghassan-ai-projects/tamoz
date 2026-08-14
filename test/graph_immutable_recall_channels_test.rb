@@ -7,7 +7,9 @@ class GraphImmutableRecallChannelsTest < Minitest::Test
     app = Tamoz.graph(name: "immutable-recall", version: "1") do
       state :situation_memory, default: [], immutable: true
       state :memory_record_digests, default: [], immutable: true
-      node(:finish) { |_state, _context| {situation_memory: [{"digest" => "tampered"}]} }
+      node(:finish, implementation_name: "test.finish", version: "1") do |_state, _context|
+        {situation_memory: [{"digest" => "tampered"}]}
+      end
       edge Tamoz::START, :finish
       edge :finish, Tamoz::END
     end.compile

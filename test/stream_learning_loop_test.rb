@@ -48,14 +48,48 @@ class StreamLearningLoopTest < Minitest::Test
     end
   end
 
-  class MemoryCursorStore
-    attr_reader :cursor
+  class ApprovalRelayDouble
+    attr_reader :deliveries
 
-    def initialize = @cursor = nil
+    def initialize
+      @deliveries = []
+    end
+
+    def deliver(approval:, conversation_id:)
+      @deliveries << {approval:, conversation_id:}
+      {"message_id" => "approval-message-1"}
+    end
+  end
+
+  class MemoryCursorStore
+    attr_reader :cursor, :events
+
+    def initialize
+      @cursor = nil
+      @events = {}
+    end
 
     def read = @cursor
 
     def write(value) = @cursor = value
+
+    def event_state(source:, event_id:, payload_digest:)
+      stored = @events[[source, event_id]]
+      return :new unless stored
+
+      stored.fetch("payload_digest") == payload_digest ? :same : :conflict
+    end
+
+    def mark_event(source:, event_id:, payload_digest:, traceparent: nil, tracestate: nil)
+      state = event_state(source:, event_id:, payload_digest:)
+      raise "notification payload conflicts with its durable event id" if state == :conflict
+
+      @events[[source, event_id]] ||= {
+        "payload_digest" => payload_digest,
+        "traceparent" => traceparent,
+        "tracestate" => tracestate
+      }
+    end
   end
 
   def cloud_event(type, id, data: {}, source: "stream-1")
@@ -67,6 +101,25 @@ class StreamLearningLoopTest < Minitest::Test
       type: :event, cursor:, event: type,
       data: cloud_event(type, id, data:), control: nil
     )
+  end
+
+  def notification_frame(cursor, type, id, data:)
+    source = data.fetch("source_authority")
+    envelope = {
+      "specversion" => "1.0", "id" => id, "source" => source, "type" => type,
+      "subject" => "outcome/#{data.fetch("outcome_id")}",
+      "time" => "2026-08-14T12:00:00Z", "datacontenttype" => "application/json",
+      "dataschema" => Tamoz::Stream::NotificationContract::CONTRACT_ID,
+      "data" => data, "tenantid" => data.fetch("tenant_id"),
+      "partitionkey" => data.fetch("command_id"),
+      "ingestedtime" => "2026-08-14T12:00:01Z",
+      "envelopedigest" => "sha256:#{"e" * 64}", "classification" => "internal"
+    }
+    Frame.new(type: :event, cursor:, event: type, data: JSON.generate(envelope), control: nil)
+  end
+
+  def durable_event_digest(frame)
+    Tamoz::Core.digest("tamoz/stream/notification/v1\n", JSON.parse(frame.data))
   end
 
   # --- T5.1: the Channel B subscriber --------------------------------------
@@ -96,12 +149,84 @@ class StreamLearningLoopTest < Minitest::Test
       event_frame("10", "io.agenticstream.test.v1", "evt-1"),
       event_frame("11", "io.agenticstream.test.v1", "evt-1")
     ])
-    Subscriber.new(
+    subscriber = Subscriber.new(
       cursor_store: store, handlers:, credential: "c"
-    ).run(transport:)
+    )
+    subscriber.run(transport:)
 
     assert_equal ["evt-1"], calls, "a redelivered event is deduplicated"
+    assert_empty subscriber.skipped
     assert_equal "11", store.cursor, "the cursor advances past both frames"
+  end
+
+  def test_durable_event_digest_deduplicates_and_rejects_conflicting_payloads
+    store = MemoryCursorStore.new
+    calls = []
+    handlers = {"io.agenticstream.test.v1" => ->(event) { calls << event.data }}
+    first_frame = event_frame("10", "io.agenticstream.test.v1", "evt-1", data: {"value" => "one"})
+    same_frame = event_frame("11", "io.agenticstream.test.v1", "evt-1", data: {"value" => "one"})
+    conflicting_frame = event_frame("12", "io.agenticstream.test.v1", "evt-1", data: {"value" => "two"})
+
+    Subscriber.new(cursor_store: store, handlers:, credential: "c").run(
+      transport: ScriptedTransport.new(frames: [first_frame])
+    )
+    assert_equal [{"value" => "one"}], calls
+    assert_equal 1, store.events.length, "the fresh event is durably marked"
+    assert_equal :same, store.event_state(
+      source: "stream-1", event_id: "evt-1", payload_digest: durable_event_digest(first_frame)
+    )
+
+    Subscriber.new(cursor_store: store, handlers:, credential: "c").run(
+      transport: ScriptedTransport.new(frames: [same_frame])
+    )
+    assert_equal [{"value" => "one"}], calls, "a durable same-payload redelivery is deduplicated"
+    assert_equal "11", store.cursor
+
+    conflicting = Subscriber.new(
+      cursor_store: store, handlers:, credential: "c", max_poison_retries: 1
+    )
+    2.times do
+      conflicting.run(transport: ScriptedTransport.new(frames: [conflicting_frame]))
+    end
+    assert_equal :conflict, store.event_state(
+      source: "stream-1", event_id: "evt-1",
+      payload_digest: durable_event_digest(conflicting_frame)
+    )
+    assert_match(/notification id was redelivered with a different payload/,
+                  conflicting.skipped.fetch(0).fetch(:reason))
+    assert_equal [{"value" => "one"}], calls, "a conflicting redelivery is never dispatched"
+  end
+
+  def test_approval_request_delivers_once_and_records_a_durable_receipt
+    directory = Dir.mktmpdir("tamoz-approval-handler")
+    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+    durable = adapter.bind_durable_subscriber_store(tenant: "acme")
+    receipts = adapter.bind_approval_receipt_store(tenant: "acme")
+    relay = ApprovalRelayDouble.new
+    envelope = read_json(
+      ROOT.join("gems", "tamoz-stream", "contracts", "notification-goldens-v1.json")
+    ).fetch("events").find { |candidate| candidate.fetch("type") == "io.agenticstream.approval.requested.v1" }
+    event = Subscriber::CloudEvent.new(
+      id: envelope.fetch("id"), source: envelope.fetch("source"), type: envelope.fetch("type"),
+      data: envelope.fetch("data"), time: envelope.fetch("time"),
+      traceparent: envelope["traceparent"], tracestate: envelope["tracestate"], envelope:
+    )
+    handlers = Tamoz::Stream::LiveLearningHandlers.new(
+      verification: nil, memory: nil, durable:, tenant: "acme", logger: nil,
+      approval_receipts: receipts, approval_relay: relay, conversation_id: "chat-1"
+    ).callables
+
+    2.times { handlers.fetch(event.type).call(event) }
+
+    assert_equal 1, relay.deliveries.length
+    assert_equal envelope.fetch("data"), relay.deliveries.fetch(0).fetch(:approval)
+    assert_equal "chat-1", relay.deliveries.fetch(0).fetch(:conversation_id)
+    assert_equal({"message_id" => "approval-message-1"},
+                 receipts.fetch("appr_1").fetch("delivery_receipt"))
+    assert_equal false, receipts.fetch("appr_1").fetch("delivery_claimed")
+  ensure
+    adapter&.close
+    FileUtils.remove_entry(directory) if directory
   end
 
   def test_the_cursor_advances_only_after_successful_dispatch
@@ -189,27 +314,32 @@ class StreamLearningLoopTest < Minitest::Test
   def test_verification_opens_awaiting_and_closes_learnable_on_a_settled_verdict
     store = VerificationStore.new(clock: -> { Time.at(1_700_000_000) })
     store.open(
+      tenant_id: "acme",
       intent_id: "intent.ep-1.at-1.1.maintenance.ticket",
       episode_id: "ep-1", attempt_id: "at-1",
       decision_digest: "sha256:#{"d" * 64}",
       episode: {task: "t"}, decision_id: "decision-7"
     )
-    assert_equal :awaiting, store.fetch(intent_id: "intent.ep-1.at-1.1.maintenance.ticket").state
+    assert_equal :awaiting,
+                 store.fetch(tenant_id: "acme", intent_id: "intent.ep-1.at-1.1.maintenance.ticket").state
 
     store.record_outcome(
+      tenant_id: "acme",
       intent_id: "intent.ep-1.at-1.1.maintenance.ticket",
-      outcome_id: "out-9", outcome_digest: "sha256:#{"o" * 64}",
+      outcome_id: "out-9", outcome_digest: "sha256:#{"b" * 64}",
       command_id: "cmd-7"
     )
     store.reconcile(
+      tenant_id: "acme",
       intent_id: "intent.ep-1.at-1.1.maintenance.ticket",
-      verdict: "verified", reconciliation_version: "1", source_authority: "stream-1"
+      command_id: "cmd-7", outcome_id: "out-9", outcome_digest: "sha256:#{"b" * 64}",
+      verdict: "verified", reconciliation_version: 1, source_authority: "stream-1"
     )
 
-    row = store.fetch(intent_id: "intent.ep-1.at-1.1.maintenance.ticket")
+    row = store.fetch(tenant_id: "acme", intent_id: "intent.ep-1.at-1.1.maintenance.ticket")
     assert_equal :reconciled, row.state
     assert row.learnable?
-    reference = store.reference(intent_id: "intent.ep-1.at-1.1.maintenance.ticket")
+    reference = store.reference(tenant_id: "acme", intent_id: "intent.ep-1.at-1.1.maintenance.ticket")
     assert_equal "out-9", reference.fetch("outcome_id")
     assert_equal "verified", reference.fetch("observation_status")
     assert_equal "cmd-7", reference.fetch("command_id")
@@ -219,28 +349,30 @@ class StreamLearningLoopTest < Minitest::Test
   def test_unlearnable_verdicts_are_recorded_and_never_learned_from
     store = VerificationStore.new(clock: -> { Time.at(1_700_000_000) })
     intent = "intent.ep-1.at-1.1.maintenance.ticket"
-    store.open(intent_id: intent, episode_id: "ep-1", attempt_id: "at-1",
-               decision_digest: "sha256:#{"d" * 64}", episode: {task: "t"})
-    store.record_outcome(intent_id: intent, outcome_id: "out-9",
-                         outcome_digest: "sha256:#{"o" * 64}")
-    store.reconcile(intent_id: intent, verdict: "inconclusive",
-                    reconciliation_version: "1", source_authority: "stream-1")
+    store.open(tenant_id: "acme", intent_id: intent, episode_id: "ep-1", attempt_id: "at-1",
+               decision_digest: "sha256:#{"d" * 64}", episode: {}, decision_id: "decision-7")
+    store.record_outcome(tenant_id: "acme", intent_id: intent, outcome_id: "out-9",
+                         outcome_digest: "sha256:#{"b" * 64}", command_id: "cmd-7")
+    store.reconcile(tenant_id: "acme", intent_id: intent, command_id: "cmd-7",
+                    outcome_id: "out-9", outcome_digest: "sha256:#{"b" * 64}",
+                    verdict: "inconclusive", reconciliation_version: 1,
+                    source_authority: "stream-1")
 
-    row = store.fetch(intent_id: intent)
+    row = store.fetch(tenant_id: "acme", intent_id: intent)
     assert_equal :reconciled, row.state
     refute row.learnable?
-    assert_nil store.reference(intent_id: intent),
+    assert_nil store.reference(tenant_id: "acme", intent_id: intent),
                "an inconclusive verdict must never feed admission"
   end
 
-  def test_duplicate_verification_open_is_refused
+  def test_duplicate_verification_open_is_idempotent
     store = VerificationStore.new
-    store.open(intent_id: "i1", episode_id: "e", attempt_id: "a",
-               decision_digest: "d", episode: {})
-    assert_raises(VerificationStore::VerificationError) do
-      store.open(intent_id: "i1", episode_id: "e", attempt_id: "a",
-                 decision_digest: "d", episode: {})
-    end
+    store.open(tenant_id: "acme", intent_id: "i1", episode_id: "e", attempt_id: "a",
+               decision_digest: "sha256:#{"d" * 64}", episode: {}, decision_id: "decision-1")
+    assert_same store, store.open(
+      tenant_id: "acme", intent_id: "i1", episode_id: "e", attempt_id: "a",
+      decision_digest: "sha256:#{"d" * 64}", episode: {}, decision_id: "decision-1"
+    )
   end
 
   # --- T5.4: situation-scoped retrieval --------------------------------------
@@ -267,12 +399,23 @@ class StreamLearningLoopTest < Minitest::Test
     }
   end
 
+  def situation_recaller(engine)
+    Tamoz::Agent::Memory::SituationRecaller.new(engine:)
+  end
+
+  def recall_caller(engine)
+    engine.caller(
+      user: "stream", project: "stream", sensitivity: :internal,
+      compatibility: {graph_version: "1", behavior_version: "tamoz.agent.session/1"}
+    )
+  end
+
   def reference_for(episode_id: "s1", attempt_id: "at-1")
     {
       "outcome_id" => "out-1", "outcome_digest" => "sha256:#{"c" * 64}",
       "command_id" => "cmd-1", "decision_id" => "decision-1",
       "source_authority" => "stream-1",
-      "reconciliation_version" => "1", "observation_status" => "verified",
+      "reconciliation_version" => 1, "observation_status" => "verified",
       "episode_id" => episode_id, "attempt_id" => attempt_id
     }
   end
@@ -305,19 +448,15 @@ class StreamLearningLoopTest < Minitest::Test
     engine, adapter, directory = memory_engine
     admit_situation_episode(engine, entity_id: "c-01")
 
-    caller = {
-      tenant: "acme", user: "stream", project: "stream",
-      sensitivity: "internal",
-      compatibility_graph: "1", compatibility_behavior: "tamoz.agent.session/1"
-    }
+    caller = recall_caller(engine)
     result = SituationMemory.related(
-      repository: engine.repository, caller:,
+      recaller: situation_recaller(engine), caller:,
       snapshot: situation_snapshot(entity_id: "c-02")
     )
-    assert_equal 1, result.fetch(:candidates).length,
+    assert_equal 1, result.records.length,
                  "a second occurrence on a related entity (same tenant, same " \
                  "entity type) retrieves the first occurrence's Experience"
-    assert_equal "c-01", result.fetch(:candidates).fetch(0).fetch("scopes_entity_id")
+    assert_equal "c-01", result.records.fetch(0).scopes.fetch("entity_id")
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -327,27 +466,22 @@ class StreamLearningLoopTest < Minitest::Test
     engine, adapter, directory = memory_engine
     admit_situation_episode(engine, entity_id: "c-01")
 
-    caller = {
-      tenant: "acme", user: "stream", project: "stream",
-      sensitivity: "internal",
-      compatibility_graph: "1", compatibility_behavior: "tamoz.agent.session/1"
-    }
+    caller = recall_caller(engine)
+    recaller = situation_recaller(engine)
     foreign = SituationMemory.retrieve(
-      repository: engine.repository, caller:,
+      recaller:, caller:,
       snapshot: situation_snapshot(entity_id: "c-01").merge(
         "entity" => {"type" => "fan", "id" => "f-01"}
       )
     )
-    assert_empty foreign.candidates,
+    assert_empty foreign.records,
                  "a different entity type is outside the relatedness boundary"
 
-    other_tenant = SituationMemory.retrieve(
-      repository: engine.repository,
-      caller: caller.merge(tenant: "other"),
-      snapshot: situation_snapshot
-    )
-    assert_empty other_tenant.candidates,
-                 "a different tenant is outside the relatedness boundary"
+    assert_raises(Tamoz::Agent::Memory::MemoryPolicyError) do
+      SituationMemory.retrieve(
+        recaller:, caller: caller.merge(tenant: "other"), snapshot: situation_snapshot
+      )
+    end
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory
@@ -501,74 +635,57 @@ class StreamLearningLoopTest < Minitest::Test
     decision_event = events.find { |event| event.decision != nil }
     decision = JSON.parse(decision_event.decision.decision_json)
     intent_id = decision.fetch("intents").fetch(0).fetch("intent_id")
-    row = verification.fetch(intent_id:)
+    row = verification.fetch(tenant_id: "acme", intent_id:)
     assert_equal :awaiting, row.state,
                  "a produced consequential episode opens an awaiting verification"
 
-    # Days later, Channel B delivers recorded then reconciled.
-    handler_store = verification
-    admitted = nil
-    handlers = {
-      "io.agenticstream.outcome.recorded.v1" => lambda do |event|
-        data = event.data
-        handler_store.record_outcome(
-          intent_id: data.fetch("intent_id"),
-          outcome_id: data.fetch("outcome_id"),
-          outcome_digest: data.fetch("outcome_digest"),
-          command_id: data["command_id"]
-        )
-      end,
-      "io.agenticstream.outcome.reconciled.v1" => lambda do |event|
-        data = event.data
-        handler_store.reconcile(
-          intent_id: data.fetch("intent_id"),
-          verdict: data.fetch("verdict"),
-          reconciliation_version: data.fetch("reconciliation_version"),
-          source_authority: data.fetch("source_authority")
-        )
-        row = handler_store.fetch(intent_id: data.fetch("intent_id"))
-        unless row.learnable?
-          admitted = false
-          next
-        end
-        result = engine.admission.admit_episode(
-          episode: row.episode.merge(
-            observed_outcome: {
-              "outcome" => data.fetch("outcome"),
-              "confidence" => data.fetch("confidence", 0.9)
-            }
-          ),
-          owner: "stream",
-          reconciled_outcome: handler_store.reference(intent_id: data.fetch("intent_id")),
-          verify_source_authority: ->(reference) { reference.fetch("source_authority") == "stream-1" }
-        )
-        admitted = result.accepted? ? result.record : false
-      end
-    }
-    cursor = MemoryCursorStore.new
-    subscriber = Subscriber.new(cursor_store: cursor, handlers:, credential: "out-cred")
+    # Days later, Channel B delivers recorded then reconciled through the live
+    # handler wiring and the durable subscriber store.
+    durable = memory_adapter.bind_durable_subscriber_store(tenant: "acme")
+    logger = Struct.new(:messages) do
+      def info(message) = messages << message
+    end.new([])
+    handlers = Tamoz::Stream::LiveLearningHandlers.new(
+      verification:, memory: engine, durable:, tenant: "acme", logger:
+    ).callables
+    subscriber = Subscriber.new(cursor_store: durable, handlers:, credential: "out-cred")
     subscriber.run(transport: ScriptedTransport.new(frames: [
-      event_frame("1", "io.agenticstream.outcome.recorded.v1", "evt-1", data: {
-        "intent_id" => intent_id, "outcome_id" => "out-9",
-        "outcome_digest" => "sha256:#{"o" * 64}", "command_id" => "cmd-7"
+      notification_frame("1", "io.agenticstream.outcome.recorded.v1", "evt-1", data: {
+        "tenant_id" => "acme", "intent_id" => intent_id, "outcome_id" => "out-9",
+        "outcome_digest" => "sha256:#{"b" * 64}", "command_id" => "cmd-7",
+        "status" => "succeeded", "reconciliation_status" => "observed", "source_authority" => "stream-1"
       }),
-      event_frame("2", "io.agenticstream.outcome.reconciled.v1", "evt-2", data: {
-        "intent_id" => intent_id, "verdict" => "verified",
-        "reconciliation_version" => "1", "source_authority" => "stream-1",
-        "outcome" => "cleaned and confirmed"
+      notification_frame("2", "io.agenticstream.outcome.reconciled.v1", "evt-2", data: {
+        "tenant_id" => "acme", "intent_id" => intent_id, "outcome_id" => "out-9",
+        "outcome_digest" => "sha256:#{"b" * 64}", "command_id" => "cmd-7",
+        "final_status" => "succeeded", "reconciliation_status" => "reconciled",
+        "verdict" => "verified", "reconciliation_version" => 1, "source_authority" => "stream-1"
       })
     ]))
 
-    closed = verification.fetch(intent_id:)
+    assert_empty subscriber.skipped
+    closed = verification.fetch(tenant_id: "acme", intent_id:)
     assert_equal :reconciled, closed.state
     assert closed.learnable?
-    refute_nil admitted, "the reconciled outcome must admit the Experience"
+    assert durable.admitted?(intent_id), "the admitted intent must be durably marked"
+    assert_equal "2", durable.read, "both outcome frames are acknowledged"
+
+    index_rows = memory_adapter.pool.with_connection do |connection|
+      connection.execute(
+        "SELECT layer, memory_id FROM tamoz_memory_index WHERE store_namespace = ?",
+        [engine.namespace]
+      )
+    end
+    assert_equal 1, index_rows.length, "the reconciled outcome admits exactly one Experience"
+    layer, memory_id = index_rows.fetch(0)
+    admitted = engine.repository.fetch(
+      engine.namespace, layer, memory_id
+    ).fetch(:entry).value
     assert_equal :observed, admitted.epistemic_kind
     provenance = admitted.source_refs.find { |ref| ref.key?("command_id") }
     assert_equal "cmd-7", provenance.fetch("command_id")
     assert_equal decision.fetch("decision_id"), provenance.fetch("decision_id")
     assert_equal "out-9", provenance.fetch("identity").split(":").last
-    assert_equal "2", cursor.cursor, "both outcome frames are acknowledged"
   ensure
     adapter&.close
     memory_adapter&.close

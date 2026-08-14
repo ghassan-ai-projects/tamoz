@@ -108,7 +108,7 @@ module Tamoz
             projections << projection
             used_bytes += bytes
           end
-          SituationRecall::Result.new(
+          Tamoz::Stream::SituationRecall::Result.new(
             records: projections,
             record_digests: projections.map(&:digest),
             restricted: restricted_metadata(search),
@@ -161,7 +161,7 @@ module Tamoz
             "command_id" => outcome.fetch("command_id"),
             "outcome_id" => outcome.fetch("identity").delete_prefix("outcome:")
           }
-          SituationRecall::Projection.new(
+          Tamoz::Stream::SituationRecall::Projection.new(
             statement: record.statement,
             scopes:,
             provenance:,

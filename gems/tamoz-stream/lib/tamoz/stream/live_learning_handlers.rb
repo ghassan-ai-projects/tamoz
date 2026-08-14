@@ -79,6 +79,7 @@ module Tamoz
 
         result = @memory.admission.admit_episode(
           episode: row.episode.transform_keys(&:to_sym).merge(
+            sensitivity: row.episode.fetch("sensitivity").to_sym,
             observed_outcome: observed_outcome(data)
           ),
           owner: "stream",
@@ -102,7 +103,7 @@ module Tamoz
         require_approval_ports!
         data = tenant_data(event)
         approval_id = data.fetch("approval_id")
-        digest = Tamoz::Core.digest("tamoz.stream.approval.request", data)
+        digest = Tamoz::Core.digest("tamoz/stream/approval-request/v1\n", data)
         @approval_receipts.reserve_requested(
           approval_id:, tenant_id: @tenant, payload_digest: digest,
           identity: approval_identity(data),
@@ -127,7 +128,7 @@ module Tamoz
         require_approval_ports!
         data = tenant_data(event)
         approval_id = data.fetch("approval_id")
-        event_digest = Tamoz::Core.digest("tamoz.stream.approval.withdraw", data)
+        event_digest = Tamoz::Core.digest("tamoz/stream/approval-withdraw/v1\n", data)
         receipt = @approval_receipts.fetch(approval_id)
         raise StreamError, "approval delivery receipt is missing" unless receipt&.fetch("delivery_receipt")
         return if receipt.fetch("state") == "withdrawn" && receipt.fetch("last_event_digest") == event_digest
@@ -144,7 +145,7 @@ module Tamoz
         data = tenant_data(event)
         require_approval_ports!
         approval_id = data.fetch("approval_id")
-        event_digest = Tamoz::Core.digest("tamoz.stream.approval.resolve", data)
+        event_digest = Tamoz::Core.digest("tamoz/stream/approval-resolve/v1\n", data)
         @approval_receipts.transition(
           approval_id:, tenant_id: @tenant, state: "resolved", event_digest:,
           identity: approval_identity(data)
@@ -171,7 +172,7 @@ module Tamoz
       end
 
       def observed_outcome(data)
-        {"outcome" => data.fetch("outcome")}
+        {"outcome" => data.fetch("final_status")}
       end
 
       def handle_duplicate_admission(intent_id)
