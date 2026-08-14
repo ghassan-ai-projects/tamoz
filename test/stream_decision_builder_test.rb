@@ -235,6 +235,38 @@ class StreamDecisionBuilderTest < Minitest::Test
                  decision.fetch("intents").map { |intent| intent.fetch("type") }
   end
 
+  def test_a_moderate_confidence_pump_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          schedule_maintenance reduce_load dispatch_crew isolate_segment
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.6}
+    ).build
+
+    assert_equal ["schedule_maintenance"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_watch_band_pump_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          install_watch_condition schedule_maintenance reduce_load
+          dispatch_crew isolate_segment
+        ],
+        watch_confidence_floor: 0.85
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.6}
+    ).build
+
+    assert_equal %w[install_watch_condition schedule_maintenance],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
   def test_a_high_confidence_pond_episode_respects_an_r1_ceiling
     decision, = Stream::DecisionBuilder.new(
       envelope: envelope_with(

@@ -17,6 +17,10 @@ module Tamoz
       }.freeze
       ACTION_RISKS = {
         "create_maintenance_ticket" => "r1",
+        "schedule_maintenance" => "r1",
+        "reduce_load" => "r1",
+        "downgrade_dispatch" => "r1",
+        "withdraw_ticket" => "r1",
         "recommend_operating_limit" => "r2",
         "dispatch_crew" => "r2",
         "isolate_segment" => "r3",
