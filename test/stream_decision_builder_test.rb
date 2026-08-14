@@ -25,16 +25,15 @@ class StreamDecisionBuilderTest < Minitest::Test
 
   def envelope_with(risk_ceiling: :RISK_CLASS_R2, allowed_intent_types: [
     "create_maintenance_ticket", "recommend_operating_limit"
-  ])
-    Stream::EpisodeRequestEnvelope.new(
-      Agenticstream::Runtime::V1::EpisodeRequest.new(
-        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
-        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-        kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-        risk_ceiling:, allowed_intent_types:
-      ),
-      worker
+  ], watch_confidence_floor: nil)
+    request = Agenticstream::Runtime::V1::EpisodeRequest.new(
+      protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
+      fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
+      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
+      risk_ceiling:, allowed_intent_types:
     )
+    request.watch_confidence_floor = watch_confidence_floor unless watch_confidence_floor.nil?
+    Stream::EpisodeRequestEnvelope.new(request, worker)
   end
 
   def snapshot
@@ -64,8 +63,8 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "bearing wear", decision.fetch("primary_hypothesis")
 
     intent = decision.fetch("intents").fetch(0)
-    assert_equal "create_maintenance_ticket", intent.fetch("type")
-    assert_equal "R1", intent.fetch("risk_class")
+    assert_equal "recommend_operating_limit", intent.fetch("type")
+    assert_equal "R2", intent.fetch("risk_class")
     assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
 
     # The decision digest verifies against the shared decision domain.
@@ -87,6 +86,240 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "R1", intent.fetch("risk_class")
   end
 
+  def test_a_low_confidence_episode_prefers_an_allowlisted_watch_condition
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3,
+        watch_metric: "condition_score", watch_threshold: 0.8
+      }
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "install_watch_condition", intent.fetch("type")
+  end
+
+  def test_a_watch_only_low_confidence_episode_proposes_only_a_watch_condition
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["start_aerator", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3, watch_only: true
+      }
+    ).build
+
+    assert_equal ["install_watch_condition"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_episode_uses_the_action_when_watch_is_allowlisted
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.9}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_zero_watch_floor_opts_out_of_watch_preference
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket", "install_watch_condition"],
+        watch_confidence_floor: 0.0
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "possible drift", confidence: 0.3}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_watch_floor_does_not_force_a_watch_that_is_not_allowlisted
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: ["create_maintenance_ticket"],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "possible drift", confidence: 0.3}
+    ).build
+
+    assert_equal "create_maintenance_ticket", decision.fetch("intents").fetch(0).fetch("type")
+  end
+
+  def test_a_low_confidence_pond_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ],
+        watch_confidence_floor: 0.5
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "low oxygen", confidence: 0.3}
+    ).build
+
+    assert_equal %w[install_watch_condition start_aerator],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_moderate_confidence_pond_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "low oxygen", confidence: 0.6}
+    ).build
+
+    assert_equal ["start_aerator"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_pond_episode_proposes_the_highest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
+    ).build
+
+    assert_equal %w[emergency_water_exchange start_aerator],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_water_network_episode_proposes_two_intents_under_r3
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R3,
+        allowed_intent_types: %w[dispatch_crew isolate_segment]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "ruptured main", confidence: 0.9}
+    ).build
+
+    assert_equal %w[isolate_segment dispatch_crew],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_water_network_episode_respects_an_r2_ceiling
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R2,
+        allowed_intent_types: %w[dispatch_crew isolate_segment]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "ruptured main", confidence: 0.9}
+    ).build
+
+    assert_equal ["dispatch_crew"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_moderate_confidence_pump_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          schedule_maintenance reduce_load dispatch_crew isolate_segment
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.6}
+    ).build
+
+    assert_equal ["schedule_maintenance"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_watch_band_pump_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          install_watch_condition schedule_maintenance reduce_load
+          dispatch_crew isolate_segment
+        ],
+        watch_confidence_floor: 0.85
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "bearing wear", confidence: 0.6}
+    ).build
+
+    assert_equal %w[install_watch_condition schedule_maintenance],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_moderate_confidence_greenhouse_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          run_vent_cycle dehumidify deploy_shade_or_heat dose_co2
+          downgrade_climate_action withdraw_climate_action
+        ]
+      ),
+      snapshot: snapshot.merge("situation_type" => "greenhouse"),
+      snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "high humidity", confidence: 0.6}
+    ).build
+
+    assert_equal ["run_vent_cycle"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+    assert_equal "R1", decision.fetch("intents").fetch(0).fetch("risk_class")
+  end
+
+  def test_a_watch_band_greenhouse_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          run_vent_cycle dehumidify deploy_shade_or_heat dose_co2
+          downgrade_climate_action withdraw_climate_action install_watch_condition
+        ],
+        watch_confidence_floor: 0.85
+      ),
+      snapshot: snapshot.merge("situation_type" => "greenhouse"),
+      snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "high humidity", confidence: 0.6}
+    ).build
+
+    assert_equal %w[install_watch_condition run_vent_cycle],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_pond_episode_respects_an_r1_ceiling
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R1,
+        allowed_intent_types: %w[
+          start_aerator halt_feeding emergency_water_exchange
+          install_watch_condition downgrade_intervention withdraw_intervention
+        ]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
+    ).build
+
+    assert_equal %w[start_aerator halt_feeding],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
   def test_an_uncertain_episode_uses_watch_when_no_action_is_allowlisted
     decision, = Stream::DecisionBuilder.new(
       envelope: envelope_with(allowed_intent_types: ["install_watch_condition"]),
@@ -105,6 +338,32 @@ class StreamDecisionBuilderTest < Minitest::Test
       "situation.condition_score >= 0.8",
       intent.fetch("parameters").fetch("expression")
     )
+  end
+
+  def test_a_watch_condition_parameters_satisfy_the_watch_effector_contract
+    now = Time.utc(2026, 8, 14, 12)
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(allowed_intent_types: ["install_watch_condition"]),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3,
+        watch_metric: "condition_score", watch_threshold: 0.8
+      }, now:
+    ).build
+
+    parameters = decision.fetch("intents").fetch(0).fetch("parameters")
+    assert_equal "situation.condition_score >= 0.8", parameters.fetch("expression")
+    assert_equal "c-01", parameters.fetch("target")
+    assert_equal parameters.fetch("entity_id"), parameters.fetch("target")
+    assert_equal "sit-1", parameters.fetch("situation_id")
+    assert_operator parameters.fetch("situation_version"), :>=, 1
+    assert_equal 7, parameters.fetch("situation_version")
+    assert_includes 1..100, parameters.fetch("max_fires")
+    assert_equal 3, parameters.fetch("max_fires")
+
+    expires_at = Time.iso8601(parameters.fetch("expires_at"))
+    assert_operator expires_at, :>, now
+    assert_equal decision.fetch("valid_until"), parameters.fetch("expires_at")
   end
 
   def test_confidence_is_clamped_to_the_unit_interval

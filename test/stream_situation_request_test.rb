@@ -72,6 +72,27 @@ class StreamSituationRequestTest < Minitest::Test
     assert_equal "flash", envelope.model_identifier
   end
 
+  def test_watch_confidence_floor_defaults_and_preserves_explicit_zero
+    default_envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(wire_request, worker)
+    assert_equal 0.5, default_envelope.watch_confidence_floor
+
+    opted_out = Tamoz::Stream::EpisodeRequestEnvelope.new(
+      wire_request(watch_confidence_floor: 0.0), worker
+    )
+    assert_equal 0.0, opted_out.watch_confidence_floor
+    refute opted_out.payload.fetch("episode").key?("watch_confidence_floor")
+  end
+
+  def test_watch_confidence_floor_must_be_finite_and_non_negative
+    [-0.1, Float::NAN, Float::INFINITY].each do |floor|
+      assert_raises(Tamoz::Stream::StreamError) do
+        Tamoz::Stream::EpisodeRequestEnvelope.new(
+          wire_request(watch_confidence_floor: floor), worker
+        )
+      end
+    end
+  end
+
   def test_validation_matrix_fails_closed
     cases = {
       protocol: ->(r) { r.protocol_version = "2.0" },

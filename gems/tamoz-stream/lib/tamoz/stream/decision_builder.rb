@@ -17,8 +17,26 @@ module Tamoz
       }.freeze
       ACTION_RISKS = {
         "create_maintenance_ticket" => "r1",
-        "recommend_operating_limit" => "r2"
+        "schedule_maintenance" => "r1",
+        "reduce_load" => "r1",
+        "downgrade_dispatch" => "r1",
+        "withdraw_ticket" => "r1",
+        "recommend_operating_limit" => "r2",
+        "dispatch_crew" => "r2",
+        "isolate_segment" => "r3",
+        "start_aerator" => "r1",
+        "halt_feeding" => "r1",
+        "emergency_water_exchange" => "r2",
+        "downgrade_intervention" => "r1",
+        "withdraw_intervention" => "r1",
+        "run_vent_cycle" => "r1",
+        "dehumidify" => "r1",
+        "deploy_shade_or_heat" => "r2",
+        "dose_co2" => "r2",
+        "downgrade_climate_action" => "r1",
+        "withdraw_climate_action" => "r1"
       }.freeze
+      HIGH_CONFIDENCE = 0.85
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
       VALIDITY_WINDOW_SECONDS = 86_400
@@ -115,22 +133,72 @@ module Tamoz
       end
 
       def diagnose_intents
-        type = expressible_action_type
-        return [action_intent(type:)] if type
+        return watch_preferred_intents if watch_preferred?
+
+        if confidence >= HIGH_CONFIDENCE
+          types = expressible_action_types(limit: 2)
+          return types.map { |type| action_intent(type:) } unless types.empty?
+        else
+          type = expressible_action_type
+          return [action_intent(type:)] if type
+        end
 
         [watch_condition_intent]
       end
 
-      def expressible_action_type
-        candidates = allowed_intent_types.filter_map do |type|
-          risk_class = ACTION_RISKS[type]
-          next unless risk_class
-          next if RISK_ORDER.fetch(risk_class) > RISK_ORDER.fetch(@envelope.risk_ceiling)
+      def watch_preferred_intents
+        return [watch_condition_intent] if @outcome.fetch(:watch_only, false)
 
-          [type, risk_class]
-        end
-        candidate = candidates.min_by { |_type, risk_class| RISK_ORDER.fetch(risk_class) }
+        intents = [watch_condition_intent]
+        type = expressible_action_type(risk_class: "r1")
+        intents << action_intent(type:) if type
+        intents
+      end
+
+      def watch_preferred?
+        floor = @envelope.watch_confidence_floor
+        floor > 0.0 && confidence < floor && watch_allowlisted?
+      end
+
+      def watch_allowlisted?
+        allowed_intent_types.include?("install_watch_condition")
+      end
+
+      def expressible_action_type(highest_risk: false, risk_class: nil)
+        candidate = select_action_candidate(
+          expressible_action_candidates(risk_class:), highest_risk:
+        )
         candidate&.first
+      end
+
+      def expressible_action_types(limit:)
+        expressible_action_candidates.sort_by do |_type, candidate_risk|
+          -RISK_ORDER.fetch(candidate_risk)
+        end.first(limit).map(&:first)
+      end
+
+      def expressible_action_candidates(risk_class: nil)
+        allowed_intent_types.filter_map do |type|
+          candidate_risk = ACTION_RISKS[type]
+          next unless candidate_risk
+          next unless expressible_candidate?(candidate_risk, risk_class)
+
+          [type, candidate_risk]
+        end
+      end
+
+      def expressible_candidate?(candidate_risk, required_risk)
+        return false if required_risk && candidate_risk != required_risk
+
+        RISK_ORDER.fetch(candidate_risk) <= RISK_ORDER.fetch(@envelope.risk_ceiling)
+      end
+
+      def select_action_candidate(candidates, highest_risk:)
+        if highest_risk
+          candidates.max_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
+        else
+          candidates.min_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
+        end
       end
 
       def allowed_intent_types
@@ -162,7 +230,12 @@ module Tamoz
             "expression" => "situation.#{metric} >= #{threshold}",
             "metric" => metric,
             "threshold" => threshold,
-            "entity_id" => @snapshot.fetch("entity").fetch("id")
+            "entity_id" => @snapshot.fetch("entity").fetch("id"),
+            "target" => @snapshot.fetch("entity").fetch("id"),
+            "expires_at" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601,
+            "situation_id" => @snapshot.fetch("situation_id"),
+            "situation_version" => @snapshot.fetch("situation_version"),
+            "max_fires" => 3
           }
         )
       end

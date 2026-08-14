@@ -48,6 +48,9 @@ module Tamoz
       # (PROTOCOL §4.2). Compensation is never "safe because it undoes".
       COMPENSATION_RISK = {
         "maintenance" => "R1",
+        "pond" => "R1",
+        "pump" => "R1",
+        "bay" => "R1",
         "transfer" => "R3"
       }.freeze
       DEFAULT_COMPENSATION_RISK = "R1"
@@ -55,10 +58,16 @@ module Tamoz
       # Compensating intent types, keyed by the original intent family.
       WITHDRAW_TYPES = {
         "maintenance" => "withdraw_maintenance_ticket",
+        "pond" => "withdraw_intervention",
+        "pump" => "withdraw_ticket",
+        "bay" => "withdraw_climate_action",
         "transfer" => "cancel_product_transfer"
       }.freeze
       DOWNGRADE_TYPES = {
         "maintenance" => "downgrade_maintenance_ticket",
+        "pond" => "downgrade_intervention",
+        "pump" => "downgrade_dispatch",
+        "bay" => "downgrade_climate_action",
         "transfer" => "downgrade_product_transfer"
       }.freeze
 
@@ -240,6 +249,24 @@ module Tamoz
         # physical transfer — misclassification would escalate the compensation
         # risk class.
         when /\b(?:transfer|shipment|move)\b/ then "transfer"
+        when /\brun_vent_cycle\b/,
+             /\bdehumidify\b/,
+             /\bdeploy_shade_or_heat\b/,
+             /\bdose_co2\b/,
+             /\bdowngrade_climate_action\b/,
+             /\bwithdraw_climate_action\b/ then "bay"
+        when /\bemergency_water_exchange\b/,
+             /\bstart_aerator\b/,
+             /\bhalt_feeding\b/,
+             /\binstall_watch_condition\b/,
+             /\bdowngrade_intervention\b/,
+             /\bwithdraw_intervention\b/ then "pond"
+        when /\bschedule_maintenance\b/,
+             /\breduce_load\b/,
+             /\bdispatch_crew\b/,
+             /\bisolate_segment\b/,
+             /\bdowngrade_dispatch\b/,
+             /\bwithdraw_ticket\b/ then "pump"
         else "maintenance"
         end
       end
