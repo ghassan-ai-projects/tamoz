@@ -228,6 +228,32 @@ class StreamDecisionBuilderTest < Minitest::Test
     )
   end
 
+  def test_a_watch_condition_parameters_satisfy_the_watch_effector_contract
+    now = Time.utc(2026, 8, 14, 12)
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(allowed_intent_types: ["install_watch_condition"]),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "possible drift", confidence: 0.3,
+        watch_metric: "condition_score", watch_threshold: 0.8
+      }, now:
+    ).build
+
+    parameters = decision.fetch("intents").fetch(0).fetch("parameters")
+    assert_equal "situation.condition_score >= 0.8", parameters.fetch("expression")
+    assert_equal "c-01", parameters.fetch("target")
+    assert_equal parameters.fetch("entity_id"), parameters.fetch("target")
+    assert_equal "sit-1", parameters.fetch("situation_id")
+    assert_operator parameters.fetch("situation_version"), :>=, 1
+    assert_equal 7, parameters.fetch("situation_version")
+    assert_includes 1..100, parameters.fetch("max_fires")
+    assert_equal 3, parameters.fetch("max_fires")
+
+    expires_at = Time.iso8601(parameters.fetch("expires_at"))
+    assert_operator expires_at, :>, now
+    assert_equal decision.fetch("valid_until"), parameters.fetch("expires_at")
+  end
+
   def test_confidence_is_clamped_to_the_unit_interval
     decision, = build(primary_hypothesis: "x", confidence: 1.7)
     assert_equal 1.0, decision.fetch("confidence")

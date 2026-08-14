@@ -198,7 +198,12 @@ module Tamoz
             "expression" => "situation.#{metric} >= #{threshold}",
             "metric" => metric,
             "threshold" => threshold,
-            "entity_id" => @snapshot.fetch("entity").fetch("id")
+            "entity_id" => @snapshot.fetch("entity").fetch("id"),
+            "target" => @snapshot.fetch("entity").fetch("id"),
+            "expires_at" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601,
+            "situation_id" => @snapshot.fetch("situation_id"),
+            "situation_version" => @snapshot.fetch("situation_version"),
+            "max_fires" => 3
           }
         )
       end
