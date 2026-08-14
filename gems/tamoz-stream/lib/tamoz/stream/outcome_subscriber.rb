@@ -2,6 +2,7 @@
 
 require "tamoz/core"
 require "tamoz/stream/errors"
+require "tamoz/stream/notification_contract"
 
 module Tamoz
   module Stream
@@ -29,13 +30,15 @@ module Tamoz
     # `event`, and the CloudEvents JSON document in `data` (§9.2).
     class OutcomeSubscriber
       # One parsed notification.
-      CloudEvent = Data.define(:id, :source, :type, :data, :time)
+      CloudEvent = Data.define(:id, :source, :type, :data, :time, :traceparent, :tracestate, :envelope)
 
       class SubscriptionError < StreamError
         CATEGORY = "stream_outcome_subscription"
       end
 
       # cursor_store: read -> cursor String|nil; write(cursor)
+      # Optional durable event methods: event_state(source:, event_id:,
+      # payload_digest:) -> :new/:same/:conflict and mark_event(...).
       # handlers: { "io.agenticstream.<type>.v1" => ->(event) {} }
       # credential: the per-subscriber Channel B credential (distinct from
       #   the worker's capability token; never the same secret).
@@ -79,7 +82,7 @@ module Tamoz
             break
           when :control
             handle_control(frame, transport)
-            break if frame.control == "subscriber_too_slow"
+            break if %w[cursor_expired subscriber_too_slow].include?(frame.control)
           when :event
             break unless handle_event(frame)
           end
@@ -120,22 +123,38 @@ module Tamoz
             frame.data.to_s.bytesize > MAX_FRAME_BYTES
 
           dispatch(parse_cloud_event(frame), frame)
-        rescue SubscriptionError => error
+        rescue StreamError => error
           handle_poison(frame, key:, reason: error.message)
         end
       end
 
       def dispatch(event, frame)
         key = [event.source, event.id]
+        NotificationContract.validate!(event) if NotificationContract.known_family?(event.type)
+        delivery_state = durable_event_state(event)
+        if delivery_state == :conflict
+          raise SubscriptionError, "notification id was redelivered with a different payload"
+        end
         if @dedupe.key?(key)
           # A redelivered (source, id) is acknowledged — it was already
           # processed — and the cursor advances past it.
           @cursor_store.write(frame.cursor)
           return true
         end
+        if delivery_state == :same
+          remember(key)
+          @cursor_store.write(frame.cursor)
+          return true
+        end
 
-        handler = @handlers[event.type]
+        handler = if NotificationContract.known_family?(event.type)
+                    @handlers[event.type]
+                  end
         if handler.nil?
+          if NotificationContract.known_family?(event.type) &&
+             !NotificationContract.supported_type?(event.type)
+            raise SubscriptionError, "unsupported version for known notification #{event.type}"
+          end
           # An unhandled type is acknowledged cleanly (the subscriber scope
           # has an event-type allowlist); it is never a poison event.
           remember(key)
@@ -145,6 +164,7 @@ module Tamoz
 
         begin
           handler.call(event)
+          mark_durable_event(event)
           remember(key)
           @cursor_store.write(frame.cursor)
           @poison.delete(key)
@@ -152,6 +172,28 @@ module Tamoz
         rescue StandardError => error
           handle_poison(frame, key:, reason: "handler_error: #{error.class}")
         end
+      end
+
+      def durable_event_state(event)
+        return :new unless @cursor_store.respond_to?(:event_state)
+
+        @cursor_store.event_state(
+          source: event.source,
+          event_id: event.id,
+          payload_digest: Tamoz::Core.digest("tamoz.stream.notification", event.envelope)
+        )
+      end
+
+      def mark_durable_event(event)
+        return unless @cursor_store.respond_to?(:mark_event)
+
+        @cursor_store.mark_event(
+          source: event.source,
+          event_id: event.id,
+          payload_digest: Tamoz::Core.digest("tamoz.stream.notification", event.envelope),
+          traceparent: event.traceparent,
+          tracestate: event.tracestate
+        )
       end
 
       def handle_poison(frame, key:, reason:)
@@ -203,7 +245,10 @@ module Tamoz
           source: value.fetch("source"),
           type: value.fetch("type"),
           data: value["data"],
-          time: value["time"]
+          time: value["time"],
+          traceparent: value["traceparent"],
+          tracestate: value["tracestate"],
+          envelope: value.freeze
         )
       end
     end

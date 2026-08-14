@@ -33,7 +33,8 @@ module Tamoz
         default: UNSET,
         default_name: nil,
         default_version: nil,
-        managed: nil
+        managed: nil,
+        immutable: false
       )
         if @channels.length >= MAX_CHANNELS
           raise GraphDefinitionError, "graph exceeds #{MAX_CHANNELS} state channels"
@@ -50,7 +51,8 @@ module Tamoz
           default_name:,
           default_version:,
           managed:,
-          codec: @codec
+          codec: @codec,
+          immutable:
         )
         key
       end

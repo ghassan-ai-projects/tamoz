@@ -31,7 +31,7 @@ module Tamoz
       # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 through
       # MIGRATION_12, which adds the situation/entity scope columns to the
       # memory index.
-      CURRENT_VERSION = 13
+      CURRENT_VERSION = 14
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1023,6 +1023,71 @@ module Tamoz
         MIGRATION_13.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      MIGRATION_14 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_stream_verifications (
+            tenant_id TEXT NOT NULL CHECK (length(tenant_id) > 0),
+            intent_id TEXT NOT NULL,
+            command_id TEXT,
+            decision_id TEXT NOT NULL,
+            episode_id TEXT NOT NULL,
+            attempt_id TEXT NOT NULL,
+            decision_digest TEXT NOT NULL CHECK (
+              substr(decision_digest, 1, 7) = 'sha256:' AND
+              length(decision_digest) = 71 AND
+              substr(decision_digest, 8) NOT GLOB '*[^0-9a-f]*'
+            ),
+            episode TEXT NOT NULL CHECK (json_valid(episode) = 1),
+            state TEXT NOT NULL CHECK (state IN ('awaiting', 'observed', 'reconciled')),
+            outcome_id TEXT,
+            outcome_digest TEXT CHECK (
+              outcome_digest IS NULL OR (
+                substr(outcome_digest, 1, 7) = 'sha256:' AND
+                length(outcome_digest) = 71 AND
+                substr(outcome_digest, 8) NOT GLOB '*[^0-9a-f]*'
+              )
+            ),
+            verdict TEXT CHECK (
+              verdict IS NULL OR verdict IN (
+                'verified', 'refuted', 'inconclusive',
+                'superseded_before_verification'
+              )
+            ),
+            reconciliation_version INTEGER CHECK (
+              reconciliation_version IS NULL OR reconciliation_version > 0
+            ),
+            source_authority TEXT,
+            opened_at INTEGER NOT NULL CHECK (opened_at >= 0),
+            reconciled_at INTEGER CHECK (reconciled_at IS NULL OR reconciled_at >= opened_at),
+            learnable INTEGER NOT NULL DEFAULT 0 CHECK (learnable IN (0, 1)),
+            CHECK (
+              (state = 'awaiting' AND outcome_id IS NULL AND outcome_digest IS NULL AND
+               verdict IS NULL AND reconciliation_version IS NULL AND
+               source_authority IS NULL AND reconciled_at IS NULL AND learnable = 0)
+              OR
+              (state = 'observed' AND outcome_id IS NOT NULL AND outcome_digest IS NOT NULL AND
+               command_id IS NOT NULL AND verdict IS NULL AND reconciliation_version IS NULL AND
+               source_authority IS NULL AND reconciled_at IS NULL AND learnable = 0)
+              OR
+              (state = 'reconciled' AND command_id IS NOT NULL AND outcome_id IS NOT NULL AND
+               outcome_digest IS NOT NULL AND verdict IS NOT NULL AND
+               reconciliation_version IS NOT NULL AND source_authority IS NOT NULL AND
+               reconciled_at IS NOT NULL AND
+               (learnable = 0 OR (verdict IN ('verified', 'refuted') AND outcome_id IS NOT NULL)))
+            ),
+            PRIMARY KEY (tenant_id, intent_id)
+          ) STRICT
+        SQL
+        <<~SQL.freeze
+          CREATE INDEX idx_tamoz_stream_verifications_state
+            ON tamoz_stream_verifications(state, opened_at, tenant_id, intent_id)
+        SQL
+      ].freeze
+
+      MIGRATION_14_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_14.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1038,7 +1103,8 @@ module Tamoz
         10 => [MIGRATION_10, MIGRATION_10_CHECKSUM],
         11 => [MIGRATION_11, MIGRATION_11_CHECKSUM],
         12 => [MIGRATION_12, MIGRATION_12_CHECKSUM],
-        13 => [MIGRATION_13, MIGRATION_13_CHECKSUM]
+        13 => [MIGRATION_13, MIGRATION_13_CHECKSUM],
+        14 => [MIGRATION_14, MIGRATION_14_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1200,7 +1266,8 @@ module Tamoz
                        :MIGRATION_10, :MIGRATION_10_CHECKSUM,
                        :MIGRATION_11, :MIGRATION_11_CHECKSUM,
                        :MIGRATION_12, :MIGRATION_12_CHECKSUM,
-                       :MIGRATIONS
+                       :MIGRATION_13, :MIGRATION_13_CHECKSUM,
+                       :MIGRATION_14, :MIGRATION_14_CHECKSUM, :MIGRATIONS
     end
   end
 end

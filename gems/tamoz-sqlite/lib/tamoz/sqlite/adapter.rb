@@ -46,6 +46,27 @@ module Tamoz
         CommsStore.new(adapter: self, checkpoints:)
       end
 
+      def bind_verification_store(clock: -> { Time.now })
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        VerificationStore.new(adapter: self, clock:)
+      end
+
+      def bind_durable_subscriber_store(tenant:)
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        DurableSubscriberStore.new(adapter: self, tenant:)
+      end
+
+      def bind_approval_receipt_store(tenant:)
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        ApprovalReceiptStore.new(adapter: self, tenant:)
+      end
+
       def initialize(
         path:,
         limits: Limits.new,

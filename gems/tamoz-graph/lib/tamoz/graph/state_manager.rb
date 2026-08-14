@@ -20,11 +20,16 @@ module Tamoz
                   end
           [name, value]
         end
-        writes = normalize_update(input, allow_managed: false)
-        apply_writes(state, [{"task_id" => "input", "update" => writes}], remaining_steps:)
+        writes = normalize_update(input, allow_managed: false, allow_immutable: true)
+        apply_writes(
+          state,
+          [{"task_id" => "input", "update" => writes}],
+          remaining_steps:,
+          allow_immutable: true
+        )
       end
 
-      def normalize_update(value, allow_managed: false)
+      def normalize_update(value, allow_managed: false, allow_immutable: false)
         normalized = codec.normalize(value)
         raise InvalidUpdateError, "node update must be a Hash" unless normalized.is_a?(Hash)
 
@@ -34,6 +39,9 @@ module Tamoz
           channel = channels.fetch(name)
           if channel.managed? && !allow_managed
             raise InvalidUpdateError, "managed channel #{name} is read-only"
+          end
+          if channel.immutable? && !allow_immutable
+            raise InvalidUpdateError, "immutable channel #{name} is read-only"
           end
           raise InvalidUpdateError, "duplicate update channel #{name}" if result.key?(name)
 
@@ -63,7 +71,7 @@ module Tamoz
 
       private
 
-      def apply_writes(state, records, remaining_steps:)
+      def apply_writes(state, records, remaining_steps:, allow_immutable: false)
         grouped = Hash.new { |hash, key| hash[key] = [] }
         writers = Hash.new { |hash, key| hash[key] = [] }
         records.each do |record|
@@ -76,6 +84,9 @@ module Tamoz
         candidate = state.dup
         grouped.each do |name, values|
           channel = channels.fetch(name)
+          if channel.immutable? && !allow_immutable
+            raise InvalidUpdateError, "immutable channel #{name} is read-only"
+          end
           if channel.reducer
             begin
               candidate[name] = channel.reducer.call(candidate.fetch(name), values.freeze)

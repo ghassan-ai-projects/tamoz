@@ -324,13 +324,16 @@ module Tamoz
                       else
                         build_statement(task, observed, episode, kind)
                       end
-          source_refs = [
-            {
-              "identity" => "episode:#{episode.fetch(:session_id)}",
-              "digest" => plan_digest,
-              "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
-            }
-          ]
+          episode_ref = {
+            "identity" => "episode:#{episode.fetch(:session_id)}",
+            "digest" => plan_digest,
+            "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
+          }
+          %i[traceparent tracestate].each do |key|
+            value = episode[key]
+            episode_ref[key.to_s] = value if value
+          end
+          source_refs = [episode_ref]
           # T5.3: the :observed record cites the Outcome id, command id,
           # source authority, and reconciliation version, so provenance
           # survives the gap between the episode and the Friday outcome.

@@ -1,0 +1,94 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Standalone Channel-B subscriber. The worker and this process use the same
+# SQLite path, so verification, subscriber delivery state, and admitted memory
+# share one durable authority.
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+
+require "logger"
+require "optparse"
+require "tamoz/agent"
+require "tamoz/sqlite"
+require "tamoz/stream/live_learning_handlers"
+require "tamoz/stream/sse_transport"
+
+options = {log: $stdout}
+parser = OptionParser.new do |opts|
+  opts.on("--tenant TENANT", "Tenant handled by this subscriber") { |value| options[:tenant] = value }
+  opts.on("--database PATH", "Shared Tamoz SQLite database") { |value| options[:database] = value }
+  opts.on("--events-url URL", "Channel-B SSE notification feed") { |value| options[:events_url] = value }
+  opts.on("--subscriber-token TOKEN", "Channel-B subscriber credential") do |value|
+    options[:subscriber_token] = value
+  end
+  opts.on("--approval-relay FILE", "Ruby file defining build_approval_relay") do |value|
+    options[:approval_relay] = value
+  end
+  opts.on("--log PATH", "Subscriber log path; defaults to stdout") do |value|
+    options[:log] = value
+  end
+end
+parser.parse!(ARGV)
+
+required = %i[tenant database events_url subscriber_token]
+unless required.all? { |key| options[key] && !options[key].to_s.empty? }
+  warn parser
+  exit 2
+end
+
+log_io = options[:log].is_a?(String) ? File.open(options[:log], "a") : options[:log]
+logger = Logger.new(log_io)
+require File.expand_path(options.fetch(:approval_relay)) if options[:approval_relay]
+
+adapter = Tamoz::SQLite::Adapter.new(
+  path: options.fetch(:database), state_codec: Tamoz::Agent::Memory::Surface.codec
+)
+tenant = options.fetch(:tenant)
+approval_receipts = adapter.bind_approval_receipt_store(tenant:)
+approval_relay = if options[:approval_relay]
+                   unless respond_to?(:build_approval_relay, true)
+                     raise ArgumentError, "approval relay file must define build_approval_relay"
+                   end
+
+                   build_approval_relay(approval_state: approval_receipts)
+                 end
+memory = Tamoz::Agent::Memory::Engine.new(tenant: options.fetch(:tenant), adapter:)
+handlers = Tamoz::Stream::LiveLearningHandlers.new(
+  verification: adapter.bind_verification_store,
+  memory:,
+  durable: adapter.bind_durable_subscriber_store(tenant:),
+  tenant:,
+  logger:,
+  approval_receipts:,
+  approval_relay:
+)
+subscriber = Tamoz::Stream::OutcomeSubscriber.new(
+  cursor_store: adapter.bind_durable_subscriber_store(tenant:),
+  handlers: handlers.callables,
+  credential: options.fetch(:subscriber_token)
+)
+transport = Tamoz::Stream::SseTransport.new(endpoint: options.fetch(:events_url), logger:)
+stopping = false
+stop = lambda do
+  stopping = true
+  transport.stop
+end
+trap("TERM") { stop.call }
+trap("INT") { stop.call }
+
+begin
+  logger.info("subscriber started tenant=#{options.fetch(:tenant)} endpoint=#{options.fetch(:events_url)}")
+  until stopping
+    begin
+      subscriber.run(transport:)
+    rescue StandardError => error
+      logger.error("subscriber error=#{error.class}: #{error.message}")
+      sleep(1) unless stopping
+    end
+  end
+ensure
+  stop.call
+  adapter.close
+  log_io.close if log_io.respond_to?(:close) && log_io != $stdout
+end

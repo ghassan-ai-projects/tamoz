@@ -299,9 +299,12 @@ module Tamoz
                AND h.deleted = 0
               WHERE i.store_namespace = ?
                 AND i.state IN ('active', 'consolidated')
+                AND i.scopes_tenant = ?
                 AND i.scopes_user = ?
                 AND i.scopes_project = ?
                 AND i.sensitivity = 'sensitive'
+                AND i.compatibility_graph = ?
+                AND i.compatibility_behavior = ?
                 AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
                 #{situation_filter}
                 #{matches_sql}
@@ -309,8 +312,10 @@ module Tamoz
             SQL
             [
               namespace,
-              caller_values.fetch(:user), caller_values.fetch(:project),
-              now_ms, *situation_binds, *match_binds
+              caller_values.fetch(:tenant), caller_values.fetch(:user),
+              caller_values.fetch(:project), caller_values.fetch(:compatibility_graph),
+              caller_values.fetch(:compatibility_behavior), now_ms,
+              *situation_binds, *match_binds
             ]
           )
         end
@@ -639,9 +644,12 @@ module Tamoz
       # entity_id or situation_type term to this fragment.
       def situation_boundary(caller_values)
         if caller_values.fetch(:entity_type)
-          ["AND i.scopes_entity_type = ?", [caller_values.fetch(:entity_type)]]
+          [
+            "AND i.scopes_situation_type = ? AND i.scopes_entity_type = ?",
+            [caller_values.fetch(:situation_type), caller_values.fetch(:entity_type)]
+          ]
         else
-          ["AND i.scopes_entity_type IS NULL", []]
+          ["AND i.scopes_situation_type IS NULL AND i.scopes_entity_type IS NULL", []]
         end
       end
 

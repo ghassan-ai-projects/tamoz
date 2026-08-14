@@ -3,7 +3,8 @@
 module Tamoz
   module Graph
     class Channel
-      attr_reader :name, :reducer, :default_bytes, :default_name, :default_version, :managed
+      attr_reader :name, :reducer, :default_bytes, :default_name, :default_version, :managed,
+                  :immutable
 
       def initialize(
         name:,
@@ -12,15 +13,23 @@ module Tamoz
         default_name:,
         default_version:,
         managed:,
-        codec:
+        codec:,
+        immutable: false
       )
         @name = Identifier.symbol(name, name: "state channel")
         @managed = normalize_managed(managed)
+        @immutable = immutable == true
+        if @immutable && @managed
+          raise GraphDefinitionError, "channel #{@name} cannot be both immutable and managed"
+        end
         @default_name = default_name && Identifier.string(default_name, name: "default name")
         @default_version = default_version && Identifier.version(default_version, name: "default version")
         @reducer = managed ? nil : reducer
         if managed && reducer
           raise GraphDefinitionError, "managed channel #{@name} cannot have a reducer"
+        end
+        if @immutable && reducer
+          raise GraphDefinitionError, "immutable channel #{@name} cannot have a reducer"
         end
         @default_bytes = compile_default(
           default,
@@ -41,12 +50,17 @@ module Tamoz
           "reducer" => reducer && {"name" => reducer.name, "version" => reducer.version},
           "default" => default_bytes,
           "default_factory" => default_name && {"name" => default_name, "version" => default_version},
-          "managed" => managed && "remaining_steps"
+          "managed" => managed && "remaining_steps",
+          "immutable" => immutable
         }
       end
 
       def managed?
         !managed.nil?
+      end
+
+      def immutable?
+        immutable
       end
 
       private

@@ -99,12 +99,12 @@ class MemoryRepositoryTest < Minitest::Test
     # MIGRATION_12; the old stream engine's retirement moved 12 -> 13 through
     # MIGRATION_13 (T8.3). The monotonic-ordering guard makes ordinal reuse
     # impossible.
-    assert_equal 13, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    assert_equal 14, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
                  Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 13, database.get_first_value("PRAGMA user_version")
+    assert_equal 14, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -116,6 +116,18 @@ class MemoryRepositoryTest < Minitest::Test
       compatibility_behavior statement_search searchable
       scopes_situation_type scopes_entity_type scopes_entity_id
     ], columns
+    verification_tables = database.execute(
+      "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_stream_verifications'"
+    )
+    assert_equal 1, verification_tables.length
+    verification_columns = database.execute(
+      "PRAGMA table_info(tamoz_stream_verifications)"
+    ).map { |row| row.fetch(1) }
+    assert_equal %w[
+      tenant_id intent_id command_id decision_id episode_id attempt_id decision_digest episode state
+      outcome_id outcome_digest verdict reconciliation_version source_authority opened_at
+      reconciled_at learnable
+    ], verification_columns
     database.close
 
     # A pre-P11 database (schema version 1) upgrades in place with existing

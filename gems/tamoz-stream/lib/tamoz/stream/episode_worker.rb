@@ -38,6 +38,11 @@ module Tamoz
 
       attr_reader :lane_config
 
+      def bind_runner(runner)
+        @runner = runner
+        self
+      end
+
       def worker_name = WORKER_NAME
 
       def worker_version = @worker_version

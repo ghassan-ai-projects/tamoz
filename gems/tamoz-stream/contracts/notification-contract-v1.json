@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:situation-runtime:notification-contract:v1",
+  "title": "Situation Runtime Channel-B notification contract v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specversion", "id", "source", "type", "subject", "time", "datacontenttype", "dataschema", "data", "tenantid", "partitionkey", "ingestedtime", "envelopedigest", "classification"],
+  "properties": {
+    "specversion": {"const": "1.0"},
+    "id": {"type": "string", "minLength": 1, "maxLength": 256},
+    "source": {"type": "string", "minLength": 1, "maxLength": 512},
+    "type": {"enum": [
+      "io.agenticstream.outcome.recorded.v1",
+      "io.agenticstream.outcome.reconciled.v1",
+      "io.agenticstream.approval.requested.v1",
+      "io.agenticstream.approval.withdrawn.v1",
+      "io.agenticstream.approval.resolved.v1",
+      "io.agenticstream.command.dispatched.v1",
+      "io.agenticstream.situation.superseded.v1",
+      "io.agenticstream.reconsideration.admitted.v1"
+    ]},
+    "subject": {"type": "string", "minLength": 1, "maxLength": 512},
+    "time": {"type": "string", "format": "date-time"},
+    "observedtime": {"type": "string", "format": "date-time"},
+    "datacontenttype": {"const": "application/json"},
+    "dataschema": {"const": "urn:situation-runtime:notification-contract:v1"},
+    "data": {"type": "object"},
+    "tenantid": {"type": "string", "minLength": 1, "maxLength": 256},
+    "partitionkey": {"type": "string", "minLength": 1, "maxLength": 512},
+    "ingestedtime": {"type": "string", "format": "date-time"},
+    "envelopedigest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "traceparent": {"type": "string", "pattern": "^(00|[0-9a-f]{2})-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$"},
+    "tracestate": {"type": "string", "maxLength": 512},
+    "classification": {"const": "internal"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.outcome.recorded.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "intent_id", "command_id", "outcome_id", "outcome_digest", "status", "reconciliation_status", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "command_id": {"type": "string", "minLength": 1}, "outcome_id": {"type": "string", "minLength": 1}, "outcome_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "status": {"enum": ["succeeded", "failed", "unknown"]}, "reconciliation_status": {"enum": ["observed", "required", "not_required", "reconciled"]}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.outcome.reconciled.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "intent_id", "command_id", "outcome_id", "outcome_digest", "final_status", "reconciliation_status", "verdict", "reconciliation_version", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "command_id": {"type": "string", "minLength": 1}, "outcome_id": {"type": "string", "minLength": 1}, "outcome_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "final_status": {"enum": ["succeeded", "failed", "manual_review"]}, "reconciliation_status": {"const": "reconciled"}, "verdict": {"enum": ["verified", "refuted", "inconclusive", "superseded_before_verification"]}, "reconciliation_version": {"type": "integer", "minimum": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.approval.requested.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "approval_id", "intent_id", "decision_id", "situation_id", "situation_version", "intent_digest", "snapshot_digest", "risk_class", "expires_at", "audience", "summary", "delta", "hypothesis", "evidence", "action", "decline_consequence", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "approval_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "decision_id": {"type": "string", "minLength": 1}, "situation_id": {"type": "string", "minLength": 1}, "situation_version": {"type": "integer", "minimum": 1}, "intent_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "snapshot_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "risk_class": {"enum": ["R0", "R1", "R2", "R3", "R4"]}, "expires_at": {"type": "string", "format": "date-time"}, "audience": {"type": "string", "minLength": 1}, "summary": {"type": "string", "minLength": 1, "maxLength": 4096}, "delta": {"type": "object"}, "hypothesis": {"type": "string", "minLength": 1, "maxLength": 4096}, "evidence": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 256}, "maxItems": 4096}, "action": {"type": "object"}, "decline_consequence": {"type": "string", "minLength": 1, "maxLength": 4096}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.approval.withdrawn.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "approval_id", "intent_id", "situation_id", "situation_version", "reason", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "approval_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "situation_id": {"type": "string", "minLength": 1}, "situation_version": {"type": "integer", "minimum": 1}, "reason": {"type": "string", "minLength": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.approval.resolved.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "approval_id", "intent_id", "decision_id", "situation_id", "situation_version", "status", "reason", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "approval_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "decision_id": {"type": "string", "minLength": 1}, "situation_id": {"type": "string", "minLength": 1}, "situation_version": {"type": "integer", "minimum": 1}, "status": {"enum": ["approved", "denied", "expired"]}, "reason": {"type": "string", "minLength": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.command.dispatched.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "command_id", "intent_id", "outcome_id", "status", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "command_id": {"type": "string", "minLength": 1}, "intent_id": {"type": "string", "minLength": 1}, "outcome_id": {"type": "string", "minLength": 1}, "status": {"type": "string", "minLength": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.situation.superseded.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "situation_id", "superseded_version", "replacement_version", "reason", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "situation_id": {"type": "string", "minLength": 1}, "superseded_version": {"type": "integer", "minimum": 1}, "replacement_version": {"type": "integer", "minimum": 1}, "reason": {"type": "string", "minLength": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    },
+    {
+      "if": {"properties": {"type": {"const": "io.agenticstream.reconsideration.admitted.v1"}}},
+      "then": {"properties": {"data": {"type": "object", "additionalProperties": false, "required": ["tenant_id", "reconsideration_id", "situation_id", "superseded_version", "correction_version", "invalidated_command_id", "invalidated_outcome_id", "trigger_id", "scheduler_item_id", "source_authority"], "properties": {
+        "tenant_id": {"type": "string", "minLength": 1}, "reconsideration_id": {"type": "string", "minLength": 1}, "situation_id": {"type": "string", "minLength": 1}, "superseded_version": {"type": "integer", "minimum": 1}, "correction_version": {"type": "integer", "minimum": 1}, "invalidated_command_id": {"type": "string", "minLength": 1}, "invalidated_outcome_id": {"type": "string", "minLength": 1}, "trigger_id": {"type": "string", "minLength": 1}, "scheduler_item_id": {"type": "string", "minLength": 1}, "source_authority": {"type": "string", "minLength": 1}
+      }}}, "required": ["data"]}
+    }
+  ]
+}
