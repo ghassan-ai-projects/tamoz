@@ -18,6 +18,8 @@ module Tamoz
       ACTION_RISKS = {
         "create_maintenance_ticket" => "r1",
         "recommend_operating_limit" => "r2",
+        "dispatch_crew" => "r2",
+        "isolate_segment" => "r3",
         "start_aerator" => "r1",
         "halt_feeding" => "r1",
         "emergency_water_exchange" => "r2",
@@ -128,8 +130,13 @@ module Tamoz
           return intents
         end
 
-        type = expressible_action_type(highest_risk: confidence >= HIGH_CONFIDENCE)
-        return [action_intent(type:)] if type
+        if confidence >= HIGH_CONFIDENCE
+          types = expressible_action_types(limit: 2)
+          return types.map { |type| action_intent(type:) } unless types.empty?
+        else
+          type = expressible_action_type
+          return [action_intent(type:)] if type
+        end
 
         [watch_condition_intent]
       end
@@ -144,15 +151,26 @@ module Tamoz
       end
 
       def expressible_action_type(highest_risk: false, risk_class: nil)
-        candidates = allowed_intent_types.filter_map do |type|
+        candidate = select_action_candidate(
+          expressible_action_candidates(risk_class:), highest_risk:
+        )
+        candidate&.first
+      end
+
+      def expressible_action_types(limit:)
+        expressible_action_candidates.sort_by do |_type, candidate_risk|
+          -RISK_ORDER.fetch(candidate_risk)
+        end.first(limit).map(&:first)
+      end
+
+      def expressible_action_candidates(risk_class: nil)
+        allowed_intent_types.filter_map do |type|
           candidate_risk = ACTION_RISKS[type]
           next unless candidate_risk
           next unless expressible_candidate?(candidate_risk, risk_class)
 
           [type, candidate_risk]
         end
-        candidate = select_action_candidate(candidates, highest_risk:)
-        candidate&.first
       end
 
       def expressible_candidate?(candidate_risk, required_risk)

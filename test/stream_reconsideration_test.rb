@@ -187,6 +187,29 @@ class StreamReconsiderationTest < Minitest::Test
     assert Reconsideration.valid_compensation?(intent, risk_ceiling: "r1")
   end
 
+  def test_a_dispatch_crew_downgrade_uses_the_pump_compensation
+    command = executed_command(command_id: "cmd_pump_1").merge(
+      "intent_type" => "dispatch_crew", "risk_class" => "R2"
+    )
+    judgement = Reconsideration.judge(
+      parsed: Reconsideration.parse(
+        wire_reconsideration(
+          invalidates: ["cmd_pump_1"], command:
+        )
+      )
+    ).fetch(0)
+
+    intent = Reconsideration.build_compensating_intents(
+      [judgement], episode: episode(risk_ceiling: "r1"), snapshot:
+    ).fetch(0)
+
+    assert_equal :downgrade, judgement.decision
+    assert_equal "downgrade_dispatch", intent.fetch("type")
+    assert_equal "R1", intent.fetch("risk_class")
+    assert_equal "cmd_pump_1", intent.fetch("compensates")
+    assert Reconsideration.valid_compensation?(intent, risk_ceiling: "r1")
+  end
+
   def test_a_transfer_compensation_is_classified_at_r3
     transfer_command = executed_command(
       command_id: "cmd_transfer_1",

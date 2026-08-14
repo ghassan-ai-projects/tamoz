@@ -49,6 +49,7 @@ module Tamoz
       COMPENSATION_RISK = {
         "maintenance" => "R1",
         "pond" => "R1",
+        "pump" => "R1",
         "transfer" => "R3"
       }.freeze
       DEFAULT_COMPENSATION_RISK = "R1"
@@ -57,11 +58,13 @@ module Tamoz
       WITHDRAW_TYPES = {
         "maintenance" => "withdraw_maintenance_ticket",
         "pond" => "withdraw_intervention",
+        "pump" => "withdraw_ticket",
         "transfer" => "cancel_product_transfer"
       }.freeze
       DOWNGRADE_TYPES = {
         "maintenance" => "downgrade_maintenance_ticket",
         "pond" => "downgrade_intervention",
+        "pump" => "downgrade_dispatch",
         "transfer" => "downgrade_product_transfer"
       }.freeze
 
@@ -249,6 +252,12 @@ module Tamoz
              /\binstall_watch_condition\b/,
              /\bdowngrade_intervention\b/,
              /\bwithdraw_intervention\b/ then "pond"
+        when /\bschedule_maintenance\b/,
+             /\breduce_load\b/,
+             /\bdispatch_crew\b/,
+             /\bisolate_segment\b/,
+             /\bdowngrade_dispatch\b/,
+             /\bwithdraw_ticket\b/ then "pump"
         else "maintenance"
         end
       end

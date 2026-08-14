@@ -187,7 +187,35 @@ class StreamDecisionBuilderTest < Minitest::Test
       outcome: {primary_hypothesis: "critical oxygen loss", confidence: 0.9}
     ).build
 
-    assert_equal ["emergency_water_exchange"],
+    assert_equal %w[emergency_water_exchange start_aerator],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_water_network_episode_proposes_two_intents_under_r3
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R3,
+        allowed_intent_types: %w[dispatch_crew isolate_segment]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "ruptured main", confidence: 0.9}
+    ).build
+
+    assert_equal %w[isolate_segment dispatch_crew],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
+  def test_a_high_confidence_water_network_episode_respects_an_r2_ceiling
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        risk_ceiling: :RISK_CLASS_R2,
+        allowed_intent_types: %w[dispatch_crew isolate_segment]
+      ),
+      snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "ruptured main", confidence: 0.9}
+    ).build
+
+    assert_equal ["dispatch_crew"],
                  decision.fetch("intents").map { |intent| intent.fetch("type") }
   end
 
