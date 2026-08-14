@@ -50,6 +50,7 @@ module Tamoz
         "maintenance" => "R1",
         "pond" => "R1",
         "pump" => "R1",
+        "bay" => "R1",
         "transfer" => "R3"
       }.freeze
       DEFAULT_COMPENSATION_RISK = "R1"
@@ -59,12 +60,14 @@ module Tamoz
         "maintenance" => "withdraw_maintenance_ticket",
         "pond" => "withdraw_intervention",
         "pump" => "withdraw_ticket",
+        "bay" => "withdraw_climate_action",
         "transfer" => "cancel_product_transfer"
       }.freeze
       DOWNGRADE_TYPES = {
         "maintenance" => "downgrade_maintenance_ticket",
         "pond" => "downgrade_intervention",
         "pump" => "downgrade_dispatch",
+        "bay" => "downgrade_climate_action",
         "transfer" => "downgrade_product_transfer"
       }.freeze
 
@@ -246,6 +249,12 @@ module Tamoz
         # physical transfer — misclassification would escalate the compensation
         # risk class.
         when /\b(?:transfer|shipment|move)\b/ then "transfer"
+        when /\brun_vent_cycle\b/,
+             /\bdehumidify\b/,
+             /\bdeploy_shade_or_heat\b/,
+             /\bdose_co2\b/,
+             /\bdowngrade_climate_action\b/,
+             /\bwithdraw_climate_action\b/ then "bay"
         when /\bemergency_water_exchange\b/,
              /\bstart_aerator\b/,
              /\bhalt_feeding\b/,

@@ -267,6 +267,42 @@ class StreamDecisionBuilderTest < Minitest::Test
                  decision.fetch("intents").map { |intent| intent.fetch("type") }
   end
 
+  def test_a_moderate_confidence_greenhouse_episode_proposes_the_lowest_risk_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          run_vent_cycle dehumidify deploy_shade_or_heat dose_co2
+          downgrade_climate_action withdraw_climate_action
+        ]
+      ),
+      snapshot: snapshot.merge("situation_type" => "greenhouse"),
+      snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "high humidity", confidence: 0.6}
+    ).build
+
+    assert_equal ["run_vent_cycle"],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+    assert_equal "R1", decision.fetch("intents").fetch(0).fetch("risk_class")
+  end
+
+  def test_a_watch_band_greenhouse_episode_proposes_a_watch_and_cheap_action
+    decision, = Stream::DecisionBuilder.new(
+      envelope: envelope_with(
+        allowed_intent_types: %w[
+          run_vent_cycle dehumidify deploy_shade_or_heat dose_co2
+          downgrade_climate_action withdraw_climate_action install_watch_condition
+        ],
+        watch_confidence_floor: 0.85
+      ),
+      snapshot: snapshot.merge("situation_type" => "greenhouse"),
+      snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {primary_hypothesis: "high humidity", confidence: 0.6}
+    ).build
+
+    assert_equal %w[install_watch_condition run_vent_cycle],
+                 decision.fetch("intents").map { |intent| intent.fetch("type") }
+  end
+
   def test_a_high_confidence_pond_episode_respects_an_r1_ceiling
     decision, = Stream::DecisionBuilder.new(
       envelope: envelope_with(

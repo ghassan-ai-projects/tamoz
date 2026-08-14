@@ -28,7 +28,13 @@ module Tamoz
         "halt_feeding" => "r1",
         "emergency_water_exchange" => "r2",
         "downgrade_intervention" => "r1",
-        "withdraw_intervention" => "r1"
+        "withdraw_intervention" => "r1",
+        "run_vent_cycle" => "r1",
+        "dehumidify" => "r1",
+        "deploy_shade_or_heat" => "r2",
+        "dose_co2" => "r2",
+        "downgrade_climate_action" => "r1",
+        "withdraw_climate_action" => "r1"
       }.freeze
       HIGH_CONFIDENCE = 0.85
       MAX_FACTS = 64
