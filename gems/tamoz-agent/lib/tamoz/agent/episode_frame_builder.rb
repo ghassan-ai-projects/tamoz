@@ -23,9 +23,7 @@ module Tamoz
       MAX_FACT_BYTES = 4096
       MAX_FACTS = 64
 
-      Frame = Data.define(:system, :user, :facts, :digest, :catalog) do
-        def fact_ids = facts.map { |entry| "fact:#{entry.fetch("id")}" }
-      end
+      Frame = Data.define(:system, :user, :facts, :evidence_ids, :digest, :catalog)
 
       # catalog: a DiagnosisCatalog (already wire-verified). prompt_sha256 is
       # optional — when present the prompt bytes must match it or the frame
@@ -48,18 +46,25 @@ module Tamoz
       end
 
       def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil,
-                tool_results: [], repair_directive: nil)
+                skills: [], memory: [], tool_results: [], repair_directive: nil)
         verify_prompt!(prompt, prompt_version, prompt_sha256)
         facts = build_facts(snapshot)
         system = build_system(prompt)
-        user = build_user(facts, tool_results, repair_directive)
+        user = build_user(facts, skills, memory, tool_results, repair_directive)
         bytes = Tamoz::Core.jcs(
           {"system" => system, "user" => user, "catalog" => @catalog.canonical}
+        )
+        evidence_ids = (
+          facts.map { |entry| "fact:#{entry.fetch("id")}" } +
+          Array(skills).map { |entry| "skill:#{entry.name}" } +
+          Array(memory).map { |entry| "memory:#{entry.fetch("digest")}" } +
+          Array(tool_results).each_index.map { |index| "tool:#{index}" }
         )
         Frame.new(
           system:,
           user:,
           facts:,
+          evidence_ids: evidence_ids.freeze,
           digest: Tamoz::Core.digest(FRAME_DOMAIN,
                                     {"system" => system, "user" => user, "catalog" => @catalog.canonical}),
           catalog: @catalog
@@ -108,16 +113,33 @@ module Tamoz
         @catalog.entries.each do |entry|
           lines << "- #{entry.code}: #{entry.description}"
         end
-        lines << "EVIDENCE: cite facts only with the fact:<id> prefixes given " \
-                 "in the user message."
+        lines << "EVIDENCE: cite facts with the fact:<id> prefixes, tools with " \
+                 "tool:<index>, memory with memory:<digest>, and skills with " \
+                 "skill:<name> — all only for entries given in the user message."
         lines << "OUTPUT: strict JSON object matching the " \
                  "tamoz.episode-diagnosis/v2 protocol; no prose around it."
         lines.join("\n")
       end
 
-      def build_user(facts, tool_results, repair_directive)
+      # The untrusted section: every entry is fenced + attributed — skills,
+      # memory, snapshot facts, tool results, and corrections are all data
+      # with stable evidence ids, never raw prompt text.
+      def build_user(facts, skills, memory, tool_results, repair_directive)
         situation = facts.map do |entry|
           {"id" => "fact:#{entry.fetch("id")}", "value" => entry.fetch("value")}
+        end
+        skill_entries = Array(skills).map do |entry|
+          {
+            "id" => "skill:#{entry.name}",
+            "tree_sha256" => entry.tree_digest,
+            "text" => entry.text
+          }
+        end
+        memory_entries = Array(memory).map do |entry|
+          {
+            "id" => "memory:#{entry.fetch("digest")}",
+            "statement" => entry.fetch("statement")
+          }
         end
         tools = Array(tool_results).map.with_index do |result, index|
           {
@@ -130,6 +152,8 @@ module Tamoz
           }
         end
         user = {"situation" => situation}
+        user["skills"] = skill_entries unless skill_entries.empty?
+        user["memory"] = memory_entries unless memory_entries.empty?
         user["tool_results"] = tools unless tools.empty?
         user["repair_directive"] = repair_directive if repair_directive
         Tamoz::Core.jcs(user)

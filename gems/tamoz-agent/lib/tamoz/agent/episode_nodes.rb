@@ -22,14 +22,126 @@ module Tamoz
       # `api_base` is on the profile secret-key denylist; the endpoint override
       # uses `base_url` instead (same intent, no scanner weakening).
       ROLE_ENDPOINT_KEYS = %w[base_url api_base].freeze
+      RECALL_OPERATION = "tamoz.agent.episode.recall"
 
-      def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:, tool_call: nil)
+      def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:, tool_call: nil, skills_source: {}, situation_recaller: nil, recall_caller: nil)
         @profile = profile
         @frame_builder_factory = frame_builder_factory
         @model_call_factory = model_call_factory
         @decision_builder = decision_builder
         @tool_call = tool_call || EpisodeToolCall.new(tool_port: nil)
+        @skills_source = skills_source.freeze
+        @situation_recaller = situation_recaller
+        @recall_caller = recall_caller
         freeze
+      end
+
+      # P5: the recall node — situation-scoped memory becomes graph state
+      # feeding build_frame. The recall is a NON-DETERMINISTIC external read
+      # (the memory store can change), so it routes through the durable effect
+      # journal under a logical key (episode, "recall", slot 0, identity
+      # digest): a replayed run returns the RECORDED projections, never a
+      # fresh, different read — the frame bytes and the reason call's logical
+      # key stay replay-stable (the P3 contract). A recaller error or a
+      # caller/tenant mismatch is a typed failure, never silent; first-
+      # occurrence cells get an empty memory section.
+      def recall(state, context)
+        unless @situation_recaller
+          return {"situation_memory" => [], "memory_record_digests" => []}
+        end
+        unless @recall_caller
+          raise EpisodeFrameError, "episode_recall/recaller_without_caller"
+        end
+
+        episode = state.fetch(:episode)
+        snapshot = state.fetch(:snapshot)
+        tenant = String(episode.fetch("tenant_id", ""))
+        unless @recall_caller[:tenant].to_s == tenant || @recall_caller["tenant"].to_s == tenant
+          raise EpisodeFrameError, "episode_recall/tenant_mismatch"
+        end
+
+        identity = {
+          "situation_id" => snapshot.fetch("situation_id"),
+          "situation_version" => snapshot.fetch("situation_version"),
+          "tenant" => tenant,
+          "limit" => 64
+        }
+        logical = ModelCall::LogicalCallKey.new(
+          episode_id: String(episode.fetch("episode_id")),
+          stage: "recall",
+          slot: 0,
+          request_digest: "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(identity))}"
+        )
+        outcome = EffectDispatcher.run(
+          context:,
+          operation: RECALL_OPERATION,
+          safety: :unsafe,
+          call_index: 0,
+          request: {"logical_call_key" => logical.to_key},
+          actor: "tamoz.agent.episode.recall",
+          logical_key: logical
+        ) do
+          result = @situation_recaller.recall(
+            caller: @recall_caller, snapshot:, query: {terms: []}, limit: 64
+          )
+          unless result.respond_to?(:projections) && result.respond_to?(:record_digests)
+            raise EpisodeFrameError, "episode_recall/result_invalid"
+          end
+
+          projections = Array(result.projections).map do |projection|
+            unless projection.is_a?(Hash)
+              raise EpisodeFrameError, "episode_recall/projection_not_object"
+            end
+            # P5: a misbehaving recaller returning ANOTHER tenant's memory is
+            # refused — the projections are cross-checked against the episode
+            # tenant (the situation identity is the recall key, not a scope
+            # field).
+            scopes = projection["scopes"]
+            unless scopes.is_a?(Hash) && scopes["tenant"].to_s == tenant
+              raise EpisodeFrameError, "episode_recall/projection_scope_mismatch"
+            end
+
+            projection
+          end
+          record_digests = Array(result.record_digests).map(&:to_s)
+          unless record_digests == projections.map { |projection| projection["digest"] }
+            raise EpisodeFrameError, "episode_recall/digests_mismatch"
+          end
+
+          {"situation_memory" => projections, "memory_record_digests" => record_digests}
+        end
+
+        case outcome.status
+        when :succeeded then outcome.value
+        else
+          raise EpisodeFrameError, "episode_recall/failed"
+        end
+      end
+
+      # P5: recalled memory enters the frame as attributed, untrusted evidence
+      # with memory:<digest> ids. Every projection is shape-validated here (a
+      # malformed or cross-tenant projection is a typed failure, never an
+      # untyped KeyError); the digest binds the FULL statement, never a
+      # truncated display.
+      def memory_entries(state)
+        Array(state[:situation_memory]).map do |projection|
+          unless projection.is_a?(Hash)
+            raise EpisodeFrameError, "episode_recall/projection_not_object"
+          end
+          digest = projection["digest"]
+          statement = projection["statement"]
+          unless digest.is_a?(String) && digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+            raise EpisodeFrameError, "episode_recall/projection_bad_digest"
+          end
+          unless statement.is_a?(String)
+            raise EpisodeFrameError, "episode_recall/projection_bad_statement"
+          end
+
+          {
+            "digest" => digest,
+            "statement" => statement
+          }
+        end
       end
 
       # Resolves the wire model_policy to a concrete role via the Profile
@@ -51,11 +163,14 @@ module Tamoz
       end
 
       # Assembles the frame: verifies the diagnosis catalog bytes against the
-      # wire digest, verifies the prompt digest, and builds the trusted policy
-      # section + untrusted situation section. No model call. P4: the INTENT
-      # catalog is verified here too — a forged/malformed/duplicate catalog
-      # fails closed BEFORE any model call (the decide node re-verifies as
-      # defense-in-depth).
+      # wire digest, verifies the prompt digest, resolves the digest-pinned
+      # skill refs, and builds the trusted policy section + untrusted
+      # situation section. No model call. P4: the INTENT catalog is verified
+      # here too — a forged/malformed/duplicate catalog fails closed BEFORE
+      # any model call (the decide node re-verifies as defense-in-depth).
+      # P5: the skill refs fail closed here too (unknown name or tree-digest
+      # mismatch), and recalled memory enters the frame as attributed,
+      # untrusted evidence with memory:<digest> ids.
       def build_frame(state, _context)
         wire = state.fetch(:wire)
         snapshot = state.fetch(:snapshot)
@@ -67,15 +182,21 @@ module Tamoz
           wire.fetch("intent_catalog_json"),
           wire.fetch("intent_catalog_sha256")
         )
+        skills = SkillSet.verify_wire(
+          wire.fetch("skill_refs_json", ""), source: @skills_source
+        )
+        memory = memory_entries(state)
         frame = @frame_builder_factory.call(
           catalog, wire.fetch("objective", "")
         ).build(
           snapshot:,
           prompt: wire.fetch("prompt", ""),
           prompt_version: wire.fetch("prompt_version", ""),
-          prompt_sha256: wire["prompt_sha256"]
+          prompt_sha256: wire["prompt_sha256"],
+          skills: skills.refs,
+          memory:
         )
-        {"frame" => frame_projection(frame)}
+        {"frame" => frame_projection(frame), "skill_set_digest" => skills.digest}
       end
 
       # The ONLY model-calling node. Journals the call under the logical call
@@ -205,6 +326,9 @@ module Tamoz
           wire.fetch("diagnosis_catalog_json"),
           wire.fetch("diagnosis_catalog_sha256")
         )
+        skills = SkillSet.verify_wire(
+          wire.fetch("skill_refs_json", ""), source: @skills_source
+        )
         frame = @frame_builder_factory.call(
           catalog, wire.fetch("objective", "")
         ).build(
@@ -212,6 +336,8 @@ module Tamoz
           prompt: wire.fetch("prompt", ""),
           prompt_version: wire.fetch("prompt_version", ""),
           prompt_sha256: wire["prompt_sha256"],
+          skills: skills.refs,
+          memory: memory_entries(state),
           tool_results: Array(state.fetch(:tool_results, [])),
           repair_directive: state[:repair_directive]
         )
@@ -293,6 +419,7 @@ module Tamoz
           "system" => frame.system,
           "user" => frame.user,
           "facts" => frame.facts,
+          "evidence_ids" => frame.evidence_ids,
           "digest" => frame.digest,
           "catalog" => frame.catalog.canonical
         }
@@ -305,7 +432,7 @@ module Tamoz
       def ground_evidence!(document, frame)
         return if document.evidence_refs.nil? || document.evidence_refs.empty?
 
-        allowed = frame.fetch("facts").map { |entry| "fact:#{entry.fetch("id")}" }
+        allowed = Array(frame["evidence_ids"])
         forged = document.evidence_refs.reject { |ref| allowed.include?(ref) }
         unless forged.empty?
           raise ProtocolError,

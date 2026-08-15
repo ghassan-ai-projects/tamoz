@@ -9,23 +9,25 @@ module Tamoz
     # repair are GRAPH BRANCHES bounded by Limits#max_steps, never a Ruby
     # counter:
     #
-    #   START → intake → build_frame → reason → validate ─► decide → END
-    #                                      ▲                 │ (tool_request)
-    #                                      │                 ▼
-    #                                      │          execute_tool ─► rebuild_frame
-    #                                      │                 │ (malformed, count<1)
-    #                                      │                 ▼
-    #                                      │                repair ───────►┘
-    #                                      └────────────────────────────────┘
+    #   START → intake → recall → build_frame → reason → validate ─► decide → END
+    #                                        ▲                 │ (tool_request)
+    #                                        │                 ▼
+    #                                        │          execute_tool ─► rebuild_frame
+    #                                        │                 │ (malformed, count<1)
+    #                                        │                 ▼
+    #                                        │                repair ───────►┘
+    #                                        └────────────────────────────────┘
     #
     # `reason` is the ONLY model-calling node; `execute_tool` the only
     # tool-calling node — both journaled unsafe effects with logical keys.
     # `validate` parses + routes. `decide` is the deterministic builder as a
     # terminal node. The runner only validates the envelope, delivers to the
     # durable inbox, and translates the terminal state to the wire.
+    # P5: `recall` (situation-scoped memory) is a graph node feeding
+    # build_frame — the runner no longer seeds the memory channels.
     class EpisodeGraph
       GRAPH_NAME = "tamoz.agent.episode"
-      GRAPH_VERSION = "2"
+      GRAPH_VERSION = "3"
 
       def self.build(checkpointer:, nodes:)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
@@ -44,14 +46,18 @@ module Tamoz
           state :document, default: nil
           state :decision, default: nil
           state :decision_digest, default: nil
-          # P5/P6-owned channels, declared so a recall-enabled runner can bind
-          # them; P2 keeps them empty/immutable.
-          state :situation_memory, default: [], immutable: true
-          state :memory_record_digests, default: [], immutable: true
+          state :skill_set_digest, default: nil
+          # P5: situation-scoped memory, written ONCE by the recall node
+          # (never reduced, never re-seeded by the runner).
+          state :situation_memory, default: []
+          state :memory_record_digests, default: []
           state :reconsideration, default: nil
 
           node(:intake, implementation_name: "tamoz.agent.episode.intake", version: "1") do |state, context|
             nodes.intake(state, context)
+          end
+          node(:recall, implementation_name: "tamoz.agent.episode.recall", version: "1") do |state, context|
+            nodes.recall(state, context)
           end
           node(:build_frame, implementation_name: "tamoz.agent.episode.build_frame", version: "1") do |state, context|
             nodes.build_frame(state, context)
@@ -76,7 +82,8 @@ module Tamoz
           end
 
           edge Tamoz::START, :intake
-          edge :intake, :build_frame
+          edge :intake, :recall
+          edge :recall, :build_frame
           edge :build_frame, :reason
           edge :reason, :validate
 

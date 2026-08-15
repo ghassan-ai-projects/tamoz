@@ -115,6 +115,12 @@ message EpisodeRequest {
   // worker and runtime verify independently before a model call.
   bytes intent_catalog_json = 63;
   bytes intent_catalog_sha256 = 64;
+
+  // P5/§B6-B9: the ordered skill REFS the episode may render into the frame —
+  // [{name, tree_sha256}], digest-pinned. The worker resolves each skill's
+  // text ONLY from the operator-approved directory and requires the tree
+  // digest to match; a mismatch fails before any model call.
+  bytes skill_refs_json = 65;
 }
 
 enum EpisodeKind {

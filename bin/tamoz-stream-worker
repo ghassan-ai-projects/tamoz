@@ -19,6 +19,7 @@
 $LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 
 require "optparse"
+require "json"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/worker_server"
 require "tamoz/stream/verification_store"
@@ -54,6 +55,9 @@ parser = OptionParser.new do |opts|
   opts.on("--lane-config SPEC", "lane=model triples, comma-separated") do |value|
     options[:lane_config] = value
   end
+  opts.on("--skills-source PATH", "JSON map {name => rendered text} of the operator-approved skills") do |value|
+    options[:skills_source] = value
+  end
 end
 parser.parse!(ARGV)
 
@@ -79,6 +83,19 @@ profile = Tamoz::Agent::Profile.preview(options.fetch(:profile))
 checkpointer = Tamoz::SQLite::Adapter.new(
   path: options.fetch(:database), state_codec: Tamoz::Agent::Memory::Surface.codec
 )
+memory = Tamoz::Agent::Memory::Engine.new(
+  tenant: options.fetch(:tenant), adapter: checkpointer
+)
+recaller = Tamoz::Agent::Memory::SituationRecaller.new(engine: memory)
+caller = memory.caller(
+  user: "stream", project: "stream", sensitivity: :internal,
+  compatibility: {graph_version: "1", behavior_version: Tamoz::Agent::BEHAVIOR_VERSION}
+)
+# P5: the operator-approved skill source — a JSON map {name => rendered
+# text}; when unset, ANY episode requesting a skill ref fails closed at
+# build_frame (the production compiler seam is Tamoz::Tools::Skills over the
+# operator directory; its Snapshot records map to this map).
+skills_source = JSON.parse(File.read(options.fetch(:skills_source))) if options.key?(:skills_source)
 nodes = Tamoz::Agent::EpisodeNodes.new(
   profile:,
   frame_builder_factory: lambda do |catalog, objective|
@@ -91,13 +108,12 @@ nodes = Tamoz::Agent::EpisodeNodes.new(
     )
     Tamoz::Agent::EpisodeModelCall.new(transport:)
   end,
-  decision_builder: Tamoz::Stream::DecisionNodeBuilder.new
+  decision_builder: Tamoz::Stream::DecisionNodeBuilder.new,
+  skills_source: skills_source || {},
+  situation_recaller: recaller,
+  recall_caller: caller
 )
 app = Tamoz::Agent::EpisodeGraph.build(checkpointer:, nodes:)
-memory = Tamoz::Agent::Memory::Engine.new(
-  tenant: options.fetch(:tenant), adapter: checkpointer
-)
-recaller = Tamoz::Agent::Memory::SituationRecaller.new(engine: memory)
 worker = Tamoz::Stream::EpisodeWorker.new(
   worker_version: options[:worker_version],
   lane_config:
@@ -107,12 +123,7 @@ runner = Tamoz::Stream::EpisodeRunner.new(
   worker:,
   verification_store: checkpointer.bind_verification_store,
   artifact_store: Tamoz::Stream::ArtifactStore.new,
-  situation_recaller: recaller,
-  configured_tenant: options.fetch(:tenant),
-  recall_caller: memory.caller(
-    user: "stream", project: "stream", sensitivity: :internal,
-    compatibility: {graph_version: "1", behavior_version: Tamoz::Agent::BEHAVIOR_VERSION}
-  )
+  configured_tenant: options.fetch(:tenant)
 )
 worker.bind_runner(runner)
 

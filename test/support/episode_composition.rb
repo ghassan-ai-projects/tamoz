@@ -27,7 +27,7 @@ module EpisodeComposition
     Tamoz::Core.digest(PROMPT_DOMAIN, {"version" => version, "text" => prompt})
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -57,7 +57,10 @@ module EpisodeComposition
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,
       decision_builder: Stream::DecisionNodeBuilder.new,
-      tool_call: Tamoz::Agent::EpisodeToolCall.new(tool_port: tool_port)
+      tool_call: Tamoz::Agent::EpisodeToolCall.new(tool_port: tool_port),
+      skills_source: skills_source || {},
+      situation_recaller: situation_recaller,
+      recall_caller: recall_caller
     )
     app = Tamoz::Agent::EpisodeGraph.build(checkpointer:, nodes:)
     worker = Stream::EpisodeWorker.new(
@@ -79,8 +82,6 @@ module EpisodeComposition
       durable_runner: app.durable_runner,
       worker:,
       artifact_store: artifact_store,
-      situation_recaller: situation_recaller,
-      recall_caller: recall_caller,
       episode_tools: episode_tools
     )
     {app:, runner:, adapter: checkpointer, directory:}
@@ -99,7 +100,8 @@ module EpisodeComposition
     decision_schema_json: nil, decision_schema_sha256: nil,
     objective: AquacultureDomain::OBJECTIVE, objective_sha256: nil,
     snapshot_sha256: nil, evidence_tools_endpoint: nil, capability_token: nil,
-    allowed_intent_types: %w[install_watch_condition start_aerator]
+    allowed_intent_types: %w[install_watch_condition start_aerator],
+    skill_refs_json: nil
   )
     Agenticstream::Runtime::V1::EpisodeRequest.new(
       protocol_version: "1.0",
@@ -116,6 +118,7 @@ module EpisodeComposition
       intent_catalog_json: intent_catalog_json,
       intent_catalog_sha256: intent_catalog_sha256 ||
                               AquacultureDomain.intent_catalog_digest,
+      skill_refs_json: skill_refs_json,
       model_policy:,
       prompt:,
       prompt_version: PROMPT_VERSION,

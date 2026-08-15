@@ -172,6 +172,7 @@ module Tamoz
             "diagnosis_catalog_sha256" => diagnosis_catalog_sha256.to_s,
             "intent_catalog_json" => @wire.intent_catalog_json.to_s,
             "intent_catalog_sha256" => intent_catalog_sha256.to_s,
+            "skill_refs_json" => @wire.skill_refs_json.to_s,
             "objective" => @wire.objective.to_s,
             "objective_sha256" => objective_sha256.to_s,
             "budget" => budget_hash,
@@ -298,19 +299,15 @@ module Tamoz
     # RequestRecord.
     class EpisodeRunner
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
-                     situation_recaller: nil, configured_tenant: nil, recall_caller: nil,
-                     episode_tools: nil)
+                     configured_tenant: nil, episode_tools: nil)
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
         @artifact_store = artifact_store
-        @situation_recaller = situation_recaller
         @configured_tenant = configured_tenant && String(configured_tenant).dup.freeze
-        @recall_caller = recall_caller
         # P2: an injected capability host (test composition) overrides the
         # runner's per-request host; production keeps the wire-derived host.
         @episode_tools = episode_tools
-        validate_graph_recall_contract!
       end
 
       attr_reader :worker
@@ -340,7 +337,6 @@ module Tamoz
                 snapshot.fetch("tenant_id") != @configured_tenant)
               raise EpisodeRequestInvalidError, "request tenant does not match configured tenant"
             end
-            recall = recall_for(snapshot, envelope)
             stream = EpisodeStream.new(
               envelope, worker_name: @worker&.worker_name, worker_version: @worker&.worker_version
             )
@@ -358,12 +354,8 @@ module Tamoz
             )
             watcher = watch_cancellation(call, context)
             payload = envelope.payload.merge("snapshot" => snapshot)
-            if recall_channels_declared?
-              payload = payload.merge(
-                "situation_memory" => recall.projections,
-                "memory_record_digests" => recall.record_digests
-              )
-            end
+            # P5: the recall node owns situation memory — the runner no longer
+            # seeds the memory channels (they are written once by the graph).
             result = @durable_runner.deliver(
               payload,
               thread: envelope.thread_id,
@@ -395,7 +387,7 @@ module Tamoz
               # checkpoint: retention runs post-run but pre-emission, and a
               # completed journal receipt survives a crash between the call
               # and the runner's terminal branch.
-              manifest = build_artifact_manifest(envelope, recall, terminal_state)
+              manifest = build_artifact_manifest(envelope, terminal_state)
               retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
               # The receipts are verified against the JOURNAL before crossing
               # the wire — node-authored state alone is never trusted (B4).
@@ -406,7 +398,7 @@ module Tamoz
               # translates it to the wire (B2).
               translate_decision(stream, envelope, terminal_state)
             end
-            manifest ||= build_artifact_manifest(envelope, recall, terminal_state)
+            manifest ||= build_artifact_manifest(envelope, terminal_state)
             stream.terminal(
               status, reason_code: reason_code_for(result),
               artifact_manifest: manifest
@@ -582,38 +574,29 @@ module Tamoz
       # digests an offline replay needs (PROTOCOL §2). The digests are the
       # STREAM's own (the sha256 values the wire carried), never locally
       # re-derived; the contract version, the memory records the episode
-      # grounded on, and the run identity complete the manifest.
-      def build_artifact_manifest(envelope, recall, terminal_state = nil)
-        memory_digests = recall.record_digests
+      # grounded on (P5: written by the recall node into the terminal state),
+      # the resolved skill-set digest (P5: derived from the wire-carried skill
+      # refs + compile-time constants, so live and replay agree), and the run
+      # identity complete the manifest.
+      def build_artifact_manifest(envelope, terminal_state = nil)
         terminal_state ||= {}
         terminal_digests = Array(terminal_state.fetch(:memory_record_digests, []))
         terminal_memory = Array(terminal_state.fetch(:situation_memory, []))
-        # The memory-contract checks apply only when the terminal state
-        # actually grounds on memory (a checkpoint-less failure never got far
-        # enough to write the keys — the recall is still the authority, and
-        # the manifest still names the authorized digests).
+        skill_set_digest = terminal_state[:skill_set_digest]
         if terminal_state.key?(:memory_record_digests) || terminal_state.key?(:situation_memory)
-          if !@situation_recaller && (!terminal_digests.empty? || !terminal_memory.empty?)
+          unless terminal_memory.map { |projection| projection.fetch("digest") } == terminal_digests
             raise EpisodeRequestInvalidError,
-                  "terminal memory requires an authorized situation recaller"
-          end
-          unless terminal_digests == memory_digests
-            raise EpisodeRequestInvalidError,
-                  "terminal memory digests do not match the authorized recall"
-          end
-          unless terminal_memory == recall.projections
-            raise EpisodeRequestInvalidError,
-                  "terminal situation memory does not match the authorized recall"
+                  "terminal memory digests do not match the recalled projections"
           end
         end
 
         Agenticstream::Runtime::V1::ArtifactManifest.new(
           prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
-          skill_set_sha256: nil,
+          skill_set_sha256: digest_bytes_or_nil(skill_set_digest),
           tool_catalog_sha256: digest_bytes_or_nil(envelope.tool_catalog_sha256),
           model_policy: blank_to_nil(envelope.wire.model_policy),
           contract_version: EpisodeWorker::CONTRACT_VERSION,
-          memory_record_sha256: memory_digests.map { |digest| Tamoz::Core.digest_bytes(digest) }
+          memory_record_sha256: terminal_digests.map { |digest| Tamoz::Core.digest_bytes(digest) }
         )
       end
 
@@ -749,45 +732,6 @@ module Tamoz
 
         [EpisodeCapabilityHost::MAX_RESULT_BYTES,
          budget.max_tool_result_bytes.to_i].reject(&:zero?).min
-      end
-
-      def recall_channels_declared?
-        channels = @durable_runner.compiled.channels
-        channels.key?(:situation_memory) && channels.key?(:memory_record_digests)
-      end
-
-      def validate_graph_recall_contract!
-        return unless @situation_recaller
-
-        compiled = @durable_runner.compiled
-        channels = compiled.channels
-        %i[situation_memory memory_record_digests].each do |channel|
-          next if channels.key?(channel)
-
-          raise ArgumentError, "recall-enabled episode graph must declare #{channel}"
-        end
-        %i[situation_memory memory_record_digests].each do |channel_name|
-          channel = channels.fetch(channel_name)
-          unless channel.immutable? && channel.reducer.nil? && channel.default(compiled.codec) == []
-            raise ArgumentError,
-                  "recall channel #{channel_name} must be immutable with a [] default and no reducer"
-          end
-        end
-      end
-
-      def recall_for(snapshot, envelope)
-        return SituationRecall::Result.new unless @situation_recaller
-        unless @recall_caller
-          raise ArgumentError, "recall-enabled EpisodeRunner requires recall_caller"
-        end
-        unless @recall_caller[:tenant] == envelope.tenant_id ||
-               @recall_caller["tenant"] == envelope.tenant_id
-          raise EpisodeRequestInvalidError, "recall caller tenant does not match the episode tenant"
-        end
-
-        SituationRecall.validate!(@situation_recaller.recall(
-          caller: @recall_caller, snapshot:, query: {terms: []}, limit: 64
-        ))
       end
 
       def trace_metadata(envelope)

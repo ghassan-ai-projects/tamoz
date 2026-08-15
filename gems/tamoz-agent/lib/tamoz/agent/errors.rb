@@ -23,6 +23,11 @@ module Tamoz
     # refuses before a model call.
     class IntentCatalogError < Error; end
 
+    # P5/§B6-B9: the skill set was missing a ref, named an unknown skill, or
+    # the operator-approved text no longer matches the wire's tree digest.
+    # Terminal: the worker refuses before a model call.
+    class SkillSetError < Error; end
+
     # P0B/§4.3/§8.1: a model-call identity or receipt was constructed with an
     # invalid shape — a bad status, a malformed digest, or usage that fabricates
     # zero instead of declaring itself unavailable. A construction-time guard, so

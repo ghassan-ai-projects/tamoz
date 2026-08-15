@@ -2,24 +2,34 @@
 
 require_relative "test_helper"
 
+# P5: the recall channels are written ONCE by the recall node (never reduced,
+# never seeded by the runner — the runner's pre-seed was the P2-era contract).
+# A node write is accepted; the initial value is the plain [] default.
 class GraphImmutableRecallChannelsTest < Minitest::Test
-  def test_immutable_recall_channel_accepts_initial_input_but_rejects_node_updates
-    app = Tamoz.graph(name: "immutable-recall", version: "1") do
-      state :situation_memory, default: [], immutable: true
-      state :memory_record_digests, default: [], immutable: true
-      node(:finish, implementation_name: "test.finish", version: "1") do |_state, _context|
-        {situation_memory: [{"digest" => "tampered"}]}
+  def test_the_recall_node_writes_the_memory_channels
+    app = Tamoz.graph(name: "recall-channels", version: "1") do
+      state :situation_memory, default: []
+      state :memory_record_digests, default: []
+      node(:recall, implementation_name: "test.recall", version: "1") do |_state, _context|
+        {
+          situation_memory: [{"digest" => "sha256:#{"a" * 64}", "statement" => "prior"}],
+          memory_record_digests: ["sha256:#{"a" * 64}"]
+        }
       end
-      edge Tamoz::START, :finish
-      edge :finish, Tamoz::END
+      edge Tamoz::START, :recall
+      edge :recall, Tamoz::END
     end.compile
     manager = app.__send__(:state_manager)
 
-    assert_equal [], manager.initial(
-      {situation_memory: []}, remaining_steps: app.limits.max_steps
-    ).fetch(:situation_memory)
-    assert_raises(Tamoz::InvalidUpdateError) do
-      manager.normalize_update({situation_memory: [{"digest" => "tampered"}]})
-    end
+    initial = manager.initial({}, remaining_steps: app.limits.max_steps)
+    assert_equal [], initial.fetch(:situation_memory),
+                 "the runner no longer seeds the recall channels"
+    update = manager.normalize_update(
+      {
+        situation_memory: [{"digest" => "sha256:#{"a" * 64}", "statement" => "prior"}],
+        memory_record_digests: ["sha256:#{"a" * 64}"]
+      }
+    )
+    assert_equal ["sha256:#{"a" * 64}"], update.fetch(:memory_record_digests)
   end
 end

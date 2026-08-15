@@ -31,6 +31,7 @@ module Tamoz
         event: "situation-runtime/event/v1\n",
         diagnosis_catalog: "situation-runtime/diagnosis-catalog/v1\n",
         intent_catalog: "situation-runtime/intent-catalog/v1\n",
+        skill_set: "situation-runtime/skill-set/v1\n",
         test: "situation-runtime/test/v1\n"
       }.freeze
 

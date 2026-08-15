@@ -37,7 +37,7 @@ module Tamoz
       # fixtures sailed through (the R3 trap). 0.05 still rejects sums the
       # model did not intend as distributions.
       PROBABILITY_TOLERANCE = 0.05
-      REF_PREFIXES = %w[fact evidence memory tool].freeze
+      REF_PREFIXES = %w[fact evidence memory tool skill].freeze
 
       TOP_LEVEL_KEYS = %w[
         protocol primary_hypothesis diagnosis_probabilities evidence_refs
