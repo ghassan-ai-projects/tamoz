@@ -10,6 +10,13 @@ module Tamoz
     # `Tamoz::DisclosableMessage`.
     class ProtocolError < Error; end
 
+    # P0B/§5: a diagnosis catalog (trusted SituationSpec config, not model
+    # output) is structurally invalid — empty, missing `unknown`, duplicate or
+    # malformed code, or oversized. Terminal: the worker refuses before a model
+    # call, exactly like a skill-digest mismatch. Distinct from `ProtocolError`,
+    # which is untrusted-model-document territory.
+    class DiagnosisCatalogError < Error; end
+
     # Raised when every plan attempt failed review. D-8 Fix C (RC-3): the raise site
     # authors the message — either a bounded summary of the last attempt's
     # STRUCTURAL-layer issues (Tamoz-generated validation text) or a generic phrase —

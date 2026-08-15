@@ -255,10 +255,12 @@ module Tamoz
         end
 
         def validate_catalog(catalog)
-          raise ProtocolError, "reasoning_document/catalog_not_array" unless catalog.is_a?(Array)
-          raise ProtocolError, "reasoning_document/catalog_empty" if catalog.empty?
+          # Accept a DiagnosisCatalog or a bare ordered code list.
+          list = catalog.respond_to?(:codes) ? catalog.codes : catalog
+          raise ProtocolError, "reasoning_document/catalog_not_array" unless list.is_a?(Array)
+          raise ProtocolError, "reasoning_document/catalog_empty" if list.empty?
 
-          codes = catalog.map(&:to_s)
+          codes = list.map(&:to_s)
           raise ProtocolError, "reasoning_document/catalog_duplicate" unless codes.uniq.length == codes.length
 
           codes
