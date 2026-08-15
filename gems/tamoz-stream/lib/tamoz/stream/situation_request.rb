@@ -68,7 +68,7 @@ module Tamoz
       def attempt_id = @wire.attempt_id
       def fence = @wire.fence
       def tenant_id = @wire.tenant_id
-      def kind = KIND_NAMES.fetch(@wire.kind)
+      def kind = KIND_NAMES[@wire.kind]
       def lane = LANE_NAMES.fetch(@wire.lane)
       def risk_ceiling = RISK_NAMES.fetch(@wire.risk_ceiling)
       def capability_token = @wire.capability_token
@@ -80,6 +80,16 @@ module Tamoz
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
       def diagnosis_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.diagnosis_catalog_sha256)
       def intent_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.intent_catalog_sha256)
+
+      # P6: the wire's Reconsideration, parsed into the durable payload form
+      # (nil for DIAGNOSE; a typed refusal for a RECONSIDER without the prior
+      # decision).
+      def parsed_reconsideration
+        return nil unless KIND_NAMES.key?(@wire.kind)
+        return nil if kind != :reconsider
+
+        Reconsideration.parse(@wire.reconsideration).to_h
+      end
 
       # P2: the wire budget envelope as a codec-safe hash the graph's
       # ReceiptBudgetController consumes (nil fields = unbounded).
@@ -173,6 +183,7 @@ module Tamoz
             "intent_catalog_json" => @wire.intent_catalog_json.to_s,
             "intent_catalog_sha256" => intent_catalog_sha256.to_s,
             "skill_refs_json" => @wire.skill_refs_json.to_s,
+            "reconsideration" => parsed_reconsideration,
             "objective" => @wire.objective.to_s,
             "objective_sha256" => objective_sha256.to_s,
             "budget" => budget_hash,
@@ -229,7 +240,7 @@ module Tamoz
         # missing (or empty, or forged, checked again at frame build) fails
         # closed BEFORE any model call. The model proposes; the catalog
         # declares the authority.
-        if KIND_NAMES.fetch(@wire.kind) == :diagnose &&
+        if KIND_NAMES[@wire.kind] == :diagnose &&
            (@wire.intent_catalog_json.to_s.empty? || intent_catalog_sha256.to_s.empty?)
           raise EpisodeRequestInvalidError,
                 "a diagnose episode requires the intent catalog"
@@ -245,12 +256,13 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "unsupported episode kind #{@wire.kind.inspect}"
         end
-        # P1: the fixed graph is the DIAGNOSE vertical slice. A RECONSIDER
-        # episode terminates typed (hard rule 6: an out-of-scope kind never
-        # flows into the diagnose path). RECONSIDER moves into the graph in P6.
-        if KIND_NAMES.fetch(@wire.kind) == :reconsider
+        # P6: RECONSIDER is a graph route (intake → judge → compensate). The
+        # intent catalog is required for BOTH kinds — the compensate node
+        # reads the compensation mapping from it.
+        if KIND_NAMES[@wire.kind] == :reconsider &&
+           (@wire.intent_catalog_json.to_s.empty? || intent_catalog_sha256.to_s.empty?)
           raise EpisodeRequestInvalidError,
-                "reconsider episodes are not supported by this graph (P6)"
+                "a reconsider episode requires the intent catalog"
         end
         unless LANE_NAMES.key?(@wire.lane)
           raise EpisodeRequestInvalidError,

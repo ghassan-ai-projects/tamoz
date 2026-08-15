@@ -206,7 +206,9 @@ class StreamEpisodeFixedGraphTest < Minitest::Test
     end
   end
 
-  def test_reconsider_episode_fails_closed
+  # P6: RECONSIDER is a graph route, but a reconsider episode WITHOUT the
+  # prior-decision payload is refused at admission, before any graph run.
+  def test_reconsider_episode_without_a_prior_decision_fails_closed
     with_fixture_endpoint do |endpoint|
       composition = composition(endpoint: endpoint.base_url)
       snapshot = AquacultureDomain.snapshot

@@ -24,6 +24,12 @@ module Tamoz
       ROLE_ENDPOINT_KEYS = %w[base_url api_base].freeze
       RECALL_OPERATION = "tamoz.agent.episode.recall"
 
+      # P6: the deterministic limits of the reconsider path (the risk lattice
+      # is the wire enum's semantics; the counts bound the judgement set).
+      MAX_COMMANDS = 64
+      MAX_INTENTS = 16
+      RISK_RANK = {"R0" => 0, "R1" => 1, "R2" => 2, "R3" => 3, "R4" => 4}.freeze
+
       def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:, tool_call: nil, skills_source: {}, situation_recaller: nil, recall_caller: nil)
         @profile = profile
         @frame_builder_factory = frame_builder_factory
@@ -147,10 +153,22 @@ module Tamoz
       # Resolves the wire model_policy to a concrete role via the Profile
       # (fail-closed: blank policy, unknown role, or incomplete role is a typed
       # failure before any model call). The resolved role is stored so `reason`
-      # can build the per-request model port.
+      # can build the per-request model port. P6: the intake writes the ROUTE
+      # (kind) the graph branches on and parses the RECONSIDER payload.
       def intake(state, _context)
         wire = state.fetch(:wire)
+        episode = state.fetch(:episode)
         policy = String(wire.fetch("model_policy", "")).strip
+        kind = String(episode.fetch("kind", "diagnose")).downcase
+        if kind == "reconsider"
+          # P6: a RECONSIDER episode never calls the model — the intake skips
+          # the role resolution entirely (no model policy is required).
+          return {
+            "route" => "judge",
+            "reconsideration" => parse_reconsideration(wire)
+          }
+        end
+
         role = ModelCall.resolve_role(@profile, policy)
         {
           "role" => {
@@ -158,8 +176,162 @@ module Tamoz
             "provider" => role.provider,
             "model" => role.model,
             "endpoint" => endpoint_for(role)
-          }
+          },
+          # The route is codec-safe (the graph branch reads it as a symbol).
+          "route" => "recall"
         }
+      end
+
+      # P6: the wire's Reconsideration payload, parsed into plain hashes
+      # (strict; a missing prior decision is a typed refusal — a RECONSIDER
+      # episode without the prior decision cannot judge).
+      def parse_reconsideration(wire)
+        raw = wire["reconsideration"]
+        unless raw.is_a?(Hash) && raw["prior_decision"].is_a?(Hash)
+          raise EpisodeFrameError, "episode_reconsider/prior_decision_missing"
+        end
+
+        # The core payload normalization (symbol- or string-keyed) owns the
+        # contract; this node consumes its output.
+        Tamoz::Core.normalize_reconsideration(raw)
+      end
+
+      # P6: the deterministic judge — the correction references
+      # (invalidates/refutes/explains → command ids / intent digests) decide
+      # withdraw (pending), downgrade (dispatched/effected), or let_stand.
+      # No catalog, no risk tables: pure logic.
+      def judge(state, _context)
+        parsed = state.fetch(:reconsideration)
+        commands = Array(parsed["commands"]).first(MAX_COMMANDS)
+        invalidated = invalidated_command_ids(parsed, commands)
+        judgements = commands.map do |command|
+          command_id = String(command.fetch("command_id", "")).byteslice(0, 256)
+          intent_type = String(command.fetch("intent_type", "")).byteslice(0, 256)
+          if invalidated.include?(command_id)
+            if %w[pending queued scheduled].include?(String(command.fetch("status", "")))
+              {"command_id" => command_id, "intent_type" => intent_type,
+               "decision" => "withdraw", "reason" => "corrected before dispatch"}
+            else
+              {"command_id" => command_id, "intent_type" => intent_type,
+               "decision" => "downgrade", "reason" => "effect exists; correction explains the initial signal"}
+            end
+          else
+            {"command_id" => command_id, "intent_type" => intent_type,
+             "decision" => "let_stand", "reason" => "correction does not reference this command"}
+          end
+        end
+        {"judgements" => judgements}
+      end
+
+      # P6: the compensating intents + the RECONSIDER decision — the mapping
+      # comes from the INTENT CATALOG's per-entry compensation metadata; the
+      # compensating risk is the TARGET's declared risk; above the ceiling the
+      # command stands. An unknown mapping fails closed (never substitutes).
+      # When NOTHING compensates, the decision still carries the R0 watch
+      # condition (the episode observes, never acts without a cataloged
+      # compensation) — a decision with zero intents would be rejected by
+      # Agentic Stream.
+      def compensate(state, _context)
+        episode = state.fetch(:episode)
+        snapshot = state.fetch(:snapshot)
+        wire = state.fetch(:wire)
+        catalog = IntentCatalog.verify_wire(
+          wire.fetch("intent_catalog_json"),
+          wire.fetch("intent_catalog_sha256")
+        )
+        ceiling = String(episode.fetch("risk_ceiling", "")).upcase
+        now = Time.now.utc
+        judgements = Array(state.fetch(:judgements)).select { |j| j.fetch("decision") != "let_stand" }
+        compensations = judgements.first(MAX_INTENTS).filter_map do |judgement|
+          action = judgement.fetch("decision")
+          target_type = catalog.compensation_for(judgement.fetch("intent_type"), action)
+          if target_type.nil?
+            raise EpisodeFrameError,
+                  "episode_reconsider/unknown_compensation_mapping: " \
+                  "#{judgement.fetch("intent_type")}.#{action}"
+          end
+          target = catalog.entry(target_type)
+          next if risk_above_ceiling?(target.risk_class, ceiling)
+
+          build_compensating_intent(
+            type: target_type, risk_class: target.risk_class,
+            episode:, snapshot:, compensates: judgement.fetch("command_id"),
+            reason: judgement.fetch("reason"), now:
+          )
+        end
+        intents = compensations.empty? ? [watch_intent(catalog, episode, snapshot, now)] : compensations
+        decision, digest = @decision_builder.build_decision(
+          intents:, episode:, snapshot:,
+          snapshot_digest: episode.fetch("snapshot_sha256", ""),
+          summary: intents == compensations ?
+            "reconsideration: #{judgements.length} compensation(s) proposed" :
+            "reconsideration: no compensation within the ceiling",
+          now:
+        )
+        {"decision" => decision, "decision_digest" => digest}
+      end
+
+      # The R0 watch condition from the catalog — the same fallback the
+      # DIAGNOSE path uses when no action is justified.
+      def watch_intent(catalog, episode, snapshot, now)
+        entry = catalog.entry(Tamoz::Agent::IntentCatalog::WATCH_TYPE)
+        parameters = {
+          "entity_id" => snapshot.fetch("entity").fetch("id"),
+          "situation_id" => snapshot.fetch("situation_id"),
+          "situation_version" => snapshot.fetch("situation_version"),
+          "target" => snapshot.fetch("entity").fetch("id"),
+          "expires_at" => (now + 86_400).iso8601
+        }
+        parameters.merge!(entry.presets.fetch("default", {}))
+        build_compensating_intent(
+          type: entry.type, risk_class: entry.risk_class,
+          episode:, snapshot:, compensates: nil,
+          reason: "no compensation within the ceiling", now:, parameters:
+        )
+      end
+
+      def build_compensating_intent(type:, risk_class:, episode:, snapshot:, compensates:, reason:, now: Time.now.utc, parameters: nil)
+        identity = String(episode.fetch("episode_id")) + "." + String(episode.fetch("attempt_id")) + "." +
+                   String(episode.fetch("fence")) + "." + type
+        # The compensates command id is part of the intent identity — two
+        # corrected commands of the same type must not collide.
+        identity += "." + String(compensates) if compensates
+        intent = {
+          "intent_id" => "intent.#{identity}",
+          "decision_id" => "decision.#{episode.fetch("episode_id")}.#{episode.fetch("attempt_id")}." \
+                           "#{episode.fetch("fence")}",
+          "tenant_id" => episode.fetch("tenant_id"),
+          "situation_id" => episode.fetch("situation_id"),
+          "situation_version" => episode.fetch("situation_version"),
+          "type" => type,
+          "risk_class" => risk_class,
+          "parameters" => parameters || {
+            "note" => String(reason).byteslice(0, 512),
+            "priority" => "routine"
+          },
+          "expires_at" => (now + 86_400).iso8601
+        }
+        intent["compensates"] = String(compensates).byteslice(0, 256) if compensates
+        intent.merge("intent_digest" => Tamoz::Core.digest(
+          :intent, intent.reject { |key, _| key == "intent_digest" }
+        ))
+      end
+
+      def risk_above_ceiling?(risk_class, ceiling)
+        RISK_RANK.fetch(risk_class, 99) >
+          RISK_RANK.fetch(ceiling, 0)
+      end
+
+      def invalidated_command_ids(parsed, commands)
+        correction = parsed["correction"]
+        return [] unless correction.is_a?(Hash)
+
+        refuted = Array(correction["refutes"]).map(&:to_s)
+        referenced = commands.filter_map do |command|
+          command.fetch("command_id") if refuted.include?(command["intent_digest"].to_s)
+        end
+        Array(correction["invalidates"]).map(&:to_s) +
+          Array(correction["explains"]).map(&:to_s) + referenced
       end
 
       # Assembles the frame: verifies the diagnosis catalog bytes against the

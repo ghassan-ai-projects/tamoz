@@ -101,7 +101,9 @@ module EpisodeComposition
     objective: AquacultureDomain::OBJECTIVE, objective_sha256: nil,
     snapshot_sha256: nil, evidence_tools_endpoint: nil, capability_token: nil,
     allowed_intent_types: %w[install_watch_condition start_aerator],
-    skill_refs_json: nil
+    skill_refs_json: nil,
+    reconsideration: nil,
+    risk_ceiling: :RISK_CLASS_R1
   )
     Agenticstream::Runtime::V1::EpisodeRequest.new(
       protocol_version: "1.0",
@@ -119,6 +121,7 @@ module EpisodeComposition
       intent_catalog_sha256: intent_catalog_sha256 ||
                               AquacultureDomain.intent_catalog_digest,
       skill_refs_json: skill_refs_json,
+      reconsideration: reconsideration,
       model_policy:,
       prompt:,
       prompt_version: PROMPT_VERSION,
@@ -134,7 +137,7 @@ module EpisodeComposition
       capability_token: capability_token,
       kind:,
       lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R1,
+      risk_ceiling:,
       allowed_intent_types: allowed_intent_types,
       executor_name: "tamoz",
       dispatch_policy: :DISPATCH_POLICY_SHADOW

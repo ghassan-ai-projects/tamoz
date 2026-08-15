@@ -18,6 +18,9 @@ module Tamoz
     #                                        │                repair ───────►┘
     #                                        └────────────────────────────────┘
     #
+    #   RECONSIDER: START → intake → judge → compensate → END
+    #   (deterministic — no model call, ever; compensation from the catalog).
+    #
     # `reason` is the ONLY model-calling node; `execute_tool` the only
     # tool-calling node — both journaled unsafe effects with logical keys.
     # `validate` parses + routes. `decide` is the deterministic builder as a
@@ -25,9 +28,10 @@ module Tamoz
     # durable inbox, and translates the terminal state to the wire.
     # P5: `recall` (situation-scoped memory) is a graph node feeding
     # build_frame — the runner no longer seeds the memory channels.
+    # P6: `route_kind` sends RECONSIDER to judge → compensate.
     class EpisodeGraph
       GRAPH_NAME = "tamoz.agent.episode"
-      GRAPH_VERSION = "3"
+      GRAPH_VERSION = "4"
 
       def self.build(checkpointer:, nodes:)
         Tamoz.graph(name: GRAPH_NAME, version: GRAPH_VERSION) do
@@ -52,6 +56,10 @@ module Tamoz
           state :situation_memory, default: []
           state :memory_record_digests, default: []
           state :reconsideration, default: nil
+          state :judgements, default: []
+          # P6: the kind route the intake writes; the route_kind branch reads
+          # it (:recall for DIAGNOSE, :judge for RECONSIDER).
+          state :route, default: nil
 
           node(:intake, implementation_name: "tamoz.agent.episode.intake", version: "1") do |state, context|
             nodes.intake(state, context)
@@ -80,10 +88,25 @@ module Tamoz
           node(:decide, implementation_name: "tamoz.agent.episode.decide", version: "1") do |state, context|
             nodes.decide(state, context)
           end
+          node(:judge, implementation_name: "tamoz.agent.episode.judge", version: "1") do |state, context|
+            nodes.judge(state, context)
+          end
+          node(:compensate, implementation_name: "tamoz.agent.episode.compensate", version: "1") do |state, context|
+            nodes.compensate(state, context)
+          end
 
           edge Tamoz::START, :intake
-          edge :intake, :recall
+          # P6: route_kind — DIAGNOSE → recall → build_frame; RECONSIDER →
+          # judge → compensate. Same spine, deterministic.
+          branch :intake,
+                 name: :tamoz_episode_route_kind,
+                 version: "1",
+                 targets: %i[recall judge] do |state|
+            state.fetch(:route).to_sym
+          end
           edge :recall, :build_frame
+          edge :judge, :compensate
+          edge :compensate, Tamoz::END
           edge :build_frame, :reason
           edge :reason, :validate
 

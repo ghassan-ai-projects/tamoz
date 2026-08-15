@@ -12,7 +12,7 @@ class AgentIntentCatalogTest < Minitest::Test
   def test_from_list_builds_the_catalog_with_declared_risks
     catalog = Catalog.from_list(AquacultureDomain::INTENT_CATALOG)
 
-    assert_equal 20, catalog.types.length
+    assert_equal 22, catalog.types.length
     assert catalog.include?(Catalog::WATCH_TYPE)
     assert_equal "R0", catalog.risk_for("install_watch_condition")
     assert_equal "R1", catalog.risk_for("start_aerator")
@@ -114,7 +114,7 @@ class AgentIntentCatalogTest < Minitest::Test
   # every Go-driven episode at this verify_wire gate.
   def test_the_aquaculture_catalog_digest_matches_the_pinned_cross_repo_vector
     assert_equal(
-      "sha256:7d923ca199a0878bc6d2548ef6ec64de9fd6017ae95492748a082aad3927c9cf",
+      "sha256:e4f866204344a5f19994e28afdea67b610e34405b062bbfd2879209a363d81f3",
       AquacultureDomain.intent_catalog_digest
     )
   end

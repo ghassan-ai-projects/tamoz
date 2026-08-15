@@ -2,7 +2,6 @@
 
 require "tamoz/core"
 require "tamoz/stream/errors"
-require "tamoz/stream/reconsideration"
 require "tamoz/agent/intent_catalog"
 
 module Tamoz
@@ -32,6 +31,31 @@ module Tamoz
 
       def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
         new(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now:).build
+      end
+
+      # P6: the RECONSIDER entry — builds the decision-v1 shape + digest over
+      # the compensating intents the compensate node produced. One builder,
+      # one decision shape (the Go validator enforces the same schema).
+      def self.build_decision(intents:, episode:, snapshot:, snapshot_digest:, summary:, now: Time.now)
+        decision = {
+          "decision_id" => "decision.#{episode.fetch("episode_id")}." \
+                           "#{episode.fetch("attempt_id")}.#{episode.fetch("fence")}",
+          "episode_id" => episode.fetch("episode_id"),
+          "attempt_id" => episode.fetch("attempt_id"),
+          "fence" => episode.fetch("fence"),
+          "snapshot_digest" => snapshot_digest,
+          "situation_id" => snapshot.fetch("situation_id"),
+          "situation_version" => snapshot.fetch("situation_version"),
+          "primary_hypothesis" => "",
+          "confidence" => 1.0,
+          "summary" => String(summary).byteslice(0, 4096),
+          "facts_used" => [],
+          "alternatives" => [],
+          "intents" => intents,
+          "valid_until" => (now + VALIDITY_WINDOW_SECONDS).utc.iso8601
+        }
+        digest = Tamoz::Core.digest(:decision, decision)
+        [decision, digest]
       end
 
       def initialize(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
@@ -89,49 +113,10 @@ module Tamoz
       # allowlist: a ceiling below the catalog-declared risk, or an allowlist
       # without the proposed type, demotes the proposal to the watch
       # observation — never escalates, never substitutes a different action.
-      # A RECONSIDER episode proposes the compensating intents from its
-      # judgment instead (T6.1), also checked against the catalog (G5).
+      # P6: RECONSIDER episodes are built by the compensate node
+      # (build_decision) — this DIAGNOSE-only path never sees them.
       def intents
-        return reconsideration_intents if @envelope.kind == :reconsider
-
         diagnose_intents
-      end
-
-      # T6.1: the compensating intents the judgment produced. Each is
-      # re-validated at the decision boundary — its own verified digest, a
-      # risk class within the ceiling, AND a catalog member whose declared
-      # risk EQUALS the claimed one — because the graph's outcome is agent
-      # output and the worker owns the wire contract. A malformed compensation
-      # is a typed failure, never a silent omission that leaves the effect
-      # uncompensated behind a PRODUCED terminal.
-      #
-      # Compensations deliberately bypass the allowed_intent_types allowlist
-      # that gates the DIAGNOSE path: the allowlist names the actions a tenant
-      # lets the worker PROPOSE; a compensation is the worker's corrective
-      # answer to an already-executed effect, and the stream validates it under
-      # its own policy pipeline anyway (PROTOCOL §4.2). The CATALOG is not
-      # bypassed — a compensation must be a declared catalog member.
-      def reconsideration_intents
-        compensations = Array(@outcome.fetch(:compensating_intents, []))
-                          .first(Reconsideration::MAX_INTENTS)
-        invalid = compensations.reject do |intent|
-          Reconsideration.valid_compensation?(
-            intent, risk_ceiling: @envelope.risk_ceiling
-          ) && catalog_member_with_declared_risk?(intent)
-        end
-        unless invalid.empty?
-          raise StreamError,
-                "a compensating intent failed the decision boundary " \
-                "(bad digest, missing compensates, not a catalog member, " \
-                "wrong risk class, or risk above the ceiling)"
-        end
-
-        compensations
-      end
-
-      def catalog_member_with_declared_risk?(intent)
-        type = String(intent.fetch("type", ""))
-        @catalog.include?(type) && @catalog.risk_for(type) == String(intent.fetch("risk_class", ""))
       end
 
       def diagnose_intents

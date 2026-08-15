@@ -299,35 +299,17 @@ class StreamDecisionBuilderTest < Minitest::Test
     assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
   end
 
-  def test_a_compensation_must_be_a_catalog_member_with_declared_risk
-    # A RECONSIDER-style outcome: compensation intents bypass the allowlist
-    # but NOT the catalog (G5) — a non-member is a typed refusal. The builder
-    # is exercised directly (the intake gate rejects RECONSIDER today — P6
-    # wires the route into the graph).
-    stub_envelope = Struct.new(
-      :episode_id, :attempt_id, :fence, :tenant_id, :risk_ceiling, :kind,
-      :watch_confidence_floor, :allowed_intent_types
-    ) do
-      def wire = self
-      def situation_id = "sit-1"
-      def situation_version = 7
-    end.new("ep-1", "at-1", 1, "acme", "r1", :reconsider, 0.5, [])
-
-    compensations = [
-      {"type" => "withdraw_ticket", "risk_class" => "R1", "compensates" => "intent.x",
-       "intent_digest" => "sha256:#{"a" * 64}"}
-    ]
-    error = assert_raises(Stream::StreamError) do
-      Stream::DecisionBuilder.new(
-        envelope: stub_envelope,
-        snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
-        outcome: {compensating_intents: compensations},
-        catalog: Catalog.from_list(
-          AquacultureDomain::INTENT_CATALOG.reject { |e| e.fetch("type") == "withdraw_ticket" }
-        )
-      ).build
+  def test_a_compensation_target_must_be_a_catalog_member
+    # P6: the compensation mapping is part of the CATALOG's metadata — a
+    # target that is not a catalog member is refused AT CATALOG LOAD (a
+    # compensation can never bypass the catalog).
+    tampered = AquacultureDomain::INTENT_CATALOG.map do |entry|
+      entry["type"] == "create_maintenance_ticket" ?
+        entry.merge("compensation" => {"withdraw" => "withdraw_ghost", "downgrade" => "downgrade_ghost"}) : entry
     end
-    assert_match(/catalog member/, error.message)
+    assert_raises(Tamoz::Agent::IntentCatalogError) do
+      Catalog.from_list(tampered)
+    end
   end
 
   def test_confidence_is_clamped_to_the_unit_interval

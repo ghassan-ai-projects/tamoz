@@ -34,6 +34,20 @@ module Tamoz
         )
       end
 
+      # P6: the RECONSIDER entry — the compensate node hands over the
+      # compensating intents; this builds the SAME decision-v1 shape and
+      # digest the DIAGNOSE path uses (one builder, one shape).
+      def build_decision(intents:, episode:, snapshot:, snapshot_digest:, summary:, now: Time.now)
+        DecisionBuilder.build_decision(
+          intents:,
+          episode:,
+          snapshot:,
+          snapshot_digest:,
+          summary:,
+          now:
+        )
+      end
+
       # The minimal envelope view the DecisionBuilder reads — the episode
       # payload hash is the durable source; no wire object is reconstructed.
       EnvelopeView = Struct.new(:episode, :allowlist) do

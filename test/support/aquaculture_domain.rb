@@ -45,7 +45,28 @@ module AquacultureDomain
     "emergency_water_exchange" => "R2",
     "deploy_shade_or_heat" => "R2",
     "dose_co2" => "R2",
-    "isolate_segment" => "R3"
+    "isolate_segment" => "R3",
+    "cancel_product_transfer" => "R3",
+    "downgrade_product_transfer" => "R3"
+  }.freeze
+
+  # P6: the catalog's per-action compensation mapping — the compensating
+  # types (catalog members with their own declared risks) for a withdraw or a
+  # downgrade. The transfer pair carries the R3 invariant (a compensation is
+  # never "safe because it undoes").
+  COMPENSATION_MAP = {
+    "create_maintenance_ticket" => {"withdraw" => "withdraw_ticket", "downgrade" => "downgrade_dispatch"},
+    "schedule_maintenance" => {"withdraw" => "withdraw_ticket", "downgrade" => "downgrade_dispatch"},
+    "start_aerator" => {"withdraw" => "withdraw_intervention", "downgrade" => "downgrade_intervention"},
+    "halt_feeding" => {"withdraw" => "withdraw_intervention", "downgrade" => "downgrade_intervention"},
+    "emergency_water_exchange" => {"withdraw" => "withdraw_intervention", "downgrade" => "downgrade_intervention"},
+    "dispatch_crew" => {"withdraw" => "withdraw_ticket", "downgrade" => "downgrade_dispatch"},
+    "run_vent_cycle" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "dehumidify" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "deploy_shade_or_heat" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "dose_co2" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "cancel_product_transfer" => {"withdraw" => "cancel_product_transfer", "downgrade" => "downgrade_product_transfer"},
+    "downgrade_product_transfer" => {"withdraw" => "cancel_product_transfer", "downgrade" => "downgrade_product_transfer"}
   }.freeze
 
   WATCH_PRESET = {
@@ -57,12 +78,19 @@ module AquacultureDomain
 
   def self.intent_entry(type, risk)
     writable = type == "install_watch_condition" ? [] : %w[hypothesis]
+    compensation_target = COMPENSATION_MAP.values.any? { |mapping| mapping.values.include?(type) }
     properties = {
       "entity_id" => {"type" => "string"},
       "situation_id" => {"type" => "string"},
       "situation_version" => {"type" => "integer"}
     }
     writable.each { |field| properties[field] = {"type" => "string", "maxLength" => 512} }
+    if compensation_target
+      # P6: the compensate node's deterministic parameters must satisfy the
+      # target schema (additionalProperties: false).
+      properties["note"] = {"type" => "string", "maxLength" => 512}
+      properties["priority"] = {"type" => "string", "maxLength" => 16}
+    end
     if type == "install_watch_condition"
       WATCH_PRESET.each_key do |field|
         properties[field] = {"type" => %w[string number]} if %w[metric target expression].include?(field)
@@ -75,7 +103,7 @@ module AquacultureDomain
       properties["max_fires"] = {"type" => "integer"}
     end
     schema = {"type" => "object", "additionalProperties" => false, "properties" => properties}
-    {
+    entry = {
       "type" => type,
       "risk_class" => risk,
       "description" => "#{type} (#{risk})",
@@ -86,6 +114,8 @@ module AquacultureDomain
       "policy" => {"requires_approval" => false},
       "rate_limit" => {"per_hour" => 60}
     }
+    entry["compensation"] = COMPENSATION_MAP.fetch(type) if COMPENSATION_MAP.key?(type)
+    entry
   end
 
   INTENT_CATALOG = INTENT_TYPES.map { |type, risk| intent_entry(type, risk) }.freeze

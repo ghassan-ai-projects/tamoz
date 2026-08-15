@@ -182,6 +182,43 @@ module Tamoz
 
         @entries = entries.freeze
         @by_type = entries.to_h { |entry| [entry.type, entry] }.freeze
+        validate_compensation_targets!
+      end
+
+      # P6: every compensation target named by an entry's metadata must be a
+      # catalog member with a declared risk — a compensation never bypasses
+      # the catalog (the target's own risk is the compensating risk).
+      def validate_compensation_targets!
+        @entries.each do |entry|
+          compensation = entry.compensation
+          next if compensation.nil? || compensation.empty?
+
+          %w[withdraw downgrade].each do |action|
+            target = compensation[action]
+            next if target.nil? || target.to_s.empty?
+            unless @by_type.key?(target.to_s)
+              raise IntentCatalogError,
+                    "intent_catalog/compensation_target_not_in_catalog: " \
+                    "#{entry.type}.#{action} -> #{target}"
+            end
+          end
+        end
+      end
+      private :validate_compensation_targets!
+
+      # P6: the compensating type for an acting judgement — from the CATALOG's
+      # per-entry metadata, never a regex or a hard-coded family table.
+      # Returns nil when the entry declares no mapping (fail closed at the
+      # compensate node: no substitution).
+      def compensation_for(type, action)
+        entry = @by_type[type]
+        return nil unless entry
+        return nil unless entry.compensation.is_a?(Hash)
+
+        target = entry.compensation[action.to_s]
+        return nil if target.nil? || target.to_s.empty?
+
+        target.to_s
       end
 
       def types = @entries.map(&:type)

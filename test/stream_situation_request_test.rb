@@ -4,6 +4,7 @@ require_relative "test_helper"
 require "tamoz/stream/episode_worker"
 require "support/local_model_endpoint"
 require "support/episode_composition"
+require "support/aquaculture_domain"
 
 # T1.3'/T1.4 (PLAN_TAMOZ_STREAM_BUILD): the episode request origin. The wire
 # EpisodeRequest is validated (contract, identity, kind, lane, risk ceiling);
@@ -52,6 +53,8 @@ class StreamSituationRequestTest < Minitest::Test
       risk_ceiling: :RISK_CLASS_R2,
       capability_token: "opaque.hmac.token",
       allowed_intent_types: ["create_maintenance_ticket"],
+      intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+      intent_catalog_sha256: AquacultureDomain.intent_catalog_digest,
       supersession_key: "sup-1",
       snapshot_json:,
       snapshot_sha256:,

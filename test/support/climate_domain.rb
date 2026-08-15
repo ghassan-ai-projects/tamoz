@@ -26,7 +26,8 @@ module ClimateDomain
     "withdraw_climate_action" => "R1",
     "deploy_shade_or_heat" => "R2",
     "dose_co2" => "R2",
-    "isolate_segment" => "R3"
+    "isolate_segment" => "R3",
+    "open_roof_louvers" => "R1"
   }.freeze
 
   WATCH_PRESET = {
@@ -52,8 +53,13 @@ module ClimateDomain
       properties["threshold"] = {"type" => "number"}
       properties["max_fires"] = {"type" => "integer"}
     end
+    compensation_target = COMPENSATION_MAP.values.any? { |mapping| mapping.values.include?(type) }
+    if compensation_target
+      properties["note"] = {"type" => "string", "maxLength" => 512}
+      properties["priority"] = {"type" => "string", "maxLength" => 16}
+    end
     schema = {"type" => "object", "additionalProperties" => false, "properties" => properties}
-    {
+    entry = {
       "type" => type,
       "risk_class" => risk,
       "description" => "#{type} (#{risk})",
@@ -64,7 +70,19 @@ module ClimateDomain
       "policy" => {"requires_approval" => false},
       "rate_limit" => {"per_hour" => 60}
     }
+    entry["compensation"] = COMPENSATION_MAP.fetch(type) if COMPENSATION_MAP.key?(type)
+    entry
   end
+
+  # P6: the climate compensation mapping — the compensating targets are
+  # catalog members with their own declared risks.
+  COMPENSATION_MAP = {
+    "open_roof_louvers" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "run_vent_cycle" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "dehumidify" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "deploy_shade_or_heat" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"},
+    "dose_co2" => {"withdraw" => "withdraw_climate_action", "downgrade" => "downgrade_climate_action"}
+  }.freeze
 
   INTENT_CATALOG = INTENT_TYPES.map { |type, risk| intent_entry(type, risk) }.freeze
 
