@@ -1,0 +1,140 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../test", __dir__))
+require "json"
+require "digest"
+require "fileutils"
+require "optparse"
+require "tamoz/evals"
+require "support/benchmark_families"
+
+# P7 (docs/new-design/PHASE_P7_BENCHMARK.md): holdout isolation. Generates the
+# holdout case manifest AFTER the protocol freeze: opaque identifiers, a
+# temporal cutoff on every input (no event may be dated after the cutoff), and
+# a truth-leak scan over the model-visible bytes (the frame the worker will
+# see). The manifest is the ONLY artifact a real-provider holdout run may
+# consume; the truth (primary code + gold action) lives in a separate file the
+# scorer reads under its own credentials.
+#
+# The truth is DERIVED from the generated facts by the SAME preregistered
+# rules the pilot calibrates (BenchmarkFamilies) — a holdout whose truth was a
+# coin flip independent of the facts would be unlearnable and the benchmark
+# could never beat any baseline honestly.
+class BenchmarkHoldout
+  PROTOCOL_PATH = File.expand_path("../docs/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+  CUTOFF = "2026-09-01T00:00:00Z"
+
+  def initialize(protocol_path: PROTOCOL_PATH, cases: 30, seed: 23, out_dir: nil, force: false)
+    @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
+    @cases = cases
+    @seed = seed
+    @out_dir = out_dir || File.expand_path(
+      "../docs/benchmark/holdout-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}", __dir__
+    )
+    @force = force
+  end
+
+  def run
+    if File.exist?(File.join(@out_dir, "holdout-manifest.json")) && !@force
+      raise ArgumentError,
+            "holdout already exists at #{@out_dir} — pass --force to regenerate (a frozen holdout must never be silently overwritten)"
+    end
+    FileUtils.mkdir_p(@out_dir)
+    cases = build_cases
+    manifest = {
+      "benchmark_protocol_version" => @protocol.fetch("benchmark_protocol_version"),
+      "protocol_sha256" => protocol_sha256,
+      "cutoff" => CUTOFF,
+      "opaque_ids" => true,
+      "cases" => cases.map { |entry| entry.fetch("model_visible") }
+    }
+    truths = {
+      "benchmark_protocol_version" => @protocol.fetch("benchmark_protocol_version"),
+      "protocol_sha256" => protocol_sha256,
+      "cutoff" => CUTOFF,
+      "truths" => cases.map { |entry| entry.fetch("truth") }
+    }
+    leak_report = scan_for_leaks(cases)
+    unless leak_report.fetch("violations").empty?
+      raise "truth leak detected in holdout cases: #{leak_report.fetch("violations").inspect}"
+    end
+
+    File.write(
+      File.join(@out_dir, "holdout-manifest.json"),
+      JSON.pretty_generate(manifest), encoding: Encoding::UTF_8
+    )
+    File.write(
+      File.join(@out_dir, "holdout-truth.json"),
+      JSON.pretty_generate(truths), encoding: Encoding::UTF_8
+    )
+    File.write(
+      File.join(@out_dir, "leak-scan.json"),
+      JSON.pretty_generate(leak_report), encoding: Encoding::UTF_8
+    )
+    puts "wrote #{@out_dir}"
+    puts "cases: #{cases.length} (cutoff #{CUTOFF})"
+  end
+
+  private
+
+  def protocol_sha256
+    Digest::SHA256.hexdigest(File.binread(PROTOCOL_PATH))
+  end
+
+  def build_cases
+    random = Random.new(@seed)
+    (1..@cases).map do |index|
+      family = @protocol.dig("case_matrix", "scenario_families")[index % 2]
+      config = BenchmarkFamilies::FAMILIES.fetch(family.fetch("id"))
+      # Opaque identifier: content-free, no sequence relationship to the truth.
+      opaque_id = format("holdout-%s-%06x", family.fetch("id"), random.rand(0xFFFFFF))
+      facts = config.fetch("facts").call(index, random)
+      truth_code = config.fetch("truth").call(facts)
+      {
+        "model_visible" => {
+          "id" => opaque_id,
+          "family" => family.fetch("id"),
+          "domain" => family.fetch("domain"),
+          # The cutoff: every observed fact is dated strictly BEFORE the
+          # cutoff, so the case could not have been generated from future
+          # truth.
+          "observed_at" => "2026-08-2#{random.rand(8)}T00:00:00Z",
+          "facts" => facts
+        },
+        "truth" => {
+          "id" => opaque_id,
+          "family" => family.fetch("id"),
+          "truth_code" => truth_code,
+          "gold_risk_class" => config.fetch("gold").call(facts)
+        }
+      }
+    end
+  end
+
+  # The model-visible bytes (the facts + the case text) must not contain the
+  # truth: the shared LeakScan token scan, plus an id-binding check that the
+  # manifest and the truth file carry the SAME opaque ids (a swap is a leak).
+  def scan_for_leaks(cases)
+    token_violations = Tamoz::Evals::Benchmark::LeakScan.new(
+      cases.map { |entry| entry.fetch("model_visible") }
+    ).call.fetch("violations")
+    visible_ids = cases.map { |entry| entry.dig("model_visible", "id") }
+    truth_ids = cases.map { |entry| entry.dig("truth", "id") }
+    violations = token_violations.dup
+    violations << "id_mismatch" unless visible_ids.sort == truth_ids.sort
+    {"violations" => violations, "scanned_cases" => cases.length, "cutoff" => CUTOFF}
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |opts|
+    opts.on("--cases N", Integer) { |value| options[:cases] = value }
+    opts.on("--seed N", Integer) { |value| options[:seed] = value }
+    opts.on("--out DIR") { |value| options[:out_dir] = value }
+    opts.on("--force") { options[:force] = true }
+  end.parse!
+  BenchmarkHoldout.new(**options).run
+end

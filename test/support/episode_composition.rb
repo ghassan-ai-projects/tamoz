@@ -27,6 +27,13 @@ module EpisodeComposition
     Tamoz::Core.digest(PROMPT_DOMAIN, {"version" => version, "text" => prompt})
   end
 
+  # The diagnosis catalog digest must be computed over the catalog the wire
+  # actually carries (the climate domain is a separate catalog) — the digest
+  # is over the parsed catalog document, so parse the passed JSON.
+  def parse_catalog(catalog_json)
+    Tamoz::Core.parse_json_strict(catalog_json)
+  end
+
   def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
@@ -96,6 +103,7 @@ module EpisodeComposition
     model_policy: "fast",
     intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
     intent_catalog_sha256: nil,
+    diagnosis_catalog_sha256: nil,
     tool_catalog_json: nil, tool_catalog_sha256: nil,
     decision_schema_json: nil, decision_schema_sha256: nil,
     objective: AquacultureDomain::OBJECTIVE, objective_sha256: nil,
@@ -116,10 +124,11 @@ module EpisodeComposition
       snapshot_json: Tamoz::Core.jcs(snapshot),
       snapshot_sha256: snapshot_sha256 || Tamoz::Core.digest(:snapshot, snapshot),
       diagnosis_catalog_json: catalog_json,
-      diagnosis_catalog_sha256: Tamoz::Core.digest(:diagnosis_catalog, AquacultureDomain::CATALOG),
+      diagnosis_catalog_sha256: diagnosis_catalog_sha256 ||
+                              Tamoz::Core.digest(:diagnosis_catalog, parse_catalog(catalog_json)),
       intent_catalog_json: intent_catalog_json,
       intent_catalog_sha256: intent_catalog_sha256 ||
-                              AquacultureDomain.intent_catalog_digest,
+                              Tamoz::Core.digest(:intent_catalog, parse_catalog(intent_catalog_json)),
       skill_refs_json: skill_refs_json,
       reconsideration: reconsideration,
       model_policy:,

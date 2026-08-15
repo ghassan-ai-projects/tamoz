@@ -27,11 +27,26 @@ module Tamoz
         @loaded_features = loaded_features.to_a
       end
 
+      # P7: the CANONICAL fingerprint for the benchmark protocol — fixed argv,
+      # no loaded-features (which are machine-dependent), so the frozen
+      # protocol regenerates byte-identically across processes and machines.
+      def canonical_fingerprint
+        "sha256:#{Digest::SHA256.hexdigest(JSON.generate(canonical_document))}"
+      end
+
       def fingerprint
         "sha256:#{Digest::SHA256.hexdigest(JSON.generate(document))}"
       end
 
       private
+
+      def canonical_document
+        {
+          "ruby" => RUBY_VERSION,
+          "ruby_patchlevel" => RUBY_PATCHLEVEL.to_s,
+          "lockfile_sha256" => lockfile_digest
+        }
+      end
 
       def document
         {
