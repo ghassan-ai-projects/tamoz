@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../test", __dir__))
+require "json"
+require "digest"
+require "optparse"
+require "tamoz/agent"
+require "support/aquaculture_domain"
+require "support/climate_domain"
+
+# P8 (docs/new-design/PHASE_P8_ROLLOUT.md): the calibration artifact. One
+# domain's exact bound document — model revision + profile digest + prompt +
+# diagnosis catalog + domain + policy digest — that unlocks automatic
+# consequential intents (R2+) on the Go side. Missing or mismatched =
+# watch-only. The artifact SHA is the binding: a change to ANY field is a new
+# artifact, and the Go gate matches on domain + model revision + artifact SHA.
+#
+# The model revision is the GO compiled-spec digest (episodes.executor_version)
+# — it is bound at REGISTRATION by the operator who runs the runtime, not by
+# this generator (a Ruby process cannot know the Go spec digest). The artifact
+# SHA binds the Ruby-verifiable fields (domain, profile, prompt, diagnosis
+# catalog, policy); the Go gate additionally requires the episode's
+# executor_version to equal the registered model_revision, so a spec change
+# invalidates the artifact (watch-only).
+#
+# Emits CALIBRATION_ARTIFACTS.json (one entry per domain) to stdout.
+def main
+  artifacts = %w[aquaculture climate].map do |domain|
+    build_artifact(domain)
+  end
+  puts JSON.pretty_generate("benchmark_protocol_version" => "1.0.0",
+                            "artifacts" => artifacts)
+end
+
+def build_artifact(domain)
+  module_const = domain == "aquaculture" ? AquacultureDomain : ClimateDomain
+  policy_digest = Tamoz::Core.digest(:intent_catalog, module_const::INTENT_CATALOG)
+  diagnosis_digest = Tamoz::Core.digest(:diagnosis_catalog, module_const::CATALOG)
+  prompt_digest = Tamoz::Core.digest(
+    "situation-runtime/prompt/v1\n", {"version" => "1.0", "text" => module_const::PROMPT}
+  )
+  sealed = Tamoz::Agent::SealedBuild.new.canonical_fingerprint
+  # model_revision is filled at Go registration (the compiled spec digest); it
+  # is intentionally not part of the Ruby-bound document SHA.
+  document = {
+    "domain" => domain,
+    "profile_digest" => sealed,
+    "prompt_sha256" => prompt_digest,
+    "diagnosis_catalog_sha256" => diagnosis_digest,
+    "policy_digest" => policy_digest
+  }
+  {
+    "domain" => domain,
+    "model_revision" => "",
+    "profile_digest" => sealed,
+    "prompt_sha256" => prompt_digest,
+    "diagnosis_catalog_sha256" => diagnosis_digest,
+    "policy_digest" => policy_digest,
+    "artifact_sha256" => "sha256:#{Digest::SHA256.hexdigest(JSON.generate(document))}"
+  }
+end
+
+main

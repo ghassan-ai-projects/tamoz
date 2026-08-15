@@ -30,13 +30,22 @@ module Tamoz
       SUPPORTED_FEATURES = [].freeze
       SUPPORTED_KINDS = %i[EPISODE_KIND_DIAGNOSE EPISODE_KIND_RECONSIDER].freeze
 
-      def initialize(worker_version:, runner: nil, lane_config: nil)
+      # P8 (no hidden fallback): the worker declares its provider mode at
+      # construction. `fixture` (demos and tests) is refused for a tamoz-mode
+      # request — a production route never gets a canned answer.
+      PROVIDER_MODES = %i[real fixture].freeze
+
+      def initialize(worker_version:, runner: nil, lane_config: nil, provider_mode: :real)
         @worker_version = worker_version
         @runner = runner
         @lane_config = lane_config
+        @provider_mode = provider_mode
+        unless PROVIDER_MODES.include?(@provider_mode)
+          raise ArgumentError, "unknown provider mode #{@provider_mode.inspect}"
+        end
       end
 
-      attr_reader :lane_config
+      attr_reader :lane_config, :provider_mode
 
       def bind_runner(runner)
         @runner = runner
@@ -129,6 +138,15 @@ module Tamoz
         if size > MAX_REQUEST_BYTES
           raise GRPC::ResourceExhausted,
                 "episode request exceeds #{MAX_REQUEST_BYTES} bytes"
+        end
+        # P8 (no hidden fallback): a FIXTURE provider can never serve a
+        # tamoz-mode (or active) request — a production route gets a real
+        # model answer or a hard failure, never a canned decision.
+        if @provider_mode == :fixture &&
+           (request.executor_name == "tamoz" ||
+            request.dispatch_policy == :DISPATCH_POLICY_ACTIVE)
+          raise GRPC::FailedPrecondition,
+                "fixture provider cannot serve a tamoz/active request (no hidden fallback)"
         end
 
         true
