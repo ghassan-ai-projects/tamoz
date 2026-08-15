@@ -55,7 +55,7 @@ class StreamEpisodeCrashMatrixTest < Minitest::Test
     # The decision body is deterministic; only attempt-scoped ids differ.
     core_intents = ->(state) do
       state.fetch(:decision).fetch("intents").map do |intent|
-        intent.reject { |key, _| key.end_with?("_id", "_digest") }
+        intent.reject { |key, _| key == "expires_at" || key.end_with?("_id", "_digest") }
       end
     end
     assert_equal core_intents.call(state1), core_intents.call(state2)

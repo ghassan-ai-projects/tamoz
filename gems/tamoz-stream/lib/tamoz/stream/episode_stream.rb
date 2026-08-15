@@ -177,9 +177,10 @@ module Tamoz
 
       def initialize(stream)
         @stream = stream
+        @last_diagnostic_code = nil
       end
 
-      attr_reader :stream
+      attr_reader :stream, :last_diagnostic_code
 
       # The Context emitter entry point. Model events are forbidden here — the
       # only model events on the wire come from receipts via the trusted
@@ -221,10 +222,19 @@ module Tamoz
         end
       end
 
-      # The terminal status from the durable run result only — no budget
-      # overrides (P1; receipts-based budgets return in P2).
-      def terminal_status(result)
-        TERMINAL_BY_RESULT.fetch(result&.status, :TERMINAL_STATUS_FAILED)
+      # The terminal status from the durable run result — no budget overrides
+      # from counted events (P2: the BUDGET_EXHAUSTED/TIMED_OUT statuses come
+      # from the TYPED failure categories the graph's error emission carries).
+      def terminal_status(result, last_diagnostic_code = nil)
+        base = TERMINAL_BY_RESULT.fetch(result&.status, :TERMINAL_STATUS_FAILED)
+        return base unless base == :TERMINAL_STATUS_FAILED
+
+        case last_diagnostic_code
+        when "stream_budget_exceeded" then :TERMINAL_STATUS_BUDGET_EXHAUSTED
+        when "timeout", "wall_time", "deadline_exceeded"
+          :TERMINAL_STATUS_TIMED_OUT
+        else base
+        end
       end
 
       # The graph error event carries the ORIGINAL error class (the adapter
@@ -234,6 +244,7 @@ module Tamoz
       # so a consumer can act on the real reason.
       def diagnostic(data)
         code = typed_code(data["error_class"].to_s)
+        @last_diagnostic_code = code
         @stream.diagnostic(
           code:,
           message: data.fetch("safe_message", "graph step failed"),

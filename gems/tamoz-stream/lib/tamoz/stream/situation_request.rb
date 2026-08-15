@@ -79,6 +79,24 @@ module Tamoz
       def prompt_sha256 = Tamoz::Core.normalize_digest(@wire.prompt_sha256)
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
       def diagnosis_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.diagnosis_catalog_sha256)
+
+      # P2: the wire budget envelope as a codec-safe hash the graph's
+      # ReceiptBudgetController consumes (nil fields = unbounded).
+      def budget_hash
+        budget = @wire.budget
+        return nil if budget.nil?
+
+        {
+          "max_model_calls" => budget.max_model_calls.to_i.positive? ? budget.max_model_calls.to_i : nil,
+          "max_input_tokens" => budget.max_input_tokens.to_i.positive? ? budget.max_input_tokens.to_i : nil,
+          "max_output_tokens" => budget.max_output_tokens.to_i.positive? ? budget.max_output_tokens.to_i : nil,
+          "max_tool_calls" => budget.max_tool_calls.to_i.positive? ? budget.max_tool_calls.to_i : nil,
+          "max_tool_result_bytes" => budget.max_tool_result_bytes.to_i.positive? ? budget.max_tool_result_bytes.to_i : nil,
+          "max_total_tool_result_bytes" => budget.max_total_tool_result_bytes.to_i.positive? ? budget.max_total_tool_result_bytes.to_i : nil,
+          "max_provider_retries" => budget.max_provider_retries.to_i.positive? ? budget.max_provider_retries.to_i : nil,
+          "max_cost_microunits" => budget.max_cost_microunits.to_i.positive? ? budget.max_cost_microunits.to_i : nil
+        }
+      end
       def traceparent = blank_to_nil(@wire.traceparent)
       def tracestate = blank_to_nil(@wire.tracestate)
 
@@ -152,7 +170,9 @@ module Tamoz
             "diagnosis_catalog_json" => @wire.diagnosis_catalog_json.to_s,
             "diagnosis_catalog_sha256" => diagnosis_catalog_sha256.to_s,
             "objective" => @wire.objective.to_s,
-            "objective_sha256" => objective_sha256.to_s
+            "objective_sha256" => objective_sha256.to_s,
+            "budget" => budget_hash,
+            "tool_catalog_json" => @wire.tool_catalog_json.to_s
           }.freeze
         }.freeze
       end
@@ -266,7 +286,8 @@ module Tamoz
     # RequestRecord.
     class EpisodeRunner
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
-                     situation_recaller: nil, configured_tenant: nil, recall_caller: nil)
+                     situation_recaller: nil, configured_tenant: nil, recall_caller: nil,
+                     episode_tools: nil)
         @durable_runner = durable_runner
         @worker = worker
         @verification_store = verification_store
@@ -274,6 +295,9 @@ module Tamoz
         @situation_recaller = situation_recaller
         @configured_tenant = configured_tenant && String(configured_tenant).dup.freeze
         @recall_caller = recall_caller
+        # P2: an injected capability host (test composition) overrides the
+        # runner's per-request host; production keeps the wire-derived host.
+        @episode_tools = episode_tools
         validate_graph_recall_contract!
       end
 
@@ -318,7 +342,7 @@ module Tamoz
               emitter: adapter,
               deadline: monotonic_deadline(wire_request.deadline),
               metadata: trace_metadata(envelope),
-              episode_tools: build_capability_host(wire_request, snapshot)
+              episode_tools: @episode_tools || build_capability_host(wire_request, snapshot)
             )
             watcher = watch_cancellation(call, context)
             payload = envelope.payload.merge("snapshot" => snapshot)
@@ -337,7 +361,7 @@ module Tamoz
               namespace: envelope.namespace,
               context:
             )
-            status = adapter.terminal_status(result)
+            status = adapter.terminal_status(result, adapter.last_diagnostic_code)
             terminal_state = nil
             if result.checkpoint_id
               # The request's OWN last checkpoint — for a PRODUCED run this is

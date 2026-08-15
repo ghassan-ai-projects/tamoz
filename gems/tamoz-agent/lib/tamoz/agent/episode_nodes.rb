@@ -23,11 +23,12 @@ module Tamoz
       # uses `base_url` instead (same intent, no scanner weakening).
       ROLE_ENDPOINT_KEYS = %w[base_url api_base].freeze
 
-      def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:)
+      def initialize(profile:, frame_builder_factory:, model_call_factory:, decision_builder:, tool_call: nil)
         @profile = profile
         @frame_builder_factory = frame_builder_factory
         @model_call_factory = model_call_factory
         @decision_builder = decision_builder
+        @tool_call = tool_call || EpisodeToolCall.new(tool_port: nil)
         freeze
       end
 
@@ -77,13 +78,20 @@ module Tamoz
         episode = state.fetch(:episode)
         frame = frame_from(state.fetch(:frame))
         role = state.fetch(:role)
+        budget = budget_controller(state)
+        # P2: the budget check is PRE-DISPATCH — exhaustion raises typed
+        # BEFORE any provider call (B7).
+        budget.check_model_call!(state.fetch(:budget_state, nil))
         model_call = @model_call_factory.call(role)
+        # P2: the wire ordinal is the model call's position in THIS episode —
+        # a loop episode emits distinct ordinals (0, 1, ...), never a collision.
+        ordinal = Array(state.fetch(:model_receipts, [])).length
         invocation = ModelCall::InvocationIdentity.new(
           attempt_id: episode.fetch("attempt_id"),
           fence: Integer(episode.fetch("fence")),
           graph_task: "reason",
           stage: "reason",
-          global_ordinal: 0
+          global_ordinal: ordinal
         )
         result = model_call.call(
           context:,
@@ -100,14 +108,21 @@ module Tamoz
           raise ProtocolError, "episode model call failed"
         end
 
+        budget_state = budget.reconcile_model(
+          state.fetch(:budget_state, nil), result.receipt.usage
+        )
+
         {
           "raw_response" => result.raw_response,
-          "model_receipts" => [receipt_projection(result.receipt)]
+          "model_receipts" => [receipt_projection(result.receipt)],
+          "budget_state" => budget_state
         }
       end
 
       # Deterministic: strict ReasoningDocument v2 parse + grounding checks
-      # against the frame facts. Never a second model.
+      # against the frame facts, then ROUTES (P2): a tool request → execute_tool;
+      # malformed-after-success → repair (exactly once) or typed terminal;
+      # valid → decide. Never a second model.
       def validate(state, _context)
         frame = frame_from(state.fetch(:frame))
         raw = state.fetch(:raw_response)
@@ -118,7 +133,91 @@ module Tamoz
         catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
         document = ReasoningDocument.parse(raw, catalog:)
         ground_evidence!(document, frame)
-        {"document" => document_projection(document)}
+
+        if document.tool_requests && !document.tool_requests.empty?
+          return {"document" => document_projection(document), "next_node" => "execute_tool"}
+        end
+
+        {"document" => document_projection(document), "next_node" => "decide"}
+      rescue ProtocolError => error
+        # A succeeded-but-malformed response is repaired exactly once; a
+        # second malformed response terminates typed.
+        if Integer(state.fetch(:repair_count, 0)) < 1
+          {"next_node" => "repair", "repair_directive" => error.message}
+        else
+          raise ProtocolError, "episode document is malformed after repair"
+        end
+      end
+
+      # P2: the ONLY tool-executing node. Validates the model's tool request
+      # against the wire tool catalog, then executes it as a journaled unsafe
+      # effect (logical key, slot = tool_results.length). Success AND refusal
+      # results are journaled and appended.
+      def execute_tool(state, context)
+        document = state.fetch(:document)
+        request = document.fetch("tool_requests").first
+        tool_name = request.fetch("name")
+        arguments = request.fetch("arguments") || {}
+        validate_tool_request!(state, tool_name, arguments)
+
+        episode = state.fetch(:episode)
+        budget = budget_controller(state)
+        budget.check_tool_call!(state.fetch(:budget_state, nil))
+        slot = Array(state.fetch(:tool_results, [])).length
+        result = @tool_call.call(
+          context:,
+          episode_id: episode.fetch("episode_id"),
+          slot:,
+          tool_name:,
+          arguments:
+        )
+        if result.unknown?
+          raise ProtocolError, "episode tool call is unknown (no blind retry)"
+        end
+        if result.failed?
+          raise ProtocolError, "episode tool call failed"
+        end
+
+        {
+          "tool_results" => [result.projection],
+          "budget_state" => budget.reconcile_tool(
+            state.fetch(:budget_state, nil), result.projection
+          )
+        }
+      end
+
+      # P2: deterministic — rebuilds the frame with the attributed tool
+      # results and (when present) the repair directive appended to the user
+      # section. Same inputs → same frame bytes → the next reason call's
+      # logical key is deterministic.
+      def rebuild_frame(state, _context)
+        wire = state.fetch(:wire)
+        snapshot = state.fetch(:snapshot)
+        catalog = DiagnosisCatalog.verify_wire(
+          wire.fetch("diagnosis_catalog_json"),
+          wire.fetch("diagnosis_catalog_sha256")
+        )
+        frame = @frame_builder_factory.call(
+          catalog, wire.fetch("objective", "")
+        ).build(
+          snapshot:,
+          prompt: wire.fetch("prompt", ""),
+          prompt_version: wire.fetch("prompt_version", ""),
+          prompt_sha256: wire["prompt_sha256"],
+          tool_results: Array(state.fetch(:tool_results, [])),
+          repair_directive: state[:repair_directive]
+        )
+        {"frame" => frame_projection(frame)}
+      end
+
+      # P2: the one-shot repair — increments the count and records the parse
+      # failure as a directive in the next frame (the frame digest changes, so
+      # the next reason call is a NEW journaled call, never a blind retry).
+      def repair(state, _context)
+        {
+          "repair_count" => Integer(state.fetch(:repair_count, 0)) + 1,
+          "repair_directive" => state[:repair_directive]
+        }
       end
 
       # Deterministic: validated document + current allowlist → terminal
@@ -140,6 +239,28 @@ module Tamoz
       end
 
       private
+
+      # The pure budget controller for this episode, derived from the wire's
+      # budget envelope (Agentic Stream's EpisodeBudget).
+      def budget_controller(state)
+        ReceiptBudgetController.new(state.fetch(:wire).fetch("budget", nil))
+      end
+
+      # Fail closed: the requested tool must be named in the wire's tool
+      # catalog and the arguments must be a bounded mapping.
+      def validate_tool_request!(state, tool_name, arguments)
+        catalog = state.fetch(:wire).fetch("tool_catalog_json", "").to_s
+        unless catalog.empty?
+          parsed = Tamoz::Core.parse_json_strict(catalog)
+          names = Array(parsed).map { |entry| entry.fetch("name", nil) }
+          unless names.include?(tool_name)
+            raise ProtocolError, "episode_tool/not_in_catalog: #{tool_name}"
+          end
+        end
+        unless arguments.is_a?(Hash)
+          raise ProtocolError, "episode_tool/arguments_not_mapping"
+        end
+      end
 
       def endpoint_for(role)
         settings = role.normalized_settings || {}

@@ -99,11 +99,19 @@ module Tamoz
       end
 
       def stream_error_data(error)
+        # The ORIGINAL error class (a NodeError wraps the node's real error):
+        # the wire's typed category must reflect why the episode actually
+        # failed (budget, timeout, protocol), not the generic wrapper.
+        effective = if error.respond_to?(:original) && error.original
+                      error.original
+                    else
+                      error
+                    end
         {
           'graph' => compiled.name,
-          'error_class' => error.class.name.to_s,
-          'category' => error.respond_to?(:category) ? error.category : 'internal',
-          'safe_message' => error.respond_to?(:safe_message) ? error.safe_message : 'The graph stream failed.'
+          'error_class' => effective.class.name.to_s,
+          'category' => effective.respond_to?(:category) ? effective.category : 'internal',
+          'safe_message' => effective.respond_to?(:safe_message) ? effective.safe_message : 'The graph stream failed.'
         }.freeze
       end
 

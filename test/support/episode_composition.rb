@@ -27,7 +27,7 @@ module EpisodeComposition
     Tamoz::Core.digest(PROMPT_DOMAIN, {"version" => version, "text" => prompt})
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -56,19 +56,32 @@ module EpisodeComposition
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,
-      decision_builder: Stream::DecisionNodeBuilder.new
+      decision_builder: Stream::DecisionNodeBuilder.new,
+      tool_call: Tamoz::Agent::EpisodeToolCall.new(tool_port: tool_port)
     )
     app = Tamoz::Agent::EpisodeGraph.build(checkpointer:, nodes:)
     worker = Stream::EpisodeWorker.new(
       worker_version: "0.1.0.alpha.1",
       lane_config: Tamoz::Agent::LaneConfig.build("fast" => "flash", "deep" => "pro", "batch" => "flash")
     )
+    # P2: a stub tool port is surfaced through the REAL capability-host seam
+    # (the runner binds it as context.episode_tools), so the graph exercises
+    # the same host path production uses.
+    episode_tools = if tool_port
+                      implementations = Stream::EpisodeCapabilityHost::PERMITTED.to_h do |name|
+                        [name, lambda do |arguments, _context|
+                          tool_port.execute(name, arguments || {})
+                        end]
+                      end
+                      Stream::EpisodeCapabilityHost.new(implementations)
+                    end
     runner = Stream::EpisodeRunner.new(
       durable_runner: app.durable_runner,
       worker:,
       artifact_store: artifact_store,
       situation_recaller: situation_recaller,
-      recall_caller: recall_caller
+      recall_caller: recall_caller,
+      episode_tools: episode_tools
     )
     {app:, runner:, adapter: checkpointer, directory:}
   end

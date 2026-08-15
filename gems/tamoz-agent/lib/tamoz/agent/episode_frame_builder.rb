@@ -47,11 +47,12 @@ module Tamoz
         actual
       end
 
-      def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil)
+      def build(snapshot:, prompt:, prompt_version: nil, prompt_sha256: nil,
+                tool_results: [], repair_directive: nil)
         verify_prompt!(prompt, prompt_version, prompt_sha256)
         facts = build_facts(snapshot)
         system = build_system(prompt)
-        user = build_user(facts)
+        user = build_user(facts, tool_results, repair_directive)
         bytes = Tamoz::Core.jcs(
           {"system" => system, "user" => user, "catalog" => @catalog.canonical}
         )
@@ -114,10 +115,24 @@ module Tamoz
         lines.join("\n")
       end
 
-      def build_user(facts)
-        Tamoz::Core.jcs(
-          {"situation" => facts.map { |entry| {"id" => "fact:#{entry.fetch("id")}", "value" => entry.fetch("value")} }}
-        )
+      def build_user(facts, tool_results, repair_directive)
+        situation = facts.map do |entry|
+          {"id" => "fact:#{entry.fetch("id")}", "value" => entry.fetch("value")}
+        end
+        tools = Array(tool_results).map.with_index do |result, index|
+          {
+            "id" => "tool:#{index}",
+            "name" => result.fetch("tool"),
+            "request_sha256" => result["request_digest"],
+            "result_sha256" => result["result_sha256"],
+            "is_error" => result.fetch("is_error", false),
+            "result_bytes" => result.fetch("result_bytes", 0)
+          }
+        end
+        user = {"situation" => situation}
+        user["tool_results"] = tools unless tools.empty?
+        user["repair_directive"] = repair_directive if repair_directive
+        Tamoz::Core.jcs(user)
       end
     end
   end
