@@ -95,7 +95,8 @@ module Tamoz
         call_index:,
         operation:,
         safety:,
-        request:
+        request:,
+        logical_key: nil
       )
         @preparation.prepare(
           execution_id:,
@@ -103,8 +104,16 @@ module Tamoz
           call_index:,
           operation:,
           safety:,
-          request:
+          request:,
+          logical_key:
         )
+      end
+
+      # P1/§8.1: the durable key for a logical call key — the identity a caller
+      # passes to `start`/`complete`/`reconcile` after preparing with
+      # `logical_key:`. Stable across attempts and fences.
+      def logical_key(logical_key)
+        EffectJournalKey.logical(logical_key)
       end
 
       def start(key:, attempt_token:)

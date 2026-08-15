@@ -1,12 +1,20 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'digest'
 
 module Tamoz
   # The SQLite namespace owns durable effect-journal storage boundaries.
   module SQLite
     # Builds stable effect identities and checks an existing key's binding.
     module EffectJournalKey
+      # P1/§8.1: logical effect keys. An episode model call is identified by its
+      # logical call key (episode, stage, slot, request digest), which is stable
+      # across worker attempts and fences — the execution-derived key cannot be
+      # (a fresh execution id is assigned per claim). The key is prefixed so
+      # `verify_identity!` can select the logical binding.
+      LOGICAL_PREFIX = 'logical:'
+
       module_function
 
       # :reek:DuplicateMethodCall -- both lease fields are part of the exact
@@ -35,6 +43,30 @@ module Tamoz
         )
       end
 
+      # P1: the stable identity for a logical call key. `to_key` already embeds
+      # the request digest, so identical request bytes dedup to one receipt and
+      # changed request bytes produce a different key (never a stale reuse).
+      # The key is digested raw: LogicalCallKey#to_key joins its validated
+      # fields with control characters that Wire.identity would reject. A
+      # LogicalCallKey object (not just its to_key string) is accepted — its
+      # to_s is not the identity.
+      def logical(logical_key)
+        key = if logical_key.respond_to?(:to_key)
+                logical_key.to_key.to_s
+              else
+                logical_key.to_s
+              end
+        if key.empty? || key.bytesize > 4096
+          raise ConfigurationError, 'logical effect key is empty or oversized'
+        end
+
+        LOGICAL_PREFIX + Digest::SHA256.hexdigest(JSON.generate([key]))
+      end
+
+      def logical?(effect_key)
+        effect_key.to_s.start_with?(LOGICAL_PREFIX)
+      end
+
       # rubocop:disable Metrics/ParameterLists -- the named arguments are the
       # complete durable effect binding, kept explicit for auditability.
       # :reek:LongParameterList -- these are the persisted identity fields.
@@ -46,8 +78,21 @@ module Tamoz
         call_index:,
         operation:,
         safety:,
-        request_digest:
+        request_digest:,
+        logical_key: nil
       )
+        if logical_key
+          # The key is the logical call identity; the execution-derived fields
+          # legitimately differ across attempts and fences. Bind the thread,
+          # namespace, safety, and request digest only.
+          actual = [row.fetch(1), row.fetch(2), row.fetch(7), row.fetch(9)]
+          expected = [lease.thread_id, lease.namespace, safety, request_digest]
+          return if actual == expected
+
+          raise CheckpointConflictError,
+                'effect key is already bound to different logical semantics'
+        end
+
         expected = [
           lease.thread_id,
           lease.namespace,

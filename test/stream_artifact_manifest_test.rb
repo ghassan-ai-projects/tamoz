@@ -3,12 +3,15 @@
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/artifact_store"
+require "support/local_model_endpoint"
+require "support/episode_composition"
 
 # T2.3 (PLAN_TAMOZ_STREAM_BUILD T2.3): the artifact manifest and retention.
 # The terminal carries the per-episode manifest (prompt / skill-set /
 # tool-catalog / model-policy / contract / memory-record digests), keyed on
 # the STREAM's own digests, and the runner retains the named documents so a
 # shadow run can resolve them without re-running Tamoz. Retention is bounded.
+# P1: the runner runs the FIXED graph (gate 4).
 class StreamArtifactManifestTest < Minitest::Test
   class StubSituationRecaller
     attr_reader :calls
@@ -26,59 +29,29 @@ class StreamArtifactManifestTest < Minitest::Test
 
   MEMORY_DIGEST = "sha256:#{"e" * 64}"
 
-  def snapshot
-    {
-      "situation_id" => "sit-1", "situation_version" => 7,
-      "tenant_id" => "acme", "situation_type" => "equipment",
-      "entity" => {"type" => "compressor", "id" => "c-01"},
-      "facts" => {"pressure" => 0.9}
-    }
-  end
-
-  def wire_request(overrides = {})
-    Agenticstream::Runtime::V1::EpisodeRequest.new(
-      protocol_version: "1.0",
-      episode_id: "ep-art", attempt_id: "at-1", fence: 1,
-      tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R2,
-      capability_token: "opaque.hmac.token",
-      snapshot_json: Tamoz::Core.jcs(snapshot),
-      snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot),
-      **overrides
-    )
+  def with_fixture_endpoint
+    Dir.mktmpdir("tamoz-manifest-endpoint") do |dir|
+      endpoint = LocalModelEndpoint.new(
+        mode: :fixture,
+        responses: [Tamoz::Core.jcs(
+          AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
+        )],
+        log_path: File.join(dir, "endpoint.log")
+      ).start
+      yield endpoint
+    ensure
+      endpoint&.stop
+    end
   end
 
   def raw_digest(digest)
     [digest.delete_prefix("sha256:")].pack("H*")
   end
 
-  def graph
-    Tamoz.graph(name: "episode-artifact", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      state :summary, default: nil
-      state :facts_used, default: []
-      state :situation_memory, default: [], immutable: true
-      state :memory_record_digests, default: [], immutable: true
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 4, output_tokens: 2}})
-        {
-          primary_hypothesis: "bearing wear", confidence: 0.9,
-          summary: "confirmed", facts_used: [],
-        }
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end
-  end
-
   def test_the_terminal_carries_the_artifact_manifest
-    envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(wire_request, nil)
+    envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(
+      EpisodeComposition.wire_request(episode_id: "ep-art"), nil
+    )
     stream = Tamoz::Stream::EpisodeStream.new(envelope, worker_name: "tamoz")
     stream.started
     manifest = Agenticstream::Runtime::V1::ArtifactManifest.new(
@@ -93,16 +66,13 @@ class StreamArtifactManifestTest < Minitest::Test
   end
 
   def test_the_runner_emits_the_manifest_and_retains_the_named_artifacts
-    directory = Dir.mktmpdir("tamoz-artifact-e2e")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     store = Tamoz::Stream::ArtifactStore.new
-    app = graph.compile(checkpointer: adapter)
     recaller = StubSituationRecaller.new(
       Tamoz::Stream::SituationRecall::Result.new(
         records: [Tamoz::Stream::SituationRecall::Projection.new(
-          statement: "prior compressor pressure increased",
+          statement: "prior pond oxygen increased",
           scopes: {
-            tenant: "acme", situation_type: "equipment", entity_type: "compressor", entity_id: "c-00"
+            tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"
           },
           provenance: {
             episode_id: "ep-prior", decision_id: "decision-prior",
@@ -113,47 +83,53 @@ class StreamArtifactManifestTest < Minitest::Test
         record_digests: [MEMORY_DIGEST]
       )
     )
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil, artifact_store: store,
-      situation_recaller: recaller, recall_caller: {tenant: "acme"}
-    )
 
     tool_catalog = JSON.generate({"tools" => ["evidence.get"]})
     tool_digest = "sha256:#{"a" * 64}"
     schema = JSON.generate({"$schema" => "x"})
     schema_digest = "sha256:#{"b" * 64}"
     objective_digest = "sha256:#{"c" * 64}"
-    wire = wire_request(
-      snapshot_sha256: raw_digest(Tamoz::Core.digest(:snapshot, snapshot)),
+    wire = EpisodeComposition.wire_request(
+      episode_id: "ep-art",
+      snapshot_sha256: raw_digest(Tamoz::Core.digest(:snapshot, AquacultureDomain.snapshot)),
       tool_catalog_json: tool_catalog, tool_catalog_sha256: raw_digest(tool_digest),
       decision_schema_json: schema, decision_schema_sha256: raw_digest(schema_digest),
-      objective_sha256: raw_digest(objective_digest), objective: "diagnose the compressor"
+      objective_sha256: raw_digest(objective_digest), objective: "diagnose the pond"
     )
 
-    events = runner.run(wire).each.to_a
-    terminal = events.last.terminal
-    assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
-    decision_event = events.find { |event| event.decision }
-    refute_nil decision_event
-    assert_equal 32, decision_event.decision.decision_sha256.bytesize
-    manifest = terminal.artifact_manifest
-    assert_equal "1.0", manifest.contract_version
-    assert_equal 32, manifest.tool_catalog_sha256.bytesize
-    assert_equal tool_digest, Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
-    assert_equal MEMORY_DIGEST,
-                 Tamoz::Core.normalize_digest(manifest.memory_record_sha256.fetch(0)),
-                 "the manifest names the memory records the episode grounded on"
-    assert_equal 1, recaller.calls.length
+    with_fixture_endpoint do |endpoint|
+      composition = EpisodeComposition.build(
+        endpoint: endpoint.base_url, artifact_store: store,
+        situation_recaller: recaller, recall_caller: {tenant: "acme"}
+      )
+      events = []
+      composition.fetch(:runner).run(wire).each { |event| events << event }
+      terminal = events.last.terminal
+      assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status
+      decision_event = events.find { |event| event.decision }
+      refute_nil decision_event
+      assert_equal 32, decision_event.decision.decision_sha256.bytesize
+      manifest = terminal.artifact_manifest
+      assert_equal "1.0", manifest.contract_version
+      assert_equal 32, manifest.tool_catalog_sha256.bytesize
+      assert_equal tool_digest, Tamoz::Core.normalize_digest(manifest.tool_catalog_sha256)
+      assert_equal MEMORY_DIGEST,
+                   Tamoz::Core.normalize_digest(manifest.memory_record_sha256.fetch(0)),
+                   "the manifest names the memory records the episode grounded on"
+      assert_equal 1, recaller.calls.length
 
-    # The named documents are retained, resolvable by the STREAM's digests —
-    # each under ITS OWN digest (the objective under objective_sha256).
-    retained = store.resolve(tool_digest)
-    assert_equal tool_catalog, retained.fetch("bytes")
-    assert_equal schema, store.resolve(schema_digest).fetch("bytes")
-    assert_equal "diagnose the compressor", store.resolve(objective_digest).fetch("bytes")
-  ensure
-    adapter&.close
-    FileUtils.remove_entry(directory) if directory
+      # The named documents are retained, resolvable by the STREAM's digests —
+      # each under ITS OWN digest (the objective under objective_sha256).
+      assert_equal tool_catalog, store.resolve(tool_digest).fetch("bytes")
+      assert_equal schema, store.resolve(schema_digest).fetch("bytes")
+      assert_equal "diagnose the pond", store.resolve(objective_digest).fetch("bytes")
+      # P1: the operator-authored prompt is retained under its own digest.
+      assert_equal AquacultureDomain::PROMPT,
+                   store.resolve(
+                     EpisodeComposition.prompt_sha256(AquacultureDomain::PROMPT)
+                   ).fetch("bytes")
+      composition.fetch(:adapter).close
+    end
   end
 
   def test_retention_is_bounded

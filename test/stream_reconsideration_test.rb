@@ -2,7 +2,6 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
-require_relative "fixtures/episode_diagnose"
 
 # T6 (PLAN_TAMOZ_STREAM_BUILD T6.1): RECONSIDER episodes. The worker routes
 # kind: RECONSIDER with the prior Decision/commands/outcomes/correction; the
@@ -90,19 +89,6 @@ class StreamReconsiderationTest < Minitest::Test
 
   def parsed
     Reconsideration.parse(wire_reconsideration)
-  end
-
-  def envelope
-    Tamoz::Stream::EpisodeRequestEnvelope.new(
-      Agenticstream::Runtime::V1::EpisodeRequest.new(
-        protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
-        fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-        kind: :EPISODE_KIND_RECONSIDER, lane: :EPISODE_LANE_FAST,
-        risk_ceiling: :RISK_CLASS_R2,
-        reconsideration: wire_reconsideration
-      ),
-      worker
-    )
   end
 
   def test_parse_carries_the_prior_decision_commands_and_correction
@@ -261,13 +247,35 @@ class StreamReconsiderationTest < Minitest::Test
                  "an R0 episode must not compensate at R1"
   end
 
+  # P1: RECONSIDER is blocked at admission (the fixed graph is the DIAGNOSE
+  # slice; RECONSIDER moves in P6). The DecisionBuilder compensation logic is
+  # unit-tested through a manual envelope view instead of the wire envelope.
+  EnvelopeView = Struct.new(:episode) do
+    def episode_id = episode.fetch(:episode_id)
+    def attempt_id = episode.fetch(:attempt_id)
+    def fence = episode.fetch(:fence)
+    def tenant_id = episode.fetch(:tenant_id)
+    def situation_id = episode.fetch(:situation_id)
+    def situation_version = episode.fetch(:situation_version)
+    def risk_ceiling = episode.fetch(:risk_ceiling)
+    def kind = :reconsider
+    def watch_confidence_floor = 0.5
+    def wire = self
+    def allowed_intent_types = []
+  end
+  private_constant :EnvelopeView
+
+  def decision_envelope
+    EnvelopeView.new(episode(risk_ceiling: "r2"))
+  end
+
   def test_the_decision_builder_includes_valid_compensations
     intents = Reconsideration.build_compensating_intents(
       Reconsideration.judge(parsed:),
       episode:, snapshot:
     )
     decision, digest = Tamoz::Stream::DecisionBuilder.build(
-      envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      envelope: decision_envelope, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
       outcome: {compensating_intents: intents, confidence: 0.9}
     )
     assert_equal "downgrade_maintenance_ticket",
@@ -283,7 +291,7 @@ class StreamReconsiderationTest < Minitest::Test
     }
     assert_raises(Tamoz::Stream::StreamError) do
       Tamoz::Stream::DecisionBuilder.build(
-        envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+        envelope: decision_envelope, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
         outcome: {compensating_intents: [forged]}
       )
     end
@@ -303,12 +311,18 @@ class StreamReconsiderationTest < Minitest::Test
     end
   end
 
-  # End to end: a RECONSIDER episode runs through the runner, the graph node
-  # judges via the module, and the produced decision carries the downgrade.
-  def test_a_reconsider_episode_produces_a_downgrade_decision
+  # P1: a RECONSIDER episode terminates typed at admission — it never flows
+  # into the diagnose graph (hard rule 6). The in-graph judgment lands in P6.
+  def test_a_reconsider_episode_terminates_typed_in_p1
     directory = Dir.mktmpdir("tamoz-reconsider-e2e")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    app = build_episode_app(adapter)
+    app = Tamoz.graph(name: "reconsider-gate", version: "1") do
+      state :episode, default: {}
+      state :snapshot, default: {}
+      node(:noop, implementation_name: "reconsider.noop", version: "1") { |_s, _c| {} }
+      edge Tamoz::START, :noop
+      edge :noop, Tamoz::END
+    end.compile(checkpointer: adapter)
     runner = Tamoz::Stream::EpisodeRunner.new(
       durable_runner: app.durable_runner, worker: nil
     )
@@ -319,7 +333,6 @@ class StreamReconsiderationTest < Minitest::Test
       tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
       kind: :EPISODE_KIND_RECONSIDER, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
-      budget: Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 5),
       capability_token: "opaque.hmac.token",
       reconsideration: wire_reconsideration,
       snapshot_json: Tamoz::Core.jcs(snapshot),
@@ -327,24 +340,9 @@ class StreamReconsiderationTest < Minitest::Test
     )
 
     events = runner.run(wire).each.to_a
+    assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status,
+                 "RECONSIDER is out of scope in P1 and must fail typed"
     assert_empty events.select { |event| event.model_started != nil }
-    budget_events = events.select { |event| event.budget != nil }
-    assert_equal 1, budget_events.length
-    assert_equal 0, budget_events.fetch(0).budget.model_calls_used
-    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.input_tokens
-    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.output_tokens
-    assert_equal 0, budget_events.fetch(0).budget.cumulative_usage.cost_microunits
-    assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
-    decision_event = events.find { |event| event.decision != nil }
-    refute_nil decision_event, "a produced reconsider episode must propose a decision"
-    decision = JSON.parse(decision_event.decision.decision_json)
-    assert_equal "downgrade_maintenance_ticket",
-                 decision.fetch("intents").fetch(0).fetch("type")
-    assert_equal "R1", decision.fetch("intents").fetch(0).fetch("risk_class")
-    assert_equal "cmd_0091_a", decision.fetch("intents").fetch(0).fetch("compensates")
-    assert Tamoz::Core.verify_digest(
-      :decision, decision, decision_event.decision.decision_sha256
-    )
     adapter.close
   ensure
     FileUtils.remove_entry(directory) if directory

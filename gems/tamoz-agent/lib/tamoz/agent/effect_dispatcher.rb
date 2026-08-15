@@ -38,6 +38,7 @@ module Tamoz
         actor:,
         reconcile: nil,
         after_start: nil,
+        logical_key: nil,
         &perform
       )
         effects = context.effects
@@ -49,19 +50,28 @@ module Tamoz
           raise ConfigurationError, "a reconcilable effect requires a reconciler"
         end
 
-        key = effects.key(
-          execution_id: context.execution_id,
-          task_id: context.task_id,
-          call_index:,
-          operation:
-        )
+        key = if logical_key
+                unless effects.respond_to?(:logical_key)
+                  raise ConfigurationError,
+                        "logical effects require a journal with logical_key support"
+                end
+                effects.logical_key(logical_key)
+              else
+                effects.key(
+                  execution_id: context.execution_id,
+                  task_id: context.task_id,
+                  call_index:,
+                  operation:
+                )
+              end
         decision = effects.prepare(
           execution_id: context.execution_id,
           task_id: context.task_id,
           call_index:,
           operation:,
           safety: safety.to_s,
-          request:
+          request:,
+          logical_key:
         )
         reconciliation = nil
 

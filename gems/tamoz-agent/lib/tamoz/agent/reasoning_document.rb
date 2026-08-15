@@ -30,7 +30,13 @@ module Tamoz
       MAX_RECOMMENDED_INTENTS = 8
       MAX_TOOL_REQUESTS = 8
       MAX_PRESET_BYTES = 128
-      PROBABILITY_TOLERANCE = 1e-6
+      # P1: the distribution check rejects pathological outputs (sum 0.5 or
+      # 1.5), not quantization noise — real providers at temperature 0 drift
+      # up to ~5% on small code sets (measured: gemma4 sum 1.05 on a 6-code
+      # set), so a tight tolerance would make real inference impossible while
+      # fixtures sailed through (the R3 trap). 0.05 still rejects sums the
+      # model did not intend as distributions.
+      PROBABILITY_TOLERANCE = 0.05
       REF_PREFIXES = %w[fact evidence memory tool].freeze
 
       TOP_LEVEL_KEYS = %w[

@@ -71,5 +71,11 @@ module Tamoz
     # checkpoint exists. The existing profile secret predicates
     # (`SECRET_VALUE_PATTERNS` / `ENTROPY_PATTERN`) are the gate.
     class ProfilePolicyError < Error; end
+
+    # P1/§3.1: the episode frame failed a deterministic gate — a prompt digest
+    # mismatch, malformed facts, or an unverifiable catalog. Terminal: the
+    # episode fails typed before any model call. Distinct from ProtocolError,
+    # which is untrusted-model-document territory.
+    class EpisodeFrameError < Error; end
   end
 end

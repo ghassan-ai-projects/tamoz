@@ -2,13 +2,16 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
+require "support/local_model_endpoint"
+require "support/episode_composition"
 
 # T1.3'/T1.4 (PLAN_TAMOZ_STREAM_BUILD): the episode request origin. The wire
 # EpisodeRequest is validated (contract, identity, kind, lane, risk ceiling);
 # the durable request id embeds (episode_id, attempt_id, fence) so a fence+1
 # redispatch is a fresh request and a redelivery is idempotent; the runner
 # delivers durably through the durable runner; a tampered snapshot terminates
-# before any graph run.
+# before any graph run. P1: the runner-level tests drive the FIXED production
+# graph (gate 4 — same graph, in-process driver), not throwaway graphs.
 class StreamSituationRequestTest < Minitest::Test
   def worker
     Tamoz::Stream::EpisodeWorker.new(
@@ -80,7 +83,7 @@ class StreamSituationRequestTest < Minitest::Test
       wire_request(watch_confidence_floor: 0.0), worker
     )
     assert_equal 0.0, opted_out.watch_confidence_floor
-    refute opted_out.payload.fetch("episode").key?("watch_confidence_floor")
+    assert_equal 0.0, opted_out.payload.fetch("episode").fetch("watch_confidence_floor")
   end
 
   def test_watch_confidence_floor_must_be_finite_and_non_negative
@@ -123,56 +126,49 @@ class StreamSituationRequestTest < Minitest::Test
     refute_equal attempt_1.request_id, attempt_2.request_id
   end
 
-  def episode_graph
-    Tamoz.graph(name: "episode-turn", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :ack, default: nil
-      node(
-        :ack,
-        implementation_name: "episode.ack",
-        version: "1"
-      ) do |state, _context|
-        {ack: state.fetch(:episode).fetch("episode_id")}
-      end
-      edge Tamoz::START, :ack
-      edge :ack, Tamoz::END
-    end
-  end
-
   def request_history(adapter, app)
     app.checkpointer.request_history(thread_id: "episode.ep-1", namespace: ["acme"])
   end
 
-  def reconsideration_payload
-    Agenticstream::Runtime::V1::Reconsideration.new(
-      prior_decision_json: "{}",
-      correction_json: "{}"
-    )
+  def with_fixture_endpoint
+    Dir.mktmpdir("tamoz-request-endpoint") do |dir|
+      endpoint = LocalModelEndpoint.new(
+        mode: :fixture,
+        responses: [Tamoz::Core.jcs(
+          AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
+        )],
+        log_path: File.join(dir, "endpoint.log")
+      ).start
+      yield endpoint
+    ensure
+      endpoint&.stop
+    end
   end
 
   def with_durable_app
-    Dir.mktmpdir("tamoz-episode-request") do |directory|
-      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-      app = episode_graph.compile(checkpointer: adapter)
-      runner = Tamoz::Stream::EpisodeRunner.new(durable_runner: app.durable_runner, worker:)
-      yield adapter, app, runner
+    with_fixture_endpoint do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      adapter = composition.fetch(:adapter)
+      yield adapter, composition.fetch(:app), composition.fetch(:runner)
       adapter.close
     end
   end
 
+  def p1_wire_request(overrides = {})
+    EpisodeComposition.wire_request(episode_id: "ep-1", **overrides)
+  end
+
   def test_the_runner_delivers_durably_and_redelivery_is_idempotent
     with_durable_app do |adapter, app, runner|
-      events = runner.run(wire_request).to_a
+      events = runner.run(p1_wire_request).to_a
 
       refute_empty events
       assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
 
       state = app.state(thread: "episode.ep-1", namespace: ["acme"]).state
-      refute state.key?(:situation_memory)
-      refute state.key?(:memory_record_digests)
+      assert_kind_of Hash, state[:decision]
 
-      redelivered = runner.run(wire_request).to_a
+      redelivered = runner.run(p1_wire_request).to_a
       assert_equal :TERMINAL_STATUS_PRODUCED, redelivered.last.terminal.status
 
       history = request_history(adapter, app)
@@ -184,8 +180,8 @@ class StreamSituationRequestTest < Minitest::Test
 
   def test_a_fence_plus_one_redispatch_executes_freshly
     with_durable_app do |_adapter, _app, runner|
-      attempt_1 = runner.run(wire_request).to_a
-      attempt_2 = runner.run(wire_request(fence: 2)).to_a
+      attempt_1 = runner.run(p1_wire_request).to_a
+      attempt_2 = runner.run(p1_wire_request(fence: 2)).to_a
 
       assert_equal :TERMINAL_STATUS_PRODUCED, attempt_1.last.terminal.status
       assert_equal :TERMINAL_STATUS_PRODUCED, attempt_2.last.terminal.status
@@ -194,24 +190,21 @@ class StreamSituationRequestTest < Minitest::Test
     end
   end
 
-  def test_reconsideration_payload_is_omitted_for_graph_without_channel
+  # P1: RECONSIDER is out of scope for the fixed diagnose graph — it must
+  # terminate typed at admission, never flow into the diagnose path.
+  def test_reconsider_episode_terminates_typed
     with_durable_app do |_adapter, _app, runner|
       events = runner.run(
-        wire_request(
-          kind: :EPISODE_KIND_RECONSIDER,
-          reconsideration: reconsideration_payload
-        )
+        p1_wire_request(kind: :EPISODE_KIND_RECONSIDER)
       ).to_a
-
-      assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
-      refute(events.any? { |event| event.diagnostic&.code == "invalid_update" })
+      assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status
     end
   end
 
   def test_a_tampered_snapshot_terminates_before_any_graph_run
     with_durable_app do |adapter, app, runner|
-      tampered = wire_request
-      tampered.snapshot_json = tampered.snapshot_json.sub("sit-1", "sit-9")
+      tampered = p1_wire_request
+      tampered.snapshot_json = tampered.snapshot_json.sub("sit-do-crash", "sit-9")
 
       events = runner.run(tampered).to_a
       assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status

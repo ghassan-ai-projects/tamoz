@@ -145,6 +145,15 @@ class AgentReasoningDocumentTest < Minitest::Test
     assert_rejected("probabilities_sum", hash)
   end
 
+  # P1: the tolerance is sized to real-provider quantization noise (~5% on a
+  # 6-code set), not a license for malformed distributions — a sum 0.88 (12%
+  # short) must still fail closed.
+  def test_rejects_a_distribution_ten_percent_short
+    hash = terminal_hash
+    hash["diagnosis_probabilities"][0]["probability"] = 0.6
+    assert_rejected("probabilities_sum", hash)
+  end
+
   def test_rejects_non_finite_probability
     raw = JSON.generate(terminal_hash).sub("0.72", "1e400")
     assert_rejected("probability_not_finite", raw)

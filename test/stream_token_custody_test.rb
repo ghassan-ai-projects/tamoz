@@ -59,6 +59,7 @@ class StreamTokenCustodyTest < Minitest::Test
     app = Tamoz.graph(name: "episode-custody", version: "1") do
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :primary_hypothesis, default: nil
       state :confidence, default: nil
       node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
@@ -125,6 +126,7 @@ class StreamTokenCustodyTest < Minitest::Test
     app = Tamoz.graph(name: "episode-custody", version: "1") do
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :primary_hypothesis, default: nil
       state :confidence, default: nil
       node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|

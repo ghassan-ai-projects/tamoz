@@ -78,6 +78,7 @@ module Tamoz
       def spec_sha256 = Tamoz::Core.normalize_digest(@wire.spec_sha256)
       def prompt_sha256 = Tamoz::Core.normalize_digest(@wire.prompt_sha256)
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
+      def diagnosis_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.diagnosis_catalog_sha256)
       def traceparent = blank_to_nil(@wire.traceparent)
       def tracestate = blank_to_nil(@wire.tracestate)
 
@@ -135,7 +136,23 @@ module Tamoz
             "snapshot_json" => @wire.snapshot_json,
             "snapshot_sha256" => snapshot_sha256,
             "traceparent" => traceparent,
-            "tracestate" => tracestate
+            "tracestate" => tracestate,
+            "watch_confidence_floor" => watch_confidence_floor
+          }.freeze,
+          # P1/§3.1: the model-authority and frame inputs the fixed graph needs.
+          # The graph's build_frame/reason nodes verify and consume these; they
+          # are control-plane config, never model output.
+          "wire" => {
+            "model_policy" => @wire.model_policy.to_s,
+            "executor_name" => @wire.executor_name.to_s,
+            "dispatch_policy" => @wire.dispatch_policy.to_s,
+            "prompt" => @wire.prompt.to_s,
+            "prompt_version" => @wire.prompt_version.to_s,
+            "prompt_sha256" => prompt_sha256.to_s,
+            "diagnosis_catalog_json" => @wire.diagnosis_catalog_json.to_s,
+            "diagnosis_catalog_sha256" => diagnosis_catalog_sha256.to_s,
+            "objective" => @wire.objective.to_s,
+            "objective_sha256" => objective_sha256.to_s
           }.freeze
         }.freeze
       end
@@ -195,11 +212,12 @@ module Tamoz
           raise EpisodeRequestInvalidError,
                 "unsupported episode kind #{@wire.kind.inspect}"
         end
-        # T6: a RECONSIDER episode judges a prior action — without the prior
-        # Decision/commands/outcomes/correction it cannot judge. Fail closed.
-        if KIND_NAMES.fetch(@wire.kind) == :reconsider && @wire.reconsideration.nil?
+        # P1: the fixed graph is the DIAGNOSE vertical slice. A RECONSIDER
+        # episode terminates typed (hard rule 6: an out-of-scope kind never
+        # flows into the diagnose path). RECONSIDER moves into the graph in P6.
+        if KIND_NAMES.fetch(@wire.kind) == :reconsider
           raise EpisodeRequestInvalidError,
-                "a RECONSIDER episode requires the reconsideration payload"
+                "reconsider episodes are not supported by this graph (P6)"
         end
         unless LANE_NAMES.key?(@wire.lane)
           raise EpisodeRequestInvalidError,
@@ -290,7 +308,7 @@ module Tamoz
             stream = EpisodeStream.new(
               envelope, worker_name: @worker&.worker_name, worker_version: @worker&.worker_version
             )
-            adapter = EpisodeStreamAdapter.new(stream, budget: wire_request.budget)
+            adapter = EpisodeStreamAdapter.new(stream)
             stream.started
             context = Tamoz::Context.new(
               run_id: envelope.request_id,
@@ -310,13 +328,6 @@ module Tamoz
                 "memory_record_digests" => recall.record_digests
               )
             end
-            if envelope.kind == :reconsider && reconsideration_channel_declared?
-              payload = payload.merge(
-                "reconsideration" => Reconsideration.parse(
-                  wire_request.reconsideration
-                ).to_h
-              )
-            end
             result = @durable_runner.deliver(
               payload,
               thread: envelope.thread_id,
@@ -326,23 +337,39 @@ module Tamoz
               namespace: envelope.namespace,
               context:
             )
-            status, reason = adapter.terminal_status(result)
-            if status == :TERMINAL_STATUS_PRODUCED
-              decision, digest = emit_decision(
-                stream, envelope, snapshot, result
+            status = adapter.terminal_status(result)
+            terminal_state = nil
+            if result.checkpoint_id
+              # The request's OWN last checkpoint — for a PRODUCED run this is
+              # the decide node's state; for a run that failed after the model
+              # call it is the last appended step, so the call's receipts are
+              # still witnessed (B4: model events come from receipts, and a
+              # completed call is never silently dropped).
+              checkpoint = @durable_runner.compiled.checkpointer.find(
+                thread_id: envelope.thread_id,
+                namespace: envelope.namespace,
+                checkpoint_id: result.checkpoint_id
               )
-              open_verifications(envelope, snapshot, decision, digest)
+              terminal_state = checkpoint.state.to_h
+              # The receipts are verified against the JOURNAL before crossing
+              # the wire — node-authored state alone is never trusted (B4).
+              emit_model_events(adapter, terminal_state, envelope)
+            end
+            if status == :TERMINAL_STATUS_PRODUCED
+              # P1: the terminal graph state IS the decision; the runner only
+              # translates it to the wire (B2).
+              translate_decision(stream, envelope, terminal_state)
             end
             # T2.3: the manifest and its retention are for PRODUCED episodes
-            # only — a FAILED/BUDGET_EXHAUSTED episode has no accepted
-            # Decision to reproduce, and its inputs are not retained.
+            # only — a FAILED episode has no accepted Decision to reproduce,
+            # and its inputs are not retained.
             manifest = nil
             if status == :TERMINAL_STATUS_PRODUCED
               manifest = build_artifact_manifest(envelope, result, recall)
               retain_manifest_artifacts(envelope) if @artifact_store
             end
             stream.terminal(
-              status, reason_code: reason, usage: adapter.wire_usage,
+              status, reason_code: reason_code_for(result),
               artifact_manifest: manifest
             )
           rescue Tamoz::Stream::StreamError => error
@@ -382,26 +409,31 @@ module Tamoz
         )
       end
 
-      # T2.4: a completed episode proposes a typed Decision (built from the
-      # graph's terminal state) BEFORE the PRODUCED terminal — the stream
-      # refuses a produced episode without one. The checkpoint is the request's
-      # OWN terminal checkpoint (never the thread's `latest`, which a
-      # concurrent fence+1 redispatch could have moved past). Returns the
-      # [decision, digest] pair so T5.2 can open verification rows per intent.
-      def emit_decision(stream, envelope, snapshot, result)
-        return [nil, nil] unless result.checkpoint_id
+      # P1: the typed reason on a FAILED terminal — the durable request's
+      # terminal error carries the graph failure category; a produced run has
+      # none.
+      def reason_code_for(result)
+        return nil if result.nil? || result.status != :failed
 
-        checkpoint = @durable_runner.compiled.checkpointer.find(
-          thread_id: envelope.thread_id,
-          namespace: envelope.namespace,
-          checkpoint_id: result.checkpoint_id
-        )
-        outcome = checkpoint.state.to_h
-        decision, digest = DecisionBuilder.build(
-          envelope:, snapshot:,
-          snapshot_digest: envelope.snapshot_sha256,
-          outcome: outcome.transform_keys(&:to_sym)
-        )
+        terminal_error = result.respond_to?(:terminal_error) ? result.terminal_error : nil
+        return nil unless terminal_error.is_a?(Hash)
+
+        terminal_error.fetch("category", terminal_error.fetch("graph_status", nil))
+      end
+
+      # P1: TRANSLATES the terminal graph state to the wire decision event.
+      # The decide node built the decision (B2); this only serializes it. The
+      # checkpoint is the request's OWN terminal checkpoint (never the
+      # thread's `latest`, which a concurrent fence+1 redispatch could have
+      # moved past).
+      def translate_decision(stream, envelope, terminal_state)
+        decision = terminal_state[:decision]
+        digest = terminal_state[:decision_digest]
+        if decision.nil? || digest.to_s.empty?
+          raise EpisodeRequestInvalidError,
+                "produced episode has no terminal decision state"
+        end
+
         stream.decision(
           decision_json: JSON.generate(decision),
           decision_sha256: digest
@@ -409,52 +441,86 @@ module Tamoz
         [decision, digest]
       end
 
-      # T5.2: a produced episode opens an :awaiting verification row per
-      # intent. The row carries everything the subscriber needs to admit the
-      # Experience when outcome.reconciled arrives (possibly days later), with
-      # the situation scopes so the Experience is reachable by the T5.4
-      # situation-scoped retrieval path.
-      def open_verifications(envelope, snapshot, decision, digest)
-        return unless @verification_store && decision
+      # P1/B4: the RUNNER turns receipts into wire model events, AFTER
+      # verifying each projection against its durable journal record (fetch by
+      # effect_key; the head must be :succeeded and the request digest must
+      # match). Node-authored state alone is never trusted, so "a model event
+      # without a completed receipt never reaches the wire" holds
+      # categorically. Emitted on fresh AND replayed runs from the same stored
+      # projections, so replay is ordinal- and digest-identical.
+      def emit_model_events(adapter, terminal_state, envelope)
+        receipts = Array(terminal_state[:model_receipts])
+        return if receipts.empty?
 
-        entity = snapshot.fetch("entity")
-        episode_content = {
-          session_id: envelope.episode_id,
-          episode_id: envelope.episode_id,
-          attempt_id: envelope.attempt_id,
-          task: "stream episode #{envelope.episode_id} " \
-                "attempt #{envelope.attempt_id}",
-          plan_digest: digest,
-          completed_at: Time.now.to_i,
-          traceparent: envelope.traceparent,
-          tracestate: envelope.tracestate,
-          scopes: {
-            "tenant" => envelope.tenant_id,
-            "user" => "stream",
-            "project" => "stream",
-            "situation_type" => snapshot.fetch("situation_type"),
-            "entity_type" => entity.fetch("type"),
-            "entity_id" => entity.fetch("id")
-          },
-          sensitivity: :internal,
-          decisions: [String(decision.fetch("primary_hypothesis", ""))],
-          corrections: []
-        }
-        decision.fetch("intents", []).each do |intent|
-          # A watch condition (R0) has no command and no outcome to verify —
-          # verification rows open only for consequential intents.
-          next if intent.fetch("risk_class", "R0").to_s.upcase == "R0"
+        checkpointer = @durable_runner.compiled.checkpointer
+        checkpointer.open_writer(
+          thread_id: envelope.thread_id, namespace: envelope.namespace,
+          owner_id: "tamoz.episode.wire", ttl: checkpointer.writer_ttl
+        ) do |writer|
+          receipts.each do |receipt|
+            record = writer.effects.fetch(receipt.fetch("effect_key"))
+            # The effect key IS the logical call key (request digest bound);
+            # the row's own request_digest is the codec digest of the effect
+            # request and legitimately differs from the transport digest the
+            # receipt carries. Verification: the record exists, the head is
+            # :succeeded, and the stored attempt's response digest matches the
+            # projection — a forged projection cannot reproduce the journaled
+            # response bytes.
+            stored_response = journal_response_digest(record)
+            if record.nil? || record.status != :succeeded ||
+               stored_response != receipt.fetch("response_digest")
+              raise StreamError,
+                    "wire_refused_model_event/receipt_not_journal_verified"
+            end
 
-          @verification_store.open(
-            tenant_id: envelope.tenant_id,
-            intent_id: intent.fetch("intent_id"),
-            episode_id: envelope.episode_id,
-            attempt_id: envelope.attempt_id,
-            decision_digest: digest,
-            episode: episode_content,
-            decision_id: intent.fetch("decision_id")
-          )
+            adapter.emit_stream_part(
+              Tamoz::StreamPart.new(
+                type: :model_started,
+                namespace: [],
+                run_id: receipt.fetch("episode_id", ""),
+                task_id: "reason",
+                sequence: 0,
+                data: {
+                  "ordinal" => receipt.fetch("ordinal"),
+                  "provider" => receipt.fetch("provider"),
+                  "model_id" => receipt.fetch("model"),
+                  "request_sha256" => receipt.fetch("request_digest")
+                },
+                emitted_at: Process.clock_gettime(Process::CLOCK_MONOTONIC)
+              )
+            )
+            adapter.emit_stream_part(
+              Tamoz::StreamPart.new(
+                type: :model_completed,
+                namespace: [],
+                run_id: receipt.fetch("episode_id", ""),
+                task_id: "reason",
+                sequence: 0,
+                data: {
+                  "ordinal" => receipt.fetch("ordinal"),
+                  "response_sha256" => receipt.fetch("response_digest"),
+                  "usage" => receipt["usage"]
+                },
+                emitted_at: Process.clock_gettime(Process::CLOCK_MONOTONIC)
+              )
+            )
+          end
         end
+      end
+
+      # The response digest stored on the journaled attempt — the codec
+      # projection's response_digest. Only a real completed attempt carries
+      # one; a forged projection cannot reproduce it.
+      def journal_response_digest(record)
+        return nil unless record&.respond_to?(:attempts)
+
+        record.attempts.each do |attempt|
+          next unless attempt.status == :succeeded
+
+          result = attempt.respond_to?(:result) ? attempt.result : nil
+          return result["response_digest"] if result.is_a?(Hash) && result["response_digest"]
+        end
+        nil
       end
 
       # T2.3: the per-episode artifact manifest on the terminal — the digests
@@ -462,7 +528,7 @@ module Tamoz
       # STREAM's own (the sha256 values the wire carried), never locally
       # re-derived; the contract version and the memory records the episode
       # grounded on complete the manifest. The checkpoint lookup uses the
-      # envelope's own thread/namespace, matching emit_decision.
+      # envelope's own thread/namespace, matching translate_decision.
       def build_artifact_manifest(envelope, result, recall)
         memory_digests = recall.record_digests
         if result&.checkpoint_id
@@ -505,11 +571,15 @@ module Tamoz
         {
           envelope.tool_catalog_sha256 => envelope.wire.tool_catalog_json,
           envelope.decision_schema_sha256 => envelope.wire.decision_schema_json,
-          envelope.objective_sha256 => envelope.wire.objective
+          envelope.objective_sha256 => envelope.wire.objective,
+          # P1: the operator-authored prompt is retained under ITS OWN digest,
+          # like every other manifest-named document (the prompt digest is the
+          # static configured prompt's digest; the frame binds it in the graph).
+          envelope.prompt_sha256 => envelope.wire.prompt
         }.each do |digest, bytes|
           next if digest.to_s.empty? || bytes.to_s.empty?
 
-          @artifact_store.retain(digest:, bytes: bytes.to_s, media_type: "application/json")
+          @artifact_store.retain(digest:, bytes: bytes.to_s, media_type: "text/plain")
         end
       end
 
@@ -587,10 +657,6 @@ module Tamoz
       def recall_channels_declared?
         channels = @durable_runner.compiled.channels
         channels.key?(:situation_memory) && channels.key?(:memory_record_digests)
-      end
-
-      def reconsideration_channel_declared?
-        @durable_runner.compiled.channels.key?(:reconsideration)
       end
 
       def validate_graph_recall_contract!

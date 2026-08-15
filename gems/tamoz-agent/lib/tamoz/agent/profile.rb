@@ -73,7 +73,11 @@ module Tamoz
       UNATTENDED_KEYS = %w[read_only reconcilable approval_required forbidden].freeze
       PROFILE_KEYS = %w[schema_version profile_id profile_version canonical_root description].freeze
       ROOTS_KEYS = %w[workspace].freeze
-      MODEL_ROLE_KEYS = %w[provider model credential_ref].freeze
+      # P0B/§4.2: `normalized_settings` (e.g. api_base) is the minimally
+      # extended role surface the episode path resolves; it is validated as a
+      # bounded string mapping, never as a secret (secrets stay in
+      # credential_ref).
+      MODEL_ROLE_KEYS = %w[provider model credential_ref normalized_settings].freeze
       CREDENTIAL_REF_KEYS = %w[kind name].freeze
       # `model_calls` and `wall_clock_seconds` are the two the WORKER enforces
       # from durable evidence, which is why they are the two that actually bind

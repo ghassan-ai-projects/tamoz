@@ -41,10 +41,11 @@ module Tamoz
         end
       end
 
-      def model_started(ordinal:, provider:, model_id:)
+      def model_started(ordinal:, provider:, model_id:, request_sha256: nil)
         build do |event|
           event.model_started = Agenticstream::Runtime::V1::ModelStarted.new(
-            ordinal:, provider:, model_id:
+            ordinal:, provider:, model_id:,
+            request_sha256: Tamoz::Core.digest_bytes(request_sha256)
           )
         end
       end
@@ -57,10 +58,12 @@ module Tamoz
         end
       end
 
-      def model_completed(ordinal:, usage:)
+      def model_completed(ordinal:, usage: nil, response_sha256: nil, finish_reason: "stop")
         build do |event|
           event.model_completed = Agenticstream::Runtime::V1::ModelCompleted.new(
-            ordinal:, usage:
+            ordinal:, finish_reason:,
+            usage:,
+            response_sha256: Tamoz::Core.digest_bytes(response_sha256)
           )
         end
       end
@@ -151,13 +154,20 @@ module Tamoz
       end
     end
 
-    # T2.1/T2.2: adapts the graph's Context emitter events and the durable run
-    # result to the wire vocabulary, with budget accounting. The graph's
-    # internal events (checkpoint/interrupt/node_update) stay internal; only
-    # task/model/error events cross. The budget ceiling (model calls, tokens,
-    # wall time) turns a run into TIMED_OUT or BUDGET_EXHAUSTED at the
-    # terminal instead of a produced Decision.
+    # P1/§8.2: the wire projection boundary. Two channels, one EpisodeStream:
+    #
+    #   - `emit` is the graph Context emitter entry (type, namespace, data,
+    #     run_id, task_id). It REJECTS model event types — a node can never
+    #     produce a model event (B4); the runner produces them from verified
+    #     journal receipts through `emit_stream_part`.
+    #   - `emit_stream_part` is the trusted channel: model events from
+    #     journal-verified receipts.
+    #
+    # Event counters, the budget state machine, and budget-aware terminal
+    # mapping are gone (P1); budgets return in P2 computed from receipts.
     class EpisodeStreamAdapter
+      MODEL_EVENT_TYPES = %i[model_started model_delta model_completed].freeze
+
       TERMINAL_BY_RESULT = {
         completed: :TERMINAL_STATUS_PRODUCED,
         failed: :TERMINAL_STATUS_FAILED,
@@ -165,66 +175,56 @@ module Tamoz
         paused: :TERMINAL_STATUS_FAILED
       }.freeze
 
-      def initialize(stream, budget: nil)
+      def initialize(stream)
         @stream = stream
-        @budget = budget
-        @model_calls = 0
-        @tool_calls = 0
-        @budget_emitted = false
-        @usage = {
-          input_tokens: 0, output_tokens: 0,
-          cached_input_tokens: 0, reasoning_tokens: 0, cost_microunits: 0
-        }
-        @started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       end
 
       attr_reader :stream
 
-      # The Context emitter entry point (type, namespace, data, run_id,
-      # task_id) — namespace is the graph's, never crossed to the wire.
+      # The Context emitter entry point. Model events are forbidden here — the
+      # only model events on the wire come from receipts via the trusted
+      # channel. A node attempt is a typed failure, never a silent drop.
       def emit(type, namespace, data = {}, run_id: nil, task_id: nil)
-        case type
-        when :task_start then tool_started(data, task_id)
-        when :task_end then tool_completed(data, task_id)
-        when :model_started then model_started(data)
-        when :model_delta then model_delta(data)
-        when :model_completed then model_completed(data)
+        type_sym = type.to_sym
+        if MODEL_EVENT_TYPES.include?(type_sym)
+          raise StreamError,
+                "graph node attempted to emit forbidden model event #{type_sym}"
+        end
+
+        case type_sym
         when :error then diagnostic(data)
+        else nil # checkpoint/interrupt/node_update/task events stay internal
         end
       end
 
-      def tool_started(data, task_id)
-        name = data.fetch("node")
-        @tool_calls += 1
-        @stream.tool(call_id: task_id, tool_name: name, state: :TOOL_STATE_REQUESTED)
-        @stream.tool(call_id: task_id, tool_name: name, state: :TOOL_STATE_STARTED)
+      # The trusted channel: StreamParts produced from journal-verified
+      # receipts. This is the only path that crosses model events.
+      # Decision/terminal events are runner-owned translations of the terminal
+      # state (not journal receipts), so the runner emits them directly.
+      def emit_stream_part(part)
+        case part.type
+        when :model_started
+          @stream.model_started(
+            ordinal: Integer(part.data.fetch("ordinal")),
+            provider: String(part.data.fetch("provider")),
+            model_id: String(part.data.fetch("model_id")),
+            request_sha256: part.data["request_sha256"]
+          )
+        when :model_completed
+          @stream.model_completed(
+            ordinal: Integer(part.data.fetch("ordinal")),
+            usage: wire_usage(part.data["usage"]),
+            response_sha256: part.data["response_sha256"]
+          )
+        else
+          nil
+        end
       end
 
-      def tool_completed(data, task_id)
-        @stream.tool(
-          call_id: task_id, tool_name: data.fetch("node"),
-          state: :TOOL_STATE_COMPLETED
-        )
-      end
-
-      def model_started(data)
-        @stream.model_started(
-          ordinal: data[:ordinal],
-          provider: data[:provider].to_s,
-          model_id: data[:model_id].to_s
-        )
-      end
-
-      def model_delta(data)
-        @stream.model_delta(ordinal: data[:ordinal], content: data[:content].to_s)
-      end
-
-      def model_completed(data)
-        @model_calls += 1
-        enforce_mid_run_budget!
-        accumulate(data[:usage] || {})
-        @stream.model_completed(ordinal: data[:ordinal], usage: wire_usage)
-        emit_budget
+      # The terminal status from the durable run result only — no budget
+      # overrides (P1; receipts-based budgets return in P2).
+      def terminal_status(result)
+        TERMINAL_BY_RESULT.fetch(result&.status, :TERMINAL_STATUS_FAILED)
       end
 
       # The graph error event carries the ORIGINAL error class (the adapter
@@ -254,71 +254,21 @@ module Tamoz
         "graph_step_failed"
       end
 
-      def emit_budget
-        @stream.budget(
-          model_calls_used: @model_calls,
-          tool_calls_used: @tool_calls,
-          cumulative_usage: wire_usage
-        )
-        @budget_emitted = true
-      end
-
-      # The terminal for the durable run result, budget-aware (T2.2). The
-      # decision event (T2.4) is emitted by the caller before this terminal.
-      def terminal(result)
-        status, reason = terminal_status(result)
-        @stream.terminal(status, reason_code: reason, usage: wire_usage)
-      end
-
-      def terminal_status(result)
-        emit_budget if @budget && !@budget_emitted
-        base = TERMINAL_BY_RESULT.fetch(result&.status, :TERMINAL_STATUS_FAILED)
-        return [:TERMINAL_STATUS_TIMED_OUT, "wall_time"] if wall_time_exceeded?
-        return [:TERMINAL_STATUS_BUDGET_EXHAUSTED, "max_model_calls"] if model_calls_exceeded?
-
-        [base, nil]
-      end
-
-      def wall_time_exceeded?
-        return false unless @budget&.respond_to?(:wall_time) && @budget.wall_time
-
-        elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - @started_at
-        elapsed > @budget.wall_time.seconds
-      end
-
-      def model_calls_exceeded?
-        return false unless @budget&.respond_to?(:max_model_calls) && @budget.max_model_calls&.positive?
-
-        @model_calls > @budget.max_model_calls
-      end
-
-      # F-2: a ceiling crossed MID-RUN aborts the run (the raise fails the
-      # graph node and the episode terminates typed) instead of only labelling
-      # the terminal after the spend happened.
-      def enforce_mid_run_budget!
-        return if @budget.nil?
-
-        if model_calls_exceeded?
-          raise BudgetExceededError,
-                "model call budget exhausted at #{@model_calls} calls"
-        end
-        if wall_time_exceeded?
-          raise BudgetExceededError, "episode wall time budget exhausted"
-        end
-      end
-
       private
 
-      def accumulate(usage)
-        %i[input_tokens output_tokens cached_input_tokens reasoning_tokens cost_microunits].each do |key|
-          @usage[key] += usage[key].to_i
-        end
-      end
+      # nil usage (unavailable) crosses as nil — the wire claims nothing it
+      # cannot prove. Present usage is mapped 1:1 from the receipt projection.
+      def wire_usage(usage)
+        return nil if usage.nil?
 
-      def wire_usage
-        Agenticstream::Runtime::V1::Usage.new(**@usage)
+        Agenticstream::Runtime::V1::Usage.new(
+          input_tokens: Integer(usage.fetch("input_tokens", 0)),
+          output_tokens: Integer(usage.fetch("output_tokens", 0)),
+          cached_input_tokens: Integer(usage.fetch("cached_input_tokens", 0)),
+          reasoning_tokens: Integer(usage.fetch("reasoning_tokens", 0)),
+          cost_microunits: Integer(usage.fetch("cost_microunits", 0))
+        )
       end
-      public :wire_usage
     end
   end
 end

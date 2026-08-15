@@ -65,8 +65,11 @@ class StreamInvariantsTest < Minitest::Test
     directory = Dir.mktmpdir("tamoz-invariant3")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     graph = Tamoz.graph(name: "invariant-3", version: "1") do
+      # P1: the runner payload carries the fixed graph's channels; a graph
+      # without them fails before its first node.
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :answer, default: nil
       node(:ask, implementation_name: "episode.ask", version: "1") do |_state, context|
         {answer: Tamoz.interrupt({"question" => "approve"}, context)}
@@ -325,15 +328,16 @@ class StreamInvariantsTest < Minitest::Test
 
   def simple_graph(name)
     Tamoz.graph(name:, version: "1") do
+      # P1: the runner payload carries the fixed graph's channels; the node
+      # never emits model events (those are receipts-only now).
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :primary_hypothesis, default: nil
       state :confidence, default: nil
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        {primary_hypothesis: "bearing wear", confidence: 0.9}
+      node(:analyze, implementation_name: "episode.analyze", version: "1") do |state, _context|
+        pressure = state.fetch(:snapshot).fetch("facts").fetch("pressure", 0.0)
+        {primary_hypothesis: "bearing wear", confidence: pressure < 0.5 ? 0.3 : 0.9}
       end
       edge Tamoz::START, :analyze
       edge :analyze, Tamoz::END

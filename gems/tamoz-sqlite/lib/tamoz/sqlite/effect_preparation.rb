@@ -31,7 +31,8 @@ module Tamoz
         call_index:,
         operation:,
         safety:,
-        request:
+        request:,
+        logical_key: nil
       )
         lease = @guard.lease
         execution = Wire.identity(execution_id, name: 'effect execution id')
@@ -46,13 +47,17 @@ module Tamoz
           @safeties,
           'effect safety'
         )
-        effect_key = EffectJournalKey.build(
-          guard: @guard,
-          execution_id: execution,
-          task_id: task,
-          call_index: index,
-          operation: operation_text
-        )
+        effect_key = if logical_key
+                       EffectJournalKey.logical(logical_key)
+                     else
+                       EffectJournalKey.build(
+                         guard: @guard,
+                         execution_id: execution,
+                         task_id: task,
+                         call_index: index,
+                         operation: operation_text
+                       )
+                     end
         request_bytes = @store.checkpoint_codec.state_codec.dump(request)
         request_digest = Wire.digest(
           request_bytes,
@@ -133,7 +138,8 @@ module Tamoz
             call_index: index,
             operation: operation_text,
             safety: safety_text,
-            request_digest:
+            request_digest:,
+            logical_key:
           )
           status = row.fetch(8)
           case status

@@ -5,6 +5,8 @@ require "tamoz/stream/episode_worker"
 require "tamoz/stream/outcome_subscriber"
 require "tamoz/stream/verification_store"
 require "tamoz/stream/situation_memory"
+require "support/local_model_endpoint"
+require "support/episode_composition"
 
 # T5 (PLAN_TAMOZ_STREAM_BUILD T5): the learning loop. The audit's core gap was
 # "the admission guard exists but nothing feeds it". This suite closes the
@@ -575,7 +577,6 @@ class StreamLearningLoopTest < Minitest::Test
 
   def test_a_produced_episode_feeds_a_late_outcome_into_admission
     directory = Dir.mktmpdir("tamoz-loop-e2e")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     memory_adapter = Tamoz::SQLite::Adapter.new(
       path: File.join(directory, "memory.db"),
       state_codec: Tamoz::Agent::Memory::Surface.codec
@@ -586,55 +587,58 @@ class StreamLearningLoopTest < Minitest::Test
     )
     verification = VerificationStore.new(clock: -> { Time.at(1_700_000_000) })
 
-    graph = Tamoz.graph(name: "episode-learn", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      state :summary, default: nil
-      state :facts_used, default: []
-      state :alternatives, default: []
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 4, output_tokens: 2}})
-        {
-          primary_hypothesis: "bearing wear", confidence: 0.9,
-          summary: "pressure trend confirms bearing wear",
-          facts_used: [{"pressure" => 0.9}],
-          alternatives: []
-        }
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end
-    app = graph.compile(checkpointer: adapter)
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil, verification_store: verification
-    )
+    # P1: the fixed graph produces the decision; the verification row is no
+    # longer opened by the runner (that moved to the Go side) — the test opens
+    # it explicitly, as the runtime's subscriber path does.
+    endpoint = LocalModelEndpoint.new(
+      mode: :fixture,
+      responses: [Tamoz::Core.jcs(
+        AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
+      )],
+      log_path: File.join(directory, "endpoint.log")
+    ).start
+    composition = EpisodeComposition.build(endpoint: endpoint.base_url)
 
-    snapshot = {
-      "situation_id" => "sit-1", "situation_version" => 7,
-      "tenant_id" => "acme", "situation_type" => "equipment",
-      "entity" => {"type" => "compressor", "id" => "c-01"},
-      "facts" => {"pressure" => 0.9}
-    }
-    wire = Agenticstream::Runtime::V1::EpisodeRequest.new(
-      protocol_version: "1.0",
-      episode_id: "ep-learn", attempt_id: "at-1", fence: 1,
-      tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R2,
-      allowed_intent_types: ["create_maintenance_ticket"],
-      capability_token: "opaque.hmac.token",
-      snapshot_json: Tamoz::Core.jcs(snapshot),
-      snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)
+    snapshot = AquacultureDomain.snapshot
+    wire = EpisodeComposition.wire_request(
+      episode_id: "ep-learn",
+      snapshot:,
+      allowed_intent_types: ["install_watch_condition", "start_aerator"]
     )
-    events = runner.run(wire).each.to_a
+    events = []
+    composition.fetch(:runner).run(wire).each { |event| events << event }
     assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
     decision_event = events.find { |event| event.decision != nil }
     decision = JSON.parse(decision_event.decision.decision_json)
-    intent_id = decision.fetch("intents").fetch(0).fetch("intent_id")
+    intent = decision.fetch("intents").fetch(0)
+    verification.open(
+      tenant_id: "acme",
+      intent_id: intent.fetch("intent_id"),
+      episode_id: "ep-learn",
+      attempt_id: "at-1",
+      decision_digest: Tamoz::Core.normalize_digest(decision_event.decision.decision_sha256),
+      episode: {
+        "session_id" => "ep-learn",
+        "episode_id" => "ep-learn",
+        "attempt_id" => "at-1",
+        "task" => "stream episode ep-learn attempt at-1",
+        "plan_digest" => Tamoz::Core.normalize_digest(decision_event.decision.decision_sha256),
+        "completed_at" => Time.at(1_700_000_000).to_i,
+        "traceparent" => nil,
+        "tracestate" => nil,
+        "scopes" => {
+          "tenant" => "acme", "user" => "stream", "project" => "stream",
+          "situation_type" => snapshot.fetch("situation_type"),
+          "entity_type" => snapshot.fetch("entity").fetch("type"),
+          "entity_id" => snapshot.fetch("entity").fetch("id")
+        },
+        "sensitivity" => :internal,
+        "decisions" => [String(decision.fetch("primary_hypothesis", ""))],
+        "corrections" => []
+      },
+      decision_id: intent.fetch("decision_id")
+    )
+    intent_id = intent.fetch("intent_id")
     row = verification.fetch(tenant_id: "acme", intent_id:)
     assert_equal :awaiting, row.state,
                  "a produced consequential episode opens an awaiting verification"
@@ -687,7 +691,8 @@ class StreamLearningLoopTest < Minitest::Test
     assert_equal decision.fetch("decision_id"), provenance.fetch("decision_id")
     assert_equal "out-9", provenance.fetch("identity").split(":").last
   ensure
-    adapter&.close
+    endpoint&.stop
+    composition&.fetch(:adapter)&.close
     memory_adapter&.close
     FileUtils.remove_entry(directory) if directory
   end
