@@ -99,4 +99,36 @@ class AgentModelReceiptTest < Minitest::Test
     assert_rejected("receipt/logical_call_key_type") { receipt(logical_call_key: {episode_id: "x"}) }
     assert_rejected("receipt/usage_type") { receipt(usage: {available: false}) }
   end
+
+  # --- Profile role resolution (§4.3): fails closed before a model call ---
+
+  ProfileDouble = Struct.new(:model_roles, :canonical_digest)
+
+  def profile(roles = {"greenhouse_reasoner" => {"provider" => "deepseek", "model" => "chat", "credential_ref" => "TAMOZ_DEEPSEEK"}},
+              digest: "sha256:#{"c" * 64}")
+    ProfileDouble.new(roles, digest)
+  end
+
+  def test_resolve_role_returns_typed_role
+    role = MC.resolve_role(profile, "greenhouse_reasoner")
+    assert_equal "greenhouse_reasoner", role.name
+    assert_equal "deepseek", role.provider
+    assert_equal "chat", role.model
+    assert_equal "TAMOZ_DEEPSEEK", role.credential_ref
+  end
+
+  def test_resolve_role_unknown_fails_closed
+    assert_rejected("model_role/unknown", Tamoz::Agent::ProfileRoleUnavailableError) { MC.resolve_role(profile, "nope") }
+  end
+
+  def test_resolve_role_incomplete_fails_closed
+    incomplete = profile({"r" => {"provider" => "deepseek"}})
+    assert_rejected("model_role/incomplete", Tamoz::Agent::ProfileRoleUnavailableError) { MC.resolve_role(incomplete, "r") }
+  end
+
+  def test_resolve_role_profile_digest_mismatch_fails_closed
+    assert_rejected("model_role/profile_digest_mismatch", Tamoz::Agent::ProfileRoleUnavailableError) do
+      MC.resolve_role(profile, "greenhouse_reasoner", expected_profile_digest: "sha256:#{"9" * 64}")
+    end
+  end
 end

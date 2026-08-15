@@ -19,7 +19,11 @@ module Tamoz
     # authoring scan (§9.2) enforces the semantic ones.
     class DiagnosisCatalog
       UNKNOWN = "unknown"
-      DIGEST_DOMAIN = "tamoz.agent.diagnosis_catalog.v1\n"
+      # Cross-boundary shared domain (jcs SHARED_DOMAINS): the compiler (Go) and
+      # the worker (Ruby) digest the catalog identically, so the wire
+      # diagnosis_catalog_sha256 and this type's #digest are the same value.
+      DIGEST_DOMAIN = :diagnosis_catalog
+      ENTRY_KEYS = %w[code description].freeze
       CODE_PATTERN = /\A[a-z][a-z0-9_]{0,63}\z/
       MAX_ENTRIES = 64
       MAX_DESCRIPTION_BYTES = 512
@@ -38,9 +42,28 @@ module Tamoz
         new(entries)
       end
 
+      # Wire gate (mirrors ReceivedSnapshot.verify): strict-parse the delivered
+      # bytes, verify they match the compiler's cross-boundary digest, then build
+      # the validated catalog. A forged, mismatched, or malformed catalog fails
+      # closed here — before any model call.
+      def self.verify_wire(diagnosis_catalog_json, expected_digest)
+        unless diagnosis_catalog_json.is_a?(String) && !diagnosis_catalog_json.empty?
+          raise DiagnosisCatalogError, "diagnosis_catalog/wire_empty"
+        end
+
+        value = Tamoz::Core.parse_json_strict(diagnosis_catalog_json)
+        unless Tamoz::Core.verify_digest(DIGEST_DOMAIN, value, expected_digest)
+          raise DiagnosisCatalogError, "diagnosis_catalog/digest_mismatch"
+        end
+
+        from_list(value)
+      end
+
       def self.build_entry(raw)
         raise DiagnosisCatalogError, "diagnosis_catalog/entry_not_object" unless raw.is_a?(Hash)
 
+        unknown = raw.keys.map(&:to_s) - ENTRY_KEYS
+        raise DiagnosisCatalogError, "diagnosis_catalog/unknown_entry_key: #{unknown.first}" unless unknown.empty?
         code = String(raw[:code] || raw["code"])
         description = String(raw[:description] || raw["description"] || "")
         unless CODE_PATTERN.match?(code)
