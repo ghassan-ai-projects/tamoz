@@ -740,6 +740,10 @@ EVIDENCE = {
                supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
   "MIG-12" => {test: "test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
                supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
+  "MIG-13" => {test: "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows"},
+  "MIG-14" => {test: "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
+  "MIG-15" => {test: "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
+               supporting: ["test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",
@@ -880,7 +884,8 @@ def parse_migrations
   source = read_utf8(
     File.join(ROOT, "gems", "tamoz-sqlite", "lib", "tamoz", "sqlite", "migrator.rb")
   )
-  source.scan(/^\s*MIGRATION_(\d+)\s*=\s*\[/).flatten.map(&:to_i).sort.uniq
+  # MIGRATION_13 is a %w[] literal (T8.3) — both literal styles count.
+  source.scan(/^\s*MIGRATION_(\d+)\s*=\s*(?:\[|%w\[)/).flatten.map(&:to_i).sort.uniq
 end
 
 NON_GOALS = [

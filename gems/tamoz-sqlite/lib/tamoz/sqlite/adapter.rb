@@ -53,6 +53,15 @@ module Tamoz
         VerificationStore.new(adapter: self, clock:)
       end
 
+      # P3: the durable verified artifact store (tenant-scoped, rehash on
+      # admission + resolve).
+      def bind_artifact_store(tenant:)
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
+
+        ArtifactStore.new(adapter: self, tenant:)
+      end
+
       def bind_durable_subscriber_store(tenant:)
         ensure_process!
         raise ClosedError, "SQLite adapter is closed" if closed?

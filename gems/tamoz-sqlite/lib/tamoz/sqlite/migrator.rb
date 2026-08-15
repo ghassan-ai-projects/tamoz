@@ -31,7 +31,10 @@ module Tamoz
       # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 through
       # MIGRATION_12, which adds the situation/entity scope columns to the
       # memory index.
-      CURRENT_VERSION = 14
+      # P3 (provenance/replay): 14 -> 15 through MIGRATION_15, which adds the
+      # durable verified artifact store (tenant-scoped (digest, bytes) rows
+      # with rehash-on-admission).
+      CURRENT_VERSION = 15
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1088,6 +1091,31 @@ module Tamoz
         MIGRATION_14.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # P3 (provenance/replay): the durable verified artifact store. Every
+      # (digest, bytes) pair is tenant-scoped and rehashed on admission (the
+      # STORE verifies, not the caller); the in-memory ArtifactStore stays
+      # test-only per the phase doc.
+      MIGRATION_15 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_artifacts (
+            tenant_id TEXT NOT NULL,
+            digest TEXT NOT NULL,
+            media_type TEXT NOT NULL,
+            bytes TEXT NOT NULL,
+            retained_at INTEGER NOT NULL,
+            PRIMARY KEY (tenant_id, digest)
+          ) STRICT
+        SQL
+        <<~SQL.freeze
+          CREATE INDEX idx_tamoz_artifacts_retained
+            ON tamoz_artifacts(tenant_id, retained_at, digest)
+        SQL
+      ].freeze
+
+      MIGRATION_15_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_15.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1104,7 +1132,8 @@ module Tamoz
         11 => [MIGRATION_11, MIGRATION_11_CHECKSUM],
         12 => [MIGRATION_12, MIGRATION_12_CHECKSUM],
         13 => [MIGRATION_13, MIGRATION_13_CHECKSUM],
-        14 => [MIGRATION_14, MIGRATION_14_CHECKSUM]
+        14 => [MIGRATION_14, MIGRATION_14_CHECKSUM],
+        15 => [MIGRATION_15, MIGRATION_15_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1267,7 +1296,8 @@ module Tamoz
                        :MIGRATION_11, :MIGRATION_11_CHECKSUM,
                        :MIGRATION_12, :MIGRATION_12_CHECKSUM,
                        :MIGRATION_13, :MIGRATION_13_CHECKSUM,
-                       :MIGRATION_14, :MIGRATION_14_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_14, :MIGRATION_14_CHECKSUM,
+                       :MIGRATION_15, :MIGRATION_15_CHECKSUM, :MIGRATIONS
     end
   end
 end

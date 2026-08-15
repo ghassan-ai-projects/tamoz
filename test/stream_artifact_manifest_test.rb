@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "digest"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/artifact_store"
 require "support/local_model_endpoint"
@@ -85,10 +86,12 @@ class StreamArtifactManifestTest < Minitest::Test
     )
 
     tool_catalog = JSON.generate({"tools" => ["evidence.get"]})
-    tool_digest = "sha256:#{"a" * 64}"
+    tool_digest = "sha256:#{Digest::SHA256.hexdigest(tool_catalog)}"
     schema = JSON.generate({"$schema" => "x"})
-    schema_digest = "sha256:#{"b" * 64}"
-    objective_digest = "sha256:#{"c" * 64}"
+    schema_digest = "sha256:#{Digest::SHA256.hexdigest(schema)}"
+    objective_digest = Tamoz::Core.digest(
+      "situation-runtime/objective/v1\n", {"text" => "diagnose the pond"}
+    )
     wire = EpisodeComposition.wire_request(
       episode_id: "ep-art",
       snapshot_sha256: raw_digest(Tamoz::Core.digest(:snapshot, AquacultureDomain.snapshot)),
@@ -118,18 +121,21 @@ class StreamArtifactManifestTest < Minitest::Test
                    "the manifest names the memory records the episode grounded on"
       assert_equal 1, recaller.calls.length
 
-      # The named documents are retained, resolvable by the STREAM's digests —
-      # each under ITS OWN digest (the objective under objective_sha256).
-      assert_equal tool_catalog, store.resolve(tool_digest).fetch("bytes")
-      assert_equal schema, store.resolve(schema_digest).fetch("bytes")
-      assert_equal "diagnose the pond", store.resolve(objective_digest).fetch("bytes")
-      # P1: the operator-authored prompt is retained under its own digest.
+      # The named documents are retained, resolvable by the VERIFIED raw
+      # digest (sha256 of the exact bytes — the store's rehash-on-admission
+      # rule). The manifest names the same wire digests the retention
+      # verified against those bytes (P3: a lying wire digest fails closed).
+      assert_equal tool_catalog, store.resolve(raw_sha256(tool_catalog)).fetch("bytes")
+      assert_equal schema, store.resolve(raw_sha256(schema)).fetch("bytes")
+      assert_equal "diagnose the pond", store.resolve(raw_sha256("diagnose the pond")).fetch("bytes")
       assert_equal AquacultureDomain::PROMPT,
-                   store.resolve(
-                     EpisodeComposition.prompt_sha256(AquacultureDomain::PROMPT)
-                   ).fetch("bytes")
+                   store.resolve(raw_sha256(AquacultureDomain::PROMPT)).fetch("bytes")
       composition.fetch(:adapter).close
     end
+  end
+
+  def raw_sha256(bytes)
+    "sha256:#{Digest::SHA256.hexdigest(bytes)}"
   end
 
   def test_retention_is_bounded

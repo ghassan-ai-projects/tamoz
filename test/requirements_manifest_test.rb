@@ -70,10 +70,11 @@ class RequirementsManifestTest < Minitest::Test
       row.fetch("id").delete_prefix("CLI-") if row.fetch("category") == "cli_command"
     }.sort
 
+    # MIGRATION_13 is a %w[] literal (T8.3) — both literal styles count.
     ordinals = File.read(
       ROOT.join("gems", "tamoz-sqlite", "lib", "tamoz", "sqlite", "migrator.rb"),
       encoding: Encoding::UTF_8
-    ).scan(/^\s*MIGRATION_(\d+)\s*=\s*\[/).flatten.map(&:to_i).sort.uniq
+    ).scan(/^\s*MIGRATION_(\d+)\s*=\s*(?:\[|%w\[)/).flatten.map(&:to_i).sort.uniq
 
     assert_equal ordinals.map { |ordinal| "MIG-#{ordinal}" }.sort, requirements.filter_map { |row|
       row.fetch("id") if row.fetch("category") == "migration"

@@ -5578,6 +5578,47 @@
       "promotion_exclusion": null
     },
     {
+      "id": "MIG-13",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_13",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-14",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_14",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-15",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_15",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
+      "supporting_tests": [
+        "test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "MIG-2",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",

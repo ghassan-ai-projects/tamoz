@@ -363,6 +363,7 @@ module Tamoz
             )
             status = adapter.terminal_status(result, adapter.last_diagnostic_code)
             terminal_state = nil
+            manifest = nil
             if result.checkpoint_id
               # The request's OWN last checkpoint — for a PRODUCED run this is
               # the decide node's state; for a run that failed after the model
@@ -375,6 +376,15 @@ module Tamoz
                 checkpoint_id: result.checkpoint_id
               )
               terminal_state = checkpoint.state.to_h
+              # P3 (every-attempt bundles): the manifest + retention are built
+              # BEFORE any model event or decision crosses the wire — a
+              # retention failure must not tear a stream that already
+              # published evidence. The crash guarantee is the journal + the
+              # checkpoint: retention runs post-run but pre-emission, and a
+              # completed journal receipt survives a crash between the call
+              # and the runner's terminal branch.
+              manifest = build_artifact_manifest(envelope, recall, terminal_state)
+              retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
               # The receipts are verified against the JOURNAL before crossing
               # the wire — node-authored state alone is never trusted (B4).
               emit_model_events(adapter, terminal_state, envelope)
@@ -384,14 +394,7 @@ module Tamoz
               # translates it to the wire (B2).
               translate_decision(stream, envelope, terminal_state)
             end
-            # T2.3: the manifest and its retention are for PRODUCED episodes
-            # only — a FAILED episode has no accepted Decision to reproduce,
-            # and its inputs are not retained.
-            manifest = nil
-            if status == :TERMINAL_STATUS_PRODUCED
-              manifest = build_artifact_manifest(envelope, result, recall)
-              retain_manifest_artifacts(envelope) if @artifact_store
-            end
+            manifest ||= build_artifact_manifest(envelope, recall, terminal_state)
             stream.terminal(
               status, reason_code: reason_code_for(result),
               artifact_manifest: manifest
@@ -414,7 +417,7 @@ module Tamoz
                      "internal_error"
                    end
             stream ||= EpisodeStream.new(identity_for(wire_request))
-            stream.diagnostic(code:, message: error.class.name)
+            stream.diagnostic(code:, message: error.message)
             stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
           ensure
             watcher&.kill
@@ -483,16 +486,16 @@ module Tamoz
         ) do |writer|
           receipts.each do |receipt|
             record = writer.effects.fetch(receipt.fetch("effect_key"))
-            # The effect key IS the logical call key (request digest bound);
-            # the row's own request_digest is the codec digest of the effect
-            # request and legitimately differs from the transport digest the
-            # receipt carries. Verification: the record exists, the head is
-            # :succeeded, and the stored attempt's response digest matches the
-            # projection — a forged projection cannot reproduce the journaled
-            # response bytes.
+            # The effect key IS the logical call key (request digest bound).
+            # Verification: the record exists, the head is :succeeded, and the
+            # stored attempt's response digest AND transport request digest
+            # match the projection — a forged projection cannot reproduce
+            # either journaled value.
             stored_response = journal_response_digest(record)
+            stored_request = journal_request_digest(record)
             if record.nil? || record.status != :succeeded ||
-               stored_response != receipt.fetch("response_digest")
+               stored_response != receipt.fetch("response_digest") ||
+               stored_request != receipt.fetch("request_digest")
               raise StreamError,
                     "wire_refused_model_event/receipt_not_journal_verified"
             end
@@ -547,23 +550,38 @@ module Tamoz
         nil
       end
 
-      # T2.3: the per-episode artifact manifest on the terminal — the digests
-      # a shadow run needs to compare (PROTOCOL §2). The digests are the
+      # The transport request digest stored on the journaled attempt — the
+      # same value the receipt's request_digest carries (P3: the projection is
+      # now request-digest-bound, so the emission check covers both sides of
+      # the binding).
+      def journal_request_digest(record)
+        return nil unless record&.respond_to?(:attempts)
+
+        record.attempts.each do |attempt|
+          next unless attempt.status == :succeeded
+
+          result = attempt.respond_to?(:result) ? attempt.result : nil
+          return result["request_digest"] if result.is_a?(Hash) && result["request_digest"]
+        end
+        nil
+      end
+
+      # T2.3/P3: the per-episode artifact manifest on EVERY terminal — the
+      # digests an offline replay needs (PROTOCOL §2). The digests are the
       # STREAM's own (the sha256 values the wire carried), never locally
-      # re-derived; the contract version and the memory records the episode
-      # grounded on complete the manifest. The checkpoint lookup uses the
-      # envelope's own thread/namespace, matching translate_decision.
-      def build_artifact_manifest(envelope, result, recall)
+      # re-derived; the contract version, the memory records the episode
+      # grounded on, and the run identity complete the manifest.
+      def build_artifact_manifest(envelope, recall, terminal_state = nil)
         memory_digests = recall.record_digests
-        if result&.checkpoint_id
-          checkpoint = @durable_runner.compiled.checkpointer.find(
-            thread_id: envelope.thread_id,
-            namespace: envelope.namespace,
-            checkpoint_id: result.checkpoint_id
-          )
-          terminal_state = checkpoint&.state&.to_h || {}
-          terminal_digests = Array(terminal_state.fetch(:memory_record_digests, []))
-          if !@situation_recaller && (!terminal_digests.empty? || !Array(terminal_state.fetch(:situation_memory, [])).empty?)
+        terminal_state ||= {}
+        terminal_digests = Array(terminal_state.fetch(:memory_record_digests, []))
+        terminal_memory = Array(terminal_state.fetch(:situation_memory, []))
+        # The memory-contract checks apply only when the terminal state
+        # actually grounds on memory (a checkpoint-less failure never got far
+        # enough to write the keys — the recall is still the authority, and
+        # the manifest still names the authorized digests).
+        if terminal_state.key?(:memory_record_digests) || terminal_state.key?(:situation_memory)
+          if !@situation_recaller && (!terminal_digests.empty? || !terminal_memory.empty?)
             raise EpisodeRequestInvalidError,
                   "terminal memory requires an authorized situation recaller"
           end
@@ -571,12 +589,12 @@ module Tamoz
             raise EpisodeRequestInvalidError,
                   "terminal memory digests do not match the authorized recall"
           end
-          terminal_memory = Array(terminal_state.fetch(:situation_memory, []))
           unless terminal_memory == recall.projections
             raise EpisodeRequestInvalidError,
                   "terminal situation memory does not match the authorized recall"
           end
         end
+
         Agenticstream::Runtime::V1::ArtifactManifest.new(
           prompt_sha256: digest_bytes_or_nil(envelope.prompt_sha256),
           skill_set_sha256: nil,
@@ -587,24 +605,67 @@ module Tamoz
         )
       end
 
-      # T2.3: retains the documents the manifest names, keyed on the STREAM's
-      # digests, so a shadow run can resolve them without re-running Tamoz.
-      # Each document is keyed under ITS OWN named digest — the objective
-      # under objective_sha256, never under the prompt's digest.
-      def retain_manifest_artifacts(envelope)
-        {
-          envelope.tool_catalog_sha256 => envelope.wire.tool_catalog_json,
-          envelope.decision_schema_sha256 => envelope.wire.decision_schema_json,
-          envelope.objective_sha256 => envelope.wire.objective,
-          # P1: the operator-authored prompt is retained under ITS OWN digest,
-          # like every other manifest-named document (the prompt digest is the
-          # static configured prompt's digest; the frame binds it in the graph).
-          envelope.prompt_sha256 => envelope.wire.prompt
-        }.each do |digest, bytes|
-          next if digest.to_s.empty? || bytes.to_s.empty?
+      # T2.3/P3: retains the documents the manifest names, keyed on the
+      # VERIFIED raw digest (sha256 of the exact bytes — the durable store's
+      # rehash-on-admission rule), plus the terminal's response content
+      # (every-attempt bundles) — so an offline replay resolves every artifact
+      # by verified digest. The manifest's digests stay the wire identity; the
+      # store's keys are the byte-verified digests. Every wire digest is
+      # verified against the bytes it claims to cover BEFORE retention — a
+      # lying digest fails closed here, before any model event crosses the
+      # wire (prompt and diagnosis-catalog digests are already verified at
+      # frame build; tool_catalog/decision_schema are plain byte digests and
+      # objective is a domain digest).
+      def retain_manifest_artifacts(envelope, terminal_state = nil)
+        documents = {
+          "tool_catalog" => [envelope.tool_catalog_sha256, envelope.wire.tool_catalog_json],
+          "decision_schema" => [envelope.decision_schema_sha256, envelope.wire.decision_schema_json],
+          "objective" => [envelope.objective_sha256, envelope.wire.objective],
+          "diagnosis_catalog" => [envelope.diagnosis_catalog_sha256, envelope.wire.diagnosis_catalog_json],
+          "prompt" => [envelope.prompt_sha256, envelope.wire.prompt]
+        }
+        documents.each do |name, (wire_digest, bytes)|
+          next if bytes.to_s.empty?
 
-          @artifact_store.retain(digest:, bytes: bytes.to_s, media_type: "text/plain")
+          verify_manifest_digest!(name, wire_digest, bytes.to_s)
+          @artifact_store.retain(
+            digest: "sha256:#{Digest::SHA256.hexdigest(bytes.to_s)}",
+            bytes: bytes.to_s,
+            media_type: "text/plain"
+          )
         end
+
+        # P3 (every-attempt bundles): the terminal's response content is
+        # retained under its OWN content digest — an offline replay resolves
+        # it by verified digest (the response envelope digest is the gateway's
+        # witness; the content digest is the store's).
+        Array(terminal_state && terminal_state[:raw_response]).each do |raw|
+          next if raw.nil? || raw.empty?
+
+          digest = "sha256:#{Digest::SHA256.hexdigest(raw)}"
+          @artifact_store.retain(digest:, bytes: raw, media_type: "text/plain")
+        end
+      end
+
+      # The wire digest must bind the exact bytes the store will hold: plain
+      # sha256 for the byte documents, the objective's own domain digest for
+      # the objective text. Verified here so the manifest's identity always
+      # resolves in the verified store.
+      def verify_manifest_digest!(name, wire_digest, bytes)
+        expected = case name
+                   when "tool_catalog", "decision_schema"
+                     "sha256:#{Digest::SHA256.hexdigest(bytes)}"
+                   when "objective"
+                     Tamoz::Core.digest(
+                       "situation-runtime/objective/v1\n", {"text" => bytes}
+                     )
+                   else
+                     return
+                   end
+        return if expected == Tamoz::Core.normalize_digest(wire_digest.to_s)
+
+        raise EpisodeRequestInvalidError,
+              "manifest_digest_mismatch/#{name}: wire digest does not bind the retained bytes"
       end
 
       def blank_to_nil(value)

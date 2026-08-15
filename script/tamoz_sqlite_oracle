@@ -19,7 +19,7 @@ module TamozSQLiteOracle
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 13
+  SCHEMA_VERSION = 15
   MIGRATION_1_CHECKSUM =
     "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
   MIGRATION_2_CHECKSUM =
@@ -61,6 +61,12 @@ module TamozSQLiteOracle
   # is retired; MIGRATION_13 drops its eight tables.
   MIGRATION_13_CHECKSUM =
     "d0d5556d510bccb1792cfe05a4f293885b7ee28cb7b56e3468d34e926619160d"
+  # MIGRATION_14 adds the tamoz_stream_verifications table; MIGRATION_15
+  # (P3, verified artifact store) adds tamoz_artifacts.
+  MIGRATION_14_CHECKSUM =
+    "140fec98900d15bb2b94d2dc21cd05c1fd83fdcc9162117d866f0530b48c8d48"
+  MIGRATION_15_CHECKSUM =
+    "bf62f82543551681ca6e3796cf5df76a9a3e3972aae7e9e587e19c2f81ad90e7"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -787,7 +793,9 @@ module TamozSQLiteOracle
         [10, MIGRATION_10_CHECKSUM],
         [11, MIGRATION_11_CHECKSUM],
         [12, MIGRATION_12_CHECKSUM],
-        [13, MIGRATION_13_CHECKSUM]
+        [13, MIGRATION_13_CHECKSUM],
+        [14, MIGRATION_14_CHECKSUM],
+        [15, MIGRATION_15_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

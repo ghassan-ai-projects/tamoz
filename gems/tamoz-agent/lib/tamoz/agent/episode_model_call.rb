@@ -45,7 +45,7 @@ module Tamoz
         @transport = transport
       end
 
-      def call(context:, episode_id:, invocation:, slot:, system:, prompt:)
+      def call(context:, episode_id:, invocation:, slot:, system:, prompt:, frame_digest: nil)
         request_bytes = @transport.build_request(system:, prompt:)
         request_digest = @transport.request_digest(request_bytes)
         logical = ModelCall::LogicalCallKey.new(
@@ -65,13 +65,15 @@ module Tamoz
           actor: "tamoz.agent.episode.reason",
           logical_key: logical
         ) do
-          perform_call(request_bytes)
+          perform_call(request_bytes, logical:, frame_digest:)
         end
 
         case outcome.status
         when :succeeded
           projection = codec_projection(outcome)
-          receipt = build_receipt(logical:, invocation:, projection:, request_bytes:, outcome:)
+          receipt = build_receipt(
+            logical:, invocation:, projection:, request_bytes:, outcome:, frame_digest:
+          )
           Result.new(
             status: :succeeded,
             raw_response: projection.fetch("content"),
@@ -89,12 +91,17 @@ module Tamoz
 
       private
 
-      # The journaled result is the full call projection — content, the digest
-      # of the exact response envelope, and provider-reported usage — so a
-      # replayed run rebuilds the identical receipt from stored bytes.
-      def perform_call(request_bytes)
-        response = @transport.call(request_bytes)
+      # The journaled result is the full call projection — the transport
+      # request digest, content, the digest of the exact response envelope,
+      # and provider-reported usage — so a replayed run rebuilds the identical
+      # receipt from stored bytes and the runner can verify the receipt's
+      # request digest against the journal, not just the response side.
+      def perform_call(request_bytes, logical:, frame_digest:)
+        response = @transport.call(
+          request_bytes, logical_call_id: logical.to_key, frame_digest:
+        )
         {
+          "request_digest" => @transport.request_digest(request_bytes),
           "content" => response.content,
           "response_digest" => response.response_digest,
           "usage" => response.usage.available ? {
@@ -108,13 +115,14 @@ module Tamoz
       def codec_projection(outcome)
         value = outcome.value
         value.is_a?(Hash) ? value : {
+          "request_digest" => "sha256:#{Digest::SHA256.hexdigest(String(value))}",
           "content" => String(value),
           "response_digest" => "sha256:#{Digest::SHA256.hexdigest(String(value))}",
           "usage" => nil
         }
       end
 
-      def build_receipt(logical:, invocation:, projection:, request_bytes:, outcome:)
+      def build_receipt(logical:, invocation:, projection:, request_bytes:, outcome:, frame_digest:)
         usage_hash = projection["usage"]
         usage = usage_hash ? ModelCall::Usage.of(
           input_tokens: usage_hash.fetch("input_tokens", 0),
@@ -131,7 +139,8 @@ module Tamoz
           provider: @transport.provider,
           model: @transport.model,
           revision: nil,
-          settings_digest: nil,
+          settings_digest: @transport.settings_digest,
+          frame_digest: frame_digest,
           request_digest: @transport.request_digest(request_bytes),
           response_digest: projection.fetch("response_digest"),
           artifact_refs: [],

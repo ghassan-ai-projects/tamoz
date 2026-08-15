@@ -27,7 +27,7 @@ module EpisodeComposition
     Tamoz::Core.digest(PROMPT_DOMAIN, {"version" => version, "text" => prompt})
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
@@ -52,7 +52,7 @@ module EpisodeComposition
       model_call_factory: lambda do |role|
         transport = Tamoz::Agent::EpisodeModelTransport.new(
           endpoint: role.fetch("endpoint"), model: role.fetch("model"),
-          provider: role.fetch("provider")
+          provider: role.fetch("provider"), gateway: gateway
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,

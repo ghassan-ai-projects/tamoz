@@ -99,7 +99,8 @@ module Tamoz
           invocation:,
           slot: 0,
           system: frame.fetch("system"),
-          prompt: frame.fetch("user")
+          prompt: frame.fetch("user"),
+          frame_digest: frame["digest"]
         )
         if result.unknown?
           raise ProtocolError, "episode model call is unknown (no blind retry)"
@@ -324,6 +325,8 @@ module Tamoz
           "status" => receipt.status.to_s,
           "provider" => receipt.provider,
           "model" => receipt.model,
+          "settings_digest" => receipt.settings_digest,
+          "frame_digest" => receipt.frame_digest,
           "request_digest" => receipt.request_digest,
           "response_digest" => receipt.response_digest,
           "ordinal" => receipt.invocation.global_ordinal,
