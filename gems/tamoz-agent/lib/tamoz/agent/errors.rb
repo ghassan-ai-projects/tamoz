@@ -17,6 +17,12 @@ module Tamoz
     # which is untrusted-model-document territory.
     class DiagnosisCatalogError < Error; end
 
+    # P0B/§4.3/§8.1: a model-call identity or receipt was constructed with an
+    # invalid shape — a bad status, a malformed digest, or usage that fabricates
+    # zero instead of declaring itself unavailable. A construction-time guard, so
+    # a malformed receipt can never enter the durable journal.
+    class ModelReceiptError < Error; end
+
     # Raised when every plan attempt failed review. D-8 Fix C (RC-3): the raise site
     # authors the message — either a bounded summary of the last attempt's
     # STRUCTURAL-layer issues (Tamoz-generated validation text) or a generic phrase —
