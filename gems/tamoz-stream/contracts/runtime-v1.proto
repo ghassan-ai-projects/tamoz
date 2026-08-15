@@ -108,6 +108,13 @@ message EpisodeRequest {
   // ACTIVE bears action authority; SHADOW is persisted and scored but the
   // runtime independently prevents it from entering the governor.
   DispatchPolicy dispatch_policy = 62;
+
+  // P4/§B9-B10: the spec-bound INTENT catalog — the domain's action
+  // vocabulary with declared risks, parameter schemas, presets, and
+  // model-writable fields. Canonical bytes plus a domain-separated digest the
+  // worker and runtime verify independently before a model call.
+  bytes intent_catalog_json = 63;
+  bytes intent_catalog_sha256 = 64;
 }
 
 enum EpisodeKind {

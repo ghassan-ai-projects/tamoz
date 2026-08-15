@@ -52,13 +52,20 @@ module Tamoz
 
       # Assembles the frame: verifies the diagnosis catalog bytes against the
       # wire digest, verifies the prompt digest, and builds the trusted policy
-      # section + untrusted situation section. No model call.
+      # section + untrusted situation section. No model call. P4: the INTENT
+      # catalog is verified here too — a forged/malformed/duplicate catalog
+      # fails closed BEFORE any model call (the decide node re-verifies as
+      # defense-in-depth).
       def build_frame(state, _context)
         wire = state.fetch(:wire)
         snapshot = state.fetch(:snapshot)
         catalog = DiagnosisCatalog.verify_wire(
           wire.fetch("diagnosis_catalog_json"),
           wire.fetch("diagnosis_catalog_sha256")
+        )
+        IntentCatalog.verify_wire(
+          wire.fetch("intent_catalog_json"),
+          wire.fetch("intent_catalog_sha256")
         )
         frame = @frame_builder_factory.call(
           catalog, wire.fetch("objective", "")
@@ -221,20 +228,28 @@ module Tamoz
         }
       end
 
-      # Deterministic: validated document + current allowlist → terminal
-      # decision state (decision-v1 shape + digest). The runner only
-      # translates this state to the wire.
+      # Deterministic: validated document + intent catalog + current allowlist
+      # → terminal decision state (decision-v1 shape + digest). The catalog is
+      # re-verified here (defense-in-depth: even a forged catalog that slipped
+      # past intake fails at the decision boundary). The runner only translates
+      # this state to the wire.
       def decide(state, _context)
         document = state.fetch(:document)
         episode = state.fetch(:episode)
         snapshot = state.fetch(:snapshot)
+        wire = state.fetch(:wire)
         allowlist = Array(episode.fetch("allowed_intent_types", []))
+        catalog = IntentCatalog.verify_wire(
+          wire.fetch("intent_catalog_json"),
+          wire.fetch("intent_catalog_sha256")
+        )
         decision, digest = @decision_builder.call(
           document:,
           episode:,
           snapshot:,
           snapshot_digest: episode.fetch("snapshot_sha256", ""),
-          allowlist:
+          allowlist:,
+          catalog:
         )
         {"decision" => decision, "decision_digest" => digest}
       end

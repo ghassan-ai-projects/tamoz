@@ -93,6 +93,8 @@ module EpisodeComposition
     prompt: AquacultureDomain::PROMPT, snapshot: AquacultureDomain.snapshot,
     catalog_json: Tamoz::Core.jcs(AquacultureDomain::CATALOG),
     model_policy: "fast",
+    intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+    intent_catalog_sha256: nil,
     tool_catalog_json: nil, tool_catalog_sha256: nil,
     decision_schema_json: nil, decision_schema_sha256: nil,
     objective: AquacultureDomain::OBJECTIVE, objective_sha256: nil,
@@ -111,6 +113,9 @@ module EpisodeComposition
       snapshot_sha256: snapshot_sha256 || Tamoz::Core.digest(:snapshot, snapshot),
       diagnosis_catalog_json: catalog_json,
       diagnosis_catalog_sha256: Tamoz::Core.digest(:diagnosis_catalog, AquacultureDomain::CATALOG),
+      intent_catalog_json: intent_catalog_json,
+      intent_catalog_sha256: intent_catalog_sha256 ||
+                              AquacultureDomain.intent_catalog_digest,
       model_policy:,
       prompt:,
       prompt_version: PROMPT_VERSION,

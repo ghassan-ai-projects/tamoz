@@ -140,6 +140,8 @@ class StreamEpisodeCrashMatrixTest < Minitest::Test
       snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot),
       diagnosis_catalog_json: Tamoz::Core.jcs(AquacultureDomain::CATALOG),
       diagnosis_catalog_sha256: Tamoz::Core.digest(:diagnosis_catalog, AquacultureDomain::CATALOG),
+      intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+      intent_catalog_sha256: AquacultureDomain.intent_catalog_digest,
       model_policy: "fast",
       prompt: prompt,
       prompt_version: "1.0",

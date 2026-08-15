@@ -2,6 +2,7 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
+require "support/aquaculture_domain"
 require "tamoz/stream/approval_relay"
 require "tamoz/stream/reconsideration"
 require "json"
@@ -273,7 +274,10 @@ class StreamInvariantsTest < Minitest::Test
         protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
         fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
         kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-        risk_ceiling: :RISK_CLASS_R0
+        risk_ceiling: :RISK_CLASS_R0,
+        allowed_intent_types: ["install_watch_condition"],
+        intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+        intent_catalog_sha256: AquacultureDomain.intent_catalog_digest
       ),
       nil
     )
@@ -287,7 +291,8 @@ class StreamInvariantsTest < Minitest::Test
       envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
       outcome: {primary_hypothesis: "x", confidence: 0.3,
                 watch_metric: "condition_score", watch_threshold: 0.8},
-      now: Time.utc(2026, 8, 12)
+      now: Time.utc(2026, 8, 12),
+      catalog: Tamoz::Agent::IntentCatalog.from_list(AquacultureDomain::INTENT_CATALOG)
     )
     intent = decision.fetch("intents").fetch(0)
     assert_equal "install_watch_condition", intent.fetch("type")
@@ -361,6 +366,8 @@ class StreamInvariantsTest < Minitest::Test
       kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
       allowed_intent_types: ["create_maintenance_ticket"],
+      intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+      intent_catalog_sha256: AquacultureDomain.intent_catalog_digest,
       capability_token: "opaque.hmac.token",
       snapshot_json: Tamoz::Core.jcs(snapshot),
       snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)

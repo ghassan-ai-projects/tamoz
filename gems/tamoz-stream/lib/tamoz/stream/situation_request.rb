@@ -79,6 +79,7 @@ module Tamoz
       def prompt_sha256 = Tamoz::Core.normalize_digest(@wire.prompt_sha256)
       def objective_sha256 = Tamoz::Core.normalize_digest(@wire.objective_sha256)
       def diagnosis_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.diagnosis_catalog_sha256)
+      def intent_catalog_sha256 = Tamoz::Core.normalize_digest(@wire.intent_catalog_sha256)
 
       # P2: the wire budget envelope as a codec-safe hash the graph's
       # ReceiptBudgetController consumes (nil fields = unbounded).
@@ -169,6 +170,8 @@ module Tamoz
             "prompt_sha256" => prompt_sha256.to_s,
             "diagnosis_catalog_json" => @wire.diagnosis_catalog_json.to_s,
             "diagnosis_catalog_sha256" => diagnosis_catalog_sha256.to_s,
+            "intent_catalog_json" => @wire.intent_catalog_json.to_s,
+            "intent_catalog_sha256" => intent_catalog_sha256.to_s,
             "objective" => @wire.objective.to_s,
             "objective_sha256" => objective_sha256.to_s,
             "budget" => budget_hash,
@@ -220,6 +223,15 @@ module Tamoz
         unless @wire.allowed_intent_types.to_a.length <= 16
           raise EpisodeRequestInvalidError,
                 "allowed_intent_types must not exceed 16 entries"
+        end
+        # P4/§B9-B10: the intent catalog is REQUIRED for a diagnose episode —
+        # missing (or empty, or forged, checked again at frame build) fails
+        # closed BEFORE any model call. The model proposes; the catalog
+        # declares the authority.
+        if KIND_NAMES.fetch(@wire.kind) == :diagnose &&
+           (@wire.intent_catalog_json.to_s.empty? || intent_catalog_sha256.to_s.empty?)
+          raise EpisodeRequestInvalidError,
+                "a diagnose episode requires the intent catalog"
         end
         validate_budget!
         if traceparent && !traceparent.match?(TRACEPARENT_PATTERN)

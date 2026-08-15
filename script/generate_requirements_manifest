@@ -567,8 +567,8 @@ EVIDENCE = {
                 ]},
   "ADR-037" => {test: "test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts",
                 supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
-  "ADR-038" => {test: "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
-                supporting: ["test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent"]},
+  "ADR-038" => {test: "test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch",
+                supporting: ["test/stream_decision_builder_test.rb#test_a_proposal_for_an_allowlisted_action_uses_the_catalog_declared_risk"]},
   "ADR-039" => {test: "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
                 supporting: ["test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"]},
   "ADR-040" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files"},
@@ -656,10 +656,10 @@ EVIDENCE = {
     ]
   },
   "OBJ-6" => {
-    test: "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
+    test: "test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch",
     supporting: [
-      "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent",
-      "test/stream_decision_builder_test.rb#test_a_low_risk_ceiling_never_proposes_a_consequential_action"
+      "test/stream_decision_builder_test.rb#test_a_proposal_for_an_allowlisted_action_uses_the_catalog_declared_risk",
+      "test/stream_decision_builder_test.rb#test_a_proposal_above_the_risk_ceiling_degrades_to_watch"
     ]
   },
   "OBJ-7" => {

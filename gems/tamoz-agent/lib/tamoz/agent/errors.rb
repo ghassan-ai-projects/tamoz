@@ -17,6 +17,12 @@ module Tamoz
     # which is untrusted-model-document territory.
     class DiagnosisCatalogError < Error; end
 
+    # P4/§B9-B10: the intent catalog was missing, malformed, forged, or
+    # self-contradictory (a declared risk outside R0–R4, a schema that is not
+    # an object, a preset with unknown parameters). Terminal: the worker
+    # refuses before a model call.
+    class IntentCatalogError < Error; end
+
     # P0B/§4.3/§8.1: a model-call identity or receipt was constructed with an
     # invalid shape — a bad status, a malformed digest, or usage that fabricates
     # zero instead of declaring itself unavailable. A construction-time guard, so
