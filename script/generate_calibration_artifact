@@ -64,7 +64,11 @@ end
 # non-finite numbers and ±0), so a malformed manifest fails at parse, not
 # later at canonicalization.
 def load_manifest(path)
-  document = Tamoz::Core.parse_json_strict(File.read(path, encoding: Encoding::UTF_8))
+  document = begin
+    Tamoz::Core.parse_json_strict(File.read(path, encoding: Encoding::UTF_8))
+  rescue Tamoz::Core::JCS::Error, Errno::ENOENT => e
+    raise ArgumentError, "manifest #{path}: #{e.message}"
+  end
   unless document.is_a?(Hash)
     raise ArgumentError, "manifest root must be an object with a \"domains\" array"
   end
@@ -130,6 +134,10 @@ parser = OptionParser.new do |opts|
 end
 begin
   parser.parse!(ARGV)
+  if ARGV.any?
+    raise OptionParser::ParseError,
+          "unexpected argument: #{ARGV.first.inspect} (did you mean --manifest?)"
+  end
   main(manifest_path: options[:manifest_path])
 rescue OptionParser::ParseError, ArgumentError, Tamoz::Core::JCS::Error, Errno::ENOENT => e
   warn "generate_calibration_artifact: #{e.message}"

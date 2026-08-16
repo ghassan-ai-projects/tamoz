@@ -70,10 +70,15 @@ the deployed domain's documents as INPUT, not hardcode fixtures.
     consumes `CALIBRATION_ARTIFACTS.json` yet — the operator registration
     (filling `model_revision` from the Go spec digest into the
     `calibration_artifacts` table) is deploy-time, still unwired.
-  - **Fail-closed property**: a degenerate or mismatched manifest catalog
-    binds a different `policy_digest`, so the Go gate (which joins on
-    domain + digests for R2+) refuses — watch-only. A bad manifest can never
-    GRANT an intent, only fail to unlock.
+  - **Fail-closed property**: the Go gate (`AssertCalibration`) joins on
+    domain + model_revision ONLY — the prompt/catalog/policy digests are
+    bound at ACTIVATION, never re-checked at gate time. A bad manifest
+    cannot grant an intent today because automation unlocks only when an
+    operator activates an artifact whose model_revision equals the deployed
+    spec's executor_version — and that registration is still unwired.
+    Stated plainly: a hand-authored catalog binds a false policy_digest the
+    gate never re-verifies, so the manifest documents must be copied from
+    the compiled spec's wire output.
 - `test/p8_rollout_test.rb`:
   - Existing determinism test unchanged.
   - NEW primary test: round-trip a real manifest — `JSON.generate` the
