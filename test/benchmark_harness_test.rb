@@ -185,13 +185,21 @@ class BenchmarkHarnessTest < Minitest::Test
     baselines = Tamoz::Evals::Benchmark::Baselines
     %i[majority_prior random_label fixed_threshold z_score first_difference
        moving_median nearest_symptom deterministic_detector].each do |name|
-      kwargs = {}
-      if %i[fixed_threshold z_score first_difference moving_median
-            deterministic_detector].include?(name)
-        kwargs = {metric: "dissolved_oxygen", alarm_code: "low_dissolved_oxygen"}
-      elsif name == :nearest_symptom
-        kwargs = {metric: "dissolved_oxygen"}
-      end
+      kwargs = if name == :fixed_threshold
+                 # The detector's domain params come from the family truth
+                 # config — no defaults (domain-leak fix).
+                 {metric: "dissolved_oxygen", alarm_code: "low_dissolved_oxygen",
+                  threshold: 2.0, operator: "lt"}
+               elsif %i[z_score first_difference moving_median
+                        deterministic_detector].include?(name)
+                 {metric: "dissolved_oxygen", alarm_code: "low_dissolved_oxygen"}
+               elsif name == :random_label
+                 {seed: 1}
+               elsif name == :nearest_symptom
+                 {metric: "dissolved_oxygen"}
+               else
+                 {}
+               end
       first = baselines.public_send(name, cells, CODES, **kwargs)
       second = baselines.public_send(name, cells, CODES, **kwargs)
       assert_equal first.map { |cell| cell.fetch("primary_code") },
@@ -220,7 +228,8 @@ class BenchmarkHarnessTest < Minitest::Test
     result = comparison.paired(
       candidate: strong, baseline: weak, cells: strong,
       metric: ->(cell) { cell.fetch("primary_code") == cell.fetch("truth_code") ? 1.0 : 0.0 },
-      minimum_effect: 0.05
+      minimum_effect: 0.05,
+      seed: 7
     )
     assert result.fetch("meets_minimum_effect")
     assert_operator result.fetch("mean_difference"), :>, 0.5
@@ -228,7 +237,8 @@ class BenchmarkHarnessTest < Minitest::Test
     reversal = comparison.paired(
       candidate: weak, baseline: strong, cells: weak,
       metric: ->(cell) { cell.fetch("primary_code") == cell.fetch("truth_code") ? 1.0 : 0.0 },
-      minimum_effect: 0.05
+      minimum_effect: 0.05,
+      seed: 7
     )
     refute reversal.fetch("meets_minimum_effect")
   end
@@ -239,12 +249,80 @@ class BenchmarkHarnessTest < Minitest::Test
                                         truth: index.even? ? "low_dissolved_oxygen" : "unknown") }
     metric = ->(cell) { cell.fetch("primary_code") == cell.fetch("truth_code") ? 1.0 : 0.0 }
     first = comparison.paired(candidate: cells, baseline: cells.reverse, cells:, metric:,
-                              minimum_effect: 0.05)
+                              minimum_effect: 0.05, seed: 7)
     second = comparison.paired(candidate: cells, baseline: cells.reverse, cells:, metric:,
-                               minimum_effect: 0.05)
+                               minimum_effect: 0.05, seed: 7)
     assert_equal first.fetch("mean_difference"), second.fetch("mean_difference")
     assert_equal first.fetch("ci_low"), second.fetch("ci_low")
     assert_equal first.fetch("ci_high"), second.fetch("ci_high")
+  end
+
+  # fixed_threshold reads the family's frozen threshold AND operator — no
+  # defaults: aquaculture lt/2.0 alarms below, climate gt/31.0 alarms above.
+  def test_fixed_threshold_alarms_by_truth_operator_and_threshold
+    baselines = Tamoz::Evals::Benchmark::Baselines
+    aqua = [
+      cell(cell_id: "a1", truth: "low_dissolved_oxygen", facts: {"dissolved_oxygen" => 1.0}),
+      cell(cell_id: "a2", truth: "unknown", facts: {"dissolved_oxygen" => 4.0}),
+      cell(cell_id: "a3", truth: "unknown", facts: {"dissolved_oxygen" => 5.0})
+    ]
+    lt = baselines.fixed_threshold(aqua, CODES, metric: "dissolved_oxygen",
+                                   alarm_code: "low_dissolved_oxygen", threshold: 2.0, operator: "lt")
+    assert_equal "low_dissolved_oxygen", lt.fetch(0).fetch("primary_code")
+    assert_equal "unknown", lt.fetch(1).fetch("primary_code")
+
+    climate_codes = CODES + %w[overheated]
+    climate = [
+      cell(cell_id: "c1", truth: "overheated", facts: {"zone_temperature" => 33.0}),
+      cell(cell_id: "c2", truth: "unknown", facts: {"zone_temperature" => 28.0}),
+      cell(cell_id: "c3", truth: "unknown", facts: {"zone_temperature" => 25.0})
+    ]
+    gt = baselines.fixed_threshold(climate, climate_codes, metric: "zone_temperature",
+                                   alarm_code: "overheated", threshold: 31.0, operator: "gt")
+    assert_equal "overheated", gt.fetch(0).fetch("primary_code")
+    assert_equal "unknown", gt.fetch(1).fetch("primary_code")
+
+    assert_raises(ArgumentError) do
+      baselines.fixed_threshold(aqua, CODES, metric: "dissolved_oxygen",
+                                 alarm_code: "low_dissolved_oxygen", threshold: 2.0, operator: "gte")
+    end
+  end
+
+  # run_baseline passes each family's frozen threshold/operator — a
+  # climate-deviation cell at 33.0 alarms "overheated" (gt/31.0); pre-fix it
+  # was evaluated lt/2.0 and fell to the majority.
+  def test_run_baseline_applies_each_family_truth_threshold_and_operator
+    protocol = read_json(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
+    cells = [
+      cell(cell_id: "clim-hot", scenario_family: "climate-deviation", truth: "overheated",
+           facts: {"zone_temperature" => 33.0}),
+      cell(cell_id: "clim-ok", scenario_family: "climate-deviation", truth: "unknown",
+           facts: {"zone_temperature" => 28.0}),
+      cell(cell_id: "clim-ok2", scenario_family: "climate-deviation", truth: "unknown",
+           facts: {"zone_temperature" => 26.0}),
+      cell(cell_id: "aqua-low", scenario_family: "do-crash", truth: "low_dissolved_oxygen",
+           facts: {"dissolved_oxygen" => 1.0}),
+      cell(cell_id: "aqua-ok", scenario_family: "do-crash", truth: "unknown",
+           facts: {"dissolved_oxygen" => 4.0}),
+      cell(cell_id: "aqua-ok2", scenario_family: "do-crash", truth: "unknown",
+           facts: {"dissolved_oxygen" => 5.0})
+    ]
+    report = Tamoz::Evals::Benchmark::Report.new(
+      protocol:, cells:, model_identity: "local-model",
+      protocol_sha256: Digest::SHA256.hexdigest(
+        File.binread(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
+      )
+    )
+    # run_baseline is private; exercising it directly isolates the
+    # family→threshold/operator wiring from the rest of build.
+    rows = report.send(:run_baseline, "fixed_threshold")
+    by_id = rows.to_h { |row| [row.fetch("cell_id"), row.fetch("primary_code")] }
+    assert_equal "overheated", by_id.fetch("clim-hot"),
+                 "climate family must alarm above 31.0 (gt), not below 2.0 (lt)"
+    assert_equal "unknown", by_id.fetch("clim-ok")
+    assert_equal "low_dissolved_oxygen", by_id.fetch("aqua-low"),
+                 "aquaculture family must alarm below 2.0 (lt)"
+    assert_equal "unknown", by_id.fetch("aqua-ok")
   end
 
   def report(protocol, cells, model_identity: "local-model", label: "", controls_passed: false, go_baseline_cells: nil)
@@ -255,7 +333,7 @@ class BenchmarkHarnessTest < Minitest::Test
       label:,
       controls_passed:,
       go_baseline_cells:,
-      protocol_sha256: "5e25b0b9de404ceb2f209da9f141f696e0a6f3215cdce6c9307a4f4cf0c66e4a"
+      protocol_sha256: "87dec3cd56f2f6b86a85384cd1348ce562d6a69eb1ea54c85641370302c23038"
     )
   end
 
@@ -269,8 +347,8 @@ class BenchmarkHarnessTest < Minitest::Test
            truth: "low_dissolved_oxygen")
     end
     built = report(protocol, perfect, controls_passed: true)
-    assert_equal "1.0.0", built.fetch("benchmark_protocol_version")
-    assert_equal "5e25b0b9de404ceb2f209da9f141f696e0a6f3215cdce6c9307a4f4cf0c66e4a",
+    assert_equal "1.1.0", built.fetch("benchmark_protocol_version")
+    assert_equal "87dec3cd56f2f6b86a85384cd1348ce562d6a69eb1ea54c85641370302c23038",
                  built.fetch("protocol_sha256")
     assert_equal "inconclusive", built.fetch("verdict"),
                  "a pilot (fixture) run must never claim the go rule"

@@ -1,5 +1,5 @@
 {
-  "benchmark_protocol_version": "1.0.0",
+  "benchmark_protocol_version": "1.1.0",
   "sealed_build_digest": "sha256:6fb7a1c49afc7de376de4b611bf3ff5daa56d476107eb05de8a09b12612fa812",
   "graph": {
     "name": "tamoz.agent.episode",
@@ -49,14 +49,18 @@
         "domain": "aquaculture",
         "primary": "low_dissolved_oxygen",
         "metric": "dissolved_oxygen",
-        "alarm_code": "low_dissolved_oxygen"
+        "alarm_code": "low_dissolved_oxygen",
+        "threshold": 2.0,
+        "operator": "lt"
       },
       {
         "id": "climate-deviation",
         "domain": "climate",
         "primary": "overheated",
         "metric": "zone_temperature",
-        "alarm_code": "overheated"
+        "alarm_code": "overheated",
+        "threshold": 31.0,
+        "operator": "gt"
       }
     ],
     "min_cases_per_cell": 30
@@ -123,6 +127,8 @@
     "failures_never_replaced": true,
     "paired_seeds_across_providers_and_baselines": true,
     "cluster_bootstrap_intervals": true,
-    "min_cases_per_cell": 30
+    "min_cases_per_cell": 30,
+    "random_label_seed": 1,
+    "bootstrap_seed": 7
   }
 }

@@ -5,7 +5,7 @@ reviewers ran; every finding fixed. The critical (pilot harness crash — the
 family driver returned a loader instance where benchmark_run resolves
 `::PROMPT` constants) is fixed by returning the thin-loader MODULE. The
 reviewers verified by execution: all six pinned digests byte-identical, the
-protocol regenerates identically (SHA `5e25b0b9…`), the holdout output pins
+protocol regenerates identically (SHA `87dec3cd…` at protocol v1.1.0), the holdout output pins
 to a committed artifact (`documentation/benchmark/holdout-pin/`), the Go
 cross-repo parity test passes, and the pilot harness runs end-to-end
 (verdict: inconclusive, correct for a fixture run). The plan's
@@ -58,8 +58,8 @@ parity digest `e4f86620…` is unchanged and still asserted on both sides.
    order). The six baseline digests (aqua intent `e4f86620…`, clim intent
    `f27b63a6…`, aqua diag `7ab740e0…`, clim diag `bb2b4789…`, aqua prompt
    `9c89f6e5…`, clim prompt `4e1440a2…`) and the protocol SHA pin
-   (`5e25b0b9…`) survive. A verification step diffs the six digests before
-   commit.
+   (`5e25b0b9…` at the time; v1.1.0 is `87dec3cd…`) survive. A verification
+   step diffs the six digests before commit.
 3. **Benchmark families are data too.** The family config moves into the
    domain JSON; a small driver reconstructs the `FAMILIES` shape (facts
    generator with the single-rand structure, threshold truth/gold) the

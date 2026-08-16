@@ -17,7 +17,7 @@ class BenchmarkProtocolTest < Minitest::Test
 
   # SHA-256 of the committed documentation/benchmark/BENCHMARK_PROTOCOL.json. Bump only
   # when a protocol change is deliberate: this is the freeze.
-  COMMITTED_SHA256 = "5e25b0b9de404ceb2f209da9f141f696e0a6f3215cdce6c9307a4f4cf0c66e4a"
+  COMMITTED_SHA256 = "87dec3cd56f2f6b86a85384cd1348ce562d6a69eb1ea54c85641370302c23038"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider
@@ -72,7 +72,7 @@ class BenchmarkProtocolTest < Minitest::Test
   end
 
   def test_freeze_fields_are_present
-    assert_equal "1.0.0", protocol.fetch("benchmark_protocol_version")
+    assert_equal "1.1.0", protocol.fetch("benchmark_protocol_version")
     assert_equal %w[aquaculture climate], protocol.fetch("case_matrix").fetch("domains")
     assert_equal 30, protocol.dig("case_matrix", "min_cases_per_cell")
     assert_equal 30, protocol.dig("statistics", "min_cases_per_cell")
@@ -81,18 +81,32 @@ class BenchmarkProtocolTest < Minitest::Test
     assert_equal "hard zero gate", protocol.dig("scoring", "evidence", "fabricated_reference_rate")
     assert_includes protocol.fetch("statistics").keys, "intention_to_treat"
     assert_includes protocol.fetch("statistics").keys, "paired_seeds_across_providers_and_baselines"
+    # The baselines' seeds are data, not gem-code defaults (domain-leak fix):
+    # random_label draws from random_label_seed, the paired comparison from
+    # bootstrap_seed.
+    assert_equal 1, protocol.dig("statistics", "random_label_seed")
+    assert_equal 7, protocol.dig("statistics", "bootstrap_seed")
   end
 
   # Every scenario family freezes the detector baselines' metric + alarm code,
   # so the "strongest non-LLM baseline" sees each family's signal (a baseline
   # hardcoded to one family's metric would score half the corpus at zero).
+  # v1.1: the truth threshold + operator are frozen per family too — the
+  # fixed_threshold detector reads them (no defaults), and the operator keeps
+  # the gt family (climate) from being evaluated lt-side.
   def test_every_scenario_family_freezes_its_metric_and_alarm
     protocol.fetch("case_matrix").fetch("scenario_families").each do |family|
       refute_empty family.fetch("metric"), "#{family.fetch("id")} must freeze its metric"
       refute_empty family.fetch("alarm_code"), "#{family.fetch("id")} must freeze its alarm code"
+      assert family.key?("threshold"), "#{family.fetch("id")} must freeze its threshold"
+      assert_includes %w[lt gt], family.fetch("operator"), "#{family.fetch("id")} must freeze lt/gt"
     end
     assert_equal "dissolved_oxygen", protocol.dig("case_matrix", "scenario_families", 0, "metric")
     assert_equal "zone_temperature", protocol.dig("case_matrix", "scenario_families", 1, "metric")
+    assert_equal 2.0, protocol.dig("case_matrix", "scenario_families", 0, "threshold")
+    assert_equal "lt", protocol.dig("case_matrix", "scenario_families", 0, "operator")
+    assert_equal 31.0, protocol.dig("case_matrix", "scenario_families", 1, "threshold")
+    assert_equal "gt", protocol.dig("case_matrix", "scenario_families", 1, "operator")
   end
 
   # Domain-knowledge extraction: the domain data must bind the SAME wire
@@ -123,7 +137,8 @@ class BenchmarkProtocolTest < Minitest::Test
 
   # The protocol's per-family metric/alarm (what the Report scores against)
   # must agree with the domain data's benchmark_family config (what the
-  # holdout/pilot generate series under) — one drift window closed.
+  # holdout/pilot generate series under) — one drift window closed. v1.1 also
+  # binds the truth threshold + operator the fixed_threshold detector reads.
   def test_family_config_agrees_between_protocol_and_domain_data
     require "support/domain_loader"
     protocol.fetch("case_matrix").fetch("scenario_families").each do |family|
@@ -132,6 +147,10 @@ class BenchmarkProtocolTest < Minitest::Test
                    "family #{family.fetch("id")} metric must agree"
       assert_equal family.fetch("alarm_code"), config.fetch("alarm_code"),
                    "family #{family.fetch("id")} alarm_code must agree"
+      assert_equal family.fetch("threshold"), config.dig("truth", "threshold"),
+                   "family #{family.fetch("id")} threshold must agree"
+      assert_equal family.fetch("operator"), config.dig("truth", "operator"),
+                   "family #{family.fetch("id")} operator must agree"
     end
   end
 end

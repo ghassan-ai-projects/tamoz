@@ -57,7 +57,8 @@ passes.
 ## Deletes / kills
 
 - `test/fixtures/episode_diagnose.rb` as any form of production or demo path. Test-only, labeled
-  `fixture`, blocked from emitting model events on a `tamoz` route.
+  `fixture`, blocked from emitting model events on a `tamoz` route. (Carried out in P1 — the file is
+  gone; the fixed `Tamoz::Agent::EpisodeGraph` + `test/support/episode_composition.rb` replaced it.)
 - Runner-side decision building and verification orchestration.
 - `--graph` loading in production mode.
 

@@ -18,7 +18,8 @@ module Tamoz
         # Computes the paired comparison of `candidate` vs `baseline` on the
         # per-cell metric. Returns the mean difference, its cluster-bootstrap
         # 95% interval, and whether the frozen minimum practical effect is met.
-        def paired(candidate:, baseline:, cells:, metric:, minimum_effect:, seed: 7,
+        # The seed is the protocol statistics' bootstrap_seed — never a default.
+        def paired(candidate:, baseline:, cells:, metric:, minimum_effect:, seed:,
                    resamples: 2000, confidence: 0.95)
           clusters = cluster_ids(cells)
           differences = per_cell_differences(candidate, baseline, metric)

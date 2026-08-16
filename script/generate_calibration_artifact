@@ -8,6 +8,8 @@ require "digest"
 require "optparse"
 require "tamoz/agent"
 
+PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+
 # P8 (docs/new-design/PHASE_P8_ROLLOUT.md): the calibration artifact. One
 # domain's exact bound document — model revision + profile digest + prompt +
 # diagnosis catalog + domain + policy digest — that unlocks automatic
@@ -45,7 +47,9 @@ def main(manifest_path: nil)
     build_artifact_from(entry.fetch("domain"), entry.fetch("prompt"),
                         entry.fetch("diagnosis_catalog"), entry.fetch("intent_catalog"))
   end
-  puts JSON.pretty_generate("benchmark_protocol_version" => "1.0.0",
+  protocol_version = JSON.parse(File.read(PROTOCOL_PATH, encoding: Encoding::UTF_8))
+                              .fetch("benchmark_protocol_version")
+  puts JSON.pretty_generate("benchmark_protocol_version" => protocol_version,
                             "artifacts" => artifacts)
 end
 

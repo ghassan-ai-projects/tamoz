@@ -85,7 +85,8 @@ side, without trusting Tamoz.
 The owner's complaints are confirmed by the code. Short version:
 
 **R1. The graph gem is used as a shell.** (violates B2)
-- The episode "graph" is one node that does everything inline (`test/fixtures/episode_diagnose.rb:65-66`).
+- The episode "graph" is one node that does everything inline (`test/fixtures/episode_diagnose.rb:65-66`
+  — removed in P1; the production path is the fixed `Tamoz::Agent::EpisodeGraph`, v4).
 - The runner orchestrates around the graph: decision building, verification rows, manifest
   (`situation_request.rb:391-514`).
 - Budgets, event sequencing, and terminal mapping are re-implemented in `episode_stream.rb:16-308`.

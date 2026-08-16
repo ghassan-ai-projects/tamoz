@@ -17,8 +17,25 @@ require "support/climate_domain"
 def main
   sealed = Tamoz::Agent::SealedBuild.new.canonical_fingerprint
   domains = DomainLoader.domains
+  # Scenario families are DATA (the domain JSON's benchmark_family), derived
+  # here rather than re-authored. Order is load-bearing: benchmark_holdout
+  # alternates families via `index % 2`, which assumes exactly two families —
+  # a third domain needs a new selection scheme.
+  scenario_families = domains.map do |name|
+    family = DomainLoader.load(name).benchmark_family
+    truth = family.fetch("truth")
+    {
+      "id" => family.fetch("family_id"),
+      "domain" => name,
+      "primary" => truth.fetch("code"),
+      "metric" => family.fetch("metric"),
+      "alarm_code" => family.fetch("alarm_code"),
+      "threshold" => truth.fetch("threshold"),
+      "operator" => truth.fetch("operator")
+    }
+  end
   protocol = {
-    "benchmark_protocol_version" => "1.0.0",
+    "benchmark_protocol_version" => "1.1.0",
     "sealed_build_digest" => sealed,
     "graph" => {
       "name" => Tamoz::Agent::EpisodeGraph::GRAPH_NAME,
@@ -51,12 +68,7 @@ def main
     },
     "case_matrix" => {
       "domains" => domains,
-      "scenario_families" => [
-        {"id" => "do-crash", "domain" => "aquaculture", "primary" => "low_dissolved_oxygen",
-         "metric" => "dissolved_oxygen", "alarm_code" => "low_dissolved_oxygen"},
-        {"id" => "climate-deviation", "domain" => "climate", "primary" => "overheated",
-         "metric" => "zone_temperature", "alarm_code" => "overheated"}
-      ],
+      "scenario_families" => scenario_families,
       "min_cases_per_cell" => 30
     },
     "scoring" => {
@@ -103,7 +115,9 @@ def main
       "failures_never_replaced" => true,
       "paired_seeds_across_providers_and_baselines" => true,
       "cluster_bootstrap_intervals" => true,
-      "min_cases_per_cell" => 30
+      "min_cases_per_cell" => 30,
+      "random_label_seed" => 1,
+      "bootstrap_seed" => 7
     }
   }
   puts JSON.pretty_generate(protocol)

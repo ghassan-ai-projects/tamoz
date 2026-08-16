@@ -18,8 +18,9 @@ module Tamoz
           cells.map { |cell| cell.merge("primary_code" => majority, "probabilities" => one_hot_probabilities(majority, codes)) }
         end
 
-        # Uniform random labels, seeded per cell so a re-run is identical.
-        def random_label(cells, codes, seed: 1)
+        # Uniform random labels, seeded per cell so a re-run is identical. The
+        # seed is the protocol statistics' random_label_seed — never a default.
+        def random_label(cells, codes, seed:)
           cells.each_with_index.map do |cell, index|
             random = Random.new(seed + index)
             code = codes.sample(random: random)
@@ -27,14 +28,17 @@ module Tamoz
           end
         end
 
-        # Fixed-threshold detector: alarms when the primary metric crosses a
-        # frozen threshold, else the majority code. The metric/alarm pair is
-        # REQUIRED — the protocol's case matrix supplies it per family
-        # (domain knowledge lives in the benchmark data, not in this gem).
-        def fixed_threshold(cells, codes, metric:, threshold: 2.0, alarm_code:)
+        # Fixed-threshold detector: alarms when the primary metric crosses the
+        # family's frozen truth threshold, else the majority code. The metric/
+        # alarm pair AND the threshold/operator come from the family's truth
+        # config (domain data) — never defaults here.
+        def fixed_threshold(cells, codes, metric:, threshold:, alarm_code:, operator:)
+          raise ArgumentError, "fixed_threshold operator must be lt or gt, got #{operator.inspect}" unless %w[lt gt].include?(operator)
+
           cells.map do |cell|
             value = metric_value(cell, metric)
-            code = value < threshold ? alarm_code : majority_for(cells, codes)
+            alarm = operator == "gt" ? value > threshold : value < threshold
+            code = alarm ? alarm_code : majority_for(cells, codes)
             cell.merge("primary_code" => code, "probabilities" => one_hot_probabilities(code, codes))
           end
         end

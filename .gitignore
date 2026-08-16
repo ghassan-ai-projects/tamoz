@@ -75,3 +75,10 @@ build-iPhoneSimulator/
 # User-owned evaluation workspace. Not repository content; kept out of git so a
 # clean checkout and `git status` stay meaningful.
 agenteval/
+
+# SQLite WAL sidecars from test runs (tracked fixture DBs opened by tests)
+*.sqlite3-shm
+*.sqlite3-wal
+# benchmark_holdout always writes a leak scan; the holdout-pin keeps only
+# manifest + truth (regenerated deliberately, see docs/new-design/impl/DOMAIN_LEAK_FIX.md)
+documentation/benchmark/holdout-pin/leak-scan.json

@@ -44,7 +44,8 @@ module Tamoz
             cells: @produced,
             metric: method(:per_cell_correctness),
             minimum_effect: @protocol.dig("thresholds", "minimum_practical_effect"),
-            confidence: @protocol.dig("thresholds", "confidence_interval")
+            confidence: @protocol.dig("thresholds", "confidence_interval"),
+            seed: @protocol.dig("statistics", "bootstrap_seed")
           )
           violations = stop_rule_violations
           {
@@ -119,6 +120,11 @@ module Tamoz
 
         def run_baseline(name)
           families = @protocol.dig("case_matrix", "scenario_families")
+          # Convention: a strategy's keyword params are filled by name from
+          # the family row (metric/alarm_code/threshold/operator) or the
+          # statistics block (seed) — the protocol keys must match the
+          # strategy signature, and a new strategy param needs a protocol
+          # field before it can be fed.
           accepted = Baselines.method(name).parameters.filter_map do |kind, key|
             key if kind == :key || kind == :keyreq
           end
@@ -128,7 +134,10 @@ module Tamoz
             if family
               kwargs[:metric] = family["metric"] if accepted.include?(:metric)
               kwargs[:alarm_code] = family["alarm_code"] if accepted.include?(:alarm_code)
+              kwargs[:threshold] = family["threshold"] if accepted.include?(:threshold)
+              kwargs[:operator] = family["operator"] if accepted.include?(:operator)
             end
+            kwargs[:seed] = @protocol.dig("statistics", "random_label_seed") if accepted.include?(:seed)
             Baselines.public_send(name, cells, @codes, **kwargs)
           end
         end

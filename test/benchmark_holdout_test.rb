@@ -53,7 +53,7 @@ class BenchmarkHoldoutTest < Minitest::Test
       File.binread(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
     )
     assert_equal protocol_sha256, output.fetch("manifest").fetch("protocol_sha256")
-    assert_equal "1.0.0", output.fetch("manifest").fetch("benchmark_protocol_version")
+    assert_equal "1.1.0", output.fetch("manifest").fetch("benchmark_protocol_version")
   end
 
   def test_a_forbidden_token_in_the_visible_bytes_is_detected
