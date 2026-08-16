@@ -232,7 +232,7 @@ class BenchmarkControlsTest < Minitest::Test
   # Control 7 — correct detection before the first-observable time is
   # suspicious: the report flags it as a stop-rule violation.
   def test_control_7_detection_before_first_observable_time_is_flagged
-    protocol = read_json(ROOT.join("docs", "benchmark", "BENCHMARK_PROTOCOL.json"))
+    protocol = read_json(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
     cells = [
       {"cell_id" => "premature-1", "scenario_family" => "do-crash", "label" => "pilot",
        "primary_code" => "low_dissolved_oxygen", "truth_code" => "low_dissolved_oxygen",

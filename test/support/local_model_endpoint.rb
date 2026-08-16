@@ -31,6 +31,10 @@ require "tamoz/agent/raw_http"
 class LocalModelEndpoint
   attr_reader :port, :log_path, :mode
 
+  # The fixture-envelope model marker (domain-agnostic; the same literal in
+  # benchmark_run / crash_matrix_test stays independent of this constant).
+  MODEL_MARKER = "local-model"
+
   def initialize(mode:, log_path:, upstream: nil, responses: nil)
     raise ArgumentError, "mode must be :proxy or :fixture" unless %i[proxy fixture].include?(mode.to_sym)
     if mode.to_sym == :proxy && upstream.to_s.empty?
@@ -124,7 +128,7 @@ class LocalModelEndpoint
     JSON.generate(
       id: "chatcmpl-local",
       object: "chat.completion",
-      model: "local-model",
+      model: MODEL_MARKER,
       choices: [{index: 0, message: {role: "assistant", content: content}, finish_reason: "stop"}],
       usage: {prompt_tokens: 42, completion_tokens: 21, total_tokens: 63}
     )

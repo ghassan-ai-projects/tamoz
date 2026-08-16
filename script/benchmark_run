@@ -26,14 +26,14 @@ require "support/episode_composition"
 # fixture provider cannot produce that, so the honest pilot verdict is
 # negative/inconclusive).
 class BenchmarkRun
-  PROTOCOL_PATH = File.expand_path("../docs/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+  PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
   BASE_TIME = "2026-08-15T00:00:00Z"
 
   def initialize(protocol_path: PROTOCOL_PATH, cases: nil, out: nil, seed: 11, label: "pilot")
     @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
     @cases_per_family = cases || @protocol.dig("case_matrix", "min_cases_per_cell")
     @out = out || File.expand_path(
-      "../docs/benchmark/results/pilot-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}.json", __dir__
+      "../documentation/benchmark/results/pilot-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}.json", __dir__
     )
     @seed = seed
     @label = label

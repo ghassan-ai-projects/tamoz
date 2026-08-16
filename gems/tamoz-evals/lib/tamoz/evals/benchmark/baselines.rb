@@ -28,9 +28,10 @@ module Tamoz
         end
 
         # Fixed-threshold detector: alarms when the primary metric crosses a
-        # frozen threshold, else the majority code.
-        def fixed_threshold(cells, codes, metric: "dissolved_oxygen", threshold: 2.0,
-                            alarm_code: "low_dissolved_oxygen")
+        # frozen threshold, else the majority code. The metric/alarm pair is
+        # REQUIRED — the protocol's case matrix supplies it per family
+        # (domain knowledge lives in the benchmark data, not in this gem).
+        def fixed_threshold(cells, codes, metric:, threshold: 2.0, alarm_code:)
           cells.map do |cell|
             value = metric_value(cell, metric)
             code = value < threshold ? alarm_code : majority_for(cells, codes)
@@ -40,8 +41,7 @@ module Tamoz
 
         # z-score detector: alarms when the primary metric is more than k
         # standard deviations below the corpus mean.
-        def z_score(cells, codes, metric: "dissolved_oxygen", k: 2.0,
-                    alarm_code: "low_dissolved_oxygen")
+        def z_score(cells, codes, metric:, k: 2.0, alarm_code:)
           values = cells.map { |cell| metric_value(cell, metric) }
           mean_value = values.sum / values.length.to_f
           stddev = Math.sqrt(values.sum { |value| (value - mean_value)**2 } / values.length.to_f)
@@ -54,8 +54,7 @@ module Tamoz
 
         # First-difference detector: alarms when the metric fell by more than
         # the frozen drop between observations.
-        def first_difference(cells, codes, metric: "dissolved_oxygen", drop: 1.0,
-                             alarm_code: "low_dissolved_oxygen")
+        def first_difference(cells, codes, metric:, drop: 1.0, alarm_code:)
           cells.map do |cell|
             series = metric_series(cell, metric)
             dropped = series.each_cons(2).any? { |before, after| before - after > drop }
@@ -66,8 +65,7 @@ module Tamoz
 
         # Moving-median detector: alarms when the metric is below the rolling
         # median by more than k times the median absolute deviation.
-        def moving_median(cells, codes, metric: "dissolved_oxygen", window: 5, k: 2.0,
-                          alarm_code: "low_dissolved_oxygen")
+        def moving_median(cells, codes, metric:, window: 5, k: 2.0, alarm_code:)
           cells.map do |cell|
             series = metric_series(cell, metric)
             window_values = series.last(window)
@@ -82,7 +80,7 @@ module Tamoz
 
         # Nearest-symptom classifier: predicts the truth code of the training
         # cell whose metric vector is nearest (euclidean) to this cell's.
-        def nearest_symptom(cells, codes, metric: "dissolved_oxygen")
+        def nearest_symptom(cells, codes, metric:)
           values = cells.map { |cell| metric_value(cell, metric) }
           cells.each_with_index.map do |cell, index|
             value = metric_value(cell, metric)
@@ -96,8 +94,8 @@ module Tamoz
         # The strongest simple deterministic detector the corpus supports:
         # the z-score detector (it thresholds adaptively instead of on a fixed
         # absolute level, so it survives domain shifts).
-        def deterministic_detector(cells, codes, **kwargs)
-          z_score(cells, codes, **kwargs)
+        def deterministic_detector(cells, codes, metric:, k: 2.0, alarm_code:)
+          z_score(cells, codes, metric:, k:, alarm_code:)
         end
 
         def metric_value(cell, metric)

@@ -185,8 +185,15 @@ class BenchmarkHarnessTest < Minitest::Test
     baselines = Tamoz::Evals::Benchmark::Baselines
     %i[majority_prior random_label fixed_threshold z_score first_difference
        moving_median nearest_symptom deterministic_detector].each do |name|
-      first = baselines.public_send(name, cells, CODES)
-      second = baselines.public_send(name, cells, CODES)
+      kwargs = {}
+      if %i[fixed_threshold z_score first_difference moving_median
+            deterministic_detector].include?(name)
+        kwargs = {metric: "dissolved_oxygen", alarm_code: "low_dissolved_oxygen"}
+      elsif name == :nearest_symptom
+        kwargs = {metric: "dissolved_oxygen"}
+      end
+      first = baselines.public_send(name, cells, CODES, **kwargs)
+      second = baselines.public_send(name, cells, CODES, **kwargs)
       assert_equal first.map { |cell| cell.fetch("primary_code") },
                    second.map { |cell| cell.fetch("primary_code") },
                    "#{name} must be deterministic"
@@ -200,7 +207,7 @@ class BenchmarkHarnessTest < Minitest::Test
       cell(primary: "unknown", truth: "unknown",
            facts: {"dissolved_oxygen" => 4.2, "dissolved_oxygen_series" => [4.4, 4.3, 4.2]})
     ]
-    z = Tamoz::Evals::Benchmark::Baselines.z_score(cells, CODES)
+    z = Tamoz::Evals::Benchmark::Baselines.z_score(cells, CODES, metric: "dissolved_oxygen", alarm_code: "low_dissolved_oxygen")
     assert_equal "low_dissolved_oxygen", z.first.fetch("primary_code")
   end
 
@@ -253,7 +260,7 @@ class BenchmarkHarnessTest < Minitest::Test
   end
 
   def protocol
-    read_json(ROOT.join("docs", "benchmark", "BENCHMARK_PROTOCOL.json"))
+    read_json(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
   end
 
   def test_report_binds_the_protocol_and_never_claims_a_go_for_pilot_cells

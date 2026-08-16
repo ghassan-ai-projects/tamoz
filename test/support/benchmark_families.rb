@@ -1,65 +1,77 @@
 # frozen_string_literal: true
 
 require "tamoz/core"
-require "tamoz/agent"
+require_relative "domain_loader"
 require_relative "aquaculture_domain"
 require_relative "climate_domain"
 
-# P7: the benchmark's scenario families, shared by the pilot harness
-# (script/benchmark_run) and the holdout generator (script/benchmark_holdout).
-# The truth and gold rules are the preregistered facts→label mapping — the
-# SAME rule derives pilot truth and holdout truth, so the holdout is learnable
-# by exactly the mechanism the pilot calibrates (never a coin flip). The
-# metric/alarm pair names the detector baselines' fact key and alarm code per
-# family (the protocol freeze carries the same pair), so the "strongest
-# non-LLM baseline" actually sees every family's signal.
+# P7: the benchmark's scenario families, driven by the DOMAIN DATA in
+# test/fixtures/domains/*.json (domain-knowledge extraction —
+# docs/new-design/impl/DOMAIN_DATA_EXTRACTION.md). The truth and gold rules
+# are the preregistered facts→label mapping derived from each family's JSON
+# config — the SAME rule derives pilot truth and holdout truth, so the
+# holdout is learnable by exactly the mechanism the pilot calibrates (never a
+# coin flip). ZERO domain knowledge in Ruby code here: this module is the
+# data-driven driver only (the only knowledge it holds is which fixture a
+# family id names).
 module BenchmarkFamilies
-  FAMILIES = {
-    "do-crash" => {
-      "domain" => AquacultureDomain,
-      "metric" => "dissolved_oxygen",
-      "alarm_code" => "low_dissolved_oxygen",
-      "series" => "dissolved_oxygen_series",
-      # The facts must use the DOMAIN's native vocabulary (the climate fixture
-      # cites fact:zone_temperature; the aquaculture fixture cites
-      # fact:dissolved_oxygen) or the grounding gate fails every cell.
+  module_function
+
+  def family_for(domain_name, data)
+    # The domain key is the thin-loader MODULE (not the loader instance) —
+    # script/benchmark_run resolves ::PROMPT/::CATALOG/::FIXTURE_RESPONSES
+    # constants on it.
+    domain = Object.const_get("#{domain_name.capitalize}Domain")
+    metric = data.fetch("metric")
+    {
+      "domain" => domain,
+      "metric" => metric,
+      "alarm_code" => data.fetch("alarm_code"),
+      "series" => data.fetch("series"),
+      # The facts generator reproduces the exact single-random-rand structure
+      # of the preregistered rules (series offsets applied as v + offset,
+      # UNROUNDED), so holdout output stays seed-deterministic.
       "facts" => lambda do |index, random|
-        dissolved_oxygen = (0.5 + random.rand * 5.0).round(2)
-        {
-          "pond_id" => "pond-#{index}",
-          "dissolved_oxygen" => dissolved_oxygen,
-          "aerator_current" => 0.0,
-          "water_temperature" => 26.5,
-          "stocking_density" => 42.0,
-          "hours_since_last_feeding" => 3.0,
-          "surface_wind" => 2.0,
-          "dissolved_oxygen_series" => [dissolved_oxygen + 1.0, dissolved_oxygen + 0.4, dissolved_oxygen]
-        }
+        value = (data.dig("metric_range", "min") + random.rand * data.dig("metric_range", "width"))
+                .round(data.dig("metric_range", "round"))
+        facts = data.fetch("base_facts").dup
+        facts["#{data.fetch("id_prefix")}_id"] = "#{data.fetch("id_prefix")}-#{index}"
+        facts[metric] = value
+        facts[data.fetch("series")] = data.fetch("series_offsets").map { |offset| value + offset }
+        facts
       end,
-      "truth" => ->(facts) { facts.fetch("dissolved_oxygen") < 2.0 ? "low_dissolved_oxygen" : "unknown" },
-      # R2 gold: the crash is a catastrophe-averting dispatch, so the utility
-      # metric's missed-catastrophe path is actually exercised.
-      "gold" => ->(facts) { facts.fetch("dissolved_oxygen") < 2.0 ? "R2" : nil }
-    },
-    "climate-deviation" => {
-      "domain" => ClimateDomain,
-      "metric" => "zone_temperature",
-      "alarm_code" => "overheated",
-      "series" => "zone_temperature_series",
-      "facts" => lambda do |index, random|
-        temperature = (24.0 + random.rand * 10.0).round(2)
-        {
-          "zone_id" => "zone-#{index}",
-          "zone_temperature" => temperature,
-          "zone_humidity" => 70.0,
-          "zone_co2" => 400.0,
-          "vent_open_fraction" => 0.0,
-          "fan_current" => 0.0,
-          "zone_temperature_series" => [temperature - 1.0, temperature - 0.3, temperature]
-        }
-      end,
-      "truth" => ->(facts) { facts.fetch("zone_temperature") > 31.0 ? "overheated" : "unknown" },
-      "gold" => ->(facts) { facts.fetch("zone_temperature") > 31.0 ? "R2" : nil }
+      "truth" => threshold_rule(metric, data.fetch("truth")),
+      "gold" => gold_rule(metric, data.fetch("gold"))
     }
-  }.freeze
+  end
+
+  def threshold_rule(metric, rule)
+    operator = rule.fetch("operator").to_sym
+    unless %i[lt gt].include?(operator)
+      raise ArgumentError, "unknown truth operator #{operator.inspect} for #{metric}"
+    end
+    lambda do |facts|
+      hit = operator == :lt ? facts.fetch(metric) < rule.fetch("threshold") :
+                               facts.fetch(metric) > rule.fetch("threshold")
+      hit ? rule.fetch("code") : rule.fetch("fallback")
+    end
+  end
+
+  def gold_rule(metric, rule)
+    operator = rule.fetch("operator").to_sym
+    unless %i[lt gt].include?(operator)
+      raise ArgumentError, "unknown gold operator #{operator.inspect} for #{metric}"
+    end
+    lambda do |facts|
+      hit = operator == :lt ? facts.fetch(metric) < rule.fetch("threshold") :
+                               facts.fetch(metric) > rule.fetch("threshold")
+      hit ? rule.fetch("risk_class") : nil
+    end
+  end
+
+  # Built after the helpers so the module_function methods are defined.
+  FAMILIES = DomainLoader.domains.to_h do |domain_name|
+    data = DomainLoader.load(domain_name).benchmark_family
+    [data.fetch("family_id"), family_for(domain_name, data)]
+  end.freeze
 end

@@ -23,7 +23,7 @@ require "support/benchmark_families"
 # coin flip independent of the facts would be unlearnable and the benchmark
 # could never beat any baseline honestly.
 class BenchmarkHoldout
-  PROTOCOL_PATH = File.expand_path("../docs/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+  PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
   CUTOFF = "2026-09-01T00:00:00Z"
 
   def initialize(protocol_path: PROTOCOL_PATH, cases: 30, seed: 23, out_dir: nil, force: false)
@@ -31,7 +31,7 @@ class BenchmarkHoldout
     @cases = cases
     @seed = seed
     @out_dir = out_dir || File.expand_path(
-      "../docs/benchmark/holdout-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}", __dir__
+      "../documentation/benchmark/holdout-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}", __dir__
     )
     @force = force
   end

@@ -13,9 +13,9 @@ require_relative "test_helper"
 #   providers, the preregistered baselines, the min-case numbers) are checked
 #   so a freeze cannot silently lose a clause.
 class BenchmarkProtocolTest < Minitest::Test
-  PROTOCOL_PATH = ROOT.join("docs", "benchmark", "BENCHMARK_PROTOCOL.json")
+  PROTOCOL_PATH = ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json")
 
-  # SHA-256 of the committed docs/benchmark/BENCHMARK_PROTOCOL.json. Bump only
+  # SHA-256 of the committed documentation/benchmark/BENCHMARK_PROTOCOL.json. Bump only
   # when a protocol change is deliberate: this is the freeze.
   COMMITTED_SHA256 = "5e25b0b9de404ceb2f209da9f141f696e0a6f3215cdce6c9307a4f4cf0c66e4a"
 
@@ -93,5 +93,45 @@ class BenchmarkProtocolTest < Minitest::Test
     end
     assert_equal "dissolved_oxygen", protocol.dig("case_matrix", "scenario_families", 0, "metric")
     assert_equal "zone_temperature", protocol.dig("case_matrix", "scenario_families", 1, "metric")
+  end
+
+  # Domain-knowledge extraction: the domain data must bind the SAME wire
+  # digests the protocol freezes — all six (two intent catalogs, two
+  # diagnosis catalogs, two prompts) recomputed through the JSON loader.
+  # This closes the climate-diagnosis gap (the protocol only pins the
+  # aquaculture diagnosis digest) and guards lockstep drift.
+  def test_domain_data_binds_the_frozen_wire_digests
+    require "support/domain_loader"
+    loader = DomainLoader.load("aquaculture")
+    assert_equal protocol.dig("digests", "intent_catalog_aquaculture"),
+                 loader.intent_catalog_digest
+    assert_equal protocol.dig("digests", "diagnosis_catalog"),
+                 Tamoz::Core.digest(:diagnosis_catalog, loader.catalog)
+    assert_equal protocol.dig("digests", "prompt_aquaculture"),
+                 Tamoz::Core.digest("situation-runtime/prompt/v1\n",
+                                    {"version" => "1.0", "text" => loader.prompt})
+
+    climate = DomainLoader.load("climate")
+    assert_equal protocol.dig("digests", "intent_catalog_climate"),
+                 climate.intent_catalog_digest
+    assert_equal "sha256:bb2b4789e3b75628c888daffb6c27426230d3d0c7861198a0489d5d71eb18d58",
+                 Tamoz::Core.digest(:diagnosis_catalog, climate.catalog)
+    assert_equal protocol.dig("digests", "prompt_climate"),
+                 Tamoz::Core.digest("situation-runtime/prompt/v1\n",
+                                    {"version" => "1.0", "text" => climate.prompt})
+  end
+
+  # The protocol's per-family metric/alarm (what the Report scores against)
+  # must agree with the domain data's benchmark_family config (what the
+  # holdout/pilot generate series under) — one drift window closed.
+  def test_family_config_agrees_between_protocol_and_domain_data
+    require "support/domain_loader"
+    protocol.fetch("case_matrix").fetch("scenario_families").each do |family|
+      config = DomainLoader.load(family.fetch("domain")).benchmark_family
+      assert_equal family.fetch("metric"), config.fetch("metric"),
+                   "family #{family.fetch("id")} metric must agree"
+      assert_equal family.fetch("alarm_code"), config.fetch("alarm_code"),
+                   "family #{family.fetch("id")} alarm_code must agree"
+    end
   end
 end

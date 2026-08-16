@@ -50,7 +50,7 @@ class BenchmarkHoldoutTest < Minitest::Test
   def test_the_manifest_binds_the_frozen_protocol
     output = run_holdout
     protocol_sha256 = Digest::SHA256.hexdigest(
-      File.binread(ROOT.join("docs", "benchmark", "BENCHMARK_PROTOCOL.json"))
+      File.binread(ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json"))
     )
     assert_equal protocol_sha256, output.fetch("manifest").fetch("protocol_sha256")
     assert_equal "1.0.0", output.fetch("manifest").fetch("benchmark_protocol_version")
@@ -72,6 +72,17 @@ class BenchmarkHoldoutTest < Minitest::Test
     second = run_holdout(cases: 6, seed: 7)
     assert_equal first.fetch("manifest"), second.fetch("manifest")
     assert_equal first.fetch("truth"), second.fetch("truth")
+
+    # The change's phase bar: the holdout output must be IDENTICAL to the
+    # committed pin (documentation/benchmark/holdout-pin/, cases=6 seed=7) —
+    # a facts/truth-rule drift in the domain data would diverge here. This is
+    # the pre-change artifact the two-runs comparison cannot see.
+    pinned_manifest = read_json(ROOT.join("documentation", "benchmark", "holdout-pin", "holdout-manifest.json"))
+    pinned_truth = read_json(ROOT.join("documentation", "benchmark", "holdout-pin", "holdout-truth.json"))
+    assert_equal pinned_manifest, first.fetch("manifest"),
+                 "holdout generation must match the committed pin (domain-data drift?)"
+    assert_equal pinned_truth, first.fetch("truth"),
+                 "holdout truth must match the committed pin (domain-data drift?)"
   ensure
     FileUtils.remove_entry(first.fetch("dir")) if first
     FileUtils.remove_entry(second.fetch("dir")) if second

@@ -6,6 +6,7 @@ $LOAD_PATH.unshift(File.expand_path("../test", __dir__))
 require "json"
 require "tamoz/agent"
 require "tamoz/stream/episode_worker"
+require "support/domain_loader"
 require "support/aquaculture_domain"
 require "support/climate_domain"
 
@@ -15,6 +16,7 @@ require "support/climate_domain"
 # SHA-256 pin.
 def main
   sealed = Tamoz::Agent::SealedBuild.new.canonical_fingerprint
+  domains = DomainLoader.domains
   protocol = {
     "benchmark_protocol_version" => "1.0.0",
     "sealed_build_digest" => sealed,
@@ -48,7 +50,7 @@ def main
       "risk_ceiling" => "R2"
     },
     "case_matrix" => {
-      "domains" => %w[aquaculture climate],
+      "domains" => domains,
       "scenario_families" => [
         {"id" => "do-crash", "domain" => "aquaculture", "primary" => "low_dissolved_oxygen",
          "metric" => "dissolved_oxygen", "alarm_code" => "low_dissolved_oxygen"},

@@ -4,7 +4,7 @@ Status: **HARNESS SHIPPED — HOLDOUT NEVER RUN** (audit observation).
 
 ## Honest statement
 
-- The frozen protocol (`docs/benchmark/BENCHMARK_PROTOCOL.json`, SHA-256 pinned
+- The frozen protocol (`documentation/benchmark/BENCHMARK_PROTOCOL.json`, SHA-256 pinned
   and byte-identical regenerating), the fixture pilot harness
   (`script/benchmark_run`), the holdout generator (`script/benchmark_holdout`),
   the metric/baseline/comparison library (`gems/tamoz-evals/lib/tamoz/evals/benchmark/`),
@@ -22,7 +22,7 @@ Status: **HARNESS SHIPPED — HOLDOUT NEVER RUN** (audit observation).
 
 | Artifact | Where | Status |
 |---|---|---|
-| Frozen protocol | `docs/benchmark/BENCHMARK_PROTOCOL.json` | committed, SHA-pinned (`test/benchmark_protocol_test.rb`) |
+| Frozen protocol | `documentation/benchmark/BENCHMARK_PROTOCOL.json` | committed, SHA-pinned (`test/benchmark_protocol_test.rb`) |
 | Pilot harness | `script/benchmark_run` | fixture-only (label permanently `pilot`; verdict can never claim go) |
 | Holdout generator | `script/benchmark_holdout` | opaque ids, temporal cutoffs, leak scan |
 | Metrics/baselines/comparison | `gems/tamoz-evals/lib/tamoz/evals/benchmark/` | pure, deterministic, tested |

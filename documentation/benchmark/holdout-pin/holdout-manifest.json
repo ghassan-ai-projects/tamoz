@@ -1,0 +1,125 @@
+{
+  "benchmark_protocol_version": "1.0.0",
+  "protocol_sha256": "5e25b0b9de404ceb2f209da9f141f696e0a6f3215cdce6c9307a4f4cf0c66e4a",
+  "cutoff": "2026-09-01T00:00:00Z",
+  "opaque_ids": true,
+  "cases": [
+    {
+      "id": "holdout-climate-deviation-88f0af",
+      "family": "climate-deviation",
+      "domain": "climate",
+      "observed_at": "2026-08-26T00:00:00Z",
+      "facts": {
+        "zone_humidity": 70.0,
+        "zone_co2": 400.0,
+        "vent_open_fraction": 0.0,
+        "fan_current": 0.0,
+        "zone_id": "zone-1",
+        "zone_temperature": 26.27,
+        "zone_temperature_series": [
+          25.27,
+          25.97,
+          26.27
+        ]
+      }
+    },
+    {
+      "id": "holdout-do-crash-3b9643",
+      "family": "do-crash",
+      "domain": "aquaculture",
+      "observed_at": "2026-08-27T00:00:00Z",
+      "facts": {
+        "aerator_current": 0.0,
+        "water_temperature": 26.5,
+        "stocking_density": 42.0,
+        "hours_since_last_feeding": 3.0,
+        "surface_wind": 2.0,
+        "pond_id": "pond-2",
+        "dissolved_oxygen": 5.39,
+        "dissolved_oxygen_series": [
+          6.39,
+          5.79,
+          5.39
+        ]
+      }
+    },
+    {
+      "id": "holdout-climate-deviation-5d855c",
+      "family": "climate-deviation",
+      "domain": "climate",
+      "observed_at": "2026-08-27T00:00:00Z",
+      "facts": {
+        "zone_humidity": 70.0,
+        "zone_co2": 400.0,
+        "vent_open_fraction": 0.0,
+        "fan_current": 0.0,
+        "zone_id": "zone-3",
+        "zone_temperature": 27.08,
+        "zone_temperature_series": [
+          26.08,
+          26.779999999999998,
+          27.08
+        ]
+      }
+    },
+    {
+      "id": "holdout-do-crash-496e48",
+      "family": "do-crash",
+      "domain": "aquaculture",
+      "observed_at": "2026-08-22T00:00:00Z",
+      "facts": {
+        "aerator_current": 0.0,
+        "water_temperature": 26.5,
+        "stocking_density": 42.0,
+        "hours_since_last_feeding": 3.0,
+        "surface_wind": 2.0,
+        "pond_id": "pond-4",
+        "dissolved_oxygen": 0.93,
+        "dissolved_oxygen_series": [
+          1.9300000000000002,
+          1.33,
+          0.93
+        ]
+      }
+    },
+    {
+      "id": "holdout-climate-deviation-b86ada",
+      "family": "climate-deviation",
+      "domain": "climate",
+      "observed_at": "2026-08-26T00:00:00Z",
+      "facts": {
+        "zone_humidity": 70.0,
+        "zone_co2": 400.0,
+        "vent_open_fraction": 0.0,
+        "fan_current": 0.0,
+        "zone_id": "zone-5",
+        "zone_temperature": 24.16,
+        "zone_temperature_series": [
+          23.16,
+          23.86,
+          24.16
+        ]
+      }
+    },
+    {
+      "id": "holdout-do-crash-e20444",
+      "family": "do-crash",
+      "domain": "aquaculture",
+      "observed_at": "2026-08-27T00:00:00Z",
+      "facts": {
+        "aerator_current": 0.0,
+        "water_temperature": 26.5,
+        "stocking_density": 42.0,
+        "hours_since_last_feeding": 3.0,
+        "surface_wind": 2.0,
+        "pond_id": "pond-6",
+        "dissolved_oxygen": 4.84,
+        "dissolved_oxygen_series": [
+          5.84,
+          5.24,
+          4.84
+        ]
+      }
+    }
+  ]
+}

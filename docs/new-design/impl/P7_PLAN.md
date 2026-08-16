@@ -95,7 +95,7 @@ preregistered gate and adds the protocol artifact + the measurement harness.
 ## Tasks
 
 ### T1 — The protocol artifact
-- `script/generate_benchmark_protocol` → `docs/benchmark/BENCHMARK_PROTOCOL.json`
+- `script/generate_benchmark_protocol` → `documentation/benchmark/BENCHMARK_PROTOCOL.json`
   (freeze fields: build digest via SealedBuild, the graph/prompt/skill/
   catalog digests, the provider identities, settings, budgets, the case
   matrix, the scoring equations, the baselines, the thresholds, the stop
