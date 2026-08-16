@@ -175,7 +175,8 @@ module Tamoz
             "name" => role.name,
             "provider" => role.provider,
             "model" => role.model,
-            "endpoint" => endpoint_for(role)
+            "endpoint" => endpoint_for(role),
+            "credential_ref" => role.credential_ref
           },
           # The route is codec-safe (the graph branch reads it as a symbol).
           "route" => "recall"
@@ -434,6 +435,11 @@ module Tamoz
         catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
         document = ReasoningDocument.parse(raw, catalog:)
         ground_evidence!(document, frame)
+        intent_catalog = IntentCatalog.verify_wire(
+          state.fetch(:wire).fetch("intent_catalog_json"),
+          state.fetch(:wire).fetch("intent_catalog_sha256")
+        )
+        validate_recommended_intent_types!(document, state, intent_catalog)
 
         if document.tool_requests && !document.tool_requests.empty?
           return {"document" => document_projection(document), "next_node" => "execute_tool"}
@@ -609,6 +615,19 @@ module Tamoz
         unless forged.empty?
           raise ProtocolError,
                 "reasoning_document/ungrounded_evidence_refs: #{forged.first}"
+        end
+      end
+
+      def validate_recommended_intent_types!(document, state, catalog)
+        allowed = Array(state.fetch(:episode).fetch("allowed_intent_types", [])).map(&:to_s)
+        valid_types = ([Tamoz::Core::INTENT_WATCH_TYPE] +
+                       allowed.select { |type| catalog.include?(type) }).uniq
+        Array(document.recommended_intents).each do |intent|
+          next if valid_types.include?(intent.type)
+
+          raise ProtocolError,
+                "reasoning_document/intent_type_not_allowed: '#{intent.type}' is not an " \
+                "allowed intent type; use exactly one of: #{valid_types.join(", ")}"
         end
       end
 

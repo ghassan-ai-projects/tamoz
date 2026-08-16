@@ -34,17 +34,16 @@ module EpisodeComposition
     Tamoz::Core.parse_json_strict(catalog_json)
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
     root = File.join(directory, "root")
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
-    File.write(
-      profile_path,
-      Psych.dump(AquacultureDomain.profile_document(endpoint:, root:, model:))
-    )
+    profile_document = AquacultureDomain.profile_document(endpoint:, root:, model:)
+    profile_document.fetch("model_roles").fetch("fast")["credential_ref"] = credential_ref if credential_ref
+    File.write(profile_path, Psych.dump(profile_document))
     File.chmod(0o600, profile_path)
     profile = Tamoz::Agent::Profile.preview_source(profile_path).document
     checkpointer = Tamoz::SQLite::Adapter.new(
@@ -57,9 +56,19 @@ module EpisodeComposition
         Tamoz::Agent::EpisodeFrameBuilder.new(catalog:, objective:)
       end,
       model_call_factory: lambda do |role|
+        credential_ref = role["credential_ref"]
+        api_key = if credential_ref
+                    name = credential_ref.fetch("name")
+                    value = ENV[name]
+                    if value.to_s.empty?
+                      raise Tamoz::ConfigurationError,
+                            "model role credential_ref #{name.inspect} is not set in the environment"
+                    end
+                    value
+                  end
         transport = Tamoz::Agent::EpisodeModelTransport.new(
           endpoint: role.fetch("endpoint"), model: role.fetch("model"),
-          provider: role.fetch("provider"), gateway: gateway
+          provider: role.fetch("provider"), api_key:, gateway: gateway
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,
