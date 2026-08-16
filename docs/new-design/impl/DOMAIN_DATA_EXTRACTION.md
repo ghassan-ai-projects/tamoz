@@ -10,8 +10,13 @@ to a committed artifact (`documentation/benchmark/holdout-pin/`), the Go
 cross-repo parity test passes, and the pilot harness runs end-to-end
 (verdict: inconclusive, correct for a fixture run). The plan's
 "completely/external" wording is corrected to the honest "knowledge is data,
-not code; the JSON is committed repo data" and the Go-side scope (production
-Go still embeds the domain) is stated as a separate owner-decided follow-up.
+not code; the JSON is committed repo data". The Go-side scope, originally
+stated as a separate owner-decided follow-up, is DONE: agentic-stream
+committed its mirror extraction at `3b25c99` (event schemas →
+`internal/eventschema/registry_data.json`, simulator channel→field →
+`internal/ingress/simulator_data.json`, intent catalog →
+`internal/episodes/testdata/aquaculture_intents.json`); the cross-repo
+parity digest `e4f86620…` is unchanged and still asserted on both sides.
 
 ## The problem
 
@@ -39,12 +44,14 @@ Go still embeds the domain) is stated as a separate owner-decided follow-up.
    (machinery only: schema construction, probability normalization, digest
    computation). All 27 referencing files keep working through the loader
    API (the 6 files listed in T3 additionally get path updates).
-   Scope note: this is the RUBY side. The Go side (agentic-stream) still
-   embeds the aquaculture domain in production (event schemas, simulator)
-   and in its conformance tests — cross-repo digest parity is unaffected
-   (verified), but "removed from the codebase" is a Ruby-side claim;
-   porting the Go copies to shared data is a separate, owner-decided
-   follow-up.
+   Scope note: this is the RUBY side. The Go side (agentic-stream) mirrored
+   the extraction at `3b25c99` — event schemas, the simulator channel→field
+   mapping, and the intent catalog now load from JSON data files
+   (`internal/eventschema/registry_data.json`,
+   `internal/ingress/simulator_data.json`,
+   `internal/episodes/testdata/aquaculture_intents.json`). Cross-repo digest
+   parity is unchanged (verified on both sides); "removed from the
+   codebase" now holds for both repos.
 2. **Wire values byte-identical.** Verified by execution: JSON round-trips
    of both catalogs, both intent catalogs, and both prompts produce identical
    digests (JCS canonicalization sorts hash keys; arrays are preserved in
