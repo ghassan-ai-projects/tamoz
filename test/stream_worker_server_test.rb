@@ -3,36 +3,21 @@
 require_relative "test_helper"
 require "tamoz/stream/worker_server"
 require "tamoz/stream/episode_worker"
+require "support/aquaculture_domain"
+require "support/episode_composition"
 
 # T1.1 (deployment slice): WorkerServer is the launcher — the gRPC host that
 # serves the EpisodeWorker handler on a TCP port (development) or a UDS
 # socket (production, mTLS at the socket). This suite proves the serving
-# shape: bind → run → dial → handshake → stop, on both transports.
+# shape: bind → run → dial → handshake → stop, on both transports. P1: the
+# composed worker runs the FIXED graph (handshake-only — no episode runs).
 class StreamWorkerServerTest < Minitest::Test
-  def self.episode_graph
-    Tamoz.graph(name: "episode-server", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        {primary_hypothesis: "bearing wear", confidence: 0.9}
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end
-  end
-
   def composed_worker
-    directory = Dir.mktmpdir("tamoz-worker-server")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    app = self.class.episode_graph.compile(checkpointer: adapter)
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil
-    )
+    # The composition's endpoint is never dialed for handshakes; any
+    # reachable-looking base is fine.
+    composition = EpisodeComposition.build(endpoint: "http://127.0.0.1:1")
+    adapter = composition.fetch(:adapter)
+    runner = composition.fetch(:runner)
     worker = Tamoz::Stream::EpisodeWorker.new(
       worker_version: "0.1.0.alpha.1",
       runner:,
@@ -40,7 +25,7 @@ class StreamWorkerServerTest < Minitest::Test
         "fast" => "flash", "deep" => "pro", "batch" => "flash"
       )
     )
-    [worker, adapter, directory]
+    [worker, adapter, composition.fetch(:directory)]
   end
 
   def handshake_on(endpoint)
@@ -103,16 +88,25 @@ class StreamWorkerServerTest < Minitest::Test
 
   def test_the_bin_launcher_composes_and_serves
     script = ROOT.join("bin/tamoz-stream-worker")
-    graph = ROOT.join("test/fixtures/episode_diagnose.rb")
     directory = Dir.mktmpdir("tamoz-bin-worker")
     database = File.join(directory, "tamoz.db")
     socket_path = File.join(directory, "worker.sock")
+    root = File.join(directory, "root")
+    Dir.mkdir(root)
+    profile_path = File.join(directory, "profile.yml")
+    File.write(
+      profile_path,
+      Psych.dump(AquacultureDomain.profile_document(endpoint: "http://127.0.0.1:1", root:))
+    )
+    File.chmod(0o600, profile_path)
 
     env = { "RUBYLIB" => Dir[File.join(ROOT, "gems/*/lib")].join(":") }
     pid = Process.spawn(
       env,
       RbConfig.ruby, script.to_s,
-      "--graph", graph.to_s, "--database", database,
+      "--profile", profile_path,
+      "--database", database,
+      "--tenant", "acme",
       "--socket", socket_path,
       out: File::NULL, err: File::NULL
     )

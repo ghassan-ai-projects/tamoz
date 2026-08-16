@@ -6,7 +6,15 @@ module Tamoz
       run_start run_end task_start task_end node_update message_chunk tool_start
       tool_progress tool_end interrupt checkpoint effect_unknown error custom
     ].freeze
-    TYPE_LOOKUP = CORE_TYPES.to_h { |type| [type.to_s, type] }.freeze
+    # P1/§8.2: the episode model/decision vocabulary on the trusted wire
+    # channel. Graph nodes never emit these (the projection adapter rejects
+    # them from the Context emitter); the trusted effect adapter produces them
+    # from journal receipts.
+    EPISODE_TYPES = %i[
+      model_started model_delta model_completed decision terminal
+    ].freeze
+    ALL_TYPES = (CORE_TYPES + EPISODE_TYPES).freeze
+    TYPE_LOOKUP = ALL_TYPES.to_h { |type| [type.to_s, type] }.freeze
     MAX_NAMESPACE_PARTS = 128
     MAX_ID_BYTES = 256
   end

@@ -2,6 +2,8 @@
 
 require_relative "test_helper"
 require "tamoz/stream/evidence_client"
+require "support/local_model_endpoint"
+require "support/episode_composition"
 
 # T3 (PLAN_TAMOZ_STREAM_BUILD T3): the reverse evidence channel. The
 # EvidenceClient dials a real EvidenceTools gRPC server (hosted in-process for
@@ -234,74 +236,38 @@ class StreamEvidenceClientTest < Minitest::Test
     end
 
     directory = Dir.mktmpdir("tamoz-evidence-e2e")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    graph = Tamoz.graph(name: "episode-evidence", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      state :summary, default: nil
-      state :facts_used, default: []
-      node(
-        :analyze,
-        implementation_name: "episode.analyze",
-        version: "1"
-      ) do |state, context|
-        evidence = context.episode_tools.execute(
-          "evidence.get", {"feature" => "pressure"}
-        )
-        context.emit(
-          :model_started, {ordinal: 0, provider: "test", model_id: "flash"}
-        )
-        context.emit(
-          :model_completed,
-          {ordinal: 0, usage: {input_tokens: 3, output_tokens: 1}}
-        )
-        {
-          primary_hypothesis: "bearing wear",
-          confidence: 0.9,
-          summary: "evidence: #{evidence.fetch("json").fetch("value")}",
-          facts_used: [{"value" => evidence.fetch("json").fetch("value")}]
-        }
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end
-    app = graph.compile(checkpointer: adapter)
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil
-    )
-
-    snapshot = {
-      "situation_id" => "sit-1", "situation_version" => 7,
-      "tenant_id" => "acme", "situation_type" => "equipment",
-      "entity" => {"type" => "compressor", "id" => "c-01"},
-      "facts" => {"pressure" => 0.2}
-    }
-    wire = Agenticstream::Runtime::V1::EpisodeRequest.new(
-      protocol_version: "1.0",
-      episode_id: "ep-evidence", attempt_id: "at-1", fence: 1,
-      tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R2,
-      allowed_intent_types: ["create_maintenance_ticket"],
-      capability_token: "opaque.hmac.token",
+    # P1: the fixed graph's reason node does not fetch tools (P2 adds the
+    # execute_tool node); the evidence channel is bound but unused in-graph.
+    # The capability host unit tests above still exercise the tool surface.
+    endpoint = LocalModelEndpoint.new(
+      mode: :fixture,
+      responses: [Tamoz::Core.jcs(
+        AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
+      )],
+      log_path: File.join(directory, "endpoint.log")
+    ).start
+    composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+    snapshot = AquacultureDomain.snapshot
+    wire = EpisodeComposition.wire_request(
+      episode_id: "ep-evidence",
+      snapshot:,
       evidence_tools_endpoint: "127.0.0.1:#{port}",
-      snapshot_json: Tamoz::Core.jcs(snapshot),
-      snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)
+      capability_token: "opaque.hmac.token"
     )
 
-    events = runner.run(wire).each.to_a
+    events = []
+    composition.fetch(:runner).run(wire).each { |event| events << event }
     terminal = events.last.terminal
     assert_equal :TERMINAL_STATUS_PRODUCED, terminal.status,
-                 "the evidence-fetching episode must produce"
+                 "the fixed-graph episode must produce"
     decision_event = events.find { |event| event.decision != nil }
     refute_nil decision_event, "a produced episode must propose a decision"
     decision = JSON.parse(decision_event.decision.decision_json)
-    assert_includes decision.fetch("summary"), "evidence: 0.9",
-                    "the graph node must have read the verified evidence"
-    adapter.close
+    hypothesis = decision.fetch("intents").fetch(0).fetch("parameters").fetch("hypothesis")
+    refute_empty hypothesis, "the decision carries the document's hypothesis"
+    composition.fetch(:adapter).close
   ensure
+    endpoint&.stop
     FileUtils.remove_entry(directory) if directory
   end
 end

@@ -1,0 +1,87 @@
+{
+  "domain": "climate",
+  "catalog": [
+    {"code": "unknown", "description": "no confident diagnosis"},
+    {"code": "overheated", "description": "temperature above the species band"},
+    {"code": "overhumid", "description": "relative humidity above the species band"},
+    {"code": "co2_depleted", "description": "carbon dioxide below the enrichment band"},
+    {"code": "vent_failure", "description": "vent actuator or fan failed"}
+  ],
+  "objective": "Diagnose the cause of a greenhouse climate deviation and recommend the safest action.",
+  "prompt": "You are the greenhouse supervisor's diagnostic assistant. Use ONLY the facts provided,\ndiagnose the climate deviation, and propose at most one action from the allowed list.\nNever invent facts. Never assign risk.\n\nOUTPUT STRICT JSON with EXACTLY this shape and no other text:\n{\n  \"protocol\": \"tamoz.episode-diagnosis/v2\",\n  \"primary_hypothesis\": \"<one-sentence hypothesis>\",\n  \"diagnosis_probabilities\": [{\"diagnosis_code\": \"<code>\", \"probability\": <number>}],\n  \"evidence_refs\": [\"fact:<id>\"],\n  \"recommended_intents\": [{\"type\": \"<one type from the allowed action list>\", \"parameters\": {\"hypothesis\": \"<value>\"}}]\n}\nRules: probabilities cover EVERY code exactly once and sum to 1; evidence_refs cite only\nfact:<id> values; recommended_intents has at most one entry. No markdown code fences.",
+  "intent_types": {
+    "install_watch_condition": "R0",
+    "run_vent_cycle": "R1",
+    "dehumidify": "R1",
+    "downgrade_climate_action": "R1",
+    "withdraw_climate_action": "R1",
+    "deploy_shade_or_heat": "R2",
+    "dose_co2": "R2",
+    "isolate_segment": "R3",
+    "open_roof_louvers": "R1"
+  },
+  "compensation_map": {
+    "open_roof_louvers": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "run_vent_cycle": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "dehumidify": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "deploy_shade_or_heat": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "dose_co2": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"}
+  },
+  "watch_properties": {
+    "metric": {"type": "string"},
+    "target": {"type": "string"},
+    "expression": {"type": "string"},
+    "expires_at": {"type": "string"},
+    "threshold": {"type": "number"},
+    "max_fires": {"type": "integer"}
+  },
+  "watch_preset": {
+    "expression": "situation.climate_score >= 0.8",
+    "metric": "climate_score",
+    "threshold": 0.8,
+    "max_fires": 3
+  },
+  "snapshot": {
+    "situation_id": "sit-climate",
+    "situation_version": 2,
+    "tenant_id": "acme",
+    "situation_type": "greenhouse",
+    "entity_type": "greenhouse_zone",
+    "entity_id_fact": "zone_id",
+    "kwarg_map": {"zone_id": "zone_id", "temperature": "zone_temperature"},
+    "event_horizon": "2026-08-15T00:00:00Z",
+    "fact_defaults": {
+      "zone_id": "zone-03",
+      "zone_temperature": 33.5,
+      "zone_humidity": 88.0,
+      "zone_co2": 280.0,
+      "vent_open_fraction": 0.0,
+      "fan_current": 0.0
+    }
+  },
+  "document_template": {
+    "evidence_refs": ["fact:zone_temperature", "fact:zone_id"],
+    "default_intent_type": "run_vent_cycle"
+  },
+  "fixtures": [
+    {"selected": "overheated", "hypothesis": "the vent stuck closed, driving temperature up"},
+    {"selected": "overhumid", "hypothesis": "condensation exceeded the dehumidifier capacity"}
+  ],
+  "benchmark_family": {
+    "family_id": "climate-deviation",
+    "metric": "zone_temperature",
+    "alarm_code": "overheated",
+    "series": "zone_temperature_series",
+    "id_prefix": "zone",
+    "base_facts": {
+      "zone_humidity": 70.0,
+      "zone_co2": 400.0,
+      "vent_open_fraction": 0.0,
+      "fan_current": 0.0
+    },
+    "metric_range": {"min": 24.0, "width": 10.0, "round": 2},
+    "series_offsets": [-1.0, -0.3, 0.0],
+    "truth": {"operator": "gt", "threshold": 31.0, "code": "overheated", "fallback": "unknown"},
+    "gold": {"operator": "gt", "threshold": 31.0, "risk_class": "R2"}
+  }
+}

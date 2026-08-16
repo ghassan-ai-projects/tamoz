@@ -171,6 +171,7 @@ module Tamoz
           validate_provider!(role['provider'], name)
           validate_model!(role['model'], name)
           credential_ref!(role['credential_ref'], name) if role.key?('credential_ref')
+          normalized_settings!(role['normalized_settings'], name) if role.key?('normalized_settings')
         end
 
         # :reek:UtilityFunction — a pure name-shape predicate.
@@ -189,6 +190,22 @@ module Tamoz
           return if model.is_a?(String) && !model.empty? && model.bytesize <= MAX_MODEL_BYTES
 
           raise ValidationError, "#{@path}: invalid model identifier for role #{role.inspect}"
+        end
+
+        # P0B/§4.2: a bounded mapping of plain strings (endpoint overrides and
+        # the like). Values must be non-secret config; secrets belong in
+        # credential_ref, whose validator rejects value-shaped entries.
+        def normalized_settings!(settings, role)
+          named = role.inspect
+          raise ValidationError, "#{@path}: normalized_settings for #{named} must be a mapping" unless settings.is_a?(Hash)
+
+          settings.each do |key, value|
+            unless key.is_a?(String) && value.is_a?(String) &&
+                   key.bytesize <= MAX_MODEL_BYTES && value.bytesize <= MAX_MODEL_BYTES
+              raise ValidationError,
+                    "#{@path}: normalized_settings for #{named} must be a bounded string mapping"
+            end
+          end
         end
 
         # A NAME of an environment variable, never a value. The same pattern the

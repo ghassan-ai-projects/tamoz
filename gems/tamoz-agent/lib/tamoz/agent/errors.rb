@@ -10,6 +10,30 @@ module Tamoz
     # `Tamoz::DisclosableMessage`.
     class ProtocolError < Error; end
 
+    # P0B/§5: a diagnosis catalog (trusted SituationSpec config, not model
+    # output) is structurally invalid — empty, missing `unknown`, duplicate or
+    # malformed code, or oversized. Terminal: the worker refuses before a model
+    # call, exactly like a skill-digest mismatch. Distinct from `ProtocolError`,
+    # which is untrusted-model-document territory.
+    class DiagnosisCatalogError < Error; end
+
+    # P4/§B9-B10: the intent catalog was missing, malformed, forged, or
+    # self-contradictory (a declared risk outside R0–R4, a schema that is not
+    # an object, a preset with unknown parameters). Terminal: the worker
+    # refuses before a model call.
+    class IntentCatalogError < Error; end
+
+    # P5/§B6-B9: the skill set was missing a ref, named an unknown skill, or
+    # the operator-approved text no longer matches the wire's tree digest.
+    # Terminal: the worker refuses before a model call.
+    class SkillSetError < Error; end
+
+    # P0B/§4.3/§8.1: a model-call identity or receipt was constructed with an
+    # invalid shape — a bad status, a malformed digest, or usage that fabricates
+    # zero instead of declaring itself unavailable. A construction-time guard, so
+    # a malformed receipt can never enter the durable journal.
+    class ModelReceiptError < Error; end
+
     # Raised when every plan attempt failed review. D-8 Fix C (RC-3): the raise site
     # authors the message — either a bounded summary of the last attempt's
     # STRUCTURAL-layer issues (Tamoz-generated validation text) or a generic phrase —
@@ -58,5 +82,11 @@ module Tamoz
     # checkpoint exists. The existing profile secret predicates
     # (`SECRET_VALUE_PATTERNS` / `ENTROPY_PATTERN`) are the gate.
     class ProfilePolicyError < Error; end
+
+    # P1/§3.1: the episode frame failed a deterministic gate — a prompt digest
+    # mismatch, malformed facts, or an unverifiable catalog. Terminal: the
+    # episode fails typed before any model call. Distinct from ProtocolError,
+    # which is untrusted-model-document territory.
+    class EpisodeFrameError < Error; end
   end
 end

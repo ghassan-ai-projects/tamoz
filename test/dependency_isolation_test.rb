@@ -74,6 +74,21 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  # Audit F2: the decision builder is the tamoz-stream injected-port boundary —
+  # it must load without tamoz-agent (the P4 edge, reintroduced by 747d350 and
+  # now homed in tamoz-core). This pins the no-edge property at the source
+  # level.
+  def test_decision_builder_loads_core_only_and_no_agent_edge
+    features = loaded_features_after("tamoz/stream/decision_builder")
+
+    assert_includes features, "tamoz/core.rb"
+    assert_includes features, "tamoz/stream/decision_builder.rb"
+    refute(
+      features.any? { |path| path.match?(%r{tamoz/agent}) },
+      features.inspect
+    )
+  end
+
   # ADR-041: tamoz-comms is a VALUES and CONTRACT gem — core only. It must not
   # pull the durable store, the agent, or any model client, and it must not
   # open a socket at load time. This is what keeps the channel vocabulary out
@@ -151,6 +166,21 @@ class DependencyIsolationTest < Minitest::Test
     production.each do |name, root|
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
       refute_includes spec.runtime_dependencies.map(&:name), "tamoz-evals", name
+    end
+  end
+
+  # Audit F2: the injected-port boundary at the PACKAGE level too — no
+  # production gemspec may depend on tamoz-agent except tamoz-agent's own
+  # dependents (agent, tools). The tamoz-stream gemspec must stay
+  # core/grpc/protobuf only.
+  def test_no_production_gemspec_depends_on_agent_except_agents_own_dependents
+    allowed = %w[tamoz-agent tamoz-tools]
+
+    GEM_ROOTS.each do |name, root|
+      next if allowed.include?(name)
+
+      spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+      refute_includes spec.runtime_dependencies.map(&:name), "tamoz-agent", name
     end
   end
 

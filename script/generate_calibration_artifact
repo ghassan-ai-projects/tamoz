@@ -1,0 +1,150 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../test", __dir__))
+require "json"
+require "digest"
+require "optparse"
+require "tamoz/agent"
+
+PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+
+# P8 (docs/new-design/PHASE_P8_ROLLOUT.md): the calibration artifact. One
+# domain's exact bound document — model revision + profile digest + prompt +
+# diagnosis catalog + domain + policy digest — that unlocks automatic
+# consequential intents (R2+) on the Go side. Missing or mismatched =
+# watch-only. The artifact SHA is the binding: a change to ANY field is a new
+# artifact, and the Go gate matches on domain + model revision.
+#
+# The model revision is the GO compiled-spec digest (episodes.executor_version)
+# — it is bound at REGISTRATION by the operator who runs the runtime, not by
+# this generator (a Ruby process cannot know the Go spec digest). The artifact
+# SHA binds the Ruby-verifiable fields (domain, profile, prompt, diagnosis
+# catalog, policy); the Go gate additionally requires the episode's
+# executor_version to equal the registered model_revision, so a spec change
+# invalidates the artifact (watch-only).
+#
+# Domain input: by default the two test-support domains (the documented
+# example set). With `--manifest PATH`, the operator supplies the deployed
+# domain's documents as JSON — the same digest computation, so the manifest
+# path binds exactly what the fixture path binds. `domain` in the manifest
+# must equal the Go situation_type (a typo is permanent silent watch-only),
+# and the catalog/prompt documents must be copied from the compiled spec's
+# WIRE output — a hand-authored catalog binds a false policy_digest that the
+# Go gate (domain + model_revision only) never re-verifies.
+#
+# Emits CALIBRATION_ARTIFACTS.json (one entry per domain) to stdout.
+def main(manifest_path: nil)
+  entries = if manifest_path
+              load_manifest(manifest_path)
+            else
+              require "support/aquaculture_domain"
+              require "support/climate_domain"
+              default_domains
+            end
+  artifacts = entries.map do |entry|
+    build_artifact_from(entry.fetch("domain"), entry.fetch("prompt"),
+                        entry.fetch("diagnosis_catalog"), entry.fetch("intent_catalog"))
+  end
+  protocol_version = JSON.parse(File.read(PROTOCOL_PATH, encoding: Encoding::UTF_8))
+                              .fetch("benchmark_protocol_version")
+  puts JSON.pretty_generate("benchmark_protocol_version" => protocol_version,
+                            "artifacts" => artifacts)
+end
+
+def default_domains
+  [
+    {"domain" => "aquaculture", "prompt" => AquacultureDomain::PROMPT,
+     "diagnosis_catalog" => AquacultureDomain::CATALOG,
+     "intent_catalog" => AquacultureDomain::INTENT_CATALOG},
+    {"domain" => "climate", "prompt" => ClimateDomain::PROMPT,
+     "diagnosis_catalog" => ClimateDomain::CATALOG,
+     "intent_catalog" => ClimateDomain::INTENT_CATALOG}
+  ]
+end
+
+# Strict JSON parse (Tamoz::Core's JCS scanner rejects duplicate keys,
+# non-finite numbers and ±0), so a malformed manifest fails at parse, not
+# later at canonicalization.
+def load_manifest(path)
+  document = begin
+    Tamoz::Core.parse_json_strict(File.read(path, encoding: Encoding::UTF_8))
+  rescue Tamoz::Core::JCS::Error, Errno::ENOENT => e
+    raise ArgumentError, "manifest #{path}: #{e.message}"
+  end
+  unless document.is_a?(Hash)
+    raise ArgumentError, "manifest root must be an object with a \"domains\" array"
+  end
+  entries = document.fetch("domains")
+  unless entries.is_a?(Array) && !entries.empty?
+    raise ArgumentError, "manifest must contain a non-empty \"domains\" array"
+  end
+  seen = {}
+  entries.each_with_index do |entry, index|
+    label = "domains[#{index}]"
+    unless entry.is_a?(Hash)
+      raise ArgumentError, "manifest #{label} must be an object"
+    end
+    domain = entry.fetch("domain", nil)
+    if !domain.is_a?(String) || domain.strip.empty?
+      raise ArgumentError,
+            "manifest #{label} domain must be a non-empty string (a typo is permanent silent watch-only)"
+    end
+    %w[prompt diagnosis_catalog intent_catalog].each do |key|
+      unless entry.key?(key)
+        raise ArgumentError, "manifest #{label} is missing \"#{key}\""
+      end
+    end
+    if seen[domain]
+      raise ArgumentError, "manifest contains duplicate domain #{domain.inspect}"
+    end
+    seen[domain] = true
+  end
+
+  entries
+end
+
+def build_artifact_from(domain, prompt, diagnosis_catalog, intent_catalog)
+  policy_digest = Tamoz::Core.digest(:intent_catalog, intent_catalog)
+  diagnosis_digest = Tamoz::Core.digest(:diagnosis_catalog, diagnosis_catalog)
+  prompt_digest = Tamoz::Core.digest(
+    "situation-runtime/prompt/v1\n", {"version" => "1.0", "text" => prompt}
+  )
+  # The profile digest is the sealed build fingerprint — domain-independent,
+  # identical on both paths.
+  sealed = Tamoz::Agent::SealedBuild.new.canonical_fingerprint
+  # model_revision is filled at Go registration (the compiled spec digest); it
+  # is intentionally not part of the Ruby-bound document SHA. The document key
+  # order is frozen — a change would be a new artifact identity.
+  document = {
+    "domain" => domain,
+    "profile_digest" => sealed,
+    "prompt_sha256" => prompt_digest,
+    "diagnosis_catalog_sha256" => diagnosis_digest,
+    "policy_digest" => policy_digest
+  }
+  artifact_sha256 = "sha256:#{Digest::SHA256.hexdigest(JSON.generate(document))}"
+  document.merge("model_revision" => "", "artifact_sha256" => artifact_sha256)
+end
+
+options = {}
+parser = OptionParser.new do |opts|
+  opts.on("--manifest PATH", "JSON manifest of deployed domain documents") { |value| options[:manifest_path] = value }
+  opts.on("-h", "--help", "show this help") do
+    puts opts
+    exit
+  end
+end
+begin
+  parser.parse!(ARGV)
+  if ARGV.any?
+    raise OptionParser::ParseError,
+          "unexpected argument: #{ARGV.first.inspect} (did you mean --manifest?)"
+  end
+  main(manifest_path: options[:manifest_path])
+rescue OptionParser::ParseError, ArgumentError, Tamoz::Core::JCS::Error, Errno::ENOENT => e
+  warn "generate_calibration_artifact: #{e.message}"
+  warn parser
+  exit 1
+end

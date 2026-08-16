@@ -1,0 +1,134 @@
+{
+  "benchmark_protocol_version": "1.1.0",
+  "sealed_build_digest": "sha256:6fb7a1c49afc7de376de4b611bf3ff5daa56d476107eb05de8a09b12612fa812",
+  "graph": {
+    "name": "tamoz.agent.episode",
+    "version": "4"
+  },
+  "digests": {
+    "diagnosis_catalog": "sha256:7ab740e0d7fbc256dfadc445b60c6a16ebdda629e75b09d856289f67e9e1a54d",
+    "intent_catalog_aquaculture": "sha256:e4f866204344a5f19994e28afdea67b610e34405b062bbfd2879209a363d81f3",
+    "intent_catalog_climate": "sha256:f27b63a667f95fa69310c726ffc2f94e3041db44157b4b3185c7d2f06789d07e",
+    "prompt_aquaculture": "sha256:9c89f6e5e47598b3f738509c6d9841bc567907f73ba1fee896fd120fa76f1698",
+    "prompt_climate": "sha256:4e1440a2b445ac80382b8c63afd2852c6fa2a5857184be2f2e0da8a829dac64d"
+  },
+  "providers": [
+    {
+      "identity": "local-model",
+      "provider": "tamoz-local",
+      "settings": {
+        "temperature": 0,
+        "stream": false,
+        "response_format": "json_object"
+      }
+    },
+    {
+      "identity": "pinned-local",
+      "provider": "tamoz-local-pinned",
+      "settings": {
+        "temperature": 0,
+        "stream": false,
+        "response_format": "json_object"
+      }
+    }
+  ],
+  "budgets": {
+    "max_model_calls": 8,
+    "max_output_tokens": 2048,
+    "wall_time": "60s",
+    "risk_ceiling": "R2"
+  },
+  "case_matrix": {
+    "domains": [
+      "aquaculture",
+      "climate"
+    ],
+    "scenario_families": [
+      {
+        "id": "do-crash",
+        "domain": "aquaculture",
+        "primary": "low_dissolved_oxygen",
+        "metric": "dissolved_oxygen",
+        "alarm_code": "low_dissolved_oxygen",
+        "threshold": 2.0,
+        "operator": "lt"
+      },
+      {
+        "id": "climate-deviation",
+        "domain": "climate",
+        "primary": "overheated",
+        "metric": "zone_temperature",
+        "alarm_code": "overheated",
+        "threshold": 31.0,
+        "operator": "gt"
+      }
+    ],
+    "min_cases_per_cell": 30
+  },
+  "scoring": {
+    "diagnosis": {
+      "macro_f1": "macro-averaged F1 over the diagnosis codes",
+      "balanced_accuracy": "mean recall over the diagnosis codes"
+    },
+    "probability": {
+      "brier": "mean squared error over the full probability vector",
+      "log_loss": "negative log likelihood over the full probability vector",
+      "calibration": "ECE over the primary-code probabilities",
+      "risk_coverage": "coverage vs risk under abstention"
+    },
+    "evidence": {
+      "fabricated_reference_rate": "hard zero gate"
+    },
+    "timing": {
+      "lead_time": "decision time vs the first-observable time"
+    },
+    "utility": {
+      "missed_catastrophe_cost": 100.0,
+      "false_action_cost": 1.0
+    },
+    "cost": {
+      "per_cell": "provider tokens + tool bytes per cell"
+    }
+  },
+  "baselines": [
+    "majority_prior",
+    "random_label",
+    "fixed_threshold",
+    "z_score",
+    "first_difference",
+    "moving_median",
+    "nearest_symptom",
+    "deterministic_detector",
+    "go_native_executor"
+  ],
+  "thresholds": {
+    "minimum_practical_effect": 0.05,
+    "confidence_interval": 0.95,
+    "safety_cost_floors": {
+      "per_scenario": true
+    }
+  },
+  "stop_rules": [
+    "truth_leak",
+    "holdout_access",
+    "fixture_or_fake_provider",
+    "forged_or_missing_witness_record",
+    "artifact_mismatch",
+    "fabricated_evidence_reference",
+    "cross_cell_memory",
+    "hidden_domain_code",
+    "silent_fallback",
+    "accepted_risk_mismatch",
+    "unreported_attempt"
+  ],
+  "statistics": {
+    "intention_to_treat": true,
+    "first_attempt_scored": true,
+    "failures_never_replaced": true,
+    "paired_seeds_across_providers_and_baselines": true,
+    "cluster_bootstrap_intervals": true,
+    "min_cases_per_cell": 30,
+    "random_label_seed": 1,
+    "bootstrap_seed": 7
+  }
+}

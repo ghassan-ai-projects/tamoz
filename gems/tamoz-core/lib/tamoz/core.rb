@@ -14,6 +14,12 @@ module Tamoz
     # `skill_epoch` resolves without any agent constant.
     LEGACY_SKILL_EPOCH = "none"
 
+    # Audit F2: the intent-catalog watch type. Homed in tamoz-core so the
+    # tamoz-stream decision builder (the injected-port boundary) resolves it
+    # WITHOUT a tamoz-agent dependency edge; tamoz-agent's IntentCatalog
+    # aliases it. The wire value is frozen — a change is a new intent catalog.
+    INTENT_WATCH_TYPE = "install_watch_condition"
+
     # P16: the D-7 taxonomy classes moved into tamoz-core, but every durable and
     # model-visible serialization of them keeps the public `Tamoz::Agent::Tool*`
     # spellings. This is the single stable mapping applied at the three
@@ -115,6 +121,33 @@ module Tamoz
       else
         raise Tamoz::Error, "unsupported plan argument #{value.class}"
       end
+    end
+
+    # P6: the RECONSIDER payload normalization — a Hash with the four
+    # string-keyed members (prior_decision/commands/outcomes/correction). Homed
+    # in core so both the stream module and the agent intake node consume ONE
+    # contract (symbol- or string-keyed input, typed refusal on a half-shaped
+    # payload).
+    def normalize_reconsideration(hash)
+      unless hash.is_a?(Hash)
+        raise Tamoz::Error, "reconsideration payload is not an object"
+      end
+
+      normalized = hash.transform_keys(&:to_s)
+      missing = %w[prior_decision commands outcomes correction].reject do |key|
+        normalized.key?(key)
+      end
+      unless missing.empty?
+        raise Tamoz::Error,
+              "reconsideration payload is missing: #{missing.join(", ")}"
+      end
+
+      {
+        "prior_decision" => normalized.fetch("prior_decision"),
+        "commands" => Array(normalized["commands"]),
+        "outcomes" => Array(normalized["outcomes"]),
+        "correction" => normalized.fetch("correction")
+      }
     end
   end
 end

@@ -66,11 +66,20 @@ message EpisodeRequest {
   bytes tool_catalog_sha256 = 15;
   bytes spec_sha256 = 16;
 
+  // P0B/§5: the versioned diagnosis vocabulary the compiler binds. Canonical
+  // bytes plus a domain-separated digest the worker and runtime verify
+  // independently before a model call.
+  bytes diagnosis_catalog_json = 17;
+  bytes diagnosis_catalog_sha256 = 18;
+
   string objective = 20;
   string executor_name = 21;
   string executor_version = 22;
   string model_policy = 23;
   string prompt_version = 24;
+  // P0B/§2.2/§4.4: the prompt BODY, previously absent from the wire, so the
+  // worker can assemble the canonical frame instead of a version string alone.
+  string prompt = 25;
 
   EpisodeBudget budget = 30;
   google.protobuf.Timestamp deadline = 31;
@@ -95,6 +104,23 @@ message EpisodeRequest {
   bytes prompt_sha256 = 59;
   bytes objective_sha256 = 60;
   optional double watch_confidence_floor = 61;
+  // P0B/§4.1/§8.2: the authority axis, durable and independent of executor_name.
+  // ACTIVE bears action authority; SHADOW is persisted and scored but the
+  // runtime independently prevents it from entering the governor.
+  DispatchPolicy dispatch_policy = 62;
+
+  // P4/§B9-B10: the spec-bound INTENT catalog — the domain's action
+  // vocabulary with declared risks, parameter schemas, presets, and
+  // model-writable fields. Canonical bytes plus a domain-separated digest the
+  // worker and runtime verify independently before a model call.
+  bytes intent_catalog_json = 63;
+  bytes intent_catalog_sha256 = 64;
+
+  // P5/§B6-B9: the ordered skill REFS the episode may render into the frame —
+  // [{name, tree_sha256}], digest-pinned. The worker resolves each skill's
+  // text ONLY from the operator-approved directory and requires the tree
+  // digest to match; a mismatch fails before any model call.
+  bytes skill_refs_json = 65;
 }
 
 enum EpisodeKind {
@@ -108,6 +134,12 @@ enum EpisodeLane {
   EPISODE_LANE_FAST = 1;
   EPISODE_LANE_DEEP = 2;
   EPISODE_LANE_BATCH = 3;
+}
+
+enum DispatchPolicy {
+  DISPATCH_POLICY_UNSPECIFIED = 0;
+  DISPATCH_POLICY_ACTIVE = 1;
+  DISPATCH_POLICY_SHADOW = 2;
 }
 
 enum RiskClass {

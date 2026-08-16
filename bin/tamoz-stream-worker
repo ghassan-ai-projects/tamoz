@@ -1,29 +1,30 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# The supervised episode worker launcher (PLAN_TAMOZ_STREAM_BUILD T1.1/T8.3).
-# Composes the gRPC EpisodeWorker from a graph file, a SQLite checkpointer,
-# and the episode stores, then serves — the deployment entry point the
-# handler-only EpisodeWorker never had.
+# The supervised episode worker launcher. P1: the production episode graph is
+# THE fixed graph (Tamoz::Agent::EpisodeGraph) compiled in process — there is
+# no --graph FILE on any production route. The launcher composes the ports:
+# the Profile (model authority), the frame builder factory, the journaled
+# model-call factory, and the deterministic decision builder (tamoz-stream).
 #
 #   tamoz-stream-worker \
-#     --graph apps/example/episode_diagnose.rb \
+#     --profile /etc/tamoz/worker-profile.yaml \
 #     --database /var/lib/tamoz/worker.sqlite3 \
-#     --socket /run/tamoz/worker.sock \
-#     --lane-config fast=flash,deep=pro,batch=flash
+#     --tenant acme \
+#     --socket /run/tamoz/worker.sock
 #
-# The graph file must define `build_episode_app(checkpointer)` returning a
-# compiled Tamoz::Graph app (the same shape the episode tests use).
 # Production binds a UDS socket (mTLS at the socket boundary); development
 # may pass --port instead.
 
 $LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 
 require "optparse"
+require "json"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/worker_server"
 require "tamoz/stream/verification_store"
 require "tamoz/stream/artifact_store"
+require "tamoz/stream/decision_node_builder"
 require "tamoz/agent"
 require "tamoz/sqlite"
 
@@ -33,8 +34,8 @@ options = {
   tenant: nil
 }
 parser = OptionParser.new do |opts|
-  opts.on("--graph FILE", "Ruby file defining build_episode_app(checkpointer)") do |value|
-    options[:graph] = value
+  opts.on("--profile PATH", "Profile file carrying model_roles (the only model authority)") do |value|
+    options[:profile] = value
   end
   opts.on("--database PATH", "SQLite database for the durable checkpointer") do |value|
     options[:database] = value
@@ -54,10 +55,13 @@ parser = OptionParser.new do |opts|
   opts.on("--lane-config SPEC", "lane=model triples, comma-separated") do |value|
     options[:lane_config] = value
   end
+  opts.on("--skills-source PATH", "JSON map {name => rendered text} of the operator-approved skills") do |value|
+    options[:skills_source] = value
+  end
 end
 parser.parse!(ARGV)
 
-unless options[:graph] && options[:database] && options[:tenant]
+unless options[:profile] && options[:database] && options[:tenant]
   warn parser
   exit 2
 end
@@ -71,16 +75,45 @@ lane_config = Tamoz::Agent::LaneConfig.build(
   end
 )
 
-require File.expand_path(options[:graph])
+# The Profile is the sole model authority: the wire names a role, the intake
+# node resolves it here (fail-closed) before any model call. Validation-only
+# load — no adoption ceremony for operator config.
+profile = Tamoz::Agent::Profile.preview(options.fetch(:profile))
 
 checkpointer = Tamoz::SQLite::Adapter.new(
-  path: options[:database], state_codec: Tamoz::Agent::Memory::Surface.codec
+  path: options.fetch(:database), state_codec: Tamoz::Agent::Memory::Surface.codec
 )
-app = build_episode_app(checkpointer)
 memory = Tamoz::Agent::Memory::Engine.new(
   tenant: options.fetch(:tenant), adapter: checkpointer
 )
 recaller = Tamoz::Agent::Memory::SituationRecaller.new(engine: memory)
+caller = memory.caller(
+  user: "stream", project: "stream", sensitivity: :internal,
+  compatibility: {graph_version: "1", behavior_version: Tamoz::Agent::BEHAVIOR_VERSION}
+)
+# P5: the operator-approved skill source — a JSON map {name => rendered
+# text}; when unset, ANY episode requesting a skill ref fails closed at
+# build_frame (the production compiler seam is Tamoz::Tools::Skills over the
+# operator directory; its Snapshot records map to this map).
+skills_source = JSON.parse(File.read(options.fetch(:skills_source))) if options.key?(:skills_source)
+nodes = Tamoz::Agent::EpisodeNodes.new(
+  profile:,
+  frame_builder_factory: lambda do |catalog, objective|
+    Tamoz::Agent::EpisodeFrameBuilder.new(catalog:, objective:)
+  end,
+  model_call_factory: lambda do |role|
+    endpoint = role.fetch("endpoint")
+    transport = Tamoz::Agent::EpisodeModelTransport.new(
+      endpoint:, model: role.fetch("model"), provider: role.fetch("provider")
+    )
+    Tamoz::Agent::EpisodeModelCall.new(transport:)
+  end,
+  decision_builder: Tamoz::Stream::DecisionNodeBuilder.new,
+  skills_source: skills_source || {},
+  situation_recaller: recaller,
+  recall_caller: caller
+)
+app = Tamoz::Agent::EpisodeGraph.build(checkpointer:, nodes:)
 worker = Tamoz::Stream::EpisodeWorker.new(
   worker_version: options[:worker_version],
   lane_config:
@@ -90,13 +123,8 @@ runner = Tamoz::Stream::EpisodeRunner.new(
   worker:,
   verification_store: checkpointer.bind_verification_store,
   artifact_store: Tamoz::Stream::ArtifactStore.new,
-  situation_recaller: recaller,
-  configured_tenant: options.fetch(:tenant),
-  recall_caller: memory.caller(
-    user: "stream", project: "stream", sensitivity: :internal,
-    compatibility: {graph_version: "1", behavior_version: Tamoz::Agent::BEHAVIOR_VERSION}
+  configured_tenant: options.fetch(:tenant)
 )
-  )
 worker.bind_runner(runner)
 
 server = Tamoz::Stream::WorkerServer.new(

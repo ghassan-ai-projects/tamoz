@@ -1,0 +1,217 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../test", __dir__))
+require "json"
+require "digest"
+require "fileutils"
+require "optparse"
+require "tamoz/agent"
+require "tamoz/stream/episode_worker"
+require "tamoz/stream/decision_node_builder"
+require "tamoz/evals"
+require "support/benchmark_families"
+require "support/local_model_endpoint"
+require "support/episode_composition"
+
+# P7: the fixture pilot harness. Drives the frozen case matrix's cells through
+# the SAME composed graph the worker launcher uses (fixture provider, real
+# HTTP boundary), extracts each cell's prediction from the terminal state, and
+# scores the corpus with the frozen metrics, baselines and paired comparison.
+#
+# The output is permanently labeled `pilot` and never pooled with holdout
+# results; the report's verdict is derived (only a comparison whose 95%
+# interval clears the frozen minimum practical effect may claim a go — and a
+# fixture provider cannot produce that, so the honest pilot verdict is
+# negative/inconclusive).
+class BenchmarkRun
+  PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
+  BASE_TIME = "2026-08-15T00:00:00Z"
+
+  def initialize(protocol_path: PROTOCOL_PATH, cases: nil, out: nil, seed: 11, label: "pilot")
+    @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
+    @cases_per_family = cases || @protocol.dig("case_matrix", "min_cases_per_cell")
+    @out = out || File.expand_path(
+      "../documentation/benchmark/results/pilot-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}.json", __dir__
+    )
+    @seed = seed
+    @label = label
+    # Control 2 (fixture/fake provider stop): this harness runs a FIXTURE
+    # provider. A fixture run can never be an intelligence (holdout) run — the
+    # label is frozen to pilot. Anything else is a stop.
+    unless @label == "pilot"
+      raise ArgumentError,
+            "fixture provider cannot produce a #{@label.inspect} run — only pilot"
+    end
+  end
+
+  def run
+    cells = build_cells
+    scored = cells.map { |cell| score_cell(cell) }
+    report = Tamoz::Evals::Benchmark::Report.build(
+      protocol: @protocol,
+      cells: scored,
+      model_identity: "local-model",
+      protocol_sha256: Digest::SHA256.hexdigest(File.binread(PROTOCOL_PATH)),
+      label: @label
+    )
+    # The FULL scored cells persist so every frozen metric (brier, calibration,
+    # risk coverage, lead time, action utility) is re-scorable from the
+    # artifact — offline reproducibility is a go-rule input.
+    report["cells"] = scored
+    FileUtils.mkdir_p(File.dirname(@out))
+    File.write(@out, JSON.pretty_generate(report), encoding: Encoding::UTF_8)
+    puts "wrote #{@out}"
+    puts "verdict: #{report.fetch("verdict")}"
+    puts "macro_f1: #{report.dig("metrics", "diagnosis", "macro_f1")}"
+    report
+  end
+
+  private
+
+  def build_cells
+    random = Random.new(@seed)
+    @protocol.dig("case_matrix", "scenario_families").flat_map do |family|
+      (1..@cases_per_family).map do |index|
+        build_cell(family, index, random)
+      end
+    end
+  end
+
+  def build_cell(family, index, random)
+    config = BenchmarkFamilies::FAMILIES.fetch(family.fetch("id"))
+    domain = config.fetch("domain")
+    facts = config.fetch("facts").call(index, random)
+    snapshot = domain.snapshot.merge("facts" => facts)
+    {
+      "cell_id" => "pilot-#{family.fetch("id")}-#{format("%03d", index)}",
+      "label" => @label,
+      "domain" => family.fetch("domain"),
+      "scenario_family" => family.fetch("id"),
+      "seed" => @seed + index,
+      "snapshot" => snapshot,
+      "facts" => facts,
+      "truth_code" => config.fetch("truth").call(facts),
+      "gold_risk_class" => config.fetch("gold").call(facts),
+      "valid_evidence_ids" => facts.keys.map { |key| "fact:#{key}" },
+      "first_observable_at" => BASE_TIME,
+      "domain_module" => domain
+    }
+  end
+
+  def score_cell(cell)
+    composition = build_composition(cell)
+    wire = EpisodeComposition.wire_request(
+      episode_id: cell.fetch("cell_id"),
+      attempt: 1,
+      fence: 1,
+      prompt: cell.fetch("domain_module")::PROMPT,
+      snapshot: cell.fetch("snapshot"),
+      catalog_json: Tamoz::Core.jcs(cell.fetch("domain_module")::CATALOG),
+      intent_catalog_json: Tamoz::Core.jcs(cell.fetch("domain_module")::INTENT_CATALOG),
+      intent_catalog_sha256: cell.fetch("domain_module").intent_catalog_digest,
+      objective: cell.fetch("domain_module")::OBJECTIVE,
+      allowed_intent_types: %w[install_watch_condition start_aerator run_vent_cycle],
+      risk_ceiling: :RISK_CLASS_R2
+    )
+    events = []
+    composition.fetch(:runner).run(wire).each { |event| events << event }
+    terminal = events.map(&:terminal).compact.last
+    decision_at = decision_time(events, terminal)
+    result = extract(cell, terminal, composition, wire, decision_at)
+    composition.fetch(:adapter).close
+    result
+  ensure
+    composition&.fetch(:adapter)&.close
+    composition&.fetch(:provider)&.stop
+    directory = composition&.fetch(:directory, nil)
+    FileUtils.remove_entry(directory) if directory
+  end
+
+  def build_composition(cell)
+    directory = Dir.mktmpdir("benchmark-pilot")
+    provider = LocalModelEndpoint.new(
+      mode: :fixture,
+      responses: cell.fetch("domain_module")::FIXTURE_RESPONSES,
+      log_path: File.join(directory, "provider.log")
+    ).start
+    composition = EpisodeComposition.build(endpoint: provider.base_url)
+    composition[:provider] = provider
+    composition[:directory] = directory
+    composition
+  end
+
+  # The produced terminal's state is read from the durable checkpoint (same
+  # thread/request_id addressing the tests use). A failed cell carries its
+  # status and reason — never a fabricated prediction.
+  def extract(cell, terminal, composition, wire, decision_at)
+    base = {
+      "cell_id" => cell.fetch("cell_id"),
+      "label" => cell.fetch("label"),
+      "scenario_family" => cell.fetch("scenario_family"),
+      "domain" => cell.fetch("domain"),
+      "facts" => cell.fetch("facts"),
+      "truth_code" => cell.fetch("truth_code"),
+      "gold_risk_class" => cell.fetch("gold_risk_class"),
+      "valid_evidence_ids" => cell.fetch("valid_evidence_ids"),
+      "first_observable_at" => cell.fetch("first_observable_at"),
+      "decision_at" => decision_at,
+      "tokens" => 0,
+      "tool_bytes" => 0
+    }
+    unless terminal&.status == :TERMINAL_STATUS_PRODUCED
+      return base.merge("status" => "failed",
+                        "failure_reason" => terminal&.to_h&.dig(:reason_code) || "not_produced")
+    end
+
+    state = composition_state(composition, wire)
+    document = state.fetch(:document, {})
+    decision = state.fetch(:decision, {})
+    probabilities = Array(document["probabilities"]).to_h do |row|
+      [row.fetch("code"), row.fetch("probability").to_f]
+    end
+    base.merge(
+      "status" => "produced",
+      "primary_code" => document.fetch("selected_code", "unknown"),
+      "probabilities" => probabilities,
+      "evidence_refs" => Array(document["evidence_refs"]),
+      "intent_risk_classes" => Array(decision["intents"]).map { |intent| intent.fetch("risk_class") }
+    )
+  end
+
+  # The decision time is the terminal event's occurred_at (the checkpoint's
+  # episode payload has no timestamp). A produced run reports the terminal
+  # time; a failed run reports the failed terminal's time.
+  def decision_time(events, terminal)
+    return BASE_TIME if terminal.nil?
+
+    seconds = terminal.to_h.dig(:occurred_at, :seconds) || events.map { |e| e.to_h.dig(:occurred_at, :seconds) }.compact.last
+    seconds ? Time.at(seconds).utc.iso8601 : BASE_TIME
+  end
+
+  def composition_state(composition, wire)
+    thread = "episode.#{wire.episode_id}"
+    result = composition.fetch(:app).durable_runner.fetch(
+      thread:,
+      request_id: "episode.#{wire.episode_id}.#{wire.attempt_id}.#{wire.fence}",
+      namespace: [wire.tenant_id]
+    )
+    composition.fetch(:app).state(
+      thread:,
+      namespace: [wire.tenant_id],
+      checkpoint_id: result.checkpoint_id
+    ).state.to_h
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |opts|
+    opts.on("--cases N", Integer) { |value| options[:cases] = value }
+    opts.on("--out PATH") { |value| options[:out] = value }
+    opts.on("--seed N", Integer) { |value| options[:seed] = value }
+    opts.on("--label VALUE") { |value| options[:label] = value }
+  end.parse!
+  BenchmarkRun.new(**options).run
+end

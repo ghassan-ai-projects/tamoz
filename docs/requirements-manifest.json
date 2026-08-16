@@ -626,9 +626,9 @@
       "title": "Physical action is typed intent plus current-state policy, never model effect",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
+      "named_test": "test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch",
       "supporting_tests": [
-        "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent"
+        "test/stream_decision_builder_test.rb#test_a_proposal_for_an_allowlisted_action_uses_the_catalog_declared_risk"
       ],
       "classification": "direct",
       "rationale": null,
@@ -5578,6 +5578,47 @@
       "promotion_exclusion": null
     },
     {
+      "id": "MIG-13",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_13",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-14",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_14",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-15",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_15",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
+      "supporting_tests": [
+        "test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "MIG-2",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
@@ -5860,10 +5901,10 @@
       "title": "physical-world output remains supervisory, typed, current-state checked, simulated first, and externally interlocked",
       "release_blocking": true,
       "status": "unverified",
-      "named_test": "test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal",
+      "named_test": "test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch",
       "supporting_tests": [
-        "test/stream_decision_builder_test.rb#test_a_confident_episode_proposes_a_consequential_intent",
-        "test/stream_decision_builder_test.rb#test_a_low_risk_ceiling_never_proposes_a_consequential_action"
+        "test/stream_decision_builder_test.rb#test_a_proposal_for_an_allowlisted_action_uses_the_catalog_declared_risk",
+        "test/stream_decision_builder_test.rb#test_a_proposal_above_the_risk_ceiling_degrades_to_watch"
       ],
       "classification": "direct",
       "rationale": null,

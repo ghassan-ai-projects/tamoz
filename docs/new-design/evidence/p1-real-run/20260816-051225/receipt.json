@@ -1,0 +1,18 @@
+{
+  "effect_id": "p1-real-98062\u0000reason\u00000\u0000sha256:c84727f40e8bc4055928825f51613405a1fa370fac8b87648b6fd6e6eaa1d6d5",
+  "effect_key": "logical:721f8634cad1f7929504d07f4592128e2403cfc6cd5304769bda066adbb2fb03",
+  "episode_id": "p1-real-98062",
+  "frame_digest": "sha256:8e5e024174aed5f6993b32b489507d32f26870e33ac8db2a511778f462029362",
+  "model": "gemma4:26b",
+  "ordinal": 0,
+  "provider": "ollama",
+  "request_digest": "sha256:c84727f40e8bc4055928825f51613405a1fa370fac8b87648b6fd6e6eaa1d6d5",
+  "response_digest": "sha256:23a58c0c1544d64964aa5a4bc3ffe1094c1328f863f83fb88cff66aaf8eb0807",
+  "settings_digest": "sha256:dbf54ff0613228eb68eebbac3fd7657c63d9ee1971b8db58d6dafc86513c6549",
+  "status": "succeeded",
+  "usage": {
+    "cost_microunits": 0,
+    "input_tokens": 2954,
+    "output_tokens": 259
+  }
+}

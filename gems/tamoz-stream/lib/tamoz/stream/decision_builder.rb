@@ -2,54 +2,67 @@
 
 require "tamoz/core"
 require "tamoz/stream/errors"
-require "tamoz/stream/reconsideration"
 
 module Tamoz
   module Stream
-    # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4): the typed Decision, built to the
-    # frozen decision-v1 schema and digested with the shared rule
-    # (situation-runtime/decision/v1). The builder selects the safest
-    # expressible action from the wire allowlist and falls back to a watch
-    # condition when no action can be expressed.
+    # T2.4 (PLAN_TAMOZ_STREAM_BUILD T2.4) + P4 (PHASE_P4_INTENT_AUTHORITY):
+    # the typed Decision, built to the frozen decision-v1 schema and digested
+    # with the shared rule (situation-runtime/decision/v1).
+    #
+    # P4 rebuild: the builder reads EVERY domain fact from the spec-bound
+    # IntentCatalog (B9/B10). The model proposes at most one actionable intent
+    # (recommended_intents in the validated document); the builder reads the
+    # EXACT risk, the parameter schema, the presets, and the model-writable
+    # fields from the catalog — the model's own risk claim is never read. No
+    # proposal (or an unproposable one) degrades to the R0 watch condition
+    # from the catalog. Confidence may cause abstention/watch; it never
+    # unlocks authority.
     class DecisionBuilder
-      RISK_ORDER = {
-        "r0" => 0, "r1" => 1, "r2" => 2, "r3" => 3, "r4" => 4
+      # The risk lattice (R0 < R1 < ... < R4) is the wire enum's semantics,
+      # not a domain table.
+      RISK_RANK = {
+        "R0" => 0, "R1" => 1, "R2" => 2, "R3" => 3, "R4" => 4
       }.freeze
-      ACTION_RISKS = {
-        "create_maintenance_ticket" => "r1",
-        "schedule_maintenance" => "r1",
-        "reduce_load" => "r1",
-        "downgrade_dispatch" => "r1",
-        "withdraw_ticket" => "r1",
-        "recommend_operating_limit" => "r2",
-        "dispatch_crew" => "r2",
-        "isolate_segment" => "r3",
-        "start_aerator" => "r1",
-        "halt_feeding" => "r1",
-        "emergency_water_exchange" => "r2",
-        "downgrade_intervention" => "r1",
-        "withdraw_intervention" => "r1",
-        "run_vent_cycle" => "r1",
-        "dehumidify" => "r1",
-        "deploy_shade_or_heat" => "r2",
-        "dose_co2" => "r2",
-        "downgrade_climate_action" => "r1",
-        "withdraw_climate_action" => "r1"
-      }.freeze
-      HIGH_CONFIDENCE = 0.85
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
+      MAX_ACTIONABLE_INTENTS = 1
       VALIDITY_WINDOW_SECONDS = 86_400
 
-      def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, now: Time.now)
-        new(envelope:, snapshot:, snapshot_digest:, outcome:, now:).build
+      def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
+        new(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now:).build
       end
 
-      def initialize(envelope:, snapshot:, snapshot_digest:, outcome:, now: Time.now)
+      # P6: the RECONSIDER entry — builds the decision-v1 shape + digest over
+      # the compensating intents the compensate node produced. One builder,
+      # one decision shape (the Go validator enforces the same schema).
+      def self.build_decision(intents:, episode:, snapshot:, snapshot_digest:, summary:, now: Time.now)
+        decision = {
+          "decision_id" => "decision.#{episode.fetch("episode_id")}." \
+                           "#{episode.fetch("attempt_id")}.#{episode.fetch("fence")}",
+          "episode_id" => episode.fetch("episode_id"),
+          "attempt_id" => episode.fetch("attempt_id"),
+          "fence" => episode.fetch("fence"),
+          "snapshot_digest" => snapshot_digest,
+          "situation_id" => snapshot.fetch("situation_id"),
+          "situation_version" => snapshot.fetch("situation_version"),
+          "primary_hypothesis" => "",
+          "confidence" => 1.0,
+          "summary" => String(summary).byteslice(0, 4096),
+          "facts_used" => [],
+          "alternatives" => [],
+          "intents" => intents,
+          "valid_until" => (now + VALIDITY_WINDOW_SECONDS).utc.iso8601
+        }
+        digest = Tamoz::Core.digest(:decision, decision)
+        [decision, digest]
+      end
+
+      def initialize(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
         @envelope = envelope
         @snapshot = snapshot
         @snapshot_digest = snapshot_digest
         @outcome = outcome
+        @catalog = catalog
         @now = now
       end
 
@@ -70,7 +83,7 @@ module Tamoz
           "facts_used" => Array(@outcome.fetch(:facts_used, [])).first(MAX_FACTS),
           "alternatives" => Array(@outcome.fetch(:alternatives, [])).first(MAX_ALTERNATIVES),
           "intents" => intents,
-          "valid_until" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601
+          "valid_until" => valid_until
         }
         digest = Tamoz::Core.digest(:decision, decision)
         [decision, digest]
@@ -80,6 +93,10 @@ module Tamoz
 
       def decision_id
         "decision.#{@envelope.episode_id}.#{@envelope.attempt_id}.#{@envelope.fence}"
+      end
+
+      def valid_until
+        (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601
       end
 
       def confidence
@@ -92,155 +109,149 @@ module Tamoz
       end
 
       # The intent set respects the episode's own risk ceiling and intent
-      # allowlist (T1.3): a ceiling below the action's risk class, or an
-      # allowlist without the action type, demotes the proposal to an
-      # observation — never escalates. A RECONSIDER episode proposes the
-      # compensating intents from its judgment instead (T6.1).
+      # allowlist: a ceiling below the catalog-declared risk, or an allowlist
+      # without the proposed type, demotes the proposal to the watch
+      # observation — never escalates, never substitutes a different action.
+      # P6: RECONSIDER episodes are built by the compensate node
+      # (build_decision) — this DIAGNOSE-only path never sees them.
       def intents
-        return reconsideration_intents if @envelope.kind == :reconsider
-
         diagnose_intents
       end
 
-      # T6.1: the compensating intents the judgment produced. Each is
-      # re-validated at the decision boundary — its own verified digest and a
-      # risk class within the ceiling — because the graph's outcome is agent
-      # output and the worker owns the wire contract. A malformed compensation
-      # is a typed failure, never a silent omission that leaves the effect
-      # uncompensated behind a PRODUCED terminal.
-      #
-      # Compensations deliberately bypass the allowed_intent_types allowlist
-      # that gates the DIAGNOSE path: the allowlist names the actions a tenant
-      # lets the worker PROPOSE; a compensation is the worker's corrective
-      # answer to an already-executed effect, and the stream validates it under
-      # its own policy pipeline anyway (PROTOCOL §4.2).
-      def reconsideration_intents
-        compensations = Array(@outcome.fetch(:compensating_intents, []))
-                          .first(Reconsideration::MAX_INTENTS)
-        invalid = compensations.reject do |intent|
-          Reconsideration.valid_compensation?(
-            intent, risk_ceiling: @envelope.risk_ceiling
-          )
-        end
-        unless invalid.empty?
-          raise StreamError,
-                "a compensating intent failed the decision boundary " \
-                "(bad digest, missing compensates, wrong risk class, " \
-                "or risk above the ceiling)"
-        end
-
-        compensations
-      end
-
       def diagnose_intents
-        return watch_preferred_intents if watch_preferred?
+        proposal = recommended_proposal
+        return [watch_condition_intent] if proposal.nil? || proposal_type(proposal) == Tamoz::Core::INTENT_WATCH_TYPE
 
-        if confidence >= HIGH_CONFIDENCE
-          types = expressible_action_types(limit: 2)
-          return types.map { |type| action_intent(type:) } unless types.empty?
-        else
-          type = expressible_action_type
-          return [action_intent(type:)] if type
+        type = proposal_type(proposal)
+        unless @catalog.include?(type) && allowed_intent_types.include?(type)
+          return [watch_condition_intent]
         end
 
-        [watch_condition_intent]
+        entry = @catalog.entry(type)
+        unless risk_within_ceiling?(entry.risk_class)
+          return [watch_condition_intent]
+        end
+
+        # Confidence may cause abstention (watch); it never unlocks an action
+        # the catalog or the operator's floor would refuse.
+        return [watch_condition_intent] if watch_preferred?
+
+        parameters = build_parameters(entry, proposal)
+        [
+          build_intent(
+            type: entry.type, risk_class: entry.risk_class, parameters:,
+            evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
+          )
+        ]
       end
 
-      def watch_preferred_intents
-        return [watch_condition_intent] if @outcome.fetch(:watch_only, false)
+      # The model's actionable proposal: at most ONE. Two+ actionable intents
+      # are a typed refusal (never a silent first-entry truncation).
+      def recommended_proposal
+        proposals = Array(@outcome.fetch(:recommended_intents, []))
+        actionable = proposals.reject { |intent| proposal_type(intent) == Tamoz::Core::INTENT_WATCH_TYPE }
+        if actionable.length > MAX_ACTIONABLE_INTENTS
+          raise StreamError,
+                "a document may propose at most one actionable intent " \
+                "(proposed #{actionable.length})"
+        end
 
-        intents = [watch_condition_intent]
-        type = expressible_action_type(risk_class: "r1")
-        intents << action_intent(type:) if type
-        intents
+        actionable.first
       end
 
       def watch_preferred?
+        return true if @outcome.fetch(:watch_only, false)
+
         floor = @envelope.watch_confidence_floor
         floor > 0.0 && confidence < floor && watch_allowlisted?
       end
 
       def watch_allowlisted?
-        allowed_intent_types.include?("install_watch_condition")
+        allowed_intent_types.include?(Tamoz::Core::INTENT_WATCH_TYPE)
       end
 
-      def expressible_action_type(highest_risk: false, risk_class: nil)
-        candidate = select_action_candidate(
-          expressible_action_candidates(risk_class:), highest_risk:
-        )
-        candidate&.first
+      def risk_within_ceiling?(declared_risk)
+        RISK_RANK.fetch(declared_risk) <= RISK_RANK.fetch(@envelope.risk_ceiling.to_s.upcase)
       end
 
-      def expressible_action_types(limit:)
-        expressible_action_candidates.sort_by do |_type, candidate_risk|
-          -RISK_ORDER.fetch(candidate_risk)
-        end.first(limit).map(&:first)
+      # The parameters are assembled from the catalog's authority ONLY:
+      # the operator-authored preset (preferred) + the builder's deterministic
+      # per-episode bindings + the model's values for catalog-declared
+      # model-writable fields. A model value for any other field is a typed
+      # refusal — never silently clamped or dropped.
+      def build_parameters(entry, proposal)
+        base = preset_for(entry, proposal)
+        base["entity_id"] = @snapshot.fetch("entity").fetch("id")
+        base["situation_id"] = @snapshot.fetch("situation_id")
+        base["situation_version"] = @snapshot.fetch("situation_version")
+        if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+          # The watch condition's target IS the entity — per-episode bound,
+          # never operator- or model-authored.
+          base["target"] = @snapshot.fetch("entity").fetch("id")
+          base["expires_at"] = valid_until
+        end
+
+        writable = entry.model_writable_fields
+        Array(proposal_parameters(proposal)).each do |key, value|
+          field = String(key)
+          unless writable.include?(field)
+            raise StreamError,
+                  "intent parameter #{field} is not model-writable for #{entry.type}"
+          end
+          base[field] = value
+        end
+        base
       end
 
-      def expressible_action_candidates(risk_class: nil)
-        allowed_intent_types.filter_map do |type|
-          candidate_risk = ACTION_RISKS[type]
-          next unless candidate_risk
-          next unless expressible_candidate?(candidate_risk, risk_class)
-
-          [type, candidate_risk]
+      def preset_for(entry, proposal)
+        if proposal_preset(proposal)
+          unless proposal_preset(proposal) == "default"
+            raise StreamError,
+                  "only the catalog's default preset is selectable in v1 " \
+                  "(#{proposal_preset(proposal)} requested for #{entry.type})"
+          end
+          deep_dup(entry.presets.fetch("default", {}))
+        else
+          deep_dup(entry.presets.fetch("default", {}))
         end
       end
 
-      def expressible_candidate?(candidate_risk, required_risk)
-        return false if required_risk && candidate_risk != required_risk
-
-        RISK_ORDER.fetch(candidate_risk) <= RISK_ORDER.fetch(@envelope.risk_ceiling)
+      # The proposal arrives as the document projection (plain hashes) or, in
+      # direct builder tests, as ReasoningDocument::RecommendedIntent objects —
+      # read both shapes.
+      def proposal_type(proposal)
+        proposal.is_a?(Hash) ? proposal["type"] : proposal.type
       end
 
-      def select_action_candidate(candidates, highest_risk:)
-        if highest_risk
-          candidates.max_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
-        else
-          candidates.min_by { |_type, candidate_risk| RISK_ORDER.fetch(candidate_risk) }
+      def proposal_preset(proposal)
+        proposal.is_a?(Hash) ? proposal["parameter_preset"] : proposal.parameter_preset
+      end
+
+      def proposal_parameters(proposal)
+        proposal.is_a?(Hash) ? proposal["parameters"] : proposal.parameters
+      end
+
+      def deep_dup(value)
+        case value
+        when Hash then value.to_h { |key, entry| [key, deep_dup(entry)] }
+        when Array then value.map { |entry| deep_dup(entry) }
+        else value
         end
       end
 
       def allowed_intent_types
         allowed = @envelope.wire.allowed_intent_types.to_a
-        allowed.empty? ? ACTION_RISKS.keys : allowed
+        if allowed.empty?
+          raise StreamError,
+                "allowed_intent_types must not be empty (fail closed)"
+        end
+
+        allowed
       end
 
-      # The consequential intent uses the risk class declared for its wire
-      # type, rather than the builder's former fixed R2 vocabulary.
-      def action_intent(type:)
-        build_intent(
-          type:, risk_class: ACTION_RISKS.fetch(type).upcase,
-          parameters: {
-            "entity_id" => @snapshot.fetch("entity").fetch("id"),
-            "hypothesis" => String(@outcome.fetch(:primary_hypothesis, "")).byteslice(0, 512)
-          }
-        )
-      end
-
-      # The observation intent (R0) for an uncertain episode: install a CEL
-      # watch condition on the situation, never touch the entity.
-      def watch_condition_intent
-        metric = String(@outcome.fetch(:watch_metric, "condition_score")).byteslice(0, 128)
-        threshold = @outcome.fetch(:watch_threshold, 0.8)
-        build_intent(
-          type: "install_watch_condition",
-          risk_class: "R0",
-          parameters: {
-            "expression" => "situation.#{metric} >= #{threshold}",
-            "metric" => metric,
-            "threshold" => threshold,
-            "entity_id" => @snapshot.fetch("entity").fetch("id"),
-            "target" => @snapshot.fetch("entity").fetch("id"),
-            "expires_at" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601,
-            "situation_id" => @snapshot.fetch("situation_id"),
-            "situation_version" => @snapshot.fetch("situation_version"),
-            "max_fires" => 3
-          }
-        )
-      end
-
-      def build_intent(type:, risk_class:, parameters:)
+      # The consequential intent uses the risk class DECLARED in the catalog —
+      # the model's claim is never read (B10).
+      def build_intent(type:, risk_class:, parameters:, evidence_ids:)
         intent = {
           "intent_id" => "intent.#{@envelope.episode_id}.#{@envelope.attempt_id}.#{@envelope.fence}.#{type}",
           "decision_id" => decision_id,
@@ -250,12 +261,42 @@ module Tamoz
           "type" => type,
           "risk_class" => risk_class,
           "parameters" => parameters,
-          "expires_at" => (@now + VALIDITY_WINDOW_SECONDS).utc.iso8601
+          "evidence_ids" => evidence_ids,
+          "expires_at" => valid_until
         }
         # The intent digest covers the intent WITHOUT its own digest.
         intent.merge("intent_digest" => Tamoz::Core.digest(
           :intent, intent.reject { |key, _| key == "intent_digest" }
         ))
+      end
+
+      # The observation intent (R0, from the catalog) for an uncertain
+      # episode: install a CEL watch condition on the situation, never touch
+      # the entity. Its parameters come from the catalog's watch preset + the
+      # per-episode bindings. The watch type must be allowlisted — a decision
+      # carrying an unallowlisted watch would be rejected by Agentic Stream,
+      # so an episode whose allowlist leaves NO valid intent for the outcome
+      # fails closed here, typed, instead of producing an invalid decision.
+      def watch_condition_intent
+        unless watch_allowlisted?
+          raise StreamError,
+                "no allowed intent for this outcome " \
+                "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
+        end
+
+        entry = @catalog.entry(Tamoz::Core::INTENT_WATCH_TYPE)
+        parameters = build_parameters(entry, EmptyProposal.new)
+        build_intent(
+          type: Tamoz::Core::INTENT_WATCH_TYPE,
+          risk_class: entry.risk_class,
+          parameters:,
+          evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
+        )
+      end
+
+      # A no-op proposal: the watch condition carries NO model values.
+      EmptyProposal = Struct.new(:type, :parameter_preset, :parameters) do
+        def initialize = super(nil, nil, nil)
       end
     end
   end

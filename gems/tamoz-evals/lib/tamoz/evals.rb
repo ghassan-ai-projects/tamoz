@@ -39,6 +39,11 @@ require_relative "evals/harness/memory_repository_adapter"
 require_relative "evals/harness/agent_memory_repository_corpus"
 require_relative "evals/harness/heuristic_corpus"
 require_relative "evals/harness/heuristic_paired_evaluation"
+require_relative "evals/benchmark/metrics"
+require_relative "evals/benchmark/baselines"
+require_relative "evals/benchmark/comparison"
+require_relative "evals/benchmark/report"
+require_relative "evals/benchmark/leak_scan"
 require_relative "evals/cli"
 
 module Tamoz

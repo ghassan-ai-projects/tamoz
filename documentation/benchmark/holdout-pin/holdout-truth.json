@@ -1,0 +1,43 @@
+{
+  "benchmark_protocol_version": "1.1.0",
+  "protocol_sha256": "87dec3cd56f2f6b86a85384cd1348ce562d6a69eb1ea54c85641370302c23038",
+  "cutoff": "2026-09-01T00:00:00Z",
+  "truths": [
+    {
+      "id": "holdout-climate-deviation-88f0af",
+      "family": "climate-deviation",
+      "truth_code": "unknown",
+      "gold_risk_class": null
+    },
+    {
+      "id": "holdout-do-crash-3b9643",
+      "family": "do-crash",
+      "truth_code": "unknown",
+      "gold_risk_class": null
+    },
+    {
+      "id": "holdout-climate-deviation-5d855c",
+      "family": "climate-deviation",
+      "truth_code": "unknown",
+      "gold_risk_class": null
+    },
+    {
+      "id": "holdout-do-crash-496e48",
+      "family": "do-crash",
+      "truth_code": "low_dissolved_oxygen",
+      "gold_risk_class": "R2"
+    },
+    {
+      "id": "holdout-climate-deviation-b86ada",
+      "family": "climate-deviation",
+      "truth_code": "unknown",
+      "gold_risk_class": null
+    },
+    {
+      "id": "holdout-do-crash-e20444",
+      "family": "do-crash",
+      "truth_code": "unknown",
+      "gold_risk_class": null
+    }
+  ]
+}

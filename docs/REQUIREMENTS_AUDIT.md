@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 426 | 254 | 15 | **no** |
+| 429 | 256 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 396 |
+| pass | 399 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -425,6 +425,9 @@ generating run.
 | `MIG-10` | migration | yes | pass | `test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store` |
 | `MIG-11` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
 | `MIG-12` | migration | yes | pass | `test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
+| `MIG-13` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
+| `MIG-14` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
+| `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
 | `MIG-2` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |

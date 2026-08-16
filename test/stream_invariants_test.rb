@@ -2,6 +2,9 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
+require "support/aquaculture_domain"
+require "support/local_model_endpoint"
+require "support/episode_composition"
 require "tamoz/stream/approval_relay"
 require "tamoz/stream/reconsideration"
 require "json"
@@ -65,8 +68,11 @@ class StreamInvariantsTest < Minitest::Test
     directory = Dir.mktmpdir("tamoz-invariant3")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     graph = Tamoz.graph(name: "invariant-3", version: "1") do
+      # P1: the runner payload carries the fixed graph's channels; a graph
+      # without them fails before its first node.
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :answer, default: nil
       node(:ask, implementation_name: "episode.ask", version: "1") do |_state, context|
         {answer: Tamoz.interrupt({"question" => "approve"}, context)}
@@ -233,7 +239,7 @@ class StreamInvariantsTest < Minitest::Test
       "intents" => [{"type" => "maintenance.ticket", "risk_class" => "R1"}]
     }
     command = {
-      "command_id" => "cmd_1", "intent_type" => "transfer.product",
+      "command_id" => "cmd_1", "intent_type" => "cancel_product_transfer",
       "status" => "dispatched"
     }
     wire = Agenticstream::Runtime::V1::Reconsideration.new(
@@ -244,22 +250,54 @@ class StreamInvariantsTest < Minitest::Test
         {"reason" => "prior_action_invalidated", "invalidates" => ["cmd_1"]}
       )
     )
-    parsed = Reconsideration.parse(wire)
-    judgements = Reconsideration.judge(parsed:)
-    intents = Reconsideration.build_compensating_intents(
-      judgements,
-      episode: {
-        episode_id: "e", attempt_id: "a", fence: 1,
-        tenant_id: "t", situation_id: "s", situation_version: 1,
-        risk_ceiling: "r4"
-      },
-      snapshot: {"situation_id" => "s", "situation_version" => 1}
+    # P6: the judgment + compensation live in the GRAPH (judge → compensate)
+    # and the compensation mapping comes from the INTENT CATALOG. Drive the
+    # graph with the same transfer scenario.
+    events = []
+    composition = EpisodeComposition.build(
+      endpoint: support_endpoint(wire).base_url
     )
+    begin
+      composition.fetch(:runner).run(
+        EpisodeComposition.wire_request(
+          episode_id: "inv-7", kind: :EPISODE_KIND_RECONSIDER,
+          risk_ceiling: :RISK_CLASS_R4,
+          allowed_intent_types: [],
+          reconsideration: wire
+        )
+      ).each { |event| events << event }
+      assert_equal :TERMINAL_STATUS_PRODUCED, events.map(&:terminal).compact.last.status
+      result = composition.fetch(:app).durable_runner.fetch(
+        thread: "episode.inv-7", request_id: "episode.inv-7.at-1.1", namespace: ["acme"]
+      )
+      decision = composition.fetch(:app).state(
+        thread: "episode.inv-7", namespace: ["acme"], checkpoint_id: result.checkpoint_id
+      ).state.to_h.fetch(:decision)
+      intents = decision.fetch("intents")
+      assert_equal 1, intents.length
+      assert_equal "R3", intents.fetch(0).fetch("risk_class"),
+                   "a transfer compensation is R3, not the original intent's class"
+      refute_equal "R1", intents.fetch(0).fetch("risk_class")
+    ensure
+      composition.fetch(:adapter).close
+    end
+  end
 
-    assert_equal 1, intents.length
-    assert_equal "R3", intents.fetch(0).fetch("risk_class"),
-                 "a transfer compensation is R3, not the original intent's class"
-    refute_equal "R1", intents.fetch(0).fetch("risk_class")
+  # A fixture endpoint for the RECONSIDER drive (no model call happens, but
+  # the composition needs a role endpoint).
+  def teardown
+    @support_endpoints&.each { |endpoint| endpoint.stop }
+  end
+
+  def support_endpoint(_wire)
+    dir = Dir.mktmpdir("tamoz-invariants")
+    @support_endpoints ||= []
+    endpoint = LocalModelEndpoint.new(
+      mode: :fixture, responses: AquacultureDomain::FIXTURE_RESPONSES,
+      log_path: File.join(dir, "endpoint.log")
+    ).start
+    @support_endpoints << endpoint
+    endpoint
   end
 
   # Invariant 8: a watch condition is scoped to one situation, expiring, and
@@ -270,7 +308,10 @@ class StreamInvariantsTest < Minitest::Test
         protocol_version: "1.0", episode_id: "ep-1", attempt_id: "at-1",
         fence: 1, tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
         kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-        risk_ceiling: :RISK_CLASS_R0
+        risk_ceiling: :RISK_CLASS_R0,
+        allowed_intent_types: ["install_watch_condition"],
+        intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+        intent_catalog_sha256: AquacultureDomain.intent_catalog_digest
       ),
       nil
     )
@@ -284,7 +325,8 @@ class StreamInvariantsTest < Minitest::Test
       envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
       outcome: {primary_hypothesis: "x", confidence: 0.3,
                 watch_metric: "condition_score", watch_threshold: 0.8},
-      now: Time.utc(2026, 8, 12)
+      now: Time.utc(2026, 8, 12),
+      catalog: Tamoz::Agent::IntentCatalog.from_list(AquacultureDomain::INTENT_CATALOG)
     )
     intent = decision.fetch("intents").fetch(0)
     assert_equal "install_watch_condition", intent.fetch("type")
@@ -293,7 +335,7 @@ class StreamInvariantsTest < Minitest::Test
     assert intent.fetch("parameters").fetch("expression").start_with?("situation."),
            "the expression is situation-scoped, never a tenant or spec"
     assert intent.key?("expires_at"), "a watch condition is expiring"
-    assert_operator decision.fetch("intents").length, :<=, Reconsideration::MAX_INTENTS,
+    assert_operator decision.fetch("intents").length, :<=, Tamoz::Agent::EpisodeNodes::MAX_INTENTS,
                     "watch conditions are count-bounded"
   end
 
@@ -325,15 +367,16 @@ class StreamInvariantsTest < Minitest::Test
 
   def simple_graph(name)
     Tamoz.graph(name:, version: "1") do
+      # P1: the runner payload carries the fixed graph's channels; the node
+      # never emits model events (those are receipts-only now).
       state :episode, default: {}
       state :snapshot, default: {}
+      state :wire, default: {}
       state :primary_hypothesis, default: nil
       state :confidence, default: nil
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        {primary_hypothesis: "bearing wear", confidence: 0.9}
+      node(:analyze, implementation_name: "episode.analyze", version: "1") do |state, _context|
+        pressure = state.fetch(:snapshot).fetch("facts").fetch("pressure", 0.0)
+        {primary_hypothesis: "bearing wear", confidence: pressure < 0.5 ? 0.3 : 0.9}
       end
       edge Tamoz::START, :analyze
       edge :analyze, Tamoz::END
@@ -357,6 +400,8 @@ class StreamInvariantsTest < Minitest::Test
       kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
       risk_ceiling: :RISK_CLASS_R2,
       allowed_intent_types: ["create_maintenance_ticket"],
+      intent_catalog_json: Tamoz::Core.jcs(AquacultureDomain::INTENT_CATALOG),
+      intent_catalog_sha256: AquacultureDomain.intent_catalog_digest,
       capability_token: "opaque.hmac.token",
       snapshot_json: Tamoz::Core.jcs(snapshot),
       snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)
