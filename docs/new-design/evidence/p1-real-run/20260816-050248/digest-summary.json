@@ -1,0 +1,12 @@
+{
+  "request_digest": "sha256:c84727f40e8bc4055928825f51613405a1fa370fac8b87648b6fd6e6eaa1d6d5",
+  "response_digest": "sha256:820c1283beed94db0b5cb8d7128e809c9f5d0489004f8e7c7d33419f7b2bc92a",
+  "provider": "ollama",
+  "model": "gemma4:26b",
+  "model_manifest": "5571076f3d70050487b26b341705799e0ab29b808164f90d20d4cf84f699d251",
+  "selected_code": "equipment_failure",
+  "intents": 1,
+  "terminal_status": "TERMINAL_STATUS_PRODUCED",
+  "episode_id": "p1-real-94632",
+  "attempt_fence": "at-1/1"
+}

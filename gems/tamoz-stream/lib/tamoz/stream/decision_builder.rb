@@ -2,7 +2,6 @@
 
 require "tamoz/core"
 require "tamoz/stream/errors"
-require "tamoz/agent/intent_catalog"
 
 module Tamoz
   module Stream
@@ -121,7 +120,7 @@ module Tamoz
 
       def diagnose_intents
         proposal = recommended_proposal
-        return [watch_condition_intent] if proposal.nil? || proposal_type(proposal) == Tamoz::Agent::IntentCatalog::WATCH_TYPE
+        return [watch_condition_intent] if proposal.nil? || proposal_type(proposal) == Tamoz::Core::INTENT_WATCH_TYPE
 
         type = proposal_type(proposal)
         unless @catalog.include?(type) && allowed_intent_types.include?(type)
@@ -150,7 +149,7 @@ module Tamoz
       # are a typed refusal (never a silent first-entry truncation).
       def recommended_proposal
         proposals = Array(@outcome.fetch(:recommended_intents, []))
-        actionable = proposals.reject { |intent| proposal_type(intent) == Tamoz::Agent::IntentCatalog::WATCH_TYPE }
+        actionable = proposals.reject { |intent| proposal_type(intent) == Tamoz::Core::INTENT_WATCH_TYPE }
         if actionable.length > MAX_ACTIONABLE_INTENTS
           raise StreamError,
                 "a document may propose at most one actionable intent " \
@@ -168,7 +167,7 @@ module Tamoz
       end
 
       def watch_allowlisted?
-        allowed_intent_types.include?(Tamoz::Agent::IntentCatalog::WATCH_TYPE)
+        allowed_intent_types.include?(Tamoz::Core::INTENT_WATCH_TYPE)
       end
 
       def risk_within_ceiling?(declared_risk)
@@ -185,7 +184,7 @@ module Tamoz
         base["entity_id"] = @snapshot.fetch("entity").fetch("id")
         base["situation_id"] = @snapshot.fetch("situation_id")
         base["situation_version"] = @snapshot.fetch("situation_version")
-        if entry.type == Tamoz::Agent::IntentCatalog::WATCH_TYPE
+        if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
           # The watch condition's target IS the entity — per-episode bound,
           # never operator- or model-authored.
           base["target"] = @snapshot.fetch("entity").fetch("id")
@@ -282,13 +281,13 @@ module Tamoz
         unless watch_allowlisted?
           raise StreamError,
                 "no allowed intent for this outcome " \
-                "(install_watch_condition is not in allowed_intent_types)"
+                "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
         end
 
-        entry = @catalog.entry(Tamoz::Agent::IntentCatalog::WATCH_TYPE)
+        entry = @catalog.entry(Tamoz::Core::INTENT_WATCH_TYPE)
         parameters = build_parameters(entry, EmptyProposal.new)
         build_intent(
-          type: Tamoz::Agent::IntentCatalog::WATCH_TYPE,
+          type: Tamoz::Core::INTENT_WATCH_TYPE,
           risk_class: entry.risk_class,
           parameters:,
           evidence_ids: Array(@outcome.fetch(:evidence_ids, []))

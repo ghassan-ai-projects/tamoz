@@ -1,8 +1,9 @@
 # P7 — Implementation plan: benchmark protocol, holdout, adversarial controls
 
-Status: **implemented + reviewed, committing** — all five implementation
-reviewers (correctness, architecture, duplication, sound/clean,
-repeated-mistakes) ran; every critical/major finding fixed:
+Status: **implemented + reviewed, committing** — see P7_REPORT.md for the
+honest standing statement: the harness ships and the 14 controls pass as
+fixture tests, but the holdout was never run against a real model and no
+intelligence claim is licensed (claim ladder capped ~level 4).
 
 - Pilot gate: the harness now carries each cell's `label` through extract, so
   a fixture run can NEVER claim `go` (reproduced before: `verdict: go` on a

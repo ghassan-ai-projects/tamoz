@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "json"
 require "tamoz/agent"
 require "tamoz/sqlite"
 require "tamoz/stream/episode_worker"
@@ -21,19 +22,23 @@ require "support/episode_composition"
 class StreamEpisodeRealModelTest < Minitest::Test
   Stream = Tamoz::Stream
 
-  OLLAMA_BASE = "http://127.0.0.1:11434"
-  DEFAULT_MODEL = "gemma4:latest"
+  OLLAMA_BASE = ENV.fetch("TAMOZ_OLLAMA_BASE", "http://127.0.0.1:11434")
+  # Audit F1: a PINNED local model tag (a moving :latest tag is not pinned).
+  # Overridable for a hosted provider (e.g. TAMOZ_REAL_MODEL=deepseek-chat
+  # with a compatible OpenAI endpoint).
+  DEFAULT_MODEL = ENV.fetch("TAMOZ_REAL_MODEL", "gemma4:26b")
+  EVIDENCE_ROOT = File.expand_path("../docs/new-design/evidence/p1-real-run", __dir__)
 
   def test_one_real_call_through_the_fixed_graph
     skip "set RUN_REAL_E2E=1 for the real model run" unless ENV["RUN_REAL_E2E"] == "1"
     skip "ollama is not reachable at #{OLLAMA_BASE}" unless ollama_up?
 
+    directory = Dir.mktmpdir("tamoz-real-worker")
     endpoint = LocalModelEndpoint.new(
       mode: :proxy, upstream: OLLAMA_BASE,
-      log_path: File.join(Dir.mktmpdir("tamoz-real"), "endpoint.log")
+      log_path: File.join(directory, "endpoint.log")
     ).start
 
-    directory = Dir.mktmpdir("tamoz-real-worker")
     root = File.join(directory, "root")
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
@@ -104,7 +109,11 @@ class StreamEpisodeRealModelTest < Minitest::Test
     refute_nil terminal, "the real run must produce a terminal"
 
     observed = endpoint.observed
-    assert_equal 1, observed.length, "exactly one provider call in the real run"
+    # A real model can emit a malformed document (repair → a second journaled
+    # call) or a stray tool request — the digest asserts compare the LAST
+    # observed call against the LAST receipt, which stay paired. At least one
+    # real call must have happened.
+    assert_operator observed.length, :>=, 1, "the real run must call the provider"
     digest = observed.last.fetch("request_digest")
 
     result = app.durable_runner.fetch(
@@ -132,13 +141,15 @@ class StreamEpisodeRealModelTest < Minitest::Test
       state.fetch(:document).fetch("selected_code")
     )
 
-    warn "REAL RUN OK: provider=ollama model=#{DEFAULT_MODEL} " \
+    write_evidence_bundle(directory, request, state, terminal, digest)
+    warn "REAL RUN OK: provider=#{receipt.fetch("provider")} model=#{DEFAULT_MODEL} " \
          "request_digest=#{receipt.fetch("request_digest")} " \
          "selected=#{state.fetch(:document).fetch("selected_code")} " \
          "decision=intents=#{state.fetch(:decision).fetch("intents").length} " \
          "fence=#{request.fence} telemetry=buffered claim=level2/6"
   ensure
     endpoint&.stop
+    FileUtils.remove_entry(directory) if directory
   end
 
   private
@@ -149,5 +160,56 @@ class StreamEpisodeRealModelTest < Minitest::Test
     response.is_a?(Net::HTTPSuccess)
   rescue StandardError
     false
+  end
+
+  # Audit F1: the committed witness bundle — the evidence the real run is
+  # reproducible from the repo. Written to a STABLE committed path (the
+  # endpoint log + receipt + digest summary); the report cites the immutable
+  # <utc>/ bundle id.
+  def write_evidence_bundle(directory, request, state, terminal, request_digest)
+    receipt = state.fetch(:model_receipts).last
+    bundle_dir = File.join(EVIDENCE_ROOT, Time.now.utc.strftime("%Y%m%d-%H%M%S-%L"))
+    FileUtils.mkdir_p(bundle_dir)
+    FileUtils.cp(File.join(directory, "endpoint.log"), File.join(bundle_dir, "endpoint.log"))
+    File.write(
+      File.join(bundle_dir, "receipt.json"),
+      JSON.pretty_generate(receipt), encoding: Encoding::UTF_8
+    )
+    summary = {
+      "request_digest" => request_digest,
+      "response_digest" => receipt.fetch("response_digest"),
+      "provider" => receipt.fetch("provider"),
+      "model" => DEFAULT_MODEL,
+      "model_manifest" => model_manifest_digest,
+      "selected_code" => state.fetch(:document).fetch("selected_code"),
+      "intents" => state.fetch(:decision).fetch("intents").length,
+      "terminal_status" => terminal.status.to_s,
+      "episode_id" => request.episode_id,
+      "attempt_fence" => "#{request.attempt_id}/#{request.fence}"
+    }
+    File.write(
+      File.join(bundle_dir, "digest-summary.json"),
+      JSON.pretty_generate(summary), encoding: Encoding::UTF_8
+    )
+    latest = File.join(EVIDENCE_ROOT, "latest")
+    FileUtils.rm_f(latest)
+    File.symlink(File.basename(bundle_dir), latest)
+    warn "wrote real-run evidence bundle: #{bundle_dir}"
+  end
+
+  # The pinned model's Ollama manifest digest — the model identity, not just
+  # the tag (a tag can move; the manifest cannot). The evidence bundle must
+  # capture it: an unpinnable model means the run's evidence cannot identify
+  # the model, so the run FAILS rather than commit degraded evidence.
+  def model_manifest_digest
+    uri = URI.parse("#{OLLAMA_BASE}/api/tags")
+    response = Net::HTTP.get_response(uri)
+    raise "cannot capture the pinned model manifest (#{DEFAULT_MODEL})" unless response.is_a?(Net::HTTPSuccess)
+
+    models = JSON.parse(response.body).fetch("models", [])
+    entry = models.find { |model| model.fetch("name") == DEFAULT_MODEL }
+    raise "pinned model #{DEFAULT_MODEL} is not in the Ollama tags list" if entry.nil?
+
+    entry.fetch("digest")
   end
 end

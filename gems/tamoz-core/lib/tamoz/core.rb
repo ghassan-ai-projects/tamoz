@@ -14,6 +14,12 @@ module Tamoz
     # `skill_epoch` resolves without any agent constant.
     LEGACY_SKILL_EPOCH = "none"
 
+    # Audit F2: the intent-catalog watch type. Homed in tamoz-core so the
+    # tamoz-stream decision builder (the injected-port boundary) resolves it
+    # WITHOUT a tamoz-agent dependency edge; tamoz-agent's IntentCatalog
+    # aliases it. The wire value is frozen — a change is a new intent catalog.
+    INTENT_WATCH_TYPE = "install_watch_condition"
+
     # P16: the D-7 taxonomy classes moved into tamoz-core, but every durable and
     # model-visible serialization of them keeps the public `Tamoz::Agent::Tool*`
     # spellings. This is the single stable mapping applied at the three

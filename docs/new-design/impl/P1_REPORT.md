@@ -1,6 +1,15 @@
 # P1 — Phase report: one real journaled call through the fixed episode graph
 
-Status: **exit-gate verification in progress** (full `rake ci` + Go suite running).
+Status: **CLOSED** (audit F1). Evidence bundles committed at
+`docs/new-design/evidence/p1-real-run/20260816-050248/` and
+`docs/new-design/evidence/p1-real-run/20260816-051225/` (`latest` symlink →
+the newer). Both runs reproduced the identical request digest (the frame is
+frozen, so the request bytes are deterministic); the response digest is
+witnessed fresh per run. Old quoted request digest `sha256:85689b8e…` is
+**superseded** — the frame evolved through P4–P8 (intent catalog, skills,
+compensation) and the model tag changed `gemma4:latest` → `gemma4:26b` (the
+request body carries the model name), so the bytes changed; the old line is
+no longer reproducible and is not cited.
 
 ## Claims made (finished line)
 
@@ -8,13 +17,16 @@ The ONLY claim made by this phase: **"A real LLM adapter path exists"** — clai
 **level 2 of 6**. This is a plumbing claim about the adapter, not an
 intelligence claim.
 
-- Real run evidence: provider `ollama`, model `gemma4:latest`, endpoint = the
-  local endpoint in proxy mode (a separately-controlled HTTP process in front
-  of the real pinned model), request digest
-  `sha256:85689b8e000620de3258761fb960019f3af9ec772ab785e8ab929bed55b7a293`
-  (witnessed byte-for-byte by the endpoint, outside the worker), attempt/fence
-  `at-1/1`, telemetry buffered (the wire stream is produced after the run
-  completes), `selected=equipment_failure`, `intents=1`.
+- Real run evidence: provider `ollama`, model `gemma4:26b` (pinned tag; Ollama
+  manifest digest `5571076f3d70050487b26b341705799e0ab29b808164f90d20d4cf84f699d251`),
+  endpoint = the local endpoint in proxy mode (a separately-controlled HTTP
+  endpoint in front of the real pinned model), request digest
+  `sha256:c84727f40e8bc4055928825f51613405a1fa370fac8b87648b6fd6e6eaa1d6d5`
+  (witnessed byte-for-byte by the endpoint, outside the worker; reproduced
+  identically across two runs), attempt/fence `at-1/1`, telemetry buffered
+  (the wire stream is produced after the run completes), `selected=equipment_failure`,
+  `intents=1`. Bundle: `docs/new-design/evidence/p1-real-run/latest/`
+  (`endpoint.log`, `receipt.json`, `digest-summary.json`).
 - Fixture runs (the LocalModelEndpoint in fixture mode, the deterministic v2
   documents) are LABELED `fixture` in every test file and are never shown as
   evidence of a real model path.
@@ -23,15 +35,15 @@ intelligence claim.
 
 | # | Gate | Status | Evidence |
 |---|---|---|---|
-| 1 | One aquaculture episode end to end through the fixed graph, real local endpoint | **PASS** | `stream_episode_real_model_test.rb` (RUN_REAL_E2E=1): PRODUCED terminal, one provider call, witnessed digests equal |
-| 2 | Endpoint log digest == Tamoz receipt digest, independently compared | **PASS** | real + fixture runs: endpoint-observed request/response digests byte-equal the receipt's; the frozen transport sends the canonical body verbatim, so `digest(body)` on the endpoint side equals the receipt by construction |
+| 1 | One aquaculture episode end to end through the fixed graph, real local endpoint | **PASS** | `stream_episode_real_model_test.rb` (RUN_REAL_E2E=1): PRODUCED terminal, at least one provider call, witnessed digests equal — committed bundle at `docs/new-design/evidence/p1-real-run/latest/` |
+| 2 | Endpoint log digest == Tamoz receipt digest, independently compared | **PASS** | the committed `endpoint.log` records the same request/response digests as `receipt.json`; the frozen transport sends the canonical body verbatim, so `digest(body)` on the endpoint side equals the receipt by construction |
 | 3 | Perturb the endpoint's response → diagnosis changes | **PASS** | `stream_episode_fixed_graph_test.rb` gate-3: two fixture documents → `low_dissolved_oxygen` vs `equipment_failure` (fixture-labeled) |
 | 4 | Same fixed graph under an in-process driver | **PASS** | `EpisodeComposition` builds the SAME `EpisodeGraph`; all runner-level tests drive it without gRPC |
 | 5 | Node-emitting `:model_started` rejected on a tamoz route | **PASS** | `EpisodeStreamAdapter#emit` raises on model event types; adversarial test + the old fixture graphs now fail closed |
 | 6 | Crash matrix: completed receipt reused on redispatch; started-without-receipt → typed unknown, no blind retry | **PASS** | `stream_episode_crash_matrix_test.rb`: fence+1 reuses the receipt (one provider call), replayed state equal; seeded started-without-receipt → FAILED terminal, no second call |
 | 7 | Unknown role / missing profile / digest mismatch → typed failure before any call | **PASS** | gate-7 tests: unknown role, catalog digest mismatch, prompt digest mismatch → FAILED with zero endpoint hits. Profile digest deferred (no wire field; unit-level only) |
 | 8 | On `ExecutorName=tamoz` the Go native executor is never constructed | **PASS** | Go: constructor gated behind the worker-socket route; `TestExecutorSelectionSkipsNativeOnTamoz` (injectable constructor, count = 0) + `TestNativeModeConstructsTheNativeExecutor` (count = 1) |
-| 9 | `rake ci` + no new dependency edge | **PASS** | `rake ci` green (exit 0); enola: tamoz-stream → {tamoz-core, evals, gen} only — no tamoz-agent edge. `ci_full`'s 11 raw-oracle failures are **pre-existing at HEAD** (verified by stash: identical `checkpoint.commit-advance` failures without the P1 change) |
+| 9 | `rake ci` + no new dependency edge | **PASS** | `rake ci` green (exit 0); enola: tamoz-stream → {tamoz-core, evals, gen} only — no tamoz-agent edge (audit F2 re-pinned). `ci_full`'s 11 raw-oracle failures are **pre-existing at HEAD** (verified by stash: identical `checkpoint.commit-advance` failures without the P1 change) |
 
 ## What shipped
 

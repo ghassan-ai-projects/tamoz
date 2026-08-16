@@ -310,6 +310,12 @@ module Tamoz
     # run into EpisodeEvent payloads; the runner here returns the durable
     # RequestRecord.
     class EpisodeRunner
+      # Audit F3: the B8-stated proof "provider: test anywhere in a stream
+      # artifact invalidates the run" — literal markers no real provider path
+      # ever emits. Real fixture receipts carry provider "ollama" + model
+      # "local-model" (fixture discrimination is structural, via test wiring);
+      # a forged marker is rejected at emit even with matching digests.
+      FORGED_PROVIDER_MARKERS = %w[test fixture local-model-fixture].freeze
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
                      configured_tenant: nil, episode_tools: nil)
         @durable_runner = durable_runner
@@ -514,6 +520,23 @@ module Tamoz
                stored_request != receipt.fetch("request_digest")
               raise StreamError,
                     "wire_refused_model_event/receipt_not_journal_verified"
+            end
+            # Audit F3 (B8's stated proof, literal): a receipt carrying a
+            # FORGED provider marker invalidates the stream artifact even with
+            # matching digests — the design's "provider: test anywhere in a
+            # stream artifact invalidates the run" is enforced here, before
+            # the event reaches the wire. Real fixture receipts carry
+            # provider "ollama" + model "local-model" (structural separation
+            # is the fixture discrimination); this guard rejects only markers
+            # no real path ever produces. A MISSING provider is equally a
+            # refusal — a genuine journaled call always carries one.
+            if FORGED_PROVIDER_MARKERS.include?(receipt.fetch("provider", ""))
+              raise StreamError,
+                    "wire_refused_model_event/forged_provider_marker"
+            end
+            if receipt.fetch("provider", "").to_s.empty?
+              raise StreamError,
+                    "wire_refused_model_event/missing_provider"
             end
 
             adapter.emit_stream_part(

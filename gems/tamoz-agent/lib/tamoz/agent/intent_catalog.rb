@@ -24,7 +24,9 @@ module Tamoz
       DIGEST_DOMAIN = :intent_catalog
       TYPE_PATTERN = /\A[a-z][a-z0-9_.-]{0,127}\z/
       RISK_CLASSES = %w[R0 R1 R2 R3 R4].freeze
-      WATCH_TYPE = "install_watch_condition"
+      # Audit F2: homed in Tamoz::Core so tamoz-stream resolves it without an
+      # agent dependency edge; this alias keeps the agent-side spellings.
+      WATCH_TYPE = Tamoz::Core::INTENT_WATCH_TYPE
       MAX_ENTRIES = 64
       MAX_PARAMETERS = 128
       MAX_PRESET_BYTES = 64 * 1024

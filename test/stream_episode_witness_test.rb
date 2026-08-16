@@ -177,17 +177,7 @@ class StreamEpisodeWitnessTest < Minitest::Test
     receipt = state.fetch(:model_receipts).first
     forged = receipt.merge("effect_key" => "logical:#{"0" * 64}")
 
-    envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(
-      EpisodeComposition.wire_request(episode_id: "witness-forged"),
-      @composition.fetch(:runner).worker
-    )
-    stream = Tamoz::Stream::EpisodeStream.new(envelope, worker_name: "tamoz")
-    adapter = Tamoz::Stream::EpisodeStreamAdapter.new(stream)
-    error = assert_raises(Tamoz::Stream::StreamError) do
-      @composition.fetch(:runner).send(
-        :emit_model_events, adapter, {model_receipts: [forged]}, envelope
-      )
-    end
+    error, stream = emit_model_events_through("witness-forged", [forged])
     assert_includes error.message, "wire_refused_model_event"
     assert_empty stream.events.select { |event| event.model_started || event.model_completed },
                  "no forged model event crosses the wire"
@@ -199,6 +189,37 @@ class StreamEpisodeWitnessTest < Minitest::Test
     events, _terminal, _state = run_episode("witness-6")
     deltas = events.select { |event| event.model_delta != nil }
     assert_empty deltas, "raw model deltas must stay off by default"
+  end
+
+  def test_audit_f3_forged_provider_marker_invalidates_the_artifact
+    # Audit F3 (B8's stated proof, literal): a receipt carrying a forged
+    # provider marker invalidates the stream artifact EVEN with matching
+    # journal digests — the design's "provider: test anywhere in a stream
+    # artifact invalidates the run". The receipt is journal-backed (its
+    # digests verify); only the provider is forged.
+    _events, _terminal, state = run_episode("witness-f3")
+    receipt = state.fetch(:model_receipts).first
+    forged = receipt.merge("provider" => "test")
+
+    error, stream = emit_model_events_through("witness-f3", [forged])
+    assert_includes error.message, "wire_refused_model_event/forged_provider_marker",
+                    "the forged-marker refusal must be distinguishable from a journal-verification refusal"
+    assert_empty stream.events.select { |event| event.model_started || event.model_completed },
+                 "no forged-marker model event crosses the wire"
+  end
+
+  def test_audit_f3_real_fixture_provider_is_not_discriminated
+    # The guard rejects forged markers only — a real fixture receipt carries
+    # provider "ollama" + model "local-model" and must still emit (structural
+    # separation is the fixture discrimination, not this guard).
+    _events, _terminal, state = run_episode("witness-f3-real")
+    receipt = state.fetch(:model_receipts).first
+    assert_equal "ollama", receipt.fetch("provider")
+
+    error, stream = emit_model_events_through("witness-f3-real", [receipt])
+    assert_nil error, "a genuine fixture receipt must emit without refusal"
+    refute_empty stream.events.select { |event| event.model_started || event.model_completed },
+                 "a genuine fixture receipt must still emit"
   end
 
   def test_sealed_build_fingerprint_is_deterministic
@@ -335,6 +356,27 @@ class StreamEpisodeWitnessTest < Minitest::Test
 
   def raw_sha256(bytes)
     "sha256:#{Digest::SHA256.hexdigest(bytes)}"
+  end
+
+  # Shared B4-emission scaffolding: builds the envelope/stream/adapter for an
+  # episode and runs emit_model_events over the given receipts. Returns
+  # [error_or_nil, stream] so a caller can assert refusal or emission.
+  def emit_model_events_through(episode_id, receipts)
+    envelope = Tamoz::Stream::EpisodeRequestEnvelope.new(
+      EpisodeComposition.wire_request(episode_id:),
+      @composition.fetch(:runner).worker
+    )
+    stream = Tamoz::Stream::EpisodeStream.new(envelope, worker_name: "tamoz")
+    adapter = Tamoz::Stream::EpisodeStreamAdapter.new(stream)
+    error = begin
+      @composition.fetch(:runner).send(
+        :emit_model_events, adapter, {model_receipts: receipts}, envelope
+      )
+      nil
+    rescue Tamoz::Stream::StreamError => caught
+      caught
+    end
+    [error, stream]
   end
 
   def run_episode(suffix)
