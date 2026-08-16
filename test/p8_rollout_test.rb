@@ -15,9 +15,7 @@ class P8RolloutTest < Minitest::Test
   GENERATOR = ROOT.join("script", "generate_calibration_artifact")
 
   def generated_artifacts
-    stdout, stderr, status = Open3.capture3(RbConfig.ruby, GENERATOR.to_s, chdir: ROOT.to_s)
-    assert status.success?, "calibration artifact generator failed:\n#{stderr}#{stdout}"
-    JSON.parse(stdout)
+    JSON.parse(run_generator)
   end
 
   def test_calibration_artifacts_are_deterministic_and_bound
@@ -36,6 +34,66 @@ class P8RolloutTest < Minitest::Test
       # The artifact SHA binds the Ruby-verifiable document (domain, profile,
       # prompt, diagnosis catalog, policy): changing any of those changes the
       # artifact identity.
+      document = entry.reject { |key, _value| %w[artifact_sha256 model_revision].include?(key) }
+      expected = "sha256:#{Digest::SHA256.hexdigest(JSON.generate(document))}"
+      assert_equal expected, entry.fetch("artifact_sha256")
+    end
+  end
+
+  def run_generator(*args)
+    stdout, stderr, status = Open3.capture3(
+      RbConfig.ruby, GENERATOR.to_s, *args, chdir: ROOT.to_s
+    )
+    assert status.success?, "calibration artifact generator failed:\n#{stderr}#{stdout}"
+    stdout
+  end
+
+  # Audit follow-up: the generator's domain input is parameterized — an
+  # operator-supplied manifest must bind EXACTLY what the fixture path binds.
+  # The primary proof: a manifest round-tripped from the test-domain
+  # constants produces byte-identical output (all digests + artifact SHA), so
+  # the operator path cannot drift from the calibrated path.
+  def test_manifest_round_trip_matches_the_default_path_byte_for_byte
+    require "support/aquaculture_domain"
+    require "support/climate_domain"
+    manifest = {"domains" => [
+      {"domain" => "aquaculture", "prompt" => AquacultureDomain::PROMPT,
+       "diagnosis_catalog" => AquacultureDomain::CATALOG,
+       "intent_catalog" => AquacultureDomain::INTENT_CATALOG},
+      {"domain" => "climate", "prompt" => ClimateDomain::PROMPT,
+       "diagnosis_catalog" => ClimateDomain::CATALOG,
+       "intent_catalog" => ClimateDomain::INTENT_CATALOG}
+    ]}
+    Dir.mktmpdir do |dir|
+      manifest_path = File.join(dir, "domains.json")
+      File.write(manifest_path, JSON.generate(manifest), encoding: Encoding::UTF_8)
+      assert_equal run_generator, run_generator("--manifest", manifest_path),
+                   "the manifest path must bind exactly what the default path binds"
+    end
+  end
+
+  # Secondary guard: the manifest path is NOT hardcoded to the test domains —
+  # a single non-fixture domain generates a well-formed, SHA-bound artifact.
+  def test_manifest_accepts_a_non_fixture_domain
+    manifest = {"domains" => [
+      {"domain" => "greenhouse-prod",
+       "prompt" => "Diagnose the climate deviation in one greenhouse zone.",
+       "diagnosis_catalog" => [
+         {"code" => "overheated", "name" => "Overheated", "evidence" => []},
+         {"code" => "unknown", "name" => "Unknown", "evidence" => []}
+       ],
+       "intent_catalog" => [
+         {"type" => "install_watch_condition", "risk_class" => "R0"}
+       ]}
+    ]}
+    Dir.mktmpdir do |dir|
+      manifest_path = File.join(dir, "greenhouse.json")
+      File.write(manifest_path, JSON.generate(manifest), encoding: Encoding::UTF_8)
+      output = JSON.parse(run_generator("--manifest", manifest_path))
+      artifacts = output.fetch("artifacts")
+      assert_equal ["greenhouse-prod"], artifacts.map { |entry| entry.fetch("domain") }
+      entry = artifacts.first
+      assert_equal "", entry.fetch("model_revision")
       document = entry.reject { |key, _value| %w[artifact_sha256 model_revision].include?(key) }
       expected = "sha256:#{Digest::SHA256.hexdigest(JSON.generate(document))}"
       assert_equal expected, entry.fetch("artifact_sha256")
