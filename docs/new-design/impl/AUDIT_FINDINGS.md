@@ -47,7 +47,7 @@ pair is a port delegating to an impl, not a duplicated brain.
 
 ## Findings
 
-### F1 — The one real call (P1 / B8) is asserted, not reproducible from the repo — **CLOSED** (commit `TBD`)
+### F1 — The one real call (P1 / B8) is asserted, not reproducible from the repo — **CLOSED** (commit `a9e5bed`)
 
 Fix applied: the real-model E2E now pins `gemma4:26b` (Ollama manifest
 `5571076f3d70050487b26b341705799e0ab29b808164f90d20d4cf84f699d251`) with
@@ -61,7 +61,7 @@ digest `sha256:85689b8e…` is superseded (the frame evolved through P4–P8).
 `P1_REPORT.md` is CLOSED and cites the bundle. A hosted-provider (deepseek)
 run is deferred and documented in the report.
 
-### F2 — P4 silently introduced a `tamoz-stream → tamoz-agent` dependency edge — **CLOSED** (commit `TBD`)
+### F2 — P4 silently introduced a `tamoz-stream → tamoz-agent` dependency edge — **CLOSED** (commit `a9e5bed`)
 
 Fix applied: `WATCH_TYPE` moved to `Tamoz::Core::INTENT_WATCH_TYPE`
 (`gems/tamoz-core/lib/tamoz/core.rb`); `IntentCatalog::WATCH_TYPE` is now an
@@ -72,7 +72,7 @@ tamoz-stream errors; the baseline is re-pinned so a reappearance is graded.
 `test/dependency_isolation_test.rb` gained
 `test_decision_builder_loads_core_only_and_no_agent_edge`.
 
-### F3 — B8's stated proof is not a code guard — **CLOSED** (commit `TBD`)
+### F3 — B8's stated proof is not a code guard — **CLOSED** (commit `a9e5bed`)
 
 Fix applied: the literal guard lives at `emit_model_events`
 (`situation_request.rb`, the design's stream-artifact admission point) —
@@ -85,7 +85,7 @@ forged-marker rejection, stated plainly. Tests:
 `test_audit_f3_forged_provider_marker_invalidates_the_artifact` and
 `test_audit_f3_real_fixture_provider_is_not_discriminated`.
 
-### P7 observation — **CLOSED** (commit `TBD`)
+### P7 observation — **CLOSED** (commit `a9e5bed`)
 
 `P7_REPORT.md` created — the standing honest statement (harness shipped, 14
 controls green as fixture tests, holdout never run against a real model, no
