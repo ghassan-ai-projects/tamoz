@@ -29,6 +29,36 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tam
 - **Do not cover rare cases.** If a scenario cannot happen by construction (or only
   in a case that has never occurred), do not write code for it. Fix it when it
   actually shows up, not preemptively.
+- **Understand before you build; extend, don't reinvent.** Before writing new
+  machinery, map how Tamoz already does the thing — with enola
+  (`explore`/`traverse`/`impact_analysis`) and by reading the real path end to end.
+  Name the existing seam you are extending before you write a line. A new class that
+  duplicates a capability the codebase already has (an effect, a loop, a store, a
+  model call) is a defect, not progress. Most of what a change needs already exists.
+- **Non-deterministic and external calls go through the durable effect journal.** A
+  model or tool call is non-deterministic and a durable graph replays its nodes.
+  Never call one raw inside a node and let downstream state depend on the result —
+  route it through `EffectDispatcher.run` (see `SessionEffects#model_call`) so a
+  replay returns the recorded receipt, not a fresh, different answer. Key identity
+  and dedup on the request, never on the answer.
+- **Domain knowledge is data, never code (B9 / P4 gate-4).** Diagnosis catalogs,
+  operator prompts, intent types + risk classes, compensation maps, watch-property
+  rules and presets, snapshot fact templates, fixture responses, and benchmark-family
+  config are authored ONLY in `test/fixtures/domains/*.json` and loaded through
+  `test/support/domain_loader.rb` (thin loader modules; zero domain content in Ruby).
+  A new domain is a new JSON file — `DomainLoader.domains` picks it up. Never
+  reintroduce any of it as Ruby literals, in gems, `test/support/`, or tests. Data
+  edits are digest-gated: the six pinned wire digests (aqua/clim intent, diag,
+  prompt) and the protocol SHA in `documentation/benchmark/BENCHMARK_PROTOCOL.json`
+  change only as a deliberate, reviewed update (the parity digest `e4f86620…` binds
+  the same catalog on the Go side — a Ruby edit without the Go mirror fails).
+- **Real model for real runs; fakes stay in tests.** Any run meant to show the agent
+  works calls a real provider. Test code never calls a real LLM, and a test, stub,
+  fixture, or deterministic provider is never shown or described as evidence that the
+  agent reasons or is intelligent.
+- **Report in plain terms, grounded in the real code.** When explaining to the owner,
+  name actual files and seams, not invented abstractions or jargon; say plainly what
+  is a real model result versus a plumbing test, and never overclaim.
 
 ## Comments
 
