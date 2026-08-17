@@ -133,12 +133,14 @@ class StreamSituationRequestTest < Minitest::Test
     app.checkpointer.request_history(thread_id: "episode.ep-1", namespace: ["acme"])
   end
 
-  def with_fixture_endpoint
+  def with_fixture_endpoint(document: nil)
     Dir.mktmpdir("tamoz-request-endpoint") do |dir|
       endpoint = LocalModelEndpoint.new(
         mode: :fixture,
         responses: [Tamoz::Core.jcs(
-          AquacultureDomain.document(selected: "low_dissolved_oxygen", hypothesis: "oxygen crash")
+          document || AquacultureDomain.document(
+            selected: "low_dissolved_oxygen", hypothesis: "oxygen crash"
+          )
         )],
         log_path: File.join(dir, "endpoint.log")
       ).start
@@ -159,6 +161,82 @@ class StreamSituationRequestTest < Minitest::Test
 
   def p1_wire_request(overrides = {})
     EpisodeComposition.wire_request(episode_id: "ep-1", **overrides)
+  end
+
+  def runner_with_verification_store(composition, store)
+    Tamoz::Stream::EpisodeRunner.new(
+      durable_runner: composition.fetch(:app).durable_runner,
+      worker: worker,
+      verification_store: store
+    )
+  end
+
+  def test_produced_consequential_intent_opens_an_awaiting_verification
+    with_fixture_endpoint do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      store = composition.fetch(:adapter).bind_verification_store
+      runner = runner_with_verification_store(composition, store)
+      request = p1_wire_request(
+        episode_id: "ep-verification",
+        allowed_intent_types: ["install_watch_condition", "start_aerator"]
+      )
+
+      events = runner.run(request).to_a
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
+      decision_event = events.find { |event| event.decision != nil }
+      decision = JSON.parse(decision_event.decision.decision_json)
+      intent = decision.fetch("intents").fetch(0)
+      assert_equal "R1", intent.fetch("risk_class")
+
+      rows = store.all
+      assert_equal 1, rows.length
+      row = rows.fetch(0)
+      assert_equal :awaiting, row.state
+      assert_equal "acme", row.tenant_id
+      assert_equal intent.fetch("intent_id"), row.intent_id
+      assert_equal decision.fetch("decision_id"), row.decision_id
+      assert_equal(
+        {
+          "tenant" => "acme",
+          "user" => "stream",
+          "project" => "stream",
+          "situation_type" => "aquaculture",
+          "entity_type" => "pond",
+          "entity_id" => "pond-07"
+        },
+        row.episode.fetch("scopes")
+      )
+    ensure
+      composition&.fetch(:adapter)&.close
+      FileUtils.remove_entry(composition.fetch(:directory)) if composition
+    end
+  end
+
+  def test_produced_r0_only_decision_opens_no_verification
+    document = AquacultureDomain.document(
+      selected: "low_dissolved_oxygen", hypothesis: "oxygen crash"
+    ).reject { |key, _| key == "recommended_intents" }
+    with_fixture_endpoint(document:) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      store = composition.fetch(:adapter).bind_verification_store
+      runner = runner_with_verification_store(composition, store)
+      request = p1_wire_request(
+        episode_id: "ep-watch-only",
+        allowed_intent_types: ["install_watch_condition"]
+      )
+
+      events = runner.run(request).to_a
+
+      assert_equal :TERMINAL_STATUS_PRODUCED, events.last.terminal.status
+      decision_event = events.find { |event| event.decision != nil }
+      decision = JSON.parse(decision_event.decision.decision_json)
+      assert_equal ["R0"], decision.fetch("intents").map { |intent| intent.fetch("risk_class") }
+      assert_empty store.all
+    ensure
+      composition&.fetch(:adapter)&.close
+      FileUtils.remove_entry(composition.fetch(:directory)) if composition
+    end
   end
 
   def test_the_runner_delivers_durably_and_redelivery_is_idempotent

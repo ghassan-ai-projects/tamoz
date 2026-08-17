@@ -82,6 +82,91 @@ class StreamEpisodeStreamTest < Minitest::Test
     end
   end
 
+  def test_produced_episode_emits_receipt_derived_budget_telemetry
+    with_fixture_endpoint do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      request = EpisodeComposition.wire_request
+      request.budget = Agenticstream::Runtime::V1::EpisodeBudget.new(
+        max_model_calls: 6, max_input_tokens: 30_000, max_output_tokens: 10_000
+      )
+      events = composition.fetch(:runner).run(request).to_a
+
+      budgets = events.filter_map(&:budget)
+      assert_equal 2, budgets.length
+      assert_equal 0, budgets.first.model_calls_used
+      assert_equal 0, budgets.first.tool_calls_used
+      assert_equal 0, budgets.first.cumulative_usage.input_tokens
+      assert_equal 0, budgets.first.cumulative_usage.output_tokens
+      assert_equal 0, budgets.last.tool_calls_used
+      assert_equal 42, budgets.last.cumulative_usage.input_tokens
+      assert_equal 21, budgets.last.cumulative_usage.output_tokens
+      assert_equal 0, budgets.last.cumulative_usage.cached_input_tokens
+      assert_equal 0, budgets.last.cumulative_usage.reasoning_tokens
+
+      result = composition.fetch(:app).durable_runner.fetch(
+        thread: "episode.#{request.episode_id}",
+        request_id: "episode.#{request.episode_id}.#{request.attempt_id}.#{request.fence}",
+        namespace: [request.tenant_id]
+      )
+      state = composition.fetch(:app).state(
+        thread: "episode.#{request.episode_id}",
+        namespace: [request.tenant_id],
+        checkpoint_id: result.checkpoint_id
+      ).state.to_h
+      assert_equal state.fetch(:model_receipts).length, budgets.last.model_calls_used
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_failed_episode_still_emits_the_zero_budget_baseline
+    malformed = JSON.generate(
+      "protocol" => "tamoz.episode-diagnosis/v2",
+      "diagnosis_probabilities" => [{"diagnosis_code" => "unknown", "probability" => 0.5}],
+      "evidence_refs" => []
+    )
+    with_fixture_endpoint(responses: [malformed, malformed]) do |endpoint|
+      composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+      request = EpisodeComposition.wire_request
+      request.budget = Agenticstream::Runtime::V1::EpisodeBudget.new(max_model_calls: 6)
+      events = composition.fetch(:runner).run(request).to_a
+
+      assert_equal :TERMINAL_STATUS_FAILED, events.last.terminal.status
+      budgets = events.filter_map(&:budget)
+      assert_equal 1, budgets.length
+      budget = budgets.first
+      refute_nil budget
+      assert_equal 0, budget.model_calls_used
+      assert_equal 0, budget.tool_calls_used
+      assert_equal 0, budget.cumulative_usage.input_tokens
+      composition.fetch(:adapter).close
+    end
+  end
+
+  def test_cumulative_usage_sums_available_receipt_projections
+    stream = Stream::EpisodeStream.new(
+      Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)
+    )
+    adapter = Stream::EpisodeStreamAdapter.new(stream)
+
+    usage = adapter.cumulative_usage([
+      {"usage" => {
+        "input_tokens" => 5, "output_tokens" => 3, "cached_input_tokens" => 2,
+        "reasoning_tokens" => 1, "cost_microunits" => 7
+      }},
+      {"usage" => nil},
+      {"usage" => {
+        "input_tokens" => 11, "output_tokens" => 13, "cached_input_tokens" => 17,
+        "reasoning_tokens" => 19, "cost_microunits" => 23
+      }}
+    ])
+
+    assert_equal 16, usage.input_tokens
+    assert_equal 16, usage.output_tokens
+    assert_equal 19, usage.cached_input_tokens
+    assert_equal 20, usage.reasoning_tokens
+    assert_equal 30, usage.cost_microunits
+  end
+
   def test_a_node_emitted_model_event_is_a_typed_failure_never_a_silent_drop
     stream = Stream::EpisodeStream.new(
       Stream::EpisodeRequestEnvelope.new(EpisodeComposition.wire_request, worker)

@@ -360,6 +360,11 @@ module Tamoz
             )
             adapter = EpisodeStreamAdapter.new(stream)
             stream.started
+            stream.budget(
+              cumulative_usage: adapter.cumulative_usage([]),
+              model_calls_used: 0,
+              tool_calls_used: 0
+            )
             context = Tamoz::Context.new(
               run_id: envelope.request_id,
               execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
@@ -410,11 +415,20 @@ module Tamoz
               # The receipts are verified against the JOURNAL before crossing
               # the wire — node-authored state alone is never trusted (B4).
               emit_model_events(adapter, terminal_state, envelope)
+              if status == :TERMINAL_STATUS_PRODUCED
+                receipts = Array(terminal_state[:model_receipts])
+                stream.budget(
+                  cumulative_usage: adapter.cumulative_usage(receipts),
+                  model_calls_used: receipts.length,
+                  tool_calls_used: 0
+                )
+              end
             end
             if status == :TERMINAL_STATUS_PRODUCED
               # P1: the terminal graph state IS the decision; the runner only
               # translates it to the wire (B2).
-              translate_decision(stream, envelope, terminal_state)
+              decision, digest = translate_decision(stream, envelope, terminal_state)
+              open_verifications(envelope, snapshot, decision, digest)
             end
             manifest ||= build_artifact_manifest(envelope, terminal_state)
             stream.terminal(
@@ -488,6 +502,52 @@ module Tamoz
           decision_sha256: digest
         )
         [decision, digest]
+      end
+
+      # T5.2: a produced episode opens an :awaiting verification row per
+      # intent. The row carries everything the subscriber needs to admit the
+      # Experience when outcome.reconciled arrives (possibly days later), with
+      # the situation scopes so the Experience is reachable by the T5.4
+      # situation-scoped retrieval path.
+      def open_verifications(envelope, snapshot, decision, digest)
+        return unless @verification_store && decision
+
+        entity = snapshot.fetch("entity")
+        episode_content = {
+          session_id: envelope.episode_id,
+          episode_id: envelope.episode_id,
+          attempt_id: envelope.attempt_id,
+          task: "stream episode #{envelope.episode_id} " \
+                "attempt #{envelope.attempt_id}",
+          plan_digest: digest,
+          completed_at: Time.now.to_i,
+          scopes: {
+            "tenant" => envelope.tenant_id,
+            "user" => "stream",
+            "project" => "stream",
+            "situation_type" => snapshot.fetch("situation_type"),
+            "entity_type" => entity.fetch("type"),
+            "entity_id" => entity.fetch("id")
+          },
+          sensitivity: :internal,
+          decisions: [String(decision.fetch("primary_hypothesis", ""))],
+          corrections: []
+        }
+        decision.fetch("intents", []).each do |intent|
+          # A watch condition (R0) has no command and no outcome to verify —
+          # verification rows open only for consequential intents.
+          next if intent.fetch("risk_class", "R0").to_s.upcase == "R0"
+
+          @verification_store.open(
+            tenant_id: envelope.tenant_id,
+            intent_id: intent.fetch("intent_id"),
+            episode_id: envelope.episode_id,
+            attempt_id: envelope.attempt_id,
+            decision_digest: digest,
+            episode: episode_content,
+            decision_id: intent.fetch("decision_id")
+          )
+        end
       end
 
       # P1/B4: the RUNNER turns receipts into wire model events, AFTER

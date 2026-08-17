@@ -2,6 +2,9 @@
 
 require_relative "test_helper"
 require "tamoz/stream/episode_worker"
+require "support/local_model_endpoint"
+require "support/aquaculture_domain"
+require "support/episode_composition"
 
 # T1.3 (PLAN_TAMOZ_STREAM_BUILD T1.3) — the audit's §4.5 security check: the
 # worker holds NO signing secret, only an opaque capability token it carries
@@ -31,15 +34,12 @@ class StreamTokenCustodyTest < Minitest::Test
   end
 
   def wire_request
-    Agenticstream::Runtime::V1::EpisodeRequest.new(
-      protocol_version: "1.0",
-      episode_id: "ep-custody", attempt_id: "at-1", fence: 1,
-      tenant_id: "acme", situation_id: "sit-1", situation_version: 7,
-      kind: :EPISODE_KIND_DIAGNOSE, lane: :EPISODE_LANE_FAST,
-      risk_ceiling: :RISK_CLASS_R2,
-      capability_token: TOKEN,
-      snapshot_json: Tamoz::Core.jcs(snapshot),
-      snapshot_sha256: Tamoz::Core.digest(:snapshot, snapshot)
+    EpisodeComposition.wire_request(
+      episode_id: "ep-custody",
+      attempt: 1,
+      fence: 1,
+      snapshot: AquacultureDomain.snapshot,
+      capability_token: TOKEN
     )
   end
 
@@ -54,35 +54,33 @@ class StreamTokenCustodyTest < Minitest::Test
   end
 
   def test_the_token_never_crosses_in_a_wire_event
-    directory = Dir.mktmpdir("tamoz-custody")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    app = Tamoz.graph(name: "episode-custody", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :wire, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        {primary_hypothesis: "x", confidence: 0.9}
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end.compile(checkpointer: adapter)
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil
+    endpoint_directory = Dir.mktmpdir("tamoz-custody-endpoint")
+    endpoint = LocalModelEndpoint.new(
+      mode: :fixture,
+      responses: AquacultureDomain::FIXTURE_RESPONSES,
+      log_path: File.join(endpoint_directory, "endpoint.log")
+    ).start
+    composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+    request = EpisodeComposition.wire_request(
+      episode_id: "ep-custody-wire",
+      snapshot: AquacultureDomain.snapshot,
+      capability_token: TOKEN
     )
 
-    events = runner.run(wire_request).each.to_a
+    events = []
+    composition.fetch(:runner).run(request).each { |event| events << event }
     events.each do |event|
-      refute_includes event.to_proto.to_s, TOKEN,
+      serialized = event.to_proto.to_s
+      refute_includes serialized, TOKEN,
                       "wire event #{event.sequence} must not carry the token"
+      refute_includes serialized, "capability_token",
+                      "wire event #{event.sequence} must not expose a token key"
     end
   ensure
-    adapter&.close
-    FileUtils.remove_entry(directory) if directory
+    endpoint&.stop
+    composition&.fetch(:adapter)&.close
+    FileUtils.remove_entry(endpoint_directory) if endpoint_directory
+    FileUtils.remove_entry(composition.fetch(:directory)) if composition
   end
 
   def test_the_handshake_never_echoes_the_token
@@ -121,36 +119,37 @@ class StreamTokenCustodyTest < Minitest::Test
   # The token never lands in the DURABLE checkpoint state of a full run —
   # the state that survives crashes and redeliveries.
   def test_the_token_never_enters_the_durable_checkpoint_state
-    directory = Dir.mktmpdir("tamoz-custody")
-    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
-    app = Tamoz.graph(name: "episode-custody", version: "1") do
-      state :episode, default: {}
-      state :snapshot, default: {}
-      state :wire, default: {}
-      state :primary_hypothesis, default: nil
-      state :confidence, default: nil
-      node(:analyze, implementation_name: "episode.analyze", version: "1") do |_state, context|
-        context.emit(:model_started, {ordinal: 0, provider: "test", model_id: "flash"})
-        context.emit(:model_completed,
-                     {ordinal: 0, usage: {input_tokens: 2, output_tokens: 1}})
-        {primary_hypothesis: "x", confidence: 0.9}
-      end
-      edge Tamoz::START, :analyze
-      edge :analyze, Tamoz::END
-    end.compile(checkpointer: adapter)
-    runner = Tamoz::Stream::EpisodeRunner.new(
-      durable_runner: app.durable_runner, worker: nil
+    endpoint_directory = Dir.mktmpdir("tamoz-custody-endpoint")
+    endpoint = LocalModelEndpoint.new(
+      mode: :fixture,
+      responses: AquacultureDomain::FIXTURE_RESPONSES,
+      log_path: File.join(endpoint_directory, "endpoint.log")
+    ).start
+    composition = EpisodeComposition.build(endpoint: endpoint.base_url)
+    request = EpisodeComposition.wire_request(
+      episode_id: "ep-custody-state",
+      snapshot: AquacultureDomain.snapshot,
+      capability_token: TOKEN
     )
 
-    runner.run(wire_request).each.to_a
-    checkpoint = app.durable_runner.compiled.checkpointer.latest(
-      thread_id: "episode.ep-custody", namespace: ["acme"]
-    )
-    refute_includes JSON.generate(checkpoint.state.to_h), TOKEN,
+    events = []
+    composition.fetch(:runner).run(request).each { |event| events << event }
+    refute_empty events
+    checkpointer = composition.fetch(:app).checkpointer
+    state = checkpointer.open_writer(
+      thread_id: "episode.#{request.episode_id}",
+      namespace: [request.tenant_id],
+      owner_id: "custody-reader",
+      ttl: checkpointer.writer_ttl
+    ) { |writer| writer.latest.state.to_h }
+    serialized = JSON.generate(state)
+    refute_includes serialized, TOKEN,
                     "the durable checkpoint must not carry the capability token"
-    refute_includes JSON.generate(checkpoint.state.to_h), "capability_token"
+    refute_includes serialized, "capability_token"
   ensure
-    adapter&.close
-    FileUtils.remove_entry(directory) if directory
+    endpoint&.stop
+    composition&.fetch(:adapter)&.close
+    FileUtils.remove_entry(endpoint_directory) if endpoint_directory
+    FileUtils.remove_entry(composition.fetch(:directory)) if composition
   end
 end

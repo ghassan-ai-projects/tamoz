@@ -167,6 +167,9 @@ module Tamoz
     # mapping are gone (P1); budgets return in P2 computed from receipts.
     class EpisodeStreamAdapter
       MODEL_EVENT_TYPES = %i[model_started model_delta model_completed].freeze
+      USAGE_FIELDS = %i[
+        input_tokens output_tokens cached_input_tokens reasoning_tokens cost_microunits
+      ].freeze
 
       TERMINAL_BY_RESULT = {
         completed: :TERMINAL_STATUS_PRODUCED,
@@ -220,6 +223,19 @@ module Tamoz
         else
           nil
         end
+      end
+
+      def cumulative_usage(receipts)
+        totals = USAGE_FIELDS.to_h { |field| [field, 0] }
+        Array(receipts).each do |receipt|
+          usage = wire_usage(receipt["usage"])
+          next if usage.nil?
+
+          USAGE_FIELDS.each do |field|
+            totals[field] += usage.public_send(field)
+          end
+        end
+        Agenticstream::Runtime::V1::Usage.new(**totals)
       end
 
       # The terminal status from the durable run result — no budget overrides
