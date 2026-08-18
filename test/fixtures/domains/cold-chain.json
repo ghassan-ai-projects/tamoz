@@ -1,0 +1,115 @@
+{
+  "domain": "cold-chain",
+  "catalog": [
+    {"code": "unknown", "description": "no confident diagnosis"},
+    {"code": "refrigeration_underperform", "description": "refrigeration unit underperforming; box temp rising toward and past the -18 C line over hours"},
+    {"code": "defrost_stuck_on", "description": "defrost heater stuck on; coil warms ~2 h while the load stays cold"},
+    {"code": "door_seal_leak", "description": "failed door seal letting ambient heat in steadily"},
+    {"code": "power_transfer_gap", "description": "genset-to-shore transfer gap; store-and-forward buffering, late history on reconnect"},
+    {"code": "transient_none", "description": "legitimate 4-minute door opening at a stop; supply-air spike, not an excursion"},
+    {"code": "telemetry_loss", "description": "reporting is due but the unit is silent (in-port link loss)"}
+  ],
+  "objective": "Decide whether this reefer's CUMULATIVE time above -18 C across the voyage has crossed the reportable threshold. Attribute transient supply-air spikes to a door opening (door_open_recent), a defrost cycle (defrost_recent), or high ambient (ambient_mean) BEFORE counting them toward the cumulative. Reserve the regulatory excursion report (raise_excursion_report) for a confirmed cumulative breach; prefer a watch when the cumulative is still under the line. Reason over late-arriving history as first-class evidence - the voyage total includes readings that arrive after an ocean gap. Never file on a reefer whose in-port telemetry is silent.",
+  "prompt": "You are the cold-chain compliance assistant. The situation is a reefer container whose cumulative time above -18 C may have crossed the reportable line. Use ONLY the facts provided, reason about the most probable cause, and propose at most one action from the allowed list. Never invent facts. Never assign risk.\n\nOUTPUT STRICT JSON with EXACTLY this shape and no other text:\n{\n  \"protocol\": \"tamoz.episode-diagnosis/v2\",\n  \"primary_hypothesis\": \"<one-sentence hypothesis>\",\n  \"diagnosis_probabilities\": [\n    {\"diagnosis_code\": \"<code>\", \"probability\": <number>}\n  ],\n  \"evidence_refs\": [\"fact:<id>\"],\n  \"recommended_intents\": [\n    {\"type\": \"<one type from the allowed action list>\", \"parameters\": {\"hypothesis\": \"<value>\"}}\n  ]\n}\nRules: diagnosis_probabilities must cover EVERY code below exactly once; probabilities are numbers in [0,1] and sum to 1; evidence_refs cite only fact:<id> values from the user message. recommended_intents has at most one entry and its type must be one of the allowed actions; omit the entry to propose no action. Do not use markdown code fences - output the raw JSON object only.\n\nALLOWED ACTIONS (recommended_intents.type must be EXACTLY one of these; choose the least costly action that matches the evidence):\n- install_watch_condition (R0, observe only)\n- adjust_setpoint (R1, lower the commanded temperature)\n- request_inspection_at_next_port (R1, advisory inspection booking)\n- raise_excursion_report (R2, regulatory filing, requires human approval)\n- downgrade_excursion (R1, compensating)\n- withdraw_excursion (R1, compensating)",
+  "intent_types": {
+    "install_watch_condition": "R0",
+    "create_maintenance_ticket": "R1",
+    "schedule_maintenance": "R1",
+    "reduce_load": "R1",
+    "downgrade_dispatch": "R1",
+    "withdraw_ticket": "R1",
+    "start_aerator": "R1",
+    "halt_feeding": "R1",
+    "downgrade_intervention": "R1",
+    "withdraw_intervention": "R1",
+    "run_vent_cycle": "R1",
+    "dehumidify": "R1",
+    "downgrade_climate_action": "R1",
+    "withdraw_climate_action": "R1",
+    "recommend_operating_limit": "R2",
+    "dispatch_crew": "R2",
+    "emergency_water_exchange": "R2",
+    "deploy_shade_or_heat": "R2",
+    "dose_co2": "R2",
+    "isolate_segment": "R3",
+    "cancel_product_transfer": "R3",
+    "downgrade_product_transfer": "R3",
+    "adjust_setpoint": "R1",
+    "request_inspection_at_next_port": "R1",
+    "raise_excursion_report": "R2",
+    "downgrade_excursion": "R1",
+    "withdraw_excursion": "R1"
+  },
+  "compensation_map": {
+    "create_maintenance_ticket": {"withdraw": "withdraw_ticket", "downgrade": "downgrade_dispatch"},
+    "schedule_maintenance": {"withdraw": "withdraw_ticket", "downgrade": "downgrade_dispatch"},
+    "start_aerator": {"withdraw": "withdraw_intervention", "downgrade": "downgrade_intervention"},
+    "halt_feeding": {"withdraw": "withdraw_intervention", "downgrade": "downgrade_intervention"},
+    "emergency_water_exchange": {"withdraw": "withdraw_intervention", "downgrade": "downgrade_intervention"},
+    "dispatch_crew": {"withdraw": "withdraw_ticket", "downgrade": "downgrade_dispatch"},
+    "run_vent_cycle": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "dehumidify": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "deploy_shade_or_heat": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "dose_co2": {"withdraw": "withdraw_climate_action", "downgrade": "downgrade_climate_action"},
+    "cancel_product_transfer": {"withdraw": "cancel_product_transfer", "downgrade": "downgrade_product_transfer"},
+    "downgrade_product_transfer": {"withdraw": "cancel_product_transfer", "downgrade": "downgrade_product_transfer"},
+    "adjust_setpoint": {"withdraw": "withdraw_excursion", "downgrade": "downgrade_excursion"},
+    "request_inspection_at_next_port": {"withdraw": "withdraw_excursion", "downgrade": "downgrade_excursion"},
+    "raise_excursion_report": {"withdraw": "withdraw_excursion", "downgrade": "downgrade_excursion"}
+  },
+  "watch_properties": {
+    "metric": {"type": ["string", "number"]},
+    "target": {"type": "string"},
+    "expression": {"type": ["string", "number"]},
+    "expires_at": {"type": "string"},
+    "threshold": {"type": "number"},
+    "max_fires": {"type": "integer"}
+  },
+  "watch_preset": {"expression": "situation.condition_score >= 0.8", "metric": "condition_score", "threshold": 0.8, "max_fires": 3},
+  "snapshot": {
+    "situation_id": "sit-cold-chain",
+    "situation_version": 7,
+    "tenant_id": "acme",
+    "situation_type": "cold-chain",
+    "entity_type": "reefer",
+    "entity_id_fact": "reefer_id",
+    "kwarg_map": {"reefer_id": "reefer_id", "excursion_cumulative": "excursion_cumulative"},
+    "event_horizon": "2026-08-17T00:00:00Z",
+    "fact_defaults": {
+      "reefer_id": "reefer-04",
+      "excursion_cumulative": 9000.0,
+      "supply_max": -17.2,
+      "door_open_recent": 0.0,
+      "defrost_recent": 0.0,
+      "ambient_mean": 12.0,
+      "power_source": "shore",
+      "link_missing": false
+    }
+  },
+  "document_template": {
+    "evidence_refs": ["fact:excursion_cumulative", "fact:reefer_id"],
+    "default_intent_type": "raise_excursion_report"
+  },
+  "fixtures": [
+    {"selected": "refrigeration_underperform", "hypothesis": "refrigeration underperforming; cumulative time above -18 C has crossed the reportable line"},
+    {"selected": "defrost_stuck_on", "hypothesis": "defrost heater stuck on; the coil is warm but the load is not in excursion"}
+  ],
+  "benchmark_family": {
+    "family_id": "cold-chain-excursion",
+    "metric": "excursion_cumulative",
+    "alarm_code": "refrigeration_underperform",
+    "series": "excursion_cumulative_series",
+    "id_prefix": "reefer",
+    "base_facts": {
+      "supply_max": -17.2,
+      "door_open_recent": 0.0,
+      "defrost_recent": 0.0,
+      "ambient_mean": 12.0,
+      "power_source": "shore"
+    },
+    "metric_range": {"min": 0.0, "width": 28800.0, "round": 0},
+    "series_offsets": [14400.0, 7200.0, 0.0],
+    "truth": {"operator": "gt", "threshold": 14400.0, "code": "refrigeration_underperform", "fallback": "unknown"},
+    "gold": {"operator": "gt", "threshold": 14400.0, "risk_class": "R2"}
+  }
+}
