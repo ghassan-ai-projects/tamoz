@@ -148,12 +148,7 @@ module Tamoz
 
       SECRET_KEY_DENYLIST = %w[api_key password token secret api_base].freeze
       INTERPOLATION_PATTERN = /\$\{|\%\{|\{\{|<%|%>/.freeze
-      SECRET_VALUE_PATTERNS = [
-        /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-        /\b(sk|pk|xox[baprs])-[A-Za-z0-9][A-Za-z0-9_-]{7,}/,
-        /\bAKIA[0-9A-Z]{16}\b/,
-        /\bAIza[0-9A-Za-z_-]{35}\b/
-      ].freeze
+      SECRET_VALUE_PATTERNS = Tamoz::Core::SECRET_VALUE_PATTERNS
       # Long unbroken tokens outside allowlisted fields are treated as candidate
       # secrets. Pure hex (digests) and path segments are excluded.
       ENTROPY_PATTERN = /\b(?![0-9a-f]{32,}\b)[A-Za-z0-9_+\/=-]{40,}\b/.freeze

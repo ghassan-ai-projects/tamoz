@@ -241,14 +241,10 @@ module Tamoz
       # not leave its raw value behind. Tool OBSERVATIONS are the user's own
       # workspace content and are deliberately NOT scanned (the pre-P17
       # `test_sensitive_content_is_not_rendered_to_streams_or_transcript`
-      # behavior). The patterns are the profile.rb credential set, duplicated
-      # across the file boundary exactly as tamoz-mcp duplicates them.
-      SECRET_VALUE_PATTERNS = [
-        /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-        /\b(sk|pk|xox[baprs])-[A-Za-z0-9][A-Za-z0-9_-]{7,}/,
-        /\bAKIA[0-9A-Z]{16}\b/,
-        /\bAIza[0-9A-Za-z_-]{35}\b/
-      ].freeze
+      # behavior). SECRET_VALUE_PATTERNS is the one shared credential set
+      # (Tamoz::Core::SECRET_VALUE_PATTERNS) — see profile.rb and tamoz-mcp's
+      # websearch.rb for the other consumers.
+      SECRET_VALUE_PATTERNS = Tamoz::Core::SECRET_VALUE_PATTERNS
       CREDENTIAL_SCANNED_KINDS = %w[plan accepted_plan].freeze
 
       # Pure `old_hash -> new_hash` upgrade functions keyed by [kind, from_version].
