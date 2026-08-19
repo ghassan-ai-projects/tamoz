@@ -61,8 +61,8 @@ module Tamoz
         def valid_values?(entry)
           PROFILE_ID_PATTERN.match?(entry['profile_id'].to_s) &&
             TransitionRegistry::REASON_PATTERN.match?(entry['reason'].to_s) &&
-            DIGEST_PATTERN.match?(entry['from_digest'].to_s) &&
-            DIGEST_PATTERN.match?(entry['to_digest'].to_s) &&
+            Tamoz::Core.valid_digest?(entry['from_digest'].to_s) &&
+            Tamoz::Core.valid_digest?(entry['to_digest'].to_s) &&
             optional_strings?(entry)
         end
 

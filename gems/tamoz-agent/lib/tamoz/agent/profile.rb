@@ -54,7 +54,6 @@ module Tamoz
       # check on the resulting descriptor then rejects it with a typed error.
       NONBLOCK = File::Constants.const_defined?(:NONBLOCK) ? File::Constants::NONBLOCK : 0
       DIGEST_DOMAIN = "tamoz.profile.v1\n"
-      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
       PROFILE_ID_PATTERN = /\A[a-z][a-z0-9_-]{0,63}\z/
       PROFILE_VERSION_PATTERN = /\A[-_.A-Za-z0-9]{1,128}\z/
       CREDENTIAL_REF_PATTERN = /\ATAMOZ_[A-Z0-9_]+\z/
@@ -284,7 +283,7 @@ module Tamoz
         end
 
         digest = hash.fetch("canonical_digest")
-        unless digest.is_a?(String) && DIGEST_PATTERN.match?(digest)
+        unless Tamoz::Core.valid_digest?(digest)
           raise ValidationError, "#{source}: pinned authority digest is not a sha256: digest"
         end
 

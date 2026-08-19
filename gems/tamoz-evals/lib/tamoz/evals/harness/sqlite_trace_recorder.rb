@@ -17,7 +17,6 @@ module Tamoz
         MAX_VERSION_BYTES = 64
         MAX_MANIFEST_STRING_BYTES = 256
         MAX_MANIFEST_INTEGER = 1_000_000
-        DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
         GIT_OBJECT_PATTERN = /\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/
         ID_PATTERN = /\A[a-z0-9][a-z0-9._-]*\z/
         VERSION_PATTERN = /\A[0-9A-Za-z][0-9A-Za-z.+_-]*\z/
@@ -489,7 +488,7 @@ module Tamoz
         def digest_value(value, name:)
           unless value.is_a?(String) &&
                  value.valid_encoding? &&
-                 value.match?(DIGEST_PATTERN)
+                 Tamoz::Core.valid_digest?(value)
             raise ExecutionError, "#{name} is invalid"
           end
           value.dup.freeze
@@ -528,7 +527,7 @@ module Tamoz
         end
 
         private_constant :ATTEMPT_CLASSES, :DEFINITION, :DEFINITION_DIGEST,
-                         :DIGEST_PATTERN, :EVENT_FIELDS, :GIT_OBJECT_PATTERN,
+                         :EVENT_FIELDS, :GIT_OBJECT_PATTERN,
                          :ID_PATTERN, :ITERATION_CLASSES, :MAX_ATTEMPTS,
                          :MAX_EVENTS, :MAX_ID_BYTES,
                          :MAX_MANIFEST_INTEGER, :MAX_MANIFEST_STRING_BYTES,

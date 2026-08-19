@@ -174,8 +174,7 @@ module Tamoz
           raise ArgumentError,
                 "each catalog snapshot must respond to server_id, snapshot_digest, and entries"
         end
-        unless snapshot.snapshot_digest.is_a?(String) &&
-               snapshot.snapshot_digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+        unless Tamoz::Core.valid_digest?(snapshot.snapshot_digest)
           raise ArgumentError, "snapshot_digest must be a sha256 digest"
         end
 

@@ -172,12 +172,12 @@ module Tamoz
         # state); the tool catalog digest is not.
         def validate_catalog_digests!(policy)
           unattended = policy['unattended_catalog_digest']
-          if !unattended.nil? && !DIGEST_PATTERN.match?(unattended)
+          if !unattended.nil? && !Tamoz::Core.valid_digest?(unattended)
             raise ValidationError, "#{@path}: policy.unattended_catalog_digest must be a sha256: digest"
           end
 
           digest = policy['tool_catalog_digest']
-          return if digest.is_a?(String) && DIGEST_PATTERN.match?(digest)
+          return if Tamoz::Core.valid_digest?(digest)
 
           raise ValidationError, "#{@path}: policy.tool_catalog_digest must be a sha256: digest"
         end

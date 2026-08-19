@@ -9,7 +9,6 @@ module Tamoz
   module Stream
     module NotificationContract
       CONTRACT_ID = "urn:situation-runtime:notification-contract:v1"
-      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/.freeze
       TRACEPARENT_PATTERN = /\A(?:00|[0-9a-f]{2})-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}\z/.freeze
 
       class ConformanceError < StreamError

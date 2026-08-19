@@ -39,7 +39,7 @@ module Tamoz
       def put_schedule(schedule, expected_revision: nil)
         now = now_ms
         payload = schedule.to_h
-        bytes = JSON.generate(Tamoz::Core.canonical(payload))
+        bytes = Tamoz::Core.jcs(payload)
         digest = Digest::SHA256.hexdigest(ENQUEUE_CONTEXT_DOMAIN + bytes)
         row = nil
         @adapter.__send__(:transaction, operation: "schedule.put") do |tx|

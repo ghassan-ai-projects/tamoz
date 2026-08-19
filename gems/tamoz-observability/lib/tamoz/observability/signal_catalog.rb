@@ -185,9 +185,7 @@ module Tamoz
                   (value.is_a?(String) || value.is_a?(Symbol)) && value.to_s.match?(LOW_CARDINALITY_PATTERN)
                 else false
                 end
-        if type == :digest
-          valid &&= value.to_s.match?(/\Asha256:[0-9a-f]{64}\z/)
-        end
+        valid &&= Tamoz::Core.valid_digest?(value.to_s) if type == :digest
         raise ValidationError, "#{name}.#{key}: expected #{type}" unless valid
       end
     end

@@ -206,16 +206,16 @@ module Tamoz
           end
 
           [transition.from_digest, transition.to_digest].each do |digest|
-            next if DIGEST_PATTERN.match?(digest)
+            next if Tamoz::Core.valid_digest?(digest)
 
             raise AdoptionError, "invalid transition digest #{digest.inspect}"
           end
         end
 
-        # Built per call rather than held in a constant: PROFILE_ID_PATTERN and
-        # DIGEST_PATTERN belong to Profile, which loads AFTER this file, so a
-        # constant here would evaluate them before they exist. Insertion order is
-        # the checking order, and each noun is the exact word the message uses.
+        # Built per call rather than held in a constant: PROFILE_ID_PATTERN
+        # belongs to Profile, which loads AFTER this file, so a constant here
+        # would evaluate it before it exists. Insertion order is the checking
+        # order, and each noun is the exact word the message uses.
         #
         # :reek:UtilityFunction — a lookup table, not behaviour.
         def field_rules

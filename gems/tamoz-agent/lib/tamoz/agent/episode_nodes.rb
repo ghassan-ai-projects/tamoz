@@ -136,7 +136,7 @@ module Tamoz
           end
           digest = projection["digest"]
           statement = projection["statement"]
-          unless digest.is_a?(String) && digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+          unless Tamoz::Core.valid_digest?(digest)
             raise EpisodeFrameError, "episode_recall/projection_bad_digest"
           end
           unless statement.is_a?(String)

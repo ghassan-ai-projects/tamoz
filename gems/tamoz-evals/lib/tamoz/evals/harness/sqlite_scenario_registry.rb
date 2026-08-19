@@ -8,7 +8,6 @@ module Tamoz
         MAX_SCENARIOS = 32
         MAX_ID_BYTES = 128
         ID_PATTERN = /\A[a-z0-9][a-z0-9._-]*\z/
-        DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
         TEMPLATE_PATTERN =
           /\A[a-z0-9][a-z0-9._-]*(?:\{index\}[a-z0-9._-]*)?\z/
         FAMILIES = %w[lease request checkpoint].freeze
@@ -343,8 +342,7 @@ module Tamoz
             raise ExecutionError, "SQLite boundary registry contract is invalid"
           end
           first_digest = registry.digest
-          unless first_digest.is_a?(String) &&
-                 first_digest.match?(DIGEST_PATTERN) &&
+          unless Tamoz::Core.valid_digest?(first_digest) &&
                  registry.digest == first_digest
             raise ExecutionError, "SQLite boundary registry digest is invalid"
           end
@@ -673,7 +671,6 @@ module Tamoz
 
         private_constant :CHECKPOINT_COMMIT_BASE, :CHECKPOINT_COMMIT_REQUEST,
                          :CHECKPOINT_WRITES_BASE, :FAMILIES, :ID_PATTERN,
-                         :DIGEST_PATTERN,
                          :LEASE_ACQUIRE, :LEASE_RELEASE, :LEASE_RENEW,
                          :LEASE_VALIDATE, :MAX_ID_BYTES, :REQUEST_CLAIM_BASE,
                          :REQUEST_CLAIM_TAIL, :REQUEST_ENQUEUE_DUPLICATE,

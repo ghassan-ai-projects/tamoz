@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "digest"
-require "json"
 
 module Tamoz
   module Scheduler
@@ -35,9 +34,7 @@ module Tamoz
         components = [
           String(schedule_id), Integer(schedule_revision), Integer(nominal_fire_at_utc)
         ]
-        "sha256:#{Digest::SHA256.hexdigest(
-          IDENTITY_DOMAIN + JSON.generate(Tamoz::Core.canonical(components))
-        )}"
+        Tamoz::Core.digest(IDENTITY_DOMAIN, components)
       end
 
       # The request id the enqueue primitive keys on: a digest of the identity

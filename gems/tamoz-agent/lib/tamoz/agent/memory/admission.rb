@@ -430,10 +430,12 @@ module Tamoz
       # Deterministic memory identity: sha256 of the canonical statement. Used
       # for admission dedup and rerun-idempotency on candidate identity.
       module MemoryRecordDigest
+        DIGEST_DOMAIN = "tamoz.agent.memory.record.v1\n"
+
         module_function
 
         def identity(statement)
-          "mem.#{Digest::SHA256.hexdigest(Tamoz::Core.canonical(statement.to_s))[0, 40]}"
+          "mem.#{Tamoz::Core.digest(DIGEST_DOMAIN, statement.to_s).delete_prefix('sha256:')[0, 40]}"
         end
       end
     end

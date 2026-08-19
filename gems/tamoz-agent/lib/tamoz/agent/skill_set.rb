@@ -65,7 +65,7 @@ module Tamoz
           raise SkillSetError, "skill_set/bad_name: #{name.inspect}"
         end
         tree_digest = Tamoz::Core.normalize_digest(tree_digest)
-        unless tree_digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+        unless Tamoz::Core.valid_digest?(tree_digest)
           raise SkillSetError, "skill_set/bad_tree_digest: #{name}"
         end
 

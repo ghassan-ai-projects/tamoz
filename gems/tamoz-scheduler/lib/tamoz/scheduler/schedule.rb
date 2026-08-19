@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "digest"
-require "json"
 
 module Tamoz
   module Scheduler
@@ -100,9 +99,7 @@ module Tamoz
         definition = fields.reject do |key, _value|
           %i[revision enabled definition_digest].include?(key)
         end
-        "sha256:#{Digest::SHA256.hexdigest(
-          DIGEST_DOMAIN + JSON.generate(Tamoz::Core.canonical(definition))
-        )}"
+        Tamoz::Core.digest(DIGEST_DOMAIN, definition)
       end
       private :compute_digest
 
@@ -392,9 +389,8 @@ module Tamoz
       end
 
       def validate_digest!(value, name)
-        unless value.is_a?(String) && value.match?(/\Asha256:[0-9a-f]{64}\z/)
-          raise Tamoz::ConfigurationError, "#{name} must be a sha256:... digest"
-        end
+        raise Tamoz::ConfigurationError, "#{name} must be a sha256:... digest" unless Tamoz::Core.valid_digest?(value)
+
         value.freeze
       end
 

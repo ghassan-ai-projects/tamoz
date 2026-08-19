@@ -14,7 +14,6 @@ module Tamoz
       ].freeze
       LEARNABLE_VERDICTS = %w[verified refuted].freeze
       STATES = %i[awaiting observed reconciled].freeze
-      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/.freeze
 
       Row = Data.define(
         :tenant_id, :intent_id, :command_id, :decision_id, :episode_id, :attempt_id, :decision_digest,
@@ -221,7 +220,7 @@ module Tamoz
 
       def digest!(value, name)
         digest = text!(value, name)
-        raise VerificationError, "#{name} must be a sha256 digest" unless digest.match?(DIGEST_PATTERN)
+        raise VerificationError, "#{name} must be a sha256 digest" unless Tamoz::Core.valid_digest?(digest)
 
         digest
       end
