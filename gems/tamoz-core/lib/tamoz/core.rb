@@ -98,6 +98,13 @@ module Tamoz
       JCS.digest_bytes(expected)
     end
 
+    # True for a well-formed "sha256:" + 64 hex chars digest string
+    # (Tamoz::Core::JCS::DIGEST_PATTERN) — the one wire-format shape every
+    # digest in this repo uses.
+    def valid_digest?(value)
+      JCS.valid_digest?(value)
+    end
+
     # Constant-time verification; recomputes and compares, never prefers a
     # locally recomputed value on mismatch.
     def verify_digest(domain, value, expected)

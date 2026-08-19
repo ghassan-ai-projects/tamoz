@@ -54,35 +54,19 @@ class PackagingTest < Minitest::Test
     end
   end
 
+  # tamoz-evals's harness subtree references Tamoz::Agent::*, Tamoz::SQLite::*,
+  # and Tamoz::Mcp::* directly, so its gemspec declares those as real
+  # dependencies (alongside tamoz-core). None of the four are published, so
+  # they're built and installed locally with `--ignore-dependencies` — the
+  # same pattern as `with_isolated_install`/the scorecard test below — rather
+  # than asking `gem install` to resolve them from a registry.
   def test_packaged_evals_executable_runs_without_repository_load_paths
-    root = GEM_ROOTS.fetch("tamoz-evals")
-
-    Dir.mktmpdir("tamoz-installed-evals") do |directory|
-      package = File.join(directory, "tamoz-evals.gem")
-      install_root = File.join(directory, "install")
-      spec = Gem::Specification.load(root.join("tamoz-evals.gemspec").to_s)
-      Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
-      clean_environment = ENV.each_key
-                             .grep(/\A(?:BUNDLE|BUNDLER)/)
-                             .to_h { |key| [key, nil] }
-                             .merge(
-                               "GEM_HOME" => install_root,
-                               "GEM_PATH" => install_root,
-                               "RUBYLIB" => nil,
-                               "RUBYOPT" => nil
-                             )
-      _stdout, stderr, status = Open3.capture3(
-        clean_environment,
-        RbConfig.ruby,
-        "-S",
-        "gem",
-        "install",
-        "--no-document",
-        "--install-dir",
-        install_root,
-        package
-      )
-      assert status.success?, stderr
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-scheduler tamoz-stream tamoz-tools
+               tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    with_isolated_install(names, "evals") do |environment|
+      install_root = environment.fetch("GEM_HOME")
+      spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-evals").join("tamoz-evals.gemspec").to_s)
+      clean_environment = environment
 
       executable = File.join(install_root, "bin", "tamoz-eval")
       stdout, stderr, status = Open3.capture3(
