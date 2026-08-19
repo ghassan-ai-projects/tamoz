@@ -145,10 +145,17 @@ class TamozTelegramTransportTest < Minitest::Test
       delivery = Comms::Delivery.build(
         conversation_id: 'telegram:chat:22222222', kind: 'control', text: 'updated',
         part_index: 0, part_count: 1, journaled: false, render_version: 1,
-        content_digest: 'c' * 64, operation: 'edit_message'
+        content_digest: 'c' * 64, operation: 'edit_message', reply_to: 42
       )
 
       assert_equal 42, transport.deliver(delivery).fetch('message_id')
+
+      sent = JSON.parse(server.requests.last.fetch(:body))
+
+      assert_equal 42, sent.fetch('message_id'),
+                   'editMessageText must identify the message being edited'
+      refute sent.key?('reply_to_message_id'),
+             'reply_to_message_id is not a recognized editMessageText parameter'
     end
   end
 

@@ -32,6 +32,10 @@ module Tamoz
       MAX_TEXT_BYTES = 4096
       MAX_MARKUP_BYTES = 8192
 
+      # @!attribute [r] reply_to
+      #   The platform message id this delivery targets: the message being
+      #   replied to when operation is 'send_message', or the message being
+      #   edited in place when operation is 'edit_message'.
       attr_reader :delivery_id, :conversation_id, :reply_to, :kind, :operation,
                   :text, :part_index, :part_count, :markup, :journaled,
                   :content_digest, :render_version, :expires_at

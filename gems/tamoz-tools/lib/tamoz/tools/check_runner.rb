@@ -103,6 +103,19 @@ module Tamoz
         wait_thread.join
       rescue Errno::ECHILD
         nil
+      rescue SystemCallError
+        # The group-kill itself was denied (e.g. the check re-exec'd under
+        # different privileges) rather than the process being gone. Fall back
+        # to a direct kill so the check isn't left running unsupervised, and
+        # never let this escape to be mistaken for a spawn failure upstream.
+        terminate_pid(pid, wait_thread)
+      end
+
+      def terminate_pid(pid, wait_thread)
+        Process.kill('KILL', pid)
+        wait_thread.join
+      rescue SystemCallError
+        nil
       end
     end
     # rubocop:enable Layout/LineLength, Metrics/AbcSize
