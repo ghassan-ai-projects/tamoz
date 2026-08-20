@@ -27,7 +27,9 @@ PATH
     tamoz-evals (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
+      tamoz-graph (= 0.1.0.alpha.1)
       tamoz-mcp (= 0.1.0.alpha.1)
+      tamoz-scheduler (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
 
 PATH

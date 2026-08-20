@@ -52,7 +52,7 @@ flowchart BT
 Two edges deserve emphasis:
 
 - **`tamoz-agent` is the only layer that knows RubyLLM** (`ruby_llm ~> 1.16.0`). It accepts a `RubyLLM::Agent`, `RubyLLM::Chat`, or a callable that produces a chat, and reuses their public messages and tools.
-- **`tamoz-evals` depends on nothing and nothing depends on it.** It is a non-runtime gem; the rule is enforced by `test/dependency_isolation_test.rb`. Evaluation code can never reach a production path.
+- **Nothing depends on `tamoz-evals`.** It is a development/release gem that depends on the runtime gems it exercises (`tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-graph`, `tamoz-scheduler`); the one-way rule is the inverse edge — no production gem depends on it — enforced by `test/dependency_isolation_test.rb`. Evaluation code can never reach a production path.
 
 ## The gem-by-gem map
 
@@ -70,7 +70,7 @@ Two edges deserve emphasis:
 | `tamoz-otel` | Bounded OTLP/HTTP exporter for observability signals | `tamoz-observability` |
 | `tamoz-telegram` | Telegram Bot API transport implementing the `Tamoz::Comms::Transport` seam; stdlib-only HTTP | `tamoz-comms` |
 | `tamoz-agent` | The deliberative agent runtime (plan/review/verify, memory, healing) and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
-| `tamoz-evals` | Evaluation and release evidence: conformance suites, scorecards, release gates. Non-runtime gem | stdlib only |
+| `tamoz-evals` | Evaluation and release evidence: conformance suites, scorecards, release gates. Development/release gem; nothing depends on it | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-graph`, `tamoz-scheduler` |
 
 ## Dependency rules that are enforced, not suggested
 

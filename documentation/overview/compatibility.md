@@ -37,7 +37,7 @@ All thirteen gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ru
 | `tamoz-otel` | `tamoz-observability` |
 | `tamoz-telegram` | `tamoz-comms` |
 | `tamoz-agent` | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm` `~> 1.16.0` |
-| `tamoz-evals` | stdlib only; **no production gem may depend on it** (enforced by test) |
+| `tamoz-evals` | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-graph`, `tamoz-scheduler` (development/release only); **no production gem may depend on it** (enforced by test) |
 
 ## Not yet supported
 
