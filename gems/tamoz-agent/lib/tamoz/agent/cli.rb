@@ -26,10 +26,42 @@ module Tamoz
       include CLICommsDoctor
       include CLICommsOps
 
-      SUBCOMMANDS = %w[
-        ask resume continue list show follow-up follow_up followup
-        redirect cancel resolve profile
-        init queue worker status schedule approve observe trace comms config
+      # Every subcommand dispatches to exactly one same-shaped cmd_* method
+      # (three spellings share follow_up); `list` alone takes no argv.
+      SUBCOMMAND_HANDLERS = {
+        "ask" => :cmd_ask,
+        "resume" => :cmd_resume,
+        "continue" => :cmd_continue,
+        "list" => :cmd_list,
+        "show" => :cmd_show,
+        "follow-up" => :cmd_follow_up,
+        "follow_up" => :cmd_follow_up,
+        "followup" => :cmd_follow_up,
+        "redirect" => :cmd_redirect,
+        "cancel" => :cmd_cancel,
+        "resolve" => :cmd_resolve,
+        "profile" => :cmd_profile,
+        "comms" => :cmd_comms,
+        "config" => :cmd_config,
+        "init" => :cmd_init,
+        "queue" => :cmd_queue,
+        "worker" => :cmd_worker,
+        "status" => :cmd_status,
+        "schedule" => :cmd_schedule,
+        "approve" => :cmd_approve,
+        "observe" => :cmd_observe,
+        "trace" => :cmd_trace
+      }.freeze
+
+      SUBCOMMANDS = SUBCOMMAND_HANDLERS.keys.freeze
+
+      SINGLE_ARG_SUBCOMMANDS = %w[list].freeze
+
+      # `--help` on any of these subcommands prints that subcommand's options
+      # and stops there, without opening a runtime directory it was never
+      # asked to touch.
+      NEEDS_HELP_CATCH = %w[
+        comms config init queue worker status schedule approve observe trace
       ].freeze
 
       THREAD_ID_PATTERN = /\A[A-Za-z0-9_\-\.]{1,64}\z/.freeze
@@ -99,37 +131,14 @@ module Tamoz
         @policy.validate_check_config(options)
         @policy.validate_profile_usage(options, subcommand)
 
-        case subcommand
-        when "ask" then cmd_ask(options, argv)
-        when "resume" then cmd_resume(options, argv)
-        when "continue" then cmd_continue(options, argv)
-        when "list" then cmd_list(options)
-        when "show" then cmd_show(options, argv)
-        when "follow-up", "follow_up", "followup" then cmd_follow_up(options, argv)
-        when "redirect" then cmd_redirect(options, argv)
-        when "cancel" then cmd_cancel(options, argv)
-        when "resolve" then cmd_resolve(options, argv)
-        when "profile" then cmd_profile(options, argv)
-        when "comms" then catch(:tamoz_subcommand_help) { cmd_comms(options, argv) }
-        when "config" then catch(:tamoz_subcommand_help) { cmd_config(options, argv) }
-        when "init", "queue", "worker", "status", "schedule", "approve"
-          # `--help` on a subcommand prints that subcommand's options and stops
-          # there, without opening a runtime directory it was never asked to touch.
-          catch(:tamoz_subcommand_help) do
-            case subcommand
-            when "init" then cmd_init(options, argv)
-            when "queue" then cmd_queue(options, argv)
-            when "worker" then cmd_worker(options, argv)
-            when "status" then cmd_status(options, argv)
-            when "schedule" then cmd_schedule(options, argv)
-            when "approve" then cmd_approve(options, argv)
-            end
-          end
-        when "observe" then catch(:tamoz_subcommand_help) { cmd_observe(options, argv) }
-        when "trace" then catch(:tamoz_subcommand_help) { cmd_trace(options, argv) }
-        else
+        handler = SUBCOMMAND_HANDLERS.fetch(subcommand) do
           raise OptionParser::InvalidArgument, "unknown subcommand: #{subcommand}"
         end
+        arguments = SINGLE_ARG_SUBCOMMANDS.include?(subcommand) ? [options] : [options, argv]
+
+        return catch(:tamoz_subcommand_help) { __send__(handler, *arguments) } if NEEDS_HELP_CATCH.include?(subcommand)
+
+        __send__(handler, *arguments)
       end
 
       def run_one_shot(options, argv)
