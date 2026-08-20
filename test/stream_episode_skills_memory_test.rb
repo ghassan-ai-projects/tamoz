@@ -148,7 +148,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "zero tool events for a smuggled tool"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_gate3_an_unknown_skill_ref_fails_before_any_model_call
@@ -300,7 +300,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "a recaller without a caller must fail before any model call"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_recall_with_a_tenant_mismatch_fails_typed
@@ -323,7 +323,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "a tenant-mismatched recaller must fail before any model call"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_a_replay_returns_the_recorded_recall_not_a_fresh_read
@@ -402,7 +402,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "replay uses the RECORDED memory, not the changed store"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_a_first_occurrence_cell_has_empty_memory
@@ -433,7 +433,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
     assert_equal [], state.fetch(:memory_record_digests)
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_gate5_a_novel_domain_with_skills_and_memory_passes_with_zero_new_ruby
