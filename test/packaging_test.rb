@@ -31,6 +31,14 @@ class PackagingTest < Minitest::Test
             assert_includes contents, "exe/tamoz"
           end
 
+          if name == "tamoz-stream"
+            # The runtime notification contract must ship; goldens, dev vectors,
+            # and the proto source must not.
+            assert_includes contents, "contracts/notification-contract-v1.json", name
+            refute(contents.any? { |path| path.match?(%r{\Acontracts/.*(?:goldens|vectors)}) }, name)
+            refute(contents.any? { |path| path.end_with?(".proto") }, name)
+          end
+
           next unless name == "tamoz-evals"
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
@@ -432,10 +440,15 @@ class PackagingTest < Minitest::Test
         )
         store = Tamoz::Stream::ArtifactStore.new
         store.retain(digest: "sha256:#{"1" * 64}", bytes: "tool-catalog")
+        # The notification contract JSON is read from the installed gem at
+        # runtime; a missing packaged file raises ConformanceError here.
+        contract = Tamoz::Stream::NotificationContract
         puts JSON.generate(
           "entity_id" => verified.fetch("entity").fetch("id"),
           "situation_version" => verified.fetch("situation_version"),
           "artifact_bytes" => store.resolve("sha256:#{"1" * 64}").fetch("bytes"),
+          "contract_supported" => contract.supported_type?("io.agenticstream.outcome.recorded.v1"),
+          "contract_unknown_rejected" => contract.supported_type?("io.example.not.a.type.v1"),
           "sqlite_defined" => defined?(Tamoz::SQLite).inspect,
           "agent_defined" => defined?(Tamoz::Agent).inspect
         )
@@ -448,6 +461,8 @@ class PackagingTest < Minitest::Test
       assert_equal "c-01", result.fetch("entity_id")
       assert_equal 7, result.fetch("situation_version")
       assert_equal "tool-catalog", result.fetch("artifact_bytes")
+      assert_equal true, result.fetch("contract_supported")
+      assert_equal false, result.fetch("contract_unknown_rejected")
       assert_equal "nil", result.fetch("sqlite_defined")
       assert_equal "nil", result.fetch("agent_defined")
       assert_empty stderr

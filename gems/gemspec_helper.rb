@@ -6,7 +6,7 @@ module TamozGemspec
 
   module_function
 
-  def build(name:, version:, summary:, description:, dependencies: [], executable: nil)
+  def build(name:, version:, summary:, description:, dependencies: [], executable: nil, runtime_contracts: [])
     root = File.expand_path(name, __dir__)
 
     Gem::Specification.new do |spec|
@@ -27,6 +27,10 @@ module TamozGemspec
         "suites/**/*.json",
         "baselines/**/*.json",
         "exe/*",
+        # Runtime contract files a gem reads with File.read at run time. Declared
+        # per gem so goldens, proto sources, and test vectors stay out of the
+        # package. Development vectors under contracts/ are intentionally excluded.
+        *runtime_contracts,
         *ALLOWED_FILES
       ]
       spec.files = Dir.chdir(root) do
