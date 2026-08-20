@@ -129,7 +129,7 @@ module Tamoz
           {
             "id" => bounded_message(id.to_s),
             "message" => bounded_message(request["message"]),
-            "schema" => deep_freeze(CanonicalJSON.normalize(schema))
+            "schema" => CanonicalJSON.deep_freeze(CanonicalJSON.normalize(schema))
           }.freeze
         end
 
@@ -261,17 +261,6 @@ module Tamoz
           text.freeze
         end
 
-        def deep_freeze(value)
-          case value
-          when Hash
-            value.each { |key, entry| deep_freeze(entry) }
-          when Array
-            value.each { |entry| deep_freeze(entry) }
-          when String
-            value.freeze
-          end
-          value.freeze
-        end
       end
     end
   end
