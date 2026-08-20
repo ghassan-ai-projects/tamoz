@@ -53,6 +53,7 @@ require_relative "evals/benchmark/baselines"
 require_relative "evals/benchmark/comparison"
 require_relative "evals/benchmark/report"
 require_relative "evals/benchmark/readiness"
+require_relative "evals/benchmark/openclaw_mission_runner"
 require_relative "evals/benchmark/leak_scan"
 require_relative "evals/cli"
 

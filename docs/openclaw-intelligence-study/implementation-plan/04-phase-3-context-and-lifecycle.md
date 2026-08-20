@@ -13,9 +13,9 @@ starts/results, approvals, waits, checkpoints, terminal state.
 
 The current slice implements the bounded canonical turn payload, transcript
 readback, allowlisted lifecycle projection, separated status fields, and
-journaled bounded compaction for deliberation and adaptive decisions. Restart-
-across-compaction, universal model-stage preparation, full CLI/Telegram trace
-parity, and scheduler recovery projection remain open.
+journaled bounded compaction for routing, deliberation, adaptive decisions, and
+verification. Restart-across-compaction, full CLI/Telegram trace parity, and
+complete scheduler recovery projection remain open.
 
 ## Entry and sequencing gates
 

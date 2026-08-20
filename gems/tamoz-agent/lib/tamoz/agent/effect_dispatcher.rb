@@ -231,6 +231,7 @@ module Tamoz
         effects.logical_identity(
           request_id: identity.fetch(:request_id, context.request_id),
           execution_id: identity.fetch(:execution_id, context.execution_id),
+          operation: identity.fetch(:operation),
           capability_id: identity.fetch(:capability_id),
           arguments: identity.fetch(:arguments),
           authority_revision: identity.fetch(:authority_revision),

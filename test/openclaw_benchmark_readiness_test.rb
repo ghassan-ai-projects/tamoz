@@ -43,7 +43,22 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     Dir.mktmpdir('openclaw-artifacts') do |directory|
       artifact = Pathname.new(directory).join('real-provider', 'run-1', 'adaptive-read-only.json')
       FileUtils.mkdir_p(artifact.dirname)
-      File.write(artifact, 'evidence')
+      mission = { 'id' => 'adaptive-read-only' }
+      document = {
+        'schema_version' => 'openclaw.evidence.v1',
+        'protocol_sha256' => Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol),
+        'mission_id' => 'adaptive-read-only',
+        'mission_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}",
+        'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
+        'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
+        'mission' => mission,
+        'provenance' => {
+          'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
+          'provider_calls' => 1
+        },
+        'result' => { 'status' => 'ready' }
+      }
+      File.write(artifact, JSON.generate(document))
       digest = "sha256:#{Digest::SHA256.file(artifact).hexdigest}"
       ready_manifest = manifest.merge(
         'missions' => [manifest.fetch('missions').first.merge('artifact_digest' => digest)]
@@ -55,6 +70,26 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
       assert_predicate result, :ready?
       assert_predicate result, :publishable?
       assert_empty result.reasons
+    end
+  end
+
+  def test_plain_text_artifact_cannot_be_published_as_provider_evidence
+    Dir.mktmpdir('openclaw-artifacts') do |directory|
+      artifact = Pathname.new(directory).join('real-provider', 'run-1', 'adaptive-read-only.json')
+      FileUtils.mkdir_p(artifact.dirname)
+      File.write(artifact, 'ready: true\n')
+      ready_manifest = manifest.merge(
+        'missions' => [manifest.fetch('missions').first.merge(
+          'artifact_digest' => "sha256:#{Digest::SHA256.file(artifact).hexdigest}"
+        )]
+      )
+
+      result = Tamoz::Evals::Benchmark::Readiness.evaluate(
+        protocol:, manifest: ready_manifest, artifact_root_base: directory
+      )
+
+      refute_predicate result, :ready?
+      assert_includes result.reasons, 'artifact_schema_invalid:adaptive-read-only'
     end
   end
 
@@ -115,7 +150,11 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
   def test_catalog_required_capability_is_checked_against_manifest_state
     catalog = {
       'schema_version' => 'openclaw.missions.v1',
-      'missions' => [{ 'id' => 'adaptive-read-only', 'required_capabilities' => ['local:read_file'] }]
+      'missions' => [{
+        'id' => 'adaptive-read-only', 'goal' => 'read and report',
+        'surfaces' => %w[cli telegram], 'required_capabilities' => ['local:read_file'],
+        'metrics' => ['completion'], 'hard_zero' => ['fabricated_evidence']
+      }]
     }
     blocked = Tamoz::Evals::Benchmark::Readiness.evaluate(
       protocol:, manifest:, mission_catalog: catalog

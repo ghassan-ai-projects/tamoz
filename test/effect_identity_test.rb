@@ -7,6 +7,7 @@ class EffectIdentityTest < Minitest::Test
     {
       request_id: 'request-1',
       execution_id: 'execution-1',
+      operation: 'model.generate.context_compact',
       capability_id: 'mcp:server/read',
       arguments: { 'path' => 'README.md', 'limit' => 10 },
       authority_revision: "sha256:#{'a' * 64}",
@@ -65,7 +66,7 @@ class EffectIdentityTest < Minitest::Test
       journal.logical_identity(**identity(iteration: 1.9))
     end
     assert_raises(Tamoz::ConfigurationError) do
-      journal.logical_identity(**identity(sub_operation: "1"))
+      journal.logical_identity(**identity(sub_operation: '1'))
     end
   end
 end

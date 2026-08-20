@@ -11,11 +11,11 @@ New capability families and delegation enter only as operator-owned, fully
 described capability sources. Nothing in this phase weakens a Phase 0
 invariant.
 
-The current slice adds read-only database admission policy through the existing
-MCP source builder and a durable child request/adoption path with narrowed
-local authority. It does not yet implement governed web/browser or
-self-modification flows, child restart evidence, or real-provider family
-evidence.
+The current slice adds read-only database admission policy, governed websearch
+egress plumbing, and a durable child request/adoption path with narrowed local
+authority. It does not yet implement an end-to-end browser mission,
+self-modification flows, child cross-process restart evidence, or real-provider
+family evidence.
 
 ## Work items (each independently shippable, in this order)
 

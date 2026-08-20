@@ -57,6 +57,29 @@ class AgentScheduleTest < Minitest::Test
     end
   end
 
+  def test_status_projects_schedule_authority_and_recovery_state
+    with_runtime do |rt|
+      rt.cli(%W[schedule add --id nightly --interval 3600 --task Read note.txt])
+
+      rt.cli(%w[status --json])
+      scheduled = JSON.parse(rt.out).fetch("scheduled_work").fetch(0)
+      assert_equal "nightly", scheduled.fetch("schedule_id")
+      assert_equal "not_materialized", scheduled.fetch("execution_state")
+      assert_equal "scheduled", scheduled.fetch("phase")
+      assert_equal "granted", scheduled.fetch("capability_state")
+      assert_match(/\Asha256:[0-9a-f]{64}\z/, scheduled.fetch("grant_revision"))
+      assert_equal "wait_for_due_occurrence", scheduled.fetch("next_action")
+      refute scheduled.key?("occurrence_id"), "status fabricated an occurrence"
+
+      rt.cli(%w[schedule pause nightly])
+      rt.cli(%w[status --json])
+      paused = JSON.parse(rt.out).fetch("scheduled_work").fetch(0)
+      assert_equal "paused", paused.fetch("phase")
+      assert_equal "schedule_disabled", paused.fetch("pause_reason")
+      assert_equal "resume_schedule", paused.fetch("next_action")
+    end
+  end
+
   # The reason the tombstone exists: a later `schedule add` reusing the id must
   # not inherit the removed schedule's stored task.
   #

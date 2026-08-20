@@ -16,7 +16,7 @@ class AgentSkillsToolboxTest < Minitest::Test
   PRE_P9_READ_ONLY_DIGEST =
     "sha256:5767fd2ac01e89f578e4e440c50b6b57f6763376d3df46587fe99043e2860511"
   PRE_P9_READ_WRITE_DIGEST =
-    "sha256:24a55e8ebb4bfc4efab57b68a60ffff7bf6e7eae25c7b39295459b691c903121"
+    "sha256:af94b8f3175d366f179b14e841415807dc4cf07140be0b9b97f5f27dd205b31a"
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills-toolbox")

@@ -8,6 +8,8 @@ module Tamoz
     # Builds bounded prior-plan, behavior, and automatic-memory prompt context.
     # :reek:DataClump :reek:DuplicateMethodCall :reek:UtilityFunction
     # Pure renderers retain prompt ordering and the memory boundary's sentinels.
+    # rubocop:disable Metrics/ClassLength -- the planning context owns the
+    # bounded frame and its durable compaction envelope as one protocol.
     class SessionPlanningContext
       ACTION_PHASES = %i[action repair].freeze
       ACTION_RECORD_PHASES = %w[action repair].freeze
@@ -21,6 +23,7 @@ module Tamoz
         MAX_OBSERVATION_INLINE_BYTES = 1_024
         MAX_PREVIEW_BYTES = 256
         MAX_SUMMARY_BYTES = 4_096
+        MAX_AUTHORITATIVE_BYTES = 4_096
         AUTHORITATIVE_KEYS = %w[
           goal constraints authority_revision catalog_revision plan_ids effect_ids
           approval_ids decisions pending_work next_action
@@ -39,7 +42,12 @@ module Tamoz
 
         def initialize(artifact_store: nil, tenant: nil)
           @artifact_store = artifact_store
-          @tenant = tenant || artifact_store&.tenant
+          store_tenant = artifact_store&.tenant
+          if store_tenant && tenant && String(store_tenant) != String(tenant)
+            raise ConfigurationError, 'compaction artifact tenant does not match the store tenant'
+          end
+
+          @tenant = store_tenant || tenant
         end
 
         def compact(context:, observations: [], authoritative: {})
@@ -240,8 +248,33 @@ module Tamoz
         end
 
         def bounded_authoritative(authoritative)
-          AUTHORITATIVE_KEYS.each_with_object({}) do |key, result|
-            result[key] = authoritative.fetch(key) if authoritative.key?(key)
+          bounded = {}
+          AUTHORITATIVE_KEYS.each do |key|
+            next unless authoritative.key?(key)
+
+            value = bounded_authoritative_value(authoritative.fetch(key))
+            candidate = bounded.merge(key => value)
+            bounded[key] = value if bytesize(candidate) <= MAX_AUTHORITATIVE_BYTES
+          end
+          bounded
+        end
+
+        def bounded_authoritative_value(value)
+          return value if bytesize(value) <= MAX_AUTHORITATIVE_BYTES / 2
+
+          marker = {
+            'truncated' => true,
+            'digest' => SessionRecords.digest(value)
+          }
+          case value
+          when Array
+            marker.merge('count' => value.length, 'preview' => value.first(8))
+          when Hash
+            marker.merge('keys' => value.keys.map(&:to_s).first(32))
+          when String
+            marker.merge('preview' => value.byteslice(0, MAX_PREVIEW_BYTES).scrub)
+          else
+            marker
           end
         end
 
@@ -505,6 +538,7 @@ module Tamoz
           }
         end
       end
+      # rubocop:enable Metrics/ClassLength
     end
   end
 end

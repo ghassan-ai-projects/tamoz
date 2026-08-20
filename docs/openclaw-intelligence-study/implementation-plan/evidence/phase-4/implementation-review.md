@@ -8,6 +8,9 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 - Database-shaped MCP sources can be marked operator-owned and pass through a
   read-only policy that rejects write statements, multiple statements, and
   configured query/row limits before MCP invocation.
+- Governed websearch has a separate operator-owned source, egress declaration,
+  bounded result/circuit policy, and untrusted-content handling; an end-to-end
+  browser mission is still outside this slice.
 - The policy is wired through `McpSourceBuilder`, so configured database
   servers do not rely on a dead wrapper path.
 - Child-task durable records bind their identity to parent/request/task/profile
@@ -16,10 +19,13 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 - Child tasks now enqueue through the existing request inbox, execute under a
   local-only narrowed toolbox, persist terminal status, and support exactly-once
   digest-bound parent adoption.
+- Child bindings pin the resolved profile digest; worker reconciliation repairs
+  a missing child request, and worker failure/budget paths settle child status
+  and close the open occurrence.
 
 ## Not delivered
 
-- Browser/web egress policy, child cross-process restart coverage, and
+- End-to-end browser execution, child cross-process restart coverage, and
   candidate-only self-modification are not implemented.
 - Approval/reconciliation and unknown-outcome scenarios for new capability
   families remain unproven.
@@ -35,10 +41,13 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 7 runs, 27 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_child_task_test.rb
-5 runs, 14 assertions, 0 failures, 0 errors, 0 skips
+6 runs, 17 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_child_task_runtime_test.rb
-2 runs, 8 assertions, 0 failures, 0 errors, 0 skips
+3 runs, 9 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_worker_test.rb
+23 runs, 107 assertions, 0 failures, 0 errors, 0 skips
 ```
 
 These are policy and persistence tests, not evidence that an agent selected or

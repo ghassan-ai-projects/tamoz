@@ -111,12 +111,20 @@ module Tamoz
       # is queued. Returns whether anything moved, which is the only input to the
       # idle decision.
       def poll_once
+        reconciled = reconcile_child_requests
         materialized = materialize_due_schedules
         advanced = advance_pending_threads
-        (materialized + advanced).positive?
+        (reconciled + materialized + advanced).positive?
       end
 
       private
+
+      def reconcile_child_requests
+        @runtime.reconcile_child_requests(limit: @batch).length
+      rescue WorkerRuntime::StoreUnavailableError => error
+        emit('worker.error', reason: error.message)
+        0
+      end
 
       # ---------------------------------------------------------------- schedules
 
@@ -287,6 +295,8 @@ module Tamoz
       rescue StandardError => error
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
+        settle_child_error(thread_id, error)
+        close_failed_occurrence(thread_id)
         emit("request.failed",
              thread: thread_id,
              request_id: occurrence_id,
@@ -305,6 +315,12 @@ module Tamoz
         end
         park(entry, nil, reason: "failed")
         PARKED
+      end
+
+      def close_failed_occurrence(thread_id)
+        @runtime.close_occurrence(thread_id)
+      rescue StandardError => error
+        emit('worker.error', reason: "failed occurrence cleanup: #{error.message}")
       end
 
       # Which budget, if any, this thread has spent. Returns nil when the profile
@@ -334,6 +350,7 @@ module Tamoz
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+        settle_child_error(thread_id, RuntimeError.new("budget_exhausted: #{budget}: #{detail}"))
         @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
         view = session && view_of(session, thread_id)
         notify_sink(
@@ -568,8 +585,14 @@ module Tamoz
 
         receipt = Tamoz::Core.jcs(
           'thread_id' => thread_id,
+          'checkpoint_id' => view.checkpoint_id,
+          'execution_id' => view.execution_id,
           'terminal' => view.terminal,
-          'verification' => view.state[:verification]
+          'verification' => view.state[:verification],
+          'effect_receipts' => view.effect_receipts,
+          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
+            Array(compaction['artifact_refs'])
+          end
         )
         @runtime.transition_child_task(child.child_id) do |current|
           next current unless %w[pending running].include?(current.status)
@@ -580,6 +603,24 @@ module Tamoz
           else current.unknown(receipt:)
           end
         end
+      end
+
+      def settle_child_error(thread_id, error)
+        child = @runtime.child_task(thread_id)
+        return unless child && %w[pending running].include?(child.status)
+
+        receipt = "#{error.class}: #{error.message}".byteslice(0, 1024)
+        @runtime.transition_child_task(child.child_id) do |current|
+          next current unless %w[pending running].include?(current.status)
+
+          if error.is_a?(Tamoz::EffectUnknownError)
+            current.unknown(receipt:)
+          else
+            current.fail(receipt:)
+          end
+        end
+      rescue StandardError => transition_error
+        emit('worker.error', reason: "child settlement failed: #{transition_error.message}")
       end
 
       def emit_approval_request(thread_id, occurrence_id, view)

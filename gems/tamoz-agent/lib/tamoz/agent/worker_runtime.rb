@@ -207,6 +207,7 @@ module Tamoz
       def enqueue_child_task(child_task, parent_profile:)
         profile_id = parent_profile.fetch('profile_id')
         stored = create_child_task(child_task, parent_profile:)
+        bound_profile = profile(profile_id)
         upsert(
           CHILD_BINDINGS,
           stored.child_id,
@@ -216,18 +217,40 @@ module Tamoz
             'parent_thread_id' => stored.parent_thread_id,
             'parent_request_id' => stored.parent_request_id,
             'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
+            'profile_digest' => bound_profile&.canonical_digest,
             'capabilities' => stored.capability_profile.fetch('capabilities', [])
           }.compact
         )
         bind_thread_profile(stored.child_id, profile_id)
-        checkpoints.enqueue_request(
-          thread_id: stored.child_id,
-          request_id: child_request_id(stored.child_id),
-          operation: :turn,
-          payload: { 'task' => stored.task },
-          delivery: :queue
+        enqueue_child_request(
+          stored
         )
         stored
+      end
+
+      def reconcile_child_requests(limit: 500)
+        child_tasks(limit:).filter_map do |child|
+          next unless child.status == 'pending'
+
+          request = checkpoints.fetch_request(
+            thread_id: child.child_id,
+            request_id: child_request_id(child.child_id)
+          )
+          next if request
+
+          enqueue_child_request(child)
+          child.child_id
+        end
+      end
+
+      def enqueue_child_request(child)
+        checkpoints.enqueue_request(
+          thread_id: child.child_id,
+          request_id: child_request_id(child.child_id),
+          operation: :turn,
+          payload: { 'task' => child.task },
+          delivery: :queue
+        )
       end
 
       def child_task(child_id)
@@ -406,6 +429,38 @@ module Tamoz
         end
       end
 
+      # The schedule store owns schedule/occurrence state; the worker owns the
+      # operator's current grant. This projection joins them without treating a
+      # queued or delivered request as execution success.
+      def scheduled_work(limit: 500)
+        store = schedule_store
+        return [] unless store.respond_to?(:list_schedules)
+
+        durable("scheduled work") do
+          store.list_schedules(limit:).map do |schedule|
+            occurrence = store.list_occurrences(
+              schedule_id: schedule.id, limit: 100
+            ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
+            grant = Tamoz::Scheduler::GrantIntersector.intersect(
+              schedule.capability_grant, worker_grant
+            )
+            scheduled_work_document(schedule, occurrence, grant)
+          end
+        end
+      rescue StoreUnavailableError => error
+        [{
+          "schema" => "tamoz.scheduled_work.v1",
+          "task_state" => "unavailable",
+          "effect_state" => "unknown",
+          "capability_state" => "unknown",
+          "delivery_state" => "unknown",
+          "phase" => "unknown",
+          "next_action" => "inspect",
+          "error_category" => "schedule_store_unavailable",
+          "error" => error.message.byteslice(0, 512)
+        }]
+      end
+
       # Human decisions about paused work, recorded by `tamoz approve` and the
       # channel gateway, consumed by the worker.
       #
@@ -535,12 +590,19 @@ module Tamoz
         raise Error, "child task #{child.child_id.inspect} has no authority binding" unless binding
 
         profile_id = binding.fetch('parent_profile_id')
+        resolved = load_profile(profile_id)
+        expected_digest = binding.fetch('profile_digest', nil)
+        unless expected_digest && resolved.canonical_digest == expected_digest
+          raise ToolPolicyError, "child authority profile changed after enqueue"
+        end
+
         @monitor.synchronize do
           key = ['child', child.child_id]
           @sessions[key] ||= build_session(
             profile_id,
             allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
-            mcp: nil
+            mcp: nil,
+            resolved_profile: resolved
           )
         end
       end
@@ -723,6 +785,83 @@ module Tamoz
 
       private
 
+      def scheduled_work_document(schedule, occurrence, grant)
+        state = occurrence&.state&.to_s || "not_materialized"
+        revoked = grant.fetch("status") == :revoked
+        paused = !schedule.enabled || revoked
+        {
+          "schema" => "tamoz.scheduled_work.v1",
+          "schedule_id" => schedule.id,
+          "schedule_revision" => schedule.revision,
+          "definition_digest" => schedule.definition_digest,
+          "occurrence_id" => occurrence&.occurrence_id,
+          "request_id" => occurrence&.request_id,
+          "execution_state" => state,
+          "task_state" => paused ? "paused" : scheduled_task_state(state),
+          "effect_state" => scheduled_effect_state(state),
+          "capability_state" => grant.fetch("status").to_s,
+          "delivery_state" => scheduled_delivery_state(state),
+          "delivery_outcome" => scheduled_delivery_state(state),
+          "phase" => scheduled_phase(schedule, occurrence, revoked),
+          "pause_reason" => schedule_pause_reason(schedule, revoked),
+          "authority_revision" => schedule.revision,
+          "grant_revision" => Tamoz::Core.digest(
+            "tamoz.scheduler.grant.v1\n", schedule.capability_grant
+          ),
+          "effective_grant" => grant.fetch("effective"),
+          "next_action" => scheduled_next_action(schedule, state, revoked)
+        }.compact
+      end
+
+      def scheduled_task_state(state)
+        %w[due claimed enqueued running].include?(state) ? "active" : "terminal"
+      end
+
+      def scheduled_effect_state(state)
+        case state
+        when "running" then "running"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        else "pending"
+        end
+      end
+
+      def scheduled_delivery_state(state)
+        case state
+        when "enqueued" then "enqueued"
+        when "running" then "delivered"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "settled"
+        else "pending"
+        end
+      end
+
+      def scheduled_phase(schedule, occurrence, revoked)
+        return "paused" unless schedule.enabled
+        return "blocked" if revoked
+        return "scheduled" unless occurrence
+
+        case occurrence.state.to_s
+        when "running" then "running"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        else "queued"
+        end
+      end
+
+      def schedule_pause_reason(schedule, revoked)
+        return "schedule_disabled" unless schedule.enabled
+        return "authority_revoked" if revoked
+
+        nil
+      end
+
+      def scheduled_next_action(schedule, state, revoked)
+        return "resume_schedule" unless schedule.enabled
+        return "review_authority" if revoked
+        return "wait_for_due_occurrence" if state == "not_materialized"
+        return "reconcile_unknown_outcome" if state == "unknown"
+
+        "inspect"
+      end
+
       def local_toolbox
         @local_toolbox ||= Toolbox.new(
           root: @directory.workspace_root,
@@ -741,8 +880,8 @@ module Tamoz
         )
       end
 
-      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source)
-        resolved = profile(profile_id)
+      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil)
+        resolved = resolved_profile || profile(profile_id)
         toolbox = session_toolbox(resolved, allowed_tools:)
 
         engine = memory_engine

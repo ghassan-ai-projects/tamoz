@@ -54,7 +54,9 @@ module Tamoz
       GRAPH_VERSION = "1"
       CURRENT_GRAPH_VERSION = "2"
       ADAPTIVE_GRAPH_VERSION = SessionNodes::ADAPTIVE_GRAPH_VERSION
-      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION, ADAPTIVE_GRAPH_VERSION].freeze
+      COMPACTION_GRAPH_VERSION = "4"
+      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION, ADAPTIVE_GRAPH_VERSION,
+                                  COMPACTION_GRAPH_VERSION].freeze
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
 
@@ -112,7 +114,7 @@ module Tamoz
         @default_graph_version = case routing.to_sym
                                  when :experimental then CURRENT_GRAPH_VERSION
                                  when :adaptive then ADAPTIVE_GRAPH_VERSION
-                                 else GRAPH_VERSION
+                                 else COMPACTION_GRAPH_VERSION
                                  end
         verify_profile_binding!(profile)
         node_arguments = {
@@ -135,6 +137,7 @@ module Tamoz
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
         @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: ADAPTIVE_GRAPH_VERSION)
+        @nodes_compaction = SessionNodes.new(**node_arguments, graph_version: COMPACTION_GRAPH_VERSION)
         @definitions = {
           GRAPH_VERSION => Session.build_definition(
             @nodes_v1,
@@ -147,6 +150,10 @@ module Tamoz
           ADAPTIVE_GRAPH_VERSION => Session.build_definition(
             @nodes_adaptive,
             version: ADAPTIVE_GRAPH_VERSION
+          ),
+          COMPACTION_GRAPH_VERSION => Session.build_definition(
+            @nodes_compaction,
+            version: COMPACTION_GRAPH_VERSION
           )
         }.freeze
         @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
@@ -175,7 +182,11 @@ module Tamoz
       private :verify_mcp_source!
 
       def nodes_for_default_graph
-        @default_graph_version == ADAPTIVE_GRAPH_VERSION ? @nodes_adaptive : @nodes
+        case @default_graph_version
+        when ADAPTIVE_GRAPH_VERSION then @nodes_adaptive
+        when COMPACTION_GRAPH_VERSION then @nodes_compaction
+        else @nodes
+        end
       end
 
       # P8 §5.2: the toolbox must expose exactly the capability surface the
@@ -413,7 +424,7 @@ module Tamoz
           state :approvals, reduce: :append, default: []
           state :effect_intents, reduce: :append, default: []
           state :effect_receipts, reduce: :append, default: []
-          state :compactions, reduce: :append, default: []
+          state :compactions, reduce: :append, default: [] unless String(version) == GRAPH_VERSION
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []

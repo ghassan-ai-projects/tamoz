@@ -10,10 +10,10 @@ evidence/scoring rules (`06`).
 Replace perception with measurement. No "more intelligent" claim exists until
 a matched benchmark reports it.
 
-The current slice adds a canonical mission catalog, readiness validation,
-artifact digest verification, fixture/real-provider separation, and a CLI
-publication refusal path. It does not run missions or providers, and it makes
-no intelligence claim.
+The current slice adds a canonical mission catalog, strict readiness and
+artifact-schema validation, fixture/real-provider separation, a provider-
+agnostic mission runner, and a CLI publication refusal path. It does not invoke
+a real provider or make an intelligence claim.
 
 ## Work items
 

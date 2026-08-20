@@ -142,13 +142,15 @@ module Tamoz
         JSON.pretty_generate(plan_input)
       end
 
-      def routing_prompt(task, toolbox:)
-        JSON.pretty_generate(
+      def routing_prompt(task, toolbox:, planning_context: {})
+        input = {
           "task" => task,
           "available_read_only_tools" => toolbox.read_only_names,
           "available_work_tools" => toolbox.names,
           "tool_descriptions" => toolbox.descriptions.slice(*toolbox.names)
-        )
+        }
+        input["planning_context"] = planning_context unless planning_context.empty?
+        JSON.pretty_generate(input)
       end
 
       def review_prompt(task, plan, phase:, evidence:, planning_context:, tool_descriptions: {})
@@ -164,7 +166,7 @@ module Tamoz
         JSON.pretty_generate(review_input)
       end
 
-      def verification_prompt(task, plan, review, observations, verification_context:)
+      def verification_prompt(task, plan, review, observations, verification_context:, planning_context: {})
         verification_input = {
           "task" => task,
           "accepted_plan" => plan.to_h,
@@ -174,6 +176,7 @@ module Tamoz
         unless verification_context.empty?
           verification_input["verification_context"] = verification_context
         end
+        verification_input["planning_context"] = planning_context unless planning_context.empty?
         JSON.pretty_generate(verification_input)
       end
 

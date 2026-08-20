@@ -24,7 +24,7 @@ module Tamoz
           request: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
           actor: 'tamoz.agent.session',
           logical_identity: logical_identity(
-            context:, capability_id: "model:#{stage}",
+            context:, operation: "model.generate.#{stage}", capability_id: "model:#{stage}",
             arguments: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
             iteration:, sub_operation:
           )
@@ -48,7 +48,8 @@ module Tamoz
         safety = intent.fetch('safety').to_sym
         options = dispatch_options(context, intent, tool, arguments, safety).merge(
           logical_identity: logical_identity(
-            context:, capability_id: tool, arguments:, iteration:, sub_operation:
+            context:, operation: intent.fetch('operation'), capability_id: tool,
+            arguments:, iteration:, sub_operation:
           )
         )
         EffectDispatcher.run(**options) { execute_dispatch(context, intent, tool, arguments) }
@@ -101,10 +102,11 @@ module Tamoz
         }
       end
 
-      def logical_identity(context:, capability_id:, arguments:, iteration:, sub_operation:)
+      def logical_identity(context:, operation:, capability_id:, arguments:, iteration:, sub_operation:)
         {
           request_id: context.request_id,
           execution_id: context.execution_id,
+          operation:,
           capability_id:,
           arguments: Tamoz::Agent::Deliberation.canonical(arguments),
           authority_revision: authority_revision,

@@ -19,16 +19,22 @@ Status: partial; the Phase 3 exit bar and global implementation bar are not met.
   allowlisted authoritative frame and can retain oversized observations in the
   existing artifact-store contract when one is explicitly supplied.
 - Wired bounded compaction into legacy deliberation and adaptive decision
-  prompts; oversized frames may use a journaled `context_compact` model effect
-  and record a digest-bound compaction envelope in checkpoint state.
+  prompts, routed intake/review, and verification; oversized frames may use a
+  journaled `context_compact` model effect and record a digest-bound compaction
+  envelope in checkpoint state.
 - Bounded aggregate observations, retained graph revision, separated validated
   summaries from deterministic fallback metadata, and threaded the existing
   SQLite artifact store through durable CLI and worker sessions.
+- Added a hard authoritative-frame byte bound, tenant/store binding, durable
+  artifact resolution coverage, effect-receipt reuse after reopen, and graph
+  version 4 for the compaction state channel.
+- Added scheduler status projection with schedule/occurrence/request identity,
+  grant revision, authority state, pause reason, and delivery outcome.
 
 ## Not delivered
 
-- Universal preparation of every model stage, restart-across-compaction kill
-  coverage, and artifact-resolution assertions across all surfaces remain open.
+- Restart-across-compaction kill coverage and artifact-resolution assertions
+  across all surfaces remain open.
 - Restart across a compaction boundary, composed CLI/Telegram trace parity, and
   scheduler recovery metadata remain unproven.
 - No provider or intelligence evidence is claimed; current tests are fixture
@@ -46,7 +52,7 @@ Focused commands passed during this slice:
 2 runs, 7 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_phase3_context_lifecycle_test.rb
-9 runs, 48 assertions, 0 failures, 0 errors, 0 skips
+13 runs, 62 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_session_adaptive_test.rb
 5 runs, 42 assertions, 0 failures, 0 errors, 0 skips
@@ -58,27 +64,26 @@ Focused commands passed during this slice:
 17 runs, 58 assertions, 0 failures, 0 errors, 0 skips
 ```
 
-The targeted production lint command initially found one
-`Metrics/AbcSize` offense in the bounded status document; it was isolated with
-the existing local convention. The 19 newly changed or newly added production
-files outside the legacy benchmark report are clean. The report retains its
-pre-existing 122 RuboCop offenses; this slice adds no new report offense.
+The targeted production lint command was run with `--cache false`; all changed
+production files are clean. Test-file lint retains unrelated pre-existing metric
+offenses in older large fixtures.
 
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:eb5af9febe4fe1a128629357e3eabc093181cc11d75d32199c8fde029d01be44
+snapshot_id: sha256:8708cb336915e6c4708b71b49fe8a6e9cd9b578bb660e4adaf84255c30774f2d
 enola: 0.2.7-51-g72cd079
-facts: 9960; insights: 52; files parsed: 501/543; parse errors: 0
+facts: 10031; insights: 52; files parsed: 502/544; parse errors: 0
 receipt comparison: equivalent inputs; 0 extraction-quality regressions
 architecture diff: 0 new findings
 ```
 
 The focused continuation suites also passed: adaptive session (5 runs, 42
-assertions), child runtime (2, 8), worker (23, 107), session kill matrix (6,
-65), session (11, 73), communications gateway (13, 54), readiness (6, 23),
-and readiness CLI (1, 4). The changed production seam linted cleanly across
-11 files.
+assertions), child task (6, 17), child runtime (3, 9), worker (23, 107),
+schedule/status (8, 60), session kill matrix (6, 65), session (11, 73),
+communications gateway (13, 54), readiness (7, 27), runner (2, 16), and
+readiness CLI (1, 4). The changed production seams linted cleanly with cache
+disabled.
 
 Repository gate status:
 

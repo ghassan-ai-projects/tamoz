@@ -4,8 +4,8 @@ require_relative "test_helper"
 
 # P16 tools-gem extraction probes (plan §4 T1/T2/T3/T3b, corrections C1–C6).
 # Everything here asserts the moved surface against values captured from the
-# pre-move code at P16 start: the digest matrix, the rejection messages, the
-# snapshot digests, the canonical bytes, and the taxonomy shape.
+# pre-move code at P16 start, except the digest matrix, which is deliberately
+# re-pinned when the catalog begins binding configured check argv values.
 class P16ToolsGemTest < Minitest::Test
   CLEAN_LIB_PATHS = %w[tamoz-core tamoz-tools].flat_map do |name|
     ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
@@ -13,7 +13,7 @@ class P16ToolsGemTest < Minitest::Test
 
   # ---- P16-start reference pins (captured from the pre-move code) -----------
 
-  MATRIX_DIGEST = "sha256:0abe59c234364da6f595f2bf261adb964e31dc54ffccc5830e18b0d08ad7565e"
+  MATRIX_DIGEST = "sha256:f87625c578108031993b53935a83e07680e0d00320e9e37995eef4414e6606a9"
 
   REJECTION_MESSAGES = {
     "bad_skills_type" => "skills must be a Tamoz::Agent::Skills::SkillSnapshot",

@@ -13,9 +13,11 @@ The current partial slice is intentionally not an end-state claim: it adds
 descriptor/identity, non-connecting MCP visibility, a durable adaptive
 read-only graph, canonical turn/lifecycle/status contracts, bounded governed
 database and child-record admission seams, and benchmark readiness checks.
+The benchmark preparation slice also now includes a provider-agnostic mission
+runner and strict evidence artifact validation; it does not supply real-provider
+evidence.
 Durable compaction, composed cross-surface execution, full governed expansion,
-the benchmark runner, and real-provider evidence remain outstanding until
-their phase exit bars pass.
+and real-provider evidence remain outstanding until their phase exit bars pass.
 
 Read in this order:
 

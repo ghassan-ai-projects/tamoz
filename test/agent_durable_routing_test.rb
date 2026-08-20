@@ -139,7 +139,8 @@ class AgentDurableRoutingTest < Minitest::Test
 
       view = resumed.view(thread: 'durable.route.legacy')
 
-      assert_equal '1', view.state.fetch(:session).fetch('graph_version')
+      assert_equal Tamoz::Agent::Session::COMPACTION_GRAPH_VERSION,
+                   view.state.fetch(:session).fetch('graph_version')
       refute_includes resumed.send(:app_for_thread, 'durable.route.legacy').definition.nodes.keys, :route
       assert_empty resumed_model.calls
     end

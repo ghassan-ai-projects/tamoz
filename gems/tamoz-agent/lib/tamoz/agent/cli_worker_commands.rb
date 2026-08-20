@@ -424,6 +424,7 @@ module Tamoz
           # operator must be able to see rather than infer.
           "capability_catalog" => runtime.capability_catalog,
           "capability_peek" => runtime.capability_peek,
+          "scheduled_work" => runtime.scheduled_work,
           "memory" => runtime.memory_summary,
           "session_status" => session_status(runtime),
           "safety_counters" => safety_counters(effects),

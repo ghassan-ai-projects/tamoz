@@ -92,5 +92,40 @@ class AgentChildTaskRuntimeTest < Minitest::Test
       end
     end
   end
+
+  def test_child_resume_refuses_a_changed_parent_profile
+    child = Tamoz::Agent::ChildTask.build(
+      parent_thread_id: 'parent-thread', parent_request_id: 'parent-request',
+      task: 'read the note', capability_profile: {
+        'capabilities' => ['local:read_file'], 'authority_revision' => 'profile:1'
+      }, depth: 1, concurrency: 1
+    )
+    parent_profile = {
+      'profile_id' => 'trusted',
+      'capabilities' => ['local:read_file'], 'authority_revision' => 'profile:1',
+      'max_child_depth' => 1, 'max_child_concurrency' => 1
+    }
+
+    with_runtime do |rt|
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        runtime.enqueue_child_task(child, parent_profile:)
+        profile_path = File.join(rt.dir, 'profiles', 'trusted.yaml')
+        profile = Psych.safe_load_file(profile_path)
+        profile['profile']['profile_version'] = '2.0'
+        File.write(profile_path, Psych.dump(profile))
+        File.chmod(0o600, profile_path)
+
+        assert_raises(Tamoz::Agent::ToolPolicyError) do
+          runtime.session_for(child.child_id)
+        end
+      ensure
+        runtime.close
+      end
+    end
+  end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
 end

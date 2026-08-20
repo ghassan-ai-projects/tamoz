@@ -10,7 +10,11 @@ implementation bar are not met.
   surfaces, capability requirements, metrics, and hard-zero markers.
 - Added readiness validation for protocol/configuration/graph/surface/command
   bindings, capability state, expected mission coverage, fixture versus real
-  provider provenance, safe artifact paths, and SHA-256 artifact existence.
+  provider provenance, safe artifact paths, SHA-256 artifact existence, and
+  canonical artifact schema/provenance verification.
+- Added a provider-agnostic canonical mission runner that executes every catalog
+  mission through an injected executor, writes digest-bound evidence artifacts,
+  and blocks real-provider readiness without provider-call provenance.
 - Added a CLI path that refuses publication for fixture runs and for missing or
   unverifiable artifacts.
 - Readiness now accepts the canonical mission catalog and refuses a ready
@@ -20,9 +24,9 @@ implementation bar are not met.
 
 ## Not delivered
 
-- The CLI validates prebuilt evidence; it does not execute the canonical
-  missions, invoke a provider, collect traces, or produce a real-provider
-  result artifact.
+- The runner owns mission execution and artifact publication, but the current
+  repository does not wire it to a real provider, collect a real-provider trace,
+  or publish a real-provider result.
 - Phase 5B common-subset/native-envelope comparison and memory attribution are
   not run.
 - No intelligence claim is made.
@@ -31,7 +35,10 @@ implementation bar are not met.
 
 ```text
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_benchmark_readiness_test.rb
-6 runs, 23 assertions, 0 failures, 0 errors, 0 skips
+7 runs, 27 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_mission_runner_test.rb
+2 runs, 16 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_benchmark_readiness_cli_test.rb
 1 runs, 4 assertions, 0 failures, 0 errors, 0 skips

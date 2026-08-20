@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'json'
 require 'pathname'
 
 module Tamoz
@@ -9,11 +10,15 @@ module Tamoz
       # Validates the control-plane evidence needed before a benchmark report
       # may publish a final verdict. Scoring remains in Report; this boundary
       # only answers whether the run is sufficiently described and available.
+      # rubocop:disable Metrics/ClassLength -- schema and evidence gate live together.
       class Readiness
         DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
         RUN_KINDS = %w[fixture real_provider].freeze
         MISSION_STATUSES = %w[ready blocked unavailable].freeze
         CAPABILITY_FIELDS = %w[exists reachable authorized attempted effective completed verified].freeze
+        MISSION_CATALOG_FIELDS = %w[goal hard_zero id metrics required_capabilities surfaces].freeze
+        MISSION_SURFACES = %w[cli telegram].freeze
+        EVIDENCE_SCHEMA_VERSION = 'openclaw.evidence.v1'
         BOOLEAN_VALUES = [true, false].freeze
         REQUIRED_FIELDS = %w[
           protocol_sha256 run_kind provider model artifact_root git_revision config_sha256
@@ -45,7 +50,7 @@ module Tamoz
               protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base
             )
             evaluated_manifest = manifest.merge(
-              'artifacts_verified' => artifacts_verified?(manifest, artifact_root_base)
+              'artifacts_verified' => artifacts_verified?(manifest, artifact_root_base, mission_catalog)
             )
             Result.new(
               status: reasons.empty? ? 'ready' : 'blocked',
@@ -76,7 +81,7 @@ module Tamoz
 
           def evidence_reasons(protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base)
             structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog) +
-              control_reasons(manifest, artifact_root_base)
+              control_reasons(manifest, artifact_root_base, mission_catalog)
           end
 
           def structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog)
@@ -90,10 +95,10 @@ module Tamoz
             reasons
           end
 
-          def control_reasons(manifest, artifact_root_base)
+          def control_reasons(manifest, artifact_root_base, mission_catalog)
             reasons = []
             reasons << 'fixture_or_fake_provider' if manifest.fetch('run_kind') == 'fixture'
-            reasons.concat(artifact_reasons(manifest, artifact_root_base))
+            reasons.concat(artifact_reasons(manifest, artifact_root_base, mission_catalog))
             reasons << 'controls_not_passed' unless manifest.fetch('controls_passed') == true
             reasons
           end
@@ -187,10 +192,46 @@ module Tamoz
               schema_error('benchmark mission catalog must contain missions')
             end
 
+            catalog.fetch('missions').each { |mission| validate_catalog_mission!(mission) }
             ids = catalog.fetch('missions').map { |mission| mission.fetch('id') }
             schema_error('benchmark mission catalog contains duplicate ids') unless ids.uniq == ids
           rescue KeyError, TypeError
             schema_error('benchmark mission catalog contains an invalid mission')
+          end
+
+          def validate_catalog_mission!(mission)
+            validate_catalog_shape!(mission)
+            validate_catalog_identity!(mission)
+            validate_catalog_lists!(mission)
+            return if mission.fetch('surfaces').all? { |surface| MISSION_SURFACES.include?(surface) }
+
+            schema_error('benchmark mission catalog surfaces are invalid')
+          end
+
+          def validate_catalog_shape!(mission)
+            return if mission.is_a?(Hash) && mission.keys.sort == MISSION_CATALOG_FIELDS
+
+            schema_error('benchmark mission catalog mission fields are invalid')
+          end
+
+          def validate_catalog_identity!(mission)
+            valid = mission.fetch('id').is_a?(String) && !mission.fetch('id').empty? &&
+                    mission.fetch('goal').is_a?(String) && !mission.fetch('goal').empty?
+            return if valid
+
+            schema_error('benchmark mission catalog mission identity is invalid')
+          end
+
+          def validate_catalog_lists!(mission)
+            %w[hard_zero metrics required_capabilities surfaces].each do |field|
+              next if valid_string_list?(mission.fetch(field))
+
+              schema_error("benchmark mission catalog #{field} is invalid")
+            end
+          end
+
+          def valid_string_list?(value)
+            value.is_a?(Array) && !value.empty? && value.all? { |entry| entry.is_a?(String) && !entry.empty? }
           end
 
           def validate_mission!(mission)
@@ -254,7 +295,7 @@ module Tamoz
             end
           end
 
-          def artifact_reasons(manifest, artifact_root_base)
+          def artifact_reasons(manifest, artifact_root_base, mission_catalog = nil)
             return ['artifacts_unverified'] unless artifact_root_base
 
             manifest.fetch('missions').filter_map do |mission|
@@ -267,14 +308,82 @@ module Tamoz
               next "artifact_missing:#{mission.fetch('id')}" unless File.file?(path)
 
               actual = "sha256:#{Digest::SHA256.file(path).hexdigest}"
-              next if actual == mission.fetch('artifact_digest')
+              next "artifact_digest_mismatch:#{mission.fetch('id')}" unless actual == mission.fetch('artifact_digest')
 
-              "artifact_digest_mismatch:#{mission.fetch('id')}"
+              document_reasons = artifact_document_reasons(path, mission, manifest, mission_catalog)
+              document_reasons.empty? ? nil : document_reasons.first
             end
           end
 
-          def artifacts_verified?(manifest, artifact_root_base)
-            artifact_root_base && artifact_reasons(manifest, artifact_root_base).empty?
+          def artifacts_verified?(manifest, artifact_root_base, mission_catalog = nil)
+            artifact_root_base && artifact_reasons(manifest, artifact_root_base, mission_catalog).empty?
+          end
+
+          def artifact_document_reasons(path, mission, manifest, mission_catalog)
+            document = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
+            reason = artifact_binding_reason(document, mission, manifest)
+            return [reason] if reason
+
+            reason = artifact_shape_reason(document, mission)
+            return [reason] if reason
+
+            reason = artifact_mission_reason(document, mission, mission_catalog)
+            return [reason] if reason
+
+            reason = artifact_provenance_reason(document, mission, manifest)
+            reason ? [reason] : []
+          rescue JSON::ParserError, TypeError
+            ["artifact_schema_invalid:#{mission.fetch('id')}"]
+          end
+
+          def artifact_binding_reason(document, mission, manifest)
+            expected = {
+              'schema_version' => EVIDENCE_SCHEMA_VERSION,
+              'protocol_sha256' => manifest.fetch('protocol_sha256'),
+              'mission_id' => mission.fetch('id'),
+              'run_kind' => manifest.fetch('run_kind'),
+              'provider' => manifest.fetch('provider'),
+              'model' => manifest.fetch('model'),
+              'git_revision' => manifest.fetch('git_revision'),
+              'config_sha256' => manifest.fetch('config_sha256')
+            }
+            return if expected.all? { |key, value| document[key] == value }
+
+            "artifact_binding_mismatch:#{mission.fetch('id')}"
+          end
+
+          def artifact_shape_reason(document, mission)
+            return if document['mission'].is_a?(Hash) && document['result'].is_a?(Hash) &&
+                      document['provenance'].is_a?(Hash)
+
+            "artifact_shape_invalid:#{mission.fetch('id')}"
+          end
+
+          def artifact_mission_reason(document, mission, mission_catalog)
+            return "artifact_mission_digest_mismatch:#{mission.fetch('id')}" unless
+              document['mission_digest'] == canonical_digest(document['mission'])
+            return unless mission_catalog
+
+            catalog_mission = mission_catalog.fetch('missions').find { |entry| entry['id'] == mission.fetch('id') }
+            return if catalog_mission && document['mission_digest'] == canonical_digest(catalog_mission)
+
+            "artifact_mission_mismatch:#{mission.fetch('id')}"
+          end
+
+          def artifact_provenance_reason(document, mission, manifest)
+            provenance = document['provenance']
+            return "artifact_provenance_mismatch:#{mission.fetch('id')}" unless
+              provenance['run_kind'] == manifest.fetch('run_kind') &&
+              provenance['provider'] == manifest.fetch('provider') &&
+              provenance['model'] == manifest.fetch('model')
+            return unless manifest.fetch('run_kind') == 'real_provider'
+            return if provenance['provider_calls'].is_a?(Integer) && provenance['provider_calls'] >= 1
+
+            "artifact_provider_call_missing:#{mission.fetch('id')}"
+          end
+
+          def canonical_digest(value)
+            "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump(value))}"
           end
 
           def safe_artifact_path?(path)
@@ -287,6 +396,7 @@ module Tamoz
           end
         end
       end
+      # rubocop:enable Metrics/ClassLength
     end
   end
 end

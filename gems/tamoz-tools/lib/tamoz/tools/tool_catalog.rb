@@ -45,7 +45,9 @@ module Tamoz
         @descriptions = descriptions_for(allow_changes, skills)
         @catalog_digest = digest([@allowed_tools.sort, @approval_required.sort, @descriptions.keys.sort,
                                   @descriptions.sort.to_h, @checks.keys.sort,
-                                  @checks.keys.sort.map { |name| [name, check_safety(name).to_s] }])
+                                  @checks.keys.sort.map do |name|
+                                    [name, check_safety(name).to_s, @checks.fetch(name)]
+                                  end])
         @prompt_surface_digest = digest(PROMPT_SURFACE_DOMAIN + JSON.generate([@catalog_digest, skills.catalog_digest]))
         freeze
       end

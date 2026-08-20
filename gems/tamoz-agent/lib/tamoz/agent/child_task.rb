@@ -152,9 +152,9 @@ module Tamoz
       def validate_parent_revision!(parent_profile)
         parent_revision = parent_profile.fetch('authority_revision', nil)
         child_revision = capability_profile.fetch('authority_revision', nil)
-        return if parent_revision.nil? || child_revision == parent_revision
+        return if parent_revision && child_revision == parent_revision
 
-        raise Tamoz::Agent::ToolPolicyError, 'child authority revision differs from parent'
+        raise Tamoz::Agent::ToolPolicyError, 'child authority revision is missing or differs from parent'
       end
 
       def transition(next_status, completion_digest: self.completion_digest)

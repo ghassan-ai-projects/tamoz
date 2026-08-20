@@ -73,11 +73,12 @@ module Tamoz
       # execution_id is accepted as an explicit input but intentionally excluded
       # from the stable logical identity.
       def logical_identity(
-        request_id:, capability_id:, arguments:, authority_revision:, catalog_revision:,
+        request_id:, operation:, capability_id:, arguments:, authority_revision:, catalog_revision:,
         iteration:, sub_operation:, execution_id: nil
       )
         fields = {
           'request_id' => Wire.identity(request_id, name: 'effect request id'),
+          'operation' => Wire.identity(operation, name: 'effect operation'),
           'capability_id' => Wire.identity(capability_id, name: 'effect capability id'),
           'arguments' => canonical_arguments(arguments),
           'authority_revision' => Wire.identity(authority_revision, name: 'effect authority revision'),
@@ -127,7 +128,7 @@ module Tamoz
         value
       end
 
-      # rubocop:disable Metrics/ParameterLists, Metrics/MethodLength -- the named
+      # rubocop:disable Metrics/AbcSize, Metrics/ParameterLists, Metrics/MethodLength -- the named
       # arguments are the durable identity comparison contract.
       # complete durable effect binding, kept explicit for auditability.
       # :reek:LongParameterList -- these are the persisted identity fields.
@@ -146,8 +147,8 @@ module Tamoz
           # The key is the logical call identity; the execution-derived fields
           # legitimately differ across attempts and fences. Bind the thread,
           # namespace, safety, and request digest only.
-          actual = [row.fetch(2), row.fetch(3), row.fetch(8), row.fetch(10)]
-          expected = [lease.thread_id, lease.namespace, safety, request_digest]
+          actual = [row.fetch(2), row.fetch(3), row.fetch(7), row.fetch(8), row.fetch(10)]
+          expected = [lease.thread_id, lease.namespace, operation, safety, request_digest]
           return if actual == expected
 
           raise CheckpointConflictError,
@@ -173,7 +174,7 @@ module Tamoz
         raise CheckpointConflictError,
               'effect key is already bound to different semantics'
       end
-      # rubocop:enable Metrics/ParameterLists, Metrics/MethodLength
+      # rubocop:enable Metrics/AbcSize, Metrics/ParameterLists, Metrics/MethodLength
     end
     # rubocop:enable Metrics/ModuleLength
 

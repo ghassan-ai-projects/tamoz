@@ -350,6 +350,17 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
+  def test_catalog_digest_changes_with_configured_check_arguments
+    first = Tamoz::Agent::Toolbox.new(
+      root: Dir.pwd, allow_changes: true, checks: { 'tests' => ['true'] }
+    )
+    second = Tamoz::Agent::Toolbox.new(
+      root: Dir.pwd, allow_changes: true, checks: { 'tests' => ['false'] }
+    )
+
+    refute_equal first.catalog_digest, second.catalog_digest
+  end
+
   def test_effect_intent_preflight_writes_nothing_and_matches_the_preview
     Dir.mktmpdir("tamoz-intent") do |root|
       target = File.join(root, "app.rb")

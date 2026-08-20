@@ -67,4 +67,12 @@ class AgentChildTaskTest < Minitest::Test
       Tamoz::Agent::ChildTask.from_h(child.to_h.merge('child_id' => "child:sha256:#{'0' * 64}"))
     end
   end
+
+  def test_parent_authority_revision_is_required
+    child = build
+
+    assert_raises(Tamoz::Agent::ToolPolicyError) do
+      child.assert_narrowed_to!(parent_profile.merge('authority_revision' => nil))
+    end
+  end
 end
