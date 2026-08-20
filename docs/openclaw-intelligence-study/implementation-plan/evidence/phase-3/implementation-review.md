@@ -59,9 +59,9 @@ pre-existing 122 RuboCop offenses; this slice adds no new report offense.
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:357fb7f0602c18af4ee2994482122200b802a86feeee08e6b25d8c0d7459b976
+snapshot_id: sha256:851df4eb93de76a4fca9cb5ff1c2617ced20c29fea50e791d8e19628da39cc16
 enola: 0.2.7-51-g72cd079
-facts: 9926; insights: 52; files parsed: 501/543; parse errors: 0
+facts: 9928; insights: 52; files parsed: 501/543; parse errors: 0
 receipt comparison: equivalent inputs; 0 extraction-quality regressions
 architecture diff: 0 new findings
 ```

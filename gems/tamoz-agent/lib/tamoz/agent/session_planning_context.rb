@@ -152,7 +152,11 @@ module Tamoz
         @compactor = BoundedCompactor.new(artifact_store:, tenant:)
       end
 
-      def planning_context_for(state, phase, conversation: [], observations: [])
+      def planning_context_for(state, phase, conversation: [])
+        compact_for(state, phase, conversation:).context
+      end
+
+      def compact_for(state, phase, conversation: [], observations: [])
         prompt_context = action_context(state, phase)
         add_conversation_context(prompt_context, conversation)
         add_behavior_snapshot(prompt_context, state)
@@ -161,7 +165,7 @@ module Tamoz
           context: prompt_context,
           observations:,
           authoritative: authoritative_context(state, phase)
-        ).context
+        )
       end
 
       # The transcript the channel gateway snapshotted into this turn's

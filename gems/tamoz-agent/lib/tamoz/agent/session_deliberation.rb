@@ -42,27 +42,31 @@ module Tamoz
           state.fetch(:terminal_reason) == 'cancelled_by_user'
       end
 
+      # rubocop:disable Metrics/MethodLength -- one ordered planner-context assembly.
       def build_loop_state(state, conversation)
         phase = state.fetch(:phase).to_sym
         effects = @services.effects
         evidence = state.fetch(:observations).map { |record| observation_payload(record) }
         allowed_tools = effects.allowed_tool_names(phase)
         mcp_tools = effects.mcp_planning_surface(allowed_tools)
-        planning_context = @services.planning_context.planning_context_for(state, phase, conversation:)
+        compacted = @services.planning_context.compact_for(
+          state, phase, conversation:, observations: evidence
+        )
         LoopState.new(
           phase:,
           repair_attempt: state.fetch(:repair_attempt),
           task: state.fetch(:task),
-          evidence:,
+          evidence: compacted.observations,
           allowed_tools:,
           mcp_tools:,
-          planning_context:,
+          planning_context: compacted.context,
           feedback: [],
           plans: [],
           reviews: [],
           ambiguity: state.fetch(:provider_ambiguity)
         )
       end
+      # rubocop:enable Metrics/MethodLength
 
       def observation_payload(record)
         @services.evidence.observation_payload(record)
