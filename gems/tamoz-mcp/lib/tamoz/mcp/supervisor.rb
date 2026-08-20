@@ -117,6 +117,8 @@ module Tamoz
     # Credential VALUES are read from the operator environment at spawn time,
     # handed to the child, and never interpolated into any message or log.
     class Supervisor < MCP::Client::Stdio
+      include CircuitSupervision
+
       # Grace period between SIGTERM and SIGKILL on teardown (plan §8).
       TERM_GRACE_SECONDS = 2.0
       # Wait for a clean exit after stdin closes before escalating to signals.
@@ -132,14 +134,10 @@ module Tamoz
         new(config, **)
       end
 
-      # Jitter applied to the exponential restart backoff (±20%).
-      BACKOFF_JITTER = 0.2
-
-      # Defaults for the §8 circuit / restart machinery.
-      DEFAULT_CIRCUIT_THRESHOLD = 3
-      DEFAULT_RETRY_BUDGET = 1
-      DEFAULT_BASE_BACKOFF = 1.0
-      DEFAULT_MAX_BACKOFF = 30.0
+      DEFAULT_CIRCUIT_THRESHOLD = CircuitSupervision::DEFAULT_CIRCUIT_THRESHOLD
+      DEFAULT_RETRY_BUDGET = CircuitSupervision::DEFAULT_RETRY_BUDGET
+      DEFAULT_BASE_BACKOFF = CircuitSupervision::DEFAULT_BASE_BACKOFF
+      DEFAULT_MAX_BACKOFF = CircuitSupervision::DEFAULT_MAX_BACKOFF
 
       def initialize(
         config,
@@ -154,19 +152,7 @@ module Tamoz
         unless config.is_a?(ServerConfig)
           raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
         end
-        unless circuit_threshold.is_a?(Integer) && circuit_threshold >= 1
-          raise ValidationError, "circuit_threshold must be an integer >= 1"
-        end
-        unless retry_budget.is_a?(Integer) && retry_budget >= 0
-          raise ValidationError, "retry_budget must be an integer >= 0"
-        end
-        unless base_backoff.is_a?(Numeric) && base_backoff.finite? && base_backoff.positive?
-          raise ValidationError, "base_backoff must be positive and finite"
-        end
-        unless max_backoff.is_a?(Numeric) && max_backoff.finite? && max_backoff.positive? &&
-               max_backoff >= base_backoff
-          raise ValidationError, "max_backoff must be positive, finite, and >= base_backoff"
-        end
+        CircuitSupervision.validate_parameters!(circuit_threshold:, retry_budget:, base_backoff:, max_backoff:)
 
         store = circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
         validate_circuit_store!(store)
@@ -197,98 +183,8 @@ module Tamoz
         )
       end
 
-      # Health state from the plan's lifecycle: disabled → starting → ready,
-      # with degraded/open on transport failures and retired after teardown.
-      # Failure changes availability, never the pinned catalog.
-      def state
-        return :retired if @retired
-        return :disabled unless @started
-        return :open if @circuit_store.open?
-        return :degraded if @circuit_store.failures.positive?
-
-        connected? ? :ready : :starting
-      end
-
-      def started?
-        !!@started
-      end
-
       def pid
         @pid
-      end
-
-      # --- §8 circuit --------------------------------------------------------
-
-      # True once `circuit_threshold` consecutive transport failures have been
-      # recorded. While open, every call fails typed-unavailable until `reset`.
-      def open?
-        @circuit_store.open?
-      end
-
-      def consecutive_failures
-        @circuit_store.failures
-      end
-
-      def last_failure_kind
-        @circuit_store.last_failure_kind
-      end
-
-      # Counts one transport failure toward the circuit. A successful round-trip
-      # (`record_success`) resets the streak, so only *consecutive* failures open
-      # the circuit. Argument/remote/elicitation outcomes never call this — the
-      # transport demonstrably worked for them. `context:` is optional typed
-      # metadata (e.g. tool name / failure class) recorded for the reset
-      # evidence. The threshold is evaluated inside the store's atomic write.
-      def record_failure(kind: :transport, context: nil)
-        @circuit_store.record_failure(kind: kind, context: context)
-      end
-
-      def record_success
-        @circuit_store.record_success
-      end
-
-      # Caller-initiated circuit reset (§8): availability returns to normal.
-      # Never called automatically — the design requires policy-defined recovery.
-      # `evidence:` must be a Hash describing who authorized the reset and why
-      # (operator identity + command digest for a :server scope); the supervisor
-      # augments it with `scope`/`server_id` and a typed `conditions_digest` of
-      # the failure state being cleared, and records it for audit.
-      def reset(evidence: nil)
-        unless evidence.nil? || evidence.is_a?(Hash)
-          raise ValidationError, "reset evidence must be a Hash"
-        end
-
-        record = {
-          "scope" => "server",
-          "server_id" => @config.server_id,
-          "conditions_digest" => @circuit_store.conditions_digest(@config.server_id)
-        }.merge(evidence || {}).freeze
-        @circuit_store.reset(evidence: record)
-      end
-
-      def reset_evidence
-        @circuit_store.reset_evidence
-      end
-
-      # Exponential restart backoff with jitter, bounded by [0, max_backoff].
-      # Deterministic for a seeded `random:` (tests); jittered in production.
-      def backoff_delay(failures = @circuit_store.failures)
-        return 0.0 unless failures.is_a?(Integer) && failures.positive?
-
-        base = @base_backoff * (2 ** (failures - 1))
-        base = @max_backoff if base > @max_backoff
-        jitter = @random.rand(-BACKOFF_JITTER..BACKOFF_JITTER)
-        (base * (1.0 + jitter)).clamp(0.0, @max_backoff)
-      end
-
-      # Kills any surviving child and spawns a fresh one after the backoff
-      # delay. Only called for recovery (read-only retry path); never retries a
-      # non-idempotent call.
-      def restart
-        delay = backoff_delay
-        close
-        sleep(delay) if delay.positive?
-        start
       end
 
       # --- request-sent boundary ---------------------------------------------
