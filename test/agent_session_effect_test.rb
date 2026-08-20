@@ -145,6 +145,74 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
+  # EU-003: an unsafe MCP call whose external outcome is unknown (mapped to
+  # Tamoz::EffectUnknownError) must be completed as a terminal :unknown journal
+  # receipt at the dispatcher boundary — not left running until a later recovery
+  # pass — and must never be re-sent.
+  def test_an_unknown_effect_error_is_completed_as_terminal_journal_unknown
+    Dir.mktmpdir("tamoz-agent-effect-unknown") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        store = app.checkpointer
+        calls = 0
+        request_body = {"tool" => "mcp:server/write"}
+        perform = lambda do
+          calls += 1
+          raise Tamoz::EffectUnknownError, "mcp non-idempotent call failed after send"
+        end
+
+        drive = lambda do |owner, request_id|
+          with_writer(store, owner) do |writer|
+            context = Tamoz::Context.new(
+              run_id: owner, execution_id: request.execution_id,
+              request_id:, task_id: "task.mcp-unsafe", effects: writer.effects
+            )
+            Tamoz::Agent::EffectDispatcher.run(
+              context:, operation: "tool.mcp:server/write", safety: :unsafe,
+              call_index: 0, request: request_body, actor: "test.caller"
+            ) { perform.call }
+          end
+        end
+
+        first = drive.call("owner.unknown", "request.unknown")
+        assert_equal :unknown, first.status
+        assert_equal 1, calls, "the ambiguous request is sent exactly once"
+        assert_equal "Tamoz::EffectUnknownError", first.error.fetch("class")
+        refute first.reused
+
+        record = with_writer(store, "owner.unknown.reread") do |writer|
+          writer.effects.prepare(
+            execution_id: request.execution_id, task_id: "task.mcp-unsafe",
+            call_index: 0, operation: "tool.mcp:server/write", safety: :unsafe,
+            request: request_body
+          ).record
+        end
+        assert_equal :unknown, record.status
+        assert_equal 1, record.current_attempt
+        assert_equal :unknown, record.attempts.last.status
+
+        second = drive.call("owner.unknown.redrive", "request.unknown2")
+        assert_equal :unknown, second.status
+        assert_equal 1, calls, "a re-drive of a terminal unknown effect never re-sends"
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
+  # The production McpSourceBuilder mapping is the one that feeds the dispatcher:
+  # an MCP ambiguous outcome becomes Tamoz::EffectUnknownError (not a repairable
+  # ToolError), so the terminal-unknown completion above is reached in production.
+  def test_mcp_source_builder_maps_ambiguous_outcome_to_effect_unknown
+    mapped = Tamoz::Agent::McpSourceBuilder.allocate.send(
+      :map_mcp_error, Tamoz::Mcp::AmbiguousOutcomeError.new("sent before transport failure")
+    )
+    assert_instance_of Tamoz::EffectUnknownError, mapped
+    refute_kind_of Tamoz::Agent::ToolError, mapped
+  end
+
   # --- filesystem reconciler ------------------------------------------------
 
   def test_filesystem_reconciler_maps_observations_to_exactly_one_disposition
