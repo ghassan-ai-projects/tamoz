@@ -1,6 +1,21 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_dependency_review",
+  "reviewed_gems": [
+    "tamoz-agent",
+    "tamoz-comms",
+    "tamoz-core",
+    "tamoz-evals",
+    "tamoz-graph",
+    "tamoz-mcp",
+    "tamoz-observability",
+    "tamoz-otel",
+    "tamoz-scheduler",
+    "tamoz-sqlite",
+    "tamoz-stream",
+    "tamoz-telegram",
+    "tamoz-tools"
+  ],
   "permissive_licenses": [
     "MIT",
     "Apache-2.0",
