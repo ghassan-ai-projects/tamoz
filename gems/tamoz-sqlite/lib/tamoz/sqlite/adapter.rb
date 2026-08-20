@@ -11,9 +11,7 @@ module Tamoz
       def durable? = true
 
       def bind_graph(checkpoint_codec:)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         CheckpointStore.new(adapter: self, checkpoint_codec:)
       end
 
@@ -21,9 +19,7 @@ module Tamoz
       # must be this adapter's bound graph checkpointer (the shared enqueue
       # primitive is a CheckpointStore method).
       def bind_schedule_store(checkpoint_store)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         ScheduleStore.new(adapter: self, checkpoints: checkpoint_store)
       end
 
@@ -31,48 +27,36 @@ module Tamoz
       # tamoz_comms_decisions so the gateway can consume a prompt and insert
       # its decision in one transaction.
       def bind_comms_decision_store
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         CommsDecisionStore.new(adapter: self)
       end
 
       # Slice C: the channel store (design §13) — admission shares the request
       # inbox enqueue seam, so poll → admit → enqueue lands in the same file.
       def bind_comms_store(checkpoints = nil)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         CommsStore.new(adapter: self, checkpoints:)
       end
 
       def bind_verification_store(clock: -> { Time.now })
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         VerificationStore.new(adapter: self, clock:)
       end
 
       # P3: the durable verified artifact store (tenant-scoped, rehash on
       # admission + resolve).
       def bind_artifact_store(tenant:)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         ArtifactStore.new(adapter: self, tenant:)
       end
 
       def bind_durable_subscriber_store(tenant:)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         DurableSubscriberStore.new(adapter: self, tenant:)
       end
 
       def bind_approval_receipt_store(tenant:)
-        ensure_process!
-        raise ClosedError, "SQLite adapter is closed" if closed?
-
+        guard_open!
         ApprovalReceiptStore.new(adapter: self, tenant:)
       end
 
@@ -224,6 +208,13 @@ module Tamoz
 
         raise ClosedError,
               "SQLite adapter cannot be reused after fork; construct one in the child"
+      end
+
+      # The shared bind_* precondition: the process check and the closed
+      # check every store binding runs before constructing its store.
+      def guard_open!
+        ensure_process!
+        raise ClosedError, "SQLite adapter is closed" if closed?
       end
     end
   end
