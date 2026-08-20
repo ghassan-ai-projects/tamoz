@@ -65,6 +65,31 @@ class MemoryEngineTest < Minitest::Test
     }
   end
 
+  # A durable effect context on the memory adapter so the consolidation model
+  # call is journalled (P-01). Each invocation uses a fresh execution/thread.
+  def with_consolidation_context
+    @consolidation_seq = (@consolidation_seq || 0) + 1
+    thread = "thread.consolidation.#{@consolidation_seq}"
+    graph = Tamoz.graph(name: "consolidation-base", version: "1") do
+      state :ready, default: false
+      node(:finish, implementation_name: "consolidation.finish", version: "1") { |_state, _context| {ready: true} }
+      edge Tamoz::START, :finish
+      edge :finish, Tamoz::END
+    end
+    app = graph.compile(checkpointer: @adapter)
+    request = app.durable_runner.deliver({}, thread:, request_id: "request.#{@consolidation_seq}")
+    store = app.checkpointer
+    result = nil
+    store.open_writer(thread_id: thread, namespace: [], owner_id: "consolidation.owner", ttl: store.writer_ttl) do |writer|
+      context = Tamoz::Context.new(
+        run_id: "run.#{@consolidation_seq}", execution_id: request.execution_id,
+        request_id: "request.#{@consolidation_seq}", task_id: "task.consolidation", effects: writer.effects
+      )
+      result = yield context
+    end
+    result
+  end
+
   def episode(statement: "Deploy canary first, then monitor", user: "alice", session_id: "s1", valid_until: nil)
     {
       session_id:,
@@ -545,9 +570,11 @@ class MemoryEngineTest < Minitest::Test
       end
     end.new
     error = assert_raises(Memory::MemoryConsolidationError) do
-      @engine.consolidation.consolidate(
-        candidates: [candidate], model: drop_model, owner: "alice", scopes:
-      )
+      with_consolidation_context do |context|
+        @engine.consolidation.consolidate(
+          candidates: [candidate], model: drop_model, owner: "alice", scopes:, context:
+        )
+      end
     end
     assert_includes error.message, "protected entry"
 
@@ -576,9 +603,11 @@ class MemoryEngineTest < Minitest::Test
       confidence: 0.9, confidence_method: "consolidation"
     )
     assert_raises(Memory::MemoryConsolidationError) do
-      @engine.consolidation.consolidate(
-        candidates: [candidate], model: failing, owner: "alice", scopes:
-      )
+      with_consolidation_context do |context|
+        @engine.consolidation.consolidate(
+          candidates: [candidate], model: failing, owner: "alice", scopes:, context:
+        )
+      end
     end
   end
 
@@ -607,9 +636,11 @@ class MemoryEngineTest < Minitest::Test
       end
     end.new
 
-    result = @engine.consolidation.consolidate(
-      candidates: [candidate], model:, owner: "alice", scopes:
-    )
+    result = with_consolidation_context do |context|
+      @engine.consolidation.consolidate(
+        candidates: [candidate], model:, owner: "alice", scopes:, context:
+      )
+    end
     assert result
 
     # The Knowledge record is active and recallable — the success path produces
@@ -619,9 +650,68 @@ class MemoryEngineTest < Minitest::Test
 
     # Rerun-idempotency: the candidate was consumed exactly once.
     error = assert_raises(Memory::MemoryConsolidationError) do
-      @engine.consolidation.consolidate(candidates: [candidate], model:, owner: "alice", scopes:)
+      with_consolidation_context do |context|
+        @engine.consolidation.consolidate(candidates: [candidate], model:, owner: "alice", scopes:, context:)
+      end
     end
     assert_includes error.message, "already consumed"
+  end
+
+  # P-01: the non-deterministic consolidation provider call is routed through
+  # EffectDispatcher under a deterministic logical key, so it is issued exactly
+  # once and a crash-time re-drive replays the recorded receipt rather than
+  # generating a fresh, different result (the replay itself is a dispatcher
+  # property, proven at that boundary). A durable effect context is required.
+  def test_consolidation_model_call_is_issued_once_through_the_durable_boundary
+    candidate = Memory::MemoryRecord.new(
+      memory_id: "mem.consolidation-replay",
+      layer: :knowledge, klass: :procedure, state: :candidate,
+      epistemic_kind: :inferred, owner: "alice", scopes: scopes,
+      sensitivity: :internal, statement: "Replay-safe procedure",
+      source_refs: [
+        {"identity" => "episode:e1", "digest" => "d1", "observed_at" => 1},
+        {"identity" => "episode:e2", "digest" => "d2", "observed_at" => 1}
+      ],
+      confidence: 0.9, confidence_method: "consolidation"
+    )
+    generations = 0
+    model = Object.new
+    model.define_singleton_method(:generate) do |stage:, system:, prompt:|
+      generations += 1
+      {"statement" => "Replay-safe procedure synthesized", "epistemic_kind" => "reported",
+       "confidence" => 0.8, "contradictions" => [], "preserved_source_refs" => ["d1", "d2"]}
+    end
+
+    result = with_consolidation_context do |context|
+      @engine.consolidation.consolidate(
+        candidates: [candidate], model:, owner: "alice", scopes:, context:
+      )
+    end
+
+    refute result.rejected?
+    assert_equal 1, generations, "the durable boundary issues exactly one provider call"
+  end
+
+  def test_consolidation_requires_a_durable_effect_context
+    candidate = Memory::MemoryRecord.new(
+      memory_id: "mem.needs-context", layer: :knowledge, klass: :procedure,
+      state: :candidate, epistemic_kind: :inferred, owner: "alice", scopes: scopes,
+      sensitivity: :internal, statement: "Needs a context",
+      source_refs: [
+        {"identity" => "episode:e1", "digest" => "d1", "observed_at" => 1},
+        {"identity" => "episode:e2", "digest" => "d2", "observed_at" => 1}
+      ],
+      confidence: 0.9, confidence_method: "consolidation"
+    )
+    model = Object.new
+    model.define_singleton_method(:generate) { |**| flunk "the model must not be called without a durable context" }
+
+    error = assert_raises(Memory::MemoryConsolidationError) do
+      @engine.consolidation.consolidate(
+        candidates: [candidate], model:, owner: "alice", scopes:, context: Object.new
+      )
+    end
+    assert_includes error.message, "durable effect context"
   end
 
   # P11 critic defect 2: Lifecycle#delete never tombstoned the STORE head

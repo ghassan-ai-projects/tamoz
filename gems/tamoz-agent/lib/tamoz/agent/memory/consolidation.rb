@@ -23,13 +23,17 @@ module Tamoz
           @limits = engine.limits
         end
 
-        def consolidate(candidates:, model:, owner:, scopes:, trace: nil)
+        def consolidate(candidates:, model:, owner:, scopes:, context:, trace: nil)
           unless candidates.length.between?(1, @limits.fetch(:max_consolidation_candidates))
             raise MemoryConsolidationError,
                   "consolidation requires 1..#{@limits.fetch(:max_consolidation_candidates)} candidates"
           end
           unless model.respond_to?(:generate)
             raise MemoryConsolidationError, "consolidation requires a provider-loaded model"
+          end
+          unless context.respond_to?(:effects)
+            raise MemoryConsolidationError,
+                  "consolidation requires a durable effect context (the model call is journalled)"
           end
 
           evaluated = evaluate_gates(candidates)
@@ -49,7 +53,7 @@ module Tamoz
 
           candidate = unconsumed.first.candidate
           preimage, preimage_version = store_preimage(candidate)
-          proposal = bounded_model_call(model, candidate, accepted)
+          proposal = bounded_model_call(model, candidate, accepted, context:, owner:, scopes:)
           validate_proposal!(proposal, candidate, accepted, preimage)
           mark_consumed(candidate, preimage_version:)
 
@@ -168,10 +172,14 @@ module Tamoz
           Never invent evidence. Never label the output observed.
         TEXT
 
-        # ONE bounded model call: the preimage material is bounded to
-        # max_consolidation_tokens; the call happens only on a provider-loaded
-        # boundary (the caller supplies the model).
-        def bounded_model_call(model, candidate, accepted)
+        # ONE bounded, durable model call. The preimage material is bounded to
+        # max_consolidation_tokens; the non-deterministic provider call is routed
+        # through EffectDispatcher under a deterministic logical key (owner +
+        # scopes + candidate preimage + request digest), so a crash between the
+        # provider response and the consumed transition replays the recorded
+        # receipt on recovery instead of issuing a fresh, different result
+        # (P-01). Consolidation invents no second journal.
+        def bounded_model_call(model, candidate, accepted, context:, owner:, scopes:)
           material = accepted.map { |entry| entry.candidate }.map do |entry|
             {"memory_id" => entry.memory_id, "statement" => entry.statement[0, 512], "source_refs" => entry.source_refs.length}
           end
@@ -179,9 +187,33 @@ module Tamoz
             "consolidation_input" => material,
             "budget_tokens" => @limits.fetch(:max_consolidation_tokens)
           )
-          response = model.generate(stage: :consolidate, system: CONSOLIDATION_SYSTEM, prompt:)
-          parsed = parse_proposal(response)
-          parsed
+          request = {
+            "candidate" => candidate.digest,
+            "owner" => String(owner),
+            "prompt_digest" => Digest::SHA256.hexdigest(prompt)
+          }
+          outcome = EffectDispatcher.run(
+            context:,
+            operation: "memory.consolidate",
+            safety: :unsafe,
+            call_index: 0,
+            request:,
+            actor: "tamoz.agent.memory.consolidation",
+            logical_key: consolidation_logical_key(owner, scopes, candidate, request.fetch("prompt_digest"))
+          ) do
+            {"output" => model.generate(stage: :consolidate, system: CONSOLIDATION_SYSTEM, prompt:)}
+          end
+          unless outcome.status == :succeeded
+            raise MemoryConsolidationError, "consolidation model effect did not complete (#{outcome.status})"
+          end
+          parse_proposal(outcome.value.fetch("output"))
+        end
+
+        # A stable identity independent of graph execution/attempt: two drives of
+        # the same consolidation dedup to one recorded provider receipt.
+        def consolidation_logical_key(owner, scopes, candidate, prompt_digest)
+          scopes_digest = Digest::SHA256.hexdigest(Tamoz::Core.jcs(scopes))
+          "memory.consolidate:#{owner}:#{scopes_digest}:#{candidate.digest}:#{prompt_digest}"
         end
 
         def parse_proposal(response)
