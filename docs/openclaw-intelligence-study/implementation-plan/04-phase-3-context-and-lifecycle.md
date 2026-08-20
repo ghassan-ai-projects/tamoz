@@ -1,6 +1,6 @@
 # Phase 3 — unified context and lifecycle projection
 
-Status: not started. Requires: Phase 2.
+Status: partial as of 2026-08-20. Requires: Phase 2; exit bar not met.
 
 Study reference: Stage 3 (`04`), P3 (`05`), "Context, memory, and compaction"
 (`04`).
@@ -10,6 +10,11 @@ Study reference: Stage 3 (`04`), P3 (`05`), "Context, memory, and compaction"
 Long tasks stay coherent (durable compaction), Telegram and durable CLI share
 session/context identity, and the user can see the work happen: tool
 starts/results, approvals, waits, checkpoints, terminal state.
+
+The current slice implements the bounded canonical turn payload, transcript
+readback, allowlisted lifecycle projection, separated status fields, and
+bounded status metadata. Durable compaction, restart-across-compaction, full
+CLI/Telegram trace parity, and scheduler recovery projection remain open.
 
 ## Entry and sequencing gates
 

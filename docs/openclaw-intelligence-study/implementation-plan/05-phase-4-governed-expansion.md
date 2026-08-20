@@ -1,6 +1,6 @@
 # Phase 4 — governed expansion
 
-Status: not started. Requires: Phases 0–3. This phase is deliberately last
+Status: partial as of 2026-08-20. Requires: Phases 0–3; exit bar not met. This phase is deliberately last
 among engineering phases — breadth only after measured composition works.
 
 Study reference: Stage 4 (`04`), P4 (`05`).
@@ -10,6 +10,11 @@ Study reference: Stage 4 (`04`), P4 (`05`).
 New capability families and delegation enter only as operator-owned, fully
 described capability sources. Nothing in this phase weakens a Phase 0
 invariant.
+
+The current slice adds read-only database admission policy through the existing
+MCP source builder and durable child-task identity/narrowing checks. It does
+not yet execute child requests, adopt child completion, implement governed web
+or self-modification flows, or provide real-provider family evidence.
 
 ## Work items (each independently shippable, in this order)
 

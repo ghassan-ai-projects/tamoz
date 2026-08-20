@@ -488,6 +488,9 @@ module Tamoz
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed",
                duration_ms:,
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :failed
@@ -503,6 +506,9 @@ module Tamoz
                thread: thread_id, request_id: occurrence_id,
                duration_ms:,
                reason: settled_failure_reason(view),
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :blocked
@@ -519,6 +525,9 @@ module Tamoz
                request_id: occurrence_id,
                duration_ms:,
                reason: "effect_unknown",
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :paused
@@ -526,6 +535,9 @@ module Tamoz
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused",
                  duration_ms:,
+                 status_projection: SessionStatusProjection.document(
+                   view, request_id: occurrence_id, delivery_state: 'pending'
+                 ),
                  observability: {execution_id: view.execution_id})
           else
             notify_sink(thread_id, "request.approval_request", "Approval requested.",
@@ -547,6 +559,9 @@ module Tamoz
              duration_ms:,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
+             status_projection: SessionStatusProjection.document(
+               view, request_id: occurrence_id, delivery_state: 'pending'
+             ),
              observability: {execution_id: view.execution_id})
       end
 

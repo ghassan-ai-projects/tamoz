@@ -425,6 +425,7 @@ module Tamoz
           "capability_catalog" => runtime.capability_catalog,
           "capability_peek" => runtime.capability_peek,
           "memory" => runtime.memory_summary,
+          "session_status" => session_status(runtime),
           "safety_counters" => safety_counters(effects),
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
@@ -463,6 +464,38 @@ module Tamoz
             end
           }
         end
+      end
+
+      def session_status(runtime)
+        runtime.open_occurrences(limit: 500).filter_map do |record|
+          view = begin
+            runtime.session_for(record.fetch(:thread_id)).view(thread: record.fetch(:thread_id))
+          rescue StandardError
+            unavailable_session_status(record)
+          end
+          next view if view.is_a?(Hash)
+
+          SessionStatusProjection.document(
+            view,
+            request_id: record.fetch(:occurrence_id),
+            delivery_state: 'pending'
+          )
+        end
+      end
+
+      def unavailable_session_status(record)
+        {
+          'schema' => SessionStatusProjection::SCHEMA,
+          'thread_id' => record.fetch(:thread_id),
+          'request_id' => record.fetch(:occurrence_id),
+          'task_state' => 'unavailable',
+          'phase' => 'unknown',
+          'effect_state' => 'unknown',
+          'capability_state' => 'unknown',
+          'delivery_state' => 'unknown',
+          'next_action' => 'inspect',
+          'error_category' => 'session_view_unavailable'
+        }
       end
 
       # The plain interrupt shape a decision digest is computed over — the same
@@ -513,6 +546,7 @@ module Tamoz
         @out.puts "runtime:   #{document["runtime_dir"]}"
         @out.puts "workspace: #{document["workspace"]}"
         @out.puts "pending:   #{document["pending_work"].length}"
+        @out.puts "tasks:     #{document.fetch("session_status").length}"
         @out.puts "sources:   #{document["capability_sources"].join(", ")}" unless document["capability_sources"].empty?
         counters = document["safety_counters"]
         @out.puts "safety:    #{counters.map { |name, count| "#{name}=#{count}" }.join(" ")}"

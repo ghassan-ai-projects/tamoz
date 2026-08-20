@@ -97,6 +97,21 @@ class AgentCliMcpTest < Minitest::Test
       source&.close
     end
   end
+
+  def test_database_mcp_binding_rejects_write_queries_before_schema_validation
+    with_runtime do |rt|
+      configure_mcp(rt, database: true)
+      source = Tamoz::Agent::McpSourceBuilder.new(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
+      ).build
+
+      assert_raises(Tamoz::Agent::ToolPolicyError) do
+        source.validate('mcp:probe/echo_constant', { 'query' => 'DROP TABLE records' })
+      end
+    ensure
+      source&.close
+    end
+  end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Minitest/MultipleAssertions
 
   # rubocop:disable Metrics/AbcSize
@@ -154,7 +169,7 @@ class AgentCliMcpTest < Minitest::Test
 
   private
 
-  def configure_mcp(runtime)
+  def configure_mcp(runtime, database: false)
     path = File.join(runtime.dir, 'config.yaml')
     document = Psych.safe_load_file(path)
     document['sources'] = {
@@ -165,7 +180,8 @@ class AgentCliMcpTest < Minitest::Test
           'command' => RbConfig.ruby,
           'arguments' => [SERVER_SCRIPT],
           'env_allowlist' => ENV_ALLOWLIST,
-          'read_only_tools' => ['echo_constant']
+          'read_only_tools' => ['echo_constant'],
+          'database' => database
         }]
       }
     }

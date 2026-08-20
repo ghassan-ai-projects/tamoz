@@ -4,6 +4,8 @@ require 'digest'
 require 'json'
 require 'time'
 
+require 'tamoz/core'
+
 require_relative 'wire'
 require_relative 'comms_store_rows'
 require_relative 'comms_outbox'
@@ -111,7 +113,8 @@ module Tamoz
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?)
           SQL
           payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
-            REQUEST_OPERATION, turn_payload(envelope_wire.fetch('text'), history)
+            REQUEST_OPERATION,
+            turn_payload(envelope_wire.fetch('text'), history, thread:, request_id:)
           )
           payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
           input_digest = Wire.digest(
@@ -153,10 +156,13 @@ module Tamoz
       # graph's payload-to-channel mapping tolerates (payload keys map onto
       # state channels one-to-one, and `task` already carries Hashes).
       # :reek:UtilityFunction -- pure payload shaping for the admission above.
-      def turn_payload(text, history)
-        return { 'task' => text } if history.empty?
-
-        { 'task' => { 'text' => text, 'conversation' => history } }
+      def turn_payload(text, history, thread:, request_id:)
+        Tamoz::Core::TurnContext.task(
+          thread_id: thread,
+          request_id:,
+          text:,
+          fragments: history
+        )
       end
 
       # ===== poll state =====
@@ -268,23 +274,35 @@ module Tamoz
       end
 
       def conversation_status(surface_id:, conversation_id:)
-        read('comms.conversation.status') do |txn|
+        route_status = read('comms.conversation.status') do |txn|
           route = txn.first('comms.conversation.status.route', <<~SQL, [surface_id, conversation_id])
             SELECT thread_id FROM tamoz_comms_conversations
             WHERE surface_id = ? AND conversation_id = ?
           SQL
           next nil unless route
 
-          open_requests = txn.scalar('comms.conversation.status.requests', <<~SQL, [surface_id, conversation_id]).to_i
-            SELECT COUNT(*) FROM tamoz_comms_requests
-            WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
-          SQL
+          open_requests = open_requests_for(txn, surface_id, conversation_id)
           {
             'thread_id' => route.fetch(0),
             'state' => open_requests.positive? ? 'accepted' : 'idle',
-            'open_requests' => open_requests
+            'open_requests' => open_requests,
+            'request_id' => active_request_id(txn, surface_id, conversation_id)
           }
         end
+        return nil unless route_status
+
+        route_status.merge(
+          'task_state' => task_state_for(
+            route_status.fetch('thread_id'), route_status.fetch('request_id')
+          ),
+          'effect_state' => effect_state_for(
+            route_status.fetch('thread_id'), route_status.fetch('request_id')
+          ),
+          'capability_state' => capability_state_for(
+            route_status.fetch('thread_id'), route_status.fetch('request_id')
+          ),
+          'delivery_state' => delivery_state_for(surface_id, conversation_id)
+        )
       end
 
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
@@ -305,6 +323,103 @@ module Tamoz
         entries.sort_by { |entry| entry.fetch(:at) }.last(limit).map do |entry|
           { 'role' => entry.fetch(:role), 'text' => entry.fetch(:text) }
         end
+      end
+
+      def open_requests_for(txn, surface_id, conversation_id)
+        txn.scalar('comms.conversation.status.requests', <<~SQL, [surface_id, conversation_id]).to_i
+          SELECT COUNT(*) FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+        SQL
+      end
+
+      def active_request_id(txn, surface_id, conversation_id)
+        txn.scalar('comms.conversation.status.active_request', <<~SQL, [surface_id, conversation_id])
+          SELECT request_id FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+          ORDER BY created_at_ms DESC, request_id DESC LIMIT 1
+        SQL
+      end
+
+      def task_state_for(thread_id, request_id)
+        return 'idle' unless request_id
+        return 'not_started' unless @checkpoints
+
+        request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
+        return 'not_started' unless request
+
+        request.status.to_s
+      end
+
+      def effect_state_for(thread_id, request_id)
+        return 'not_started' unless @checkpoints
+        return 'not_started' unless request_id
+
+        request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
+        return 'not_started' unless request && %i[running completed failed].include?(request.status)
+
+        summarize_effect_statuses(effect_statuses(thread_id))
+      end
+
+      def effect_statuses(thread_id)
+        state = @checkpoints.latest(thread_id:, namespace: [])&.state
+        statuses = Array(state&.fetch(:effect_receipts, nil)).filter_map do |row|
+          row.fetch('status', nil).to_s
+        end
+        return statuses unless statuses.empty?
+
+        @checkpoints.effect_census.filter_map do |row|
+          row[:status].to_s if row[:thread_id] == thread_id
+        end
+      end
+
+      def summarize_effect_statuses(statuses)
+        return 'not_started' if statuses.empty?
+        return 'unknown' if statuses.include?('unknown')
+        return 'pending' if statuses.intersect?(%w[prepared running reconcile])
+        return 'failed' if statuses.include?('failed')
+
+        'succeeded'
+      end
+
+      def capability_state_for(thread_id, request_id)
+        return 'not_started' unless @checkpoints
+        return 'not_started' unless request_id
+
+        checkpoint = @checkpoints.latest(thread_id:, namespace: [])
+        session = checkpoint&.state&.fetch(:session, nil)
+        events = lifecycle_events_for(checkpoint, request_id)
+        return 'invoked' if capability_invoked?(events)
+        return 'bound' if capability_bound?(session)
+
+        'not_inspected'
+      end
+
+      def lifecycle_events_for(checkpoint, request_id)
+        Array(checkpoint&.state&.fetch(:lifecycle_events, nil)).select do |event|
+          event.fetch('request_id', nil) == request_id
+        end
+      end
+
+      def capability_invoked?(events)
+        events.any? { |event| event.key?('capability_id') }
+      end
+
+      def capability_bound?(session)
+        session&.key?('tool_catalog_digest') == true
+      end
+
+      def delivery_state_for(surface_id, conversation_id)
+        statuses = @outbox.outbox_rows(
+          surface_id:, statuses: %w[pending claimed succeeded failed unknown], limit: 500
+        ).filter_map do |row|
+          row.fetch('status') if row.fetch('conversation_id') == conversation_id
+        end
+        return 'none' if statuses.empty?
+        return 'unknown' if statuses.include?('unknown')
+        return 'pending' if statuses.intersect?(%w[pending claimed])
+        return 'failed' if statuses.include?('failed')
+
+        'succeeded'
       end
 
       def outbox_rows(surface_id:, statuses:, limit: 500)
@@ -584,15 +699,15 @@ module Tamoz
       # The task text of one admitted request, read back from the graph inbox
       # payload. A channel turn with history nests the text under the task
       # Hash; any other non-text turn (a cancel or redirect payload) has no
-      # transcript line, and a row that cannot be read back must not take the
-      # admission down with it.
+      # transcript line. A corrupt durable payload is surfaced instead of being
+      # silently omitted from the next model context.
       def request_task(request_id, thread_id)
+        return nil unless @checkpoints
+
         request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
         task = request&.payload&.fetch('task', nil)
         task = task.fetch('text', nil) if task.is_a?(Hash)
         task.is_a?(String) ? task : nil
-      rescue StandardError
-        nil
       end
 
       def recent_terminal_deliveries(surface_id:, conversation_id:, limit:)

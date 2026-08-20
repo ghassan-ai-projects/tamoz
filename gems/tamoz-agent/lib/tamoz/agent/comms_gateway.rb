@@ -347,7 +347,11 @@ module Tamoz
         status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
         return 'No work is admitted for this conversation.' unless status
 
-        "Work status: #{status.fetch('state')}; open requests: #{status.fetch('open_requests')}."
+        "Work status: task=#{status.fetch('task_state')}; " \
+          "effect=#{status.fetch('effect_state')}; " \
+          "capability=#{status.fetch('capability_state')}; " \
+          "delivery=#{status.fetch('delivery_state')}; " \
+          "open requests=#{status.fetch('open_requests')}."
       end
 
       def cancel_request(envelope)

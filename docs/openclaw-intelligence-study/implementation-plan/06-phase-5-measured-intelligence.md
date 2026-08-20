@@ -1,6 +1,6 @@
 # Phase 5 — measured intelligence
 
-Status: not started. Phase 5A requires Phase 2; Phase 5B requires Phases 0–4.
+Status: partial as of 2026-08-20. Phase 5A requires Phase 2; Phase 5B requires Phases 0–4; exit bar not met.
 
 Study reference: Stage 5 (`04`), "Measurement gates" (`05`), scenario matrix
 evidence/scoring rules (`06`).
@@ -9,6 +9,11 @@ evidence/scoring rules (`06`).
 
 Replace perception with measurement. No "more intelligent" claim exists until
 a matched benchmark reports it.
+
+The current slice adds a canonical mission catalog, readiness validation,
+artifact digest verification, fixture/real-provider separation, and a CLI
+publication refusal path. It does not run missions or providers, and it makes
+no intelligence claim.
 
 ## Work items
 

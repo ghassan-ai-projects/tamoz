@@ -27,6 +27,7 @@ module Tamoz
       :checkpoint_id,
       :sequence,
       :execution_id,
+      :request_id,
       :status,
       :phase,
       :accepted_plan,
@@ -595,6 +596,7 @@ module Tamoz
           checkpoint_id: snapshot.checkpoint_id,
           sequence: snapshot.sequence,
           execution_id: snapshot.execution_id,
+          request_id: request_id_for(app, thread:, execution_id: snapshot.execution_id),
           status:,
           phase: state.fetch(:phase),
           accepted_plan: state[:accepted_plan],
@@ -642,6 +644,15 @@ module Tamoz
       end
 
       private
+
+      def request_id_for(app, thread:, execution_id:)
+        return nil unless execution_id
+
+        app.durable_runner.history(thread:).reverse_each do |request|
+          return request.request_id if request.execution_id == execution_id
+        end
+        nil
+      end
 
       def build_run_context(context:, emitter:)
         cancellation = context&.cancellation || Tamoz::CancellationToken.new

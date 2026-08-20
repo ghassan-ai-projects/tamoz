@@ -46,49 +46,65 @@ module Tamoz
       def build
         require "tamoz/mcp"
 
-        catalogs = {}
-        descriptors = []
-        supervisors = {}
-        source_digests = {}
+        state = {
+          catalogs: {}, descriptors: [], supervisors: {}, source_digests: {}, database_policies: {}
+        }
         configs = server_configs
         return nil if configs.empty?
 
         begin
           configs.each do |config, settings|
-            source_digests[config.server_id] = Tamoz::Core.digest(
-              "tamoz.agent.mcp.source.v1\n", config.describe
-            )
-            snapshot = Tamoz::Mcp::Catalog.compile(config)
-            catalogs[snapshot.server_id] = snapshot
-            supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
-            read_only = Array(settings["read_only_tools"])
-            snapshot.entries.each do |entry|
-              descriptors << Tamoz::Mcp::Invocation.descriptor_for(
-                entry,
-                snapshot:,
-                # Fail closed: unknown MCP effects are not admitted into the
-                # capability host. Only an operator-declared read-only tool is
-                # safe for this slice.
-                effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
-              )
-            end
+            build_server(config, settings, state)
           end
 
           McpCapabilitySource.new(
-            catalogs:,
-            descriptors:,
-            source_digests:,
+            catalogs: state.fetch(:catalogs),
+            descriptors: state.fetch(:descriptors),
+            source_digests: state.fetch(:source_digests),
             validator: lambda do |descriptor, arguments|
               with_mcp_error_mapping do
+                state.fetch(:database_policies).fetch(descriptor.source_id, nil)&.validate(arguments)
                 Tamoz::Mcp::Invocation.validate_arguments(descriptor, arguments)
               end
             end,
-            executor: build_executor(catalogs, supervisors),
-            closer: -> { supervisors.each_value(&:close) }
+            executor: build_executor(
+              state.fetch(:catalogs), state.fetch(:supervisors), state.fetch(:database_policies)
+            ),
+            closer: -> { state.fetch(:supervisors).each_value(&:close) }
           )
         rescue StandardError
-          supervisors.each_value(&:close)
+          state.fetch(:supervisors).each_value(&:close)
           raise
+        end
+      end
+
+      def build_server(config, settings, state)
+        catalogs = state.fetch(:catalogs)
+        descriptors = state.fetch(:descriptors)
+        supervisors = state.fetch(:supervisors)
+        source_digests = state.fetch(:source_digests)
+        source_digests[config.server_id] = Tamoz::Core.digest(
+          "tamoz.agent.mcp.source.v1\n", config.describe
+        )
+        snapshot = Tamoz::Mcp::Catalog.compile(config)
+        catalogs[snapshot.server_id] = snapshot
+        supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
+        policy = database_policy(config.server_id, settings)
+        state.fetch(:database_policies)[config.server_id] = policy if policy
+        append_descriptors(descriptors, snapshot, settings)
+      end
+
+      def append_descriptors(descriptors, snapshot, settings)
+        read_only = Array(settings["read_only_tools"])
+        snapshot.entries.each do |entry|
+          descriptors << Tamoz::Mcp::Invocation.descriptor_for(
+            entry,
+            snapshot:,
+            # Fail closed: unknown MCP effects are not admitted into the
+            # capability host. Only an operator-declared read-only tool is
+            # safe for this slice.
+            effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
+          )
         end
       end
 
@@ -130,7 +146,7 @@ module Tamoz
       # The executor dispatches a descriptor to the supervisor that owns its
       # server. It resolves the snapshot by the descriptor's OWN source id, so a
       # descriptor can never be executed against a different server's transport.
-      def build_executor(catalogs, supervisors)
+      def build_executor(catalogs, supervisors, database_policies)
         lambda do |_context, descriptor, arguments|
           server_id = descriptor.source_id
           snapshot = catalogs.fetch(server_id) do
@@ -140,9 +156,26 @@ module Tamoz
             raise Error, "no supervisor for MCP server #{server_id.inspect}"
           end
           with_mcp_error_mapping do
-            Tamoz::Mcp::Invocation.call(descriptor, arguments, snapshot:, supervisor:)
+            policy = database_policies.fetch(descriptor.source_id, nil)
+            validated_arguments = policy ? policy.validate(arguments) : arguments
+            Tamoz::Mcp::Invocation.call(descriptor, validated_arguments, snapshot:, supervisor:)
           end
         end
+      end
+
+      def database_policy(server_id, settings)
+        raw = settings["database"]
+        return nil unless raw
+
+        options = raw == true ? {} : raw
+        unless options.is_a?(Hash)
+          raise Error, "MCP database settings for #{server_id.inspect} must be a mapping"
+        end
+
+        GovernedDatabaseSource.policy(
+          server_id:,
+          max_rows: options.fetch("max_rows", GovernedDatabaseSource::MAX_ROWS)
+        )
       end
 
       def with_mcp_error_mapping

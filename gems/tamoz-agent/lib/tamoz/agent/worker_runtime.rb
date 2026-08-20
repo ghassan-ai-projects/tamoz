@@ -179,6 +179,61 @@ module Tamoz
       # reaches a terminal state, so it is also the durable identity that lets an
       # approval resume the SAME occurrence rather than starting a new one.
       OPEN_OCCURRENCES = %w[tamoz worker occurrence].freeze
+      CHILD_TASKS = %w[tamoz worker child_task].freeze
+
+      def create_child_task(child_task, parent_profile:)
+        unless child_task.is_a?(ChildTask)
+          raise ArgumentError, "child_task must be a Tamoz::Agent::ChildTask"
+        end
+
+        child_task.assert_narrowed_to!(parent_profile)
+
+        durable("create child task #{child_task.child_id.inspect}") do
+          existing = @adapter.store.get(CHILD_TASKS, child_task.child_id)
+          if existing && !existing.deleted
+            stored = ChildTask.from_h(existing.value)
+            return stored if stored.to_h == child_task.to_h
+
+            raise Tamoz::StoreConflictError,
+                  "child task #{child_task.child_id.inspect} is already bound to different content"
+          end
+          upsert(CHILD_TASKS, child_task.child_id, child_task.to_h)
+          child_task
+        end
+      end
+
+      def child_task(child_id)
+        durable("child task #{child_id.inspect}") do
+          value = record(CHILD_TASKS, String(child_id))
+          value && ChildTask.from_h(value)
+        end
+      end
+
+      def transition_child_task(child_id)
+        durable("transition child task #{child_id.inspect}") do
+          entry = @adapter.store.get(CHILD_TASKS, String(child_id))
+          unless entry && !entry.deleted
+            raise Tamoz::StoreConflictError,
+                  "child task #{child_id.inspect} does not exist"
+          end
+
+          next_task = yield ChildTask.from_h(entry.value)
+          unless next_task.is_a?(ChildTask) && next_task.child_id == child_id
+            raise ArgumentError, "child task transition returned an invalid record"
+          end
+
+          @adapter.store.put(CHILD_TASKS, String(child_id), next_task.to_h, if_version: entry.version)
+          next_task
+        end
+      end
+
+      def child_tasks(limit: 500)
+        durable("child tasks") do
+          @adapter.store.each(CHILD_TASKS, limit:).filter_map do |entry|
+            ChildTask.from_h(entry.value) unless entry.deleted
+          end
+        end
+      end
 
       def open_occurrence(thread_id, occurrence_id)
         upsert(OPEN_OCCURRENCES, thread_id,

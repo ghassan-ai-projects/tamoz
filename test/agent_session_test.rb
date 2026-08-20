@@ -85,13 +85,15 @@ class AgentSessionTest < Minitest::Test
       session = build_session(model:, root:, adapter:)
 
       request = session.app.durable_runner.deliver(
-        {"task" => {
-          "text" => "and the font?",
-          "conversation" => [
+        Tamoz::Agent::SessionPlanningContext.turn_payload(
+          thread_id: "session.conversation",
+          request_id: "request.1",
+          text: "and the font?",
+          fragments: [
             {"role" => "user", "text" => "make it blue"},
             {"role" => "assistant", "text" => "done, it is blue"}
           ]
-        }},
+        ),
         thread: "session.conversation",
         request_id: "request.1"
       )

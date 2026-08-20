@@ -144,7 +144,12 @@ module Tamoz
 
       def submit_follow_up(session, task, thread_id, request_id)
         session.app.durable_runner.submit(
-          { 'task' => task },
+          SessionPlanningContext.follow_up_payload(
+            session.app.checkpointer,
+            thread_id:,
+            request_id:,
+            text: task
+          ),
           thread: thread_id,
           request_id:,
           operation: :turn,

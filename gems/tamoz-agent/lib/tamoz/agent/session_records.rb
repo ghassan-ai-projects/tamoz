@@ -183,6 +183,7 @@ module Tamoz
             "source_id" => STRING,
             "provenance" => STRING,
             "truncated" => BOOLEAN,
+            "output_bytes" => INTEGER,
             "terminal_reason" => STRING
           }
         },

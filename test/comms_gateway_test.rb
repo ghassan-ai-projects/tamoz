@@ -114,8 +114,12 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal 2, requests.length
       assert_equal 'make it blue', requests.first.payload.fetch('task')
-      assert_equal({ 'text' => 'and the font?', 'conversation' => [{ 'role' => 'user', 'text' => 'make it blue' }] },
-                   requests.last.payload.fetch('task'))
+      task = requests.last.payload.fetch('task')
+      assert_equal 'and the font?', task.fetch('text')
+      context = task.fetch('context')
+      assert_equal thread, context.fetch('thread_id')
+      assert_equal requests.last.request_id, context.fetch('request_id')
+      assert_equal [{ 'role' => 'user', 'text' => 'make it blue' }], context.fetch('fragments')
       replies = transport.deliveries.map(&:text)
 
       assert_equal 'Accepted. I will report committed progress.', replies.first

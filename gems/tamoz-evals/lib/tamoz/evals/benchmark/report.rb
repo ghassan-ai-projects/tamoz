@@ -16,13 +16,15 @@ module Tamoz
       # plainly.
       class Report
         def self.build(protocol:, cells:, model_identity:, protocol_sha256:,
-                       label: "", controls_passed: false, go_baseline_cells: nil)
+                       label: "", controls_passed: false, go_baseline_cells: nil,
+                       readiness: nil)
           new(protocol:, cells:, model_identity:, protocol_sha256:,
-              label:, controls_passed:, go_baseline_cells:).build
+              label:, controls_passed:, go_baseline_cells:, readiness:).build
         end
 
         def initialize(protocol:, cells:, model_identity:, protocol_sha256:,
-                       label: "", controls_passed: false, go_baseline_cells: nil)
+                       label: "", controls_passed: false, go_baseline_cells: nil,
+                       readiness: nil)
           @protocol = protocol
           @cells = cells
           @model_identity = model_identity
@@ -30,6 +32,7 @@ module Tamoz
           @label = label
           @controls_passed = controls_passed
           @go_baseline_cells = go_baseline_cells
+          @readiness = readiness
           @produced = cells.reject { |cell| cell.fetch("status", "produced") == "failed" }
           @codes = codes_from(cells)
         end
@@ -48,7 +51,7 @@ module Tamoz
             seed: @protocol.dig("statistics", "bootstrap_seed")
           )
           violations = stop_rule_violations
-          {
+          report = {
             "benchmark_protocol_version" => @protocol.fetch("benchmark_protocol_version"),
             "protocol_sha256" => @protocol_sha256,
             "model_identity" => @model_identity,
@@ -64,6 +67,8 @@ module Tamoz
             "verdict" => verdict(comparison, violations),
             "content_digest" => content_digest(metrics, baselines, comparison, violations)
           }
+          report['readiness'] = @readiness.to_h if @readiness
+          report
         end
 
         private
@@ -186,6 +191,7 @@ module Tamoz
           # gate are the honest guards.
           return "inconclusive" if @cells.any? { |cell| cell.fetch("label", "") == "pilot" }
           return "inconclusive" unless @controls_passed
+          return "inconclusive" if @readiness && !@readiness.publishable?
 
           if comparison.fetch("meets_minimum_effect")
             "go"
@@ -200,7 +206,8 @@ module Tamoz
           "sha256:#{Digest::SHA256.hexdigest(
             JSON.generate({"label" => @label, "metrics" => metrics, "baselines" => baselines,
                            "comparison" => comparison, "violations" => violations,
-                           "controls_passed" => @controls_passed})
+                           "controls_passed" => @controls_passed,
+                           'readiness' => @readiness&.to_h })
           )}"
         end
       end

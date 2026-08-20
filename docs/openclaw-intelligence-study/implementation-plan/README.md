@@ -1,7 +1,7 @@
 # Implementation plan — OpenClaw intelligence study
 
-Status: implementation in progress; Phases 0–2 are partial and Phases 3–5
-are not started.
+Status: implementation in progress; Phases 0–5 have partial plumbing, and the
+global implementation bar is not met.
 
 This folder turns the completed study (`docs/openclaw-intelligence-study/`) into
 implementation phases. The study's `04-tamoz-target-architecture.md` (stages 0–5)
@@ -10,9 +10,12 @@ them executable: concrete work items mapped to real seams, tests, and a per-phas
 exit bar.
 
 The current partial slice is intentionally not an end-state claim: it adds
-descriptor/identity, non-connecting MCP visibility, and a durable adaptive
-read-only graph, while lifecycle parity, governed expansion, and the benchmark
-remain outstanding until their phase exit bars pass.
+descriptor/identity, non-connecting MCP visibility, a durable adaptive
+read-only graph, canonical turn/lifecycle/status contracts, bounded governed
+database and child-record admission seams, and benchmark readiness checks.
+Durable compaction, composed cross-surface execution, full governed expansion,
+the benchmark runner, and real-provider evidence remain outstanding until
+their phase exit bars pass.
 
 Read in this order:
 

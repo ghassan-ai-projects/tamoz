@@ -230,7 +230,15 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload
 
-      assert_equal({ 'text' => 'hello', 'conversation' => history }, payload.fetch('task'))
+      task = payload.fetch('task')
+      assert_equal 'hello', task.fetch('text')
+      context = task.fetch('context')
+      assert_equal 'tg.ops.abc', context.fetch('thread_id')
+      assert_equal checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id,
+                   context.fetch('request_id')
+      assert_equal history, context.fetch('fragments')
+      assert_equal Tamoz::Core::TurnContext.digest(context.reject { |key, _| key == 'digest' }),
+                   context.fetch('digest')
     end
   end
 
