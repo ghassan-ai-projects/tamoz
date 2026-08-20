@@ -143,7 +143,7 @@ module Tamoz
         required = %i[
           mcp_catalogs catalogs names read_only_names name? read_only?
           approval_required? maximum_effect_output_bytes validate effect_intent
-          preview execute
+          preview execute descriptors descriptor_for
         ]
         missing = required.reject { |method| mcp.respond_to?(method) }
         unless missing.empty?

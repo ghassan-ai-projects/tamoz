@@ -362,6 +362,41 @@ class AgentCapabilityBindingTest < Minitest::Test
     end
   end
 
+  # A conforming source with exactly one required method removed, so respond_to?
+  # reports it missing. The preflight list must name every method the session
+  # actually calls, not a subset (audit EU-001).
+  def source_without(method)
+    source = mcp_source
+    source.singleton_class.send(:undef_method, method)
+    source
+  end
+
+  def test_session_construction_rejects_an_mcp_source_missing_a_called_method
+    Dir.mktmpdir("tamoz-binding-negative") do |directory|
+      root = File.join(directory, "workspace")
+      FileUtils.mkdir_p(root)
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      model = Object.new
+      model.define_singleton_method(:generate) { |**| raise "no model call expected before preflight" }
+      begin
+        %i[descriptors descriptor_for].each do |method|
+          error = assert_raises(ArgumentError, "removing #{method} must fail preflight") do
+            Tamoz::Agent::Session.new(
+              model:,
+              toolbox: Tamoz::Tools::Toolbox.new(root:, allow_changes: true),
+              checkpointer: adapter,
+              mcp: source_without(method)
+            )
+          end
+          assert_includes error.message, "mcp source must respond to"
+          assert_includes error.message, method.to_s
+        end
+      ensure
+        adapter.close
+      end
+    end
+  end
+
   def with_session(database, root)
     adapter = Tamoz::SQLite::Adapter.new(path: database)
     begin
