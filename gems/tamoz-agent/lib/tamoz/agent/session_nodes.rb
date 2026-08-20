@@ -40,8 +40,11 @@ module Tamoz
         :mcp,
         :profile_roles,
         :profile_budgets,
+        :profile_narrowed,
         :memory,
         :memory_owner,
+        :artifact_store,
+        :artifact_tenant,
         :capabilities,
         :graph_version
       )
@@ -71,8 +74,11 @@ module Tamoz
         mcp: nil,
         profile_roles: nil,
         profile_budgets: nil,
+        profile_narrowed: false,
         memory: nil,
         memory_owner: nil,
+        artifact_store: nil,
+        artifact_tenant: nil,
         transcript_reader: nil,
         graph_version: GRAPH_VERSION
       )
@@ -88,6 +94,7 @@ module Tamoz
         @graph_version = String(graph_version).freeze
         @profile_roles = profile_roles
         @profile_budgets = profile_budgets
+        @profile_narrowed = profile_narrowed
         verify_profile_roles!(profile_roles)
         @capabilities = CapabilityBinding.build(toolbox:, mcp:)
 
@@ -101,8 +108,11 @@ module Tamoz
           mcp:,
           profile_roles:,
           profile_budgets:,
+          profile_narrowed:,
           memory:,
           memory_owner:,
+          artifact_store:,
+          artifact_tenant:,
           capabilities: @capabilities,
           graph_version: @graph_version
         )
@@ -115,7 +125,9 @@ module Tamoz
         @planning_context = SessionPlanningContext.new(
           configuration:,
           memory: @memory_nodes,
-          transcript_reader:
+          transcript_reader:,
+          artifact_store:,
+          tenant: artifact_tenant
         )
         @plan_outcomes = SessionPlanOutcomes.new(configuration:)
         @effects = SessionEffects.new(configuration:)

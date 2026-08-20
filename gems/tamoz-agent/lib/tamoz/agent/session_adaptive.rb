@@ -29,6 +29,8 @@ module Tamoz
         the caller and cite observation refs from the supplied evidence.
       TEXT
 
+      Prompt = Data.define(:text, :compaction)
+
       def initialize(services:)
         @services = services
       end
@@ -37,11 +39,12 @@ module Tamoz
         iteration = state.fetch(:adaptive_iteration)
         return terminal_update('adaptive_iteration_limit') if iteration >= MAX_ITERATIONS
 
+        prepared = decision_prompt(state, context)
         call = @services.effects.model_call(
           context,
           stage: :adaptive_decide,
           system: ADAPTIVE_SYSTEM,
-          prompt: decision_prompt(state),
+          prompt: prepared.text,
           call_index: iteration,
           iteration:,
           sub_operation: 0
@@ -56,14 +59,15 @@ module Tamoz
             call,
             'adaptive decision outcome is unknown',
             operation: 'model.generate.adaptive_decide'
-          ).merge(lifecycle_events: [model_event])
+          ).merge(lifecycle_events: [model_event]).merge(compaction_update(prepared))
         end
 
         decision, digest = parse_decision(call.value, iteration)
         record = decision_record(decision, iteration, digest)
         case decision.fetch(:decision)
         when 'final'
-          final_update(state, decision, digest, record).merge(lifecycle_events: [model_event])
+          update = final_update(state, decision, digest, record).merge(lifecycle_events: [model_event])
+          update.merge(compaction_update(prepared))
         when 'action'
           {
             adaptive_action: {
@@ -75,7 +79,7 @@ module Tamoz
             adaptive_decisions: [record],
             lifecycle_events: [model_event],
             next_node: 'adaptive_validate'
-          }
+          }.merge(compaction_update(prepared))
         end
       rescue ProtocolError, SensitiveValueError => e
         invalid_decision_update(state, e.message).merge(
@@ -85,7 +89,7 @@ module Tamoz
                                             iteration: state.fetch(:adaptive_iteration), sub_operation: 0
             )
           ]
-        )
+        ).merge(compaction_update(prepared))
       end
 
       def validate(state, context)
@@ -276,29 +280,45 @@ module Tamoz
 
       private
 
-      def decision_prompt(state)
+      def decision_prompt(state, durable_context)
         effects = @services.effects
         allowed = effects.allowed_tool_names(:discovery)
         descriptions = @services.configuration.toolbox.descriptions.slice(*allowed)
         descriptions = descriptions.merge(effects.mcp_planning_surface(allowed))
-        JSON.pretty_generate(
-          'task' => state.fetch(:task),
-          'iteration' => state.fetch(:adaptive_iteration),
-          'max_iterations' => MAX_ITERATIONS,
-          'available_capabilities' => descriptions,
-          'observations' => state.fetch(:observations).filter_map do |record|
-            next unless record['phase'] == 'adaptive_read_only'
+        observations = state.fetch(:observations).filter_map do |record|
+          next unless record['phase'] == 'adaptive_read_only'
 
-            {
-              'evidence_ref' => record['evidence_ref'],
-              'capability_id' => record['tool'],
-              'output' => record['output'],
-              'provenance' => record['provenance'],
-              'truncated' => record['truncated'],
-              'output_bytes' => record['output_bytes']
-            }
-          end
+          {
+            'evidence_ref' => record['evidence_ref'],
+            'capability_id' => record['tool'],
+            'output' => record['output'],
+            'provenance' => record['provenance'],
+            'truncated' => record['truncated'],
+            'output_bytes' => record['output_bytes']
+          }
+        end
+        compaction = { effects:, durable_context: }
+        compacted = @services.planning_context.compact_for(
+          state,
+          :read_only,
+          observations:,
+          compaction:
         )
+        Prompt.new(
+          text: JSON.pretty_generate(
+            'task' => state.fetch(:task),
+            'iteration' => state.fetch(:adaptive_iteration),
+            'max_iterations' => MAX_ITERATIONS,
+            'available_capabilities' => descriptions,
+            'planning_context' => compacted.context,
+            'observations' => compacted.observations
+          ),
+          compaction: compacted.record
+        )
+      end
+
+      def compaction_update(prompt)
+        prompt&.compaction ? { compactions: [prompt.compaction] } : {}
       end
 
       def parse_decision(raw, iteration)

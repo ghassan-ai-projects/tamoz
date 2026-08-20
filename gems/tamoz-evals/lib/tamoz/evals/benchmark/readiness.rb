@@ -38,9 +38,12 @@ module Tamoz
         end
 
         class << self
-          def evaluate(protocol:, manifest:, expected_mission_ids: nil, artifact_root_base: nil)
+          def evaluate(protocol:, manifest:, expected_mission_ids: nil, mission_catalog: nil, artifact_root_base: nil)
             validate_manifest!(manifest)
-            reasons = evidence_reasons(protocol, manifest, expected_mission_ids, artifact_root_base)
+            validate_mission_catalog!(mission_catalog) if mission_catalog
+            reasons = evidence_reasons(
+              protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base
+            )
             evaluated_manifest = manifest.merge(
               'artifacts_verified' => artifacts_verified?(manifest, artifact_root_base)
             )
@@ -51,8 +54,12 @@ module Tamoz
             )
           end
 
-          def assert_publishable!(protocol:, manifest:, expected_mission_ids: nil, artifact_root_base: nil)
-            result = evaluate(protocol:, manifest:, expected_mission_ids:, artifact_root_base:)
+          def assert_publishable!(
+            protocol:, manifest:, expected_mission_ids: nil, mission_catalog: nil, artifact_root_base: nil
+          )
+            result = evaluate(
+              protocol:, manifest:, expected_mission_ids:, mission_catalog:, artifact_root_base:
+            )
             return result if result.publishable?
 
             raise Tamoz::Evals::ExecutionError,
@@ -67,16 +74,17 @@ module Tamoz
 
           private
 
-          def evidence_reasons(protocol, manifest, expected_mission_ids, artifact_root_base)
-            structural_reasons(protocol, manifest, expected_mission_ids) +
+          def evidence_reasons(protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base)
+            structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog) +
               control_reasons(manifest, artifact_root_base)
           end
 
-          def structural_reasons(protocol, manifest, expected_mission_ids)
+          def structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog)
             reasons = []
             reasons << 'protocol_digest_mismatch' unless protocol_digest(protocol) == manifest.fetch('protocol_sha256')
             reasons.concat(capability_reasons(manifest.fetch('capabilities')))
             reasons.concat(mission_reasons(manifest.fetch('missions')))
+            reasons.concat(required_capability_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(missing_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons.concat(unexpected_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons
@@ -174,6 +182,17 @@ module Tamoz
             missions.each { |mission| validate_mission!(mission) }
           end
 
+          def validate_mission_catalog!(catalog)
+            unless catalog.is_a?(Hash) && catalog['missions'].is_a?(Array) && !catalog['missions'].empty?
+              schema_error('benchmark mission catalog must contain missions')
+            end
+
+            ids = catalog.fetch('missions').map { |mission| mission.fetch('id') }
+            schema_error('benchmark mission catalog contains duplicate ids') unless ids.uniq == ids
+          rescue KeyError, TypeError
+            schema_error('benchmark mission catalog contains an invalid mission')
+          end
+
           def validate_mission!(mission)
             unless mission.is_a?(Hash) && mission['id'].is_a?(String) &&
                    MISSION_STATUSES.include?(mission['status'])
@@ -192,6 +211,21 @@ module Tamoz
             capabilities.filter_map do |name, state|
               missing = CAPABILITY_FIELDS.reject { |key| state.fetch(key) }
               "capability_unavailable:#{name}:#{missing.join('/')}" unless missing.empty?
+            end
+          end
+
+          def required_capability_reasons(manifest, catalog)
+            states = manifest.fetch('capabilities')
+            catalog.fetch('missions').filter_map do |mission|
+              next unless mission['required_capabilities'].is_a?(Array)
+
+              missing = mission.fetch('required_capabilities').filter_map do |capability|
+                state = states[capability]
+                capability unless state&.values&.all?(true)
+              end
+              next if missing.empty?
+
+              "mission_capability_unavailable:#{mission.fetch('id')}:#{missing.join('/')}"
             end
           end
 

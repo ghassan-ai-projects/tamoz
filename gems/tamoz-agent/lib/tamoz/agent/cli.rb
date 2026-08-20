@@ -561,6 +561,8 @@ module Tamoz
             profile_roles: resolve_profile_roles(profile, options),
             profile_budgets: profile && profile.budgets,
             mcp:,
+            artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
+            artifact_tenant: "session:#{thread_id}",
             routing: if options[:adaptive_routing]
                        :adaptive
                      else

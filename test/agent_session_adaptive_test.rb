@@ -97,6 +97,43 @@ class AgentSessionAdaptiveTest < Minitest::Test
     end
   end
 
+  def test_adaptive_compacts_large_observation_before_the_next_decision
+    with_workspace do |root, adapter|
+      File.write(File.join(root, "large.txt"), "large observation\n" * 200)
+      model = ScriptedModel.new(
+        adaptive_decide: [
+          action("read_file", "large.txt"),
+          {
+            "decision" => "final",
+            "answer" => "the file was inspected",
+            "evidence_refs" => ["observation:0"]
+          }
+        ],
+        context_compact: [{"summary" => "Retain the task and the large file observation reference."}]
+      )
+      session = build_session(model:, root:, adapter:, routing: :adaptive)
+
+      outcome = session.start(
+        "Inspect the large file",
+        thread: "session.adaptive.compaction",
+        request_id: "request.adaptive.compaction"
+      )
+
+      assert_equal :completed, outcome.status
+      assert_equal %i[adaptive_decide context_compact adaptive_decide],
+                   model.calls.map { |call| call.fetch(:stage) }
+      view = session.view(thread: "session.adaptive.compaction")
+      compaction = view.state.fetch(:compactions).fetch(0)
+      assert_equal "model", compaction.fetch("mode")
+      assert_equal "succeeded", compaction.fetch("status")
+      assert_equal "Retain the task and the large file observation reference.",
+                   compaction.fetch("summary")
+      assert_equal compaction.fetch("summary_digest"),
+                   Tamoz::Agent::SessionRecords.digest("summary" => compaction.fetch("summary"))
+      assert adapter.integrity_check.fetch("ok")
+    end
+  end
+
   def test_adaptive_mutation_hands_off_to_the_reviewed_legacy_path
     with_workspace do |root, adapter|
       File.write(File.join(root, "note.txt"), "handoff\n")

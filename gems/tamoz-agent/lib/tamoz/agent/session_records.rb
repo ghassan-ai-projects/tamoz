@@ -62,6 +62,7 @@ module Tamoz
             # (equality to `profile.budgets` only — labeled). Forward-looking for
             # P13; no runtime consumer exists today. Empty sentinel {}.
             "profile_budgets" => HASH,
+            "authority_narrowed" => BOOLEAN,
             "skill_epoch" => STRING,
             "prompt_surface_digest" => STRING,
             # P10 §5 epoch rules: a session that used an MCP capability pins the
@@ -261,6 +262,26 @@ module Tamoz
             # A repairable tool rejection, recorded as evidence rather than raised.
             # Carries kind, tool, error_class, reason, and failure_signature.
             "failure" => HASH
+          }
+        },
+        "compaction" => {
+          required: {
+            "phase" => STRING,
+            "mode" => STRING,
+            "status" => STRING,
+            "input_digest" => STRING,
+            "frame_digest" => STRING,
+            "observation_count" => INTEGER,
+            "context_bytes" => INTEGER
+          },
+          optional: {
+            "summary_digest" => STRING,
+            "summary" => STRING,
+            "fallback_reason" => STRING,
+            "effect_status" => STRING,
+            "artifact_refs" => ARRAY,
+            "effect_key" => STRING,
+            "attempt_number" => INTEGER
           }
         },
         "verification" => {

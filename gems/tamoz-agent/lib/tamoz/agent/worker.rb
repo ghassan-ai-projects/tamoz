@@ -410,11 +410,20 @@ module Tamoz
 
       def claim_and_run(session, thread_id:, occurrence_id:)
         emit("request.claimed", thread: thread_id, request_id: occurrence_id)
+        start_child_task(thread_id)
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      def start_child_task(thread_id)
+        child = @runtime.child_task(thread_id)
+        return unless child
+        return unless child.status == 'pending'
+
+        @runtime.transition_child_task(child.child_id, &:start)
       end
 
       # A request left `claimed`/`running` belongs to a worker that died holding
@@ -455,6 +464,7 @@ module Tamoz
         return IDLE unless view
 
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+        settle_child_task(thread_id, view)
 
         # A claim that was rejected as stale returns a terminal-failed request
         # whose view is the thread's OLD latest checkpoint — never this
@@ -548,6 +558,27 @@ module Tamoz
           PARKED
         else
           PROGRESSED
+        end
+      end
+
+      def settle_child_task(thread_id, view)
+        child = @runtime.child_task(thread_id)
+        return unless child && %i[completed failed blocked].include?(view.status)
+        return unless %w[pending running].include?(child.status)
+
+        receipt = Tamoz::Core.jcs(
+          'thread_id' => thread_id,
+          'terminal' => view.terminal,
+          'verification' => view.state[:verification]
+        )
+        @runtime.transition_child_task(child.child_id) do |current|
+          next current unless %w[pending running].include?(current.status)
+
+          case view.status
+          when :completed then current.complete(receipt:)
+          when :failed then current.fail(receipt:)
+          else current.unknown(receipt:)
+          end
         end
       end
 

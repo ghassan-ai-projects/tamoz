@@ -58,7 +58,7 @@ module Tamoz
           profile_authority: profile.authority_snapshot,
           profile_roles: recorded_profile_roles,
           profile_budgets: recorded_profile_budgets
-        }
+        }.merge(@configuration.profile_narrowed ? { authority_narrowed: true } : {})
       end
 
       def recorded_profile_roles

@@ -12,9 +12,10 @@ described capability sources. Nothing in this phase weakens a Phase 0
 invariant.
 
 The current slice adds read-only database admission policy through the existing
-MCP source builder and durable child-task identity/narrowing checks. It does
-not yet execute child requests, adopt child completion, implement governed web
-or self-modification flows, or provide real-provider family evidence.
+MCP source builder and a durable child request/adoption path with narrowed
+local authority. It does not yet implement governed web/browser or
+self-modification flows, child restart evidence, or real-provider family
+evidence.
 
 ## Work items (each independently shippable, in this order)
 

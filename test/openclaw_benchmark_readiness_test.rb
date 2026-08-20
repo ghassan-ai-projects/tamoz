@@ -111,5 +111,19 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     assert_equal readiness.to_h, report.fetch('readiness')
     assert_equal 'inconclusive', report.fetch('verdict')
   end
+
+  def test_catalog_required_capability_is_checked_against_manifest_state
+    catalog = {
+      'schema_version' => 'openclaw.missions.v1',
+      'missions' => [{ 'id' => 'adaptive-read-only', 'required_capabilities' => ['local:read_file'] }]
+    }
+    blocked = Tamoz::Evals::Benchmark::Readiness.evaluate(
+      protocol:, manifest:, mission_catalog: catalog
+    )
+
+    refute_predicate blocked, :ready?
+    assert_includes blocked.reasons,
+                    'mission_capability_unavailable:adaptive-read-only:local:read_file'
+  end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Layout/LineLength

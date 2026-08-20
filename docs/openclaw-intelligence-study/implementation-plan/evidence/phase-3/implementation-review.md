@@ -1,6 +1,6 @@
 # Phase 3 implementation review
 
-Date: 2026-08-20
+Date: 2026-08-21
 Status: partial; the Phase 3 exit bar and global implementation bar are not met.
 
 ## Scope delivered
@@ -18,12 +18,17 @@ Status: partial; the Phase 3 exit bar and global implementation bar are not met.
 - Added a deterministic bounded-compaction fallback that preserves the
   allowlisted authoritative frame and can retain oversized observations in the
   existing artifact-store contract when one is explicitly supplied.
+- Wired bounded compaction into legacy deliberation and adaptive decision
+  prompts; oversized frames may use a journaled `context_compact` model effect
+  and record a digest-bound compaction envelope in checkpoint state.
+- Bounded aggregate observations, retained graph revision, separated validated
+  summaries from deterministic fallback metadata, and threaded the existing
+  SQLite artifact store through durable CLI and worker sessions.
 
 ## Not delivered
 
-- The compactor is not yet wired into the durable model-call/checkpoint
-  boundary; journaled summarization, restart-across-compaction, and durable
-  artifact resolution remain open.
+- Universal preparation of every model stage, restart-across-compaction kill
+  coverage, and artifact-resolution assertions across all surfaces remain open.
 - Restart across a compaction boundary, composed CLI/Telegram trace parity, and
   scheduler recovery metadata remain unproven.
 - No provider or intelligence evidence is claimed; current tests are fixture
@@ -41,7 +46,10 @@ Focused commands passed during this slice:
 2 runs, 7 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_phase3_context_lifecycle_test.rb
-4 runs, 15 assertions, 0 failures, 0 errors, 0 skips
+9 runs, 48 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_session_adaptive_test.rb
+5 runs, 42 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/comms_gateway_test.rb
 13 runs, 54 assertions, 0 failures, 0 errors, 0 skips
@@ -59,12 +67,18 @@ pre-existing 122 RuboCop offenses; this slice adds no new report offense.
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:851df4eb93de76a4fca9cb5ff1c2617ced20c29fea50e791d8e19628da39cc16
+snapshot_id: sha256:eb5af9febe4fe1a128629357e3eabc093181cc11d75d32199c8fde029d01be44
 enola: 0.2.7-51-g72cd079
-facts: 9928; insights: 52; files parsed: 501/543; parse errors: 0
+facts: 9960; insights: 52; files parsed: 501/543; parse errors: 0
 receipt comparison: equivalent inputs; 0 extraction-quality regressions
 architecture diff: 0 new findings
 ```
+
+The focused continuation suites also passed: adaptive session (5 runs, 42
+assertions), child runtime (2, 8), worker (23, 107), session kill matrix (6,
+65), session (11, 73), communications gateway (13, 54), readiness (6, 23),
+and readiness CLI (1, 4). The changed production seam linted cleanly across
+11 files.
 
 Repository gate status:
 
@@ -79,8 +93,8 @@ focused slice suites above.
 
 ## Claims and blind spots
 
-The canonical context and status contracts are plumbing evidence only. Socket-
-restricted integration tests, durable compaction, restart recovery, and
+The canonical context, bounded compaction, and status contracts are plumbing
+evidence only. Socket-restricted integration tests, restart recovery, and
 cross-surface parity are not evidence of completion in this record. The
 pre-existing working-tree modification to `docs/openclaw-intelligence-study/README.md`
 is preserved and is not part of this slice.

@@ -180,6 +180,8 @@ module Tamoz
       # approval resume the SAME occurrence rather than starting a new one.
       OPEN_OCCURRENCES = %w[tamoz worker occurrence].freeze
       CHILD_TASKS = %w[tamoz worker child_task].freeze
+      CHILD_BINDINGS = %w[tamoz worker child_binding].freeze
+      CHILD_ADOPTIONS = %w[tamoz worker child_adoption].freeze
 
       def create_child_task(child_task, parent_profile:)
         unless child_task.is_a?(ChildTask)
@@ -200,6 +202,32 @@ module Tamoz
           upsert(CHILD_TASKS, child_task.child_id, child_task.to_h)
           child_task
         end
+      end
+
+      def enqueue_child_task(child_task, parent_profile:)
+        profile_id = parent_profile.fetch('profile_id')
+        stored = create_child_task(child_task, parent_profile:)
+        upsert(
+          CHILD_BINDINGS,
+          stored.child_id,
+          {
+            'child_id' => stored.child_id,
+            'parent_profile_id' => String(profile_id),
+            'parent_thread_id' => stored.parent_thread_id,
+            'parent_request_id' => stored.parent_request_id,
+            'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
+            'capabilities' => stored.capability_profile.fetch('capabilities', [])
+          }.compact
+        )
+        bind_thread_profile(stored.child_id, profile_id)
+        checkpoints.enqueue_request(
+          thread_id: stored.child_id,
+          request_id: child_request_id(stored.child_id),
+          operation: :turn,
+          payload: { 'task' => stored.task },
+          delivery: :queue
+        )
+        stored
       end
 
       def child_task(child_id)
@@ -233,6 +261,40 @@ module Tamoz
             ChildTask.from_h(entry.value) unless entry.deleted
           end
         end
+      end
+
+      def adopt_child_task(child_id, parent_thread_id:)
+        child = child_task(child_id)
+        raise Tamoz::StoreConflictError, "child task #{child_id.inspect} does not exist" unless child
+        unless child.parent_thread_id == String(parent_thread_id)
+          raise Tamoz::Agent::ToolPolicyError, 'child adoption parent does not match'
+        end
+        raise Tamoz::StoreConflictError, "child task #{child_id.inspect} is not terminal" unless child.adoptable?
+
+        durable("adopt child task #{child_id.inspect}") do
+          existing = record(CHILD_ADOPTIONS, child.child_id)
+          if existing
+            raise Tamoz::StoreConflictError, 'child adoption is bound to a different completion' unless
+              existing.fetch('completion_digest') == child.completion_digest
+
+            return existing
+          end
+
+          adoption = {
+            'child_id' => child.child_id,
+            'parent_thread_id' => child.parent_thread_id,
+            'parent_request_id' => child.parent_request_id,
+            'status' => child.status,
+            'completion_digest' => child.completion_digest,
+            'adopted_at' => Time.now.utc.iso8601
+          }
+          upsert(CHILD_ADOPTIONS, child.child_id, adoption)
+          adoption
+        end
+      end
+
+      def child_adoption(child_id)
+        durable("child adoption #{child_id.inspect}") { record(CHILD_ADOPTIONS, String(child_id)) }
       end
 
       def open_occurrence(thread_id, occurrence_id)
@@ -460,7 +522,27 @@ module Tamoz
 
       # The session that will drive `thread_id`, under the authority bound to it.
       def session_for(thread_id)
+        child = child_task(thread_id)
+        return session_for_child(child) if child
+
         session_for_profile(thread_profile(thread_id))
+      end
+
+      def session_for_child(child)
+        binding = durable("child binding #{child.child_id.inspect}") do
+          record(CHILD_BINDINGS, child.child_id)
+        end
+        raise Error, "child task #{child.child_id.inspect} has no authority binding" unless binding
+
+        profile_id = binding.fetch('parent_profile_id')
+        @monitor.synchronize do
+          key = ['child', child.child_id]
+          @sessions[key] ||= build_session(
+            profile_id,
+            allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
+            mcp: nil
+          )
+        end
       end
 
       def session_for_profile(profile_id)
@@ -659,24 +741,9 @@ module Tamoz
         )
       end
 
-      def build_session(profile_id)
+      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source)
         resolved = profile(profile_id)
-        toolbox = if resolved
-                    Toolbox.new(
-                      root: resolved.canonical_root,
-                      allow_changes: resolved.allow_changes?,
-                      checks: resolved.checks.transform_values { |check| check.fetch("argv") },
-                      check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
-                      allowed_tools: resolved.tools_allowed,
-                      approval_required: unattended_approval_required(resolved),
-                      skills: skills_snapshot
-                    )
-                  else
-                    # No profile means no preauthorization, so the only thing a
-                    # worker may do unattended is read.
-                    Toolbox.new(root: @directory.workspace_root, allow_changes: false,
-                                checks: {}, skills: skills_snapshot)
-                  end
+        toolbox = session_toolbox(resolved, allowed_tools:)
 
         engine = memory_engine
         Session.new(
@@ -685,11 +752,62 @@ module Tamoz
           checkpointer: @adapter,
           profile: resolved,
           profile_budgets: resolved && resolved.budgets,
+          profile_narrowed: !allowed_tools.nil?,
           memory: engine,
           memory_owner: engine && memory_owner,
-          mcp: mcp_source,
+          artifact_store: @adapter.bind_artifact_store(
+            tenant: "profile:#{profile_id || 'default'}"
+          ),
+          artifact_tenant: "profile:#{profile_id || 'default'}",
+          mcp:,
           routing: @routing
         )
+      end
+
+      def session_toolbox(resolved, allowed_tools: nil)
+        unless resolved
+          return Toolbox.new(root: @directory.workspace_root, allow_changes: false,
+                             checks: {}, skills: skills_snapshot)
+        end
+
+        Toolbox.new(
+          root: resolved.canonical_root,
+          allow_changes: resolved.allow_changes?,
+          checks: resolved.checks.transform_values { |check| check.fetch("argv") },
+          check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
+          allowed_tools: narrowed_tools(resolved, allowed_tools),
+          approval_required: narrowed_approval_required(resolved, allowed_tools),
+          skills: skills_snapshot
+        )
+      end
+
+      def narrowed_tools(resolved, allowed_tools)
+        return resolved.tools_allowed unless allowed_tools
+
+        unknown = allowed_tools - resolved.tools_allowed
+        raise ToolPolicyError, "child capabilities exceed profile tools: #{unknown.join(', ')}" unless unknown.empty?
+
+        allowed_tools
+      end
+
+      def narrowed_approval_required(resolved, allowed_tools)
+        required = unattended_approval_required(resolved)
+        allowed_tools ? required & allowed_tools : required
+      end
+
+      def child_local_tools(capabilities)
+        capabilities.map do |capability|
+          name = String(capability)
+          unless name.start_with?('local:')
+            raise ToolPolicyError, "child capability source is not supported: #{name}"
+          end
+
+          name.delete_prefix('local:')
+        end.uniq.freeze
+      end
+
+      def child_request_id(child_id)
+        "child-request:#{child_id}"
       end
     end
   end

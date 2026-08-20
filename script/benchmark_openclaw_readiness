@@ -25,7 +25,7 @@ manifest = JSON.parse(File.read(options.fetch(:manifest), encoding: Encoding::UT
 mission_catalog = JSON.parse(File.read(options.fetch(:missions), encoding: Encoding::UTF_8))
 mission_ids = mission_catalog.fetch('missions').map { |mission| mission.fetch('id') }
 result = Tamoz::Evals::Benchmark::Readiness.evaluate(
-  protocol:, manifest:, expected_mission_ids: mission_ids,
+  protocol:, manifest:, expected_mission_ids: mission_ids, mission_catalog:,
   artifact_root_base: options.fetch(:artifact_base)
 )
 puts JSON.pretty_generate(result.to_h.merge('protocol_version' => protocol.fetch('benchmark_protocol_version')))

@@ -76,8 +76,11 @@ module Tamoz
         mcp: nil,
         profile_roles: nil,
         profile_budgets: nil,
+        profile_narrowed: false,
         memory: nil,
         memory_owner: nil,
+        artifact_store: nil,
+        artifact_tenant: nil,
         routing: :legacy
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
@@ -105,6 +108,7 @@ module Tamoz
         # every memory branch inert (pre-P11 sessions resume byte-identically).
         @memory = memory
         @memory_owner = memory_owner
+        @profile_narrowed = profile_narrowed == true
         @default_graph_version = case routing.to_sym
                                  when :experimental then CURRENT_GRAPH_VERSION
                                  when :adaptive then ADAPTIVE_GRAPH_VERSION
@@ -121,8 +125,11 @@ module Tamoz
           mcp:,
           profile_roles:,
           profile_budgets:,
+          profile_narrowed:,
           memory:,
           memory_owner:,
+          artifact_store:,
+          artifact_tenant:,
           transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
         }
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
@@ -184,8 +191,11 @@ module Tamoz
         # session that matches neither is refused.
         expected = profile.policy.fetch("tool_catalog_digest")
         unattended = profile.policy["unattended_catalog_digest"]
-        unless toolbox.catalog_digest == expected ||
-               (unattended && toolbox.catalog_digest == unattended)
+        catalog_matches = toolbox.catalog_digest == expected ||
+                          (unattended && toolbox.catalog_digest == unattended)
+        catalog_matches ||= @profile_narrowed &&
+                            (toolbox.allowed_tools - profile.tools_allowed).empty?
+        unless catalog_matches
           pinned = [expected, unattended].compact.join(" or ")
           raise Profile::ValidationError,
                 "toolbox catalog digest #{toolbox.catalog_digest} does not match " \
@@ -403,6 +413,7 @@ module Tamoz
           state :approvals, reduce: :append, default: []
           state :effect_intents, reduce: :append, default: []
           state :effect_receipts, reduce: :append, default: []
+          state :compactions, reduce: :append, default: []
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []

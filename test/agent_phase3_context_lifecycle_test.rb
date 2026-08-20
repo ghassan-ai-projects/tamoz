@@ -133,9 +133,10 @@ class AgentPhase3ContextLifecycleTest < Minitest::Test
     assert_equal ['effect.1'], result.context.fetch('authoritative').fetch('effect_ids')
     assert_equal ['approval.1'], result.context.fetch('authoritative').fetch('approval_ids')
     assert_equal 'continue', result.context.fetch('authoritative').fetch('next_action')
-    assert_equal 2_000, result.observations.fetch(0).fetch('output_reference').fetch('byte_count')
     assert_equal "sha256:#{Digest::SHA256.hexdigest('o' * 2_000)}",
-                 result.observations.fetch(0).fetch('output_reference').fetch('digest')
+                 result.observations.fetch(0).fetch('output_digest')
+    assert result.observations.fetch(0).fetch('output_unavailable')
+    refute result.observations.fetch(0).key?('output_reference')
   end
 
   def test_bounded_compactor_retains_large_observation_only_through_supplied_store
@@ -153,6 +154,75 @@ class AgentPhase3ContextLifecycleTest < Minitest::Test
     assert_equal 'tenant.1', result.observations.fetch(0).fetch('output_reference').fetch('tenant')
     assert_equal output, retained.fetch(0).fetch(:bytes)
     assert_equal 'text/plain', retained.fetch(0).fetch(:media_type)
+  end
+
+  def test_bounded_compactor_caps_many_individually_small_observations
+    observations = Array.new(30) do |index|
+      { 'step_id' => "step.#{index}", 'output' => 'o' * 900, 'provenance' => 'workspace' }
+    end
+
+    result = Tamoz::Agent::SessionPlanningContext::BoundedCompactor.new.compact(
+      context: {}, observations:
+    )
+
+    assert result.compacted
+    assert_operator Tamoz::Core.jcs(result.observations).bytesize,
+                    :<=, Tamoz::Agent::SessionPlanningContext::BoundedCompactor::MAX_OBSERVATIONS_BYTES
+    assert(result.observations.any? { |observation| observation['output_unavailable'] })
+  end
+
+  def test_compaction_summary_is_journaled_and_checkpoint_ready
+    outcome = Data.define(:status, :value, :effect_key, :attempt_number).new(
+      :succeeded, '{"summary":"Keep the goal and the pending effect."}', 'effect.compact.1', 1
+    )
+    calls = []
+    effects = Object.new
+    effects.define_singleton_method(:model_call) do |context, **arguments|
+      calls << [context, arguments]
+      outcome
+    end
+    result = Tamoz::Agent::SessionPlanningContext::BoundedCompactor.new.compact(
+      context: { 'non_authoritative' => 'x' * 30_000 },
+      observations: [{ 'output' => 'o' * 2_000, 'provenance' => 'workspace' }],
+      authoritative: { 'goal' => 'preserve this goal', 'next_action' => 'continue' }
+    )
+
+    summarized = Tamoz::Agent::SessionPlanningContext::BoundedCompactor.new.summarize(
+      result, effects:, durable_context: Object.new, phase: :read_only, iteration: 2
+    )
+
+    assert_equal 1, calls.length
+    assert_equal :context_compact, calls.fetch(0).fetch(1).fetch(:stage)
+    assert_equal 100, calls.fetch(0).fetch(1).fetch(:sub_operation)
+    assert_equal 'Keep the goal and the pending effect.', summarized.context.fetch('summary').fetch('text')
+    assert_equal 'model', summarized.record.fetch('mode')
+    assert_equal 'effect.compact.1', summarized.record.fetch('effect_key')
+    assert_equal summarized.record.fetch('summary_digest'),
+                 Tamoz::Agent::SessionRecords.digest('summary' => summarized.record.fetch('summary'))
+  end
+
+  def test_compaction_unknown_summary_falls_back_without_fabricating_summary_evidence
+    outcome = Data.define(:status, :value, :effect_key, :attempt_number).new(
+      :unknown, nil, 'effect.compact.unknown', 1
+    )
+    effects = Object.new
+    effects.define_singleton_method(:model_call) { |*| outcome }
+    result = Tamoz::Agent::SessionPlanningContext::BoundedCompactor.new.compact(
+      context: { 'non_authoritative' => 'x' * 30_000 }, observations: []
+    )
+
+    summarized = Tamoz::Agent::SessionPlanningContext::BoundedCompactor.new.summarize(
+      result, effects:, durable_context: Object.new, phase: :read_only, iteration: 0
+    )
+
+    assert_equal 'deterministic', summarized.record.fetch('mode')
+    assert_equal 'fallback', summarized.record.fetch('status')
+    assert_equal 'unknown', summarized.record.fetch('fallback_reason')
+    assert_equal 'unknown', summarized.record.fetch('effect_status')
+    refute summarized.record.key?('summary_digest')
+    assert_equal 'Deterministic bounded context retained; model summary unavailable.',
+                 summarized.record.fetch('summary')
+    refute summarized.context.key?('summary')
   end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
