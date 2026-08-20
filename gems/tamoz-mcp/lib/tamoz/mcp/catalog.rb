@@ -175,14 +175,7 @@ module Tamoz
         # stripped and the result is byte-bounded without splitting a UTF-8
         # sequence. Locale-independent: the encoding is named explicitly.
         def bounded_description(value, config)
-          text = String(value || "").dup.force_encoding(Encoding::UTF_8)
-          text = text.scrub("") unless text.valid_encoding?
-          text = text.gsub(CONTROL_CHARACTER_PATTERN, " ").strip
-          budget = config.budgets.max_description_bytes
-          if text.bytesize > budget
-            text = text.byteslice(0, budget).scrub("").rstrip
-          end
-          text.freeze
+          BoundedText.bound(value, config.budgets.max_description_bytes)
         end
 
         def canonicalize_annotations(annotations)
