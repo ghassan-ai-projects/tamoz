@@ -6,7 +6,7 @@ module Tamoz
       # P11 §2 package boundary: `tamoz-agent` owns the memory surface
       # (canonical record, admission, retrieval, consolidation, promotion,
       # correction/deletion protocols) and depends on the structural
-      # `Tamoz::SQLite::MemoryRepository` contract. All P11 code lands under
+      # `Tamoz::SQLite::MemoryStore` contract. All P11 code lands under
       # `gems/tamoz-agent/lib/tamoz/agent/memory/`.
       module Surface
         module_function
@@ -62,7 +62,7 @@ module Tamoz
           @protection = protection
           @limits = limits.freeze
           @clock = clock
-          @repository = Tamoz::SQLite::MemoryRepository.new(store: @store, clock: @clock)
+          @repository = Tamoz::SQLite::MemoryStore.new(store: @store, clock: @clock)
           @admission = Admission.new(self)
           @retrieval = Retrieval.new(self)
           @lifecycle = Lifecycle.new(self)
@@ -102,7 +102,7 @@ module Tamoz
         # The index metadata for a record (per-version snapshot).
         def index_for(record)
           scopes = record.scopes
-          Tamoz::SQLite::MemoryRepository::IndexRow.new(
+          Tamoz::SQLite::MemoryStore::IndexRow.new(
             store_namespace: namespace,
             memory_id: record.memory_id,
             record_version: record.record_version,

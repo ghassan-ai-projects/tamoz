@@ -27,7 +27,7 @@ module Tamoz
     # The index stores ONLY searchable metadata columns plus memory id/version:
     # `statement_search` is populated only for non-sensitive records, so a
     # sensitive statement never enters a searchable column (invariant 24).
-    class MemoryRepository
+    class MemoryStore
       MEMORY_NAMESPACE_PREFIX = "tamoz.memory."
       ELIGIBLE_STATES = %w[active consolidated].freeze
       SENSITIVITY_ORDER = %w[public internal sensitive].freeze
@@ -101,7 +101,7 @@ module Tamoz
 
       def initialize(store:, clock: -> { Time.now })
         unless store.is_a?(Store)
-          raise ConfigurationError, "MemoryRepository requires a Tamoz::SQLite::Store"
+          raise ConfigurationError, "MemoryStore requires a Tamoz::SQLite::Store"
         end
 
         @store = store
@@ -119,7 +119,7 @@ module Tamoz
       # the CAS base (nil for a brand-new memory id). Returns the StoreEntry.
       def append(record:, index:, expected_version:, sensitive:)
         unless index.is_a?(IndexRow)
-          raise ConfigurationError, "MemoryRepository append requires an IndexRow"
+          raise ConfigurationError, "MemoryStore append requires an IndexRow"
         end
         address = normalize_memory_address(index)
         bytes = store.state_codec.dump(record)

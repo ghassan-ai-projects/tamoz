@@ -6,7 +6,7 @@ require_relative "test_helper"
 # the DC-3 one-transaction append, the SQL authorization-before-ranking filters
 # (decryption boundary), the honest-searchable claim, migration ordinal 2 +
 # monotonic ordering, correction/head-join recall, and the purge owner.
-class MemoryRepositoryTest < Minitest::Test
+class MemoryStoreTest < Minitest::Test
   NAMESPACE = "tamoz.memory.acme"
   CALLER = {
     tenant: "acme",
@@ -42,7 +42,7 @@ class MemoryRepositoryTest < Minitest::Test
   end
 
   def setup
-    @directory = Dir.mktmpdir("tamoz-memory-repo")
+    @directory = Dir.mktmpdir("tamoz-memory-store")
     @protection = CountingProtection.new
     @adapter = Tamoz::SQLite::Adapter.new(
       path: File.join(@directory, "memory.db"),
@@ -50,7 +50,7 @@ class MemoryRepositoryTest < Minitest::Test
       limits: Tamoz::SQLite::Limits.new(deletion_retention: 86_400.0)
     )
     @store = @adapter.store
-    @repo = Tamoz::SQLite::MemoryRepository.new(store: @store)
+    @repo = Tamoz::SQLite::MemoryStore.new(store: @store)
   end
 
   def teardown
@@ -59,7 +59,7 @@ class MemoryRepositoryTest < Minitest::Test
   end
 
   def index_row(**overrides)
-    Tamoz::SQLite::MemoryRepository::IndexRow.new(
+    Tamoz::SQLite::MemoryStore::IndexRow.new(
       store_namespace: NAMESPACE,
       memory_id: "m1",
       record_version: 1,

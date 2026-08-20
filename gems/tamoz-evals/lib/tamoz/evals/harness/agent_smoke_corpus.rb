@@ -2530,7 +2530,7 @@ module Tamoz
 
         # P11 case 19: the memory layer's attributable value, proven
         # mechanically. A seeded Experience record is recalled through the REAL
-        # production memory stack (SQLite Store + MemoryRepository + the
+        # production memory stack (SQLite Store + MemoryStore + the
         # SQL-filtered retrieval) and injected into the decisive turn; the
         # oracle requires BOTH the `:memory_recalled` trace mark AND the
         # recalled content in the effective prompt (mark AND injection, never

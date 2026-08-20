@@ -355,7 +355,7 @@ module Tamoz
       # P11 (three-layer memory) §2/§4 P11-B: the lexical memory index. One
       # row per Store version of a memory record, written in the SAME
       # transaction as the Store version/head append (DC-3) by
-      # `Tamoz::SQLite::MemoryRepository`. The retrieval query filters on the
+      # `Tamoz::SQLite::MemoryStore`. The retrieval query filters on the
       # scope/state/sensitivity/validity/compatibility columns BEFORE any row
       # is materialized or decrypted (invariant 30); `statement_search` is
       # populated only for non-sensitive records, so a sensitive statement
