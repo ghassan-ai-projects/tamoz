@@ -1,4 +1,0 @@
-#!/usr/bin/env ruby
-# frozen_string_literal: true
-
-abort "tamoz-stream-worker-learning was retired; use tamoz-stream-worker and tamoz-stream-subscriber"
