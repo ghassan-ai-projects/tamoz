@@ -51,6 +51,14 @@ class DependencyIsolationTest < Minitest::Test
       end,
       features.inspect
     )
+    # The agent must not depend upward on tamoz-stream. The shared situation
+    # recall contract lives in tamoz-core, not tamoz-stream (audit P-02).
+    # (tamoz/stream_part and tamoz/stream_sink are tamoz-core files, not the
+    # stream gem, so match only the stream gem's require path.)
+    refute(
+      features.any? { |path| path.match?(%r{/tamoz/stream[./]}) },
+      "require \"tamoz/agent\" must not load tamoz/stream: #{features.grep(%r{/tamoz/stream[./]}).inspect}"
+    )
   end
 
   def test_evals_is_stdlib_only_and_loads_no_runtime_package

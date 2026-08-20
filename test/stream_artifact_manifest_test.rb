@@ -69,8 +69,8 @@ class StreamArtifactManifestTest < Minitest::Test
   def test_the_runner_emits_the_manifest_and_retains_the_named_artifacts
     store = Tamoz::Stream::ArtifactStore.new
     recaller = StubSituationRecaller.new(
-      Tamoz::Stream::SituationRecall::Result.new(
-        records: [Tamoz::Stream::SituationRecall::Projection.new(
+      Tamoz::Core::SituationRecall::Result.new(
+        records: [Tamoz::Core::SituationRecall::Projection.new(
           statement: "prior pond oxygen increased",
           scopes: {
             tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"

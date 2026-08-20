@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
 require "tamoz/core"
-require "tamoz/stream/situation_recall"
 
 module Tamoz
   module Agent
     module Memory
       # Materializes only authorized, observed Experience records and projects
-      # them into the storage-agnostic stream recall contract.
+      # them into the storage-agnostic recall contract.
       class SituationRecaller
         MAX_RECORDS = 64
         MAX_BYTES = 32 * 1024
@@ -108,7 +107,7 @@ module Tamoz
             projections << projection
             used_bytes += bytes
           end
-          Tamoz::Stream::SituationRecall::Result.new(
+          Tamoz::Core::SituationRecall::Result.new(
             records: projections,
             record_digests: projections.map(&:digest),
             restricted: restricted_metadata(search),
@@ -161,7 +160,7 @@ module Tamoz
             "command_id" => outcome.fetch("command_id"),
             "outcome_id" => outcome.fetch("identity").delete_prefix("outcome:")
           }
-          Tamoz::Stream::SituationRecall::Projection.new(
+          Tamoz::Core::SituationRecall::Projection.new(
             statement: record.statement,
             scopes:,
             provenance:,
