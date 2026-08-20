@@ -17,11 +17,12 @@ require_relative "climate_domain"
 module BenchmarkFamilies
   module_function
 
-  def family_for(domain_name, data)
-    # The domain key is the thin-loader MODULE (not the loader instance) —
-    # script/benchmark_run resolves ::PROMPT/::CATALOG/::FIXTURE_RESPONSES
-    # constants on it.
-    domain = Object.const_get("#{domain_name.capitalize}Domain")
+  def family_for(domain, data)
+    # The domain key is the DomainLoader instance itself (its prompt/catalog/
+    # fixture_responses methods drive script/benchmark_run). Passing the loader
+    # instead of a per-domain Ruby constant keeps this driver fully data-driven,
+    # so a new domain JSON — including a hyphenated id like `cold-chain` — is
+    # picked up without a matching Ruby module.
     metric = data.fetch("metric")
     {
       "domain" => domain,
@@ -71,7 +72,8 @@ module BenchmarkFamilies
 
   # Built after the helpers so the module_function methods are defined.
   FAMILIES = DomainLoader.domains.to_h do |domain_name|
-    data = DomainLoader.load(domain_name).benchmark_family
-    [data.fetch("family_id"), family_for(domain_name, data)]
+    domain = DomainLoader.load(domain_name)
+    data = domain.benchmark_family
+    [data.fetch("family_id"), family_for(domain, data)]
   end.freeze
 end

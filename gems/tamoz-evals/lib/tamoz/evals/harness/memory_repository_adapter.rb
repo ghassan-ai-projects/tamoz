@@ -7,7 +7,7 @@ module Tamoz
       # The existing per-cell `MemoryStore` (JSON index/vault fixtures) measures
       # injection correctness against a lightweight fixture store; this adapter
       # drives the SAME harness cells through the REAL production memory stack
-      # — `Tamoz::SQLite::MemoryRepository` + the Store + `Memory::Engine`'s
+      # — `Tamoz::SQLite::MemoryStore` + the Store + `Memory::Engine`'s
       # SQL-filtered retrieval (authorization before ranking, invariant 30) —
       # behind the identical `MemoryStore` interface, so
       # `MemoryRetrieval`/`MemoryEnvelope`/`MemoryCell` work unchanged.

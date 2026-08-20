@@ -32,6 +32,18 @@ module Tamoz
       "Tamoz::Core::ToolPolicyError" => "Tamoz::Agent::ToolPolicyError"
     }.freeze
 
+    # Shapes that must never enter a prompt, transcript, journal, or index
+    # (invariant 24): a PEM private key header, an sk/pk/xox-prefixed token,
+    # an AWS access key id, or a Google API key. The one canonical set — reuse
+    # it rather than re-deriving it, since a new provider's key pattern added
+    # here should not require finding every independent copy.
+    SECRET_VALUE_PATTERNS = [
+      /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+      /\b(sk|pk|xox[baprs])-[A-Za-z0-9][A-Za-z0-9_-]{7,}/,
+      /\bAKIA[0-9A-Z]{16}\b/,
+      /\bAIza[0-9A-Za-z_-]{35}\b/
+    ].freeze
+
     loader = Zeitwerk::Loader.new
     loader.tag = "tamoz-core"
     loader.inflector.inflect("jcs" => "JCS")
@@ -96,6 +108,28 @@ module Tamoz
 
     def digest_bytes(expected)
       JCS.digest_bytes(expected)
+    end
+
+    # True for a well-formed "sha256:" + 64 hex chars digest string
+    # (Tamoz::Core::JCS::DIGEST_PATTERN) — the one wire-format shape every
+    # digest in this repo uses.
+    def valid_digest?(value)
+      JCS.valid_digest?(value)
+    end
+
+    # True when value is, or (recursively, through Hash/Array) contains, a
+    # string matching SECRET_VALUE_PATTERNS.
+    def secret_shaped?(value)
+      case value
+      when String
+        SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
+      when Hash
+        value.values.any? { |entry| secret_shaped?(entry) }
+      when Array
+        value.any? { |entry| secret_shaped?(entry) }
+      else
+        false
+      end
     end
 
     # Constant-time verification; recomputes and compares, never prefers a

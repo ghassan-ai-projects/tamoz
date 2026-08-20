@@ -10,7 +10,6 @@ module Tamoz
         MAX_OCCURRENCE = 256
         MAX_REMAINING_MS = 3_600_000
         CONTROL_FILENAME = "selector-control.json"
-        DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
         ID_PATTERN = /\A[a-z0-9][a-z0-9._-]*\z/
         POINTS = %w[
           before_begin after_begin before_sql after_sql before_commit after_commit
@@ -558,7 +557,7 @@ module Tamoz
           def digest_value(value, name:)
             unless value.is_a?(String) &&
                    value.valid_encoding? &&
-                   value.match?(DIGEST_PATTERN)
+                   Tamoz::Core.valid_digest?(value)
               raise ExecutionError, "#{name} is invalid"
             end
             value.dup.freeze

@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-
 module Tamoz
   module Agent
     module Improvement
@@ -92,7 +89,7 @@ module Tamoz
         def read_trajectory(relative_path)
           rendered = @toolbox.execute("read_file", {"path" => String(relative_path)})
           body = rendered.split("content:\n", 2).last
-          JSON.parse(String(body))
+          Tamoz::Core.parse_json_strict(String(body))
         end
 
         # Generate the single candidate. Deterministic and provider-free: the

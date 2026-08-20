@@ -103,8 +103,14 @@ module Tamoz
         ensure
           begin
             guard.close
-          rescue Exception # rubocop:disable Lint/RescueException
-            raise unless primary_error
+          rescue Exception => release_error # rubocop:disable Lint/RescueException
+            # Re-raising primary_error here (rather than letting it already be
+            # in flight) chains release_error onto it as #cause, so a stuck
+            # lease still leaves a trace of why the release attempt failed —
+            # instead of the release failure being discarded outright.
+            raise primary_error if primary_error
+
+            raise release_error
           end
         end
       end

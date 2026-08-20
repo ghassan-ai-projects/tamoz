@@ -129,7 +129,7 @@ module Tamoz
           {
             "id" => bounded_message(id.to_s),
             "message" => bounded_message(request["message"]),
-            "schema" => deep_freeze(CanonicalJSON.normalize(schema))
+            "schema" => CanonicalJSON.deep_freeze(CanonicalJSON.normalize(schema))
           }.freeze
         end
 
@@ -252,26 +252,9 @@ module Tamoz
         end
 
         def bounded_message(value)
-          text = String(value || "").dup.force_encoding(Encoding::UTF_8)
-          text = text.scrub("") unless text.valid_encoding?
-          text = text.gsub(CONTROL_CHARACTER_PATTERN, " ").strip
-          if text.bytesize > MAX_MESSAGE_BYTES
-            text = text.byteslice(0, MAX_MESSAGE_BYTES).scrub("").rstrip
-          end
-          text.freeze
+          BoundedText.bound(value, MAX_MESSAGE_BYTES)
         end
 
-        def deep_freeze(value)
-          case value
-          when Hash
-            value.each { |key, entry| deep_freeze(entry) }
-          when Array
-            value.each { |entry| deep_freeze(entry) }
-          when String
-            value.freeze
-          end
-          value.freeze
-        end
       end
     end
   end

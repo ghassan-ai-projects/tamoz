@@ -231,7 +231,7 @@ module Tamoz
 
       def require_digest!(approval, key)
         value = approval[key].to_s
-        unless value.match?(/\Asha256:[0-9a-f]{64}\z/)
+        unless Tamoz::Core.valid_digest?(value)
           raise ApprovalRelayError, "#{key} must be a sha256: hex digest"
         end
 

@@ -37,6 +37,11 @@ module Tamoz
 
       MAX_SAFE_INTEGER = 9_007_199_254_740_991 # 2**53 - 1
 
+      # The one wire-format shape for a domain-separated digest (CONTRACTS.md
+      # §2-3): "sha256:" plus 64 lowercase hex characters. The canonical home
+      # for this check — reference it instead of re-deriving the regex.
+      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
+
       module_function
 
       def canonicalize(value)
@@ -80,10 +85,14 @@ module Tamoz
 
       def digest_bytes(expected)
         normalized = normalize_digest(expected)
-        return normalized unless normalized.is_a?(String) &&
-                                 normalized.match?(/\Asha256:[0-9a-f]{64}\z/)
+        return normalized unless valid_digest?(normalized)
 
         [normalized.delete_prefix("sha256:")].pack("H*")
+      end
+
+      # True for a well-formed "sha256:" + 64 hex chars digest string.
+      def valid_digest?(value)
+        value.is_a?(String) && DIGEST_PATTERN.match?(value)
       end
 
       # Constant-time comparison; verification is recomputation, never a

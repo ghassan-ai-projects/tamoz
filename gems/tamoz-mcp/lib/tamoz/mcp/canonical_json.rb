@@ -17,6 +17,19 @@ module Tamoz
         JSON.generate(normalize(value))
       end
 
+      # Recursively freezes a JSON-shaped value in place (the shared freezer
+      # for catalog/invocation/elicitation snapshots — all three deep-froze
+      # their own byte-identical copy of this before it moved here).
+      def deep_freeze(value)
+        case value
+        when Hash
+          value.each_value { |entry| deep_freeze(entry) }
+        when Array
+          value.each { |entry| deep_freeze(entry) }
+        end
+        value.freeze
+      end
+
       def normalize(value, depth = 0)
         raise ValidationError, 'catalog value nesting exceeds 100' if depth > 100
 

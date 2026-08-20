@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-
 module Tamoz
   module Agent
     module Healing
@@ -49,9 +46,7 @@ module Tamoz
             end
           end
 
-          "healing.#{Digest::SHA256.hexdigest(
-            "#{domain}\n#{JSON.generate(Tamoz::Core.canonical(components))}"
-          )}"
+          "healing.#{Tamoz::Core.digest("#{domain}\n", components).delete_prefix('sha256:')}"
         end
 
         # The full, inspectable identity — what the transition log records so an

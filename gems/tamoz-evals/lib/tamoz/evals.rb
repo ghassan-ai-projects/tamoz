@@ -2,6 +2,15 @@
 
 require "pathname"
 
+# The harness subtree (agent_smoke_corpus, sqlite_scenario_runtime, etc.)
+# references Tamoz::Agent::*, Tamoz::SQLite::*, and Tamoz::Mcp::* directly;
+# these must be real requires (matching the gemspec dependencies below), not
+# an accident of Gemfile load order.
+require "tamoz/core"
+require "tamoz/agent"
+require "tamoz/sqlite"
+require "tamoz/mcp"
+
 require_relative "evals/version"
 require_relative "evals/errors"
 require_relative "evals/deep_freeze"

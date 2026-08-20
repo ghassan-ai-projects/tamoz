@@ -1,14 +1,15 @@
 # frozen_string_literal: true
 
-require "tamoz/core"
-
 module Tamoz
-  module Stream
+  module Core
     # Storage-agnostic boundary for related Situation memory. Only safe
     # projections and audit metadata cross this boundary; a storage adapter
     # must never expose its rows or canonical MemoryRecord objects here.
+    #
+    # This contract is shared: tamoz-agent produces a Result from its memory
+    # store and tamoz-stream consumes and validates it. It lives in tamoz-core
+    # so neither side has to depend upward on the other.
     module SituationRecall
-      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/.freeze
       SCOPE_FIELDS = %w[tenant situation_type entity_type entity_id].freeze
       PROVENANCE_FIELDS = %w[episode_id decision_id command_id outcome_id].freeze
 
@@ -20,7 +21,7 @@ module Tamoz
             provenance: normalize_hash(provenance, "provenance"),
             digest: String(digest)
           }
-          unless values.fetch(:digest).match?(SituationRecall::DIGEST_PATTERN)
+          unless Tamoz::Core.valid_digest?(values.fetch(:digest))
             raise ArgumentError, "recall projection digest must be sha256:<64 lowercase hex>"
           end
           validate_fields!(values.fetch(:scopes), SCOPE_FIELDS, "scopes")
@@ -83,7 +84,7 @@ module Tamoz
 
       def validate!(result)
         unless result.is_a?(Result)
-          raise ArgumentError, "situation recaller must return Tamoz::Stream::SituationRecall::Result"
+          raise ArgumentError, "situation recaller must return Tamoz::Core::SituationRecall::Result"
         end
 
         result

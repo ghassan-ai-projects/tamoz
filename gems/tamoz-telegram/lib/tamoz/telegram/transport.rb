@@ -50,10 +50,14 @@ module Tamoz
           'chat_id' => chat_id(delivery.conversation_id),
           'text' => delivery.text
         }
-        params['reply_to_message_id'] = delivery.reply_to if delivery.reply_to
+        editing = delivery.operation == 'edit_message'
+        if editing
+          params['message_id'] = delivery.reply_to
+        elsif delivery.reply_to
+          params['reply_to_message_id'] = delivery.reply_to
+        end
         attach_markup(params, delivery) if delivery.markup
-        method = delivery.operation == 'edit_message' ? 'editMessageText' : 'sendMessage'
-        result = @client.call(method, params)
+        result = @client.call(editing ? 'editMessageText' : 'sendMessage', params)
         {
           'message_id' => result.fetch('message_id'),
           'platform_time' => Time.at(result.fetch('date')).utc.iso8601(6)

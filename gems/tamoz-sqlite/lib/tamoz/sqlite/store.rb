@@ -53,7 +53,7 @@ module Tamoz
       end
 
       # P11 (DC-3 atomic storage seam) — INTERNAL, not part of the stable public
-      # API. `Tamoz::SQLite::MemoryRepository` opens ONE transaction and appends
+      # API. `Tamoz::SQLite::MemoryStore` opens ONE transaction and appends
       # the Store version/head AND the memory index row inside it, so a kill
       # between the two writes leaves neither (no best-effort two-write).
       # Public `put`/`delete` delegate to the same primitive.
@@ -71,14 +71,14 @@ module Tamoz
       end
 
       # P11 (DC-3) — INTERNAL. The Store's protection codec, used by
-      # MemoryRepository to protect a sensitive record before the one-transaction
+      # MemoryStore to protect a sensitive record before the one-transaction
       # append. No transaction is needed: the codec is pure.
       def protect_bytes(bytes, namespace:, key:)
         protect(bytes, address: normalize_address(namespace, key))
       end
 
       # P11 (DC-3) — INTERNAL. Reads one specific historical version of a Store
-      # key (materialized + decrypted like `get`). MemoryRepository uses this so
+      # key (materialized + decrypted like `get`). MemoryStore uses this so
       # a corrected record's prior versions remain readable (probe P11-16:
       # "a historical read of R still works").
       def read_version(namespace, key, version)
@@ -102,7 +102,7 @@ module Tamoz
       end
 
       # P11 (DC-3) — INTERNAL. The current Store head version for a key, or nil.
-      # MemoryRepository uses it to version historical reads and purge scans.
+      # MemoryStore uses it to version historical reads and purge scans.
       def head_version(namespace, key)
         address = normalize_address(namespace, key)
         adapter.__send__(:read, operation: "store.head_version") do |tx|
@@ -183,7 +183,7 @@ module Tamoz
       end
 
       # The DC-3 shared append body: runs inside the CALLER's transaction. The
-      # public `append_version` (put/delete) and MemoryRepository both use it.
+      # public `append_version` (put/delete) and MemoryStore both use it.
       def append_version_in_tx(tx, address:, expected:, bytes:, sensitive:, deleted:)
         now = adapter.__send__(:backend_time, tx, "store.cas.time")
         row = tx.first(

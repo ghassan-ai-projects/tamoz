@@ -12,5 +12,8 @@ TamozGemspec.build(
     ["tamoz-core", "= #{Tamoz::Stream::VERSION}"],
     ["grpc", "~> 1.83"],
     ["google-protobuf", "~> 4.35"]
-  ]
+  ],
+  # Read at runtime by NotificationContract (live_learning_handlers,
+  # outcome_subscriber). The goldens/vectors/proto in contracts/ are dev-only.
+  runtime_contracts: ["contracts/notification-contract-v1.json"]
 )

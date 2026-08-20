@@ -295,8 +295,8 @@ module Tamoz
       end
 
       # A no-op proposal: the watch condition carries NO model values.
-      EmptyProposal = Struct.new(:type, :parameter_preset, :parameters) do
-        def initialize = super(nil, nil, nil)
+      EmptyProposal = Data.define(:type, :parameter_preset, :parameters) do
+        def initialize = super(type: nil, parameter_preset: nil, parameters: nil)
       end
     end
   end

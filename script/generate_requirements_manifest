@@ -291,7 +291,7 @@ EVIDENCE = {
     classification: "deferred-by-contract"
   },
   "INV-30" => {
-    test: "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
+    test: "test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
     supporting: [
       "test/memory_engine_test.rb#test_retrieval_budget_truncates_by_rank_and_automatic_drops_lowest",
       "test/memory_repository_adapter_test.rb#test_sensitive_records_are_matched_never_injected_never_decrypted"
@@ -302,7 +302,7 @@ EVIDENCE = {
     test: "test/memory_engine_test.rb#test_deletion_emits_receipt_and_propagates_to_index",
     supporting: [
       "test/memory_engine_test.rb#test_correction_removes_bad_record_from_active_recall_and_index",
-      "test/memory_repository_test.rb#test_expired_purge_pass_names_pending_records_in_the_receipt"
+      "test/memory_store_test.rb#test_expired_purge_pass_names_pending_records_in_the_receipt"
     ],
     classification: "deferred-by-contract"
   },
@@ -535,11 +535,11 @@ EVIDENCE = {
   "ADR-022" => {test: "test/agent_runtime_test.rb#test_never_executes_when_no_plan_passes_review"},
   "ADR-023" => {test: "test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself"},
   "ADR-024" => {test: "test/agent_scorecard_test.rb#test_auditor_rejects_missing_review_missing_approval_and_false_completion"},
-  "ADR-025" => {test: "test/dependency_isolation_test.rb#test_evals_is_stdlib_only_and_loads_no_runtime_package",
-                supporting: ["test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals"]},
+  "ADR-025" => {test: "test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals",
+                supporting: ["test/dependency_isolation_test.rb#test_evals_is_a_runtime_coupled_release_harness"]},
   "ADR-026" => {test: "test/memory_engine_test.rb#test_lifecycle_transitions_and_eligible_state_set_are_exact"},
   "ADR-027" => {test: "test/memory_engine_test.rb#test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge",
-                supporting: ["test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption"]},
+                supporting: ["test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption"]},
   "ADR-028" => {test: "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle"},
   "ADR-029" => {test: "test/mcp_catalog_test.rb#test_compile_produces_immutable_catalog_with_exact_digests",
                 supporting: ["test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk"]},
@@ -651,7 +651,7 @@ EVIDENCE = {
     supporting: [
       "test/agent_skills_adversarial_test.rb#test_a12_allowed_tools_is_recorded_as_a_request_and_grants_nothing",
       "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
-      "test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
+      "test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption",
       "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
     ]
   },
@@ -727,7 +727,7 @@ EVIDENCE = {
   # ---- Migrations ---------------------------------------------------------
   "MIG-1" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
               supporting: ["test/sqlite_kernel_test.rb#test_migration_checksum_tampering_is_rejected"]},
-  "MIG-2" => {test: "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
+  "MIG-2" => {test: "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
   "MIG-3" => {test: "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic"},
   "MIG-4" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
   "MIG-5" => {test: "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"},
@@ -736,12 +736,12 @@ EVIDENCE = {
   "MIG-8" => {test: "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"},
   "MIG-9" => {test: "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store"},
   "MIG-10" => {test: "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store"},
-  "MIG-11" => {test: "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
+  "MIG-11" => {test: "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
                supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
-  "MIG-12" => {test: "test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
+  "MIG-12" => {test: "test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type",
                supporting: ["test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly"]},
-  "MIG-13" => {test: "test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows"},
-  "MIG-14" => {test: "test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
+  "MIG-13" => {test: "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows"},
+  "MIG-14" => {test: "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic"},
   "MIG-15" => {test: "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
                supporting: ["test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"]},
 

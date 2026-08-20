@@ -87,39 +87,42 @@ module Tamoz
           end
         end
 
+        # Each scenario id maps to exactly one same-named prepare_* method
+        # with no other branch logic, so the dispatch is a pure lookup.
+        SCENARIO_PREPARERS = {
+          "lease.acquire-new" => :prepare_lease_acquire_new,
+          "lease.acquire-takeover" => :prepare_lease_acquire_takeover,
+          "lease.validate" => :prepare_lease_validate,
+          "lease.renew" => :prepare_lease_renew,
+          "lease.release" => :prepare_lease_release,
+          "request.enqueue-new" => :prepare_request_enqueue_new,
+          "request.enqueue-duplicate" => :prepare_request_enqueue_duplicate,
+          "request.claim-turn" => :prepare_request_claim_turn,
+          "request.claim-resume" => :prepare_request_claim_resume,
+          "request.claim-redirect" => :prepare_request_claim_redirect,
+          "request.claim-stale" => :prepare_request_claim_stale,
+          "request.recover-claimed" => :prepare_request_recover_claimed,
+          "request.recover-running" => :prepare_request_recover_running,
+          "request.recover-redirecting" => :prepare_request_recover_redirecting,
+          "request.recover-stale" => :prepare_request_recover_stale,
+          "request.mark-running" => :prepare_request_mark_running,
+          "request.mark-redirect-running" => :prepare_request_mark_redirect_running,
+          "request.redirect-ready" => :prepare_request_redirect_ready,
+          "checkpoint.writes-new" => :prepare_checkpoint_writes_new,
+          "checkpoint.writes-duplicate" => :prepare_checkpoint_writes_duplicate,
+          "checkpoint.commit-start" => :prepare_checkpoint_commit_start,
+          "checkpoint.commit-advance" => :prepare_checkpoint_commit_advance,
+          "checkpoint.commit-turn" => :prepare_checkpoint_commit_turn,
+          "checkpoint.commit-fork" => :prepare_checkpoint_commit_fork,
+          "checkpoint.commit-paused" => :prepare_checkpoint_commit_paused,
+          "checkpoint.commit-failed" => :prepare_checkpoint_commit_failed
+        }.freeze
+
         def prepare_action!
-          case @definition.fetch("id")
-          when "lease.acquire-new" then prepare_lease_acquire_new
-          when "lease.acquire-takeover" then prepare_lease_acquire_takeover
-          when "lease.validate" then prepare_lease_validate
-          when "lease.renew" then prepare_lease_renew
-          when "lease.release" then prepare_lease_release
-          when "request.enqueue-new" then prepare_request_enqueue_new
-          when "request.enqueue-duplicate" then prepare_request_enqueue_duplicate
-          when "request.claim-turn" then prepare_request_claim_turn
-          when "request.claim-resume" then prepare_request_claim_resume
-          when "request.claim-redirect" then prepare_request_claim_redirect
-          when "request.claim-stale" then prepare_request_claim_stale
-          when "request.recover-claimed" then prepare_request_recover_claimed
-          when "request.recover-running" then prepare_request_recover_running
-          when "request.recover-redirecting" then prepare_request_recover_redirecting
-          when "request.recover-stale" then prepare_request_recover_stale
-          when "request.mark-running" then prepare_request_mark_running
-          when "request.mark-redirect-running"
-            prepare_request_mark_redirect_running
-          when "request.redirect-ready" then prepare_request_redirect_ready
-          when "checkpoint.writes-new" then prepare_checkpoint_writes_new
-          when "checkpoint.writes-duplicate"
-            prepare_checkpoint_writes_duplicate
-          when "checkpoint.commit-start" then prepare_checkpoint_commit_start
-          when "checkpoint.commit-advance" then prepare_checkpoint_commit_advance
-          when "checkpoint.commit-turn" then prepare_checkpoint_commit_turn
-          when "checkpoint.commit-fork" then prepare_checkpoint_commit_fork
-          when "checkpoint.commit-paused" then prepare_checkpoint_commit_paused
-          when "checkpoint.commit-failed" then prepare_checkpoint_commit_failed
-          else
+          handler = SCENARIO_PREPARERS.fetch(@definition.fetch("id")) do
             raise ExecutionError, "SQLite scenario setup is not implemented"
           end
+          __send__(handler)
         end
 
         def prepare_lease_acquire_new
@@ -666,7 +669,7 @@ module Tamoz
 
         private_constant :EXECUTION_A, :EXECUTION_B, :GRAPH_NAME,
                          :GRAPH_VERSION, :OWNER_A, :OWNER_B, :REQUEST_ID,
-                         :THREAD_ID
+                         :SCENARIO_PREPARERS, :THREAD_ID
       end
 
       private_constant :SQLiteScenarioRuntime

@@ -65,10 +65,11 @@ named example task in a clean subprocess.
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
 | `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
 | `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
-| `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
+| `tamoz-evals` | Conformance, artifact verification, release evidence | core, agent, sqlite, mcp, graph, scheduler (development/release only) |
 
-`tamoz-evals` is a non-runtime gem: no production gemspec may depend on it, and
-`test/dependency_isolation_test.rb` enforces that.
+`tamoz-evals` is a development/release gem: it depends on the runtime gems it
+exercises, but no production gemspec may depend on it, and
+`test/dependency_isolation_test.rb` enforces that inverse edge.
 
 ## Running the agent
 

@@ -156,7 +156,7 @@ module Tamoz
             source_id: snapshot.server_id,
             definition_digest: entry.definition_digest,
             input_schema: entry.schema,
-            output_schema: output_schema.nil? ? nil : deep_freeze_json(output_schema),
+            output_schema: output_schema.nil? ? nil : CanonicalJSON.deep_freeze(output_schema),
             effect_class: effect_class.to_sym,
             protocol_profile: (protocol_profile || snapshot.protocol_version)
           )
@@ -658,7 +658,7 @@ module Tamoz
 
           copied = strip_controls_deep(structured)
           bytes = CanonicalJSON.dump(copied).bytesize
-          return [deep_freeze_json(copied), false] if bytes <= budget
+          return [CanonicalJSON.deep_freeze(copied), false] if bytes <= budget
 
           [nil, true]
         rescue ValidationError
@@ -688,17 +688,6 @@ module Tamoz
           text.byteslice(0, bytes).scrub("").rstrip
         end
 
-        def deep_freeze_json(value)
-          case value
-          when Hash
-            value.each { |key, entry| deep_freeze_json(entry) }
-          when Array
-            value.each { |entry| deep_freeze_json(entry) }
-          when String
-            value.freeze
-          end
-          value.freeze
-        end
       end
     end
   end

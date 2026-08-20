@@ -1,7 +1,10 @@
 # tamoz-evals
 
-Tamoz's development and release quality system. The artifact verifier is stdlib-only and is
-never a runtime dependency of a production Tamoz gem.
+Tamoz's development and release quality system. It is a runtime-coupled development/release
+gem: its verifier and scorecard/treatment harness reference `Tamoz::Agent`, `Tamoz::SQLite`,
+`Tamoz::Mcp`, `Tamoz::Graph`, and `Tamoz::Scheduler` directly, so it declares those gems as
+dependencies. The one-way rule is the inverse edge — no production Tamoz gem depends on
+`tamoz-evals` — enforced by `test/dependency_isolation_test.rb`.
 
 ```sh
 tamoz-eval verify path/to/artifact.json
@@ -13,7 +16,6 @@ schemas, verifier, and the internal bounded subprocess primitive used by fixed r
 the repository's `docs/evaluation-artifacts-v1.md` for the exact v1 canonicalization,
 provenance, evidence-containment, and exit-code contract.
 
-The optional `agent-smoke` profile lazily loads an installed `tamoz-agent` and runs 12
-controller-scripted public cases. Ordinary artifact verification remains stdlib-only. The
-profile reports deterministic metadata and hard gates; it is not a live-model benchmark,
-protected holdout, or operating-system sandbox.
+The optional `agent-smoke` profile runs 12 controller-scripted public cases over the
+installed `tamoz-agent`. The profile reports deterministic metadata and hard gates; it is
+not a live-model benchmark, protected holdout, or operating-system sandbox.

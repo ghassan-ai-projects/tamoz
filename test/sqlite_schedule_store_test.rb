@@ -189,6 +189,34 @@ class SQLiteScheduleStoreTest < Minitest::Test
     end
   end
 
+  # EU-002: enable_schedule is the declared symmetric partner of
+  # disable_schedule; resuming restores claims and CAS-guards the revision.
+  def test_enable_schedule_restores_claims_after_a_pause
+    with_engine do |store, _adapter, _checkpoints, _path|
+      stored = store.put_schedule(schedule)
+      grant = {"scopes" => ["read"], "capabilities" => []}
+
+      # disable/enable CAS on the current revision but do not bump it (they flip
+      # the enabled flag, not the definition).
+      store.disable_schedule("daily", expected_revision: stored.revision, reason: "manual pause")
+      paused = store.materialize_due(
+        now: 1_700_000_100, owner: "p", lease_for: 30, limit: 10, request_template:, current_grant: grant
+      )
+      assert_equal 0, paused.length, "a paused schedule claims nothing"
+
+      store.enable_schedule("daily", expected_revision: stored.revision)
+      resumed = store.materialize_due(
+        now: 1_700_000_100, owner: "p", lease_for: 30, limit: 10, request_template:, current_grant: grant
+      )
+      refute_empty resumed, "a resumed schedule claims again"
+
+      # A stale expected_revision on enable is refused, exactly like disable.
+      assert_raises(Scheduler::StoreConflictError) do
+        store.enable_schedule("daily", expected_revision: stored.revision + 1)
+      end
+    end
+  end
+
   # --- P13-B: misfire policies (design §6) ---------------------------------
 
   # Interval schedule with a 1h cadence, polled at now = anchor + 3h. The due

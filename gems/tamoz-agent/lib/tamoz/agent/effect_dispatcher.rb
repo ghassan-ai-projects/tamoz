@@ -168,6 +168,22 @@ module Tamoz
               reconciliation:,
               reused: false
             )
+          rescue Tamoz::EffectUnknownError => error
+            # A request was sent whose external outcome is unknown (e.g. an MCP
+            # non-idempotent call that failed after send). Record the started
+            # attempt as terminal :unknown here rather than letting it stay
+            # running until a later recovery pass, and never repair it.
+            detail = unknown_error_detail(error)
+            effects.complete(key:, attempt_token: token, status: :unknown, error: detail)
+            return Outcome.new(
+              status: :unknown,
+              value: nil,
+              error: detail,
+              effect_key: key,
+              attempt_number: decision.record.current_attempt,
+              reconciliation:,
+              reused: false
+            )
           end
           record = effects.complete(
             key:,
@@ -204,6 +220,15 @@ module Tamoz
           "class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
           "message" => error.message,
           "repairable" => error.repairable?
+        }.freeze
+      end
+
+      # Bounded evidence for a terminal :unknown attempt. An unknown outcome is
+      # never repairable, so no repair field is recorded — the attempt is done.
+      def unknown_error_detail(error)
+        {
+          "class" => error.class.name,
+          "message" => error.message
         }.freeze
       end
 

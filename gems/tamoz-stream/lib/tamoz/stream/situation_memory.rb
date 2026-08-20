@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "tamoz/stream/situation_recall"
+require "tamoz/core"
 
 module Tamoz
   module Stream
@@ -10,7 +10,7 @@ module Tamoz
       module_function
 
       def retrieve(recaller:, caller:, snapshot:, query: {terms: []}, limit: 20)
-        SituationRecall.validate!(
+        Tamoz::Core::SituationRecall.validate!(
           recaller.recall(caller:, snapshot:, query:, limit:)
         )
       end

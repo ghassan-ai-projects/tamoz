@@ -77,7 +77,7 @@ flowchart TB
     style Shared fill:#0d3b66,color:#fff
 ```
 
-Direction of production dependency is one-way and bottom-up: `tamoz-core` → contract gems and `tamoz-graph` → `tamoz-sqlite` and the adapters → `tamoz-agent`. `tamoz-evals` depends on nothing and nothing may depend on it; it is a development/release gem that exercises every public boundary.
+Direction of production dependency is one-way and bottom-up: `tamoz-core` → contract gems and `tamoz-graph` → `tamoz-sqlite` and the adapters → `tamoz-agent`. Nothing may depend on `tamoz-evals`; it is a development/release gem that depends on the runtime gems it exercises (core, agent, sqlite, mcp, graph, scheduler) and that no production gem may depend on.
 
 ## The runtime model
 

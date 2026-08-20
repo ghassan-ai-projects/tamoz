@@ -9,11 +9,12 @@ module Tamoz
     # invocation keep the same policy gates for local and remote servers.
     # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
     class HttpSupervisor
-      BACKOFF_JITTER = 0.2
-      DEFAULT_CIRCUIT_THRESHOLD = 3
-      DEFAULT_RETRY_BUDGET = 1
-      DEFAULT_BASE_BACKOFF = 1.0
-      DEFAULT_MAX_BACKOFF = 30.0
+      include CircuitSupervision
+
+      DEFAULT_CIRCUIT_THRESHOLD = CircuitSupervision::DEFAULT_CIRCUIT_THRESHOLD
+      DEFAULT_RETRY_BUDGET = CircuitSupervision::DEFAULT_RETRY_BUDGET
+      DEFAULT_BASE_BACKOFF = CircuitSupervision::DEFAULT_BASE_BACKOFF
+      DEFAULT_MAX_BACKOFF = CircuitSupervision::DEFAULT_MAX_BACKOFF
 
       attr_reader :config, :circuit_threshold, :retry_budget
 
@@ -30,19 +31,7 @@ module Tamoz
         unless config.is_a?(ServerConfig) && config.transport == :http
           raise ValidationError, 'HttpSupervisor requires an HTTP ServerConfig'
         end
-        unless circuit_threshold.is_a?(Integer) && circuit_threshold >= 1
-          raise ValidationError, 'circuit threshold must be an integer >= 1'
-        end
-        unless retry_budget.is_a?(Integer) && retry_budget >= 0
-          raise ValidationError, 'retry budget must be an integer >= 0'
-        end
-        unless base_backoff.is_a?(Numeric) && base_backoff.finite? && base_backoff.positive?
-          raise ValidationError, 'base backoff must be positive and finite'
-        end
-        unless max_backoff.is_a?(Numeric) && max_backoff.finite? && max_backoff.positive? &&
-               max_backoff >= base_backoff
-          raise ValidationError, 'max backoff must be positive, finite, and >= base backoff'
-        end
+        CircuitSupervision.validate_parameters!(circuit_threshold:, retry_budget:, base_backoff:, max_backoff:)
 
         @config = config
         @environ = environ
@@ -58,61 +47,7 @@ module Tamoz
         @request_sent = false
       end
 
-      def state
-        return :retired if @retired
-        return :disabled unless @started
-        return :open if @circuit_store.open?
-        return :degraded if @circuit_store.failures.positive?
-
-        connected? ? :ready : :starting
-      end
-
-      def started? = @started
-
       def pid = nil
-
-      def open? = @circuit_store.open?
-
-      def consecutive_failures = @circuit_store.failures
-
-      def last_failure_kind = @circuit_store.last_failure_kind
-
-      def record_failure(kind: :transport, context: nil)
-        @circuit_store.record_failure(kind:, context:)
-      end
-
-      def record_success
-        @circuit_store.record_success
-      end
-
-      def reset(evidence: nil)
-        raise ValidationError, 'reset evidence must be a Hash' unless evidence.nil? || evidence.is_a?(Hash)
-
-        record = {
-          'scope' => 'server',
-          'server_id' => @config.server_id,
-          'conditions_digest' => @circuit_store.conditions_digest(@config.server_id)
-        }.merge(evidence || {}).freeze
-        @circuit_store.reset(evidence: record)
-      end
-
-      def reset_evidence = @circuit_store.reset_evidence
-
-      def backoff_delay(failures = @circuit_store.failures)
-        return 0.0 unless failures.is_a?(Integer) && failures.positive?
-
-        base = @base_backoff * (2**(failures - 1))
-        base = @max_backoff if base > @max_backoff
-        jitter = @random.rand(-BACKOFF_JITTER..BACKOFF_JITTER)
-        (base * (1.0 + jitter)).clamp(0.0, @max_backoff)
-      end
-
-      def restart
-        delay = backoff_delay
-        close
-        sleep(delay) if delay.positive?
-        start
-      end
 
       def start
         raise ProtocolError, 'MCP HTTP supervisor already started' if @started

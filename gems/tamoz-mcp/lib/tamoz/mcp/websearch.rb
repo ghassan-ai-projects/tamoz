@@ -46,9 +46,7 @@ module Tamoz
       def self.credential_shaped_query?(value)
         text = String(value)
         text.match?(/\A[A-Z][A-Z0-9_]*[ \t]*[:=][ \t]*\S/) ||
-          text.match?(/\b(?:sk|pk)-[A-Za-z0-9][A-Za-z0-9_-]{7,}\b/) ||
-          text.match?(/\bAKIA[0-9A-Z]{16}\b/) ||
-          text.match?(/\bAIza[0-9A-Za-z_-]{35}\b/)
+          Tamoz::Core.secret_shaped?(text)
       end
 
       # Search RESULT content is adversarial by construction (unlike
@@ -76,12 +74,8 @@ module Tamoz
         session_?keys?|tokens?|secrets?|passwords?|credentials?|passphrase)[A-Za-z0-9_.]*?
       }ix
       CREDENTIAL_ASSIGNMENT_PATTERN = /(?<![A-Za-z0-9_.])(#{CREDENTIAL_NAME_SEGMENT})[ \t]*[:=][ \t]*[^\s]+/x
-      SECRET_TOKEN_PATTERN = /
-        \b(?:sk|pk)-[A-Za-z0-9][A-Za-z0-9_-]{7,}\b |
-        \bAKIA[0-9A-Z]{16}\b |
-        \bAIza[0-9A-Za-z_-]{35}\b |
-        -----BEGIN[ A-Z]*PRIVATE\s+KEY-----
-      /x
+      # The one shared secret-token pattern set (Tamoz::Core::SECRET_VALUE_PATTERNS).
+      SECRET_TOKEN_PATTERN = Regexp.union(Tamoz::Core::SECRET_VALUE_PATTERNS)
     end
   end
 end

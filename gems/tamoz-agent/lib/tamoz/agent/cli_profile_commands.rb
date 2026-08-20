@@ -92,7 +92,7 @@ module Tamoz
         raise OptionParser::MissingArgument, '--profile' if options[:profile].to_s.empty?
 
         validate_thread_id!(thread_id)
-        unless Profile::DIGEST_PATTERN.match?(digest)
+        unless Tamoz::Core.valid_digest?(digest)
           raise ArgumentError, '--digest must be a sha256: canonical profile digest'
         end
 

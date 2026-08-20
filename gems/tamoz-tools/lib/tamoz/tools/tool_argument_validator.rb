@@ -25,6 +25,11 @@ module Tamoz
         'create_file' => :validate_create_file
       }.freeze
 
+      # The bare-hex sha256 shape (no "sha256:" prefix) `expected_sha256`
+      # arguments use — distinct from Tamoz::Core::JCS::DIGEST_PATTERN's
+      # prefixed wire format.
+      SHA256_HEX_PATTERN = /\A[0-9a-f]{64}\z/
+
       def initialize(names:, checks:, path_resolver:, skill_catalog:)
         @names = names
         @checks = checks
@@ -97,7 +102,7 @@ module Tamoz
         return unless arguments.key?('expected_sha256')
 
         digest = arguments.fetch('expected_sha256')
-        return if digest.is_a?(String) && digest.match?(/\A[0-9a-f]{64}\z/)
+        return if digest.is_a?(String) && digest.match?(SHA256_HEX_PATTERN)
 
         raise ToolArgumentError, 'expected_sha256 must be 64 lowercase hex characters'
       end
@@ -179,7 +184,7 @@ module Tamoz
         end
 
         expected = arguments.fetch('expected_sha256')
-        unless expected.is_a?(String) && expected.match?(/\A[0-9a-f]{64}\z/)
+        unless expected.is_a?(String) && expected.match?(SHA256_HEX_PATTERN)
           raise ToolArgumentError, 'expected_sha256 must be 64 lowercase hex characters'
         end
 

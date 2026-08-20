@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'digest'
 
 module Tamoz
   # The SQLite namespace owns durable effect-journal storage boundaries.
@@ -60,7 +59,7 @@ module Tamoz
           raise ConfigurationError, 'logical effect key is empty or oversized'
         end
 
-        LOGICAL_PREFIX + Digest::SHA256.hexdigest(JSON.generate([key]))
+        LOGICAL_PREFIX + Wire.digest(JSON.generate([key]), domain: 'tamoz.graph.effect.logical').delete_prefix('sha256:')
       end
 
       def logical?(effect_key)

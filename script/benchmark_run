@@ -96,22 +96,23 @@ class BenchmarkRun
       "gold_risk_class" => config.fetch("gold").call(facts),
       "valid_evidence_ids" => facts.keys.map { |key| "fact:#{key}" },
       "first_observable_at" => BASE_TIME,
-      "domain_module" => domain
+      "domain_loader" => domain
     }
   end
 
   def score_cell(cell)
     composition = build_composition(cell)
+    domain = cell.fetch("domain_loader")
     wire = EpisodeComposition.wire_request(
       episode_id: cell.fetch("cell_id"),
       attempt: 1,
       fence: 1,
-      prompt: cell.fetch("domain_module")::PROMPT,
+      prompt: domain.prompt,
       snapshot: cell.fetch("snapshot"),
-      catalog_json: Tamoz::Core.jcs(cell.fetch("domain_module")::CATALOG),
-      intent_catalog_json: Tamoz::Core.jcs(cell.fetch("domain_module")::INTENT_CATALOG),
-      intent_catalog_sha256: cell.fetch("domain_module").intent_catalog_digest,
-      objective: cell.fetch("domain_module")::OBJECTIVE,
+      catalog_json: Tamoz::Core.jcs(domain.catalog),
+      intent_catalog_json: Tamoz::Core.jcs(domain.intent_catalog),
+      intent_catalog_sha256: domain.intent_catalog_digest,
+      objective: domain.objective,
       allowed_intent_types: %w[install_watch_condition start_aerator run_vent_cycle],
       risk_ceiling: :RISK_CLASS_R2
     )
@@ -133,7 +134,7 @@ class BenchmarkRun
     directory = Dir.mktmpdir("benchmark-pilot")
     provider = LocalModelEndpoint.new(
       mode: :fixture,
-      responses: cell.fetch("domain_module")::FIXTURE_RESPONSES,
+      responses: cell.fetch("domain_loader").fixture_responses,
       log_path: File.join(directory, "provider.log")
     ).start
     composition = EpisodeComposition.build(endpoint: provider.base_url)

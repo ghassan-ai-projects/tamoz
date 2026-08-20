@@ -131,7 +131,7 @@ module Tamoz
                   "The MCP server entry #{name.inspect} has an invalid input schema."
           end
 
-          deep_freeze(CanonicalJSON.normalize(candidate))
+          CanonicalJSON.deep_freeze(CanonicalJSON.normalize(candidate))
         end
 
         # --- resources / prompts (catalogued only; never readable in v1) ----
@@ -140,7 +140,7 @@ module Tamoz
           client.resources.map do |resource|
             name = validate_entry_name!(resource["name"] || resource["uri"])
             description = bounded_description(resource["description"], config)
-            schema = deep_freeze(CanonicalJSON.normalize(
+            schema = CanonicalJSON.deep_freeze(CanonicalJSON.normalize(
               "uri" => resource["uri"].to_s, "mimeType" => resource["mimeType"].to_s
             ))
             build_entry(name, :resource, description, schema, nil)
@@ -151,7 +151,7 @@ module Tamoz
           client.prompts.map do |prompt|
             name = validate_entry_name!(prompt["name"])
             description = bounded_description(prompt["description"], config)
-            schema = deep_freeze(CanonicalJSON.normalize(
+            schema = CanonicalJSON.deep_freeze(CanonicalJSON.normalize(
               "arguments" => prompt["arguments"] || []
             ))
             build_entry(name, :prompt, description, schema, nil)
@@ -175,20 +175,13 @@ module Tamoz
         # stripped and the result is byte-bounded without splitting a UTF-8
         # sequence. Locale-independent: the encoding is named explicitly.
         def bounded_description(value, config)
-          text = String(value || "").dup.force_encoding(Encoding::UTF_8)
-          text = text.scrub("") unless text.valid_encoding?
-          text = text.gsub(CONTROL_CHARACTER_PATTERN, " ").strip
-          budget = config.budgets.max_description_bytes
-          if text.bytesize > budget
-            text = text.byteslice(0, budget).scrub("").rstrip
-          end
-          text.freeze
+          BoundedText.bound(value, config.budgets.max_description_bytes)
         end
 
         def canonicalize_annotations(annotations)
           return nil if annotations.nil?
 
-          deep_freeze(CanonicalJSON.normalize(annotations))
+          CanonicalJSON.deep_freeze(CanonicalJSON.normalize(annotations))
         end
 
         def build_entry(name, kind, description, schema, annotations)
@@ -225,17 +218,6 @@ module Tamoz
           "sha256:#{Digest::SHA256.hexdigest(payload)}"
         end
 
-        def deep_freeze(value)
-          case value
-          when Hash
-            value.each_value { |entry| deep_freeze(entry) }
-          when Array
-            value.each { |entry| deep_freeze(entry) }
-          when String
-            value.freeze
-          end
-          value.freeze
-        end
       end
     end
   end

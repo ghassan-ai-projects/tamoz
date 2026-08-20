@@ -6,7 +6,7 @@ module Tamoz
       # P11 §2 package boundary: `tamoz-agent` owns the memory surface
       # (canonical record, admission, retrieval, consolidation, promotion,
       # correction/deletion protocols) and depends on the structural
-      # `Tamoz::SQLite::MemoryRepository` contract. All P11 code lands under
+      # `Tamoz::SQLite::MemoryStore` contract. All P11 code lands under
       # `gems/tamoz-agent/lib/tamoz/agent/memory/`.
       module Surface
         module_function
@@ -35,27 +35,11 @@ module Tamoz
 
         # Secret-shaped content never enters admission, an index row's
         # searchable columns, a consolidation preimage, a prompt, or a receipt
-        # (invariant 24). Same pattern set as the session-record credential
-        # gate and the toolbox credential env pattern.
-        SECRET_VALUE_PATTERNS = [
-          /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-          /\b(sk|pk|xox[baprs])-[A-Za-z0-9][A-Za-z0-9_-]{7,}/,
-          /\bAKIA[0-9A-Z]{16}\b/,
-          /\bAIza[0-9A-Za-z_-]{35}\b/
-        ].freeze
-        private_constant :SECRET_VALUE_PATTERNS
-
+        # (invariant 24). Delegates to Tamoz::Core.secret_shaped? — the one
+        # pattern set, shared with the session-record credential gate and the
+        # toolbox credential env pattern.
         def secret_shaped?(value)
-          case value
-          when String
-            SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
-          when Hash
-            value.values.any? { |entry| secret_shaped?(entry) }
-          when Array
-            value.any? { |entry| secret_shaped?(entry) }
-          else
-            false
-          end
+          Tamoz::Core.secret_shaped?(value)
         end
       end
 
@@ -78,7 +62,7 @@ module Tamoz
           @protection = protection
           @limits = limits.freeze
           @clock = clock
-          @repository = Tamoz::SQLite::MemoryRepository.new(store: @store, clock: @clock)
+          @repository = Tamoz::SQLite::MemoryStore.new(store: @store, clock: @clock)
           @admission = Admission.new(self)
           @retrieval = Retrieval.new(self)
           @lifecycle = Lifecycle.new(self)
@@ -118,7 +102,7 @@ module Tamoz
         # The index metadata for a record (per-version snapshot).
         def index_for(record)
           scopes = record.scopes
-          Tamoz::SQLite::MemoryRepository::IndexRow.new(
+          Tamoz::SQLite::MemoryStore::IndexRow.new(
             store_namespace: namespace,
             memory_id: record.memory_id,
             record_version: record.record_version,

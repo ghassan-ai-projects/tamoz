@@ -15,7 +15,10 @@ module Tamoz
     # a repeated delivery re-runs the same transaction and the shared enqueue
     # primitive dedups on the deterministic request id.
     module ScheduleStore
-      CONTRACT_VERSION = 1
+      # v2: materialize_due declares current_grant/include_provenance and the
+      # lifecycle-symmetric enable_schedule is part of the contract (previously
+      # SQLite-only extensions its callers depended on).
+      CONTRACT_VERSION = 2
 
       # Insert or update a schedule. `expected_revision` is the CAS guard: the
       # write succeeds only when the stored revision matches; a concurrent edit
@@ -32,6 +35,14 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Resume a paused schedule — the lifecycle-symmetric partner of
+      # `disable_schedule`. Enabling is lifecycle state, not definition, so it
+      # has its own path rather than a re-`put_schedule` (an edit must not
+      # silently un-pause). CAS on `expected_revision`.
+      def enable_schedule(id, expected_revision:)
+        raise NotImplementedError
+      end
+
       # The atomic due scan. Claims every occurrence whose nominal instant (or
       # `not_before` after jitter) has passed, creates the occurrence if absent,
       # derives the deterministic request id, and enqueues the request into the
@@ -39,8 +50,16 @@ module Tamoz
       #
       # @param request_template [Hash] prevalidated, bounded, provider-free;
       #   its only substitutions are deterministic occurrence identity fields.
+      # @param current_grant the operator policy AT the enforcement point
+      #   (invariant 40). The schedule's stored maximum grant is intersected
+      #   against it; `nil` fails closed (empty policy — nothing survives).
+      # @param include_provenance [Boolean] whether the enqueued request payload
+      #   carries the schedule/occurrence identifiers alongside the template. A
+      #   consumer whose payload is a closed schema (the agent session) passes
+      #   false; the identifiers stay queryable on the occurrence row regardless.
       # @return [Array<Occurrence>] occurrences whose durable requests committed
-      def materialize_due(now:, owner:, lease_for:, limit:, request_template:)
+      def materialize_due(now:, owner:, lease_for:, limit:, request_template:,
+                          current_grant:, include_provenance: true)
         raise NotImplementedError
       end
 

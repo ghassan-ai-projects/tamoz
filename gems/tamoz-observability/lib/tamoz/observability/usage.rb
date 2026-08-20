@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'digest'
-require 'json'
-
 module Tamoz
   module Observability
     Usage = Data.define(
@@ -66,6 +63,8 @@ module Tamoz
     end
 
     class PricingTable
+      DIGEST_DOMAIN = "tamoz.observability.pricing_table.v1\n"
+
       attr_reader :source, :version, :digest
 
       def initialize(source:, version:, input_per_million:, output_per_million:)
@@ -75,7 +74,7 @@ module Tamoz
         raise ValidationError, 'pricing version must not be empty' if @version.empty?
         @input = non_negative(input_per_million, :input_per_million)
         @output = non_negative(output_per_million, :output_per_million)
-        @digest = "sha256:#{Digest::SHA256.hexdigest(JSON.generate(to_h))}".freeze
+        @digest = Tamoz::Core.digest(DIGEST_DOMAIN, to_h)
         freeze
       end
 

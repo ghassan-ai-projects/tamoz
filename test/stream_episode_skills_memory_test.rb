@@ -25,7 +25,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
 
     def recall(caller:, snapshot:, query:, limit:)
       @calls << {caller:, snapshot:, query:, limit:}
-      Tamoz::Stream::SituationRecall::Result.new(
+      Tamoz::Core::SituationRecall::Result.new(
         records: @projections, record_digests: @record_digests
       )
     end
@@ -148,7 +148,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "zero tool events for a smuggled tool"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_gate3_an_unknown_skill_ref_fails_before_any_model_call
@@ -199,7 +199,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
 
   def test_gate4_recalled_memory_is_citable_and_fabricated_refs_fail
     digest = "sha256:#{Digest::SHA256.hexdigest("prior pond oxygen increased")}"
-    projection = Tamoz::Stream::SituationRecall::Projection.new(
+    projection = Tamoz::Core::SituationRecall::Projection.new(
       statement: "prior pond oxygen increased",
       scopes: {
         tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"
@@ -246,7 +246,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
 
   def test_gate4_a_fabricated_memory_ref_fails_validation
     digest = "sha256:#{Digest::SHA256.hexdigest("prior pond oxygen increased")}"
-    projection = Tamoz::Stream::SituationRecall::Projection.new(
+    projection = Tamoz::Core::SituationRecall::Projection.new(
       statement: "prior pond oxygen increased",
       scopes: {
         tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"
@@ -300,7 +300,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "a recaller without a caller must fail before any model call"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_recall_with_a_tenant_mismatch_fails_typed
@@ -323,7 +323,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "a tenant-mismatched recaller must fail before any model call"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_a_replay_returns_the_recorded_recall_not_a_fresh_read
@@ -333,7 +333,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
     # recaller would now return different memory.
     first_digest = "sha256:#{Digest::SHA256.hexdigest("first memory")}"
     second_digest = "sha256:#{Digest::SHA256.hexdigest("changed memory")}"
-    first_projection = Tamoz::Stream::SituationRecall::Projection.new(
+    first_projection = Tamoz::Core::SituationRecall::Projection.new(
       statement: "first memory",
       scopes: {tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"},
       provenance: {episode_id: "ep-p", decision_id: "d", command_id: "c", outcome_id: "o"},
@@ -351,16 +351,16 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
       def recall(caller:, snapshot:, query:, limit:)
         @calls += 1
         if @calls == 1
-          Tamoz::Stream::SituationRecall::Result.new(records: [@first], record_digests: [@first.digest])
+          Tamoz::Core::SituationRecall::Result.new(records: [@first], record_digests: [@first.digest])
         else
           # A changed store: fence 2 WOULD return different memory.
-          second = Tamoz::Stream::SituationRecall::Projection.new(
+          second = Tamoz::Core::SituationRecall::Projection.new(
             statement: "changed memory",
             scopes: {tenant: "acme", situation_type: "aquaculture", entity_type: "pond", entity_id: "pond-00"},
             provenance: {episode_id: "ep-p", decision_id: "d", command_id: "c", outcome_id: "o"},
             digest: @second
           )
-          Tamoz::Stream::SituationRecall::Result.new(records: [second], record_digests: [second.digest])
+          Tamoz::Core::SituationRecall::Result.new(records: [second], record_digests: [second.digest])
         end
       end
     end.new(first_projection, second_digest)
@@ -402,7 +402,7 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                  "replay uses the RECORDED memory, not the changed store"
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_a_first_occurrence_cell_has_empty_memory
@@ -433,12 +433,12 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
     assert_equal [], state.fetch(:memory_record_digests)
     composition.fetch(:adapter).close
   ensure
-    endpoint.stop
+    endpoint&.stop
   end
 
   def test_gate5_a_novel_domain_with_skills_and_memory_passes_with_zero_new_ruby
     digest = "sha256:#{Digest::SHA256.hexdigest("greenhouse vents cycled last night")}"
-    projection = Tamoz::Stream::SituationRecall::Projection.new(
+    projection = Tamoz::Core::SituationRecall::Projection.new(
       statement: "greenhouse vents cycled last night",
       scopes: {
         tenant: "acme", situation_type: "greenhouse", entity_type: "greenhouse_zone", entity_id: "zone-03"

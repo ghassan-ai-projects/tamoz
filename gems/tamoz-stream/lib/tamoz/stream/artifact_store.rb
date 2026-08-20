@@ -34,7 +34,7 @@ module Tamoz
 
       def retain(digest:, bytes:, media_type: "application/json")
         digest = String(Tamoz::Core.normalize_digest(digest))
-        unless digest.match?(/\Asha256:[0-9a-f]{64}\z/)
+        unless Tamoz::Core.valid_digest?(digest)
           raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
         end
         unless bytes.is_a?(String)

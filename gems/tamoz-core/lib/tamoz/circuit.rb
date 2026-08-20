@@ -47,7 +47,7 @@ module Tamoz
     DEFAULT_PROBE_WINDOW_MS = 30_000
 
     STATES = %w[closed open].freeze
-    DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
+    DIGEST_PATTERN = Tamoz::Core::JCS::DIGEST_PATTERN
     # DR-2 D10: owner ids are stable deployment/policy identities. A per-process
     # UUID would let a restart orphan its own evidence, so UUID churn is refused
     # at the boundary rather than silently accepted.

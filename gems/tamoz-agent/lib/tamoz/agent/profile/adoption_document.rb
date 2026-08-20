@@ -39,7 +39,7 @@ module Tamoz
         # instance state it does not need would be the worse trade.
         def valid_activation?(profile_id, digests)
           profile_id.is_a?(String) && digests.is_a?(Array) &&
-            digests.all? { |digest| digest.is_a?(String) && DIGEST_PATTERN.match?(digest) }
+            digests.all? { |digest| Tamoz::Core.valid_digest?(digest) }
         end
       end
     end

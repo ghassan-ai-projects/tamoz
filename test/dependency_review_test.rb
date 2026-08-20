@@ -70,6 +70,17 @@ class DependencyReviewTest < Minitest::Test
     assert_equal declared, reported
   end
 
+  # The review must inventory EVERY gemspec in the monorepo. A hand-kept subset
+  # previously omitted four adapter gems, so a new third-party dependency added
+  # to any of them would never have appeared in the closure.
+  def test_the_review_inventories_every_gemspec
+    on_disk = Dir.glob(ROOT.join("gems", "tamoz-*", "*.gemspec").to_s)
+                 .map { |path| File.basename(path, ".gemspec") }.sort
+
+    assert_equal on_disk, report.fetch("reviewed_gems")
+    assert_equal GEM_ROOTS.keys.sort, report.fetch("reviewed_gems")
+  end
+
   # Development gems must never appear in the runtime closure. `minitest` is
   # hard-refused; `rake` may ship ONLY under the documented google-protobuf
   # exception (its gemspec declares rake as a runtime dependency; Tamoz runtime

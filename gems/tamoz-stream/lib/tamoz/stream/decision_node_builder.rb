@@ -50,7 +50,7 @@ module Tamoz
 
       # The minimal envelope view the DecisionBuilder reads — the episode
       # payload hash is the durable source; no wire object is reconstructed.
-      EnvelopeView = Struct.new(:episode, :allowlist) do
+      EnvelopeView = Data.define(:episode, :allowlist) do
         def episode_id = episode.fetch("episode_id")
         def attempt_id = episode.fetch("attempt_id")
         def fence = episode.fetch("fence")

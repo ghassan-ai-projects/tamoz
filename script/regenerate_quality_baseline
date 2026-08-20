@@ -65,9 +65,24 @@ end
 def rubocop_report
   cfg = raw_rubocop_config
   out = File.join(TMP, 'rubocop-raw.json')
+  FileUtils.rm_f(out) # never parse a stale report from a prior run
   bin = Gem.bin_path('rubocop', 'rubocop')
-  Open3.capture3(RbConfig.ruby, bin, '--config', cfg, '--format', 'json', '--out', out, chdir: ROOT)
-  JSON.parse(File.read(out))
+  _stdout, err, status = Open3.capture3(
+    RbConfig.ruby, bin, '--config', cfg, '--format', 'json', '--out', out, chdir: ROOT
+  )
+  # RuboCop exits 0 (clean) or 1 (offenses found); any other code — cache,
+  # plugin, config, or filesystem failure — must fail the ratchet closed rather
+  # than let a false-zero ledger be recorded (CQ-03).
+  unless [0, 1].include?(status.exitstatus)
+    raise "rubocop failed (exit #{status.exitstatus.inspect}): #{err}"
+  end
+
+  report = JSON.parse(File.read(out))
+  if report.fetch('summary').fetch('inspected_file_count').to_i.zero?
+    raise "rubocop inspected 0 files; the analyzer did not run: #{err}"
+  end
+
+  report
 end
 
 def offense_totals(report)
@@ -113,7 +128,12 @@ end
 
 def reek_ledger
   bin = Gem.bin_path('reek', 'reek')
-  out, = Open3.capture3(RbConfig.ruby, bin, '--format', 'json', *REPORT_DIRS, chdir: ROOT)
+  out, err, status = Open3.capture3(RbConfig.ruby, bin, '--format', 'json', *REPORT_DIRS, chdir: ROOT)
+  # Reek exits 0 (clean) or 2 (smells found); any other code is a tool failure,
+  # so fail the ratchet closed instead of recording an empty ledger (CQ-03).
+  unless [0, 2].include?(status.exitstatus)
+    raise "reek failed (exit #{status.exitstatus.inspect}): #{err}"
+  end
   smells = JSON.parse(out)
   by_type = Hash.new(0)
   by_file = Hash.new(0)

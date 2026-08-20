@@ -14,7 +14,6 @@ module Tamoz
       VERDICTS = Tamoz::Stream::VerificationStore::VERDICTS
       LEARNABLE_VERDICTS = Tamoz::Stream::VerificationStore::LEARNABLE_VERDICTS
       STATES = Tamoz::Stream::VerificationStore::STATES
-      DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/.freeze
       COLUMNS = %w[
         tenant_id intent_id command_id decision_id episode_id attempt_id decision_digest episode state
         outcome_id outcome_digest verdict reconciliation_version source_authority opened_at
@@ -292,7 +291,7 @@ module Tamoz
 
       def digest!(value, name)
         digest = text!(value, name)
-        raise VerificationError, "#{name} must be a sha256 digest" unless digest.match?(DIGEST_PATTERN)
+        raise VerificationError, "#{name} must be a sha256 digest" unless Tamoz::Core.valid_digest?(digest)
 
         digest
       end
