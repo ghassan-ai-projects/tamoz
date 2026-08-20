@@ -13,7 +13,11 @@ module Tamoz
     # payload. `Tamoz::StateCodec` already rejects it at dump time; this module rejects it
     # one layer earlier so the failure names the record rather than a JSON path.
     module SessionRecords
-      RECORD_VERSION = 1
+      # Effect receipts gained durable logical and attempt identities. This is an
+      # incompatible checkpoint wire change; old session records are rejected and
+      # callers must start from a fresh database as required by the repository
+      # compatibility policy.
+      RECORD_VERSION = 2
       DIGEST_DOMAIN = "tamoz.agent.session_record.v1"
       LEGACY_PROFILE_ID = "legacy"
       LEGACY_PROFILE_DIGEST = "legacy:none"
@@ -64,6 +68,7 @@ module Tamoz
             # catalog digests it ran against as {server_id => snapshot_digest}.
             # Optional HASH, legacy sentinel {}, RECORD_VERSION stays 1.
             "mcp_catalogs" => HASH,
+            "mcp_source_digests" => HASH,
             # P17 (correction 5): a session that ran under a profile carrying an
             # `egress:` section pins the canonical egress declaration. Optional
             # HASH, legacy sentinel {} — the pre-P17 state and the "profile has
@@ -137,7 +142,48 @@ module Tamoz
           },
           optional: {
             "plan_digest" => STRING,
-            "fallback" => STRING
+            "fallback" => STRING,
+            "mode" => STRING,
+            "authority_revision" => STRING,
+            "catalog_revision" => STRING
+          }
+        },
+        "adaptive_decision" => {
+          required: {
+            "decision" => STRING,
+            "iteration" => INTEGER,
+            "decision_digest" => STRING
+          },
+          optional: {
+            "capability_id" => STRING,
+            "arguments_digest" => STRING,
+            "answer" => STRING,
+            "evidence_refs" => STRINGS,
+            "reason" => STRING
+          }
+        },
+        "lifecycle_event" => {
+          required: {
+            "event_type" => STRING,
+            "sequence" => INTEGER,
+            "request_id" => STRING,
+            "thread_id" => STRING,
+            "execution_id" => STRING,
+            "phase" => STRING,
+            "effect_state" => STRING,
+            "delivery_state" => STRING
+          },
+          optional: {
+            "iteration" => INTEGER,
+            "sub_operation" => INTEGER,
+            "effect_key" => STRING,
+            "logical_key" => STRING,
+            "attempt_number" => INTEGER,
+            "capability_id" => STRING,
+            "source_id" => STRING,
+            "provenance" => STRING,
+            "truncated" => BOOLEAN,
+            "terminal_reason" => STRING
           }
         },
         "approval" => {
@@ -168,12 +214,16 @@ module Tamoz
             "before_state" => STRING,
             "after_digest" => STRING,
             "after_mode" => INTEGER,
-            "check_name" => STRING
+            "check_name" => STRING,
+            "iteration" => INTEGER,
+            "sub_operation" => INTEGER
           }
         },
         "effect_receipt" => {
           required: {
             "effect_key" => STRING,
+            "logical_key" => STRING,
+            "attempt_identity" => STRING,
             "step_id" => STRING,
             "operation" => STRING,
             "safety" => STRING,
@@ -182,7 +232,9 @@ module Tamoz
           },
           optional: {
             "reconciliation" => STRING,
-            "external_id" => STRING
+            "external_id" => STRING,
+            "iteration" => INTEGER,
+            "sub_operation" => INTEGER
           }
         },
         "observation" => {
@@ -195,6 +247,16 @@ module Tamoz
           optional: {
             "tool" => STRING,
             "check" => HASH,
+            "effect_key" => STRING,
+            "iteration" => INTEGER,
+            "sub_operation" => INTEGER,
+            "provenance" => STRING,
+            "source_id" => STRING,
+            "truncated" => BOOLEAN,
+            "output_bytes" => INTEGER,
+            "result_class" => STRING,
+            "decision_digest" => STRING,
+            "evidence_ref" => STRING,
             # A repairable tool rejection, recorded as evidence rather than raised.
             # Carries kind, tool, error_class, reason, and failure_signature.
             "failure" => HASH
@@ -248,7 +310,8 @@ module Tamoz
       CREDENTIAL_SCANNED_KINDS = %w[plan accepted_plan].freeze
 
       # Pure `old_hash -> new_hash` upgrade functions keyed by [kind, from_version].
-      # Empty at RECORD_VERSION 1: there is no earlier shipped version to migrate.
+      # No compatibility migrations: version 1 receipts do not carry the identity
+      # fields required by the current journal contract.
       MIGRATIONS = {}.freeze
 
       module_function
@@ -333,6 +396,7 @@ module Tamoz
           # session and a P10 session built without an MCP source both resume
           # against "no catalogs". "{}" is the legacy sentinel.
           defaults["mcp_catalogs"] = {} unless migrated.key?("mcp_catalogs")
+          defaults["mcp_source_digests"] = {} unless migrated.key?("mcp_source_digests")
           # P17: no egress pin is one state, however it arose — a pre-P17 session
           # and a P17 session whose profile carried no `egress:` section both
           # resume against "no egress declaration". "{}" is the legacy sentinel.

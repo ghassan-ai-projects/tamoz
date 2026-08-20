@@ -35,7 +35,10 @@ module Tamoz
         source = @configuration.mcp
         return {} unless source && !source.catalogs.empty?
 
-        { mcp_catalogs: source.mcp_catalogs }
+        {
+          mcp_catalogs: source.mcp_catalogs,
+          mcp_source_digests: source.mcp_source_digests
+        }
       end
 
       def egress_binding
@@ -94,6 +97,8 @@ module Tamoz
 
       def session_update(task, context, claimed)
         toolbox = @configuration.toolbox
+        return adaptive_session_update(task, context, claimed, toolbox) if adaptive_graph?
+
         {
           task:,
           phase: toolbox.action_capable? ? 'discovery' : 'read_only',
@@ -103,6 +108,44 @@ module Tamoz
           **@memory.claimed_behavior_channel(claimed),
           session: session_record(task, context, claimed, toolbox)
         }
+      end
+
+      def adaptive_graph?
+        @graph_version == SessionNodes::ADAPTIVE_GRAPH_VERSION
+      end
+
+      def adaptive_session_update(task, context, claimed, toolbox)
+        {
+          task:,
+          phase: 'adaptive_read_only',
+          repair_attempt: 0,
+          step_cursor: 0,
+          adaptive_iteration: 0,
+          next_node: 'adaptive_decide',
+          route: adaptive_route(toolbox),
+          **@memory.claimed_behavior_channel(claimed),
+          session: session_record(task, context, claimed, toolbox)
+        }
+      end
+
+      def adaptive_route(toolbox)
+        authority_revision = @configuration.profile&.canonical_digest || toolbox.catalog_digest
+        catalog_revision = SessionRecords.digest(
+          Tamoz::Agent::Deliberation.canonical(@configuration.mcp&.mcp_catalogs || {})
+        )
+        SessionRecords.build(
+          'route',
+          route: 'adaptive_read_only',
+          reason_class: 'workspace_evidence',
+          route_digest: SessionRecords.digest(
+            'mode' => 'adaptive_read_only',
+            'authority_revision' => authority_revision,
+            'catalog_revision' => catalog_revision
+          ),
+          mode: 'adaptive_read_only',
+          authority_revision:,
+          catalog_revision:
+        )
       end
 
       def session_record(task, context, claimed, toolbox)

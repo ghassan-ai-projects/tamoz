@@ -39,6 +39,7 @@ module Tamoz
       # what makes websearch one of the four closed-world sources rather than an
       # unnamed extra MCP server.
       WEBSEARCH_SERVER_ID = "websearch"
+      MCP_EFFECT_CLASSES = %i[read_only bounded reconcilable].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
 
       def self.build(toolbox:, mcp: nil)
@@ -94,6 +95,10 @@ module Tamoz
       end
 
       def descriptor?(name) = registry.descriptors.key?(String(name))
+
+      def inventory(**)
+        host.inventory(**)
+      end
 
       def validate(name, arguments)
         descriptor, dispatcher = host.route(String(name))
@@ -163,15 +168,27 @@ module Tamoz
       def build_toolbox_source(source_id, names, toolbox)
         read_only = toolbox.read_only_names
         descriptors = names.map do |name|
+          input_schema = {"type" => "object"}
+          output_schema = {"type" => "object"}
           Capability::Descriptor.new(
             id: name,
             kind: SKILL_TOOLS.include?(name) ? :skill : :tool,
             source_id:,
             trust: SKILL_TOOLS.include?(name) ? :declared : :local,
             effect_class: read_only.include?(name) ? :read_only : :bounded,
+            approval_policy: read_only.include?(name) ? :none : :required,
+            egress_policy_ref: "none",
+            egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+            secret_handling: :reject_values,
+            request_budget: {"max_bytes" => 16 * 1024},
+            output_budget: {"max_bytes" => 64 * 1024},
+            retry_policy: read_only.include?(name) ? :read_only : :none,
+            reconciliation_policy: :none,
+            schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
+            source_digest: Capability::Descriptor.source_digest_for(source_id),
             protocol_profile: {"transport" => "in_process"},
-            input_schema: {"type" => "object"},
-            output_schema: {"type" => "object"}
+            input_schema:,
+            output_schema:
           )
         end
         Capability::Source.new(source_id:, descriptors:)
@@ -184,7 +201,12 @@ module Tamoz
 
         @mcp.descriptors.group_by { |descriptor| source_id_for(descriptor) }
             .transform_values do |descriptors|
-              descriptors.map { |descriptor| mcp_descriptor(descriptor) }
+              descriptors.filter_map do |descriptor|
+                effect_class = optional(descriptor, :effect_class)&.to_sym
+                next unless MCP_EFFECT_CLASSES.include?(effect_class)
+
+                mcp_descriptor(descriptor)
+              end
             end
       end
 
@@ -202,34 +224,55 @@ module Tamoz
       # schema/profile fields when the caller's descriptor carries them —
       # reading a field the contract does not promise would make the host
       # reject a conforming caller.
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def mcp_descriptor(descriptor)
         websearch = descriptor.source_id == WEBSEARCH_SERVER_ID
         profile = optional(descriptor, :protocol_profile)
+        remote_digest = descriptor.definition_digest
+        effect_class = optional(descriptor, :effect_class)&.to_sym
+        unless MCP_EFFECT_CLASSES.include?(effect_class)
+          raise Tamoz::Core::Capability::DescriptorConflictError,
+                "MCP capability #{descriptor.id.inspect} has no closed effect classification"
+        end
+        input_schema = optional(descriptor, :input_schema)
+        output_schema = optional(descriptor, :output_schema)
+        egress_policy_ref = websearch ? "websearch:#{descriptor.source_id}" : "mcp:#{descriptor.source_id}"
         Capability::Descriptor.new(
           id: descriptor.id,
           kind: websearch ? :websearch : :mcp_tool,
           source_id: source_id_for(descriptor),
-          # The remote definition digest is the pin; the host never recomputes
-          # it, so a changed server cannot present the same descriptor.
-          source_digest: descriptor.definition_digest,
+          source_digest: Capability::Descriptor.source_digest_for(source_id_for(descriptor)),
           trust: :operator,
-          effect_class: @mcp.read_only?(descriptor.id) ? :read_only : :bounded,
+          effect_class:,
+          approval_policy: effect_class == :read_only ? :none : :required,
+          egress_policy_ref:,
+          egress_policy_digest: Capability::Descriptor.egress_digest_for(egress_policy_ref),
+          secret_handling: :reject_values,
+          request_budget: {"max_bytes" => 16 * 1024},
+          output_budget: {"max_bytes" => 64 * 1024},
+          retry_policy: effect_class == :read_only ? :read_only : :none,
+          reconciliation_policy: effect_class == :reconcilable ? :explicit : :none,
+          schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
           protocol_profile: {
-            "transport" => "mcp", "profile" => profile.nil? ? "" : profile.to_s
+            "transport" => "mcp", "profile" => profile.nil? ? "" : profile.to_s,
+            "definition_digest" => remote_digest
           },
-          input_schema: schema_shape(optional(descriptor, :input_schema)),
-          output_schema: schema_shape(optional(descriptor, :output_schema))
+          input_schema: schema_shape(input_schema),
+          output_schema: schema_shape(output_schema)
         )
       end
 
       def optional(descriptor, field)
         descriptor.respond_to?(field) ? descriptor.public_send(field) : nil
       end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       # The host records THAT a schema is pinned, never a copy of it: the
       # pinned schema stays in the caller's source, which is the only thing
       # allowed to validate against it (P10 §4).
-      def schema_shape(schema) = schema.nil? ? nil : {"type" => "object"}
+      def schema_shape(schema)
+        schema.nil? ? nil : Tamoz::Core.deep_freeze(Tamoz::Core.canonical(schema))
+      end
     end
 
     # The per-source dispatcher for the MCP-owned sources (`mcp:<server>` and

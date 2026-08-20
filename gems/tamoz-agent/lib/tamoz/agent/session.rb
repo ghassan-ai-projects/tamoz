@@ -37,7 +37,10 @@ module Tamoz
       :provider_ambiguity,
       :interrupts,
       :state
-    )
+    ) do
+      def adaptive_decisions = state.fetch(:adaptive_decisions, [])
+      def lifecycle_events = state.fetch(:lifecycle_events, [])
+    end
 
     # The durable agent lifecycle: one graph turn over the existing DurableRunner,
     # checkpoint store, request inbox, lease/fence, and effect journal.
@@ -49,16 +52,17 @@ module Tamoz
       GRAPH_NAME = "tamoz.agent.session"
       GRAPH_VERSION = "1"
       CURRENT_GRAPH_VERSION = "2"
-      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION].freeze
+      ADAPTIVE_GRAPH_VERSION = SessionNodes::ADAPTIVE_GRAPH_VERSION
+      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION, ADAPTIVE_GRAPH_VERSION].freeze
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
-      ROUTINGS = %i[legacy experimental].freeze
+      ROUTINGS = %i[legacy experimental adaptive].freeze
 
       attr_reader :app, :definition, :toolbox
 
       # P15-W: the sealed P18 capability host this session was constructed
       # with. Exposed read-only so an operator (and the audit) can inspect the
       # exact surface a thread is bound to without reaching into the nodes.
-      def capabilities = @nodes.capabilities
+      def capabilities = nodes_for_default_graph.capabilities
 
       def initialize(
         model:,
@@ -100,7 +104,11 @@ module Tamoz
         # every memory branch inert (pre-P11 sessions resume byte-identically).
         @memory = memory
         @memory_owner = memory_owner
-        @default_graph_version = routing.to_sym == :experimental ? CURRENT_GRAPH_VERSION : GRAPH_VERSION
+        @default_graph_version = case routing.to_sym
+                                 when :experimental then CURRENT_GRAPH_VERSION
+                                 when :adaptive then ADAPTIVE_GRAPH_VERSION
+                                 else GRAPH_VERSION
+                                 end
         verify_profile_binding!(profile)
         node_arguments = {
           model:,
@@ -118,6 +126,7 @@ module Tamoz
         }
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
+        @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: ADAPTIVE_GRAPH_VERSION)
         @definitions = {
           GRAPH_VERSION => Session.build_definition(
             @nodes_v1,
@@ -126,6 +135,10 @@ module Tamoz
           CURRENT_GRAPH_VERSION => Session.build_definition(
             @nodes,
             version: CURRENT_GRAPH_VERSION
+          ),
+          ADAPTIVE_GRAPH_VERSION => Session.build_definition(
+            @nodes_adaptive,
+            version: ADAPTIVE_GRAPH_VERSION
           )
         }.freeze
         @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
@@ -152,6 +165,10 @@ module Tamoz
         end
       end
       private :verify_mcp_source!
+
+      def nodes_for_default_graph
+        @default_graph_version == ADAPTIVE_GRAPH_VERSION ? @nodes_adaptive : @nodes
+      end
 
       # P8 §5.2: the toolbox must expose exactly the capability surface the
       # profile pins; a mismatch fails here, before any model I/O.
@@ -293,12 +310,15 @@ module Tamoz
 
         stored = record.fetch("mcp_catalogs", {})
         current = @mcp ? @mcp.mcp_catalogs : {}
-        return if stored == current
+        stored_sources = record.fetch("mcp_source_digests", {})
+        current_sources = @mcp ? @mcp.mcp_source_digests : {}
+        return if stored == current && stored_sources == current_sources
 
         raise McpCatalogSnapshotUnavailableError,
-              "session #{thread} was planned against MCP catalog digests #{stored.inspect}; " \
-              "the current source exposes #{current.inspect}. Restore the exact catalog " \
-              "snapshots or start a new session."
+              "session #{thread} was planned against MCP catalog/source digests " \
+              "#{stored.inspect}/#{stored_sources.inspect}; the current source exposes " \
+              "#{current.inspect}/#{current_sources.inspect}. Restore the exact MCP " \
+              "configuration or start a new session."
       end
       private :enforce_mcp_binding!
 
@@ -361,6 +381,7 @@ module Tamoz
 
       def self.build_definition(nodes, version: GRAPH_VERSION)
         routed = String(version) == CURRENT_GRAPH_VERSION
+        adaptive = String(version) == ADAPTIVE_GRAPH_VERSION
         Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
           state :task, default: ""
           state :phase, default: ""
@@ -371,7 +392,7 @@ module Tamoz
           state :provider_ambiguity, default: 0
           state :check_passed, default: false
           state :session
-          state :route if routed
+          state :route if routed || adaptive
           state :accepted_plan
           state :verification
           state :blocked
@@ -384,6 +405,15 @@ module Tamoz
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []
+          if adaptive
+            state :adaptive_iteration, default: 0
+            state :adaptive_action
+            state :adaptive_pending_observation
+            state :adaptive_decisions, reduce: :append, default: []
+            state :adaptive_seen_actions, reduce: :append, default: []
+            state :adaptive_terminal_detail, default: nil
+            state :lifecycle_events, reduce: :append, default: []
+          end
           # P11-W / DR-1: the intake's BehaviorTransition claim ids, finalized
           # by the deliberate node after the apply (checkpoint commit).
           state :behavior_transition_claim, reduce: :append, default: []
@@ -394,6 +424,24 @@ module Tamoz
           if routed
             node(:route, implementation_name: "tamoz.agent.session.route", version: "1") do |state, context|
               nodes.route(state, context)
+            end
+          end
+          if adaptive
+            node(:adaptive_decide, implementation_name: "tamoz.agent.session.adaptive_decide",
+                                   version: "1") do |state, context|
+              nodes.adaptive_decide(state, context)
+            end
+            node(:adaptive_validate, implementation_name: "tamoz.agent.session.adaptive_validate",
+                                     version: "1") do |state, context|
+              nodes.adaptive_validate(state, context)
+            end
+            node(:adaptive_dispatch, implementation_name: "tamoz.agent.session.adaptive_dispatch",
+                                     version: "1") do |state, context|
+              nodes.adaptive_dispatch(state, context)
+            end
+            node(:adaptive_observe, implementation_name: "tamoz.agent.session.adaptive_observe",
+                                    version: "1") do |state, context|
+              nodes.adaptive_observe(state, context)
             end
           end
           node(:deliberate, implementation_name: "tamoz.agent.session.deliberate", version: "1") do |state, context|
@@ -416,7 +464,11 @@ module Tamoz
           end
 
           edge Tamoz::START, :intake
-          edge :intake, routed ? :route : :deliberate
+          edge :intake, if adaptive
+                          :adaptive_decide
+                        else
+                          (routed ? :route : :deliberate)
+                        end
           edge :verify, :terminal
           edge :terminal, Tamoz::END
 
@@ -425,6 +477,32 @@ module Tamoz
                    name: :route_route,
                    version: "1",
                    targets: %i[step_gate deliberate terminal] do |state|
+              state.fetch(:next_node).to_sym
+            end
+          end
+          if adaptive
+            branch :adaptive_decide,
+                   name: :adaptive_decide_route,
+                   version: "1",
+                   targets: %i[adaptive_validate terminal deliberate] do |state|
+              state.fetch(:next_node).to_sym
+            end
+            branch :adaptive_validate,
+                   name: :adaptive_validate_route,
+                   version: "1",
+                   targets: %i[adaptive_dispatch terminal deliberate] do |state|
+              state.fetch(:next_node).to_sym
+            end
+            branch :adaptive_dispatch,
+                   name: :adaptive_dispatch_route,
+                   version: "1",
+                   targets: %i[adaptive_observe terminal] do |state|
+              state.fetch(:next_node).to_sym
+            end
+            branch :adaptive_observe,
+                   name: :adaptive_observe_route,
+                   version: "1",
+                   targets: %i[adaptive_decide terminal] do |state|
               state.fetch(:next_node).to_sym
             end
           end

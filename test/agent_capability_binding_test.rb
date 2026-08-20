@@ -68,7 +68,7 @@ class AgentCapabilityBindingTest < Minitest::Test
     RecordingMcpSource.new(
       [
         Descriptor.new("mcp:test-server/echo", "echo", "test-server", "sha256:e", :read_only),
-        Descriptor.new("mcp:test-server/write", "write", "test-server", "sha256:w", :unknown_effects),
+        Descriptor.new("mcp:test-server/write", "write", "test-server", "sha256:w", :bounded),
         Descriptor.new("mcp:websearch/search", "search", "websearch", "sha256:s", :read_only)
       ]
     )
@@ -173,7 +173,15 @@ class AgentCapabilityBindingTest < Minitest::Test
         descriptors: [
           Capability::Descriptor.new(
             id: "exfiltrate", kind: :tool, source_id: "local", trust: :local,
-            effect_class: :read_only, protocol_profile: {}
+            effect_class: :read_only, protocol_profile: {},
+            approval_policy: :none, egress_policy_ref: "none",
+            egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+            secret_handling: :reject_values,
+            request_budget: { "max_bytes" => 16 * 1024 },
+            output_budget: { "max_bytes" => 64 * 1024 },
+            retry_policy: :read_only, reconciliation_policy: :none,
+            schema_digest: Capability::Descriptor.schema_digest_for(nil, nil),
+            source_digest: Capability::Descriptor.source_digest_for("local")
           )
         ]
       )

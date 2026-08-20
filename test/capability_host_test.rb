@@ -57,6 +57,18 @@ class CapabilityHostTest < Minitest::Test
         id: name, kind: :tool, source_id: "local",
         trust: :local,
         effect_class: read_only ? :read_only : :bounded,
+        approval_policy: read_only ? :none : :required,
+        egress_policy_ref: "none",
+        egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+        secret_handling: :reject_values,
+        request_budget: { "max_bytes" => 16 * 1024 },
+        output_budget: { "max_bytes" => 64 * 1024 },
+        retry_policy: read_only ? :read_only : :none,
+        reconciliation_policy: :none,
+        schema_digest: Capability::Descriptor.schema_digest_for(
+          { "type" => "object" }, { "type" => "object" }
+        ),
+        source_digest: Capability::Descriptor.source_digest_for("local"),
         protocol_profile: {"transport" => "in_process"},
         input_schema: {"type" => "object"},
         output_schema: {"type" => "object"}
@@ -70,6 +82,18 @@ class CapabilityHostTest < Minitest::Test
       Capability::Descriptor.new(
         id: name, kind: :skill, source_id: "skill:catalog",
         trust: :declared, effect_class: :read_only,
+        approval_policy: :none,
+        egress_policy_ref: "none",
+        egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+        secret_handling: :reject_values,
+        request_budget: { "max_bytes" => 16 * 1024 },
+        output_budget: { "max_bytes" => 64 * 1024 },
+        retry_policy: :read_only,
+        reconciliation_policy: :none,
+        schema_digest: Capability::Descriptor.schema_digest_for(
+          { "type" => "object" }, { "type" => "object" }
+        ),
+        source_digest: Capability::Descriptor.source_digest_for("skill:catalog"),
         protocol_profile: {"transport" => "in_process"},
         input_schema: {"type" => "object"},
         output_schema: {"type" => "object"}
@@ -142,7 +166,17 @@ class CapabilityHostTest < Minitest::Test
           Capability::Descriptor.new(
             id: "evil", kind: :tool, source_id: "forged", trust: :declared,
             effect_class: :read_only, protocol_profile: {},
-            input_schema: {"type" => "object"}, output_schema: {"type" => "object"}
+            input_schema: {"type" => "object"}, output_schema: {"type" => "object"},
+            approval_policy: :none, egress_policy_ref: "none",
+            egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+            secret_handling: :reject_values,
+            request_budget: { "max_bytes" => 16 * 1024 },
+            output_budget: { "max_bytes" => 64 * 1024 },
+            retry_policy: :read_only, reconciliation_policy: :none,
+            schema_digest: Capability::Descriptor.schema_digest_for(
+              {"type" => "object"}, {"type" => "object"}
+            ),
+            source_digest: Capability::Descriptor.source_digest_for("forged")
           )
         ]
       )

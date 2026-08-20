@@ -296,7 +296,10 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
   end
 
   def source_for(snapshot, supervisor:, names: %w[set_answer])
-    descriptors = names.map { |name| descriptor_for(snapshot, name) }
+    descriptors = names.map do |name|
+      effect_class = name == "set_answer" ? :bounded : :read_only
+      descriptor_for(snapshot, name, effect_class:)
+    end
     executor = lambda do |_context, descriptor, arguments|
       outcome = Invocation.call(
         descriptor, arguments, snapshot: snapshot, supervisor: supervisor
@@ -479,7 +482,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
         error = assert_raises(Tamoz::Agent::McpCatalogSnapshotUnavailableError) do
           other.continue(thread: "session.mcp.resume", request_id: "request.b")
         end
-        assert_match(/was planned against MCP catalog digests/, error.message)
+        assert_match(/was planned against MCP catalog\/source digests/, error.message)
       ensure
         supervisor.close
       end
@@ -531,7 +534,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
 
   def test_structural_review_rejects_bare_names_and_schema_invalid_arguments_without_io
     snapshot = fake_snapshot
-    descriptor = fake_descriptor(snapshot, "echo")
+    descriptor = fake_descriptor(snapshot, "echo", effect_class: :read_only)
     validator = lambda do |_entry, _arguments|
       raise Tamoz::Agent::ToolArgumentError, "the arguments are invalid"
     end
@@ -738,7 +741,7 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       File.write(File.join(root, "note.txt"), "Tamoz is awake.\n")
       source = Source.new(
         catalogs: {snapshot.server_id => snapshot},
-        descriptors: [fake_descriptor(snapshot, "set_answer")],
+        descriptors: [fake_descriptor(snapshot, "set_answer", effect_class: :bounded)],
         executor: ->(_, _, _) { "answer file written" }
       )
       model = ScriptedModel.new(

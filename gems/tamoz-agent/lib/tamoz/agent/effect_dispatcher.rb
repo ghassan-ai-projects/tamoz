@@ -20,6 +20,7 @@ module Tamoz
         :error,
         :effect_key,
         :attempt_number,
+        :attempt_identity,
         :reconciliation,  # nil | "completed" | "not_applied" | "unknown"
         :reused           # true when the recorded receipt was returned without acting
       )
@@ -39,6 +40,7 @@ module Tamoz
         reconcile: nil,
         after_start: nil,
         logical_key: nil,
+        logical_identity: nil,
         &perform
       )
         effects = context.effects
@@ -50,12 +52,17 @@ module Tamoz
           raise ConfigurationError, "a reconcilable effect requires a reconciler"
         end
 
+        generated_logical_key = logical_key.nil? && logical_identity
+        logical_key ||= build_logical_key(effects, context, logical_identity)
         key = if logical_key
-                unless effects.respond_to?(:logical_key)
+                if generated_logical_key
+                  logical_key
+                elsif !effects.respond_to?(:logical_key)
                   raise ConfigurationError,
                         "logical effects require a journal with logical_key support"
+                else
+                  effects.logical_key(logical_key)
                 end
-                effects.logical_key(logical_key)
               else
                 effects.key(
                   execution_id: context.execution_id,
@@ -100,6 +107,7 @@ module Tamoz
                 error: nil,
                 effect_key: key,
                 attempt_number: decision.record.current_attempt,
+                attempt_identity: current_attempt_identity(decision.record),
                 reconciliation:,
                 reused: true
               )
@@ -116,6 +124,7 @@ module Tamoz
             error: nil,
             effect_key: key,
             attempt_number: decision.record.current_attempt,
+            attempt_identity: current_attempt_identity(decision.record),
             reconciliation:,
             reused: true
           )
@@ -127,6 +136,7 @@ module Tamoz
             error: attempt&.error,
             effect_key: key,
             attempt_number: decision.record.current_attempt,
+            attempt_identity: current_attempt_identity(decision.record),
             reconciliation:,
             reused: true
           )
@@ -137,6 +147,7 @@ module Tamoz
             error: nil,
             effect_key: key,
             attempt_number: decision.record.current_attempt,
+            attempt_identity: current_attempt_identity(decision.record),
             reconciliation:,
             reused: false
           )
@@ -147,6 +158,7 @@ module Tamoz
             error: nil,
             effect_key: key,
             attempt_number: decision.record.current_attempt,
+            attempt_identity: current_attempt_identity(decision.record),
             reconciliation:,
             reused: false
           )
@@ -165,6 +177,7 @@ module Tamoz
               error: detail,
               effect_key: key,
               attempt_number: decision.record.current_attempt,
+              attempt_identity: current_attempt_identity(decision.record),
               reconciliation:,
               reused: false
             )
@@ -181,6 +194,7 @@ module Tamoz
               error: detail,
               effect_key: key,
               attempt_number: decision.record.current_attempt,
+              attempt_identity: current_attempt_identity(decision.record),
               reconciliation:,
               reused: false
             )
@@ -197,6 +211,7 @@ module Tamoz
             error: nil,
             effect_key: key,
             attempt_number: record.current_attempt,
+            attempt_identity: current_attempt_identity(record),
             reconciliation:,
             reused: false
           )
@@ -204,6 +219,25 @@ module Tamoz
           raise CheckpointCorruptionError,
                 "unhandled effect decision #{decision.action.inspect}"
         end
+      end
+
+      def build_logical_key(effects, context, identity)
+        return unless identity
+        unless effects.respond_to?(:logical_identity)
+          raise ConfigurationError,
+                "structured logical effects require a journal with logical_identity support"
+        end
+
+        effects.logical_identity(
+          request_id: identity.fetch(:request_id, context.request_id),
+          execution_id: identity.fetch(:execution_id, context.execution_id),
+          capability_id: identity.fetch(:capability_id),
+          arguments: identity.fetch(:arguments),
+          authority_revision: identity.fetch(:authority_revision),
+          catalog_revision: identity.fetch(:catalog_revision),
+          iteration: identity.fetch(:iteration),
+          sub_operation: identity.fetch(:sub_operation)
+        )
       end
 
       # Repairability is decided from the exception *type* at the raise site and then
@@ -227,14 +261,20 @@ module Tamoz
       # never repairable, so no repair field is recorded — the attempt is done.
       def unknown_error_detail(error)
         {
-          "class" => error.class.name,
-          "message" => error.message
+          "class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
+          "message" => Tamoz::Error.disclosable_message(
+            error.message, fallback: "effect outcome is unknown"
+          )
         }.freeze
       end
 
       def terminal_attempt(record)
         record.attempts.reverse.find { |attempt| attempt.status == :succeeded } ||
           record.attempts.last
+      end
+
+      def current_attempt_identity(record)
+        record.attempts.find { |attempt| attempt.attempt_number == record.current_attempt }&.identity
       end
 
       # Filesystem reconciliation: execute only from a proven before-state, complete

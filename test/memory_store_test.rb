@@ -17,6 +17,15 @@ class MemoryStoreTest < Minitest::Test
     compatibility_behavior: "tamoz.agent.session/1"
   }.freeze
 
+  def reset_effect_identity_schema(database)
+    assert_equal 0, database.get_first_value("SELECT COUNT(*) FROM tamoz_effects")
+    %w[tamoz_effect_transitions tamoz_effect_attempts tamoz_effects].each do |table|
+      database.execute("DROP TABLE #{table}")
+    end
+    migration = Tamoz::SQLite::Migrator.const_get(:MIGRATION_1)
+    migration.select { |sql| sql.include?("tamoz_effect") }.each { |sql| database.execute(sql) }
+  end
+
   # A deterministic protection codec (XOR) with a decrypt counter — the
   # decryption-boundary instrumentation target (P11-07).
   class CountingProtection
@@ -98,14 +107,15 @@ class MemoryStoreTest < Minitest::Test
     # through MIGRATION_11; situation scopes moved 11 -> 12 through
     # MIGRATION_12; the old stream engine's retirement moved 12 -> 13 through
     # MIGRATION_13 (T8.3); the verified artifact store moved 14 -> 15 through
-    # MIGRATION_15 (P3). The monotonic-ordering guard makes ordinal reuse
+    # MIGRATION_15 (P3); effect logical/attempt identities moved 15 -> 16
+    # through MIGRATION_16. The monotonic-ordering guard makes ordinal reuse
     # impossible.
-    assert_equal 15, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    assert_equal 16, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
                  Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 15, database.get_first_value("PRAGMA user_version")
+    assert_equal 16, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -156,6 +166,7 @@ class MemoryStoreTest < Minitest::Test
     # version-1 upgrade to re-create it.
     database.execute("DROP INDEX IF EXISTS idx_tamoz_artifacts_retained")
     database.execute("DROP TABLE IF EXISTS tamoz_artifacts")
+    reset_effect_identity_schema(database)
     %w[
       tamoz_comms_surfaces tamoz_comms_bindings tamoz_comms_pairing_challenges
       tamoz_comms_conversations tamoz_comms_inbound tamoz_comms_requests
@@ -165,11 +176,11 @@ class MemoryStoreTest < Minitest::Test
       database.execute("DROP TABLE IF EXISTS #{table}")
     end
     database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)")
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 15, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 16, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 
@@ -228,6 +239,7 @@ class MemoryStoreTest < Minitest::Test
     # first opened at v15; drop them so the reopen can re-run MIGRATION_15.
     database.execute("DROP INDEX IF EXISTS idx_tamoz_artifacts_retained")
     database.execute("DROP TABLE IF EXISTS tamoz_artifacts")
+    reset_effect_identity_schema(database)
     # The DB was built at v14, which already dropped the old stream tables;
     # recreate them from the real migration definitions so the downgrade can
     # exercise MIGRATION_11's stream clears, then let MIGRATION_13 drop them
@@ -237,7 +249,7 @@ class MemoryStoreTest < Minitest::Test
       database.execute(statement)
     end
     database.execute("PRAGMA user_version = 10")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13, 14, 15)")
+    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13, 14, 15, 16)")
     database.close
     adapter.close
 
@@ -267,7 +279,7 @@ class MemoryStoreTest < Minitest::Test
     assert_includes indexes, "idx_tamoz_memory_index_scope"
     assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal 15, upgraded.integrity_check.fetch("schema_version")
+    assert_equal 16, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

@@ -34,7 +34,9 @@ module Tamoz
       # P3 (provenance/replay): 14 -> 15 through MIGRATION_15, which adds the
       # durable verified artifact store (tenant-scoped (digest, bytes) rows
       # with rehash-on-admission).
-      CURRENT_VERSION = 15
+      # OpenClaw Phase 0 identity: persist logical and attempt identities rather
+      # than reconstructing them from the current worker process.
+      CURRENT_VERSION = 16
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1116,6 +1118,16 @@ module Tamoz
         MIGRATION_15.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      MIGRATION_16 = [
+        "ALTER TABLE tamoz_effects ADD COLUMN logical_key TEXT",
+        "ALTER TABLE tamoz_effect_attempts ADD COLUMN attempt_identity TEXT",
+        "CREATE UNIQUE INDEX idx_tamoz_effect_attempt_identity ON tamoz_effect_attempts(attempt_identity)"
+      ].freeze
+
+      MIGRATION_16_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_16.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1133,7 +1145,8 @@ module Tamoz
         12 => [MIGRATION_12, MIGRATION_12_CHECKSUM],
         13 => [MIGRATION_13, MIGRATION_13_CHECKSUM],
         14 => [MIGRATION_14, MIGRATION_14_CHECKSUM],
-        15 => [MIGRATION_15, MIGRATION_15_CHECKSUM]
+        15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
+        16 => [MIGRATION_16, MIGRATION_16_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1297,7 +1310,8 @@ module Tamoz
                        :MIGRATION_12, :MIGRATION_12_CHECKSUM,
                        :MIGRATION_13, :MIGRATION_13_CHECKSUM,
                        :MIGRATION_14, :MIGRATION_14_CHECKSUM,
-                       :MIGRATION_15, :MIGRATION_15_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_15, :MIGRATION_15_CHECKSUM,
+                       :MIGRATION_16, :MIGRATION_16_CHECKSUM, :MIGRATIONS
     end
   end
 end

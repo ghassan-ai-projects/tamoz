@@ -299,7 +299,9 @@ class AgentMcpAdversarialTest < Minitest::Test
       ENV["MCP_TEST_SERVER_EXIT_MID_CALL"] = "1"
       supervisor = Supervisor.new(config)
       begin
-        source = source_for(snapshot, supervisor:, names: %w[sleep_ms])
+        source = source_for(
+          snapshot, supervisor:, names: %w[sleep_ms], effect_class: :bounded
+        )
         session, model = read_only_session(
           root:, adapter:, source:,
           tool: "mcp:test-server/sleep_ms", arguments: {"ms" => 1}

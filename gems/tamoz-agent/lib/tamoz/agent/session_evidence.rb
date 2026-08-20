@@ -33,7 +33,15 @@ module Tamoz
           'repair_attempt' => record.fetch('repair_attempt'),
           'step_id' => record.fetch('step_id'),
           'tool' => record['tool'],
-          'output' => record.fetch('output')
+          'output' => record.fetch('output'),
+          'effect_key' => record['effect_key'],
+          'provenance' => record['provenance'],
+          'source_id' => record['source_id'],
+          'truncated' => record['truncated'],
+          'output_bytes' => record['output_bytes'],
+          'result_class' => record['result_class'],
+          'decision_digest' => record['decision_digest'],
+          'evidence_ref' => record['evidence_ref']
         }
         payload['check'] = record.fetch('check') if record.key?('check')
         payload['failure'] = record.fetch('failure') if record.key?('failure')

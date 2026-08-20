@@ -16,7 +16,7 @@ class AgentSessionRecordsTest < Minitest::Test
     )
 
     assert_equal "plan", record.fetch("record")
-    assert_equal 1, record.fetch("record_version")
+    assert_equal 2, record.fetch("record_version")
     assert record.frozen?
   end
 
@@ -35,7 +35,7 @@ class AgentSessionRecordsTest < Minitest::Test
       Records.load!(
         {
           "record" => "terminal",
-          "record_version" => 1,
+          "record_version" => 2,
           "reason" => "done",
           "satisfied" => true,
           "surprise" => 1
@@ -52,25 +52,23 @@ class AgentSessionRecordsTest < Minitest::Test
       Records.load!(
         {
           "record" => "terminal",
-          "record_version" => 2,
+          "record_version" => 3,
           "reason" => 12_345,
           "unknown_future_field" => {"nested" => true}
         }
       )
     end
 
-    assert_match(/version 2 exceeds supported version 1/, error.message)
+    assert_match(/version 3 exceeds supported version 2/, error.message)
   end
 
-  # At RECORD_VERSION 1 there is no older shipped version, so the migration branch is
-  # unreachable by construction. This test pins that fact rather than pretending to
-  # exercise a migration that does not exist; when RECORD_VERSION rises, it must be
-  # replaced by real fixture round-trips for every supported prior version.
-  def test_no_older_version_exists_to_migrate_from_at_version_one
-    assert_equal 1, Records::RECORD_VERSION
+  # Version 2 is intentionally incompatible with version 1 session records: the
+  # current effect receipt contract requires identities that old checkpoints lack.
+  def test_no_compatibility_migration_exists_for_version_one
+    assert_equal 2, Records::RECORD_VERSION
     assert_empty Records::MIGRATIONS
-    assert_raises(Tamoz::CheckpointCorruptionError) do
-      Records.load!({"record" => "terminal", "record_version" => 0})
+    assert_raises(Tamoz::CheckpointVersionError) do
+      Records.load!({"record" => "terminal", "record_version" => 1})
     end
   end
 
@@ -82,12 +80,12 @@ class AgentSessionRecordsTest < Minitest::Test
 
   def test_migration_registry_is_empty_at_the_first_shipped_version
     assert_empty Records::MIGRATIONS
-    assert_equal 1, Records::RECORD_VERSION
+    assert_equal 2, Records::RECORD_VERSION
   end
 
   def test_missing_required_field_is_rejected
     error = assert_raises(Tamoz::CheckpointCorruptionError) do
-      Records.load!({"record" => "terminal", "record_version" => 1, "reason" => "done"})
+      Records.load!({"record" => "terminal", "record_version" => 2, "reason" => "done"})
     end
 
     assert_match(/missing "satisfied"/, error.message)
@@ -98,7 +96,7 @@ class AgentSessionRecordsTest < Minitest::Test
       Records.load!(
         {
           "record" => "terminal",
-          "record_version" => 1,
+          "record_version" => 2,
           "reason" => "done",
           "satisfied" => "yes"
         }
@@ -143,8 +141,9 @@ class AgentSessionRecordsTest < Minitest::Test
     assert_equal state, Records.load_state!(state)
   end
 
-  def test_pre_p8_session_record_loads_with_legacy_profile_sentinels
-    record = Records.load!(
+  def test_version_one_session_record_is_rejected_without_compatibility_migration
+    assert_raises(Tamoz::CheckpointVersionError) do
+      Records.load!(
       {
         "record" => "session",
         "record_version" => 1,
@@ -157,10 +156,8 @@ class AgentSessionRecordsTest < Minitest::Test
         "tool_catalog_digest" => "sha256:#{"b" * 64}",
         "created_at_ms" => 0
       }
-    )
-
-    assert_equal "legacy", record.fetch("profile_id")
-    assert_equal "legacy:none", record.fetch("profile_digest")
+      )
+    end
   end
 
   def test_session_record_accepts_explicit_profile_identity

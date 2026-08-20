@@ -105,6 +105,32 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  def test_adaptive_routing_is_available_on_the_durable_cli_surface
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          adaptive_decide: [
+            {"decision" => "action", "capability_id" => "read_file",
+             "arguments" => {"path" => "note.txt"}},
+            {"decision" => "final", "answer" => "hello",
+             "evidence_refs" => ["observation:0"]}
+          ]
+        )
+      end
+      out = StringIO.new
+      err = StringIO.new
+
+      status = run_cli(
+        ["--adaptive-routing", "ask", "read note.txt"],
+        session: "adaptive-cli", workspace:, session_dir:, out:, err:, factory:
+      )
+
+      assert_equal 0, status, err.string
+      assert_includes out.string, "hello"
+    end
+  end
+
   # `list` must actually report the threads it wrote. The command had no test
   # and a blanket StandardError rescue in `list_entry`, so a NoMethodError
   # turned every listing into an empty table without any error.

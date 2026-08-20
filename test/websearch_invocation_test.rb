@@ -137,7 +137,7 @@ class WebsearchInvocationTest < Minitest::Test
     Invocation.descriptor_for(
       snapshot.entries.find { |entry| entry.name == "search" },
       snapshot:,
-      effect_class: :unknown_effects
+      effect_class: :read_only
     )
   end
 

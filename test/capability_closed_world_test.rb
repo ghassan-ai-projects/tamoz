@@ -29,8 +29,27 @@ class CapabilityClosedWorldTest < Minitest::Test
   end
 
   def descriptor(id:, kind:, source_id:, effect_class: :read_only, **overrides)
+    egress_ref = if source_id.start_with?("mcp:")
+                   source_id
+                 elsif source_id == "websearch"
+                   "websearch:search"
+                 else
+                   "none"
+                 end
     Capability::Descriptor.new(
       id:, kind:, source_id:, trust: :local, effect_class:,
+      approval_policy: effect_class == :read_only ? :none : :required,
+      egress_policy_ref: egress_ref,
+      egress_policy_digest: Capability::Descriptor.egress_digest_for(egress_ref),
+      secret_handling: :reject_values,
+      request_budget: { "max_bytes" => 16 * 1024 },
+      output_budget: { "max_bytes" => 64 * 1024 },
+      retry_policy: effect_class == :read_only ? :read_only : :none,
+      reconciliation_policy: :none,
+      schema_digest: Capability::Descriptor.schema_digest_for(
+        { "type" => "object" }, { "type" => "object" }
+      ),
+      source_digest: Capability::Descriptor.source_digest_for(source_id),
       protocol_profile: {"transport" => "in_process"},
       input_schema: {"type" => "object"},
       output_schema: {"type" => "object"}, **overrides

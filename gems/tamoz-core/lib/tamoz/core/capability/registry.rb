@@ -18,7 +18,7 @@ module Tamoz
       # never re-reads profile policy (that stays the P8 binding +
       # `verify_profile_binding!`). `surface` is descriptors-as-data intersected
       # with the admission set, immutable mid-turn.
-      Registry = Data.define(:sources, :surface, :names) do
+      Registry = Data.define(:sources, :surface, :names, :declared) do
         def self.build(sources:, admission_set:)
           unless sources.is_a?(Array) && sources.all? { |s| s.is_a?(Source) }
             raise Tamoz::ConfigurationError, "sources must be Capability::Source values"
@@ -54,13 +54,18 @@ module Tamoz
             :new,
             sources: sources.freeze,
             surface: surface.freeze,
-            names: surface.keys.freeze
+            names: surface.keys.freeze,
+            declared: registry.transform_values { |entry| entry.fetch(:descriptor) }.freeze
           )
         end
 
         # The model-visible surface: descriptor-id => descriptor (the
         # intersection result, immutable).
         def descriptors = surface
+
+        def declared_descriptors = declared
+
+        def admitted?(descriptor_id) = surface.key?(String(descriptor_id))
 
         def source_for(descriptor_id)
           sources.find do |source|

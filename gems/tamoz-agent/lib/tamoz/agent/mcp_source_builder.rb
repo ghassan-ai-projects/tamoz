@@ -49,11 +49,15 @@ module Tamoz
         catalogs = {}
         descriptors = []
         supervisors = {}
+        source_digests = {}
         configs = server_configs
         return nil if configs.empty?
 
         begin
           configs.each do |config, settings|
+            source_digests[config.server_id] = Tamoz::Core.digest(
+              "tamoz.agent.mcp.source.v1\n", config.describe
+            )
             snapshot = Tamoz::Mcp::Catalog.compile(config)
             catalogs[snapshot.server_id] = snapshot
             supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
@@ -62,7 +66,9 @@ module Tamoz
               descriptors << Tamoz::Mcp::Invocation.descriptor_for(
                 entry,
                 snapshot:,
-                # Fail closed: only a tool the OPERATOR named is read-only.
+                # Fail closed: unknown MCP effects are not admitted into the
+                # capability host. Only an operator-declared read-only tool is
+                # safe for this slice.
                 effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
               )
             end
@@ -71,6 +77,7 @@ module Tamoz
           McpCapabilitySource.new(
             catalogs:,
             descriptors:,
+            source_digests:,
             validator: lambda do |descriptor, arguments|
               with_mcp_error_mapping do
                 Tamoz::Mcp::Invocation.validate_arguments(descriptor, arguments)
@@ -83,6 +90,39 @@ module Tamoz
           supervisors.each_value(&:close)
           raise
         end
+      end
+
+      # Read-only configuration inspection. This validates the operator-owned
+      # server declarations but never compiles a catalog or starts a supervisor.
+      def peek
+        require "tamoz/mcp"
+
+        rows = server_configs.map do |config, settings|
+          {
+            "source_id" => if config.server_id == WEBSEARCH_SERVER_ID
+                             "websearch:#{config.server_id}"
+                           else
+                             "mcp:#{config.server_id}"
+                           end,
+            "server_id" => config.server_id,
+            "transport" => config.transport.to_s,
+            "configured" => true,
+            "catalogued" => false,
+            "materialized" => false,
+            "reachable" => false,
+            "verified" => false,
+            "effective" => false,
+            "reason" => "unmaterialized",
+            "read_only_tools" => Array(settings["read_only_tools"]).map(&:to_s).sort.freeze,
+            "config_digest" => Tamoz::Core.digest(
+              "tamoz.agent.mcp.peek.v1\n", config.describe
+            )
+          }.freeze
+        end.freeze
+        {
+          "revision" => Tamoz::Core.digest("tamoz.agent.mcp.peek.revision.v1\n", rows),
+          "sources" => rows
+        }.freeze
       end
 
       private

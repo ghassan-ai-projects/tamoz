@@ -11,7 +11,7 @@ module Tamoz
         transaction.first(
           label,
           <<~SQL,
-            SELECT effect_key, thread_id, namespace, execution_id, task_id,
+            SELECT effect_key, logical_key, thread_id, namespace, execution_id, task_id,
                    call_index, operation, safety, status, request_digest,
                    current_attempt, requires_reconciliation,
                    created_at_ms, updated_at_ms

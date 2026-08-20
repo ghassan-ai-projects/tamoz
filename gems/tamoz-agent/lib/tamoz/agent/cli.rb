@@ -142,6 +142,8 @@ module Tamoz
       end
 
       def run_one_shot(options, argv)
+        raise ArgumentError, "--adaptive-routing requires --session" if options[:adaptive_routing]
+
         if options[:session]
           @policy.validate_profile_usage(options, "ask")
           options[:explicit_session] = options[:session]
@@ -559,7 +561,11 @@ module Tamoz
             profile_roles: resolve_profile_roles(profile, options),
             profile_budgets: profile && profile.budgets,
             mcp:,
-            routing: options[:experimental_routing] ? :experimental : :legacy
+            routing: if options[:adaptive_routing]
+                       :adaptive
+                     else
+                       (options[:experimental_routing] ? :experimental : :legacy)
+                     end
           )
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid

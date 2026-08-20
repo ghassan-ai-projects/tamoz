@@ -49,9 +49,9 @@ module Tamoz
           now = @store.adapter.__send__(:backend_time, tx, 'effect.reconcile.time')
           row = EffectJournalRows.effect(tx, effect_key, 'effect.reconcile.row')
           raise CheckpointConflictError, 'effect does not exist' unless row
-          unless row.fetch(8) == 'reconcile'
+          unless row.fetch(9) == 'reconcile'
             raise CheckpointConflictError,
-                  "effect status #{row.fetch(8)} cannot be reconciled"
+                  "effect status #{row.fetch(9)} cannot be reconciled"
           end
 
           case disposition_text
@@ -64,7 +64,7 @@ module Tamoz
                 WHERE effect_key = ? AND attempt_number = ?
                   AND status IN ('prepared', 'running', 'unknown')
               SQL
-              [now, effect_key, row.fetch(10)]
+              [now, effect_key, row.fetch(11)]
             )
             tx.execute(
               'effect.reconcile.completed_head',
@@ -94,13 +94,14 @@ module Tamoz
                 WHERE effect_key = ? AND attempt_number = ?
                   AND status IN ('prepared', 'running', 'unknown')
               SQL
-              [now, effect_key, row.fetch(10)]
+              [now, effect_key, row.fetch(11)]
             )
             EffectAttemptLedger.grant_next!(
               tx,
               row:,
               effect_key:,
               token: candidate_token,
+              execution_id: row.fetch(4),
               fence: @guard.lease.fence,
               attempt_ttl: @attempt_ttl,
               now:
@@ -125,7 +126,7 @@ module Tamoz
                 WHERE effect_key = ? AND attempt_number = ?
                   AND status IN ('prepared', 'running')
               SQL
-              [now, effect_key, row.fetch(10)]
+              [now, effect_key, row.fetch(11)]
             )
             tx.execute(
               'effect.reconcile.unknown_head',
@@ -145,7 +146,7 @@ module Tamoz
             tx,
             effect_key:,
             transition: "reconcile.#{disposition_text}",
-            attempt_number: row.fetch(10),
+            attempt_number: row.fetch(11),
             actor: actor_text,
             evidence: {
               'payload' => evidence_bytes,
@@ -179,9 +180,9 @@ module Tamoz
           now = @store.adapter.__send__(:backend_time, tx, 'effect.resolve.time')
           row = EffectJournalRows.effect(tx, effect_key, 'effect.resolve.row')
           raise CheckpointConflictError, 'effect does not exist' unless row
-          unless %w[unknown reconcile failed].include?(row.fetch(8))
+          unless %w[unknown reconcile failed].include?(row.fetch(9))
             raise CheckpointConflictError,
-                  "effect status #{row.fetch(8)} cannot be human-resolved"
+                  "effect status #{row.fetch(9)} cannot be human-resolved"
           end
           tx.execute(
             'effect.resolve.head',
@@ -193,7 +194,7 @@ module Tamoz
                   updated_at_ms = ?
               WHERE effect_key = ? AND status = ?
             SQL
-            [status_text, status_text, now, effect_key, row.fetch(8)]
+            [status_text, status_text, now, effect_key, row.fetch(9)]
           )
           raise CheckpointConflictError, 'effect resolution lost' unless tx.changes == 1
 
@@ -201,7 +202,7 @@ module Tamoz
             tx,
             effect_key:,
             transition: "resolve.#{status_text}",
-            attempt_number: row.fetch(10),
+            attempt_number: row.fetch(11),
             actor: actor_text,
             evidence: {
               'payload' => evidence_bytes,

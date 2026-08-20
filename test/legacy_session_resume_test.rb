@@ -85,6 +85,7 @@ class LegacySessionResumeTest < Minitest::Test
         def names = []
         def read_only_names = []
         def descriptors = []
+        def descriptor_for(_name) = nil
         def name?(_name) = false
         def read_only?(_name) = true
         def approval_required?(_name) = false

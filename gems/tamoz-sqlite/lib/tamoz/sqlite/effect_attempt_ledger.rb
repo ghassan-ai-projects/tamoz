@@ -16,6 +16,7 @@ module Tamoz
         effect_key:,
         attempt_number:,
         attempt_token:,
+        attempt_identity:,
         fence:,
         attempt_ttl:,
         now:
@@ -25,28 +26,31 @@ module Tamoz
           'effect.attempt.insert',
           <<~SQL,
             INSERT INTO tamoz_effect_attempts(
-              effect_key, attempt_number, attempt_token, fence, status,
+              effect_key, attempt_number, attempt_token, attempt_identity, fence, status,
               deadline_ms, result, result_digest, external_id, error,
               error_digest, prepared_at_ms, started_at_ms, completed_at_ms
             )
             VALUES (
-              ?, ?, ?, ?, 'prepared', ?, NULL, NULL, NULL, NULL,
+              ?, ?, ?, ?, ?, 'prepared', ?, NULL, NULL, NULL, NULL,
               NULL, ?, NULL, NULL
             )
           SQL
-          [effect_key, attempt_number, attempt_token, fence, deadline, now]
+          [effect_key, attempt_number, attempt_token, attempt_identity, fence, deadline, now]
         )
       end
 
       # :reek:LongParameterList -- the retry grant carries its full fence and
       # deadline authority through the open transaction.
-      def grant_next!(transaction, row:, effect_key:, token:, fence:, attempt_ttl:, now:)
-        attempt_number = row.fetch(10) + 1
+      def grant_next!(transaction, row:, effect_key:, token:, execution_id:, fence:, attempt_ttl:, now:)
+        attempt_number = row.fetch(11) + 1
         insert!(
           transaction,
           effect_key:,
           attempt_number:,
           attempt_token: token,
+          attempt_identity: EffectJournalKey.attempt_identity(
+            row.fetch(0), attempt_number, execution_id:, fence:
+          ),
           fence:,
           attempt_ttl:,
           now:

@@ -41,21 +41,23 @@ class AgentWorkerMcpTest < Minitest::Test
     end
   end
 
-  # The real server, spawned and spoken to. Its tools reach the dispatchable
-  # catalog under source-qualified names.
-  def test_an_operator_configured_server_reaches_the_dispatchable_catalog
+  # Status inspects configuration without spawning the server. Materialization
+  # and dispatch are covered by the session/CLI tests below.
+  def test_an_operator_configured_server_is_visible_without_materialization
     with_runtime do |rt|
       configure_mcp(rt, {"mcp" => {"enabled" => true,
-                                   "servers" => [server_settings("id" => "probe")]}})
+                                   "servers" => [server_settings(
+                                     "id" => "probe", "read_only_tools" => ["echo_constant"]
+                                   )]}})
 
       status = rt.cli(%w[status --json])
 
       assert_equal 0, status, rt.err
-      catalog = JSON.parse(rt.out).fetch("capability_catalog")
-      assert_includes catalog, "mcp:probe/echo_constant"
-      # Names are always source-qualified: a bare tool name is never dispatchable,
-      # so one server can never shadow another's tool or a local one.
-      refute_includes catalog, "echo_constant"
+      document = JSON.parse(rt.out)
+      assert_empty document.fetch("capability_catalog").grep(/^mcp:/)
+      source = document.fetch("capability_peek").fetch("mcp").fetch("sources").fetch(0)
+      assert_equal "mcp:probe", source.fetch("source_id")
+      assert_equal ["echo_constant"], source.fetch("read_only_tools")
     end
   end
 
@@ -110,7 +112,9 @@ class AgentWorkerMcpTest < Minitest::Test
       assert_equal 0, status, rt.err
       document = JSON.parse(rt.out)
       assert_includes document.fetch("capability_sources"), "websearch"
-      assert_includes document.fetch("capability_catalog"), "mcp:websearch/search"
+      peek = document.fetch("capability_peek").fetch("mcp").fetch("sources")
+      assert_equal "unmaterialized", peek.fetch(0).fetch("reason")
+      assert_equal "websearch:websearch", peek.fetch(0).fetch("source_id")
     end
   end
 
@@ -188,6 +192,26 @@ class AgentWorkerMcpTest < Minitest::Test
 
       assert_empty JSON.parse(rt.out).fetch("capability_catalog").grep(/^mcp:/),
                    "workspace content configured an MCP server"
+    end
+  end
+
+  def test_capability_peek_does_not_materialize_a_remote_source
+    with_runtime do |rt|
+      configure_mcp(rt, {"mcp" => {"enabled" => true,
+                                   "servers" => [server_settings("id" => "probe")]}})
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        peek = runtime.capability_peek
+        row = peek.fetch("mcp").fetch("sources").fetch(0)
+
+        assert_equal "unmaterialized", row.fetch("reason")
+        refute runtime.instance_variable_defined?(:@mcp_source)
+      ensure
+        runtime.close
+      end
     end
   end
 

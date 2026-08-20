@@ -213,6 +213,26 @@ class AgentSessionEffectTest < Minitest::Test
     refute_kind_of Tamoz::Agent::ToolError, mapped
   end
 
+  def test_typed_remote_outcome_keeps_provenance_and_redacts_before_journaling
+    observation = Data.define(:server_id, :text, :truncated).new(
+      server_id: "remote-server",
+      text: "answer sk-live-12345678",
+      truncated: true
+    )
+    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+      status: :succeeded, observation:, interrupt: nil, denial: nil
+    )
+    effects = Tamoz::Agent::SessionEffects.allocate
+
+    payload = effects.send(:result_payload, outcome)
+
+    assert_equal "remote-server", payload.fetch("source_id")
+    assert_equal "remote_untrusted", payload.fetch("provenance")
+    assert payload.fetch("truncated")
+    assert_includes payload.fetch("output"), "[REDACTED]"
+    refute_includes payload.fetch("output"), "sk-live-12345678"
+  end
+
   # --- filesystem reconciler ------------------------------------------------
 
   def test_filesystem_reconciler_maps_observations_to_exactly_one_disposition

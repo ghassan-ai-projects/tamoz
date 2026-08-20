@@ -40,10 +40,12 @@ module Tamoz
         verification_update(state, configuration, call, input.terminal_reason)
       end
 
-      def terminal(state, _context)
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- terminal assembly
+      # is the single durable boundary for the completed session and its lifecycle.
+      def terminal(state, context)
         verification = state[:verification]
         @services.memory.record_episode_memory(state, verification) if @services.configuration.memory
-        {
+        update = {
           phase: 'terminal',
           terminal: SessionRecords.build(
             'terminal',
@@ -52,7 +54,26 @@ module Tamoz
             blocked: state[:blocked]
           )
         }
+        return update unless state.key?(:lifecycle_events)
+
+        update.merge(
+          lifecycle_events: [
+            SessionRecords.build(
+              'lifecycle_event',
+              event_type: 'terminal',
+              sequence: state.fetch(:lifecycle_events).length,
+              request_id: context.request_id,
+              thread_id: context.thread_id || state.dig(:session, 'session_id'),
+              execution_id: context.execution_id,
+              phase: 'terminal',
+              effect_state: state[:blocked] ? 'unknown' : 'terminal',
+              delivery_state: 'pending',
+              terminal_reason: state.fetch(:terminal_reason)
+            )
+          ]
+        )
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       private
 

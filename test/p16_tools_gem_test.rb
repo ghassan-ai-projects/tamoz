@@ -676,19 +676,11 @@ class P16ToolsGemTest < Minitest::Test
     # Consumer 1: the toolbox's empty-snapshot skill_epoch.
     assert_equal "none", Tamoz::Tools::Toolbox.new(root: @dir).skill_epoch
     # Consumer 2: session_records load-time default fill.
-    record = Tamoz::Agent::SessionRecords.load!(
-      {
-        "record" => "session",
-        "record_version" => 1,
-        "session_id" => "s",
-        "task" => "t",
-        "task_digest" => "d",
-        "root" => @dir,
-        "graph_version" => "1",
-        "behavior_version" => "b",
-        "tool_catalog_digest" => "c",
-        "created_at_ms" => 0
-      }
+    record = Tamoz::Agent::SessionRecords.build(
+      "session",
+      session_id: "s", task: "t", task_digest: "d", root: @dir,
+      graph_version: "1", behavior_version: "b", tool_catalog_digest: "c",
+      created_at_ms: 0
     )
     assert_equal "none", record.fetch("skill_epoch")
     # Consumer 3: session enforce fetch default (pre-P9 resume).

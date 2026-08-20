@@ -89,7 +89,7 @@ module Tamoz
       # The bound checkpoint store. Taken from a session rather than bound
       # separately so the worker reads the inbox through exactly the codec the
       # sessions write it with.
-      def checkpoints = canonical_session.app.checkpointer
+      def checkpoints = metadata_session.app.checkpointer
 
       def schedule_store
         @schedule_store ||= @adapter.bind_schedule_store(checkpoints)
@@ -416,12 +416,20 @@ module Tamoz
 
       def canonical_session = session_for_profile(nil)
 
-      # The capability names the agent can actually dispatch, read off the sealed
-      # registry rather than off configuration. This is the honest answer to "is
-      # websearch really available?", and it is deliberately not the same value as
-      # `RuntimeDirectory#enabled_sources`.
+      # The local capabilities available without materializing any remote source.
+      # Remote tools are intentionally absent until an explicit session build.
       def capability_catalog
-        durable("capability catalog") { canonical_session.capabilities.names(:action).sort }
+        durable("capability catalog") { local_capability_catalog }
+      end
+
+      # Configuration-only capability visibility. `peek` validates the sealed
+      # operator declaration and reports remote sources as unmaterialized; it
+      # never starts a process or opens a network connection.
+      def capability_peek
+        {
+          "local" => capability_catalog,
+          "mcp" => McpSourceBuilder.new(@directory).peek
+        }.freeze
       end
 
       def head_request(thread_id)
@@ -568,11 +576,33 @@ module Tamoz
         @mcp_source = McpSourceBuilder.new(@directory).build
       end
 
+      def local_capability_catalog
+        local_toolbox.names.sort.freeze
+      end
+
       def skill_rejections
         skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
 
       private
+
+      def local_toolbox
+        @local_toolbox ||= Toolbox.new(
+          root: @directory.workspace_root,
+          allow_changes: false,
+          checks: {},
+          skills: skills_snapshot
+        )
+      end
+
+      def metadata_session
+        @metadata_session ||= Session.new(
+          model: DeferredModel.new { @model_factory.call(profile: nil) },
+          toolbox: local_toolbox,
+          checkpointer: @adapter,
+          routing: @routing
+        )
+      end
 
       def build_session(profile_id)
         resolved = profile(profile_id)

@@ -285,7 +285,7 @@ class AgentSessionTest < Minitest::Test
         session.continue(thread: "session.version", request_id: "request.v2")
       end
 
-      assert_match(/version 2 exceeds supported version 1/, error.message)
+    assert_match(/version 3 exceeds supported version 2/, error.message)
       assert_equal calls, model.calls.length, "no node ran"
     end
   end
@@ -414,7 +414,7 @@ class AgentSessionTest < Minitest::Test
       latest = writer.latest
       future = {
         "record" => "plan",
-        "record_version" => 2,
+        "record_version" => 3,
         "plan_id" => "future.0.1",
         "phase" => "action",
         "attempt" => 1,

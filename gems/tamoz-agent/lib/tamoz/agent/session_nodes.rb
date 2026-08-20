@@ -14,6 +14,7 @@ require_relative "session_deliberation"
 require_relative "session_steps"
 require_relative "session_lifecycle"
 require_relative "session_routing"
+require_relative "session_adaptive"
 
 module Tamoz
   module Agent
@@ -23,6 +24,7 @@ module Tamoz
       MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
       MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
       GRAPH_VERSION = "1"
+      ADAPTIVE_GRAPH_VERSION = "3"
       # Rebinding, not a second definition: durable records keep this spelling while
       # the value is owned by `Tamoz::Agent` for the memory layer.
       BEHAVIOR_VERSION = Tamoz::Agent::BEHAVIOR_VERSION
@@ -128,6 +130,7 @@ module Tamoz
           evidence: @evidence
         )
         @routing = SessionRouting.new(services:)
+        @adaptive = SessionAdaptive.new(services:)
         @deliberation = SessionDeliberation.new(services:)
         @steps = SessionSteps.new(services:)
         @lifecycle = SessionLifecycle.new(services:)
@@ -161,6 +164,14 @@ module Tamoz
       def deliberate(state, context) = @deliberation.deliberate(state, context)
 
       def route(state, context) = @routing.route(state, context)
+
+      def adaptive_decide(state, context) = @adaptive.decide(state, context)
+
+      def adaptive_validate(state, context) = @adaptive.validate(state, context)
+
+      def adaptive_dispatch(state, context) = @adaptive.dispatch(state, context)
+
+      def adaptive_observe(state, context) = @adaptive.observe(state, context)
 
       def step_gate(state, context) = @steps.step_gate(state, context)
 
