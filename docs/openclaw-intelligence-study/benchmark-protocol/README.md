@@ -24,13 +24,16 @@ standing up a parallel benchmark stack.
 3. [03-implementation-plan.md](03-implementation-plan.md) — phased work items,
    each mapped to a concrete `tamoz-evals` seam, with exit bars and the
    committed evidence each phase must produce.
+4. [scenarios/](scenarios/README.md) — an escalating ladder of agent-drivable
+   runbooks (T1–T5) an external agent like OpenClaw follows to set up, run, and
+   verify each mission, with machine-checkable PASS/FAIL assertions.
 
 ## First principles (inherited, non-negotiable)
 
 - **Measurement replaces perception.** No "more intelligent" claim exists until
   a matched benchmark reports it. A scripted-model result is never intelligence
-  evidence — it is a plumbing regression gate (see the study's
-  [00-report-bar.md](../00-report-bar.md)).
+  evidence — it is a plumbing regression gate (inherited from
+  [06-phase-5-measured-intelligence.md](../implementation-plan/06-phase-5-measured-intelligence.md)).
 - **Real runs use a real provider.** Intelligence missions run against a real
   model (DeepSeek by default; see the local-run note). The provider identity is
   recorded in every artifact and the readiness gate refuses to publish a
@@ -38,7 +41,7 @@ standing up a parallel benchmark stack.
 - **Fail closed.** A missing capability, an unknown effect outcome, a forged or
   absent witness record, or a leaked holdout truth is a failure of that run,
   never averaged away.
-- **Reuse the owner.** Extend `Tamoz::Evals::Benchmark::*`, the mission runner,
+- **Reuse, don't rebuild.** Extend `Tamoz::Evals::Benchmark::*`, the mission runner,
   readiness, report, and the durable CLI adapter. Do not add a new runtime,
   registry, journal, or domain catalog to satisfy a work item.
 

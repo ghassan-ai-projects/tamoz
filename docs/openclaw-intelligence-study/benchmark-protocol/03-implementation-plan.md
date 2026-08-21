@@ -16,10 +16,14 @@ comparison track before the missions score deterministically on fixtures.
   is recorded, never assumed.
 - A committed **capability manifest** describing the exact tools each mission is
   permitted (the input to `--capabilities`).
-- A **comparison-target adapter** for Track A. The preregistered
-  `go_native_executor` baseline (`baselines.rb`) is the minimum; a real
-  OpenClaw adapter is optional and, if added, must run under the same matched
-  manifest.
+- A **comparison-target adapter** for Track A. The minimum is the
+  `go_native_executor` baseline — preregistered in `BENCHMARK_PROTOCOL.json`
+  and injected into `report.rb` as baseline cells (the non-LLM baseline library
+  in `baselines.rb` is a separate thing). A real OpenClaw adapter is required
+  only for the *comparative* claim (see the claim tiers in
+  [02](02-mission-catalog-and-scoring.md#verdict-rule-reuse-reportrb)); without
+  it, Track A supports the floor claim and absolute capability reporting. If
+  added, it must run under the same matched manifest.
 
 ## Phase B0 — Fixture completeness and deterministic oracles
 
@@ -33,7 +37,10 @@ and score deterministically. No provider, no claim.
   with a scripted model (as the smoke corpus does) and a controller-owned
   deterministic oracle that computes the metric set in
   [02](02-mission-catalog-and-scoring.md#metric-definitions) from the session
-  record + effect journal — never from model self-report.
+  record + effect journal — never from model self-report. This includes the
+  `run_kind = fixture` path through the runner and CLI: today
+  `script/benchmark_openclaw_run` hardcodes `real_provider`, so the evidence
+  command below does not exist until B0 adds it.
 - **Durable fields:** none new; reuse observation/receipt/lifecycle records.
 - **Test (plumbing):** extend `test/openclaw_mission_runner_test.rb` so a
   fixture run produces a scored artifact + `manifest.json` for every mission,
@@ -80,7 +87,9 @@ Goal: every mission runs on durable CLI **and** Telegram with a measured parity.
 - **Build:** a Telegram surface executor (or a durable parity harness that
   replays the same turn through the channel gateway) that records a
   `surface_executions` entry per surface; compute the `parity` metric from the
-  two terminal outcomes.
+  two terminal outcomes. Parity runs go through a gateway fake at the Telegram
+  API boundary (recorded requests, no real egress) — a benchmark run never
+  depends on, or posts to, live Telegram.
 - **Test (plumbing):** extend the runner test so each mission emits two surface
   executions and a parity score; fixture-level Telegram/CLI identity assertions
   already exist in the Phase 3 evidence coverage — reuse them.
@@ -102,11 +111,14 @@ Goal: a matched comparison that isolates agent-loop quality.
 - **Test (plumbing):** a fixture matched run yields a deterministic verdict; the
   existing `benchmark_harness_test`/`benchmark_report_test` patterns extend to
   the mission cells.
-- **Real-provider proof:** a matched `real_provider` run produces a `go`,
-  `negative`, or `inconclusive` verdict against the strongest baseline on a
-  named axis, with confidence intervals.
-- **Exit bar:** a verdict exists for at least the read-only and governed-mutation
-  axes; Track B breadth is reported separately, never folded into the verdict.
+- **Real-provider proof:** a matched `real_provider` run produces a per-axis
+  `go`, `negative`, or `inconclusive` verdict against the strongest baseline,
+  with confidence intervals.
+- **Exit bar:** a verdict exists for at least the `adaptive_continuation` and
+  `governance` axes, labeled by claim tier — with only `go_native_executor` the
+  label is *floor*; the *comparative* label additionally requires the OpenClaw
+  adapter. Track B breadth is reported separately, never folded into the
+  verdict.
 
 ## Phase B4 — Longitudinal scoreboard and regression gate
 
@@ -119,8 +131,8 @@ Goal: improvement and regression are visible over time.
 - **Build:** an append step in the run flow that writes one scoreboard entry
   (shape in [02](02-mission-catalog-and-scoring.md#longitudinal-scoreboard)) for
   an accepted `real_provider` run; a regression test that fails when the newest
-  entry drops an axis below the prior accepted entry beyond the confidence
-  interval without a reviewed note.
+  run drops an axis below the prior accepted run's interval (read from the
+  referenced artifact) without a reviewed note.
 - **Test (plumbing):** the append is deterministic and idempotent; the
   regression gate fires on a synthetic regression fixture.
 - **Evidence:** the committed scoreboard file plus the manifests it references.
@@ -136,9 +148,10 @@ Goal: the first honest intelligence statement.
 - **Real-provider proof:** all missions `ready`; readiness `publishable?`; no
   hard-zero; a committed report and scoreboard entry.
 - **Exit bar / claim rule:** the published claim is limited to what the matched
-  data supports, per axis, with capability-availability differences reported
-  alongside completion rates. A missing family is an *unavailable result* that
-  blocks the claim for that axis — it never lowers the bar.
+  data supports — per axis, per claim tier (floor vs comparative) — with
+  capability-availability differences reported alongside completion rates. A
+  missing family is an *unavailable result* that blocks the claim for that axis
+  — it never lowers the bar.
 
 ## Build/reuse ledger (do not reinvent)
 
