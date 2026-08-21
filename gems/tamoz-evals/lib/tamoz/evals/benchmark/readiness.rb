@@ -21,6 +21,7 @@ module Tamoz
         MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
         PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
         PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
+        INDEPENDENT_TRACE_SOURCE = 'tamoz.observability.journal'
         EVIDENCE_SCHEMA_VERSION = 'openclaw.evidence.v1'
         BOOLEAN_VALUES = [true, false].freeze
         REQUIRED_FIELDS = %w[
@@ -387,6 +388,7 @@ module Tamoz
             "artifact_mission_mismatch:#{mission.fetch('id')}"
           end
 
+          # rubocop:disable Metrics/AbcSize -- one fail-closed provenance projection.
           def artifact_provenance_reason(document, mission, manifest)
             provenance = document['provenance']
             return "artifact_provenance_mismatch:#{mission.fetch('id')}" unless
@@ -401,10 +403,14 @@ module Tamoz
             expected_digest = canonical_digest(
               'mission_digest' => document.fetch('mission_digest'), 'receipts' => receipts
             )
-            return if provenance['provider_trace_digest'] == expected_digest
+            return "artifact_provider_trace_mismatch:#{mission.fetch('id')}" unless
+              provenance['provider_trace_digest'] == expected_digest
 
-            "artifact_provider_trace_mismatch:#{mission.fetch('id')}"
+            return if valid_independent_trace?(provenance['independent_trace'], receipts)
+
+            "artifact_independent_trace_unavailable:#{mission.fetch('id')}"
           end
+          # rubocop:enable Metrics/AbcSize
 
           def valid_provider_receipts?(receipts)
             receipts.is_a?(Array) && !receipts.empty? &&
@@ -417,6 +423,20 @@ module Tamoz
               receipt.fetch('operation').start_with?('model.generate.') &&
               PROVIDER_RECEIPT_STATUSES.include?(receipt.fetch('status'))
           end
+
+          # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+          def valid_independent_trace?(evidence, receipts)
+            return false unless evidence.is_a?(Hash) && evidence['source'] == INDEPENDENT_TRACE_SOURCE
+            return false unless evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty?
+            return false unless DIGEST_PATTERN.match?(evidence['trace_digest'].to_s)
+            return false unless evidence['trace'].is_a?(Hash)
+            return false unless evidence['trace_digest'] == canonical_digest(evidence['trace'])
+
+            spans = evidence['trace']['spans']
+            model_spans = Array(spans).count { |span| span.is_a?(Hash) && span['name'] == 'tamoz.model.call' }
+            model_spans >= receipts.length
+          end
+          # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
           def canonical_digest(value)
             "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump(value))}"

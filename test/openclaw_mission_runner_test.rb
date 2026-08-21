@@ -74,6 +74,9 @@ class OpenclawMissionRunnerTest < Minitest::Test
       )
 
       assert_equal 2, result.artifacts.length
+      manifest_path = Pathname.new(directory).join(manifest.fetch('artifact_root'), 'manifest.json')
+      assert_predicate manifest_path, :file?
+      assert_equal manifest, JSON.parse(File.read(manifest_path))
       refute_predicate readiness, :ready?
       assert_includes readiness.reasons, 'fixture_or_fake_provider'
       assert readiness.manifest.fetch('artifacts_verified')
@@ -122,7 +125,8 @@ class OpenclawMissionRunnerTest < Minitest::Test
             'provider_effect_receipts' => receipts,
             'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(
               Tamoz::Evals::CanonicalJSON.dump('mission_digest' => mission_digest, 'receipts' => receipts)
-            )}"
+            )}",
+            'independent_trace' => independent_trace
           }
         }
       }).run
@@ -130,6 +134,17 @@ class OpenclawMissionRunnerTest < Minitest::Test
       assert_equal %w[ready ready], result.manifest.fetch('missions').map { |mission| mission.fetch('status') }
       assert_equal 2, result.artifacts.length
     end
+  end
+
+  def independent_trace
+    trace = {'trace_id' => 'trace-1', 'spans' => [{'name' => 'tamoz.model.call'}]}
+    {
+      'source' => Tamoz::Evals::Benchmark::Readiness::INDEPENDENT_TRACE_SOURCE,
+      'trace_id' => trace.fetch('trace_id'),
+      'trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(trace))}",
+      'trace' => trace,
+      'model_span_count' => 1
+    }
   end
 
   def test_catalog_mission_id_cannot_escape_the_artifact_directory

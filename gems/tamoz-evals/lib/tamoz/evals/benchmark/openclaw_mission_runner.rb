@@ -12,6 +12,7 @@ module Tamoz
       # adapter and writes provenance-bound evidence artifacts. The adapter is
       # deliberately injected: this runner owns mission identity and evidence
       # publication, not a second agent runtime or provider client.
+      # rubocop:disable Metrics/ClassLength -- the runner keeps one bounded evidence contract together.
       class OpenclawMissionRunner
         SCHEMA_VERSION = 'openclaw.evidence.v1'
         CATALOG_SCHEMA_VERSION = 'openclaw.missions.v1'
@@ -19,6 +20,7 @@ module Tamoz
         MISSION_STATUSES = %w[ready blocked unavailable].freeze
         PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
         PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
+        MANIFEST_FILENAME = 'manifest.json'
         MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
         MAX_ARTIFACT_BYTES = 131_072
 
@@ -50,6 +52,7 @@ module Tamoz
         end
         # rubocop:enable Metrics/AbcSize
 
+        # rubocop:disable Metrics/MethodLength -- assemble and persist one manifest atomically.
         def run
           artifact_directory = @artifact_base.join(@artifact_root)
           FileUtils.mkdir_p(artifact_directory)
@@ -70,8 +73,10 @@ module Tamoz
             'missions' => artifacts.map { |artifact| artifact.fetch('mission') },
             'controls_passed' => @controls_passed
           }
+          write_manifest(artifact_directory, manifest)
           Result.new(manifest:, artifacts: artifacts.freeze)
         end
+        # rubocop:enable Metrics/MethodLength
 
         private
 
@@ -162,7 +167,8 @@ module Tamoz
             'id' => mission.fetch('id'),
             'status' => status,
             'artifact_path' => artifact&.fetch('path'),
-            'artifact_digest' => artifact&.fetch('digest')
+            'artifact_digest' => artifact&.fetch('digest'),
+            'metrics' => result.fetch('metrics', {})
           }.compact
           mission_record['reason'] = result.fetch('reason') if result['reason']
           {
@@ -215,9 +221,11 @@ module Tamoz
           expected_digest = digest(
             'mission_digest' => digest(mission), 'receipts' => receipts
           )
-          return if provenance['provider_trace_digest'] == expected_digest
+          unless provenance['provider_trace_digest'] == expected_digest
+            raise SchemaError, 'real-provider mission trace digest does not match its receipts'
+          end
 
-          raise SchemaError, 'real-provider mission trace digest does not match its receipts'
+          validate_independent_trace!(provenance.fetch('independent_trace'), receipts)
         end
 
         def validate_provider_receipts!(receipts)
@@ -242,6 +250,22 @@ module Tamoz
             PROVIDER_RECEIPT_STATUSES.include?(receipt.fetch('status'))
         end
 
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        def validate_independent_trace!(evidence, receipts)
+          spans = evidence.is_a?(Hash) && evidence['trace'].is_a?(Hash) ? evidence['trace']['spans'] : nil
+          model_spans = Array(spans).count { |span| span.is_a?(Hash) && span['name'] == 'tamoz.model.call' }
+          valid = evidence.is_a?(Hash) && evidence['source'] == Readiness::INDEPENDENT_TRACE_SOURCE &&
+                  evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty? &&
+                  Readiness::DIGEST_PATTERN.match?(evidence['trace_digest'].to_s) &&
+                  evidence['trace'].is_a?(Hash) &&
+                  evidence['trace_digest'] == digest(evidence['trace']) &&
+                  model_spans >= receipts.length
+          return if valid
+
+          raise SchemaError, 'real-provider mission lacks independent trace evidence'
+        end
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
         def write_artifact(mission, result, artifact_directory)
           path = "#{mission.fetch('id')}.json"
           document = artifact_document(mission, result)
@@ -250,6 +274,14 @@ module Tamoz
 
           atomic_write(artifact_directory.join(path), bytes, mission.fetch('id'))
           { 'path' => path, 'digest' => "sha256:#{Digest::SHA256.hexdigest(bytes)}" }
+        end
+
+        def write_manifest(artifact_directory, manifest)
+          bytes = "#{CanonicalJSON.dump(manifest)}\n"
+          raise SchemaError, 'OpenClaw evidence manifest exceeds the size limit' if
+            bytes.bytesize > MAX_ARTIFACT_BYTES
+
+          atomic_write(artifact_directory.join(MANIFEST_FILENAME), bytes, 'manifest')
         end
 
         def artifact_document(mission, result)
@@ -300,6 +332,9 @@ module Tamoz
           String(value).byteslice(0, 256).to_s
         end
       end
+      # rubocop:enable Metrics/ClassLength
     end
   end
 end
+
+require_relative 'openclaw_durable_cli_adapter'
