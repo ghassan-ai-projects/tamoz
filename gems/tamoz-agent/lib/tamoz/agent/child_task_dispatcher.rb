@@ -29,13 +29,10 @@ module Tamoz
         end
 
         @runtime = runtime
-        @parent_profile = {
-          'profile_id' => profile.profile_id,
-          'capabilities' => profile.tools_allowed.map { |name| "local:#{name}" }.freeze,
-          'authority_revision' => profile.canonical_digest,
-          'max_child_depth' => DEFAULT_DEPTH,
-          'max_child_concurrency' => DEFAULT_CONCURRENCY
-        }.freeze
+        context = child_context(runtime)
+        @parent_profile = parent_profile(profile, context)
+        @current_depth = context ? context.fetch(:current_depth) : 0
+        @current_policy = context&.slice(:remaining_depth, :remaining_concurrency)
         freeze
       end
 
@@ -44,6 +41,9 @@ module Tamoz
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- validation keeps the complete bounded delegation contract at one gate.
       def validate(descriptor, arguments)
         assert_descriptor!(descriptor)
+        if @current_policy&.values&.any?(&:zero?)
+          raise ToolPolicyError, 'child delegation budget is exhausted'
+        end
         raise ToolArgumentError, "#{TOOL_NAME} arguments must be an object" unless arguments.is_a?(Hash)
 
         unknown = arguments.keys.map(&:to_s) - %w[task capabilities]
@@ -89,9 +89,10 @@ module Tamoz
           task: normalized.fetch('task'),
           capability_profile: {
             'capabilities' => normalized.fetch('capabilities'),
-            'authority_revision' => @parent_profile.fetch('authority_revision')
+            'authority_revision' => @parent_profile.fetch('authority_revision'),
+            'delegation_policy' => delegation_policy
           },
-          depth: DEFAULT_DEPTH,
+          depth: @current_depth + 1,
           concurrency: DEFAULT_CONCURRENCY
         )
         stored = @runtime.enqueue_child_task(child, parent_profile: @parent_profile)
@@ -125,6 +126,32 @@ module Tamoz
         return if descriptor.id == TOOL_NAME
 
         raise ToolPolicyError, "child dispatcher received #{descriptor.id.inspect}"
+      end
+
+      def child_context(runtime)
+        return unless runtime.respond_to?(:child_delegation_context)
+
+        runtime.child_delegation_context
+      end
+
+      def parent_profile(profile, context)
+        capabilities = context&.fetch(:capabilities) || profile.tools_allowed.map { |name| "local:#{name}" }
+        max_depth = context ? context.fetch(:current_depth) + context.fetch(:remaining_depth) : DEFAULT_DEPTH
+        max_concurrency = context ? context.fetch(:remaining_concurrency) : DEFAULT_CONCURRENCY
+        {
+          'profile_id' => profile.profile_id,
+          'capabilities' => capabilities.freeze,
+          'authority_revision' => profile.canonical_digest,
+          'max_child_depth' => max_depth,
+          'max_child_concurrency' => max_concurrency
+        }.freeze
+      end
+
+      def delegation_policy
+        {
+          'remaining_depth' => @parent_profile.fetch('max_child_depth') - (@current_depth + 1),
+          'remaining_concurrency' => @parent_profile.fetch('max_child_concurrency') - DEFAULT_CONCURRENCY
+        }
       end
     end
   end

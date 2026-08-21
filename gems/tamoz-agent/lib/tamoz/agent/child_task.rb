@@ -12,6 +12,11 @@ module Tamoz
       STATUSES = %w[pending running completed failed unknown].freeze
       MAX_TASK_BYTES = 4 * 1024
       MAX_CAPABILITIES = 32
+      DELEGATION_POLICY_KEYS = %w[remaining_depth remaining_concurrency].freeze
+      DEFAULT_DELEGATION_POLICY = {
+        'remaining_depth' => 0,
+        'remaining_concurrency' => 0
+      }.freeze
 
       attr_reader :child_id, :parent_thread_id, :parent_request_id, :task,
                   :capability_profile, :depth, :concurrency, :status,
@@ -40,9 +45,13 @@ module Tamoz
           'parent_thread_id' => String(parent_thread_id),
           'parent_request_id' => String(parent_request_id),
           'task' => String(task),
-          'capability_profile' => capability_profile
+          'capability_profile' => identity_profile(capability_profile)
         )
         "child:sha256:#{Digest::SHA256.hexdigest(JSON.generate(payload))}"
+      end
+
+      def self.identity_profile(profile)
+        profile.reject { |key, _value| String(key) == 'delegation_policy' }
       end
 
       def initialize(**attributes)
@@ -64,6 +73,9 @@ module Tamoz
         @parent_request_id = require_text(attributes.fetch(:parent_request_id), 'parent_request_id')
         @task = require_text(attributes.fetch(:task), 'task')
         raise ArgumentError, "child task exceeds #{MAX_TASK_BYTES} bytes" if @task.bytesize > MAX_TASK_BYTES
+        return unless Tamoz::Core.secret_shaped?(attributes.fetch(:task))
+
+        raise Tamoz::SensitiveValueError, 'child task cannot contain credential-shaped values'
       end
 
       def assign_policy(attributes)
@@ -92,6 +104,12 @@ module Tamoz
           'status' => status,
           'completion_digest' => completion_digest
         }
+      end
+
+      def delegation_policy = capability_profile.fetch('delegation_policy')
+
+      def delegation_enabled?
+        delegation_policy.values_at('remaining_depth', 'remaining_concurrency').all?(&:positive?)
       end
 
       def start
@@ -123,6 +141,8 @@ module Tamoz
         validate_parent_revision!(parent_profile)
         enforce_parent_limit!(parent_profile, 'max_child_depth', depth)
         enforce_parent_limit!(parent_profile, 'max_child_concurrency', concurrency)
+        enforce_policy_limit!(parent_profile, 'max_child_depth', depth, 'remaining_depth')
+        enforce_policy_limit!(parent_profile, 'max_child_concurrency', concurrency, 'remaining_concurrency')
         self
       end
 
@@ -176,9 +196,16 @@ module Tamoz
 
       def validate_profile(profile)
         validate_profile_shape(profile)
-        validate_capabilities(profile.fetch('capabilities', []))
+        raise Tamoz::SensitiveValueError, 'child capability profile cannot contain credential-shaped values' if
+          Tamoz::Core.secret_shaped?(profile)
 
-        Tamoz::Core.deep_freeze(Tamoz::Core.canonical(profile))
+        validate_capabilities(profile.fetch('capabilities', []))
+        normalized = Tamoz::Core.canonical(profile)
+        normalized['delegation_policy'] = validate_delegation_policy(
+          normalized.fetch('delegation_policy', DEFAULT_DELEGATION_POLICY)
+        )
+
+        Tamoz::Core.deep_freeze(normalized)
       end
 
       def validate_profile_shape(profile)
@@ -193,6 +220,17 @@ module Tamoz
         return if valid
 
         raise ArgumentError, 'child capability_profile capabilities are invalid'
+      end
+
+      def validate_delegation_policy(policy)
+        unless policy.is_a?(Hash) && policy.keys.all? { |key| DELEGATION_POLICY_KEYS.include?(String(key)) }
+          raise ArgumentError, 'child delegation policy is invalid'
+        end
+
+        normalized = DELEGATION_POLICY_KEYS.to_h do |key|
+          [key, validate_integer(policy.fetch(key), key, key == 'remaining_concurrency' ? 0..16 : 0..8)]
+        end
+        normalized.freeze
       end
 
       def validate_integer(value, name, range)
@@ -216,6 +254,17 @@ module Tamoz
         return if limit.is_a?(Integer) && value <= limit
 
         raise Tamoz::Agent::ToolPolicyError, "child #{key.delete_prefix('max_child_')} exceeds parent limit"
+      end
+
+      def enforce_policy_limit!(parent_profile, limit_key, child_value, remaining_key)
+        limit = parent_profile.fetch(limit_key, nil)
+        return unless limit
+
+        maximum_remaining = [limit - child_value, 0].max
+        return if delegation_policy.fetch(remaining_key) <= maximum_remaining
+
+        message = "child #{remaining_key.delete_prefix('remaining_')} exceeds parent allowance"
+        raise Tamoz::Agent::ToolPolicyError, message
       end
     end
   end

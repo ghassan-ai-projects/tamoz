@@ -7,6 +7,8 @@ class AgentPhase4CapabilityTest < Minitest::Test
   class ChildRuntime
     attr_reader :child
 
+    attr_accessor :child_delegation_context
+
     def enqueue_child_task(child, parent_profile:)
       @child = [child, parent_profile]
       child
@@ -76,6 +78,47 @@ class AgentPhase4CapabilityTest < Minitest::Test
       refute result.fetch('activated')
       assert registry.candidate?('thread-1', profile_id: 'trusted',
                                              from: proposal.from_digest, to: proposal.to_digest)
+    end
+  end
+
+  def test_child_policy_narrows_capabilities_and_stops_at_exhausted_budget
+    runtime = ChildRuntime.new
+    profile = ProfileStub.new(
+      profile_id: 'trusted',
+      tools_allowed: %w[read_file list_directory],
+      canonical_digest: "sha256:#{'a' * 64}"
+    )
+    toolbox = Tamoz::Tools::Toolbox.new(root: Dir.tmpdir, allowed_tools: %w[read_file list_directory])
+    context = Tamoz::Context.new(
+      run_id: 'run', execution_id: 'execution', request_id: 'request', thread_id: 'parent'
+    )
+
+    runtime.child_delegation_context = {
+      current_depth: 1, remaining_depth: 1, remaining_concurrency: 1,
+      capabilities: ['local:read_file']
+    }
+    binding = Tamoz::Agent::CapabilityBinding.build(toolbox:, child_task_runtime: runtime, profile:)
+
+    assert_raises(Tamoz::Agent::ToolPolicyError) do
+      binding.execute(context, 'delegate_child_task',
+                      { 'task' => 'widen', 'capabilities' => ['local:list_directory'] })
+    end
+    binding.execute(context, 'delegate_child_task',
+                    { 'task' => 'stay narrow', 'capabilities' => ['local:read_file'] })
+    child, = runtime.child
+
+    assert_equal 2, child.depth
+    assert_equal 0, child.delegation_policy.fetch('remaining_depth')
+    assert_equal 0, child.delegation_policy.fetch('remaining_concurrency')
+
+    runtime.child_delegation_context = {
+      current_depth: 2, remaining_depth: 0, remaining_concurrency: 0,
+      capabilities: ['local:read_file']
+    }
+    exhausted = Tamoz::Agent::CapabilityBinding.build(toolbox:, child_task_runtime: runtime, profile:)
+    assert_raises(Tamoz::Agent::ToolPolicyError) do
+      exhausted.execute(context, 'delegate_child_task',
+                        { 'task' => 'recurse', 'capabilities' => ['local:read_file'] })
     end
   end
 

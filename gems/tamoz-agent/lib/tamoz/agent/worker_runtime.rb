@@ -650,13 +650,32 @@ module Tamoz
 
         @monitor.synchronize do
           key = ['child', child.child_id]
-          @sessions[key] ||= build_session(
-            profile_id,
-            allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
-            mcp: nil,
-            resolved_profile: resolved
-          )
+          @sessions[key] ||= with_child_delegation_context(child) do
+            build_session(
+              profile_id,
+              allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
+              mcp: nil,
+              resolved_profile: resolved
+            )
+          end
         end
+      end
+
+      def child_delegation_context
+        Thread.current[:tamoz_agent_child_delegation_context]
+      end
+
+      def with_child_delegation_context(child)
+        previous = Thread.current[:tamoz_agent_child_delegation_context]
+        Thread.current[:tamoz_agent_child_delegation_context] = {
+          current_depth: child.depth,
+          remaining_depth: child.delegation_policy.fetch('remaining_depth'),
+          remaining_concurrency: child.delegation_policy.fetch('remaining_concurrency'),
+          capabilities: child.capability_profile.fetch('capabilities')
+        }.freeze
+        yield
+      ensure
+        Thread.current[:tamoz_agent_child_delegation_context] = previous
       end
 
       def session_for_profile(profile_id)

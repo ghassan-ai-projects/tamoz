@@ -75,4 +75,37 @@ class AgentChildTaskTest < Minitest::Test
       child.assert_narrowed_to!(parent_profile.merge('authority_revision' => nil))
     end
   end
+
+  def test_policy_is_immutable_and_does_not_change_durable_identity
+    policy = build.capability_profile.merge(
+      'delegation_policy' => { 'remaining_depth' => 1, 'remaining_concurrency' => 1 }
+    )
+    child = Tamoz::Agent::ChildTask.build(
+      parent_thread_id: 'thread-1', parent_request_id: 'request-1',
+      task: 'inspect the repository', capability_profile: policy, depth: 1, concurrency: 1
+    )
+
+    assert_equal build.child_id, child.child_id
+    assert_predicate child, :delegation_enabled?
+    assert_raises(FrozenError) { child.delegation_policy['remaining_depth'] = 0 }
+  end
+
+  def test_secret_shaped_task_and_profile_are_rejected_at_value_boundary
+    assert_raises(Tamoz::SensitiveValueError) do
+      Tamoz::Agent::ChildTask.build(
+        parent_thread_id: 'thread-1', parent_request_id: 'request-1',
+        task: 'record sk-live-DO-NOT-PERSIST-0123456789',
+        capability_profile: { 'capabilities' => ['local:read_file'] }, depth: 1, concurrency: 1
+      )
+    end
+    assert_raises(Tamoz::SensitiveValueError) do
+      Tamoz::Agent::ChildTask.build(
+        parent_thread_id: 'thread-1', parent_request_id: 'request-1', task: 'inspect',
+        capability_profile: {
+          'capabilities' => ['local:read_file'],
+          'note' => 'sk-live-DO-NOT-PERSIST-0123456789'
+        }, depth: 1, concurrency: 1
+      )
+    end
+  end
 end
