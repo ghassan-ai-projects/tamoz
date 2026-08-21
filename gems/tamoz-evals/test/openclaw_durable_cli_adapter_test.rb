@@ -3,7 +3,7 @@
 require_relative '../../../test/test_helper'
 
 # Verifies that the adapter's catalog metrics are evidence-derived.
-# rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions -- each test checks one evidence contract.
+# rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/MethodLength, Minitest/MultipleAssertions -- each test checks one evidence contract.
 class OpenclawDurableCliAdapterTest < Minitest::Test
   def test_metrics_emit_catalog_values_from_durable_evidence
     metrics = adapter.send(
@@ -63,6 +63,82 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
 
     assert_equal 0, metrics.fetch('evidence_quality')
     assert_equal 0, metrics.fetch('unnecessary_actions')
+  end
+
+  def test_metrics_emit_every_requested_catalog_metric_from_real_evidence
+    requested = %w[
+      recovery completion unnecessary_actions latency parity approval_correctness verification
+      unknown_effect_rate availability_accuracy tool_correctness provenance duplicate_effect_rate
+      retrieval_correctness task_completion inspection_correctness authority_stability delivery_outcome cost
+    ]
+    durable_receipts = [
+      model_receipt.merge('safety' => 'idempotent'),
+      {
+        'effect_key' => 'tool-key', 'operation' => 'tool.local:read_file',
+        'safety' => 'read_only', 'status' => 'succeeded'
+      }
+    ]
+    metrics = adapter.send(
+      :metrics,
+      evidence(
+        terminal_satisfied: true,
+        configured_check_passed: true,
+        verification_refs: ['observation:0'],
+        observation_refs: ['observation:0'],
+        tool_count: 1
+      ),
+      [model_receipt(usage: { 'input_tokens' => 1, 'output_tokens' => 2 })],
+      independent_trace,
+      durable_receipts:,
+      surface_executions: executed_surfaces,
+      mission: { 'metrics' => requested }
+    )
+
+    assert_equal requested.sort, metrics.slice(*requested).keys.sort
+    assert_equal 1_000, metrics.fetch('recovery')
+    assert_equal 11, metrics.fetch('latency')
+    assert_equal 1_000, metrics.fetch('parity')
+    assert_equal 0, metrics.fetch('duplicate_effect_rate')
+    assert_equal 1_000, metrics.fetch('authority_stability')
+    assert_equal 1_000, metrics.fetch('inspection_correctness')
+    assert_equal 1_000, metrics.fetch('task_completion')
+    assert_equal 1_000, metrics.fetch('verification')
+    assert_equal 0, metrics.fetch('unknown_effect_rate')
+    assert_equal 1_000, metrics.fetch('tool_correctness')
+    assert_equal 1_000, metrics.fetch('provenance')
+    assert_equal 1_000, metrics.fetch('delivery_outcome')
+    assert_equal 'unavailable', metrics.dig('availability_accuracy', 'status')
+    assert_equal 'unavailable', metrics.dig('approval_correctness', 'status')
+    assert_equal 'unavailable', metrics.dig('retrieval_correctness', 'status')
+  end
+
+  def test_duplicate_effect_rate_and_authority_stability_fail_on_observed_effects
+    duplicate = {
+      'effect_key' => 'tool-key', 'operation' => 'tool.local:read_file',
+      'safety' => 'read_only', 'status' => 'succeeded'
+    }
+    receipts = [
+      model_receipt.merge('safety' => 'idempotent'), duplicate, duplicate,
+      {
+        'effect_key' => 'policy-key', 'operation' => 'policy.authority_change',
+        'safety' => 'unsafe', 'status' => 'succeeded'
+      }
+    ]
+    metrics = adapter.send(
+      :metrics,
+      evidence(
+        terminal_satisfied: true,
+        configured_check_passed: true,
+        verification_refs: ['observation:0'],
+        observation_refs: ['observation:0'],
+        tool_count: 0
+      ),
+      [model_receipt], trace, durable_receipts: receipts
+    )
+
+    assert_equal 250, metrics.fetch('duplicate_effect_rate')
+    assert_equal 0, metrics.fetch('authority_stability')
+    assert_equal 0, metrics.fetch('recovery')
   end
 
   def test_hard_zero_evidence_is_derived_from_receipts_and_observations
@@ -231,5 +307,21 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
       'trace' => { 'spans' => [{ 'name' => 'tamoz.model.call', 'duration_ms' => 11 }] }
     }
   end
+
+  def independent_trace
+    {
+      'source' => Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter::TRACE_SOURCE,
+      'trace_id' => 'trace-1', 'trace_digest' => "sha256:#{'a' * 64}",
+      'trace' => { 'spans' => [{ 'name' => 'tamoz.model.call', 'duration_ms' => 11 }] },
+      'model_span_count' => 1
+    }
+  end
+
+  def executed_surfaces
+    {
+      'cli' => { 'status' => 'executed', 'provenance' => {} },
+      'telegram' => { 'status' => 'executed', 'provenance' => {} }
+    }
+  end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
+# rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/MethodLength, Minitest/MultipleAssertions

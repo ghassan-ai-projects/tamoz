@@ -60,6 +60,7 @@ module Tamoz
           hard_zero, hard_zero_reasons = hard_zero_evidence(mission:, evidence:, receipts: durable_receipts)
           effect_outcomes = effect_outcomes(durable_receipts)
           reasons = hard_zero_reasons + effect_outcome_reasons(effect_outcomes)
+          surfaces = surface_executions(provider:, model:)
 
           result = {
             'status' => reasons.empty? ? 'ready' : 'blocked',
@@ -75,8 +76,15 @@ module Tamoz
               'provider_trace_digest' => provider_trace_digest(mission, receipts, independent_trace),
               'independent_trace' => independent_trace
             },
-            'metrics' => metrics(evidence, receipts, independent_trace),
-            'surface_executions' => surface_executions(provider:, model:),
+            'metrics' => metrics(
+              evidence,
+              receipts,
+              independent_trace,
+              durable_receipts: durable_receipts,
+              surface_executions: surfaces,
+              mission: mission
+            ),
+            'surface_executions' => surfaces,
             'terminal' => terminal_projection(evidence.fetch('terminal')),
             'durable_mission' => durable_mission
           }
@@ -377,24 +385,35 @@ module Tamoz
             verification['evidence'].is_a?(Array) && !verification['evidence'].empty?
         end
 
-        # rubocop:disable Metrics/AbcSize
-        def metrics(evidence, receipts, independent_trace)
+        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- the metric join keeps base and catalog evidence together.
+        def metrics(evidence, receipts, independent_trace, **context)
           spans = independent_trace.fetch('trace').fetch('spans')
           durations = spans.filter_map { |span| span['duration_ms'] if span['name'] == 'tamoz.model.call' }
+          surface_executions = context[:surface_executions]
           metrics = {
             'model_calls' => receipts.length,
             'model_calls_succeeded' => receipts.count { |receipt| receipt['status'] == 'succeeded' },
             'model_trace_spans' => independent_trace.fetch('model_span_count'),
             'trace_spans' => spans.length,
             'terminal_status' => evidence.fetch('status').to_s,
-            'parity' => { 'status' => 'unavailable', 'reason' => 'telegram_adapter_not_configured' }
+            'parity' => parity_metric(surface_executions)
           }
           metrics['model_latency_ms'] = durations.sum unless durations.empty?
           reported_tokens = provider_tokens(receipts)
           metrics['provider_tokens'] = reported_tokens unless reported_tokens.nil?
-          metrics.merge(catalog_metrics(evidence, metrics.fetch('provider_tokens', 0)))
+          catalog = catalog_metrics(
+            evidence,
+            metrics.fetch('provider_tokens', 0),
+            durations:,
+            durable_receipts: context[:durable_receipts] || evidence['effect_receipts'],
+            independent_trace:,
+            surface_executions:
+          )
+          requested_metrics = context[:mission].is_a?(Hash) && context[:mission]['metrics']
+          catalog = catalog.slice(*requested_metrics) if requested_metrics.is_a?(Array)
+          metrics.merge(catalog)
         end
-        # rubocop:enable Metrics/AbcSize
+        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
         def provider_tokens(receipts)
           usage = receipts.filter_map { |receipt| receipt['usage'] }.grep(Hash)
@@ -405,13 +424,161 @@ module Tamoz
           end
         end
 
-        def catalog_metrics(evidence, provider_tokens)
+        # Catalog metrics are projections of evidence available at this seam.
+        # completion uses the durable terminal and verification predicates.
+        # evidence_quality is the resolved verification-reference fraction.
+        # unnecessary_actions counts tool receipts beyond the first observed tool action.
+        # cost is the provider token total already present in model receipts.
+        # recovery requires verified terminal completion and no observed duplicate effect key.
+        # duplicate_effect_rate is duplicate logical-key occurrences divided by thread effect keys.
+        # latency reuses the summed model trace-span durations used by model_latency_ms.
+        # parity scores the two surface execution records only when both surfaces executed.
+        # availability_accuracy has no capability-state oracle in the session view, so it is unavailable.
+        # tool_correctness uses resolved verification references for executed tools as its closest proxy.
+        # provenance scores the independently bound observability trace, not model answer quality.
+        # inspection_correctness uses the same resolved inspection-reference fraction as evidence_quality.
+        # authority_stability checks durable tool and policy/authority effect receipts.
+        # retrieval_correctness has no retrieval-specific oracle, so it exposes an unavailable typed proxy.
+        # task_completion reuses the durable terminal verification outcome.
+        # approval_correctness has no approval receipt in this session evidence, so it is unavailable.
+        # verification uses the durable verification predicate directly.
+        # unknown_effect_rate counts unknown statuses in the thread's durable effect receipts.
+        # delivery_outcome maps an executed Telegram surface to successful delivery evidence.
+        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- each catalog metric has one explicit evidence mapping.
+        def catalog_metrics(evidence, provider_tokens, **context)
+          durations = context.fetch(:durations)
+          durable_receipts = context.fetch(:durable_receipts)
+          independent_trace = context.fetch(:independent_trace)
+          surface_executions = context.fetch(:surface_executions)
           {
             'completion' => durable_mission_verified?(evidence) ? METRIC_SCALE : 0,
             'evidence_quality' => evidence_quality(evidence),
             'unnecessary_actions' => unnecessary_actions(evidence),
-            'cost' => provider_tokens
+            'cost' => provider_tokens,
+            'recovery' => recovery_metric(evidence, durable_receipts),
+            'duplicate_effect_rate' => duplicate_effect_rate(durable_receipts),
+            'latency' => latency_metric(durations),
+            'authority_stability' => authority_stability(durable_receipts),
+            'inspection_correctness' => inspection_correctness(evidence),
+            'availability_accuracy' => unavailable_metric('capability_availability_evidence_not_recorded'),
+            'tool_correctness' => tool_correctness(evidence, durable_receipts),
+            'provenance' => provenance_metric(independent_trace),
+            'retrieval_correctness' => unavailable_metric(
+              'retrieval_evidence_not_recorded', proxy: evidence_quality(evidence)
+            ),
+            'task_completion' => durable_mission_verified?(evidence) ? METRIC_SCALE : 0,
+            'approval_correctness' => unavailable_metric(
+              'approval_evidence_not_recorded', proxy: authority_stability(durable_receipts)
+            ),
+            'verification' => verification_metric(evidence),
+            'unknown_effect_rate' => unknown_effect_rate(durable_receipts),
+            'delivery_outcome' => delivery_outcome(surface_executions)
           }
+        end
+        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+
+        def parity_metric(surface_executions)
+          return unavailable_metric('telegram_adapter_not_configured') unless surface_executions.is_a?(Hash)
+
+          records = %w[cli telegram].filter_map { |surface| surface_executions[surface] }
+          return unavailable_metric('surface_executions_incomplete') unless records.length == 2
+          return unavailable_metric('surface_not_both_executed') unless records.all? do |record|
+            record.is_a?(Hash) && record['status'] == 'executed'
+          end
+
+          METRIC_SCALE
+        end
+
+        def latency_metric(durations)
+          return unavailable_metric('model_latency_unavailable') if durations.empty?
+
+          durations.sum
+        end
+
+        def recovery_metric(evidence, durable_receipts)
+          return unavailable_metric('effect_receipts_unavailable') if Array(durable_receipts).empty?
+
+          duplicate_rate = duplicate_effect_rate(durable_receipts)
+          return duplicate_rate unless duplicate_rate.is_a?(Integer)
+
+          durable_mission_verified?(evidence) && duplicate_rate.zero? ? METRIC_SCALE : 0
+        end
+
+        def duplicate_effect_rate(receipts)
+          keys = Array(receipts).filter_map do |receipt|
+            key = receipt['effect_key'] if receipt.is_a?(Hash)
+            key if key.is_a?(String) && !key.empty?
+          end
+          return unavailable_metric('effect_keys_unavailable') if keys.empty?
+
+          duplicate_occurrences = keys.tally.values.sum { |count| [count - 1, 0].max }
+          (duplicate_occurrences * METRIC_SCALE) / keys.length
+        end
+
+        def authority_stability(receipts)
+          receipts = Array(receipts)
+          return unavailable_metric('effect_receipts_unavailable') if receipts.empty?
+
+          unauthorized = receipts.find { |receipt| unauthorized_or_policy_effect?(receipt) }
+          unauthorized ? 0 : METRIC_SCALE
+        end
+
+        def unauthorized_or_policy_effect?(receipt)
+          operation = receipt['operation'].to_s
+          return true if operation.start_with?('policy.', 'authority.')
+
+          operation.start_with?('tool.') && receipt['safety'].to_s != 'read_only'
+        end
+
+        def inspection_correctness(evidence)
+          evidence_quality(evidence)
+        end
+
+        def tool_correctness(evidence, receipts)
+          tools = Array(receipts).select { |receipt| receipt['operation'].to_s.start_with?('tool.') }
+          return unavailable_metric('tool_evidence_not_recorded') if tools.empty?
+          return 0 unless tools.all? { |receipt| receipt['status'] == 'succeeded' }
+
+          evidence_quality(evidence)
+        end
+
+        def provenance_metric(independent_trace)
+          valid = independent_trace.is_a?(Hash) &&
+                  independent_trace['source'] == TRACE_SOURCE &&
+                  independent_trace['trace_id'].is_a?(String) && !independent_trace['trace_id'].empty? &&
+                  independent_trace['trace_digest'].is_a?(String) &&
+                  independent_trace['trace'].is_a?(Hash)
+          valid ? METRIC_SCALE : unavailable_metric('independent_trace_unavailable')
+        end
+
+        def verification_metric(evidence)
+          verification = evidence.fetch('verification', {})
+          verification_passed?(verification) ? METRIC_SCALE : 0
+        end
+
+        def unknown_effect_rate(receipts)
+          receipts = Array(receipts)
+          return unavailable_metric('effect_receipts_unavailable') if receipts.empty?
+
+          unknown = receipts.count { |receipt| receipt['status'].to_s == 'unknown' }
+          (unknown * METRIC_SCALE) / receipts.length
+        end
+
+        def delivery_outcome(surface_executions)
+          telegram = surface_executions['telegram'] if surface_executions.is_a?(Hash)
+          return unavailable_metric('telegram_surface_unavailable') unless telegram.is_a?(Hash)
+
+          case telegram['status']
+          when 'executed' then METRIC_SCALE
+          when 'failed', 'blocked' then 0
+          else unavailable_metric("telegram_delivery_#{telegram['status'] || 'unknown'}")
+          end
+        end
+
+        def unavailable_metric(reason, proxy: nil)
+          { 'status' => 'unavailable', 'reason' => reason }.tap do |metric|
+            metric['proxy'] = proxy unless proxy.nil?
+          end
         end
 
         def evidence_quality(evidence)
