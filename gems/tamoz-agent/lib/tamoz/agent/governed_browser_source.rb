@@ -79,6 +79,7 @@ module Tamoz
 
         host = match[1].downcase
         raise ToolPolicyError, 'browser host is not allowlisted' unless @allowed_hosts.include?(host)
+
         arguments
       end
     end

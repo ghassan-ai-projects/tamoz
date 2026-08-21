@@ -202,7 +202,7 @@ module Tamoz
           digest('mission_digest' => digest(mission), 'receipts' => receipts)
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        # rubocop:disable Metrics/AbcSize
         def metrics(evidence, receipts, independent_trace)
           spans = independent_trace.fetch('trace').fetch('spans')
           durations = spans.filter_map { |span| span['duration_ms'] if span['name'] == 'tamoz.model.call' }
@@ -222,7 +222,7 @@ module Tamoz
           end
           metrics
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+        # rubocop:enable Metrics/AbcSize
 
         def terminal_projection(terminal)
           return {} unless terminal.is_a?(Hash)
