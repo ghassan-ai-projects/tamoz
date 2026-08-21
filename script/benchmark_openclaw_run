@@ -35,6 +35,7 @@ OptionParser.new do |parser|
   parser.on('--capabilities PATH') { |value| options[:capabilities] = value }
   parser.on('--config-sha256 DIGEST') { |value| options[:config_sha256] = value }
   parser.on('--git-revision REVISION') { |value| options[:git_revision] = value }
+  parser.on('--scenario ID') { |value| options[:scenario] = value }
   parser.on('--controls-passed') { options[:controls_passed] = true }
   parser.on('--publish') { options[:publish] = true }
 end.parse!
@@ -70,12 +71,20 @@ environment = Tamoz::Evals::Benchmark::EnvironmentLoader.for(
 adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
   runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace), env: environment
 )
+executor = if options[:scenario] &&
+              Tamoz::Evals::Benchmark::ScenarioDriver.implemented?(options.fetch(:scenario))
+             Tamoz::Evals::Benchmark::ScenarioDriver.new(
+               adapter:, scenario: options.fetch(:scenario)
+             )
+           else
+             adapter
+           end
 runner = Tamoz::Evals::Benchmark::OpenclawMissionRunner.new(
   protocol:, catalog:, run_kind: 'real_provider', provider: options.fetch(:provider),
   model: options.fetch(:model), artifact_root: options.fetch(:artifact_root),
   artifact_base: options.fetch(:artifact_base), git_revision:, config_sha256:, graph: protocol.fetch('graph'),
   surfaces: %w[cli telegram], capabilities:, controls_passed: options.fetch(:controls_passed),
-  command: "script/benchmark_openclaw_run #{ARGV.join(' ')}", executor: adapter
+  command: "script/benchmark_openclaw_run #{ARGV.join(' ')}", executor:
 )
 run = runner.run
 readiness = Tamoz::Evals::Benchmark::Readiness.evaluate(

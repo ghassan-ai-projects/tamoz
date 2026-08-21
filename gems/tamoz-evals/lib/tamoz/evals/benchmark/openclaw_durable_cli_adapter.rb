@@ -19,6 +19,8 @@ module Tamoz
         METRIC_SCALE = 1_000
         EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
 
+        attr_reader :runtime_dir, :workspace
+
         class CredentialUnavailable < Tamoz::Evals::ExecutionError; end
         class TraceUnavailable < Tamoz::Evals::ExecutionError; end
 
@@ -36,32 +38,64 @@ module Tamoz
         end
         # rubocop:enable Metrics/ParameterLists
 
-        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one durable mission transaction.
         def call(mission:, run_kind:, provider:, model:)
           raise ArgumentError, 'OpenClaw durable adapter only supports real_provider runs' unless
             run_kind == 'real_provider'
 
           provider = String(provider)
           model = String(model)
-          credential_binding!(provider)
-          initialize_runtime!
-          thread = thread_id(mission.fetch('id'))
+          prepare!(provider:, model:)
+          thread = thread_id_for(mission.fetch('id'))
           enqueue!(thread, mission.fetch('goal'), provider:, model:)
           worker!(provider:, model:)
-          evidence = @evidence_reader.call(
+          result_for(mission:, provider:, model:, thread:, evidence: evidence_for(thread:, provider:, model:))
+        rescue CredentialUnavailable, TraceUnavailable => e
+          blocked_result(mission, e.message)
+        rescue Tamoz::Evals::ExecutionError => e
+          blocked_result(mission, bounded_reason(e.message))
+        end
+
+        def prepare!(provider:, model:)
+          raise ArgumentError, 'model is required' if String(model).empty?
+
+          credential_binding!(provider)
+          initialize_runtime!
+        end
+
+        def thread_id_for(mission_id)
+          thread_id(mission_id)
+        end
+
+        def evidence_for(thread:, provider:, model:)
+          @evidence_reader.call(
             runtime_dir: @runtime_dir, thread:, provider:, model:
           )
+        end
+
+        # Builds the normal adapter result from a caller-controlled durable
+        # session boundary. Scenario drivers use this to keep one evidence join
+        # and one provenance contract for both ordinary and multi-step runs.
+        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        # rubocop:disable Metrics/ParameterLists -- the public
+        # scenario seam passes the existing adapter contract plus three oracle overrides.
+        def result_for(mission:, provider:, model:, thread:, evidence:, hard_zero_overrides: {},
+                       hard_zero_reasons: [], metric_overrides: {})
           trace = trace!(thread)
           durable_receipts = durable_effect_receipts(evidence.fetch('effect_receipts'))
           receipts = model_receipts(durable_receipts)
           validate_receipts!(receipts)
           independent_trace = independent_trace!(trace, receipts, mission:, thread:)
           durable_mission = durable_mission!(evidence, mission:, thread:)
-          hard_zero, hard_zero_reasons = hard_zero_evidence(mission:, evidence:, receipts: durable_receipts)
+          hard_zero, reasons = hard_zero_evidence(mission:, evidence:, receipts: durable_receipts)
+          hard_zero = hard_zero.merge(hard_zero_overrides)
+          reasons = reasons.reject do |reason|
+            name = reason.delete_prefix('hard_zero_unverifiable:')
+            hard_zero_overrides.key?(name)
+          end
+          reasons.concat(Array(hard_zero_reasons))
           effect_outcomes = effect_outcomes(durable_receipts)
-          reasons = hard_zero_reasons + effect_outcome_reasons(effect_outcomes)
+          reasons.concat(effect_outcome_reasons(effect_outcomes))
           surfaces = surface_executions(provider:, model:)
-
           result = {
             'status' => reasons.empty? ? 'ready' : 'blocked',
             'reason' => reasons.first,
@@ -83,18 +117,14 @@ module Tamoz
               durable_receipts: durable_receipts,
               surface_executions: surfaces,
               mission: mission
-            ),
+            ).merge(metric_overrides),
             'surface_executions' => surfaces,
             'terminal' => terminal_projection(evidence.fetch('terminal')),
             'durable_mission' => durable_mission
           }
           result.compact
-        rescue CredentialUnavailable, TraceUnavailable => e
-          blocked_result(mission, e.message)
-        rescue Tamoz::Evals::ExecutionError => e
-          blocked_result(mission, bounded_reason(e.message))
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+        # rubocop:enable Metrics/ParameterLists
 
         private
 
@@ -385,7 +415,7 @@ module Tamoz
             verification['evidence'].is_a?(Array) && !verification['evidence'].empty?
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- the metric join keeps base and catalog evidence together.
+        # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- the metric join keeps base and catalog evidence together.
         def metrics(evidence, receipts, independent_trace, **context)
           spans = independent_trace.fetch('trace').fetch('spans')
           durations = spans.filter_map { |span| span['duration_ms'] if span['name'] == 'tamoz.model.call' }
@@ -631,6 +661,8 @@ module Tamoz
         def bounded_reason(message)
           String(message).byteslice(0, 256).to_s
         end
+
+        public :enqueue!, :worker!
       end
       # rubocop:enable Metrics/ClassLength
 
@@ -660,7 +692,7 @@ module Tamoz
           view = runtime.session_for(thread).view(thread:)
           view_receipts = view.effect_receipts.map(&:to_h)
           census_receipts = effect_census_receipts(runtime, thread)
-          journal_receipts = journal_model_receipts(runtime, thread)
+          journal_receipts = journal_receipts(runtime, thread)
           {
             'status' => view.status,
             'terminal' => view.terminal,
@@ -671,6 +703,10 @@ module Tamoz
             end,
             'verification' => view.state.fetch(:verification, {})
           }
+        end
+
+        def journal_receipts(runtime, thread)
+          journal_model_receipts(runtime, thread) + journal_read_file_receipts(runtime, thread)
         end
 
         def build_model(provider:, model:)
@@ -684,6 +720,12 @@ module Tamoz
           rows = read_model_receipts(runtime, thread)
           codec = runtime.checkpoints.checkpoint_codec.state_codec
           rows.filter_map { |row| journal_model_receipt(codec, row) }
+        end
+
+        def journal_read_file_receipts(runtime, thread)
+          rows = read_read_file_receipts(runtime, thread)
+          codec = runtime.checkpoints.checkpoint_codec.state_codec
+          rows.filter_map { |row| journal_read_file_receipt(codec, row) }
         end
 
         def effect_census_receipts(runtime, thread)
@@ -723,6 +765,28 @@ module Tamoz
           end
         end
 
+        def read_read_file_receipts(runtime, thread)
+          runtime.adapter.__send__(:read, operation: 'benchmark.model_receipts') do |transaction|
+            transaction.rows(
+              'benchmark.read_file_receipts.select',
+              <<~SQL,
+                SELECT e.effect_key, e.operation, e.status,
+                       a.result, a.result_digest
+                FROM tamoz_effects AS e
+                JOIN tamoz_effect_attempts AS a
+                  ON a.effect_key = e.effect_key
+                 AND a.attempt_number = e.current_attempt
+                WHERE e.thread_id = ?
+                  AND e.operation = 'tool.local:read_file'
+                  AND e.status = 'succeeded'
+                  AND a.status = 'succeeded'
+                ORDER BY e.created_at_ms ASC, e.call_index ASC, e.effect_key ASC
+              SQL
+              [thread]
+            )
+          end
+        end
+
         def journal_model_receipt(codec, row)
           result = decode_journal_result(codec, row.fetch(3), row.fetch(4))
           {
@@ -730,6 +794,17 @@ module Tamoz
             'operation' => row.fetch(1),
             'status' => row.fetch(2),
             'usage' => result.is_a?(Hash) ? result['usage'] : nil
+          }
+        end
+
+        def journal_read_file_receipt(codec, row)
+          result = decode_journal_result(codec, row.fetch(3), row.fetch(4))
+          {
+            'effect_key' => row.fetch(0),
+            'operation' => row.fetch(1),
+            'status' => row.fetch(2),
+            'result' => result,
+            'result_digest' => row.fetch(4)
           }
         end
 

@@ -12,7 +12,7 @@ class DurableSessionEvidenceReaderTest < Minitest::Test
       evidence = reader.call(runtime_dir: @runtime_dir, thread: THREAD, provider: 'openai', model: 'test')
 
       assert_equal(
-        %w[tool.mcp:alms/health.check model.generate.adaptive_decide],
+        %w[tool.mcp:alms/health.check model.generate.adaptive_decide tool.local:read_file],
         evidence.fetch('effect_receipts').map { |receipt| receipt.fetch('operation') }
       )
       assert_equal(
@@ -23,6 +23,7 @@ class DurableSessionEvidenceReaderTest < Minitest::Test
       assert_equal 'read_only', evidence.dig('effect_receipts', 0, 'safety')
       assert_equal 'idempotent', evidence.dig('effect_receipts', 1, 'safety')
       assert_equal ['observation:0'], evidence.fetch('observation_refs')
+      assert_read_file_receipt(evidence)
     end
   end
 
@@ -95,9 +96,14 @@ class DurableSessionEvidenceReaderTest < Minitest::Test
   end
 
   def fake_adapter(result_bytes, result_digest)
+    read_file_bytes, read_file_digest = read_file_result
     transaction = Object.new
-    transaction.define_singleton_method(:rows) do |*_arguments|
-      [['model-key', 'model.generate.adaptive_decide', 'succeeded', result_bytes, result_digest]]
+    transaction.define_singleton_method(:rows) do |*arguments|
+      if arguments.fetch(1).include?('tool.local:read_file')
+        [['read-file-key', 'tool.local:read_file', 'succeeded', read_file_bytes, read_file_digest]]
+      else
+        [['model-key', 'model.generate.adaptive_decide', 'succeeded', result_bytes, result_digest]]
+      end
     end
     adapter = Object.new
     adapter.define_singleton_method(:read) do |operation:, &block|
@@ -115,6 +121,21 @@ class DurableSessionEvidenceReaderTest < Minitest::Test
       bytes, domain: 'tamoz.sqlite.effect_result'
     )
     [bytes, digest]
+  end
+
+  def read_file_result
+    result = { 'output' => "File: scenario/status.json\nsha256: #{'a' * 64}\ncontent:\n{\"status\":\"inactive\"}\n" }
+    bytes = Tamoz::StateCodec.new.dump(result)
+    digest = Tamoz::SQLite.const_get(:Wire, false).digest(
+      bytes, domain: 'tamoz.sqlite.effect_result'
+    )
+    [bytes, digest]
+  end
+
+  def assert_read_file_receipt(evidence)
+    output = evidence.dig('effect_receipts', 2, 'result', 'output')
+
+    assert_equal 'File: scenario/status.json', output.lines.first.chomp
   end
 
   def fake_session(view)

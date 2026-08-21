@@ -60,6 +60,7 @@ require_relative "evals/benchmark/cell_extractor"
 require_relative "evals/benchmark/comparison_executor"
 require_relative "evals/benchmark/openclaw_publisher"
 require_relative "evals/benchmark/leak_scan"
+require_relative "evals/benchmark/scenario_driver"
 require_relative "evals/cli"
 
 module Tamoz
