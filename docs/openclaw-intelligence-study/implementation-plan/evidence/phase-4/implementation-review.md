@@ -30,23 +30,35 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
   derives parent thread/request identity from the durable context, intersects
   requested local capabilities with the trusted profile, and enqueues through
   `WorkerRuntime#enqueue_child_task`.
-- Candidate-only profile/skill/config proposals now have a small promotion
-  value object that resolves an operator-owned artifact, records the existing
-  next-boundary transition, and returns `activated: false`; it has no activation
-  method or authority-writing path.
+- Candidate-only profile/skill/config proposals resolve operator-owned
+  artifacts, validate narrowed authority, and enter the durable lifecycle
+  through exact approval, apply, restart-health verification, activation, and
+  rollback stages.
 - `GovernedBrowserSource` defines the browser adapter boundary, exact HTTPS host
-  allowlist, bounded untrusted output, and fail-closed behavior when the
-  external adapter is absent.
+  allowlist, bounded untrusted output, required allowlisted final-location
+  evidence, and fail-closed behavior when the external adapter is absent.
+- Commit `1b1cc9b` adds the candidate-only profile/skill/config lifecycle:
+  operator-resolved candidate validation, exact human approval digests,
+  durable apply, restart/health verification, activation, and rollback with
+  typed unknown outcomes. Focused lifecycle coverage is 6 runs/13 assertions;
+  the existing improvement candidate suite is 14 runs/284 assertions.
+- Commit `b66be46` adds a durable parent-scoped child concurrency reservation
+  with CAS retry/release on terminal settlement, revalidates candidate content
+  before approval/effect execution, and covers browser redirect/missing-location
+  and child-sibling budget failures.
 
 ## Not delivered
 
 - A live browser run remains blocked by the absence of an approved browser
   connector/adapter in this repository; the new source refuses before network
   execution until one is injected.
-- Child cross-process restart coverage and the full profile apply/restart/health
-  workflow remain outside this minimal wiring slice.
+- Child cross-process restart coverage remains outside this slice; the child
+  runtime coverage currently proves durable request/adoption and bounded local
+  delegation, not a separate process witness.
 - Approval/reconciliation and unknown-outcome scenarios for new capability
   families remain unproven.
+- The browser source remains an injected adapter seam rather than a live
+  connector registration; no network execution is claimed.
 - No real-provider family run is claimed.
 
 ## Verification
@@ -59,10 +71,10 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 7 runs, 27 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_child_task_test.rb
-6 runs, 17 assertions, 0 failures, 0 errors, 0 skips
+8 runs, 23 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_child_task_runtime_test.rb
-3 runs, 9 assertions, 0 failures, 0 errors, 0 skips
+4 runs, 11 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_worker_test.rb
 23 runs, 107 assertions, 0 failures, 0 errors, 0 skips
@@ -71,7 +83,7 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 8 runs, 61 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_phase4_capability_test.rb
-3 runs, 19 assertions, 0 failures, 0 errors, 0 skips
+7 runs, 30 assertions, 0 failures, 0 errors, 0 skips
 ```
 
 These are policy and persistence tests, not evidence that an agent selected or

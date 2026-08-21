@@ -12,10 +12,11 @@ described capability sources. Nothing in this phase weakens a Phase 0
 invariant.
 
 The current slice adds read-only database admission policy, governed websearch
-egress plumbing, and a durable child request/adoption path with narrowed local
-authority. It does not yet implement an end-to-end browser mission,
-self-modification flows, child cross-process restart evidence, or real-provider
-family evidence.
+egress plumbing, a bounded browser adapter seam, a durable child
+request/adoption path with narrowed local authority, and a candidate-only
+self-modification lifecycle. It does not yet provide an end-to-end browser
+mission, child cross-process restart evidence, or real-provider family
+evidence.
 
 ## Work items (each independently shippable, in this order)
 

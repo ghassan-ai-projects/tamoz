@@ -32,17 +32,23 @@ Status: partial; the Phase 3 exit bar and global implementation bar are not met.
   grant revision, authority state, pause reason, and delivery outcome; the
   worker now acknowledges and completes materialized occurrences through the
   schedule store after durable graph execution.
+- Commit `211ad47` added restart-boundary coverage for compaction, delivery
+  deduplication, and replayed Telegram admission, plus canonical CLI/Telegram
+  identity assertions. The focused continuation package now covers 108 runs
+  and 541 assertions with zero failures.
+- Commit `b66be46` extends the shared durable conversation status projection
+  with lifecycle phase, event kind/sequence, next action, and terminal reason;
+  Telegram `/status` now exposes those semantic fields alongside task/effect/
+  capability/delivery state.
 
 ## Remaining gaps
 
-- Added worker recovery coverage for a compaction crash boundary: the same open
-  occurrence is reopened, the compaction record is written once, the read effect
-  is not duplicated, and one terminal lifecycle event remains.
-- Added exact canonical turn-payload parity assertions for the durable CLI
-  follow-up path and Telegram admission path.
 - A real `SIGKILL` injected at the exact compaction checkpoint, and a full
   composed CLI/Telegram delivery trace artifact, remain external acceptance
   work; this patch does not claim those fixtures were run.
+- The status projection is semantically aligned, but a live composed Telegram
+  transport trace proving every lifecycle event across a worker restart is
+  still absent.
 - No provider or intelligence evidence is claimed; current tests are fixture
   and durable-plumbing tests.
 
@@ -77,11 +83,10 @@ offenses in older large fixtures.
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:940e472a9e12ed3d0e8ba005d5db22a5f76ff03dfd11f9a59b22a13e34a652cd
+snapshot_id: sha256:d6bad7c50338c844cdbf099bd4617161c9d5bcbba8a8112a81665bfa165a9d73
 enola: 0.2.7-51-g72cd079
-facts: 10057; insights: 52; files parsed: 502/544; parse errors: 0
-receipt comparison: equivalent inputs; 0 extraction-quality regressions
-architecture diff: 0 new findings
+facts: 10324; insights: 52; files parsed: 509/551; parse errors: 0
+architecture diff: PASS — no structural regression; advisory findings only
 ```
 
 The focused continuation suites also passed: adaptive session (5 runs, 42

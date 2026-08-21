@@ -36,6 +36,16 @@ implementation bar are not met.
   unavailable.
 - Readiness now accepts the canonical mission catalog and refuses a ready
   mission whose required capability is absent or incomplete in the manifest.
+- Commit `41140bc` adds metrics-schema completeness, explicit effect outcome and
+  hard-zero records, per-surface execution provenance, and manifest consistency
+  checks. The durable CLI adapter records CLI execution and explicitly records
+  Telegram as unavailable when no approved Telegram adapter is configured;
+  it never self-attests that surface as executed.
+- Commit `b66be46` makes ready-mission readiness fail closed for non-passed
+  hard-zero values, missing/failed/unknown real-provider effect outcomes, and
+  unexecuted surfaces; adaptive-final verification now has an explicit
+  evidence-reference path. It also adds a catalog-level fixture integration
+  test covering every committed mission.
 - Kept the existing benchmark pilot path fixture-labelled; fixture results are
   not relabelled as intelligence evidence.
 
@@ -45,6 +55,8 @@ implementation bar are not met.
   operator capability bindings, and the control-passed decision were not
   available in this environment. The production path therefore remains
   unproven by a live result and correctly fails closed.
+- The default durable CLI adapter has no approved Telegram transport, so the
+  canonical two-surface run is correctly unavailable rather than publishable.
 - The independent trace is sourced from Tamoz's separate observability journal,
   but it is a runtime witness rather than cryptographic provider attestation.
 - Phase 5B common-subset/native-envelope comparison and memory attribution are
@@ -55,10 +67,10 @@ implementation bar are not met.
 
 ```text
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_benchmark_readiness_test.rb
-8 runs, 31 assertions, 0 failures, 0 errors, 0 skips
+9 runs, 39 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_mission_runner_test.rb
-4 runs, 22 assertions, 0 failures, 0 errors, 0 skips
+9 runs, 39 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec ruby -Itest test/openclaw_durable_cli_adapter_test.rb
 3 runs, 11 assertions, 0 failures, 0 errors, 0 skips

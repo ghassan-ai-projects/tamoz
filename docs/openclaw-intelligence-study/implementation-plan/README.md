@@ -12,12 +12,16 @@ exit bar.
 The current partial slice is intentionally not an end-state claim: it adds
 descriptor/identity, non-connecting MCP visibility, a durable adaptive
 read-only graph, canonical turn/lifecycle/status contracts, bounded governed
-database and child-record admission seams, and benchmark readiness checks.
-The benchmark preparation slice also now includes a provider-agnostic mission
-runner and strict evidence artifact validation; it does not supply real-provider
-evidence.
-Durable compaction, composed cross-surface execution, full governed expansion,
-and real-provider evidence remain outstanding until their phase exit bars pass.
+database/browser and child-record admission seams, candidate-only
+self-modification lifecycle controls, and benchmark readiness checks. Durable
+compaction restart and CLI/Telegram semantic parity now have focused fixture
+coverage. The benchmark preparation slice also includes a provider-agnostic
+mission runner, explicit surface-execution provenance, fail-closed hard-zero/outcome
+recording, and strict evidence artifact validation; it does not supply
+real-provider evidence.
+Live Telegram/browser execution, exact socket/SIGKILL acceptance, matched
+real-provider benchmark evidence, and the final intelligence claim remain
+outstanding until their external prerequisites and phase exit bars pass.
 
 Read in this order:
 
