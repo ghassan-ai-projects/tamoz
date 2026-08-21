@@ -86,6 +86,52 @@ class ComparisonExecutorTest < Minitest::Test
     end
   end
 
+  def test_publisher_writes_report_and_appends_scoreboard_once_for_publishable_run
+    Dir.mktmpdir('benchmark-publish') do |directory|
+      root = Pathname.new(directory)
+      manifest = write_synthetic_run(root)
+      readiness = publishable_readiness(manifest)
+      scoreboard_path = root.join('scoreboard.json')
+
+      first = Tamoz::Evals::Benchmark::OpenclawPublisher.publish(
+        manifest:, protocol:, readiness:, artifact_base: root, scoreboard_path:
+      )
+      second = Tamoz::Evals::Benchmark::OpenclawPublisher.publish(
+        manifest:, protocol:, readiness:, artifact_base: root, scoreboard_path:
+      )
+
+      report_path = root.join(manifest.fetch('artifact_root'), 'report.json')
+
+      assert_path_exists report_path
+      assert_equal first.report, read_json(report_path)
+      assert_predicate first.scoreboard, :appended?
+      refute_predicate second.scoreboard, :appended?
+      assert_equal first.scoreboard.entry, second.scoreboard.entry
+      assert_equal [first.scoreboard.entry], read_json(scoreboard_path).fetch('entries')
+    end
+  end
+
+  def test_publisher_refuses_an_unaccepted_run_without_writing_or_appending
+    Dir.mktmpdir('benchmark-publish-refusal') do |directory|
+      root = Pathname.new(directory)
+      manifest = write_synthetic_run(root).merge('controls_passed' => false)
+      readiness = Tamoz::Evals::Benchmark::Readiness::Result.new(
+        status: 'blocked', reasons: ['controls_not_passed'], manifest:
+      )
+      report_path = root.join(manifest.fetch('artifact_root'), 'report.json')
+      scoreboard_path = root.join('scoreboard.json')
+
+      assert_raises(Tamoz::Evals::Benchmark::OpenclawPublisher::Refusal) do
+        Tamoz::Evals::Benchmark::OpenclawPublisher.publish(
+          manifest:, protocol:, readiness:, artifact_base: root, scoreboard_path:
+        )
+      end
+
+      refute_path_exists report_path
+      refute_path_exists scoreboard_path
+    end
+  end
+
   private
 
   def protocol
@@ -125,6 +171,7 @@ class ComparisonExecutorTest < Minitest::Test
     {
       'run_kind' => 'real_provider', 'controls_passed' => true,
       'artifact_root' => artifact_root, 'provider' => 'openrouter', 'model' => 'model-a',
+      'git_revision' => 'abc123',
       'protocol_sha256' => Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol),
       'run_id' => 'run-1',
       'missions' => [{
@@ -133,6 +180,12 @@ class ComparisonExecutorTest < Minitest::Test
         'surface_executions' => { 'cli' => { 'status' => 'executed' } }
       }]
     }
+  end
+
+  def publishable_readiness(manifest)
+    Tamoz::Evals::Benchmark::Readiness::Result.new(
+      status: 'ready', reasons: [], manifest: manifest.merge('artifacts_verified' => true)
+    )
   end
 
   def receipts

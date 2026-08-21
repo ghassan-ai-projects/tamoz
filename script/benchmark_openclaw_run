@@ -83,10 +83,21 @@ readiness = Tamoz::Evals::Benchmark::Readiness.evaluate(
   expected_mission_ids: catalog.fetch('missions').map { |mission| mission.fetch('id') },
   mission_catalog: catalog, artifact_root_base: options.fetch(:artifact_base)
 )
-puts JSON.pretty_generate(
-  readiness.to_h.merge(
-    'manifest_path' => File.join(options.fetch(:artifact_base), options.fetch(:artifact_root), 'manifest.json')
-  )
+
+output = readiness.to_h.merge(
+  'manifest_path' => File.join(options.fetch(:artifact_base), options.fetch(:artifact_root), 'manifest.json')
 )
+if options.fetch(:publish) && readiness.publishable?
+  result = Tamoz::Evals::Benchmark::OpenclawPublisher.publish(
+    manifest: run.manifest, protocol:, readiness:, artifact_base: options.fetch(:artifact_base),
+    scoreboard_path: File.join(root, 'documentation', 'benchmark', 'scoreboard',
+                               'INTELLIGENCE_SCOREBOARD.json')
+  )
+  output['scoreboard'] = {
+    'status' => result.scoreboard.appended? ? 'appended' : 'already_present'
+  }
+end
+
+puts JSON.pretty_generate(output)
 
 exit 2 unless readiness.ready? && (!options.fetch(:publish) || readiness.publishable?)
