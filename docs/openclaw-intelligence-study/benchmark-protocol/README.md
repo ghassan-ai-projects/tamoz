@@ -1,6 +1,8 @@
 # Intelligence benchmark — protocol design and plan
 
-Status: design/plan only. No runtime code is added by these documents.
+Status: protocol plus operator runbook. The canonical runner and durable
+adapter exist; scenario-specific fixture/oracle execution and Telegram parity
+remain explicitly incomplete.
 
 This folder is the executable design for the benchmark that answers one
 question honestly: **is Tamoz measurably more capable, and is it improving
@@ -45,6 +47,81 @@ standing up a parallel benchmark stack.
   readiness, report, and the durable CLI adapter. Do not add a new runtime,
   registry, journal, or domain catalog to satisfy a work item.
 
+## Run the real benchmark
+
+The runner executes the missions in the catalog supplied by `--missions` (the
+default is the canonical nine-mission catalog). It does not infer a scenario
+from a Markdown file, and `SCENARIO_INDEX.json` is currently documentation
+metadata rather than a runner input.
+
+Prerequisites:
+
+- a configured Tamoz runtime containing `config.yaml`;
+- a workspace path the runtime is allowed to inspect;
+- a capability manifest whose states are observed, not guessed; and
+- an ignored `.env` file containing `OPENROUTER_API_KEY`.
+
+The runner reads only the selected provider's credential and API-base entries
+from `.env`; it never prints them or writes them to an artifact. Shell
+environment variables take precedence. Use `--env-file PATH` or
+`TAMOZ_ENV_FILE` to select another env file.
+
+The capability manifest uses the readiness seven-tuple:
+
+```json
+{
+  "local:read_file": {
+    "exists": true,
+    "reachable": true,
+    "authorized": true,
+    "attempted": true,
+    "effective": true,
+    "completed": true,
+    "verified": true
+  }
+}
+```
+
+Set each value from real control-plane evidence. Do not copy this example into
+an intelligence run unless every field is true for that run.
+
+Run the canonical catalog through the real provider:
+
+```bash
+artifact_base="$PWD/benchmark-artifacts"
+artifact_root="real-provider/$(date -u +%Y%m%dT%H%M%SZ)-$(git rev-parse --short HEAD)"
+
+script/benchmark_openclaw_run \
+  --runtime-dir "$HOME/.tamoz" \
+  --workspace "$PWD" \
+  --provider openrouter \
+  --model deepseek/deepseek-chat \
+  --capabilities /path/to/capabilities.json \
+  --artifact-base "$artifact_base" \
+  --artifact-root "$artifact_root"
+```
+
+The command prints the readiness result and exits non-zero when evidence is
+blocked. It writes the manifest at
+`<artifact-base>/<artifact-root>/manifest.json` and per-mission artifacts beside
+it. A real run is not publishable merely because the model responded: provider
+effect receipts, an independent trace, controls, artifact verification, and
+both required surfaces must pass.
+
+Re-check an existing manifest without advancing the runtime:
+
+```bash
+script/benchmark_openclaw_readiness \
+  --protocol documentation/benchmark/BENCHMARK_PROTOCOL.json \
+  --manifest "$artifact_base/$artifact_root/manifest.json" \
+  --missions documentation/benchmark/OPENCLAW_MISSIONS.json \
+  --artifact-base "$artifact_base"
+```
+
+Add `--publish` only when the operator intends to enforce the publication gate.
+Do not place fixture or scripted-model output under `real-provider/`; fixture
+results are plumbing evidence and never intelligence evidence.
+
 ## What already exists (the seams the plan builds on)
 
 | Seam | File | Role |
@@ -59,7 +136,7 @@ standing up a parallel benchmark stack.
 | Mission catalog | `documentation/benchmark/OPENCLAW_MISSIONS.json` | The versioned mission set (`openclaw.missions.v1`). |
 | Operator entrypoints | `script/benchmark_openclaw_run`, `script/benchmark_openclaw_readiness` | Require operator-supplied runtime/config/capabilities; exit non-zero when evidence is unavailable. |
 
-## The one command (target end state)
+## The one command (full publishable target)
 
 ```bash
 script/benchmark_openclaw_run \
@@ -70,11 +147,11 @@ script/benchmark_openclaw_run \
   --controls-passed --publish
 ```
 
-For the current real-intelligence run, export `OPENROUTER_API_KEY` and use the
-OpenRouter provider/model pair shown above. RubyLLM supplies the default
-`https://openrouter.ai/api/v1` base; an empty or missing key is an external
-blocker. No fixture or scripted-model output may be placed under
-`real-provider/` or described as intelligence evidence.
+For the current real-intelligence run, keep `OPENROUTER_API_KEY` in the ignored
+`.env` file and use the OpenRouter provider/model pair shown above. RubyLLM
+supplies the default `https://openrouter.ai/api/v1` base; an empty or missing
+key is an external blocker. The `--controls-passed --publish` form is the full
+target command, not a bypass for missing receipts, parity, or scenario oracles.
 
 Until the plan's phases land, this command fails closed with a typed reason,
 which is the correct behavior — it never emits a fabricated verdict.

@@ -129,7 +129,7 @@ Terminal semantic outcome and delivery receipts are required for the parity
 assertion once the B2 surface executor exists; the current adapter records
 Telegram as unavailable and cannot be used to claim `metrics.parity == 1`.
 
-### Commands (fixture rehearsal, then real)
+### Commands (real-provider run)
 
 A driver first rehearses each scenario as a **fixture** run once B0 exists — it
 proves the scenario wiring and assertions without a provider, and can never
@@ -143,21 +143,38 @@ fail-closed operator entrypoint:
 # Do not substitute a fake result.
 ```
 
-Then the same scenario as a **real** run (the only kind that can support a
-claim):
+The current runner accepts a mission catalog, not an individual scenario ID.
+Until B0 binds the scenario index and controller oracle into the artifact, a
+scenario driver must not label an ordinary catalog artifact as scenario
+evidence. The real-provider command below is therefore a canonical mission
+run, not proof that every T scenario is implemented:
 
 ```bash
 script/benchmark_openclaw_run \
   --runtime-dir <configured runtime> \
-  --provider openrouter --model deepseek/deepseek-chat \
+  --workspace <workspace> \
+  --provider openrouter \
+  --model deepseek/deepseek-chat \
   --capabilities <scenario capability-manifest.json> \
+  --artifact-base <artifact base> \
   --artifact-root real-provider/<date>-<git-sha>/<scenario>
 script/benchmark_openclaw_readiness \
   --protocol documentation/benchmark/BENCHMARK_PROTOCOL.json \
   --manifest real-provider/<date>-<git-sha>/<scenario>/manifest.json \
   --missions documentation/benchmark/OPENCLAW_MISSIONS.json \
-  --artifact-base .
+  --artifact-base <artifact base>
 ```
+
+The runner reads `OPENROUTER_API_KEY` (and an optional
+`OPENROUTER_API_BASE`) from the repository `.env` automatically. Use
+`--env-file <path>` when the credential file lives elsewhere. It loads only the
+selected provider entries, and the values never belong in a manifest,
+command string, or committed artifact.
+
+The command exits non-zero for `blocked`, `failed`, `unavailable`, or
+`unknown` evidence. The current adapter cannot produce Telegram delivery and
+acknowledgement receipts, so a two-surface publishable parity claim remains
+blocked until that executor exists.
 
 Both tracks (common-subset, native-envelope) apply; a scenario's verdict is
 per-axis, and beating a scripted baseline is a **floor claim**, never an
