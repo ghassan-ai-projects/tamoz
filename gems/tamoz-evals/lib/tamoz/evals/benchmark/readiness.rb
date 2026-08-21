@@ -84,7 +84,7 @@ module Tamoz
           def protocol_digest(protocol)
             schema_error('benchmark protocol must be an object') unless protocol.is_a?(Hash)
 
-            "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump(protocol))}"
+            "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump_with_floats(protocol))}"
           end
 
           def provider_trace_digest(mission_digest:, receipts:, independent_trace:)

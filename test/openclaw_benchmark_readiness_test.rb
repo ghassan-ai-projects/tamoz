@@ -4,10 +4,19 @@ require_relative 'test_helper'
 
 # The manifest helper and report fixture intentionally bind the complete evidence
 # contract in one place.
-# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Layout/LineLength
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength
+# rubocop:disable Metrics/ClassLength, Metrics/MethodLength
+# rubocop:disable Layout/LineLength, Minitest/MultipleAssertions
 class OpenclawBenchmarkReadinessTest < Minitest::Test
   def protocol
     { 'benchmark_protocol_version' => 'openclaw.v1' }
+  end
+
+  def test_protocol_digest_accepts_the_frozen_protocol_decimal_thresholds
+    protocol_path = ROOT.join('documentation', 'benchmark', 'BENCHMARK_PROTOCOL.json')
+    protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
+
+    assert_match(/\Asha256:[0-9a-f]{64}\z/, Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol))
   end
 
   def manifest(run_kind: 'real_provider', capability: nil, mission_status: 'ready', controls_passed: true)
@@ -282,4 +291,6 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     assert_includes effect_result.reasons, 'mission_effect_outcome_not_succeeded:adaptive-read-only'
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Layout/LineLength
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength
+# rubocop:enable Metrics/ClassLength, Metrics/MethodLength
+# rubocop:enable Layout/LineLength, Minitest/MultipleAssertions

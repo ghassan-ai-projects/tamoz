@@ -30,6 +30,11 @@ class CanonicalJSONTest < Minitest::Test
     assert_includes error.message, "scaled integers"
   end
 
+  def test_floating_point_values_require_explicit_opt_in
+    assert_equal '{"cost":0.1}',
+                 Tamoz::Evals::CanonicalJSON.dump_with_floats({"cost" => 0.1})
+  end
+
   def test_unicode_keys_cannot_collide_after_normalization
     composed = "\u00E9"
     decomposed = "e\u0301"
