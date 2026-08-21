@@ -15,6 +15,7 @@ options = {
   missions: File.join(root, 'documentation', 'benchmark', 'OPENCLAW_MISSIONS.json'),
   artifact_base: Dir.pwd,
   workspace: Dir.pwd,
+  env_file: ENV.fetch('TAMOZ_ENV_FILE', File.join(root, '.env')),
   publish: false,
   controls_passed: false
 }
@@ -26,6 +27,7 @@ OptionParser.new do |parser|
   parser.on('--missions PATH') { |value| options[:missions] = value }
   parser.on('--runtime-dir PATH') { |value| options[:runtime_dir] = value }
   parser.on('--workspace PATH') { |value| options[:workspace] = value }
+  parser.on('--env-file PATH') { |value| options[:env_file] = value }
   parser.on('--artifact-base PATH') { |value| options[:artifact_base] = value }
   parser.on('--artifact-root PATH') { |value| options[:artifact_root] = value }
   parser.on('--provider NAME') { |value| options[:provider] = value }
@@ -62,8 +64,11 @@ if git_revision.nil?
   git_revision = git_revision.strip
 end
 
+environment = Tamoz::Evals::Benchmark::EnvironmentLoader.for(
+  provider: options.fetch(:provider), env_file: options.fetch(:env_file)
+)
 adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
-  runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace)
+  runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace), env: environment
 )
 runner = Tamoz::Evals::Benchmark::OpenclawMissionRunner.new(
   protocol:, catalog:, run_kind: 'real_provider', provider: options.fetch(:provider),
