@@ -1,7 +1,11 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'fileutils'
 require 'json'
+require 'pathname'
+require 'psych'
+require 'rbconfig'
 require 'securerandom'
 require 'stringio'
 
@@ -17,12 +21,35 @@ module Tamoz
         TRACE_SOURCE = 'tamoz.observability.journal'
         THREAD_PREFIX = 'openclaw'
         METRIC_SCALE = 1_000
+        WORKER_TIMEOUT_MS = 600_000
+        WORKER_BOOTSTRAP = 'require "tamoz/agent"; exit Tamoz::Agent::CLI.run(ARGV)'
+        CHANGE_PROFILE_PREFIX = 'scenario-t3-m3m4'
+        CHANGE_TOOLS = %w[read_file list_directory search_text create_file].freeze
         EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
 
         attr_reader :runtime_dir, :workspace
 
         class CredentialUnavailable < Tamoz::Evals::ExecutionError; end
         class TraceUnavailable < Tamoz::Evals::ExecutionError; end
+
+        # Polls tamoz_effects while a worker subprocess is active.
+        class EffectPoller
+          attr_reader :effect_key
+
+          def initialize(adapter:, thread:, operation:)
+            @adapter = adapter
+            @thread = thread
+            @operation = operation
+          end
+
+          def poll(**)
+            receipt = @adapter.effect_receipt_for(thread: @thread, operation: @operation)
+            return unless receipt
+
+            @effect_key = receipt['logical_key'] || receipt['effect_key']
+            Tamoz::Evals::Harness::SubprocessRunner::INTERVENTION_KILL
+          end
+        end
 
         # rubocop:disable Metrics/ParameterLists -- injected seams keep the production path testable.
         def initialize(runtime_dir:, workspace:, env: ENV.to_h, cli: nil, evidence_reader: nil,
@@ -58,8 +85,21 @@ module Tamoz
         def prepare!(provider:, model:)
           raise ArgumentError, 'model is required' if String(model).empty?
 
+          @change_profile_id = nil
           credential_binding!(provider)
           initialize_runtime!
+        end
+
+        def prepare_changes!
+          initialize_runtime!
+          @change_profile_id = "#{CHANGE_PROFILE_PREFIX}-#{Digest::SHA256.hexdigest(@run_id)[0, 16]}"
+          path = File.join(@runtime_dir, 'profiles', "#{@change_profile_id}.yaml")
+          FileUtils.mkdir_p(File.dirname(path), mode: 0o700)
+          File.chmod(0o700, File.dirname(path))
+          File.write(path, Psych.dump(change_profile_document), mode: 'wb')
+          File.chmod(0o600, path)
+        rescue SystemCallError => e
+          raise Tamoz::Evals::ExecutionError, "scenario_profile_setup_failed:#{e.class}"
         end
 
         def thread_id_for(mission_id)
@@ -70,6 +110,24 @@ module Tamoz
           @evidence_reader.call(
             runtime_dir: @runtime_dir, thread:, provider:, model:
           )
+        end
+
+        def effect_receipt_for(thread:, operation:)
+          database = SQLite3::Database.new(
+            File.join(@runtime_dir, Tamoz::Agent::RuntimeDirectory::DATABASE_FILE), readonly: true
+          )
+          row = database.get_first_row(
+            effect_poll_sql,
+            [thread, operation]
+          )
+          row && {
+            'effect_key' => row.fetch(0), 'logical_key' => row[1],
+            'operation' => row.fetch(2), 'status' => row.fetch(3)
+          }
+        rescue SQLite3::Exception => e
+          raise Tamoz::Evals::ExecutionError, "scenario_effect_poll_failed:#{e.class}"
+        ensure
+          database&.close
         end
 
         # Builds the normal adapter result from a caller-controlled durable
@@ -128,6 +186,16 @@ module Tamoz
 
         private
 
+        def effect_poll_sql
+          <<~SQL
+            SELECT effect_key, logical_key, operation, status
+            FROM tamoz_effects
+            WHERE thread_id = ? AND operation = ? AND status != 'prepared'
+            ORDER BY created_at_ms ASC, call_index ASC, effect_key ASC
+            LIMIT 1
+          SQL
+        end
+
         def validate_inputs!
           raise ArgumentError, 'runtime_dir is required' if @runtime_dir.empty?
           raise ArgumentError, 'workspace is required' if @workspace.empty?
@@ -158,9 +226,10 @@ module Tamoz
         end
 
         def enqueue!(thread, task, provider:, model:)
+          profile = @change_profile_id ? ['--profile', @change_profile_id] : []
           document = invoke(
             base_args(provider:, model:) +
-            ['queue', 'add', '--task', task, '--thread', thread, '--json']
+            ['queue', 'add', '--task', task, '--thread', thread, *profile, '--json']
           )
           return if document.fetch('status') == 'queued' && document.fetch('thread') == thread
 
@@ -169,6 +238,25 @@ module Tamoz
 
         def worker!(provider:, model:)
           invoke(base_args(provider:, model:) + ['worker', '--once', '--json'])
+        end
+
+        def worker_until_effect!(thread:, provider:, model:, operation:)
+          poller = EffectPoller.new(
+            adapter: self, thread:, operation:
+          )
+          result = run_worker_subprocess(provider:, model:, poller:)
+          raise Tamoz::Evals::ExecutionError, 'scenario_effect_kill_not_observed' unless
+            intentional_kill?(result)
+          raise Tamoz::Evals::ExecutionError, 'scenario_effect_key_not_observed' unless poller.effect_key
+
+          poller.effect_key
+        end
+
+        def worker_subprocess!(provider:, model:)
+          result = run_worker_subprocess(provider:, model:)
+          raise Tamoz::Evals::ExecutionError, 'scenario_worker_failed' unless result.success?
+
+          result
         end
 
         def trace!(thread)
@@ -198,6 +286,52 @@ module Tamoz
           raise Tamoz::Evals::ExecutionError, 'cli_output_invalid'
         end
 
+        def run_worker_subprocess(provider:, model:, poller: nil)
+          runner = Tamoz::Evals::Harness::SubprocessRunner.new(
+            root: @workspace,
+            environment: @env
+          )
+          runner.capture(
+            worker_subprocess_argv(provider:, model:),
+            timeout_ms: WORKER_TIMEOUT_MS,
+            command: 'tamoz.worker',
+            poller:
+          )
+        end
+
+        def worker_subprocess_argv(provider:, model:)
+          [
+            RbConfig.ruby,
+            '-I',
+            subprocess_load_path,
+            '-e',
+            WORKER_BOOTSTRAP,
+            '--',
+            *base_args(provider:, model:),
+            'worker',
+            '--once',
+            '--json'
+          ]
+        end
+
+        def subprocess_load_path
+          paths = $LOAD_PATH.filter_map do |path|
+            next unless path.is_a?(String) && Pathname.new(path).absolute?
+            next unless File.directory?(path)
+
+            path
+          end.uniq
+          raise Tamoz::Evals::ExecutionError, 'scenario_worker_load_path_unavailable' if paths.empty?
+
+          paths.join(File::PATH_SEPARATOR)
+        end
+
+        def intentional_kill?(result)
+          result.instance_of?(Tamoz::Evals::Harness::SubprocessRunner::Result) &&
+            result.termination == 'kill' && result.termination_reason == 'poller' &&
+            result.term_signal == 'KILL' && result.exit_status.nil?
+        end
+
         def parse_json_output(output)
           lines = output.each_line.map(&:strip).reject(&:empty?)
           JSON.parse(lines.fetch(-1))
@@ -210,6 +344,34 @@ module Tamoz
           args += ['--provider', provider, '--model', model] if provider && model
           args << '--adaptive-routing' if @routing == :adaptive
           args
+        end
+
+        def change_profile_document
+          toolbox = Tamoz::Tools::Toolbox.new(
+            root: @workspace, allow_changes: true, allowed_tools: CHANGE_TOOLS,
+            approval_required: []
+          )
+          {
+            'profile' => {
+              'schema_version' => 1,
+              'profile_id' => @change_profile_id,
+              'profile_version' => '1.0',
+              'canonical_root' => @workspace
+            },
+            'roots' => { 'workspace' => @workspace },
+            'tools' => { 'allowed' => CHANGE_TOOLS, 'approval_required' => [] },
+            'policy' => {
+              'allow_changes' => true,
+              'default_check_safety' => 'read_only',
+              'graph_version' => Tamoz::Agent::Session::GRAPH_VERSION,
+              'behavior_version' => Tamoz::Agent::BEHAVIOR_VERSION,
+              'tool_catalog_digest' => toolbox.catalog_digest
+            },
+            'unattended' => {
+              'read_only' => %w[read_file list_directory search_text],
+              'reconcilable' => ['create_file']
+            }
+          }
         end
 
         def thread_id(mission_id)
@@ -662,7 +824,7 @@ module Tamoz
           String(message).byteslice(0, 256).to_s
         end
 
-        public :enqueue!, :worker!
+        public :enqueue!, :worker!, :worker_until_effect!, :worker_subprocess!
       end
       # rubocop:enable Metrics/ClassLength
 
@@ -697,6 +859,7 @@ module Tamoz
             'status' => view.status,
             'terminal' => view.terminal,
             'effect_receipts' => merge_effect_receipts(view_receipts, journal_receipts, census_receipts),
+            'effect_receipt_history' => view_receipts,
             'effect_receipts_complete' => !census_receipts.empty?,
             'observation_refs' => Array(view.state[:observations]).filter_map do |observation|
               observation['evidence_ref'] if observation.is_a?(Hash)

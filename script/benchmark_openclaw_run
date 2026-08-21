@@ -69,7 +69,8 @@ environment = Tamoz::Evals::Benchmark::EnvironmentLoader.for(
   provider: options.fetch(:provider), env_file: options.fetch(:env_file)
 )
 adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
-  runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace), env: environment
+  runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace), env: environment,
+  routing: options[:scenario] == 'T3-m3m4' ? :legacy : :adaptive
 )
 executor = if options[:scenario] &&
               Tamoz::Evals::Benchmark::ScenarioDriver.implemented?(options.fetch(:scenario))

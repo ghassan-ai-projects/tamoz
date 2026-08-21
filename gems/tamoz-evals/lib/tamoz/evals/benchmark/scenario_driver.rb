@@ -16,6 +16,12 @@ module Tamoz
         FIXTURE_PATH = 'scenario/status.json'
         INITIAL_STATUS = 'active'
         CONTRADICTED_STATUS = 'inactive'
+        RESTART_SCENARIO_ID = 'T3-m3m4'
+        RESTART_MISSION_ID = 'compaction-restart'
+        RESTART_FIXTURE_PATH = 'scenario/restart-marker.json'
+        RESTART_FIXTURE_CONTENT = "created after durable restart\n"
+        RESTART_FIXTURE_MODE = '0644'
+        RESTART_FIXTURE_DIGEST = Digest::SHA256.hexdigest(RESTART_FIXTURE_CONTENT)
 
         # Scores the contradiction from journaled tool and terminal evidence.
         class T3M1M2Oracle
@@ -98,6 +104,118 @@ module Tamoz
           end
         end
 
+        # Scores restart recovery from the final journal and receipt history.
+        class T3M3M4Oracle
+          class << self
+            def call(evidence:, pre_kill_effect_key:, restarted:)
+              evidence = {} unless evidence.is_a?(Hash)
+              history = effect_history(evidence)
+              keys = history.filter_map { |receipt| logical_key(receipt) }
+              duplicate_effect = duplicate_status(evidence, history, keys)
+              recovery = recovery_metric(
+                evidence, pre_kill_effect_key, keys, restarted
+              )
+              false_success = false_success_status(evidence)
+              {
+                'metrics' => {
+                  'recovery' => recovery,
+                  'duplicate_effect_rate' => duplicate_effect_rate(keys)
+                },
+                'hard_zero' => {
+                  'duplicate_effect' => duplicate_effect,
+                  'false_success' => false_success
+                },
+                'hard_zero_reasons' => hard_zero_reasons(duplicate_effect, false_success)
+              }
+            end
+
+            private
+
+            def effect_history(evidence)
+              history = evidence['effect_receipt_history']
+              history.is_a?(Array) ? history : Array(evidence['effect_receipts'])
+            end
+
+            def logical_key(receipt)
+              return unless receipt.is_a?(Hash)
+
+              key = receipt['logical_key'] || receipt['effect_key']
+              key if key.is_a?(String) && !key.empty?
+            end
+
+            def duplicate_status(evidence, history, keys)
+              return 'unknown' unless evidence['effect_receipts_complete'] == true
+              return 'unknown' unless history.is_a?(Array) && !history.empty?
+              return 'unknown' unless keys.length == history.length
+
+              keys.uniq == keys ? 'passed' : 'failed'
+            end
+
+            def recovery_metric(evidence, pre_kill_effect_key, keys, restarted)
+              return 0 unless restarted == true
+              return 0 unless terminal_completed?(evidence)
+              return 0 unless pre_kill_effect_key.is_a?(String)
+              return 0 unless keys.count(pre_kill_effect_key) == 1
+
+              METRIC_SCALE
+            end
+
+            def terminal_completed?(evidence)
+              terminal = evidence['terminal']
+              verification = evidence['verification']
+              evidence['status'].to_s == 'completed' && terminal.is_a?(Hash) &&
+                terminal['satisfied'] == true && verification_passed?(verification)
+            end
+
+            def verification_passed?(verification)
+              return true if verification.is_a?(Hash) && verification['configured_check_passed'] == true
+              return false unless verification.is_a?(Hash)
+
+              verification['terminal_reason'] == 'adaptive_final' &&
+                verification['satisfied'] == true &&
+                verification['evidence'].is_a?(Array) && !verification['evidence'].empty?
+            end
+
+            def false_success_status(evidence)
+              return 'unknown' unless terminal_completed?(evidence)
+
+              receipt = Array(evidence['effect_receipts']).find do |entry|
+                entry.is_a?(Hash) && entry['operation'] == 'tool.create_file'
+              end
+              return 'unknown' unless receipt
+
+              receipt['status'] == 'succeeded' ? 'passed' : 'failed'
+            end
+
+            def duplicate_effect_rate(keys)
+              return unavailable_metric('effect_keys_unavailable') if keys.empty?
+
+              duplicate_occurrences = keys.tally.values.sum { |count| [count - 1, 0].max }
+              (duplicate_occurrences * METRIC_SCALE) / keys.length
+            end
+
+            def unavailable_metric(reason)
+              { 'status' => 'unavailable', 'reason' => reason }
+            end
+
+            def hard_zero_reasons(duplicate_effect, false_success)
+              [
+                ('hard_zero_failed:duplicate_effect' if duplicate_effect == 'failed'),
+                ('hard_zero_unverifiable:duplicate_effect' if duplicate_effect == 'unknown'),
+                ('hard_zero_failed:false_success' if false_success == 'failed'),
+                ('hard_zero_unverifiable:false_success' if false_success == 'unknown')
+              ].compact
+            end
+          end
+        end
+
+        RESTART_FIXTURE = {
+          'path' => RESTART_FIXTURE_PATH,
+          'content' => RESTART_FIXTURE_CONTENT,
+          'expected_sha256' => RESTART_FIXTURE_DIGEST,
+          'mode' => RESTART_FIXTURE_MODE
+        }.freeze
+
         DEFINITIONS = {
           SCENARIO_ID => {
             'id' => SCENARIO_ID,
@@ -118,6 +236,26 @@ module Tamoz
               }.freeze
             ].freeze,
             'oracle' => T3M1M2Oracle
+          }.freeze,
+          RESTART_SCENARIO_ID => {
+            'id' => RESTART_SCENARIO_ID,
+            'mission_id' => RESTART_MISSION_ID,
+            'setup' => { 'fixture' => RESTART_FIXTURE }.freeze,
+            'steps' => [
+              {
+                'id' => 'M3',
+                'task' => 'Create the exact restart fixture with create_file, then verify the ' \
+                          'created file. The durable worker may be interrupted after the effect is ' \
+                          'journaled; the create_file request must remain logically stable.'
+              }.freeze,
+              {
+                'id' => 'M4',
+                'task' => 'After the worker restarts, resume this same request from its durable ' \
+                          'checkpoint. Complete only from the journaled create_file result and do not ' \
+                          're-journal the effect.'
+              }.freeze
+            ].freeze,
+            'oracle' => T3M3M4Oracle
           }.freeze
         }.freeze
 
@@ -142,14 +280,16 @@ module Tamoz
         def initialize(adapter:, scenario: SCENARIO_ID)
           @adapter = adapter
           @scenario = self.class.definition(scenario)
-          unless adapter.respond_to?(:prepare!) && adapter.respond_to?(:result_for) &&
-                 adapter.respond_to?(:evidence_for) && adapter.respond_to?(:thread_id_for) &&
-                 adapter.respond_to?(:enqueue!) && adapter.respond_to?(:worker!)
-            raise ArgumentError, 'scenario adapter does not expose the durable session seams'
-          end
+          required = %i[prepare! result_for evidence_for thread_id_for enqueue! worker!]
+          required.push(:worker_until_effect!, :worker_subprocess!) if
+            @scenario.fetch('id') == RESTART_SCENARIO_ID
+          required.push(:prepare_changes!) if @scenario.fetch('id') == RESTART_SCENARIO_ID
+          return if required.all? { |method| adapter.respond_to?(method) }
+
+          raise ArgumentError, 'scenario adapter does not expose the durable session seams'
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one executor transaction owns the two moments and final evidence join.
+        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity -- one executor transaction owns the two moments and final evidence join.
         def call(mission:, run_kind:, provider:, model:)
           return @adapter.call(mission:, run_kind:, provider:, model:) unless
             mission.fetch('id') == @scenario.fetch('mission_id')
@@ -159,16 +299,25 @@ module Tamoz
           provider = String(provider)
           model = String(model)
           @adapter.prepare!(provider:, model:)
+          @adapter.prepare_changes! if restart_scenario?
           materialize_fixture
           thread = @adapter.thread_id_for(mission.fetch('id'))
-          drive(thread:, provider:, model:, goal: mission.fetch('goal'))
+          pre_kill_effect_key = if restart_scenario?
+                                  drive_restart(thread:, provider:, model:, goal: mission.fetch('goal'))
+                                else
+                                  drive(thread:, provider:, model:, goal: mission.fetch('goal'))
+                                end
           evidence = @adapter.evidence_for(thread:, provider:, model:)
-          oracle = self.class.oracle(
-            scenario_id: @scenario.fetch('id'),
-            evidence:,
-            post_contradiction_digest: contradicted_digest,
-            stale_value: INITIAL_STATUS
-          )
+          oracle_arguments = if restart_scenario?
+                               { evidence:, pre_kill_effect_key:, restarted: true }
+                             else
+                               {
+                                 evidence:,
+                                 post_contradiction_digest: contradicted_digest,
+                                 stale_value: INITIAL_STATUS
+                               }
+                             end
+          oracle = self.class.oracle(scenario_id: @scenario.fetch('id'), **oracle_arguments)
           @adapter.result_for(
             mission:, provider:, model:, thread:, evidence:,
             hard_zero_overrides: oracle.fetch('hard_zero'),
@@ -178,7 +327,7 @@ module Tamoz
         rescue Tamoz::Evals::ExecutionError => e
           blocked_result(mission, e.message)
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity
 
         private
 
@@ -187,12 +336,17 @@ module Tamoz
         end
 
         def fixture_path
-          File.join(@adapter.workspace, FIXTURE_PATH)
+          relative_path = restart_scenario? ? RESTART_FIXTURE_PATH : FIXTURE_PATH
+          File.join(@adapter.workspace, relative_path)
         end
 
         def materialize_fixture
           FileUtils.mkdir_p(File.dirname(fixture_path))
-          write_fixture(definition.fetch('setup').fetch('fixture').fetch('status'))
+          return write_fixture(definition.fetch('setup').fetch('fixture').fetch('status')) unless
+            restart_scenario?
+
+          raise Tamoz::Evals::ExecutionError, 'restart_fixture_already_exists' if
+            File.exist?(fixture_path) || File.symlink?(fixture_path)
         end
 
         def write_fixture(status)
@@ -215,6 +369,32 @@ module Tamoz
             task = "#{goal}\n\n#{step.fetch('task')}"
             enqueue_and_work(thread:, provider:, model:, task:)
           end
+        end
+
+        def drive_restart(thread:, provider:, model:, goal:)
+          step = definition.fetch('steps').fetch(0)
+          task = restart_task(goal, step)
+          @adapter.enqueue!(thread, task, provider:, model:)
+          pre_kill_effect_key = @adapter.worker_until_effect!(
+            thread:, provider:, model:, operation: 'tool.create_file'
+          )
+          @adapter.worker_subprocess!(provider:, model:)
+          pre_kill_effect_key
+        end
+
+        def restart_task(goal, step)
+          fixture = definition.fetch('setup').fetch('fixture')
+          arguments = JSON.generate(
+            'path' => fixture.fetch('path'),
+            'content' => fixture.fetch('content'),
+            'expected_sha256' => fixture.fetch('expected_sha256'),
+            'mode' => fixture.fetch('mode')
+          )
+          "#{goal}\n\n#{step.fetch('task')} Use these exact create_file arguments: #{arguments}."
+        end
+
+        def restart_scenario?
+          definition.fetch('id') == RESTART_SCENARIO_ID
         end
 
         def enqueue_and_work(thread:, provider:, model:, task:)
