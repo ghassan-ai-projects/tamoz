@@ -5,6 +5,53 @@ require_relative '../../../test/test_helper'
 # Verifies that the adapter's catalog metrics are evidence-derived.
 # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/MethodLength, Minitest/MultipleAssertions -- each test checks one evidence contract.
 class OpenclawDurableCliAdapterTest < Minitest::Test
+  # Simulates a readonly SQLite connection while a writer holds the lock.
+  class BusyReadonlyDatabase
+    attr_accessor :busy_timeout
+    attr_reader :query_count
+
+    def initialize(busy_attempts:, row:)
+      @busy_attempts = busy_attempts
+      @row = row
+      @query_count = 0
+    end
+
+    def get_first_row(*)
+      @query_count += 1
+      raise SQLite3::BusyException, 'synthetic busy database' if @query_count <= @busy_attempts
+
+      @row
+    end
+
+    def close; end
+  end
+
+  def test_effect_poller_retries_transient_busy_readonly_database
+    database = BusyReadonlyDatabase.new(busy_attempts: 3, row: effect_poll_row)
+
+    with_effect_database(database) do
+      poller = effect_poller
+
+      assert_equal Tamoz::Evals::Harness::SubprocessRunner::INTERVENTION_KILL, poller.poll
+      assert_equal 'logical-key', poller.effect_key
+    end
+
+    assert_equal 4, database.query_count
+    assert_equal 5_000, database.busy_timeout
+  end
+
+  def test_effect_poller_fails_closed_after_persistent_busy_database
+    database = BusyReadonlyDatabase.new(busy_attempts: 100, row: nil)
+
+    error = with_effect_database(database) do
+      assert_raises(Tamoz::Evals::ExecutionError) { effect_poller.poll }
+    end
+
+    assert_equal 'scenario_effect_poll_failed:SQLite3::BusyException', error.message
+    assert_equal 10, database.query_count
+    assert_equal 5_000, database.busy_timeout
+  end
+
   def test_metrics_emit_catalog_values_from_durable_evidence
     metrics = adapter.send(
       :metrics,
@@ -270,6 +317,30 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
   end
 
   private
+
+  def effect_poller
+    Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter::EffectPoller.new(
+      adapter:, thread: 'thread-1', operation: 'tool.local:read_file'
+    )
+  end
+
+  def effect_poll_row
+    ['effect-key', 'logical-key', 'tool.local:read_file', 'succeeded']
+  end
+
+  def with_effect_database(database)
+    database_class = SQLite3::Database.singleton_class
+    original_new = database_class.instance_method(:new)
+    factory = lambda { |path, readonly:|
+      assert_equal File.join(adapter.runtime_dir, Tamoz::Agent::RuntimeDirectory::DATABASE_FILE), path
+      assert readonly
+      database
+    }
+    database_class.define_method(:new) { |path, readonly:| factory.call(path, readonly:) }
+    yield
+  ensure
+    database_class&.define_method(:new, original_new)
+  end
 
   def adapter
     @adapter ||= Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(

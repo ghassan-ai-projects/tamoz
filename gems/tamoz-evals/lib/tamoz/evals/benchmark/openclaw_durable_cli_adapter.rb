@@ -26,6 +26,9 @@ module Tamoz
         CHANGE_PROFILE_PREFIX = 'scenario-t3-m3m4'
         CHANGE_TOOLS = %w[read_file list_directory search_text create_file].freeze
         EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
+        EFFECT_POLL_BUSY_TIMEOUT_MS = 5_000
+        EFFECT_POLL_MAX_ATTEMPTS = 10
+        EFFECT_POLL_RETRY_DELAY_SECONDS = 0.01
 
         attr_reader :runtime_dir, :workspace
 
@@ -116,10 +119,8 @@ module Tamoz
           database = SQLite3::Database.new(
             File.join(@runtime_dir, Tamoz::Agent::RuntimeDirectory::DATABASE_FILE), readonly: true
           )
-          row = database.get_first_row(
-            effect_poll_sql,
-            [thread, operation]
-          )
+          database.busy_timeout = EFFECT_POLL_BUSY_TIMEOUT_MS
+          row = effect_poll_row(database, thread:, operation:)
           row && {
             'effect_key' => row.fetch(0), 'logical_key' => row[1],
             'operation' => row.fetch(2), 'status' => row.fetch(3)
@@ -185,6 +186,19 @@ module Tamoz
         # rubocop:enable Metrics/ParameterLists
 
         private
+
+        def effect_poll_row(database, thread:, operation:)
+          attempts = 0
+          begin
+            attempts += 1
+            database.get_first_row(effect_poll_sql, [thread, operation])
+          rescue SQLite3::BusyException
+            raise if attempts >= EFFECT_POLL_MAX_ATTEMPTS
+
+            sleep(EFFECT_POLL_RETRY_DELAY_SECONDS)
+            retry
+          end
+        end
 
         def effect_poll_sql
           <<~SQL
