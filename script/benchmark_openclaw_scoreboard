@@ -1,0 +1,65 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+
+require 'json'
+require 'optparse'
+require 'tamoz/evals'
+
+options = {
+  artifact_base: Dir.pwd,
+  scoreboard: File.expand_path('../documentation/benchmark/scoreboard/INTELLIGENCE_SCOREBOARD.json', __dir__)
+}
+OptionParser.new do |parser|
+  parser.banner = 'Usage: script/benchmark_openclaw_scoreboard --manifest PATH --report PATH'
+  parser.on('--manifest PATH') { |value| options[:manifest] = value }
+  parser.on('--report PATH') { |value| options[:report] = value }
+  parser.on('--artifact-base PATH') { |value| options[:artifact_base] = value }
+  parser.on('--scoreboard PATH') { |value| options[:scoreboard] = value }
+  parser.on('--force-run-kind KIND') { |value| options[:force_run_kind] = value }
+  parser.on('--date DATE') { |value| options[:date] = value }
+  parser.on('--notes TEXT') { |value| options[:notes] = value }
+  parser.on('--track TRACK') { |value| options[:track] = value }
+  parser.on('--provider-model-version VERSION') { |value| options[:provider_model_version] = value }
+  parser.on('--sealed-build-digest DIGEST') { |value| options[:sealed_build_digest] = value }
+  parser.on('--cost-budget TOKENS') { |value| options[:cost_budget] = Integer(value, 10) }
+end.parse!
+
+missing = %i[manifest report].reject { |key| options.key?(key) }
+abort "missing required options: #{missing.join(', ')}" unless missing.empty?
+
+begin
+  manifest = JSON.parse(File.read(options.fetch(:manifest), encoding: Encoding::UTF_8))
+  if options[:force_run_kind] && options[:force_run_kind] != 'real_provider'
+    raise Tamoz::Evals::Benchmark::Scoreboard::Error,
+          '--force-run-kind must be real_provider'
+  end
+  unless manifest['run_kind'] == 'real_provider'
+    raise Tamoz::Evals::Benchmark::Scoreboard::Error, 'run_kind must be real_provider'
+  end
+  unless manifest['controls_passed'] == true
+    raise Tamoz::Evals::Benchmark::Scoreboard::Error, 'controls_passed must be true'
+  end
+
+  report = JSON.parse(File.read(options.fetch(:report), encoding: Encoding::UTF_8))
+  result = Tamoz::Evals::Benchmark::Scoreboard.append(
+    manifest:, report:, scoreboard_path: options.fetch(:scoreboard),
+    artifact_base: options.fetch(:artifact_base), date: options[:date], notes: options[:notes],
+    track: options[:track], provider_model_version: options[:provider_model_version],
+    sealed_build_digest: options[:sealed_build_digest], cost_budget: options[:cost_budget]
+  )
+  puts Tamoz::Evals::CanonicalJSON.dump(
+    'status' => result.appended? ? 'appended' : 'already_present',
+    'entry' => result.entry
+  )
+rescue JSON::ParserError => e
+  warn "benchmark scoreboard refused: invalid JSON: #{e.message}"
+  exit 2
+rescue KeyError => e
+  warn "benchmark scoreboard refused: missing field #{e.key.inspect}"
+  exit 2
+rescue ArgumentError, Tamoz::Evals::Benchmark::Scoreboard::Error => e
+  warn "benchmark scoreboard refused: #{e.message}"
+  exit 2
+end
