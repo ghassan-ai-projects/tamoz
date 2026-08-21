@@ -625,7 +625,11 @@ module Tamoz
       end
 
       def observability_recorder(runtime)
-        Tamoz::Observability::Recorder::Journal.new(directory: runtime.path, role: "worker")
+        DurableRecorder.new(
+          recorder: Tamoz::Observability::Recorder::Journal.new(
+            directory: runtime.path, role: "worker"
+          )
+        )
       rescue StandardError => error
         @err.puts "tamoz: observability disabled: #{error.message}" if @env["TAMOZ_OBSERVABILITY_DEBUG"]
         Tamoz::Observability::Recorder::Null::INSTANCE
