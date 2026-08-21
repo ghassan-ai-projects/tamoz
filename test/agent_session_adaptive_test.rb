@@ -3,6 +3,9 @@
 require_relative "test_helper"
 
 class AgentSessionAdaptiveTest < Minitest::Test
+  class CompactionCrash < Exception # rubocop:disable Lint/InheritException
+  end
+
   class ScriptedModel
     attr_reader :calls
 
@@ -18,6 +21,35 @@ class AgentSessionAdaptiveTest < Minitest::Test
 
       value = queue.length == 1 ? queue.first : queue.shift
       value.is_a?(String) ? value : JSON.generate(value)
+    end
+  end
+
+  class RestartableCompactionModel
+    attr_reader :calls
+
+    def initialize(crash: false)
+      @crash = crash
+      @calls = []
+    end
+
+    def generate(stage:, system:, prompt:)
+      @calls << stage
+      case stage
+      when :adaptive_decide
+        if @calls.count(:adaptive_decide) == 1
+          JSON.generate('decision' => 'action', 'capability_id' => 'read_file',
+                        'arguments' => { 'path' => 'large.txt' })
+        else
+          JSON.generate('decision' => 'final', 'answer' => 'the file was inspected',
+                        'evidence_refs' => ['observation:0'])
+        end
+      when :context_compact
+        raise CompactionCrash, 'simulated worker loss during compaction' if @crash
+
+        JSON.generate('summary' => 'Retain the large observation for the next decision.')
+      else
+        raise "unexpected model stage #{stage.inspect}"
+      end
     end
   end
 
@@ -131,6 +163,60 @@ class AgentSessionAdaptiveTest < Minitest::Test
       assert_equal compaction.fetch("summary_digest"),
                    Tamoz::Agent::SessionRecords.digest("summary" => compaction.fetch("summary"))
       assert adapter.integrity_check.fetch("ok")
+    end
+  end
+
+  def test_adaptive_compaction_reopens_with_one_effect_and_terminal_record
+    Dir.mktmpdir('tamoz-adaptive-restart') do |directory|
+      root = File.join(directory, 'workspace')
+      database = File.join(directory, 'tamoz.sqlite3')
+      FileUtils.mkdir_p(root)
+      File.write(File.join(root, 'large.txt'), 'large observation\n' * 200)
+
+      first_adapter = Tamoz::SQLite::Adapter.new(
+        path: database,
+        limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2)
+      )
+      begin
+        first_session = build_session(
+          model: RestartableCompactionModel.new(crash: true), root:, adapter: first_adapter, routing: :adaptive
+        )
+        assert_raises(CompactionCrash) do
+          first_session.start('Inspect the large file', thread: 'restart-thread', request_id: 'restart-request')
+        end
+      ensure
+        first_adapter.close
+      end
+
+      sleep 0.25
+      second_adapter = Tamoz::SQLite::Adapter.new(
+        path: database,
+        limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0, effect_attempt_ttl: 0.2)
+      )
+      begin
+        second_session = build_session(
+          model: RestartableCompactionModel.new, root:, adapter: second_adapter, routing: :adaptive
+        )
+        outcome = second_session.recover(
+          thread: 'restart-thread', request_id: 'restart-request', owner_id: 'restart-owner'
+        )
+        view = second_session.view(thread: 'restart-thread')
+
+        assert_equal :completed, outcome.status
+        assert_equal 1, view.state.fetch(:compactions).length
+        assert_equal 1, view.effect_receipts.count { |receipt| receipt.fetch('operation') == 'tool.read_file' }
+        assert_equal 1, view.lifecycle_events.count { |event| event.fetch('event_type') == 'terminal' }
+        census = second_session.app.checkpointer.effect_census
+        assert_equal 1, census.count { |row| row.fetch(:operation) == 'tool.read_file' }
+        assert_equal 1, census.count { |row| row.fetch(:operation) == 'model.generate.context_compact' }
+        assert_equal 1, census.find { |row| row.fetch(:operation) == 'tool.read_file' }.fetch(:succeeded_attempts)
+        assert_equal 1,
+                     census.find { |row| row.fetch(:operation) == 'model.generate.context_compact' }
+                           .fetch(:succeeded_attempts)
+        assert second_adapter.integrity_check.fetch('ok')
+      ensure
+        second_adapter.close
+      end
     end
   end
 

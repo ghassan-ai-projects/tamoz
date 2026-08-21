@@ -301,10 +301,15 @@ module Tamoz
                     reservation: reservation_slots, capacity: outbox_capacity, now:,
                     history:
         )
-        if %i[enqueued duplicate].include?(outcome)
+        if outcome == :enqueued
           append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
           return
         end
+
+        # A replayed update already has its admission durable.
+        # Re-rendering it here can create a second control row when the queue
+        # state changed between the original attempt and the replay.
+        return if outcome == :duplicate
 
         # Saturated (invariant 57): durable refusal, no turn, and a bounded
         # busy reply that itself may be coalesced.
