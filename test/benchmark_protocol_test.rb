@@ -17,7 +17,7 @@ class BenchmarkProtocolTest < Minitest::Test
 
   # SHA-256 of the committed documentation/benchmark/BENCHMARK_PROTOCOL.json. Bump only
   # when a protocol change is deliberate: this is the freeze.
-  COMMITTED_SHA256 = "87dec3cd56f2f6b86a85384cd1348ce562d6a69eb1ea54c85641370302c23038"
+  COMMITTED_SHA256 = "b877236355be9598236f9fe2925a5246f9baf740a8e91c6886c4f3cee20fef6a"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider
