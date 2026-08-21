@@ -4,7 +4,7 @@ require_relative 'test_helper'
 
 # The manifest helper and report fixture intentionally bind the complete evidence
 # contract in one place.
-# rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Layout/LineLength
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Layout/LineLength
 class OpenclawBenchmarkReadinessTest < Minitest::Test
   def protocol
     { 'benchmark_protocol_version' => 'openclaw.v1' }
@@ -34,7 +34,11 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'id' => 'adaptive-read-only',
         'status' => mission_status,
         'artifact_path' => 'adaptive-read-only.json',
-        'artifact_digest' => "sha256:#{'a' * 64}"
+        'artifact_digest' => "sha256:#{'a' * 64}",
+        'durable_mission' => {
+          'mission_id' => 'adaptive-read-only', 'run_id' => 'run-1', 'thread_id' => 'thread-1',
+          'status' => 'completed', 'satisfied' => true, 'verified' => true
+        }
       }]
     }
   end
@@ -73,24 +77,25 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
 
   def provider_provenance(mission_digest: nil)
     receipts = [{
-      'effect_key' => 'logical:' + ('a' * 64),
+      'effect_key' => "logical:#{'a' * 64}",
       'operation' => 'model.generate.plan',
       'status' => 'succeeded'
     }]
-    trace = {'trace_id' => 'trace-1', 'spans' => [{'name' => 'tamoz.model.call'}]}
+    trace = { 'trace_id' => 'trace-1', 'spans' => [{ 'name' => 'tamoz.model.call' }] }
+    independent_trace = {
+      'source' => Tamoz::Evals::Benchmark::Readiness::INDEPENDENT_TRACE_SOURCE,
+      'run_id' => 'run-1', 'thread_id' => 'thread-1', 'mission_id' => 'adaptive-read-only',
+      'trace_id' => trace.fetch('trace_id'),
+      'trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(trace))}",
+      'trace' => trace, 'model_span_count' => 1
+    }
     {
       'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
       'provider_effect_receipts' => receipts,
-      'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(
-        Tamoz::Evals::CanonicalJSON.dump('mission_digest' => mission_digest, 'receipts' => receipts)
-      )}",
-      'independent_trace' => {
-        'source' => Tamoz::Evals::Benchmark::Readiness::INDEPENDENT_TRACE_SOURCE,
-        'trace_id' => trace.fetch('trace_id'),
-        'trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(trace))}",
-        'trace' => trace,
-        'model_span_count' => 1
-      }
+      'provider_trace_digest' => Tamoz::Evals::Benchmark::Readiness.provider_trace_digest(
+        mission_digest:, receipts:, independent_trace:
+      ),
+      'independent_trace' => independent_trace
     }
   end
 
@@ -126,7 +131,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     Dir.mktmpdir('openclaw-artifacts') do |directory|
       artifact = Pathname.new(directory).join('real-provider', 'run-1', 'adaptive-read-only.json')
       FileUtils.mkdir_p(artifact.dirname)
-      mission = {'id' => 'adaptive-read-only'}
+      mission = { 'id' => 'adaptive-read-only' }
       mission_digest = "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}"
       document = {
         'schema_version' => 'openclaw.evidence.v1',
@@ -135,7 +140,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
         'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
         'mission' => mission, 'provenance' => provider_provenance(mission_digest:).except('independent_trace'),
-        'result' => {'status' => 'ready'}
+        'result' => { 'status' => 'ready' }
       }
       File.write(artifact, JSON.generate(document))
       ready_manifest = manifest.merge(
@@ -217,4 +222,4 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
                     'mission_capability_unavailable:adaptive-read-only:local:read_file'
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Layout/LineLength
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Layout/LineLength

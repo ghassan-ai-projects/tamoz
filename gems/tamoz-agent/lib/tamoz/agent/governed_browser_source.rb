@@ -53,24 +53,21 @@ module Tamoz
 
         raw = @adapter.execute(context:, capability_id: String(name), arguments: normalized)
         validate_final_location!(raw)
-        status = adapter_status(raw)
+        build_outcome(raw, adapter_status(raw))
+      end
+
+      def build_outcome(raw, status)
         text = raw.is_a?(Hash) ? raw.fetch('output', raw.fetch('text', '')) : raw.to_s
         truncated = text.bytesize > MAX_OUTPUT_BYTES
         observation = Observation.new(
           text: text.byteslice(0, MAX_OUTPUT_BYTES), server_id: 'browser', truncated:
         )
-        case status
-        when :succeeded
-          Outcome.new(status:, observation:, interrupt: nil, denial: nil)
-        when :denied
-          Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw))
-        when :interrupt
-          Outcome.new(status:, observation:, interrupt: adapter_reason(raw), denial: nil)
-        when :failed, :unknown
-          Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw))
-        else
-          raise ToolError, "browser adapter returned unsupported outcome #{status.inspect}"
-        end
+        return Outcome.new(status:, observation:, interrupt: nil, denial: nil) if status == :succeeded
+        return Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw)) if
+          %i[denied failed unknown].include?(status)
+        return Outcome.new(status:, observation:, interrupt: adapter_reason(raw), denial: nil) if status == :interrupt
+
+        raise ToolError, "browser adapter returned unsupported outcome #{status.inspect}"
       end
 
       def close = @adapter&.close
@@ -106,9 +103,7 @@ module Tamoz
       end
 
       def adapter_reason(raw)
-        value = if raw.is_a?(Hash)
-                  raw['reason'] || raw['error'] || raw['message'] || raw['denial']
-                end
+        value = raw.is_a?(Hash) ? raw.values_at('reason', 'error', 'message', 'denial').compact.first : nil
         text = value.to_s
         { 'reason' => text.byteslice(0, 512) || '' }.freeze
       end
@@ -117,19 +112,21 @@ module Tamoz
         return unless raw.is_a?(Hash)
 
         evidence = raw.fetch('evidence', {})
-        unless evidence.is_a?(Hash)
-          raise ToolPolicyError, 'browser adapter location evidence must be an object'
-        end
+        raise ToolPolicyError, 'browser adapter location evidence must be an object' unless evidence.is_a?(Hash)
 
         final_url = raw.key?('final_url') ? raw['final_url'] : evidence['final_url']
         final_host = raw.key?('final_host') ? raw['final_host'] : evidence['final_host']
         return if final_url.nil? && final_host.nil?
 
+        validate_location_consistency(final_url, final_host)
+      end
+
+      def validate_location_consistency(final_url, final_host)
         url_host = validate_location_url(final_url) if final_url
         evidence_host = validate_location_host(final_host) if final_host
-        if url_host && evidence_host && url_host != evidence_host
-          raise ToolPolicyError, 'browser adapter final URL and host evidence disagree'
-        end
+        return unless url_host && evidence_host && url_host != evidence_host
+
+        raise ToolPolicyError, 'browser adapter final URL and host evidence disagree'
       end
 
       def validate_location_url(url)

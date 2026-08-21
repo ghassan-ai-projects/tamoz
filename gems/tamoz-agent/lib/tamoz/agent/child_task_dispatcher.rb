@@ -30,7 +30,7 @@ module Tamoz
 
         @runtime = runtime
         context = child_context(runtime)
-        @parent_profile = parent_profile(profile, context)
+        @parent_profile = build_parent_profile(profile, context)
         @current_depth = context ? context.fetch(:current_depth) : 0
         @current_policy = context&.slice(:remaining_depth, :remaining_concurrency)
         freeze
@@ -41,9 +41,7 @@ module Tamoz
       # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- validation keeps the complete bounded delegation contract at one gate.
       def validate(descriptor, arguments)
         assert_descriptor!(descriptor)
-        if @current_policy&.values&.any?(&:zero?)
-          raise ToolPolicyError, 'child delegation budget is exhausted'
-        end
+        raise ToolPolicyError, 'child delegation budget is exhausted' if @current_policy&.values&.any?(&:zero?)
         raise ToolArgumentError, "#{TOOL_NAME} arguments must be an object" unless arguments.is_a?(Hash)
 
         unknown = arguments.keys.map(&:to_s) - %w[task capabilities]
@@ -134,7 +132,7 @@ module Tamoz
         runtime.child_delegation_context
       end
 
-      def parent_profile(profile, context)
+      def build_parent_profile(profile, context)
         capabilities = context&.fetch(:capabilities) || profile.tools_allowed.map { |name| "local:#{name}" }
         max_depth = context ? context.fetch(:current_depth) + context.fetch(:remaining_depth) : DEFAULT_DEPTH
         max_concurrency = context ? context.fetch(:remaining_concurrency) : DEFAULT_CONCURRENCY

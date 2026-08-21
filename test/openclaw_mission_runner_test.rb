@@ -2,7 +2,7 @@
 
 require_relative 'test_helper'
 
-# rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
+# rubocop:disable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Minitest/MultipleAssertions
 class OpenclawMissionRunnerTest < Minitest::Test
   def protocol
     { 'benchmark_protocol_version' => 'openclaw.v1' }
@@ -75,6 +75,7 @@ class OpenclawMissionRunnerTest < Minitest::Test
 
       assert_equal 2, result.artifacts.length
       manifest_path = Pathname.new(directory).join(manifest.fetch('artifact_root'), 'manifest.json')
+
       assert_predicate manifest_path, :file?
       assert_equal manifest, JSON.parse(File.read(manifest_path))
       refute_predicate readiness, :ready?
@@ -109,37 +110,59 @@ class OpenclawMissionRunnerTest < Minitest::Test
       end)
     end
   end
+
+  def test_executor_failure_reason_does_not_expose_exception_text
+    result = runner(Dir.tmpdir, executor: lambda {
+      raise StandardError, 'OPENAI_API_KEY=sk-secret-value'
+    }).run
+
+    mission = result.manifest.fetch('missions').first
+
+    assert_equal 'blocked', mission.fetch('status')
+    assert_match 'executor_error:', mission.fetch('reason')
+    refute_includes mission.fetch('reason'), 'sk-secret-value'
+  end
+
   def test_real_provider_accepts_only_a_digest_bound_model_receipt_set
     Dir.mktmpdir('openclaw-runner') do |directory|
       receipts = [{
-        'effect_key' => 'logical:' + ('a' * 64),
+        'effect_key' => "logical:#{'a' * 64}",
         'operation' => 'model.generate.plan',
         'status' => 'succeeded'
       }]
       result = runner(directory, run_kind: 'real_provider', executor: lambda { |mission:, **|
         mission_digest = "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}"
+        trace = independent_trace(mission_id: mission.fetch('id'))
+        receipts_digest = Tamoz::Evals::Benchmark::Readiness.provider_trace_digest(
+          mission_digest:, receipts:, independent_trace: trace
+        )
         {
           'status' => 'ready',
           'provenance' => {
             'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
             'provider_effect_receipts' => receipts,
-            'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(
-              Tamoz::Evals::CanonicalJSON.dump('mission_digest' => mission_digest, 'receipts' => receipts)
-            )}",
-            'independent_trace' => independent_trace
+            'provider_trace_digest' => receipts_digest,
+            'independent_trace' => trace
+          },
+          'durable_mission' => {
+            'mission_id' => mission.fetch('id'), 'run_id' => 'run-1', 'thread_id' => 'thread-1',
+            'status' => 'completed', 'satisfied' => true, 'verified' => true
           }
         }
       }).run
 
-      assert_equal %w[ready ready], result.manifest.fetch('missions').map { |mission| mission.fetch('status') }
+      assert_equal(%w[ready ready], result.manifest.fetch('missions').map { |mission| mission.fetch('status') })
       assert_equal 2, result.artifacts.length
     end
   end
 
-  def independent_trace
-    trace = {'trace_id' => 'trace-1', 'spans' => [{'name' => 'tamoz.model.call'}]}
+  def independent_trace(mission_id:)
+    trace = {
+      'trace_id' => 'trace-1', 'spans' => [{ 'name' => 'tamoz.model.call' }]
+    }
     {
       'source' => Tamoz::Evals::Benchmark::Readiness::INDEPENDENT_TRACE_SOURCE,
+      'run_id' => 'run-1', 'thread_id' => 'thread-1', 'mission_id' => mission_id,
       'trace_id' => trace.fetch('trace_id'),
       'trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(trace))}",
       'trace' => trace,
@@ -163,4 +186,4 @@ class OpenclawMissionRunnerTest < Minitest::Test
     end
   end
 end
-# rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
+# rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Minitest/MultipleAssertions

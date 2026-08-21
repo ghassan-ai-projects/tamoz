@@ -19,7 +19,7 @@ module Tamoz
         RUN_KINDS = %w[fixture real_provider].freeze
         MISSION_STATUSES = %w[ready blocked unavailable].freeze
         PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
-        PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
+        PROVIDER_RECEIPT_STATUSES = %w[succeeded].freeze
         MANIFEST_FILENAME = 'manifest.json'
         MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
         MAX_ARTIFACT_BYTES = 131_072
@@ -168,7 +168,8 @@ module Tamoz
             'status' => status,
             'artifact_path' => artifact&.fetch('path'),
             'artifact_digest' => artifact&.fetch('digest'),
-            'metrics' => result.fetch('metrics', {})
+            'metrics' => result.fetch('metrics', {}),
+            'durable_mission' => result['durable_mission']
           }.compact
           mission_record['reason'] = result.fetch('reason') if result['reason']
           {
@@ -189,7 +190,7 @@ module Tamoz
         rescue StandardError => e
           {
             'status' => 'blocked',
-            'reason' => "executor_error:#{e.class}:#{bounded(e.message)}"
+            'reason' => "executor_error:#{e.class}"
           }
         end
 
@@ -218,14 +219,15 @@ module Tamoz
 
           receipts = provenance['provider_effect_receipts']
           validate_provider_receipts!(receipts)
-          expected_digest = digest(
-            'mission_digest' => digest(mission), 'receipts' => receipts
+          independent_trace = provenance.fetch('independent_trace')
+          expected_digest = Readiness.provider_trace_digest(
+            mission_digest: digest(mission), receipts:, independent_trace:
           )
           unless provenance['provider_trace_digest'] == expected_digest
             raise SchemaError, 'real-provider mission trace digest does not match its receipts'
           end
 
-          validate_independent_trace!(provenance.fetch('independent_trace'), receipts)
+          validate_independent_trace!(independent_trace, receipts, mission)
         end
 
         def validate_provider_receipts!(receipts)
@@ -233,13 +235,13 @@ module Tamoz
             raise SchemaError, 'real-provider mission must include effect receipts'
           end
 
-          return if receipts.any? { |receipt| receipt.fetch('status') == 'succeeded' }
-
-          raise SchemaError, 'real-provider mission must include a succeeded provider receipt'
+          nil
         end
 
         def valid_provider_receipts?(receipts)
-          receipts.is_a?(Array) && !receipts.empty? && receipts.all? { |receipt| valid_provider_receipt?(receipt) }
+          receipts.is_a?(Array) && !receipts.empty? &&
+            receipts.map { |receipt| receipt['effect_key'] }.uniq == receipts.map { |receipt| receipt['effect_key'] } &&
+            receipts.all? { |receipt| valid_provider_receipt?(receipt) }
         end
 
         def valid_provider_receipt?(receipt)
@@ -251,11 +253,14 @@ module Tamoz
         end
 
         # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-        def validate_independent_trace!(evidence, receipts)
+        def validate_independent_trace!(evidence, receipts, mission)
           spans = evidence.is_a?(Hash) && evidence['trace'].is_a?(Hash) ? evidence['trace']['spans'] : nil
           model_spans = Array(spans).count { |span| span.is_a?(Hash) && span['name'] == 'tamoz.model.call' }
           valid = evidence.is_a?(Hash) && evidence['source'] == Readiness::INDEPENDENT_TRACE_SOURCE &&
                   evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty? &&
+                  evidence['mission_id'] == mission.fetch('id') &&
+                  evidence['run_id'].is_a?(String) && !evidence['run_id'].empty? &&
+                  evidence['thread_id'].is_a?(String) && !evidence['thread_id'].empty? &&
                   Readiness::DIGEST_PATTERN.match?(evidence['trace_digest'].to_s) &&
                   evidence['trace'].is_a?(Hash) &&
                   evidence['trace_digest'] == digest(evidence['trace']) &&
@@ -326,10 +331,6 @@ module Tamoz
         def safe_path?(path)
           pathname = Pathname.new(path)
           !pathname.absolute? && pathname.each_filename.none?('..') && !path.empty?
-        end
-
-        def bounded(value)
-          String(value).byteslice(0, 256).to_s
         end
       end
       # rubocop:enable Metrics/ClassLength

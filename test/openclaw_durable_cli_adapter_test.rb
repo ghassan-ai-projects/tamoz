@@ -2,6 +2,9 @@
 
 require_relative 'test_helper'
 
+# The adapter integration checks deliberately assert the durable command sequence
+# and the independent trace binding in one scenario.
+# rubocop:disable Metrics/AbcSize, Minitest/MultipleAssertions
 class OpenclawDurableCliAdapterTest < Minitest::Test
   MISSION = {
     'id' => 'adaptive-read-only',
@@ -17,7 +20,7 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
       commands = []
       cli = fake_cli(commands)
       adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
-        runtime_dir: runtime, workspace:, env: {'OPENAI_API_KEY' => 'test-key'}, cli:,
+        runtime_dir: runtime, workspace:, env: { 'OPENAI_API_KEY' => 'test-key' }, cli:,
         evidence_reader: ->(**) { durable_evidence }
       )
 
@@ -36,7 +39,10 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
     cli_calls = 0
     adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
       runtime_dir: Dir.tmpdir, workspace: Dir.pwd, env: {},
-      cli: ->(**) { cli_calls += 1; 0 }, evidence_reader: ->(**) { durable_evidence }
+      cli: lambda { |**|
+        cli_calls += 1
+        0
+      }, evidence_reader: ->(**) { durable_evidence }
     )
 
     result = adapter.call(mission: MISSION, run_kind: 'real_provider', provider: 'openai', model: 'gpt-test')
@@ -52,9 +58,9 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
       runtime = File.join(directory, 'runtime')
       FileUtils.mkdir_p(workspace)
       Tamoz::Agent::RuntimeDirectory.create!(runtime, workspace:)
-      cli = fake_cli([], trace: {'trace_id' => 'trace-1', 'spans' => []})
+      cli = fake_cli([], trace: { 'trace_id' => 'trace-1', 'spans' => [] })
       adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
-        runtime_dir: runtime, workspace:, env: {'OPENAI_API_KEY' => 'test-key'}, cli:,
+        runtime_dir: runtime, workspace:, env: { 'OPENAI_API_KEY' => 'test-key' }, cli:,
         evidence_reader: ->(**) { durable_evidence }
       )
 
@@ -70,9 +76,10 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
   def durable_evidence
     {
       'status' => :completed,
-      'terminal' => {'reason' => 'completed', 'satisfied' => true},
+      'terminal' => { 'reason' => 'completed', 'satisfied' => true },
+      'verification' => { 'configured_check_passed' => true },
       'effect_receipts' => [{
-        'effect_key' => 'logical:' + ('a' * 64),
+        'effect_key' => "logical:#{'a' * 64}",
         'operation' => 'model.generate.plan',
         'status' => 'succeeded'
       }]
@@ -80,7 +87,7 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
   end
 
   def fake_cli(commands, trace: nil)
-    trace ||= {'trace_id' => 'trace-1', 'spans' => [{'name' => 'tamoz.model.call'}]}
+    trace ||= { 'trace_id' => 'trace-1', 'spans' => [{ 'name' => 'tamoz.model.call' }] }
     lambda do |argv, out:, **|
       commands << argv
       if argv.include?('trace')
@@ -94,3 +101,4 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
     end
   end
 end
+# rubocop:enable Metrics/AbcSize, Minitest/MultipleAssertions

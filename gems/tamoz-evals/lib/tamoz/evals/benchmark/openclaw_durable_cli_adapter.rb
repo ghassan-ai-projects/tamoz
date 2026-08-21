@@ -51,7 +51,8 @@ module Tamoz
           trace = trace!(thread)
           receipts = model_receipts(evidence.fetch('effect_receipts'))
           validate_receipts!(receipts)
-          independent_trace = independent_trace!(trace, receipts)
+          independent_trace = independent_trace!(trace, receipts, mission:, thread:)
+          durable_mission = durable_mission!(evidence, mission:, thread:)
 
           {
             'status' => 'ready',
@@ -61,11 +62,12 @@ module Tamoz
               'model' => model,
               'thread_id' => thread,
               'provider_effect_receipts' => receipts,
-              'provider_trace_digest' => provider_trace_digest(mission, receipts),
+              'provider_trace_digest' => provider_trace_digest(mission, receipts, independent_trace),
               'independent_trace' => independent_trace
             },
             'metrics' => metrics(evidence, receipts, independent_trace),
-            'terminal' => terminal_projection(evidence.fetch('terminal'))
+            'terminal' => terminal_projection(evidence.fetch('terminal')),
+            'durable_mission' => durable_mission
           }
         rescue CredentialUnavailable, TraceUnavailable => e
           { 'status' => 'blocked', 'reason' => e.message }
@@ -175,12 +177,25 @@ module Tamoz
         end
 
         def validate_receipts!(receipts)
-          return if receipts.any? { |receipt| receipt['status'] == 'succeeded' }
+          valid = receipts.is_a?(Array) && !receipts.empty? && unique_receipts?(receipts) &&
+                  receipts.all? { |receipt| valid_receipt?(receipt) }
+          return if valid
 
           raise Tamoz::Evals::ExecutionError, 'provider_effect_receipt_unavailable'
         end
 
-        def independent_trace!(trace, receipts)
+        def unique_receipts?(receipts)
+          keys = receipts.map { |receipt| receipt['effect_key'] }
+          keys.uniq == keys
+        end
+
+        def valid_receipt?(receipt)
+          receipt.is_a?(Hash) && receipt['effect_key'].is_a?(String) &&
+            receipt['operation'].to_s.start_with?('model.generate.') &&
+            receipt['status'] == 'succeeded'
+        end
+
+        def independent_trace!(trace, receipts, mission:, thread:)
           spans = Array(trace.fetch('spans'))
           model_spans = spans.select { |span| span['name'] == 'tamoz.model.call' }
           if trace.fetch('trace_id').to_s.empty? || model_spans.length < receipts.length
@@ -189,6 +204,9 @@ module Tamoz
 
           {
             'source' => TRACE_SOURCE,
+            'run_id' => @run_id,
+            'thread_id' => thread,
+            'mission_id' => mission.fetch('id'),
             'trace_id' => trace.fetch('trace_id'),
             'trace_digest' => digest(trace),
             'trace' => trace,
@@ -198,8 +216,23 @@ module Tamoz
           raise TraceUnavailable, 'independent_trace_unavailable'
         end
 
-        def provider_trace_digest(mission, receipts)
-          digest('mission_digest' => digest(mission), 'receipts' => receipts)
+        def provider_trace_digest(mission, receipts, independent_trace)
+          Readiness.provider_trace_digest(
+            mission_digest: digest(mission), receipts:, independent_trace:
+          )
+        end
+
+        def durable_mission!(evidence, mission:, thread:)
+          verification = evidence.fetch('verification', {})
+          terminal = evidence.fetch('terminal', {})
+          valid = evidence['status'].to_s == 'completed' && terminal['satisfied'] == true &&
+                  verification['configured_check_passed'] == true
+          raise Tamoz::Evals::ExecutionError, 'durable_mission_not_verified' unless valid
+
+          {
+            'mission_id' => mission.fetch('id'), 'run_id' => @run_id, 'thread_id' => thread,
+            'status' => 'completed', 'satisfied' => true, 'verified' => true
+          }
         end
 
         # rubocop:disable Metrics/AbcSize
@@ -258,7 +291,8 @@ module Tamoz
           {
             'status' => view.status,
             'terminal' => view.terminal,
-            'effect_receipts' => view.effect_receipts.map(&:to_h)
+            'effect_receipts' => view.effect_receipts.map(&:to_h),
+            'verification' => view.state.fetch(:verification, {})
           }
         ensure
           runtime&.close

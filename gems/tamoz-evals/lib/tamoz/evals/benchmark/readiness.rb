@@ -129,7 +129,7 @@ module Tamoz
             validate_manifest_strings!(manifest)
             validate_binding_metadata!(manifest)
             validate_capabilities!(manifest.fetch('capabilities'))
-            validate_missions!(manifest.fetch('missions'))
+            validate_missions!(manifest.fetch('missions'), run_kind: manifest.fetch('run_kind'))
           end
 
           def validate_required_fields!(manifest)
@@ -165,16 +165,24 @@ module Tamoz
           end
 
           def validate_binding_metadata!(manifest)
-            unless DIGEST_PATTERN.match?(manifest.fetch('config_sha256'))
-              raise Tamoz::Evals::DigestError, 'benchmark configuration digest is invalid'
-            end
+            validate_config_digest!(manifest.fetch('config_sha256'))
+            validate_graph_binding!(manifest.fetch('graph'))
+            validate_surfaces!(manifest.fetch('surfaces'))
+          end
 
-            graph = manifest.fetch('graph')
-            unless graph.is_a?(Hash) && graph['name'].is_a?(String) && graph['version'].is_a?(String)
-              schema_error('benchmark graph binding is invalid')
-            end
+          def validate_config_digest!(digest)
+            return if DIGEST_PATTERN.match?(digest)
 
-            surfaces = manifest.fetch('surfaces')
+            raise Tamoz::Evals::DigestError, 'benchmark configuration digest is invalid'
+          end
+
+          def validate_graph_binding!(graph)
+            return if graph.is_a?(Hash) && graph['name'].is_a?(String) && graph['version'].is_a?(String)
+
+            schema_error('benchmark graph binding is invalid')
+          end
+
+          def validate_surfaces!(surfaces)
             return if surfaces.is_a?(Array) && surfaces.uniq == surfaces && surfaces.include?('cli') &&
                       surfaces.all? { |surface| MISSION_SURFACES.include?(surface) }
 
@@ -198,14 +206,14 @@ module Tamoz
             schema_error("benchmark capability #{name.inspect} state must be boolean")
           end
 
-          def validate_missions!(missions)
+          def validate_missions!(missions, run_kind:)
             unless missions.is_a?(Array) && !missions.empty?
               schema_error('benchmark missions must be a non-empty array')
             end
 
             ids = missions.filter_map { |mission| mission['id'] if mission.is_a?(Hash) }
             schema_error('benchmark evidence manifest contains duplicate mission ids') unless ids.uniq == ids
-            missions.each { |mission| validate_mission!(mission) }
+            missions.each { |mission| validate_mission!(mission, run_kind:) }
           end
 
           def validate_mission_catalog!(catalog)
@@ -259,20 +267,24 @@ module Tamoz
             value.is_a?(Array) && !value.empty? && value.all? { |entry| entry.is_a?(String) && !entry.empty? }
           end
 
-          def validate_mission!(mission)
-            unless mission.is_a?(Hash) && mission['id'].is_a?(String) &&
-                   MISSION_STATUSES.include?(mission['status'])
-              schema_error('benchmark mission has an invalid status')
-            end
+          def validate_mission!(mission, run_kind:)
+            schema_error('benchmark mission has an invalid status') unless valid_mission_shape?(mission)
             return unless mission['status'] == 'ready'
+            return if run_kind == 'fixture'
 
-            digest = mission['artifact_digest']
-            path = mission['artifact_path']
-            durable = mission['durable_mission']
-            return if DIGEST_PATTERN.match?(digest.to_s) && safe_artifact_path?(path) &&
-                      valid_durable_mission?(durable, mission.fetch('id'))
+            return if valid_real_provider_mission?(mission)
 
             raise Tamoz::Evals::DigestError, 'ready mission artifact or durable evidence binding is invalid'
+          end
+
+          def valid_mission_shape?(mission)
+            mission.is_a?(Hash) && mission['id'].is_a?(String) && MISSION_STATUSES.include?(mission['status'])
+          end
+
+          def valid_real_provider_mission?(mission)
+            DIGEST_PATTERN.match?(mission['artifact_digest'].to_s) &&
+              safe_artifact_path?(mission['artifact_path']) &&
+              valid_durable_mission?(mission['durable_mission'], mission.fetch('id'))
           end
 
           def capability_reasons(capabilities)
@@ -333,11 +345,8 @@ module Tamoz
           def artifact_reason_for(mission, manifest, artifact_root_base, mission_catalog)
             return unless mission.fetch('status') == 'ready'
 
-            path = File.expand_path(
-              File.join(manifest.fetch('artifact_root'), mission.fetch('artifact_path')),
-              artifact_root_base
-            )
-            return "artifact_missing:#{mission.fetch('id')}" unless File.file?(path)
+            path, reason = resolve_artifact_path(mission, manifest, artifact_root_base)
+            return reason if reason
 
             actual = "sha256:#{Digest::SHA256.file(path).hexdigest}"
             return "artifact_digest_mismatch:#{mission.fetch('id')}" unless actual == mission.fetch('artifact_digest')
@@ -346,6 +355,25 @@ module Tamoz
             document_reasons.empty? ? nil : document_reasons.first
           rescue SystemCallError, EncodingError => e
             "artifact_unavailable:#{mission.fetch('id')}:#{e.class}"
+          end
+
+          def resolve_artifact_path(mission, manifest, artifact_root_base)
+            id = mission.fetch('id')
+            artifact_path = mission.fetch('artifact_path')
+            return [nil, "artifact_path_invalid:#{id}"] unless safe_artifact_path?(artifact_path)
+
+            artifact_root = Pathname.new(artifact_root_base).expand_path.join(manifest.fetch('artifact_root'))
+            return [nil, "artifact_missing:#{id}"] unless artifact_root.directory?
+
+            root = artifact_root.realpath
+            candidate = root.join(artifact_path)
+            return [nil, "artifact_symlink:#{id}"] if File.symlink?(candidate)
+            return [nil, "artifact_missing:#{id}"] unless candidate.file?
+
+            path = candidate.realpath.to_s
+            return [nil, "artifact_outside_root:#{id}"] unless path == root.to_s || path.start_with?("#{root}/")
+
+            [path, nil]
           end
 
           def artifacts_verified?(manifest, artifact_root_base, mission_catalog = nil)
@@ -407,34 +435,48 @@ module Tamoz
             "artifact_mission_mismatch:#{mission.fetch('id')}"
           end
 
-          # rubocop:disable Metrics/AbcSize -- one fail-closed provenance projection.
           def artifact_provenance_reason(document, mission, manifest)
             provenance = document['provenance']
-            return "artifact_provenance_mismatch:#{mission.fetch('id')}" unless
-              provenance['run_kind'] == manifest.fetch('run_kind') &&
-              provenance['provider'] == manifest.fetch('provider') &&
-              provenance['model'] == manifest.fetch('model')
+            unless provenance_binding_valid?(provenance, manifest)
+              return "artifact_provenance_mismatch:#{mission.fetch('id')}"
+            end
             return unless manifest.fetch('run_kind') == 'real_provider'
 
             receipts = provenance['provider_effect_receipts']
             return "artifact_provider_receipts_invalid:#{mission.fetch('id')}" unless valid_provider_receipts?(receipts)
 
-            expected_digest = canonical_digest(
-              'mission_digest' => document.fetch('mission_digest'), 'receipts' => receipts
-            )
-            return "artifact_provider_trace_mismatch:#{mission.fetch('id')}" unless
-              provenance['provider_trace_digest'] == expected_digest
+            independent_trace = provenance['independent_trace']
+            return "artifact_independent_trace_unavailable:#{mission.fetch('id')}" unless independent_trace.is_a?(Hash)
 
-            return if valid_independent_trace?(provenance['independent_trace'], receipts)
+            return "artifact_provider_trace_mismatch:#{mission.fetch('id')}" unless provider_trace_valid?(
+              provenance, document.fetch('mission_digest'), receipts, independent_trace
+            )
+
+            return if valid_independent_trace?(independent_trace, receipts, mission)
 
             "artifact_independent_trace_unavailable:#{mission.fetch('id')}"
           end
-          # rubocop:enable Metrics/AbcSize
+
+          def provenance_binding_valid?(provenance, manifest)
+            %w[run_kind provider model].all? do |field|
+              provenance[field] == manifest.fetch(field)
+            end
+          end
+
+          def provider_trace_valid?(provenance, mission_digest, receipts, independent_trace)
+            provenance['provider_trace_digest'] == provider_trace_digest(
+              mission_digest:, receipts:, independent_trace:
+            )
+          end
 
           def valid_provider_receipts?(receipts)
             receipts.is_a?(Array) && !receipts.empty? &&
-              receipts.all? { |receipt| valid_provider_receipt?(receipt) } &&
-              receipts.any? { |receipt| receipt.fetch('status') == 'succeeded' }
+              unique_effect_keys?(receipts) && receipts.all? { |receipt| valid_provider_receipt?(receipt) }
+          end
+
+          def unique_effect_keys?(receipts)
+            keys = receipts.map { |receipt| receipt['effect_key'] }
+            keys.uniq == keys
           end
 
           def valid_provider_receipt?(receipt)
@@ -444,9 +486,12 @@ module Tamoz
           end
 
           # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-          def valid_independent_trace?(evidence, receipts)
+          def valid_independent_trace?(evidence, receipts, mission)
             return false unless evidence.is_a?(Hash) && evidence['source'] == INDEPENDENT_TRACE_SOURCE
             return false unless evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty?
+            return false unless evidence['mission_id'] == mission.fetch('id')
+            return false unless evidence['run_id'].is_a?(String) && !evidence['run_id'].empty?
+            return false unless evidence['thread_id'].is_a?(String) && !evidence['thread_id'].empty?
             return false unless DIGEST_PATTERN.match?(evidence['trace_digest'].to_s)
             return false unless evidence['trace'].is_a?(Hash)
             return false unless evidence['trace_digest'] == canonical_digest(evidence['trace'])
@@ -467,10 +512,25 @@ module Tamoz
           end
 
           def valid_durable_mission?(evidence, mission_id)
-            evidence.is_a?(Hash) && DURABLE_MISSION_FIELDS.all? { |field| evidence.key?(field) } &&
-              evidence['mission_id'] == mission_id && evidence['status'] == 'completed' &&
-              evidence['satisfied'] == true && evidence['verified'] == true &&
-              %w[run_id thread_id].all? { |field| evidence[field].is_a?(String) && !evidence[field].empty? }
+            return false unless durable_mission_shape?(evidence)
+            return false unless durable_mission_identity_valid?(evidence, mission_id)
+
+            durable_mission_binding_valid?(evidence)
+          end
+
+          def durable_mission_shape?(evidence)
+            evidence.is_a?(Hash) && DURABLE_MISSION_FIELDS.all? { |field| evidence.key?(field) }
+          end
+
+          def durable_mission_identity_valid?(evidence, mission_id)
+            evidence['mission_id'] == mission_id && evidence['status'] == 'completed' &&
+              evidence['satisfied'] == true && evidence['verified'] == true
+          end
+
+          def durable_mission_binding_valid?(evidence)
+            %w[run_id thread_id].all? do |field|
+              evidence[field].is_a?(String) && !evidence[field].empty?
+            end
           end
 
           def surface_reasons(manifest, catalog)

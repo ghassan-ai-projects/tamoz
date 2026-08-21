@@ -7,7 +7,7 @@ module Tamoz
     # Owns the durable v2 intake route. The route decision is an ordinary journaled
     # model effect followed by a checkpointed route record, so a resumed thread never
     # asks the model to choose a different graph path.
-    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists -- the route owns the ordered intake/review protocol and its durable records.
+    # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists -- the route owns the ordered intake/review protocol and its durable records.
     class SessionRouting
       def initialize(services:)
         @services = services
@@ -186,7 +186,6 @@ module Tamoz
       end
 
       def routing_surface
-        toolbox = @services.configuration.toolbox
         capabilities = @services.configuration.capabilities
         Data.define(:names, :read_only_names, :descriptions).new(
           names: capabilities.names(:action),
@@ -297,7 +296,7 @@ module Tamoz
       def raw_digest(value)
         Digest::SHA256.hexdigest(String(value))
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists
+      # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists
     end
   end
 end
