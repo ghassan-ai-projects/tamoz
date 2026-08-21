@@ -391,6 +391,8 @@ module Tamoz
           durations = spans.filter_map { |span| span['duration_ms'] if span['name'] == 'tamoz.model.call' }
           surface_executions = context[:surface_executions]
           metrics = {
+            # Keep the scale declaration beside the scaled values in each manifest mission.
+            'metric_scale' => METRIC_SCALE,
             'model_calls' => receipts.length,
             'model_calls_succeeded' => receipts.count { |receipt| receipt['status'] == 'succeeded' },
             'model_trace_spans' => independent_trace.fetch('model_span_count'),

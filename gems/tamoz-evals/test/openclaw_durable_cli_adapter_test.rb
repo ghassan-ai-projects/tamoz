@@ -19,6 +19,7 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
       trace
     )
 
+    assert_equal 1_000, metrics.fetch('metric_scale')
     assert_equal 1_000, metrics.fetch('completion')
     assert_equal 1_000, metrics.fetch('evidence_quality')
     assert_equal 0, metrics.fetch('unnecessary_actions')
