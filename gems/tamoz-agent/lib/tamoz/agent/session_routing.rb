@@ -21,9 +21,9 @@ module Tamoz
           system: Deliberation::ROUTING_SYSTEM,
           prompt: Deliberation.routing_prompt(
             state.fetch(:task),
-            toolbox: @services.configuration.toolbox,
+            toolbox: routing_surface,
             planning_context:,
-            capability_descriptions: @services.configuration.capabilities.descriptions
+            capability_descriptions: routing_capability_descriptions
           ),
           call_index: 0
         )
@@ -88,7 +88,7 @@ module Tamoz
         issues = Deliberation.structural_issues(
           plan,
           phase: :discovery,
-          allowed_tools: @services.configuration.toolbox.read_only_names,
+          allowed_tools: discovery_capability_names,
           toolbox: @services.configuration.toolbox,
           capabilities: @services.configuration.capabilities
         )
@@ -141,9 +141,7 @@ module Tamoz
             phase: :discovery,
             evidence: [],
             planning_context: bounded_planning_context(state, context),
-            tool_descriptions: @services.configuration.toolbox.descriptions.merge(
-              @services.configuration.capabilities.descriptions
-            ).slice(*@services.configuration.toolbox.read_only_names)
+            tool_descriptions: routing_capability_descriptions.slice(*discovery_capability_names)
           ),
           call_index: 1
         )
@@ -174,6 +172,27 @@ module Tamoz
       def bounded_planning_context(state, context)
         conversation = @services.planning_context.conversation_transcript(context)
         @services.planning_context.compact_for(state, :discovery, conversation:).context
+      end
+
+      def discovery_capability_names
+        @services.configuration.capabilities.names(:discovery)
+      end
+
+      def routing_capability_descriptions
+        capabilities = @services.configuration.capabilities
+        capabilities.descriptions.merge(
+          capabilities.remote_planning_surface(capabilities.names(:action))
+        )
+      end
+
+      def routing_surface
+        toolbox = @services.configuration.toolbox
+        capabilities = @services.configuration.capabilities
+        Data.define(:names, :read_only_names, :descriptions).new(
+          names: capabilities.names(:action),
+          read_only_names: discovery_capability_names,
+          descriptions: routing_capability_descriptions
+        )
       end
 
       def review_record(plan_data, decision, issues, rationale, layer: 'semantic')

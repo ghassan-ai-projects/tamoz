@@ -52,12 +52,25 @@ module Tamoz
           @adapter.respond_to?(:execute)
 
         raw = @adapter.execute(context:, capability_id: String(name), arguments: normalized)
+        validate_final_location!(raw)
+        status = adapter_status(raw)
         text = raw.is_a?(Hash) ? raw.fetch('output', raw.fetch('text', '')) : raw.to_s
         truncated = text.bytesize > MAX_OUTPUT_BYTES
         observation = Observation.new(
           text: text.byteslice(0, MAX_OUTPUT_BYTES), server_id: 'browser', truncated:
         )
-        Outcome.new(status: :succeeded, observation:, interrupt: nil, denial: nil)
+        case status
+        when :succeeded
+          Outcome.new(status:, observation:, interrupt: nil, denial: nil)
+        when :denied
+          Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw))
+        when :interrupt
+          Outcome.new(status:, observation:, interrupt: adapter_reason(raw), denial: nil)
+        when :failed, :unknown
+          Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw))
+        else
+          raise ToolError, "browser adapter returned unsupported outcome #{status.inspect}"
+        end
       end
 
       def close = @adapter&.close
@@ -81,6 +94,65 @@ module Tamoz
         raise ToolPolicyError, 'browser host is not allowlisted' unless @allowed_hosts.include?(host)
 
         arguments
+      end
+
+      def adapter_status(raw)
+        return :succeeded unless raw.is_a?(Hash) && raw.key?('status')
+
+        status = raw.fetch('status').to_s.downcase.to_sym
+        return status if %i[succeeded failed unknown denied interrupt].include?(status)
+
+        :unknown
+      end
+
+      def adapter_reason(raw)
+        value = if raw.is_a?(Hash)
+                  raw['reason'] || raw['error'] || raw['message'] || raw['denial']
+                end
+        text = value.to_s
+        { 'reason' => text.byteslice(0, 512) || '' }.freeze
+      end
+
+      def validate_final_location!(raw)
+        return unless raw.is_a?(Hash)
+
+        evidence = raw.fetch('evidence', {})
+        unless evidence.is_a?(Hash)
+          raise ToolPolicyError, 'browser adapter location evidence must be an object'
+        end
+
+        final_url = raw.key?('final_url') ? raw['final_url'] : evidence['final_url']
+        final_host = raw.key?('final_host') ? raw['final_host'] : evidence['final_host']
+        return if final_url.nil? && final_host.nil?
+
+        url_host = validate_location_url(final_url) if final_url
+        evidence_host = validate_location_host(final_host) if final_host
+        if url_host && evidence_host && url_host != evidence_host
+          raise ToolPolicyError, 'browser adapter final URL and host evidence disagree'
+        end
+      end
+
+      def validate_location_url(url)
+        unless url.is_a?(String) && url.bytesize <= MAX_URL_BYTES
+          raise ToolPolicyError, 'browser adapter final URL is not bounded'
+        end
+
+        match = URL_PATTERN.match(url)
+        raise ToolPolicyError, 'browser adapter final URL must use HTTPS' unless match
+
+        validate_location_host(match[1])
+      end
+
+      def validate_location_host(host)
+        unless host.is_a?(String) && host.bytesize <= MAX_URL_BYTES
+          raise ToolPolicyError, 'browser adapter final host is not bounded'
+        end
+
+        normalized = host.downcase
+        raise ToolPolicyError, 'browser adapter final host is not allowlisted' unless
+          @allowed_hosts.include?(normalized)
+
+        normalized
       end
     end
   end

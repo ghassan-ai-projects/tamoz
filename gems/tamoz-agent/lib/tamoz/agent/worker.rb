@@ -501,10 +501,17 @@ module Tamoz
       end
 
       def scheduled_terminal_status(view, request)
-        return :succeeded if view&.status == :completed
+        if view&.status == :completed
+          return :succeeded if view.terminal&.fetch('satisfied', false) == true
+
+          return :failed
+        end
         return :failed if view&.status == :failed
         return :unknown if view&.status == :blocked
-        return :succeeded if request&.status == :completed
+        # A completed request without its terminal projection is not enough to
+        # prove verification. Keep the occurrence non-green until the projection
+        # is available rather than treating delivery completion as task success.
+        return :unknown if request&.status == :completed
         return :failed if request&.status == :failed
 
         nil
