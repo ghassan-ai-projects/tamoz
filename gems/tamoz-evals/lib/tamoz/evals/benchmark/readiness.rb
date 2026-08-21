@@ -20,9 +20,10 @@ module Tamoz
         MISSION_SURFACES = %w[cli telegram].freeze
         MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
         PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
-        PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
+        PROVIDER_RECEIPT_STATUSES = %w[succeeded].freeze
         INDEPENDENT_TRACE_SOURCE = 'tamoz.observability.journal'
         EVIDENCE_SCHEMA_VERSION = 'openclaw.evidence.v1'
+        DURABLE_MISSION_FIELDS = %w[mission_id run_id thread_id status satisfied verified].freeze
         BOOLEAN_VALUES = [true, false].freeze
         REQUIRED_FIELDS = %w[
           protocol_sha256 run_kind provider model artifact_root git_revision config_sha256
@@ -81,6 +82,17 @@ module Tamoz
             "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump(protocol))}"
           end
 
+          def provider_trace_digest(mission_digest:, receipts:, independent_trace:)
+            canonical_digest(
+              'mission_digest' => mission_digest,
+              'receipts' => receipts,
+              'trace_binding' => independent_trace.slice(
+                'run_id', 'thread_id', 'mission_id', 'trace_id'
+              ),
+              'trace' => independent_trace.fetch('trace')
+            )
+          end
+
           private
 
           def evidence_reasons(protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base)
@@ -94,6 +106,7 @@ module Tamoz
             reasons.concat(capability_reasons(manifest.fetch('capabilities')))
             reasons.concat(mission_reasons(manifest.fetch('missions')))
             reasons.concat(required_capability_reasons(manifest, mission_catalog)) if mission_catalog
+            reasons.concat(surface_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(missing_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons.concat(unexpected_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons
@@ -110,6 +123,7 @@ module Tamoz
           def validate_manifest!(manifest)
             schema_error('benchmark evidence manifest must be an object') unless manifest.is_a?(Hash)
 
+            reject_sensitive!(manifest)
             validate_required_fields!(manifest)
             validate_protocol_and_run_kind!(manifest)
             validate_manifest_strings!(manifest)
@@ -161,9 +175,10 @@ module Tamoz
             end
 
             surfaces = manifest.fetch('surfaces')
-            return if surfaces.is_a?(Array) && %w[cli telegram].all? { |surface| surfaces.include?(surface) }
+            return if surfaces.is_a?(Array) && surfaces.uniq == surfaces && surfaces.include?('cli') &&
+                      surfaces.all? { |surface| MISSION_SURFACES.include?(surface) }
 
-            schema_error('benchmark surfaces must include cli and telegram')
+            schema_error('benchmark surfaces must contain unique supported values and include cli')
           end
 
           def validate_capabilities!(capabilities)
@@ -188,6 +203,8 @@ module Tamoz
               schema_error('benchmark missions must be a non-empty array')
             end
 
+            ids = missions.filter_map { |mission| mission['id'] if mission.is_a?(Hash) }
+            schema_error('benchmark evidence manifest contains duplicate mission ids') unless ids.uniq == ids
             missions.each { |mission| validate_mission!(mission) }
           end
 
@@ -251,9 +268,11 @@ module Tamoz
 
             digest = mission['artifact_digest']
             path = mission['artifact_path']
-            return if DIGEST_PATTERN.match?(digest.to_s) && safe_artifact_path?(path)
+            durable = mission['durable_mission']
+            return if DIGEST_PATTERN.match?(digest.to_s) && safe_artifact_path?(path) &&
+                      valid_durable_mission?(durable, mission.fetch('id'))
 
-            raise Tamoz::Evals::DigestError, 'ready mission artifact binding is invalid'
+            raise Tamoz::Evals::DigestError, 'ready mission artifact or durable evidence binding is invalid'
           end
 
           def capability_reasons(capabilities)
@@ -445,6 +464,26 @@ module Tamoz
           def safe_artifact_path?(path)
             path.is_a?(String) && !path.empty? && !Pathname.new(path).absolute? &&
               Pathname.new(path).each_filename.none?('..')
+          end
+
+          def valid_durable_mission?(evidence, mission_id)
+            evidence.is_a?(Hash) && DURABLE_MISSION_FIELDS.all? { |field| evidence.key?(field) } &&
+              evidence['mission_id'] == mission_id && evidence['status'] == 'completed' &&
+              evidence['satisfied'] == true && evidence['verified'] == true &&
+              %w[run_id thread_id].all? { |field| evidence[field].is_a?(String) && !evidence[field].empty? }
+          end
+
+          def surface_reasons(manifest, catalog)
+            required = catalog.fetch('missions').flat_map { |mission| mission.fetch('surfaces') }.uniq
+            required.filter_map do |surface|
+              "surface_unexecuted:#{surface}" unless manifest.fetch('surfaces').include?(surface)
+            end
+          end
+
+          def reject_sensitive!(value)
+            return unless Tamoz::Core.secret_shaped?(value)
+
+            raise Tamoz::SensitiveValueError, 'benchmark evidence contains a secret-shaped value'
           end
 
           def schema_error(message)
