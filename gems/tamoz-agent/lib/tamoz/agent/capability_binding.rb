@@ -238,13 +238,18 @@ module Tamoz
 
         @mcp.descriptors.group_by { |descriptor| source_id_for(descriptor) }
             .transform_values do |descriptors|
-              descriptors.filter_map do |descriptor|
-                effect_class = optional(descriptor, :effect_class)&.to_sym
-                next unless MCP_EFFECT_CLASSES.include?(effect_class)
-
-                mcp_descriptor(descriptor)
-              end
+              descriptors.map { |descriptor| mcp_descriptor(descriptor) }
             end
+      end
+
+      # Fail closed, never drop: an MCP tool the operator did not declare
+      # read-only carries the caller's `:unknown_effects` (or any class outside
+      # the closed capability set). It is admitted as `:bounded` — unsafe,
+      # approval-required, non-retryable — so an ambiguous remote effect is
+      # governed through review and approval rather than silently unavailable.
+      def closed_effect_class(descriptor)
+        effect_class = optional(descriptor, :effect_class)&.to_sym
+        MCP_EFFECT_CLASSES.include?(effect_class) ? effect_class : :bounded
       end
 
       def source_id_for(descriptor)
@@ -266,11 +271,7 @@ module Tamoz
         websearch = descriptor.source_id == WEBSEARCH_SERVER_ID
         profile = optional(descriptor, :protocol_profile)
         remote_digest = descriptor.definition_digest
-        effect_class = optional(descriptor, :effect_class)&.to_sym
-        unless MCP_EFFECT_CLASSES.include?(effect_class)
-          raise Tamoz::Core::Capability::DescriptorConflictError,
-                "MCP capability #{descriptor.id.inspect} has no closed effect classification"
-        end
+        effect_class = closed_effect_class(descriptor)
         input_schema = optional(descriptor, :input_schema)
         output_schema = optional(descriptor, :output_schema)
         egress_policy_ref = websearch ? "websearch:#{descriptor.source_id}" : "mcp:#{descriptor.source_id}"

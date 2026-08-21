@@ -100,9 +100,10 @@ module Tamoz
           descriptors << Tamoz::Mcp::Invocation.descriptor_for(
             entry,
             snapshot:,
-            # Fail closed: unknown MCP effects are not admitted into the
-            # capability host. Only an operator-declared read-only tool is
-            # safe for this slice.
+            # Fail closed: only an operator-declared tool is read-only. Any
+            # other tool carries `:unknown_effects`, which the capability
+            # binding admits as `:bounded` — unsafe and approval-required —
+            # so an unannotated remote effect is governed, never auto-run.
             effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
           )
         end

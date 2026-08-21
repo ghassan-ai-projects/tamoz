@@ -127,7 +127,11 @@ class AgentScorecardTest < Minitest::Test
         # only the measured prompt bytes grow with that explicit context.
         # Re-measured after the JCS digest-rule cutover (T0.1): the reviewed
         # surface rendering carries RFC 8785 canonical bytes.
-        "model_input_bytes" => 276_992,
+        # Re-measured after the OpenClaw capability-visibility slice: the plan,
+        # review, and routing prompts now render the bound capability
+        # descriptions, so the input bytes grow while every behavior counter
+        # above stays identical.
+        "model_input_bytes" => 281_693,
         "model_output_bytes" => 21_472,
         "tool_output_bytes" => 4_946,
         "mutations" => 10,
