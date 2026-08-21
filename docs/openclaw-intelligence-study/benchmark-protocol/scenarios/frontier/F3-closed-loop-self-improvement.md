@@ -6,6 +6,9 @@ adopted. **Seam to extend:** `Improvement::CandidateLifecycle` ↔ the intellige
 scoreboard. **Primary axes (once built):** every axis (self-improvement is
 cross-cutting) + `governance`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F3`;
+state `UNAVAILABLE` until held-out improvement gating exists).
+
 ## The gap (where the seven-tuple stops today)
 
 The branch built the candidate lifecycle — propose → approve → apply →

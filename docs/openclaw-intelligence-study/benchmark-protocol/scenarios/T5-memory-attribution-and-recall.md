@@ -4,6 +4,9 @@
 `completion`). **Mission:** `memory-attribution`. **Surfaces:** `cli`,
 `telegram`.
 
+**Contract metadata:** [SCENARIO_INDEX.json](SCENARIO_INDEX.json) (`T5`; state
+`INCOMPLETE` until the ablation oracle and B0 fixture executor exist).
+
 ## The pitch
 
 The other rungs measure a single run. This one measures whether the agent
@@ -14,10 +17,10 @@ attributable fact from a prior episode and reach the answer faster and cleaner;
 memory-off should get there too, but slower — and, critically, must **not
 fabricate** the remembered fact it never stored.
 
-This is the study's "it gets smarter" moment (`auth-edr` moment 7), made
-falsifiable. The trap it guards against is the one that quietly ruins memory
-benchmarks: crediting a **scripted response change** as "improvement," or letting
-a fact leak **across cells** so the score reflects contamination, not recall.
+This is the study's "it gets smarter" property, made falsifiable. The trap it
+guards against is the one that quietly ruins memory benchmarks: crediting a
+**scripted response change** as "improvement," or letting a fact leak **across
+cells** so the score reflects contamination, not recall.
 Retrieval correctness and task outcome are reported **separately** so recall is
 never conflated with the result.
 
@@ -32,9 +35,11 @@ never conflated with the result.
   - **memory-off** — the identical task with recall disabled.
 - A **different-entity control:** the same follow-up on `host-B`, which must
   recall **nothing** (scoping proof).
-- **Capability manifest:** `{ "memory:recall": "allow", "local:read_file":
-  "allow", "local:run_check": "allow" }`; memory-off toggles `memory:recall` to
-  `deny`.
+- **Capability policy:** `memory:recall`, `local:read_file`, and
+  `local:run_check` are permitted for the memory-on cell. The memory-off cell
+  is a separate ablation with `memory:recall` deliberately not attempted; its
+  seven-field state and blocked/unavailable outcome are recorded explicitly,
+  and it is never treated as a ready canonical mission artifact.
 - **Oracle:** scores retrieval correctness (the memory-on run used the recalled
   Experience digest), task completion (separately, per cell), cross-cell leak
   (no fact from `host-A` appears in the `host-B` run), and cost delta.

@@ -191,9 +191,10 @@ improvement measurable and regression visible:
   later change that lowers an axis is a visible regression, and an improvement is
   a dated, attributable delta. See the scoreboard spec in
   [02-mission-catalog-and-scoring.md](02-mission-catalog-and-scoring.md#longitudinal-scoreboard).
-- **Provider drift is a confound, recorded not hidden.** `deepseek-chat` is a
-  moving upstream target; a trend break can come from a provider-side model
-  change rather than a Tamoz change. Each scoreboard entry records the
+- **Provider drift is a confound, recorded not hidden.**
+  `deepseek/deepseek-chat` through OpenRouter is a moving upstream target; a
+  trend break can come from a provider-side model change rather than a Tamoz
+  change. Each scoreboard entry records the
   provider-reported model version or fingerprint when the API exposes one, and
   a trend break that coincides with a version change is annotated, not
   silently attributed to Tamoz.

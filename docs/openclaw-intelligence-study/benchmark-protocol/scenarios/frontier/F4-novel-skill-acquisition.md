@@ -6,6 +6,9 @@ same durable session. **Seam to extend:** `Tools::Skills` + the `load_skill`
 capability + the candidate lifecycle for skill scope. **Primary axes (once
 built):** `adaptive_continuation`, `self_knowledge`, `governance`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F4`;
+state `UNAVAILABLE` until in-session skill acquisition exists).
+
 ## The gap (where the seven-tuple stops today)
 
 Skills exist as a source (`load_skill`, `read_skill_resource`), and the candidate
@@ -40,7 +43,7 @@ Close the acquire→use loop under governance:
   resources) scoped to the task, routed through the existing candidate lifecycle
   (human approval binds the exact skill digest);
 - on approval, the skill is **loaded into the live session** through the sealed
-  capability host (a new source epoch, not a mutation of an existing one) and
+  capability host (a new `skill_epoch`, not a mutation of an existing one) and
   becomes a first-class, admission-bounded capability;
 - the authored skill inherits the closed-world contract: declared trust, bounded
   I/O, secret handling, no authority widening — a skill can do **less** than the

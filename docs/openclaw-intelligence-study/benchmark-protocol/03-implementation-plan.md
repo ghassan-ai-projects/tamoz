@@ -11,9 +11,10 @@ comparison track before the missions score deterministically on fixtures.
 
 ## Prerequisites (external — gather before B1)
 
-- A real provider credential and the UTF-8 locale for real runs (see the
-  local-run note). Real missions use DeepSeek by default; the provider identity
-  is recorded, never assumed.
+- An OpenRouter credential (`OPENROUTER_API_KEY`) and the UTF-8 locale for real
+  runs (see the local-run note). Real missions use DeepSeek through OpenRouter
+  by default (`openrouter` / `deepseek/deepseek-chat`); the provider identity is
+  recorded, never assumed.
 - A committed **capability manifest** describing the exact tools each mission is
   permitted (the input to `--capabilities`).
 - A **comparison-target adapter** for Track A. The minimum is the
@@ -72,8 +73,8 @@ the durable CLI, with two independent witnesses.
   `adaptive-read-only` mission — provider receipt set present, trace digest bound,
   independent journal trace with model spans present.
 - **Evidence:** `real-provider/<date>-<git-sha>/` for the one mission; command
-  `script/benchmark_openclaw_run --runtime-dir … --provider deepseek --model
-  deepseek-chat --capabilities … --artifact-root real-provider/<date>-<sha>`.
+  `script/benchmark_openclaw_run --runtime-dir … --provider openrouter --model
+  deepseek/deepseek-chat --capabilities … --artifact-root real-provider/<date>-<sha>`.
 - **Exit bar:** one real mission is `publishable?`; a fabricated or missing
   witness is a typed block, never a pass.
 

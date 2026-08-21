@@ -4,13 +4,18 @@
 page under governance. **Seam to extend:** `GovernedBrowserSource`.
 **Primary axes (once built):** `external_tool_use`, `governance`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F1`;
+state `UNAVAILABLE` until the browser adapter is wired).
+
 ## The gap (where the seven-tuple stops today)
 
 `GovernedBrowserSource` already defines the boundary — an exact HTTPS host
 allowlist, bounded untrusted output, required allowlisted final-location
 evidence, and **fail-closed behavior when the external adapter is absent** — but
-no real browser adapter is wired. So for a task that requires live navigation,
-the capability's seven-tuple stops at:
+it is wired nowhere: no production code references it (only its own test
+instantiates it), `mcp_source_builder.rb` never builds it, and no browser
+adapter exists behind it. So for a task that requires live navigation, the
+capability's seven-tuple stops at:
 
 `exists=true → reachable=false`
 
@@ -37,7 +42,9 @@ or `fabricated_evidence` hard-zero) — the only real bug F1 can surface now.
 
 ## The increment (smallest extension that closes the gap)
 
-Wire a governed browser **adapter** behind the existing source contract:
+Wire `GovernedBrowserSource` into `mcp_source_builder.rb` (the way
+`GovernedDatabaseSource` already is) and put a governed browser **adapter**
+behind the existing source contract:
 
 - honor the source's **HTTPS host allowlist** exactly (no redirect off-allowlist);
 - return **bounded untrusted output** with the required allowlisted final-location

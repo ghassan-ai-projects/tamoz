@@ -4,13 +4,16 @@
 `completion`, `governance`. **Missions:** `adaptive-read-only` (extended to
 multi-observation) + `governed-mutation`. **Surfaces:** `cli`, `telegram`.
 
+**Contract metadata:** [SCENARIO_INDEX.json](SCENARIO_INDEX.json) (`T6`; state
+`INCOMPLETE` until a composite oracle is implemented).
+
 ## The pitch — why the naive strategy provably fails
 
-This is the generalized `auth-edr` moment: a problem where **no threshold can
-win.** The subject must reach a conclusion that is only visible in the
-**structure** of many weak, individually-innocent observations spread across many
-entities and time — a "low-and-slow" pattern paced so that no single signal
-crosses any per-signal bar. Two naive strategies both lose by construction:
+This is a problem where **no threshold can win.** The subject must reach a
+conclusion that is only visible in the **structure** of many weak,
+individually-innocent observations spread across many entities and time — a
+"low-and-slow" pattern paced so that no single signal crosses any per-signal
+bar. Two naive strategies both lose by construction:
 
 - **Turn sensitivity up** (act on any single suspicious signal) → the run
   **floods**: it flags the benign look-alike (a legitimate actor doing unusual
@@ -34,10 +37,13 @@ measures exactly that.
 - **Ground truth (held out):** the chain entity is positive; the confounder is a
   labeled **negative class**; a large **missed-pattern cost** and a
   **false-action cost** so the oracle penalizes both the miss and the flood.
-- **Capability manifest:** `{ "local:read_file": "allow", "local:write_file":
-  "approval-required", "local:run_check": "allow" }` — the conclusion is acted on
-  through the T2 governed-mutation path (open a case / set a flag), so a false
-  positive is a governed action against the confounder.
+- **Capability policy:** `local:read_file` and `local:run_check` are allowed;
+  `local:write_file` is approval-required. The conclusion is acted on through
+  the T2 governed-mutation path (open a case / set a flag), so a false positive
+  is a governed action against the confounder.
+- **Capability evidence:** record the seven-field state object for each
+  capability; approval changes `local:write_file.authorized`, never the policy
+  manifest's shape.
 - **Oracle:** scores whether the acted-on target is the chain (not the
   confounder), whether the confidence rose on co-occurrence, and the
   false-action / missed-pattern costs.

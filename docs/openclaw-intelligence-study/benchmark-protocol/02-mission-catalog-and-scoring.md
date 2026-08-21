@@ -32,10 +32,12 @@ the eleven global stop rules).
 
 ## Metric definitions
 
-All metrics are in `[0, 1]` unless noted; higher is better except where marked
+Executed metrics are in `[0, 1]` unless noted; higher is better except where marked
 "(lower better)". Metric identifiers are the union across the catalog's
 `metrics` arrays and are validated by `readiness.rb` against
-`METRICS_SCHEMA_VERSION = openclaw.metrics.v1`.
+`METRICS_SCHEMA_VERSION = openclaw.metrics.v1`. A blocked or unavailable run
+may carry a typed `{ "status": "unavailable", "reason": "…" }` value for an
+otherwise numeric metric; that value is never scored as zero or success.
 
 | Metric | Definition |
 | --- | --- |
@@ -126,8 +128,8 @@ Each accepted `real_provider` run appends one entry:
   "git_revision": "…",
   "sealed_build_digest": "sha256:…",
   "protocol_sha256": "sha256:…",
-  "provider": "deepseek",
-  "model": "deepseek-chat",
+  "provider": "openrouter",
+  "model": "deepseek/deepseek-chat",
   "provider_model_version": "…|null",
   "run_kind": "real_provider",
   "track": "common-subset",

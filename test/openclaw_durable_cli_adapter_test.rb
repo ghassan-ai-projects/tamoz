@@ -28,6 +28,7 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
 
       assert_equal 'ready', result.fetch('status')
       assert_equal 1, result.dig('metrics', 'model_calls')
+      assert_equal 'unavailable', result.dig('metrics', 'parity', 'status')
       assert_equal 'tamoz.observability.journal', result.dig('provenance', 'independent_trace', 'source')
       assert(commands.any? { |argv| argv.include?('queue') && argv.include?('add') })
       assert(commands.any? { |argv| argv.include?('worker') && argv.include?('--once') })

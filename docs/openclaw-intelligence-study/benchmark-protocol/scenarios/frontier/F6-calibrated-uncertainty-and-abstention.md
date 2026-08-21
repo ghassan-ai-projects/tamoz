@@ -6,6 +6,15 @@ confidence** and **abstain** when it should not act, rather than always answerin
 `calibration` / `risk_coverage` scoring. **Primary axes (once built):**
 `self_knowledge`, `governance`, `completion`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F6`;
+state `UNAVAILABLE` until confidence/abstention fields are emitted).
+
+`calibration` and `risk_coverage` are inherited protocol scoring fields, not
+currently emitted `openclaw.metrics.v1` mission metrics. Until a reviewed
+schema/catalog extension exists, this scenario records them as controller-owned
+frontier predicates and remains `UNAVAILABLE`; it must not put undeclared
+`metrics.*` keys into a canonical mission artifact.
+
 ## The gap (where the seven-tuple stops today)
 
 The frozen protocol already *scores* `calibration` (ECE over primary-code
@@ -85,7 +94,7 @@ confidence does not predict accuracy (flat, or anti-correlated) fails the
 `calibration` bar — a made-up number is worse than none. Abstention must be a real
 terminal that *declines the action*, not a relabeled failure to dodge the score.
 
-## What comes after (the horizon, F7)
+## What comes after (the horizon)
 
 The natural next frontier is **agent-vs-agent**: replace the scripted adversaries
 of T6/T7 with another *autonomous* agent that adapts to Tamoz in real time —

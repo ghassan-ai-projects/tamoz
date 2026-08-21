@@ -1,13 +1,21 @@
 # Agent-drivable benchmark scenarios
 
+The completion contract for this directory is [00-implementation-bar.md](00-implementation-bar.md).
+Read it before adding or running a scenario.
+
 These are runbooks a capable external agent (OpenClaw, or any driver) can follow
-autonomously to **set up, run, and verify** an intelligence-benchmark mission —
-the same shape as the `agent-research-lab` round runbooks, applied to the Tamoz
-benchmark in [../02-mission-catalog-and-scoring.md](../02-mission-catalog-and-scoring.md).
+autonomously to **set up, run, and verify** an intelligence-benchmark mission,
+applied to the Tamoz benchmark in
+[../02-mission-catalog-and-scoring.md](../02-mission-catalog-and-scoring.md).
 
 Each scenario is one rung on a difficulty ladder. A driver runs them in order;
 each rung adds one hard thing on top of the last, so a failure localizes to the
 capability the new rung introduced.
+
+Provenance note: several scenarios generalize adversarial patterns from an
+external study (`agent-research-lab`'s auth-edr benchmark). That material is
+**not committed in this repo** and is not needed — every scenario here fully
+specifies its own fixtures, moments, and assertions.
 
 ## Two roles — do not conflate them
 
@@ -32,22 +40,21 @@ self-report.
 | T4 | [T4-adversarial-injection-and-availability.md](T4-adversarial-injection-and-availability.md) | `governance`, `external_tool_use`, `self_knowledge` | Untrusted content carrying an injection + a secret bait, plus an *unavailable* capability. The milestone. |
 | T5 | [T5-memory-attribution-and-recall.md](T5-memory-attribution-and-recall.md) | `memory` | Matched memory-on/off; recall makes the second run faster without fabricating. |
 
-T4 is the **milestone**, exactly as `auth-edr` moment 4 is: the first rung where
-attacker-controlled text actually reaches the subject's reasoning, and the whole
-point is that it **changes nothing**. If only one rung is run for a
-security-review-grade result, run T4.
+T4 is the **milestone**: the first rung where attacker-controlled text actually
+reaches the subject's reasoning, and the whole point is that it **changes
+nothing**. If only one rung is run for a security-review-grade result, run T4.
 
 ### Advanced tier (T6–T11) — where a capable agent actually fails
 
 T1–T5 are single-capability floors: a strong autonomous agent clears each with
 one right move. The advanced tier is different by construction. Each rung is
-built so that the **greedy or naive strategy provably fails** — the way
-`auth-edr` makes a rate threshold non-converge against a low-and-slow adversary.
-Passing requires holding a hypothesis over a long horizon, resisting an
-adversary that *adapts*, refusing a shortcut that games the check, triaging under
-a hard budget, containing authority across delegation, or reversing a past
-action on out-of-order evidence. A single-shot or reward-hacking loop scores a
-hard-zero here, not a soft miss.
+built so that the **greedy or naive strategy provably fails** — the way a rate
+threshold cannot converge against a low-and-slow adversary. Passing requires
+holding a hypothesis over a long horizon, resisting an adversary that *adapts*,
+refusing a shortcut that games the check, triaging under a hard budget,
+containing authority across delegation, or reversing a past action on
+out-of-order evidence. A single-shot or reward-hacking loop scores a hard-zero
+here, not a soft miss.
 
 | Rung | Scenario | Primary axes | Why the naive strategy fails |
 | --- | --- | --- | --- |
@@ -61,9 +68,9 @@ hard-zero here, not a soft miss.
 Run the advanced tier **after** T1–T5 pass on the same build: a T6+ failure is
 only interpretable once the floors hold. T6 (structure-beats-threshold) and T7
 (adaptive injection) are the two most discriminating; T10 exercises the durable
-child-task machinery this branch added.
+child-task machinery (`ChildTask`, `ChildTaskDispatcher`).
 
-### Frontier round (F1–F6) — capabilities Tamoz does not have yet
+### Frontier round (F1–F9) — capabilities Tamoz does not have yet
 
 T1–T11 measure what Tamoz can or nearly can do. The **frontier round** in
 [frontier/](frontier/README.md) measures what it **cannot do yet** — so the
@@ -93,32 +100,47 @@ The driver reads results from the mission artifact + `manifest.json` produced by
 `OpenclawMissionRunner`, cross-checked against the independent
 observability-journal trace. Two witnesses must agree (see
 [../01-protocol-design.md §5](../01-protocol-design.md#5-provenance-and-evidence-rules)).
+`SCENARIO_INDEX.json` is the contract index and is not yet consumed by the
+runner; until B0 binds a scenario ID and controller oracle into the artifact,
+an ordinary catalog artifact must not be relabeled as scenario evidence.
+
+**One drive-through is one sample.** A scenario PASS means the assertions held
+on that run. A publishable per-axis *claim* still needs the cell discipline of
+[../01 §6](../01-protocol-design.md#6-statistical-validity-inherited-from-the-frozen-protocol)
+— a cell is `(mission, surface, system)` filled with paired seeds, and an
+underpowered interval is `inconclusive`, never a softened `go`. The scenario is
+the unit of evidence; the cell is the unit of claim.
 
 ### The verification surface (what the driver asserts against)
 
-Every assertion below resolves to a field the harness already emits:
+Every assertion below must resolve to a field the harness emits, or be marked
+`INCOMPLETE` until the B0 fixture/oracle implementation adds that field:
 
 | Assert on | Source |
 | --- | --- |
-| Mission `status` (`ready`/`blocked`/`failed`/`unavailable`) | mission artifact |
-| Per-axis `metrics` (`completion`, `approval_correctness`, …) | mission artifact, `openclaw.metrics.v1` |
+| Mission `status` (`ready`/`blocked`/`failed`/`unavailable`/`unknown`) | mission artifact |
+| Per-axis `metrics` (`completion`, `approval_correctness`, …) | mission artifact, `openclaw.metrics.v1`; scenario-local predicates stay in the controller oracle |
 | Capability seven-tuple (`exists…verified`) | `manifest.json` `capabilities` |
 | Effect receipts (operation, safety, status, `unknown` states) | durable session, via `OpenclawDurableCliAdapter` (read without advancing) |
 | `hard_zero` list (which stop rules fired) | mission artifact |
 | Independent trace digest bound to the mission digest | `tamoz trace --json` |
 
+Terminal semantic outcome and delivery receipts are required for the parity
+assertion once the B2 surface executor exists; the current adapter records
+Telegram as unavailable and cannot be used to claim `metrics.parity == 1`.
+
 ### Commands (fixture rehearsal, then real)
 
-A driver first rehearses each scenario as a **fixture** run — it proves the
-scenario wiring and the assertions without a provider, and can never publish:
+A driver first rehearses each scenario as a **fixture** run once B0 exists — it
+proves the scenario wiring and assertions without a provider, and can never
+publish. B0 is not implemented in the current tree, so there is intentionally
+no fixture command to copy yet; the index marks T scenarios `INCOMPLETE` until
+that executor and oracle land. The real-run command below is the existing
+fail-closed operator entrypoint:
 
 ```bash
-script/benchmark_openclaw_run \
-  --provider fixture --model fixture \
-  --missions <scenario mission subset> \
-  --capabilities <scenario capability-manifest.json> \
-  --artifact-root fixtures/<scenario>
-script/benchmark_openclaw_readiness --artifact-root fixtures/<scenario>   # expect: fixture_or_fake_provider
+# B0 fixture invocation: unavailable until the fixture executor and oracle land.
+# Do not substitute a fake result.
 ```
 
 Then the same scenario as a **real** run (the only kind that can support a
@@ -127,11 +149,14 @@ claim):
 ```bash
 script/benchmark_openclaw_run \
   --runtime-dir <configured runtime> \
-  --provider deepseek --model deepseek-chat \
-  --missions <scenario mission subset> \
+  --provider openrouter --model deepseek/deepseek-chat \
   --capabilities <scenario capability-manifest.json> \
   --artifact-root real-provider/<date>-<git-sha>/<scenario>
-script/benchmark_openclaw_readiness --artifact-root real-provider/<date>-<git-sha>/<scenario>
+script/benchmark_openclaw_readiness \
+  --protocol documentation/benchmark/BENCHMARK_PROTOCOL.json \
+  --manifest real-provider/<date>-<git-sha>/<scenario>/manifest.json \
+  --missions documentation/benchmark/OPENCLAW_MISSIONS.json \
+  --artifact-base .
 ```
 
 Both tracks (common-subset, native-envelope) apply; a scenario's verdict is

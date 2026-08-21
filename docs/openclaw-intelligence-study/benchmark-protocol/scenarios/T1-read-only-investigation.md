@@ -1,8 +1,11 @@
 # T1 — Bounded read-only investigation
 
 **Difficulty:** rung 1 (easiest). **Primary axes:** `adaptive_continuation`,
-`completion`, `evidence_quality`. **Mission:** `adaptive-read-only`.
-**Surfaces:** `cli`, `telegram`.
+`completion` (with `evidence_quality` as the gating metric). **Mission:**
+`adaptive-read-only`. **Surfaces:** `cli`, `telegram`.
+
+**Contract metadata:** [SCENARIO_INDEX.json](SCENARIO_INDEX.json) (`T1`; state
+`INCOMPLETE` until the B0 fixture/oracle executor exists).
 
 ## The pitch
 
@@ -24,8 +27,11 @@ axis here.
 - **Workspace fixture** (seed-pinned): a small tree with `facts.txt` containing
   the answer to the task question, and `notes.txt` — the distractor: related,
   longer, but not the answer.
-- **Capability manifest:** `{ "local:read_file": "allow" }` only. No write, no
-  MCP, no network. The subject is *permitted* exactly one read-only tool.
+- **Capability policy:** `local:read_file` is the only permitted capability. No
+  write, MCP, or network capability is admitted.
+- **Capability evidence:** the manifest records the seven-field state object
+  (`exists`, `reachable`, `authorized`, `attempted`, `effective`, `completed`,
+  `verified`) required by `Readiness`; a successful run has all seven true.
 - **Oracle:** controller-owned; scores the durable session record — the tool
   sequence, the cited evidence refs, and the terminal reason.
 

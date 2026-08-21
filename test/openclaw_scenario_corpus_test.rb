@@ -10,6 +10,7 @@ class OpenclawScenarioCorpusTest < Minitest::Test
                          'SCENARIO_INDEX.json')
   SCENARIO_ROOT = INDEX_PATH.dirname
   CATALOG_PATH = ROOT.join('documentation', 'benchmark', 'OPENCLAW_MISSIONS.json')
+  PROTOCOL_PATH = ROOT.join('documentation', 'benchmark', 'BENCHMARK_PROTOCOL.json')
   EXPECTED_IDS = ((1..11).map { |number| "T#{number}" } + (1..9).map { |number| "F#{number}" }).freeze
   REQUIRED_ENTRY_KEYS = %w[
     scenario_id path state status_reason tier classification mission_ids axes
@@ -22,6 +23,8 @@ class OpenclawScenarioCorpusTest < Minitest::Test
   ALLOWED_CLASSIFICATIONS = %w[canonical composite frontier].freeze
   ALLOWED_RUN_KINDS = %w[fixture real_provider].freeze
   ALLOWED_SURFACES = %w[cli telegram].freeze
+  T_SCENARIO_HEADINGS = %w[Setup Task Reading].freeze
+  F_SCENARIO_HEADINGS = ['The gap', 'The increment', 'Anti-cheat', 'Graduation'].freeze
 
   def index
     @index ||= read_json(INDEX_PATH)
@@ -29,6 +32,10 @@ class OpenclawScenarioCorpusTest < Minitest::Test
 
   def catalog
     @catalog ||= read_json(CATALOG_PATH)
+  end
+
+  def protocol
+    @protocol ||= read_json(PROTOCOL_PATH)
   end
 
   def missions
@@ -43,8 +50,20 @@ class OpenclawScenarioCorpusTest < Minitest::Test
     assert_equal 'openclaw.scenario-index.v1', index.fetch('schema_version')
     assert_equal 'docs/openclaw-intelligence-study/benchmark-protocol/scenarios', index.fetch('scenario_directory')
     assert_equal 'documentation/benchmark/OPENCLAW_MISSIONS.json', index.fetch('catalog')
+    assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/stop_rules', index.fetch('global_hard_zero_ref')
     assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/budgets', index.fetch('budget_ref')
     assert_equal 'paired_protocol_seed', index.fetch('seed_policy')
+    assert_equal(
+      {
+        'provider' => 'openrouter',
+        'model' => 'deepseek/deepseek-chat',
+        'credential_env' => 'OPENROUTER_API_KEY',
+        'api_base_default' => 'https://openrouter.ai/api/v1',
+        'run_kind' => 'real_provider',
+        'fixture_results_are_intelligence_evidence' => false
+      },
+      index.fetch('real_provider_policy')
+    )
     assert_equal EXPECTED_IDS.sort, entries.map { |entry| entry.fetch('scenario_id') }.sort
     assert_equal EXPECTED_IDS.length, entries.length
 
@@ -57,6 +76,11 @@ class OpenclawScenarioCorpusTest < Minitest::Test
   def test_entries_are_unique_and_have_the_required_schema
     assert_equal entries.length, entries.map { |entry| entry.fetch('scenario_id') }.uniq.length
     assert_equal entries.length, entries.map { |entry| entry.fetch('path') }.uniq.length
+    assert_equal entries.length, entries.map { |entry| entry.fetch('oracle_id') }.uniq.length
+
+    assert_predicate CATALOG_PATH, :file?
+    assert_predicate PROTOCOL_PATH, :file?
+    assert_kind_of Hash, protocol.fetch('budgets')
 
     entries.each do |entry|
       assert REQUIRED_ENTRY_KEYS.all? { |key| entry.key?(key) },
@@ -69,6 +93,7 @@ class OpenclawScenarioCorpusTest < Minitest::Test
       assert_match(/\Aopenclaw\.scenario\.[tf]\d+\.v1\z/, entry.fetch('oracle_id'))
       assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/budgets', entry.fetch('budget_ref')
       assert_equal 'paired_protocol_seed', entry.fetch('seed_policy')
+      assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/budgets', entry.fetch('budget_ref')
 
       assert_unique_nonempty_strings(entry, 'axes')
       assert_unique_nonempty_strings(entry, 'required_capabilities')
@@ -87,12 +112,40 @@ class OpenclawScenarioCorpusTest < Minitest::Test
     end
   end
 
+  def test_scenario_documents_bind_the_index_and_declared_contract
+    entries.each { |entry| assert_scenario_document_contract(entry) }
+  end
+
+  def assert_scenario_document_contract(entry)
+    document = File.read(SCENARIO_ROOT.join(entry.fetch('path')), encoding: Encoding::UTF_8)
+    id = entry.fetch('scenario_id')
+
+    assert_includes document, 'SCENARIO_INDEX.json', id
+    assert_match(/state\s+`#{Regexp.escape(entry.fetch('state'))}`/, document, id)
+    assert_includes document, '## Drive', id
+    assert_tier_document_contract(document, entry.fetch('tier'), id)
+  end
+
+  def assert_tier_document_contract(document, tier, id)
+    if tier == 'T'
+      assert_includes document, '## Verify', id
+      assert_includes document, '## Fail', id
+      T_SCENARIO_HEADINGS.each { |heading| assert_includes document, "## #{heading}", id }
+      refute_match(/--provider\s+fixture/, document, "#{id} claims a fixture command before B0")
+      return
+    end
+
+    assert_includes document, '## Acceptance bar', id
+    F_SCENARIO_HEADINGS.each { |heading| assert_includes document, "## #{heading}", id }
+    assert_includes document, 'UNAVAILABLE', id
+  end
+
   def test_states_and_classifications_make_incomplete_and_unavailable_explicit
     entries.each do |entry|
       if entry.fetch('tier') == 'T'
         assert_equal 'INCOMPLETE', entry.fetch('state'), entry.fetch('scenario_id')
-        assert_equal 'canonical', entry.fetch('classification') if entry.fetch('scenario_id').match?(/\AT[1-5]\z/)
-        if entry.fetch('scenario_id').match?(/\AT(?:6|7|8|9|10|11)\z/)
+        assert_equal 'canonical', entry.fetch('classification') if entry.fetch('scenario_id').match?(/\AT(?:1|2|5)\z/)
+        if entry.fetch('scenario_id').match?(/\AT(?:3|4|6|7|8|9|10|11)\z/)
           assert_equal 'composite',
                        entry.fetch('classification')
         end
@@ -179,6 +232,10 @@ class OpenclawScenarioCorpusTest < Minitest::Test
     refute_includes path.split('/'), '..'
     assert_equal path, Pathname.new(path).cleanpath.to_s
     assert_equal extension, Pathname.new(path).extname if extension
+  end
+
+  def read_json(path)
+    JSON.parse(File.read(path, encoding: Encoding::UTF_8))
   end
 
   def ordered_union(records, key)

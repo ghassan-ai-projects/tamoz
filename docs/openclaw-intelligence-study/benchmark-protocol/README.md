@@ -24,9 +24,9 @@ standing up a parallel benchmark stack.
 3. [03-implementation-plan.md](03-implementation-plan.md) — phased work items,
    each mapped to a concrete `tamoz-evals` seam, with exit bars and the
    committed evidence each phase must produce.
-4. [scenarios/](scenarios/README.md) — an escalating ladder of agent-drivable
-   runbooks (T1–T5) an external agent like OpenClaw follows to set up, run, and
-   verify each mission, with machine-checkable PASS/FAIL assertions.
+4. [scenarios/](scenarios/README.md) — the agent-drivable ladder (T1–T11),
+   frontier specifications (F1–F9), and the machine-readable scenario contract
+   an external driver follows to set up, run, and verify each mission.
 
 ## First principles (inherited, non-negotiable)
 
@@ -64,11 +64,17 @@ standing up a parallel benchmark stack.
 ```bash
 script/benchmark_openclaw_run \
   --runtime-dir <configured runtime> \
-  --provider deepseek --model deepseek-chat \
+  --provider openrouter --model deepseek/deepseek-chat \
   --capabilities <capability-manifest.json> \
   --artifact-root real-provider/<date>-<git-sha> \
   --controls-passed --publish
 ```
+
+For the current real-intelligence run, export `OPENROUTER_API_KEY` and use the
+OpenRouter provider/model pair shown above. RubyLLM supplies the default
+`https://openrouter.ai/api/v1` base; an empty or missing key is an external
+blocker. No fixture or scripted-model output may be placed under
+`real-provider/` or described as intelligence evidence.
 
 Until the plan's phases land, this command fails closed with a typed reason,
 which is the correct behavior — it never emits a fabricated verdict.

@@ -6,6 +6,9 @@ self-assessment — beyond a single mission. **Seam to extend:** scheduler
 occurrences + the durable session + a project/milestone ledger. **Primary axes
 (once built):** `recovery`, `adaptive_continuation`, `completion`, `cost`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F5`;
+state `UNAVAILABLE` until a project/milestone ledger exists).
+
 ## The gap (where the seven-tuple stops today)
 
 The scheduler can materialize an occurrence and the durable session can resume a

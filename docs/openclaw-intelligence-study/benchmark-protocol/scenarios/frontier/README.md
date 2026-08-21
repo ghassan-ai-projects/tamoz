@@ -36,25 +36,31 @@ So every F scenario is defined by four things:
 
 ## The frontier round
 
-Ordered by how far each is from today's surface. Each names the seam its
-increment extends.
+Roughly ordered by how far each is from today's surface (the number is an id,
+not a rank). Each names the seam its increment extends.
 
 | # | Scenario | Missing capability | Increment extends |
 | --- | --- | --- | --- |
-| F1 | [F1-live-browser-actuation.md](F1-live-browser-actuation.md) | Real governed web navigation/actuation | `GovernedBrowserSource` (defined, adapter absent → fail-closed today) |
+| F1 | [F1-live-browser-actuation.md](F1-live-browser-actuation.md) | Real governed web navigation/actuation | `GovernedBrowserSource` (defined, unwired + adapter absent → fail-closed today) |
 | F2 | [F2-heterogeneous-tool-composition.md](F2-heterogeneous-tool-composition.md) | Compose 2+ real external services with governed data-flow between them | multi-source capability host + `GovernedDatabaseSource` + provenance chaining |
 | F3 | [F3-closed-loop-self-improvement.md](F3-closed-loop-self-improvement.md) | Author a change to itself that *measurably* improves, proven on the benchmark | `Improvement::CandidateLifecycle` ↔ the scoreboard |
 | F4 | [F4-novel-skill-acquisition.md](F4-novel-skill-acquisition.md) | Recognize a capability gap, author a governed skill, and use it in-session | `Tools::Skills` + `load_skill` + candidate lifecycle for skill scope |
 | F5 | [F5-long-horizon-autonomous-project.md](F5-long-horizon-autonomous-project.md) | A multi-day project with self-set milestones and scheduled continuation | scheduler occurrences + durable session + a project/milestone ledger |
 | F6 | [F6-calibrated-uncertainty-and-abstention.md](F6-calibrated-uncertainty-and-abstention.md) | Calibrated confidence and abstention when it should not act | adaptive decision confidence ↔ the protocol's `calibration`/`risk_coverage` scoring |
+| F7 | [F7-self-inspection-surface.md](F7-self-inspection-surface.md) | Agent-facing inspection of its own durable state (machinery for the catalog's `self-inspection` mission) | a governed read-only self-inspection capability over the runtime's status/trace records |
+| F8 | [F8-agent-initiated-deferred-work.md](F8-agent-initiated-deferred-work.md) | Agent-created schedules (creation is operator-only today) | `ScheduleStore#put_schedule` behind an approval-gated capability + per-occurrence budgets |
+| F9 | [F9-agent-initiated-clarification.md](F9-agent-initiated-clarification.md) | Agent-initiated free-form clarification (elicitation is MCP-originated only) | the elicitation/interrupt machinery, agent-initiated direction |
 
-F7 (agent-vs-agent: face a *real* autonomous adversary rather than a scripted
+Agent-vs-agent (facing a *real* autonomous adversary rather than a scripted
 one) is the horizon beyond this round — noted in F6's "what comes after."
 
 ## How Round F is driven and scored
 
-A driver runs an F scenario exactly like a T scenario (same
-[../README.md](../README.md) five sections), with two differences:
+A driver uses the same evidence and result-state contract as a T scenario (see
+[../00-implementation-bar.md](../00-implementation-bar.md)); the frontier
+documents use gap/increment/acceptance headings rather than pretending that an
+unimplemented capability has a runnable T-tier fixture. There are two
+differences in execution:
 
 - **Today (capability absent):** the PASS is the *honest fail-closed* result — the
   mission is `unavailable`/`blocked`, the seven-tuple stops at the named field,

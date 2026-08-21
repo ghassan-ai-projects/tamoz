@@ -6,10 +6,14 @@ external services into one governed plan with **data flowing between them**.
 cross-source provenance. **Primary axes (once built):** `external_tool_use`,
 `governance`, `adaptive_continuation`.
 
+**Contract metadata:** [../SCENARIO_INDEX.json](../SCENARIO_INDEX.json) (`F2`;
+state `UNAVAILABLE` until durable cross-source composition exists).
+
 ## The gap (where the seven-tuple stops today)
 
-Today a single MCP/database/websearch call can be governed end to end
-(T2/T4 prove it). What Tamoz cannot yet do is **chain** them: read from service A,
+Today individual governed database and web/MCP sources have bounded policy
+seams (covered by their source tests and T4's web/MCP path). What Tamoz cannot
+yet do is **chain** them: read from service A,
 transform the result, and write it to service B — as one plan, with the
 **provenance of A carried onto the effect at B**, and one composite approval that
 sees the whole chain. Each source is governed in isolation; there is no

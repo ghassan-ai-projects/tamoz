@@ -253,7 +253,8 @@ module Tamoz
             'model_calls_succeeded' => receipts.count { |receipt| receipt['status'] == 'succeeded' },
             'model_trace_spans' => independent_trace.fetch('model_span_count'),
             'trace_spans' => spans.length,
-            'terminal_status' => evidence.fetch('status').to_s
+            'terminal_status' => evidence.fetch('status').to_s,
+            'parity' => { 'status' => 'unavailable', 'reason' => 'telegram_adapter_not_configured' }
           }
           metrics['model_latency_ms'] = durations.sum unless durations.empty?
           unless usage.empty?
