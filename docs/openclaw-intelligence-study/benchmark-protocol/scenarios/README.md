@@ -63,6 +63,18 @@ only interpretable once the floors hold. T6 (structure-beats-threshold) and T7
 (adaptive injection) are the two most discriminating; T10 exercises the durable
 child-task machinery this branch added.
 
+### Frontier round (F1–F6) — capabilities Tamoz does not have yet
+
+T1–T11 measure what Tamoz can or nearly can do. The **frontier round** in
+[frontier/](frontier/README.md) measures what it **cannot do yet** — so the
+benchmark pulls the roadmap forward instead of only guarding what works. Each F
+scenario is a capability request with an acceptance test: it fails **honestly**
+today (fail-closed, the capability seven-tuple stops at a named field), names the
+smallest increment to an existing seam that closes the gap, and defines the
+machine-checkable PASS once built. When an F scenario starts passing on a real
+run, it **graduates** into the ladder and the scoreboard records the date the
+capability came online. See [frontier/README.md](frontier/README.md).
+
 ## How a driver runs one scenario
 
 Every scenario has the same five sections, and the driver executes them top to
