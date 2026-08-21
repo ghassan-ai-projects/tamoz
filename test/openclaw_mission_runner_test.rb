@@ -59,6 +59,11 @@ class OpenclawMissionRunnerTest < Minitest::Test
       result = runner(directory, executor: lambda do |mission:, run_kind:, **|
         {
           'status' => 'ready',
+          'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
+          'metrics' => mission.fetch('metrics').to_h { |metric| [metric, 1] },
+          'hard_zero' => mission.fetch('hard_zero').to_h { |rule| [rule, 'passed'] },
+          'effect_outcomes' => [],
+          'surface_executions' => surface_executions(mission, run_kind:),
           'provenance' => {
             'run_kind' => run_kind, 'provider' => 'fixture-provider', 'model' => 'fixture-model',
             'provider_calls' => 0
@@ -112,15 +117,17 @@ class OpenclawMissionRunnerTest < Minitest::Test
   end
 
   def test_executor_failure_reason_does_not_expose_exception_text
-    result = runner(Dir.tmpdir, executor: lambda {
-      raise StandardError, 'OPENAI_API_KEY=sk-secret-value'
-    }).run
+    Dir.mktmpdir('openclaw-runner') do |directory|
+      result = runner(directory, executor: lambda {
+        raise StandardError, 'OPENAI_API_KEY=sk-secret-value'
+      }).run
 
-    mission = result.manifest.fetch('missions').first
+      mission = result.manifest.fetch('missions').first
 
-    assert_equal 'blocked', mission.fetch('status')
-    assert_match 'executor_error:', mission.fetch('reason')
-    refute_includes mission.fetch('reason'), 'sk-secret-value'
+      assert_equal 'blocked', mission.fetch('status')
+      assert_match 'executor_error:', mission.fetch('reason')
+      refute_includes mission.fetch('reason'), 'sk-secret-value'
+    end
   end
 
   def test_real_provider_accepts_only_a_digest_bound_model_receipt_set
@@ -138,6 +145,11 @@ class OpenclawMissionRunnerTest < Minitest::Test
         )
         {
           'status' => 'ready',
+          'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
+          'metrics' => mission.fetch('metrics').to_h { |metric| [metric, 1] },
+          'hard_zero' => mission.fetch('hard_zero').to_h { |rule| [rule, 'passed'] },
+          'effect_outcomes' => [],
+          'surface_executions' => surface_executions(mission, run_kind: 'real_provider'),
           'provenance' => {
             'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
             'provider_effect_receipts' => receipts,
@@ -156,6 +168,57 @@ class OpenclawMissionRunnerTest < Minitest::Test
     end
   end
 
+  def test_failed_and_unknown_outcomes_are_recorded_without_artifacts
+    result = runner(Dir.tmpdir, executor: lambda do |mission:, **|
+      if mission.fetch('id') == 'adaptive-read-only'
+        {
+          'status' => 'failed', 'reason' => 'mutation_rejected',
+          'effect_outcomes' => [{ 'effect_key' => 'effect-1', 'status' => 'failed' }]
+        }
+      else
+        { 'status' => 'unknown', 'reason' => 'receipt_lost' }
+      end
+    end).run
+
+    records = result.manifest.fetch('missions')
+
+    assert_equal(%w[failed unknown], records.map { |record| record.fetch('status') })
+    assert_equal 'failed', records.first.fetch('effect_outcomes').first.fetch('status')
+    assert_equal 'unknown', records.last.fetch('hard_zero').values.first
+
+    assert(records.all? { |record| record.fetch('artifact_path', nil).nil? })
+  end
+
+  def test_ready_result_with_incomplete_metrics_is_blocked
+    result = runner(Dir.tmpdir, executor: lambda do |**|
+      {
+        'status' => 'ready', 'metrics' => {},
+        'provenance' => { 'run_kind' => 'fixture', 'provider' => 'fixture-provider', 'model' => 'fixture-model' }
+      }
+    end).run
+
+    assert(result.manifest.fetch('missions').all? do |record|
+      record.fetch('status') == 'blocked' && record.fetch('reason').start_with?('executor_error:')
+    end)
+  end
+
+  def test_ready_result_with_unexecuted_surface_is_unavailable
+    result = runner(Dir.tmpdir, executor: lambda do |mission:, run_kind:, **|
+      {
+        'status' => 'ready',
+        'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
+        'metrics' => mission.fetch('metrics').to_h { |metric| [metric, 1] },
+        'hard_zero' => mission.fetch('hard_zero').to_h { |rule| [rule, 'passed'] },
+        'surface_executions' => surface_executions(mission, run_kind:).merge(
+          'telegram' => surface_executions(mission, run_kind:).fetch('telegram').merge('status' => 'unavailable')
+        ),
+        'provenance' => { 'run_kind' => run_kind, 'provider' => 'fixture-provider', 'model' => 'fixture-model' }
+      }
+    end).run
+
+    assert(result.manifest.fetch('missions').all? { |record| record.fetch('status') == 'unavailable' })
+  end
+
   def independent_trace(mission_id:)
     trace = {
       'trace_id' => 'trace-1', 'spans' => [{ 'name' => 'tamoz.model.call' }]
@@ -168,6 +231,19 @@ class OpenclawMissionRunnerTest < Minitest::Test
       'trace' => trace,
       'model_span_count' => 1
     }
+  end
+
+  def surface_executions(mission, run_kind:)
+    mission.fetch('surfaces').to_h do |surface|
+      [surface, {
+        'status' => 'executed',
+        'provenance' => {
+          'surface' => surface, 'run_kind' => run_kind,
+          'provider' => run_kind == 'fixture' ? 'fixture-provider' : 'provider-a',
+          'model' => run_kind == 'fixture' ? 'fixture-model' : 'model-a'
+        }
+      }]
+    end
   end
 
   def test_catalog_mission_id_cannot_escape_the_artifact_directory

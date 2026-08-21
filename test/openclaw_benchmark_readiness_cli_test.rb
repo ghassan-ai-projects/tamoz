@@ -15,6 +15,7 @@ class OpenclawBenchmarkReadinessCLITest < Minitest::Test
     path
   end
 
+  # rubocop:disable Metrics/AbcSize
   def manifest_path(directory, run_kind: 'fixture')
     protocol = { 'benchmark_protocol_version' => 'openclaw.v1' }
     path = directory.join('manifest.json')
@@ -23,7 +24,28 @@ class OpenclawBenchmarkReadinessCLITest < Minitest::Test
       'attempted' => true, 'effective' => true, 'completed' => true,
       'verified' => true
     }
+    mission_records = JSON.parse(File.read(MISSIONS)).fetch('missions').map do |mission|
+      surfaces = mission.fetch('surfaces').to_h do |surface|
+        [surface, {
+          'status' => 'executed',
+          'provenance' => {
+            'surface' => surface, 'run_kind' => run_kind,
+            'provider' => 'provider', 'model' => 'model'
+          }
+        }]
+      end
+      {
+        'id' => mission.fetch('id'), 'status' => 'ready',
+        'artifact_path' => "#{mission.fetch('id')}.json",
+        'artifact_digest' => "sha256:#{'b' * 64}",
+        'metrics_schema_version' => 'openclaw.metrics.v1',
+        'metrics' => mission.fetch('metrics').to_h { |metric| [metric, 1] },
+        'hard_zero' => mission.fetch('hard_zero').to_h { |rule| [rule, 'passed'] },
+        'effect_outcomes' => [], 'surface_executions' => surfaces
+      }
+    end
     manifest = {
+      'runner_schema_version' => 'openclaw.evidence.v1',
       'protocol_sha256' => Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol),
       'run_kind' => run_kind, 'provider' => 'provider', 'model' => 'model',
       'artifact_root' => run_kind == 'fixture' ? 'fixtures/test' : 'real-provider/test',
@@ -33,17 +55,15 @@ class OpenclawBenchmarkReadinessCLITest < Minitest::Test
       'surfaces' => %w[cli telegram],
       'command' => 'script/benchmark_openclaw_readiness',
       'controls_passed' => true, 'capabilities' => { 'read_only' => capabilities },
-      'missions' => JSON.parse(File.read(MISSIONS)).fetch('missions').map do |mission|
-        {
-          'id' => mission.fetch('id'), 'status' => 'ready',
-          'artifact_path' => "#{mission.fetch('id')}.json",
-          'artifact_digest' => "sha256:#{'b' * 64}"
-        }
-      end
+      'surface_executions' => mission_records.to_h do |mission|
+        [mission.fetch('id'), mission.fetch('surface_executions')]
+      end,
+      'missions' => mission_records
     }
     File.write(path, JSON.generate(manifest))
     path
   end
+  # rubocop:enable Metrics/AbcSize
 
   def test_publish_refuses_fixture_manifest
     Dir.mktmpdir('openclaw-readiness') do |directory|

@@ -66,6 +66,7 @@ module Tamoz
               'independent_trace' => independent_trace
             },
             'metrics' => metrics(evidence, receipts, independent_trace),
+            'surface_executions' => surface_executions(provider:, model:),
             'terminal' => terminal_projection(evidence.fetch('terminal')),
             'durable_mission' => durable_mission
           }
@@ -261,6 +262,25 @@ module Tamoz
           return {} unless terminal.is_a?(Hash)
 
           terminal.slice('reason', 'satisfied', 'status')
+        end
+
+        def surface_executions(provider:, model:)
+          {
+            'cli' => {
+              'status' => 'executed',
+              'provenance' => {
+                'surface' => 'cli', 'run_kind' => 'real_provider',
+                'provider' => provider, 'model' => model
+              }
+            },
+            'telegram' => {
+              'status' => 'unavailable',
+              'provenance' => {
+                'surface' => 'telegram', 'run_kind' => 'real_provider',
+                'provider' => provider, 'model' => model, 'reason' => 'adapter_not_configured'
+              }
+            }
+          }
         end
 
         def digest(value)

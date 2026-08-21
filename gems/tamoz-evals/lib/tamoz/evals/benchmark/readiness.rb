@@ -14,7 +14,7 @@ module Tamoz
       class Readiness
         DIGEST_PATTERN = /\Asha256:[0-9a-f]{64}\z/
         RUN_KINDS = %w[fixture real_provider].freeze
-        MISSION_STATUSES = %w[ready blocked unavailable].freeze
+        MISSION_STATUSES = %w[ready blocked failed unavailable unknown].freeze
         CAPABILITY_FIELDS = %w[exists reachable authorized attempted effective completed verified].freeze
         MISSION_CATALOG_FIELDS = %w[goal hard_zero id metrics required_capabilities surfaces].freeze
         MISSION_SURFACES = %w[cli telegram].freeze
@@ -23,11 +23,16 @@ module Tamoz
         PROVIDER_RECEIPT_STATUSES = %w[succeeded].freeze
         INDEPENDENT_TRACE_SOURCE = 'tamoz.observability.journal'
         EVIDENCE_SCHEMA_VERSION = 'openclaw.evidence.v1'
+        METRICS_SCHEMA_VERSION = 'openclaw.metrics.v1'
+        SURFACE_STATUSES = %w[executed blocked failed unavailable unknown].freeze
+        HARD_ZERO_STATUSES = %w[passed failed unknown].freeze
+        EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
+        SURFACE_FIELDS = %w[status provenance].freeze
         DURABLE_MISSION_FIELDS = %w[mission_id run_id thread_id status satisfied verified].freeze
         BOOLEAN_VALUES = [true, false].freeze
         REQUIRED_FIELDS = %w[
-          protocol_sha256 run_kind provider model artifact_root git_revision config_sha256
-          graph surfaces command capabilities missions controls_passed
+          runner_schema_version protocol_sha256 run_kind provider model artifact_root git_revision config_sha256
+          graph surfaces surface_executions command capabilities missions controls_passed
         ].freeze
 
         Result = Data.define(:status, :reasons, :manifest) do
@@ -100,17 +105,21 @@ module Tamoz
               control_reasons(manifest, artifact_root_base, mission_catalog)
           end
 
+          # rubocop:disable Metrics/AbcSize
           def structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog)
             reasons = []
             reasons << 'protocol_digest_mismatch' unless protocol_digest(protocol) == manifest.fetch('protocol_sha256')
             reasons.concat(capability_reasons(manifest.fetch('capabilities')))
             reasons.concat(mission_reasons(manifest.fetch('missions')))
             reasons.concat(required_capability_reasons(manifest, mission_catalog)) if mission_catalog
+            reasons.concat(metric_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(surface_reasons(manifest, mission_catalog)) if mission_catalog
+            reasons.concat(manifest_consistency_reasons(manifest))
             reasons.concat(missing_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons.concat(unexpected_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons
           end
+          # rubocop:enable Metrics/AbcSize
 
           def control_reasons(manifest, artifact_root_base, mission_catalog)
             reasons = []
@@ -129,6 +138,7 @@ module Tamoz
             validate_manifest_strings!(manifest)
             validate_binding_metadata!(manifest)
             validate_capabilities!(manifest.fetch('capabilities'))
+            validate_surface_executions!(manifest.fetch('surface_executions'))
             validate_missions!(manifest.fetch('missions'), run_kind: manifest.fetch('run_kind'))
           end
 
@@ -140,6 +150,9 @@ module Tamoz
           end
 
           def validate_protocol_and_run_kind!(manifest)
+            schema_error('benchmark runner schema version is invalid') unless
+              manifest.fetch('runner_schema_version') == EVIDENCE_SCHEMA_VERSION
+
             digest = manifest.fetch('protocol_sha256')
             raise Tamoz::Evals::DigestError, 'benchmark protocol digest is invalid' unless DIGEST_PATTERN.match?(digest)
 
@@ -216,6 +229,34 @@ module Tamoz
             missions.each { |mission| validate_mission!(mission, run_kind:) }
           end
 
+          def validate_surface_executions!(executions)
+            unless executions.is_a?(Hash) && executions.keys.all?(String)
+              schema_error('benchmark surface executions must be an object')
+            end
+
+            executions.each do |mission_id, surfaces|
+              unless surfaces.is_a?(Hash) && !surfaces.empty?
+                schema_error("benchmark surface executions are invalid:#{mission_id}")
+              end
+              surfaces.each { |surface, record| validate_surface_execution!(mission_id, surface, record) }
+            end
+          end
+
+          # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+          def validate_surface_execution!(mission_id, surface, record)
+            unless MISSION_SURFACES.include?(surface) && record.is_a?(Hash) &&
+                   record.keys.sort == SURFACE_FIELDS.sort && SURFACE_STATUSES.include?(record['status']) &&
+                   record['provenance'].is_a?(Hash)
+              schema_error("benchmark surface execution is invalid:#{mission_id}:#{surface}")
+            end
+            provenance = record.fetch('provenance')
+            return if provenance['surface'] == surface && provenance['run_kind'].is_a?(String) &&
+                      provenance['provider'].is_a?(String) && provenance['model'].is_a?(String)
+
+            schema_error("benchmark surface provenance is invalid:#{mission_id}:#{surface}")
+          end
+          # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
           def validate_mission_catalog!(catalog)
             schema_error('benchmark mission catalog must contain missions') unless valid_catalog_shape?(catalog)
 
@@ -277,8 +318,33 @@ module Tamoz
             raise Tamoz::Evals::DigestError, 'ready mission artifact or durable evidence binding is invalid'
           end
 
+          # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
           def valid_mission_shape?(mission)
-            mission.is_a?(Hash) && mission['id'].is_a?(String) && MISSION_STATUSES.include?(mission['status'])
+            mission.is_a?(Hash) && mission['id'].is_a?(String) && MISSION_STATUSES.include?(mission['status']) &&
+              mission['metrics_schema_version'] == METRICS_SCHEMA_VERSION && mission['metrics'].is_a?(Hash) &&
+              mission['metrics'].values.none?(&:nil?) && valid_hard_zero_map?(mission['hard_zero']) &&
+              valid_effect_outcomes?(mission['effect_outcomes']) && valid_surface_map?(mission['surface_executions'])
+          end
+          # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+          def valid_hard_zero_map?(hard_zero)
+            hard_zero.is_a?(Hash) && !hard_zero.empty? &&
+              hard_zero.values.all? { |status| HARD_ZERO_STATUSES.include?(status) }
+          end
+
+          def valid_effect_outcomes?(outcomes)
+            outcomes.is_a?(Array) && outcomes.all? do |outcome|
+              outcome.is_a?(Hash) && outcome['effect_key'].is_a?(String) &&
+                EFFECT_OUTCOME_STATUSES.include?(outcome['status'])
+            end
+          end
+
+          def valid_surface_map?(surfaces)
+            surfaces.is_a?(Hash) && !surfaces.empty? && surfaces.all? do |surface, record|
+              MISSION_SURFACES.include?(surface) && record.is_a?(Hash) &&
+                record.keys.sort == SURFACE_FIELDS.sort && SURFACE_STATUSES.include?(record['status']) &&
+                record['provenance'].is_a?(Hash)
+            end
           end
 
           def valid_real_provider_mission?(mission)
@@ -306,6 +372,19 @@ module Tamoz
               next if missing.empty?
 
               "mission_capability_unavailable:#{mission.fetch('id')}:#{missing.join('/')}"
+            end
+          end
+
+          def metric_reasons(manifest, catalog)
+            manifest_missions = manifest.fetch('missions').to_h { |mission| [mission.fetch('id'), mission] }
+            catalog.fetch('missions').filter_map do |catalog_mission|
+              actual = manifest_missions[catalog_mission.fetch('id')]
+              next unless actual
+
+              missing = catalog_mission.fetch('metrics') - actual.fetch('metrics').keys
+              missing.filter_map do |metric|
+                "mission_metric_missing:#{catalog_mission.fetch('id')}:#{metric}"
+              end.first
             end
           end
 
@@ -393,6 +472,9 @@ module Tamoz
             reason = artifact_mission_reason(document, mission, mission_catalog)
             return [reason] if reason
 
+            reason = artifact_result_reason(document, mission)
+            return [reason] if reason
+
             reason = artifact_provenance_reason(document, mission, manifest)
             reason ? [reason] : []
           rescue JSON::ParserError, TypeError
@@ -435,11 +517,22 @@ module Tamoz
             "artifact_mission_mismatch:#{mission.fetch('id')}"
           end
 
+          def artifact_result_reason(document, mission)
+            result = document['result']
+            fields = %w[status metrics metrics_schema_version hard_zero effect_outcomes surface_executions]
+            return if fields.all? { |field| result[field] == mission[field] }
+
+            "artifact_result_mismatch:#{mission.fetch('id')}"
+          end
+
+          # rubocop:disable Metrics/AbcSize
           def artifact_provenance_reason(document, mission, manifest)
             provenance = document['provenance']
             unless provenance_binding_valid?(provenance, manifest)
               return "artifact_provenance_mismatch:#{mission.fetch('id')}"
             end
+            return "artifact_surface_provenance_mismatch:#{mission.fetch('id')}" unless
+              provenance['surface_executions'] == mission['surface_executions']
             return unless manifest.fetch('run_kind') == 'real_provider'
 
             receipts = provenance['provider_effect_receipts']
@@ -456,6 +549,7 @@ module Tamoz
 
             "artifact_independent_trace_unavailable:#{mission.fetch('id')}"
           end
+          # rubocop:enable Metrics/AbcSize
 
           def provenance_binding_valid?(provenance, manifest)
             %w[run_kind provider model].all? do |field|
@@ -534,10 +628,24 @@ module Tamoz
           end
 
           def surface_reasons(manifest, catalog)
-            required = catalog.fetch('missions').flat_map { |mission| mission.fetch('surfaces') }.uniq
-            required.filter_map do |surface|
-              "surface_unexecuted:#{surface}" unless manifest.fetch('surfaces').include?(surface)
+            executions = manifest.fetch('surface_executions')
+            catalog.fetch('missions').flat_map do |mission|
+              mission.fetch('surfaces').filter_map do |surface|
+                record = executions.dig(mission.fetch('id'), surface)
+                "surface_unexecuted:#{mission.fetch('id')}:#{surface}" unless record&.fetch('status') == 'executed'
+              end
             end
+          end
+
+          def manifest_consistency_reasons(manifest)
+            missions = manifest.fetch('missions')
+            executions = manifest.fetch('surface_executions')
+            return [] if missions.map { |mission| mission.fetch('id') }.sort == executions.keys.sort &&
+                         missions.all? do |mission|
+                           executions.fetch(mission.fetch('id')) == mission.fetch('surface_executions')
+                         end
+
+            ['manifest_surface_execution_mismatch']
           end
 
           def reject_sensitive!(value)

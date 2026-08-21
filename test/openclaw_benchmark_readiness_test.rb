@@ -12,6 +12,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
 
   def manifest(run_kind: 'real_provider', capability: nil, mission_status: 'ready', controls_passed: true)
     {
+      'runner_schema_version' => 'openclaw.evidence.v1',
       'protocol_sha256' => Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol),
       'run_kind' => run_kind,
       'provider' => 'provider-a',
@@ -30,17 +31,36 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
           'verified' => true
         }
       },
+      'surface_executions' => {
+        'adaptive-read-only' => surface_executions(run_kind:)
+      },
       'missions' => [{
         'id' => 'adaptive-read-only',
         'status' => mission_status,
         'artifact_path' => 'adaptive-read-only.json',
         'artifact_digest' => "sha256:#{'a' * 64}",
+        'metrics_schema_version' => 'openclaw.metrics.v1',
+        'metrics' => { 'completion' => 1 },
+        'hard_zero' => { 'fabricated_evidence' => 'passed' },
+        'effect_outcomes' => [],
+        'surface_executions' => surface_executions(run_kind:),
         'durable_mission' => {
           'mission_id' => 'adaptive-read-only', 'run_id' => 'run-1', 'thread_id' => 'thread-1',
           'status' => 'completed', 'satisfied' => true, 'verified' => true
         }
       }]
     }
+  end
+
+  def surface_executions(run_kind: 'real_provider')
+    %w[cli telegram].to_h do |surface|
+      [surface, {
+        'status' => 'executed',
+        'provenance' => {
+          'surface' => surface, 'run_kind' => run_kind, 'provider' => 'provider-a', 'model' => 'model-a'
+        }
+      }]
+    end
   end
 
   def test_ready_real_provider_manifest_is_publishable
@@ -58,7 +78,12 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
         'mission' => mission,
         'provenance' => provider_provenance(mission_digest:),
-        'result' => { 'status' => 'ready' }
+        'result' => {
+          'status' => 'ready', 'metrics_schema_version' => 'openclaw.metrics.v1',
+          'metrics' => { 'completion' => 1 },
+          'hard_zero' => { 'fabricated_evidence' => 'passed' }, 'effect_outcomes' => [],
+          'surface_executions' => surface_executions
+        }
       }
       File.write(artifact, JSON.generate(document))
       digest = "sha256:#{Digest::SHA256.file(artifact).hexdigest}"
@@ -91,6 +116,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     }
     {
       'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
+      'surface_executions' => surface_executions,
       'provider_effect_receipts' => receipts,
       'provider_trace_digest' => Tamoz::Evals::Benchmark::Readiness.provider_trace_digest(
         mission_digest:, receipts:, independent_trace:
@@ -140,7 +166,12 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
         'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
         'mission' => mission, 'provenance' => provider_provenance(mission_digest:).except('independent_trace'),
-        'result' => { 'status' => 'ready' }
+        'result' => {
+          'status' => 'ready', 'metrics_schema_version' => 'openclaw.metrics.v1',
+          'metrics' => { 'completion' => 1 },
+          'hard_zero' => { 'fabricated_evidence' => 'passed' }, 'effect_outcomes' => [],
+          'surface_executions' => surface_executions
+        }
       }
       File.write(artifact, JSON.generate(document))
       ready_manifest = manifest.merge(
@@ -173,7 +204,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
   def test_publishable_assertion_refuses_missing_mission_artifact
     bad = manifest.merge('missions' => [{ 'id' => 'adaptive-read-only', 'status' => 'ready' }])
 
-    assert_raises(Tamoz::Evals::DigestError) do
+    assert_raises(Tamoz::Evals::SchemaError) do
       Tamoz::Evals::Benchmark::Readiness.assert_publishable!(protocol:, manifest: bad)
     end
   end
