@@ -4,6 +4,67 @@ require_relative '../../../test/test_helper'
 
 # Exercises the controller-owned T3 M1-to-M2 journal oracle.
 class ScenarioDriverTest < Minitest::Test
+  # Records the durable seams needed to exercise restart setup without a provider.
+  class RestartAdapter
+    attr_reader :worker_until_effect_calls, :worker_subprocess_calls, :workspace
+
+    def initialize(workspace)
+      @workspace = workspace
+      @worker_until_effect_calls = 0
+      @worker_subprocess_calls = 0
+    end
+
+    def prepare!(**); end
+
+    def prepare_changes!; end
+
+    def result_for(**)
+      { 'status' => 'ready' }
+    end
+
+    def evidence_for(**)
+      receipts = [
+        {
+          'effect_key' => 'logical:create-file',
+          'logical_key' => 'logical:create-file',
+          'operation' => 'tool.create_file',
+          'status' => 'succeeded'
+        }
+      ]
+      {
+        'status' => 'completed',
+        'terminal' => { 'satisfied' => true },
+        'verification' => {
+          'terminal_reason' => 'adaptive_final',
+          'satisfied' => true,
+          'evidence' => ['observation:restart']
+        },
+        'effect_receipts_complete' => true,
+        'effect_receipts' => receipts,
+        'effect_receipt_history' => receipts
+      }
+    end
+
+    def thread_id_for(mission_id)
+      "thread:#{mission_id}"
+    end
+
+    def enqueue!(*); end
+
+    def worker!; end
+
+    def worker_until_effect!(**)
+      @worker_until_effect_calls += 1
+      path = File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
+      File.binwrite(path, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT)
+      'logical:create-file'
+    end
+
+    def worker_subprocess!(**)
+      @worker_subprocess_calls += 1
+    end
+  end
+
   def test_recovery_scores_when_the_journal_contains_the_corrected_reread_and_terminal_cites_it
     Dir.mktmpdir('scenario-driver') do |directory|
       digest = write_fixture(directory, 'inactive')
@@ -79,6 +140,54 @@ class ScenarioDriverTest < Minitest::Test
     end
   end
 
+  def test_compaction_restart_reuses_its_fixture_and_reaches_the_kill_seam_twice
+    Dir.mktmpdir('scenario-restart-driver') do |workspace|
+      adapter = RestartAdapter.new(workspace)
+      driver = restart_driver(adapter)
+
+      results = Array.new(2) { driver.call(**restart_call_arguments) }
+      statuses = results.map { |result| result.fetch('status') }
+
+      assert_equal(
+        [%w[ready ready], 2, 2,
+         Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT],
+        [statuses, adapter.worker_until_effect_calls,
+         adapter.worker_subprocess_calls, File.binread(restart_fixture_path(workspace))]
+      )
+    end
+  end
+
+  def test_compaction_restart_keeps_an_unknown_fixture_and_blocks
+    Dir.mktmpdir('scenario-restart-driver') do |workspace|
+      original = "user-owned content\n"
+      path = write_restart_fixture(workspace, original)
+      adapter = RestartAdapter.new(workspace)
+
+      result = restart_driver(adapter).call(**restart_call_arguments)
+
+      assert_equal(
+        %w[blocked restart_fixture_already_exists] + [original, 0],
+        [result.fetch('status'), result.fetch('reason'), File.binread(path),
+         adapter.worker_until_effect_calls]
+      )
+    end
+  end
+
+  def test_compaction_restart_keeps_a_symlink_at_the_fixture_path_and_blocks
+    Dir.mktmpdir('scenario-restart-driver') do |workspace|
+      path, target = symlink_restart_fixture(workspace)
+      adapter = RestartAdapter.new(workspace)
+
+      result = restart_driver(adapter).call(**restart_call_arguments)
+
+      assert_equal(
+        %w[blocked restart_fixture_already_exists true true 0],
+        [result.fetch('status'), result.fetch('reason'), File.symlink?(path).to_s,
+         File.exist?(target).to_s, adapter.worker_until_effect_calls.to_s]
+      )
+    end
+  end
+
   private
 
   def write_fixture(directory, status)
@@ -147,5 +256,41 @@ class ScenarioDriverTest < Minitest::Test
       'effect_receipts' => receipts,
       'effect_receipt_history' => receipts
     }
+  end
+
+  def restart_driver(adapter)
+    Tamoz::Evals::Benchmark::ScenarioDriver.new(adapter:, scenario: 'T3-m3m4')
+  end
+
+  def restart_call_arguments
+    {
+      mission: {
+        'id' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_MISSION_ID,
+        'goal' => 'Complete the restart scenario.'
+      },
+      run_kind: 'real_provider',
+      provider: 'openrouter',
+      model: 'deepseek/deepseek-chat'
+    }
+  end
+
+  def restart_fixture_path(workspace)
+    File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
+  end
+
+  def write_restart_fixture(workspace, content)
+    path = restart_fixture_path(workspace)
+    FileUtils.mkdir_p(File.dirname(path))
+    File.binwrite(path, content)
+    path
+  end
+
+  def symlink_restart_fixture(workspace)
+    path = restart_fixture_path(workspace)
+    target = File.join(workspace, 'user-owned-restart-marker.json')
+    File.binwrite(target, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT)
+    FileUtils.mkdir_p(File.dirname(path))
+    File.symlink(target, path)
+    [path, target]
   end
 end

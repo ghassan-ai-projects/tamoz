@@ -345,8 +345,27 @@ module Tamoz
           return write_fixture(definition.fetch('setup').fetch('fixture').fetch('status')) unless
             restart_scenario?
 
+          remove_owned_restart_fixture
           raise Tamoz::Evals::ExecutionError, 'restart_fixture_already_exists' if
             File.exist?(fixture_path) || File.symlink?(fixture_path)
+        end
+
+        # The fixed restart path is part of the scenario contract. Exact known
+        # bytes and digest are the ownership marker; mismatches and symlinks stay protected.
+        def remove_owned_restart_fixture
+          return if File.symlink?(fixture_path)
+          return unless File.file?(fixture_path)
+          return unless restart_fixture_owned?
+
+          File.delete(fixture_path)
+        end
+
+        def restart_fixture_owned?
+          content = File.binread(fixture_path)
+          content == RESTART_FIXTURE_CONTENT &&
+            Digest::SHA256.hexdigest(content) == RESTART_FIXTURE_DIGEST
+        rescue SystemCallError
+          false
         end
 
         def write_fixture(status)
