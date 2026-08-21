@@ -45,6 +45,7 @@ module Tamoz
         :memory_owner,
         :artifact_store,
         :artifact_tenant,
+        :child_task_runtime,
         :capabilities,
         :graph_version
       )
@@ -79,6 +80,7 @@ module Tamoz
         memory_owner: nil,
         artifact_store: nil,
         artifact_tenant: nil,
+        child_task_runtime: nil,
         transcript_reader: nil,
         graph_version: GRAPH_VERSION
       )
@@ -96,7 +98,7 @@ module Tamoz
         @profile_budgets = profile_budgets
         @profile_narrowed = profile_narrowed
         verify_profile_roles!(profile_roles)
-        @capabilities = CapabilityBinding.build(toolbox:, mcp:)
+        @capabilities = CapabilityBinding.build(toolbox:, mcp:, child_task_runtime:, profile:)
 
         configuration = NodeConfiguration.new(
           model:,
@@ -113,6 +115,7 @@ module Tamoz
           memory_owner:,
           artifact_store:,
           artifact_tenant:,
+          child_task_runtime:,
           capabilities: @capabilities,
           graph_version: @graph_version
         )

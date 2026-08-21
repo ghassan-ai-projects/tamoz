@@ -22,7 +22,8 @@ module Tamoz
           prompt: Deliberation.routing_prompt(
             state.fetch(:task),
             toolbox: @services.configuration.toolbox,
-            planning_context:
+            planning_context:,
+            capability_descriptions: @services.configuration.capabilities.descriptions
           ),
           call_index: 0
         )
@@ -140,9 +141,9 @@ module Tamoz
             phase: :discovery,
             evidence: [],
             planning_context: bounded_planning_context(state, context),
-            tool_descriptions: @services.configuration.toolbox.descriptions.slice(
-              *@services.configuration.toolbox.read_only_names
-            )
+            tool_descriptions: @services.configuration.toolbox.descriptions.merge(
+              @services.configuration.capabilities.descriptions
+            ).slice(*@services.configuration.toolbox.read_only_names)
           ),
           call_index: 1
         )

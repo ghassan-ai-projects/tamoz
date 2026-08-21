@@ -83,6 +83,7 @@ module Tamoz
         memory_owner: nil,
         artifact_store: nil,
         artifact_tenant: nil,
+        child_task_runtime: nil,
         routing: :legacy
       )
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
@@ -132,6 +133,7 @@ module Tamoz
           memory_owner:,
           artifact_store:,
           artifact_tenant:,
+          child_task_runtime:,
           transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
         }
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)

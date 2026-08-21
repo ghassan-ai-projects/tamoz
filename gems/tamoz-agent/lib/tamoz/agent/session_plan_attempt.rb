@@ -60,7 +60,8 @@ module Tamoz
             details.feedback,
             details.planning_context,
             toolbox: configuration.toolbox,
-            mcp_tools: details.mcp_tools
+            mcp_tools: details.mcp_tools,
+            capability_descriptions: configuration.capabilities.descriptions
           ),
           call_index: details.attempt * 2
         )
@@ -153,6 +154,7 @@ module Tamoz
         result(details, feedback: review.fetch('issues'), update:)
       end
 
+      # rubocop:disable Metrics/AbcSize -- the review prompt intentionally binds every visible capability surface.
       def semantic_call(context, details, plan_data)
         @services.effects.model_call(
           context,
@@ -165,7 +167,9 @@ module Tamoz
             evidence: details.evidence,
             planning_context: details.planning_context,
             tool_descriptions: Tamoz::Agent::Deliberation.merge_tool_surfaces(
-              @services.configuration.toolbox.descriptions,
+              @services.configuration.toolbox.descriptions.merge(
+                @services.configuration.capabilities.descriptions
+              ),
               details.allowed_tools,
               details.mcp_tools
             )
@@ -173,6 +177,7 @@ module Tamoz
           call_index: (details.attempt * 2) + 1
         )
       end
+      # rubocop:enable Metrics/AbcSize
 
       def semantic_record(plan_data, review)
         SessionRecords.build(

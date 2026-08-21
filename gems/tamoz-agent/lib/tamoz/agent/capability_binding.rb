@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "child_task_dispatcher"
+
 module Tamoz
   module Agent
     # P15-W (docs/P18_CAPABILITY_HOST_PLAN.md §9) — the production binding of
@@ -42,20 +44,23 @@ module Tamoz
       MCP_EFFECT_CLASSES = %i[read_only bounded reconcilable].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
 
-      def self.build(toolbox:, mcp: nil)
-        new(toolbox:, mcp:)
+      def self.build(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
+        new(toolbox:, mcp:, child_task_runtime:, profile:)
       end
 
-      def initialize(toolbox:, mcp: nil)
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- construction binds the sealed local, skill, remote, and optional child sources in one order-preserving protocol.
+      def initialize(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
         @toolbox = toolbox
         @mcp = mcp
-        local = Tamoz::Tools::LocalDispatcher.new(toolbox)
+        child = child_dispatcher(child_task_runtime, profile)
+        local = BoundLocalDispatcher.new(toolbox, child:)
         sources = []
         dispatchers = {}
 
         local_names, skill_names = toolbox.names.partition do |name|
           !SKILL_TOOLS.include?(name)
         end
+        local_names << ChildTaskDispatcher::TOOL_NAME if child
         sources << build_toolbox_source("local", local_names, toolbox)
         dispatchers["local"] = local
         unless skill_names.empty?
@@ -70,15 +75,22 @@ module Tamoz
           dispatchers[source_id] = mcp_dispatcher
         end
 
+        @child_enabled = !child.nil?
+        @descriptions = toolbox.descriptions.dup
+        @descriptions[ChildTaskDispatcher::TOOL_NAME] = ChildTaskDispatcher::DESCRIPTION if child
+        @descriptions.freeze
+
         @host = Tamoz::Tools::CapabilityHost.new(
           sources:, admission_set: admission_set
         )
         dispatchers.each { |source_id, dispatcher| @host.bind_dispatcher(source_id, dispatcher) }
-        @ordered_names = (toolbox.names + (mcp ? mcp.names : [])).uniq.freeze
+        @ordered_names = (toolbox.names + (child ? [ChildTaskDispatcher::TOOL_NAME] : []) +
+                          (mcp ? mcp.names : [])).uniq.freeze
         freeze
       end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
-      attr_reader :host, :toolbox, :mcp
+      attr_reader :host, :toolbox, :mcp, :descriptions
 
       def registry = host.registry
 
@@ -155,14 +167,26 @@ module Tamoz
         %i[mcp_tool websearch].include?(descriptor.kind)
       end
 
+      def remote_planning_surface(allowed)
+        allowed.filter_map { |name| mcp_entry(@mcp, name) if @mcp }.to_h.freeze
+      end
+
       private
+
+      def child_dispatcher(runtime, profile)
+        return unless runtime && profile
+
+        ChildTaskDispatcher.new(runtime:, profile:)
+      end
 
       # Invariant 35: the admission set is policy-derived, computed BEFORE the
       # host exists. `Toolbox#allowed_tools` is the already-intersected profile
       # surface; the MCP ids are the caller's pinned catalog descriptors, which
       # `Session#verify_mcp_binding!` pins across resume.
       def admission_set
-        @toolbox.allowed_tools + (@mcp ? @mcp.names : [])
+        @toolbox.allowed_tools +
+          (@child_enabled ? [ChildTaskDispatcher::TOOL_NAME] : []) +
+          (@mcp ? @mcp.names : [])
       end
 
       def build_toolbox_source(source_id, names, toolbox)
@@ -192,6 +216,19 @@ module Tamoz
           )
         end
         Capability::Source.new(source_id:, descriptors:)
+      end
+
+      def mcp_entry(source, name)
+        return unless source.name?(name)
+
+        descriptor = source.descriptor_for(name)
+        snapshot = source.catalogs[descriptor.source_id]
+        entry = snapshot&.entries&.find { |candidate| candidate.name == descriptor.name }
+        description = entry&.description
+        return if description.nil? || description.empty?
+
+        [name, String(description).encode("UTF-8", invalid: :replace, undef: :replace)
+                              .gsub(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/, '')]
       end
 
       # One built-in source per MCP server, so a two-server session composes
@@ -272,6 +309,54 @@ module Tamoz
       # allowed to validate against it (P10 §4).
       def schema_shape(schema)
         schema.nil? ? nil : Tamoz::Core.deep_freeze(Tamoz::Core.canonical(schema))
+      end
+    end
+
+    # Keeps the existing Toolbox dispatcher as the local implementation while
+    # adding the one durable child capability to the same sealed source.
+    class BoundLocalDispatcher
+      def initialize(toolbox, child: nil)
+        @local = Tamoz::Tools::LocalDispatcher.new(toolbox)
+        @child = child
+        freeze
+      end
+
+      def validate(descriptor, arguments)
+        child?(descriptor) ? @child.validate(descriptor, arguments) : @local.validate(descriptor, arguments)
+      end
+
+      def execute(descriptor, arguments, context: nil)
+        return @child.execute(descriptor, arguments, context:) if child?(descriptor)
+
+        @local.execute(descriptor, arguments, context:)
+      end
+
+      def preview(descriptor, arguments)
+        child?(descriptor) ? @child.preview(descriptor, arguments) : @local.preview(descriptor, arguments)
+      end
+
+      def effect_intent(descriptor, arguments)
+        child?(descriptor) ? @child.effect_intent(descriptor, arguments) : @local.effect_intent(descriptor, arguments)
+      end
+
+      def approval_required?(descriptor)
+        child?(descriptor) ? @child.approval_required?(descriptor) : @local.approval_required?(descriptor)
+      end
+
+      def maximum_effect_output_bytes(descriptor)
+        return @child.maximum_effect_output_bytes(descriptor) if child?(descriptor)
+
+        @local.maximum_effect_output_bytes(descriptor)
+      end
+
+      def safety(descriptor, arguments)
+        child?(descriptor) ? @child.safety(descriptor, arguments) : @local.safety(descriptor, arguments)
+      end
+
+      private
+
+      def child?(descriptor)
+        descriptor.id == ChildTaskDispatcher::TOOL_NAME
       end
     end
 

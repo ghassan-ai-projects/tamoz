@@ -950,6 +950,7 @@ module Tamoz
             tenant: "profile:#{profile_id || 'default'}"
           ),
           artifact_tenant: "profile:#{profile_id || 'default'}",
+          child_task_runtime: self,
           mcp:,
           routing: @routing
         )
