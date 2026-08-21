@@ -33,6 +33,13 @@ module Tamoz
           new(**values).freeze
         end
 
+        def digest
+          Tamoz::Core.digest(
+            "tamoz.agent.improvement.candidate_proposal.v1\n",
+            to_h
+          )
+        end
+
         def promote!(registry:, candidate_resolver:, actor:, human_gate_evidence:)
           actor = String(actor)
           unless human_gate_evidence.to_s.start_with?(EvaluationReport::HUMAN_GATE_PREFIX) &&

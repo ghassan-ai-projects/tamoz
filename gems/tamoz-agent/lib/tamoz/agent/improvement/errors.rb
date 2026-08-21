@@ -47,6 +47,14 @@ module Tamoz
       # Terminal (plan §7 P12-I3, invariant 28): rollback could not be proven to
       # restore the previous epoch byte-identically.
       class RollbackIntegrityError < ImprovementError; end
+
+      # Terminal lifecycle refusal: a candidate effect has an unknown outcome
+      # and no later phase may treat it as applied or safe to activate.
+      class CandidateUnknownError < ImprovementError; end
+
+      # Terminal lifecycle refusal: an approval does not bind the exact
+      # candidate, authority, actor, and lifecycle operation being requested.
+      class ApprovalDigestError < ImprovementError; end
     end
   end
 end
