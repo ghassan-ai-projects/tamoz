@@ -60,7 +60,7 @@ module Tamoz
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
 
-      attr_reader :app, :definition, :toolbox
+      attr_reader :app, :definition, :toolbox, :model
 
       # P15-W: the sealed P18 capability host this session was constructed
       # with. Exposed read-only so an operator (and the audit) can inspect the
@@ -106,6 +106,7 @@ module Tamoz
 
         verify_mcp_source!(mcp)
         @toolbox = toolbox
+        @model = model
         @mcp = mcp
         # P11: the optional memory surface and its per-session owner. Nil keeps
         # every memory branch inert (pre-P11 sessions resume byte-identically).

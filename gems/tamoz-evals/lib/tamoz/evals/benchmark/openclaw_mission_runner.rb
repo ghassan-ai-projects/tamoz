@@ -341,6 +341,8 @@ module Tamoz
 
         # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def outcome_status(status, hard_zero, effect_outcomes, surface_executions)
+          return 'blocked' if status == 'blocked'
+
           failed = hard_zero.value?('failed') || effect_outcomes.any? { |outcome| outcome['status'] == 'failed' }
           return 'failed' if failed
 

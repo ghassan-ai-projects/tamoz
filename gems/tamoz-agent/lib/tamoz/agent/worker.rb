@@ -67,6 +67,8 @@ module Tamoz
         @batch = Integer(batch)
         @cancellation = cancellation || Tamoz::CancellationToken.new
         @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
+        @model_effect_keys = Set.new
+        @model_effect_monitor = Mutex.new
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -541,6 +543,7 @@ module Tamoz
         end
 
         view = view_of(session, thread_id)
+        emit_durable_model_calls(session, thread_id:, request_id: request&.request_id || occurrence_id)
         return IDLE unless view
 
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
@@ -910,6 +913,108 @@ module Tamoz
         @observability.emit(name, correlation:, attributes:)
       rescue StandardError
         :dropped
+      end
+
+      def emit_durable_model_calls(session, thread_id:, request_id:)
+        return unless @runtime.respond_to?(:checkpoints) && session.respond_to?(:effect)
+
+        seed_model_effect_keys(thread_id)
+        rows = @runtime.checkpoints.effect_census(limit: 10_000).select do |row|
+          row.fetch(:thread_id) == thread_id &&
+            row.fetch(:status) == :succeeded &&
+            row.fetch(:operation).to_s.start_with?("model.generate.")
+        end
+        rows.each do |row|
+          effect_key = row.fetch(:effect_key)
+          next unless claim_model_effect(effect_key)
+
+          result = emit_durable_model_call(
+            session, thread_id:, request_id:, effect_key:
+          )
+          release_model_effect(effect_key) if result == :dropped
+        end
+      rescue StandardError
+        :dropped
+      end
+
+      def emit_durable_model_call(session, thread_id:, request_id:, effect_key:)
+        record = session.effect(thread: thread_id, effect_key:)
+        return :dropped unless record && record.status == :succeeded
+
+        attempt = record.attempts.reverse.find { |entry| entry.status == :succeeded }
+        return :dropped unless attempt
+
+        model = session.model if session.respond_to?(:model)
+        provider = model_identity(model, :provider)
+        model_name = model_identity(model, :model_identifier)
+        model_call = Tamoz::Observability::ModelCall.new(
+          producer: @observability, provider:, model: model_name
+        )
+        model_call.emit(
+          correlation: {
+            thread_id:, execution_id: record.execution_id, request_id:,
+            task_id: record.task_id, effect_key:
+          },
+          started_at_ms: attempt.started_at_ms,
+          ended_at_ms: attempt.completed_at_ms,
+          usage: model_usage(attempt.result),
+          request_digest: record.request_digest
+        )
+      rescue StandardError
+        :dropped
+      end
+
+      def claim_model_effect(effect_key)
+        @model_effect_monitor.synchronize do
+          next false if @model_effect_keys.include?(effect_key)
+
+          @model_effect_keys.add(effect_key)
+          true
+        end
+      end
+
+      def seed_model_effect_keys(thread_id)
+        return unless @runtime.respond_to?(:path)
+
+        keys = Tamoz::Observability::Recorder::Journal.read(
+          @runtime.path, role: "worker", thread_id:, kind: "event"
+        ).filter_map do |document|
+          document.dig("correlation", "effect_key") if document["name"] == "tamoz.model.call"
+        end
+        @model_effect_monitor.synchronize { @model_effect_keys.merge(keys) }
+      rescue StandardError
+        :dropped
+      end
+
+      def release_model_effect(effect_key)
+        @model_effect_monitor.synchronize { @model_effect_keys.delete(effect_key) }
+      end
+
+      def model_identity(model, method)
+        return "unknown" unless model
+
+        value = model.respond_to?(method) ? model.public_send(method) : model.class.name
+        sanitized = value.to_s.gsub(/[^a-zA-Z0-9_.:-]/, "_")[0, 128]
+        sanitized.empty? ? "unknown" : sanitized
+      end
+
+      def model_usage(result)
+        raw = result.is_a?(Hash) && (result["usage"] || result[:usage])
+        return unless raw.is_a?(Hash)
+
+        Tamoz::Observability::Usage.new(
+          input_tokens: usage_value(raw, "input_tokens"),
+          output_tokens: usage_value(raw, "output_tokens"),
+          cache_read_tokens: usage_value(raw, "cache_read_tokens"),
+          cache_write_tokens: usage_value(raw, "cache_write_tokens")
+        )
+      rescue Tamoz::Observability::ValidationError
+        nil
+      end
+
+      def usage_value(usage, key)
+        value = usage[key] || usage[key.to_sym]
+        value.is_a?(Numeric) ? value.to_i : nil
       end
     end
   end
