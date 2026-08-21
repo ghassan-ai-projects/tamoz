@@ -19,6 +19,14 @@ Read the final study in this order:
 8. [07-evidence-index.md](07-evidence-index.md) — source, test, runtime, and confidence index.
 9. [08-review-log.md](08-review-log.md) — review passes, disagreements, corrections, and final audit.
 
+Implementation planning lives in [implementation-plan/](implementation-plan/README.md):
+the acceptance bar and the phased slices derived from 04/05/06.
+
+The intelligence benchmark — the measurement that turns perception into a
+verifiable, longitudinal claim — is designed in
+[benchmark-protocol/](benchmark-protocol/README.md): protocol, mission catalog,
+scoring, and a phased plan built on the existing `tamoz-evals` gem.
+
 ## Working hypothesis
 
 OpenClaw appears more intelligent because it combines a broad reachable
