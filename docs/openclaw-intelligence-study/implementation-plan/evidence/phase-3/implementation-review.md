@@ -73,7 +73,7 @@ offenses in older large fixtures.
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:a57332367ea9801dd53fcda2c7d054f649170d3a2000957f3b8d7a8b603d89c1
+snapshot_id: sha256:940e472a9e12ed3d0e8ba005d5db22a5f76ff03dfd11f9a59b22a13e34a652cd
 enola: 0.2.7-51-g72cd079
 facts: 10057; insights: 52; files parsed: 502/544; parse errors: 0
 receipt comparison: equivalent inputs; 0 extraction-quality regressions

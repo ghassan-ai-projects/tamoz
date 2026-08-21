@@ -15,7 +15,7 @@ implementation bar are not met.
 - Added a provider-agnostic canonical mission runner that executes every catalog
   mission through an injected executor, writes size-bounded atomic artifacts,
   and blocks real-provider readiness without a canonicalized model-effect
-  receipt set and matching trace digest.
+  receipt set and a trace digest bound to that mission's canonical digest.
 - Mission catalog schema/version, per-mission CLI/Telegram coverage, mission-ID
   allowlisting, artifact size limits, atomic replacement, and artifact-I/O
   failure classification are fail-closed.
@@ -31,6 +31,9 @@ implementation bar are not met.
 - The runner owns mission execution and artifact publication, but the current
   repository does not wire it to a real provider, collect a real-provider trace,
   or publish a real-provider result.
+- The receipt/trace gate is a consistency and containment check, not independent
+  provider attestation; Phase 5B must source receipts directly from the durable
+  effect journal before any real-provider result can be trusted.
 - Phase 5B common-subset/native-envelope comparison and memory attribution are
   not run.
 - No intelligence claim is made.

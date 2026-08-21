@@ -113,13 +113,16 @@ class OpenclawMissionRunnerTest < Minitest::Test
         'operation' => 'model.generate.plan',
         'status' => 'succeeded'
       }]
-      result = runner(directory, run_kind: 'real_provider', executor: lambda { |**|
+      result = runner(directory, run_kind: 'real_provider', executor: lambda { |mission:, **|
+        mission_digest = "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}"
         {
           'status' => 'ready',
           'provenance' => {
             'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
             'provider_effect_receipts' => receipts,
-            'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(receipts))}"
+            'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(
+              Tamoz::Evals::CanonicalJSON.dump('mission_digest' => mission_digest, 'receipts' => receipts)
+            )}"
           }
         }
       }).run

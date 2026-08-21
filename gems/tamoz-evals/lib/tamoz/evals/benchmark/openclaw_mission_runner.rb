@@ -179,7 +179,7 @@ module Tamoz
             provider: @provider,
             model: @model
           )
-          validate_result(result)
+          validate_result(result, mission)
         rescue StandardError => e
           {
             'status' => 'blocked',
@@ -187,12 +187,12 @@ module Tamoz
           }
         end
 
-        def validate_result(result)
+        def validate_result(result, mission)
           validate_result_shape!(result)
           status = result.fetch('status')
           return result if status != 'ready'
 
-          validate_ready_provenance!(result.fetch('provenance', nil))
+          validate_ready_provenance!(result.fetch('provenance', nil), mission)
           result
         end
 
@@ -203,7 +203,7 @@ module Tamoz
           raise SchemaError, 'mission executor returned an invalid status'
         end
 
-        def validate_ready_provenance!(provenance)
+        def validate_ready_provenance!(provenance, mission)
           unless provenance.is_a?(Hash) && provenance['run_kind'] == @run_kind &&
                  provenance['provider'] == @provider && provenance['model'] == @model
             raise SchemaError, 'ready mission is missing run-kind provenance'
@@ -212,7 +212,10 @@ module Tamoz
 
           receipts = provenance['provider_effect_receipts']
           validate_provider_receipts!(receipts)
-          return if provenance['provider_trace_digest'] == digest(receipts)
+          expected_digest = digest(
+            'mission_digest' => digest(mission), 'receipts' => receipts
+          )
+          return if provenance['provider_trace_digest'] == expected_digest
 
           raise SchemaError, 'real-provider mission trace digest does not match its receipts'
         end

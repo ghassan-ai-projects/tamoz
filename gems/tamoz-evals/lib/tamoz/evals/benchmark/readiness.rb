@@ -397,7 +397,11 @@ module Tamoz
 
             receipts = provenance['provider_effect_receipts']
             return "artifact_provider_receipts_invalid:#{mission.fetch('id')}" unless valid_provider_receipts?(receipts)
-            return if provenance['provider_trace_digest'] == canonical_digest(receipts)
+
+            expected_digest = canonical_digest(
+              'mission_digest' => document.fetch('mission_digest'), 'receipts' => receipts
+            )
+            return if provenance['provider_trace_digest'] == expected_digest
 
             "artifact_provider_trace_mismatch:#{mission.fetch('id')}"
           end

@@ -44,15 +44,16 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
       artifact = Pathname.new(directory).join('real-provider', 'run-1', 'adaptive-read-only.json')
       FileUtils.mkdir_p(artifact.dirname)
       mission = { 'id' => 'adaptive-read-only' }
+      mission_digest = "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}"
       document = {
         'schema_version' => 'openclaw.evidence.v1',
         'protocol_sha256' => Tamoz::Evals::Benchmark::Readiness.protocol_digest(protocol),
         'mission_id' => 'adaptive-read-only',
-        'mission_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(mission))}",
+        'mission_digest' => mission_digest,
         'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
         'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
         'mission' => mission,
-        'provenance' => provider_provenance,
+        'provenance' => provider_provenance(mission_digest:),
         'result' => { 'status' => 'ready' }
       }
       File.write(artifact, JSON.generate(document))
@@ -70,7 +71,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     end
   end
 
-  def provider_provenance
+  def provider_provenance(mission_digest: nil)
     receipts = [{
       'effect_key' => 'logical:' + ('a' * 64),
       'operation' => 'model.generate.plan',
@@ -79,7 +80,9 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     {
       'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
       'provider_effect_receipts' => receipts,
-      'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(receipts))}"
+      'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(
+        Tamoz::Evals::CanonicalJSON.dump('mission_digest' => mission_digest, 'receipts' => receipts)
+      )}"
     }
   end
 
