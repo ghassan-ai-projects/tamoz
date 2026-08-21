@@ -33,12 +33,16 @@ Status: partial; the Phase 3 exit bar and global implementation bar are not met.
   worker now acknowledges and completes materialized occurrences through the
   schedule store after durable graph execution.
 
-## Not delivered
+## Remaining gaps
 
-- Restart-across-compaction kill coverage and artifact-resolution assertions
-  across all surfaces remain open.
-- Restart across a compaction boundary, composed CLI/Telegram trace parity, and
-  scheduler crash/recovery acceptance metadata remain unproven.
+- Added worker recovery coverage for a compaction crash boundary: the same open
+  occurrence is reopened, the compaction record is written once, the read effect
+  is not duplicated, and one terminal lifecycle event remains.
+- Added exact canonical turn-payload parity assertions for the durable CLI
+  follow-up path and Telegram admission path.
+- A real `SIGKILL` injected at the exact compaction checkpoint, and a full
+  composed CLI/Telegram delivery trace artifact, remain external acceptance
+  work; this patch does not claim those fixtures were run.
 - No provider or intelligence evidence is claimed; current tests are fixture
   and durable-plumbing tests.
 
@@ -100,8 +104,31 @@ focused slice suites above.
 
 ## Claims and blind spots
 
-The canonical context, bounded compaction, and status contracts are plumbing
-evidence only. Socket-restricted integration tests, restart recovery, and
-cross-surface parity are not evidence of completion in this record. The
+The canonical context, bounded compaction, worker recovery, and exact payload
+parity assertions are plumbing evidence only. A real SIGKILL at the exact
+compaction checkpoint, socket-restricted cross-surface delivery, and the full
+trace artifact remain unproven in this record. The
 pre-existing working-tree modification to `docs/openclaw-intelligence-study/README.md`
 is preserved and is not part of this slice.
+
+## This acceptance slice
+
+Focused additions:
+
+```text
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_worker_test.rb
+24 runs, 114 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_cli_test.rb
+33 runs, 231 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/comms_gateway_test.rb
+13 runs, 55 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_phase3_context_lifecycle_test.rb
+13 runs, 62 assertions, 0 failures, 0 errors, 0 skips
+```
+
+The CLI suite still prints a background lease-conflict diagnostic from an
+existing paused-session drain race while exiting green; it is not introduced by
+the parity assertion. No real-provider or intelligence claim is made.

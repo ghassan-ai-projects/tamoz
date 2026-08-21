@@ -120,6 +120,12 @@ class CommsGatewayTest < Minitest::Test
       assert_equal thread, context.fetch('thread_id')
       assert_equal requests.last.request_id, context.fetch('request_id')
       assert_equal [{ 'role' => 'user', 'text' => 'make it blue' }], context.fetch('fragments')
+      assert_equal Tamoz::Agent::SessionPlanningContext.turn_payload(
+        thread_id: thread,
+        request_id: requests.last.request_id,
+        text: 'and the font?',
+        fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
+      ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
 
       assert_equal 'Accepted. I will report committed progress.', replies.first
