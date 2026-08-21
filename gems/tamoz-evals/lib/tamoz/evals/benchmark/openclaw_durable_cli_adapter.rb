@@ -227,13 +227,20 @@ module Tamoz
           verification = evidence.fetch('verification', {})
           terminal = evidence.fetch('terminal', {})
           valid = evidence['status'].to_s == 'completed' && terminal['satisfied'] == true &&
-                  verification['configured_check_passed'] == true
+                  verification_passed?(verification)
           raise Tamoz::Evals::ExecutionError, 'durable_mission_not_verified' unless valid
 
           {
             'mission_id' => mission.fetch('id'), 'run_id' => @run_id, 'thread_id' => thread,
             'status' => 'completed', 'satisfied' => true, 'verified' => true
           }
+        end
+
+        def verification_passed?(verification)
+          return true if verification['configured_check_passed'] == true
+
+          verification['terminal_reason'] == 'adaptive_final' && verification['satisfied'] == true &&
+            verification['evidence'].is_a?(Array) && !verification['evidence'].empty?
         end
 
         # rubocop:disable Metrics/AbcSize

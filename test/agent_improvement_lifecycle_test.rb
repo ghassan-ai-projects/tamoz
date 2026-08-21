@@ -118,6 +118,14 @@ class AgentImprovementLifecycleTest < Minitest::Test
     end
   end
 
+  def test_candidate_content_is_revalidated_before_approval
+    @candidate = @candidate.merge('content' => { 'setting' => 'changed-after-validation' })
+
+    assert_raises(Improvement::EvaluatorTamperError) do
+      @lifecycle.approval_request(actor: 'operator')
+    end
+  end
+
   private
 
   def approve

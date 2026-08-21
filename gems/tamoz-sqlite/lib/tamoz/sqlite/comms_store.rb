@@ -291,18 +291,18 @@ module Tamoz
         end
         return nil unless route_status
 
-        route_status.merge(
-          'task_state' => task_state_for(
-            route_status.fetch('thread_id'), route_status.fetch('request_id')
-          ),
-          'effect_state' => effect_state_for(
-            route_status.fetch('thread_id'), route_status.fetch('request_id')
-          ),
-          'capability_state' => capability_state_for(
-            route_status.fetch('thread_id'), route_status.fetch('request_id')
-          ),
+        route_status.merge(conversation_runtime_status(route_status, surface_id, conversation_id))
+      end
+
+      def conversation_runtime_status(route_status, surface_id, conversation_id)
+        thread_id = route_status.fetch('thread_id')
+        request_id = route_status.fetch('request_id')
+        {
+          'task_state' => task_state_for(thread_id, request_id),
+          'effect_state' => effect_state_for(thread_id, request_id),
+          'capability_state' => capability_state_for(thread_id, request_id),
           'delivery_state' => delivery_state_for(surface_id, conversation_id)
-        )
+        }.merge(lifecycle_status_for(thread_id, request_id))
       end
 
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
@@ -392,6 +392,33 @@ module Tamoz
         return 'bound' if capability_bound?(session)
 
         'not_inspected'
+      end
+
+      def lifecycle_status_for(thread_id, request_id)
+        checkpoint = @checkpoints&.latest(thread_id:, namespace: [])
+        event = lifecycle_events_for(checkpoint, request_id).last
+        unless event
+          return {
+            'phase' => 'unknown', 'event_kind' => 'unknown', 'event_sequence' => nil,
+            'next_action' => 'inspect', 'terminal_reason' => nil
+          }.compact
+        end
+
+        event_type = event.fetch('event_type')
+        {
+          'phase' => event.fetch('phase', 'unknown'),
+          'event_kind' => event_type,
+          'event_sequence' => event.fetch('sequence'),
+          'next_action' => lifecycle_next_action(event_type),
+          'terminal_reason' => event.fetch('terminal_reason', nil)
+        }.compact
+      end
+
+      def lifecycle_next_action(event_type)
+        return 'none' if event_type == 'terminal'
+        return 'approval' if event_type == 'approval'
+
+        'continue'
       end
 
       def lifecycle_events_for(checkpoint, request_id)

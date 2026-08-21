@@ -233,6 +233,19 @@ class AgentSessionEffectTest < Minitest::Test
     refute_includes payload.fetch("output"), "sk-live-12345678"
   end
 
+  def test_mcp_denial_reason_is_redacted_before_being_persisted
+    denial = { 'reason' => 'provider rejected OPENAI_API_KEY=sk-live-12345678' }
+    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+      status: :denied, observation: nil, interrupt: nil, denial:
+    )
+    effects = Tamoz::Agent::SessionEffects.allocate
+
+    error = assert_raises(Tamoz::Agent::ToolError) { effects.send(:result_payload, outcome) }
+
+    assert_includes error.message, '[REDACTED]'
+    refute_includes error.message, 'sk-live-12345678'
+  end
+
   # --- filesystem reconciler ------------------------------------------------
 
   def test_filesystem_reconciler_maps_observations_to_exactly_one_disposition

@@ -190,6 +190,7 @@ module Tamoz
       CHILD_TASKS = %w[tamoz worker child_task].freeze
       CHILD_BINDINGS = %w[tamoz worker child_binding].freeze
       CHILD_ADOPTIONS = %w[tamoz worker child_adoption].freeze
+      CHILD_BUDGETS = %w[tamoz worker child_budget].freeze
       CHILD_ACTIVE_STATUSES = %w[pending running].freeze
 
       def create_child_task(child_task, parent_profile:)
@@ -214,29 +215,33 @@ module Tamoz
       end
 
       def enqueue_child_task(child_task, parent_profile:)
-        profile_id = parent_profile.fetch('profile_id')
-        stored = create_child_task(child_task, parent_profile:)
-        bound_profile = profile(profile_id)
-        binding = {
-          'child_id' => stored.child_id,
-          'parent_profile_id' => String(profile_id),
-          'parent_thread_id' => stored.parent_thread_id,
-          'parent_request_id' => stored.parent_request_id,
-          'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
-          'profile_digest' => bound_profile&.canonical_digest,
-          'capabilities' => stored.capability_profile.fetch('capabilities', [])
-        }.compact
-        existing_binding = record(CHILD_BINDINGS, stored.child_id)
-        if existing_binding && existing_binding != binding
-          raise Tamoz::StoreConflictError,
-                "child task #{stored.child_id.inspect} is already bound to different authority"
-        end
-        upsert(CHILD_BINDINGS, stored.child_id, binding) unless existing_binding
-        bind_thread_profile(stored.child_id, profile_id)
-        enqueue_child_request(
+        reserve_child_slot!(child_task, parent_profile:) if child_active?(child_task)
+        begin
+          profile_id = parent_profile.fetch('profile_id')
+          stored = create_child_task(child_task, parent_profile:)
+          bound_profile = profile(profile_id)
+          binding = {
+            'child_id' => stored.child_id,
+            'parent_profile_id' => String(profile_id),
+            'parent_thread_id' => stored.parent_thread_id,
+            'parent_request_id' => stored.parent_request_id,
+            'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
+            'profile_digest' => bound_profile&.canonical_digest,
+            'capabilities' => stored.capability_profile.fetch('capabilities', [])
+          }.compact
+          existing_binding = record(CHILD_BINDINGS, stored.child_id)
+          if existing_binding && existing_binding != binding
+            raise Tamoz::StoreConflictError,
+                  "child task #{stored.child_id.inspect} is already bound to different authority"
+          end
+          upsert(CHILD_BINDINGS, stored.child_id, binding) unless existing_binding
+          bind_thread_profile(stored.child_id, profile_id)
+          enqueue_child_request(stored)
           stored
-        )
-        stored
+        rescue StandardError
+          release_child_slot!(child_task) if child_active?(child_task)
+          raise
+        end
       end
 
       def reconcile_child_requests(limit: 500)
@@ -317,6 +322,7 @@ module Tamoz
           end
 
           @adapter.store.put(CHILD_TASKS, String(child_id), next_task.to_h, if_version: entry.version)
+          release_child_slot!(next_task) unless CHILD_ACTIVE_STATUSES.include?(next_task.status)
           next_task
         end
       end
@@ -594,10 +600,86 @@ module Tamoz
       # profile) pass through unchanged: they are already the right answer.
       def durable(what)
         yield
-      rescue Error
+      rescue Tamoz::Error
         raise
       rescue StandardError => error
         raise StoreUnavailableError, "#{what} is unavailable: #{error.class}: #{error.message}"
+      end
+
+      def child_active?(child)
+        CHILD_ACTIVE_STATUSES.include?(child.status)
+      end
+
+      def child_budget_key(child)
+        "#{child.parent_thread_id}/#{child.parent_request_id}"
+      end
+
+      def reserve_child_slot!(child, parent_profile:)
+        limit = Integer(parent_profile.fetch('max_child_concurrency'))
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+
+        durable("reserve child capacity for #{child.parent_thread_id.inspect}") do
+          with_child_budget_retry do |store|
+            key = child_budget_key(child)
+            entry, current = child_budget_state(store, key, limit)
+            active = Array(current['active_child_ids'])
+            return if active.include?(child.child_id)
+
+            ensure_child_capacity!(current, active, limit)
+
+            store.put(
+              CHILD_BUDGETS, key,
+              current.merge('limit' => limit, 'active_child_ids' => active + [child.child_id]),
+              if_version: entry&.version
+            )
+          end
+        end
+      end
+
+      def release_child_slot!(child)
+        durable("release child capacity for #{child.parent_thread_id.inspect}") do
+          with_child_budget_retry do |store|
+            key = child_budget_key(child)
+            entry = store.get(CHILD_BUDGETS, key)
+            return unless entry && !entry.deleted
+
+            active = Array(entry.value['active_child_ids'])
+            next unless active.include?(child.child_id)
+
+            store.put(
+              CHILD_BUDGETS, key,
+              entry.value.merge('active_child_ids' => active - [child.child_id]),
+              if_version: entry.version
+            )
+          end
+        end
+      end
+
+      def child_budget_state(store, key, limit)
+        entry = store.get(CHILD_BUDGETS, key)
+        current = if entry && !entry.deleted
+                    entry.value
+                  else
+                    { 'limit' => limit, 'active_child_ids' => [] }
+                  end
+        [entry, current]
+      end
+
+      def ensure_child_capacity!(current, active, limit)
+        return if current['limit'] == limit && active.length < limit
+
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted'
+      end
+
+      def with_child_budget_retry
+        attempts = 0
+        begin
+          yield @adapter.store
+        rescue Tamoz::StoreConflictError
+          attempts += 1
+          retry if attempts < 3
+          raise ToolPolicyError, 'child delegation concurrency reservation conflicted'
+        end
       end
 
       # The record at (namespace, key), or nil when there is none.

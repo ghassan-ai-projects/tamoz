@@ -19,7 +19,9 @@ options = {
   controls_passed: false
 }
 OptionParser.new do |parser|
-  parser.banner = 'Usage: script/benchmark_openclaw_run --runtime-dir DIR --provider NAME --model ID --capabilities PATH --artifact-root PATH'
+  parser.banner = 'Usage: script/benchmark_openclaw_run ' \
+                  '--runtime-dir DIR --provider NAME --model ID ' \
+                  '--capabilities PATH --artifact-root PATH'
   parser.on('--protocol PATH') { |value| options[:protocol] = value }
   parser.on('--missions PATH') { |value| options[:missions] = value }
   parser.on('--runtime-dir PATH') { |value| options[:runtime_dir] = value }

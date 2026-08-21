@@ -353,9 +353,12 @@ module Tamoz
         return 'No work is admitted for this conversation.' unless status
 
         "Work status: task=#{status.fetch('task_state')}; " \
+          "phase=#{status.fetch('phase', 'unknown')}; " \
+          "event=#{status.fetch('event_kind', 'unknown')}##{status.fetch('event_sequence', 'unknown')}; " \
           "effect=#{status.fetch('effect_state')}; " \
           "capability=#{status.fetch('capability_state')}; " \
           "delivery=#{status.fetch('delivery_state')}; " \
+          "next=#{status.fetch('next_action', 'inspect')}; " \
           "open requests=#{status.fetch('open_requests')}."
       end
 

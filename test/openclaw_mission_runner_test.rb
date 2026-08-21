@@ -34,10 +34,10 @@ class OpenclawMissionRunnerTest < Minitest::Test
     { 'local:read_file' => state }
   end
 
-  def runner(directory, executor:, run_kind: 'fixture')
+  def runner(directory, executor:, run_kind: 'fixture', mission_catalog: catalog)
     Tamoz::Evals::Benchmark::OpenclawMissionRunner.new(
       protocol:,
-      catalog:,
+      catalog: mission_catalog,
       run_kind:,
       provider: run_kind == 'fixture' ? 'fixture-provider' : 'provider-a',
       model: run_kind == 'fixture' ? 'fixture-model' : 'model-a',
@@ -127,6 +127,40 @@ class OpenclawMissionRunnerTest < Minitest::Test
       assert_equal 'blocked', mission.fetch('status')
       assert_match 'executor_error:', mission.fetch('reason')
       refute_includes mission.fetch('reason'), 'sk-secret-value'
+    end
+  end
+
+  def test_committed_catalog_reaches_ready_fixture_records_for_every_mission
+    mission_catalog = JSON.parse(
+      File.read('documentation/benchmark/OPENCLAW_MISSIONS.json', encoding: Encoding::UTF_8)
+    )
+    Dir.mktmpdir('openclaw-catalog') do |directory|
+      result = runner(directory, mission_catalog:, executor: lambda do |mission:, run_kind:, **|
+        {
+          'status' => 'ready',
+          'metrics_schema_version' => Tamoz::Evals::Benchmark::OpenclawMissionRunner::METRICS_SCHEMA_VERSION,
+          'metrics' => mission.fetch('metrics').to_h { |metric| [metric, 1] },
+          'hard_zero' => mission.fetch('hard_zero').to_h { |rule| [rule, 'passed'] },
+          'effect_outcomes' => [],
+          'surface_executions' => surface_executions(mission, run_kind:),
+          'provenance' => {
+            'run_kind' => run_kind, 'provider' => 'fixture-provider', 'model' => 'fixture-model',
+            'provider_calls' => 0
+          },
+          'trace' => [{ 'mission_id' => mission.fetch('id'), 'tool' => 'fixture' }]
+        }
+      end).run
+
+      assert_equal mission_catalog.fetch('missions').map { |mission| mission.fetch('id') },
+                   result.manifest.fetch('missions').map { |mission| mission.fetch('id') }
+      assert result.manifest.fetch('missions').all? { |mission| mission.fetch('status') == 'ready' }
+      readiness = Tamoz::Evals::Benchmark::Readiness.evaluate(
+        protocol:, manifest: result.manifest,
+        expected_mission_ids: mission_catalog.fetch('missions').map { |mission| mission.fetch('id') },
+        mission_catalog:, artifact_root_base: directory
+      )
+      refute_predicate readiness, :ready?
+      assert_includes readiness.reasons, 'fixture_or_fake_provider'
     end
   end
 

@@ -52,8 +52,9 @@ module Tamoz
           @adapter.respond_to?(:execute)
 
         raw = @adapter.execute(context:, capability_id: String(name), arguments: normalized)
-        validate_final_location!(raw)
-        build_outcome(raw, adapter_status(raw))
+        status = adapter_status(raw)
+        validate_final_location!(raw, status:)
+        build_outcome(raw, status)
       end
 
       def build_outcome(raw, status)
@@ -108,17 +109,30 @@ module Tamoz
         { 'reason' => text.byteslice(0, 512) || '' }.freeze
       end
 
-      def validate_final_location!(raw)
+      def validate_final_location!(raw, status:)
         return unless raw.is_a?(Hash)
 
         evidence = raw.fetch('evidence', {})
         raise ToolPolicyError, 'browser adapter location evidence must be an object' unless evidence.is_a?(Hash)
 
-        final_url = raw.key?('final_url') ? raw['final_url'] : evidence['final_url']
-        final_host = raw.key?('final_host') ? raw['final_host'] : evidence['final_host']
+        final_url, final_host = final_location(raw, evidence)
+        require_final_location!(status, final_url, final_host)
         return if final_url.nil? && final_host.nil?
 
         validate_location_consistency(final_url, final_host)
+      end
+
+      def final_location(raw, evidence)
+        [
+          raw.key?('final_url') ? raw['final_url'] : evidence['final_url'],
+          raw.key?('final_host') ? raw['final_host'] : evidence['final_host']
+        ]
+      end
+
+      def require_final_location!(status, final_url, final_host)
+        return unless status == :succeeded && final_url.nil? && final_host.nil?
+
+        raise ToolPolicyError, 'browser adapter successful output must include final location evidence'
       end
 
       def validate_location_consistency(final_url, final_host)

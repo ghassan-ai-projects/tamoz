@@ -144,7 +144,10 @@ class AgentPhase4CapabilityTest < Minitest::Test
 
       def execute(context:, capability_id:, arguments:)
         @arguments = [context, capability_id, arguments]
-        { 'output' => 'x' * (Tamoz::Agent::GovernedBrowserSource::MAX_OUTPUT_BYTES + 1) }
+        {
+          'output' => 'x' * (Tamoz::Agent::GovernedBrowserSource::MAX_OUTPUT_BYTES + 1),
+          'final_host' => 'example.com'
+        }
       end
     end.new
     source = Tamoz::Agent::GovernedBrowserSource.new(
@@ -158,6 +161,34 @@ class AgentPhase4CapabilityTest < Minitest::Test
                  outcome.observation.text.bytesize
     assert outcome.observation.truncated
     assert_equal descriptor.id, adapter.arguments.fetch(1)
+  end
+
+  def test_browser_source_rejects_success_without_final_location_evidence
+    descriptor = Struct.new(:id, :effect_class).new('mcp:browser/snapshot', :read_only)
+    adapter = Struct.new(:response) do
+      def execute(**) = response
+    end.new({ 'output' => 'bounded result' })
+    source = Tamoz::Agent::GovernedBrowserSource.new(
+      adapter:, descriptors: [descriptor], allowed_hosts: ['example.com']
+    )
+
+    assert_raises(Tamoz::Agent::ToolPolicyError) do
+      source.execute(:context, descriptor.id, { 'url' => 'https://example.com' })
+    end
+  end
+
+  def test_browser_source_rejects_a_redirect_to_an_unallowlisted_host
+    descriptor = Struct.new(:id, :effect_class).new('mcp:browser/navigate', :read_only)
+    adapter = Struct.new(:response) do
+      def execute(**) = response
+    end.new({ 'output' => 'bounded result', 'final_url' => 'https://evil.example' })
+    source = Tamoz::Agent::GovernedBrowserSource.new(
+      adapter:, descriptors: [descriptor], allowed_hosts: ['example.com']
+    )
+
+    assert_raises(Tamoz::Agent::ToolPolicyError) do
+      source.execute(:context, descriptor.id, { 'url' => 'https://example.com' })
+    end
   end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
 end

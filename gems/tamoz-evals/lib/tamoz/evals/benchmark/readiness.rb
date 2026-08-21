@@ -111,6 +111,7 @@ module Tamoz
             reasons << 'protocol_digest_mismatch' unless protocol_digest(protocol) == manifest.fetch('protocol_sha256')
             reasons.concat(capability_reasons(manifest.fetch('capabilities')))
             reasons.concat(mission_reasons(manifest.fetch('missions')))
+            reasons.concat(mission_evidence_reasons(manifest, mission_catalog))
             reasons.concat(required_capability_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(metric_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(surface_reasons(manifest, mission_catalog)) if mission_catalog
@@ -393,6 +394,51 @@ module Tamoz
               status = mission.fetch('status')
               "mission_#{status}:#{mission.fetch('id')}" unless status == 'ready'
             end
+          end
+
+          def mission_evidence_reasons(manifest, catalog)
+            catalog_by_id = Array(catalog&.fetch('missions', nil)).to_h { |mission| [mission.fetch('id'), mission] }
+            manifest.fetch('missions').flat_map do |mission|
+              mission_ready_evidence_reasons(manifest, mission, catalog_by_id)
+            end
+          end
+
+          def mission_ready_evidence_reasons(manifest, mission, catalog_by_id)
+            return [] unless mission.fetch('status') == 'ready'
+
+            [
+              hard_zero_reason(mission),
+              effect_outcome_reason(manifest, mission),
+              surface_execution_reason(mission),
+              hard_zero_catalog_reason(mission, catalog_by_id)
+            ].compact
+          end
+
+          def hard_zero_reason(mission)
+            return if mission.fetch('hard_zero').values.all?('passed')
+
+            "mission_hard_zero_not_passed:#{mission.fetch('id')}"
+          end
+
+          def effect_outcome_reason(manifest, mission)
+            return unless manifest.fetch('run_kind') == 'real_provider'
+            return "mission_effect_outcomes_missing:#{mission.fetch('id')}" if mission.fetch('effect_outcomes').empty?
+            return unless mission.fetch('effect_outcomes').any? { |outcome| outcome.fetch('status') != 'succeeded' }
+
+            "mission_effect_outcome_not_succeeded:#{mission.fetch('id')}"
+          end
+
+          def surface_execution_reason(mission)
+            return if mission.fetch('surface_executions').values.all? { |record| record.fetch('status') == 'executed' }
+
+            "mission_surface_not_executed:#{mission.fetch('id')}"
+          end
+
+          def hard_zero_catalog_reason(mission, catalog_by_id)
+            expected = catalog_by_id.dig(mission.fetch('id'), 'hard_zero')
+            return unless expected && mission.fetch('hard_zero').keys.sort != expected.sort
+
+            "mission_hard_zero_mismatch:#{mission.fetch('id')}"
           end
 
           def missing_mission_reasons(missions, expected_ids)

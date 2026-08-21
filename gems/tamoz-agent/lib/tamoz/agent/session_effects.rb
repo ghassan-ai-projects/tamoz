@@ -190,7 +190,7 @@ module Tamoz
 
       def safe_mcp_reason(reason)
         text = reason.respond_to?(:to_h) ? reason.to_h.inspect : reason.to_s
-        text.byteslice(0, 512)
+        sanitize_remote_text(text.byteslice(0, 512) || '')
       end
 
       def sanitize_remote_text(text)

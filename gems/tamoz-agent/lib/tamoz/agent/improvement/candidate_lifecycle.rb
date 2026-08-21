@@ -25,18 +25,23 @@ module Tamoz
           CandidateProposal.build(**attributes)
         end
 
-        def self.approval_digest(proposal:, candidate_digest:, operation:, actor:, authority_digest:)
+        # rubocop:disable Metrics/ParameterLists -- digest fields are the approval contract.
+        def self.approval_digest(
+          proposal:, candidate_digest:, candidate_content_digest:, operation:, actor:, authority_digest:
+        )
           Tamoz::Core.digest(
             APPROVAL_DOMAIN,
             {
               'proposal_digest' => proposal.digest,
               'candidate_digest' => candidate_digest,
+              'candidate_content_digest' => candidate_content_digest,
               'operation' => String(operation),
               'actor' => String(actor),
               'authority_digest' => authority_digest
             }
           )
         end
+        # rubocop:enable Metrics/ParameterLists
 
         def initialize(
           proposal:, candidate_resolver:, current_authority: nil,
@@ -66,14 +71,17 @@ module Tamoz
 
         def approval_request(operation: :apply, actor: @actor, authority_digest: @proposal.from_digest)
           require_phase!(operation.to_sym == :rollback ? :active : :validated, :approval)
+          ensure_candidate_unchanged!
           validate_actor!(actor)
           digest = self.class.approval_digest(
             proposal: @proposal, candidate_digest: @proposal.to_digest,
+            candidate_content_digest: candidate_content_digest,
             operation:, actor:, authority_digest:
           )
           {
             'operation' => String(operation), 'actor' => String(actor),
             'authority_digest' => authority_digest, 'candidate_digest' => @proposal.to_digest,
+            'candidate_content_digest' => candidate_content_digest,
             'proposal_digest' => @proposal.digest, 'approval_digest' => digest
           }.freeze
         end
@@ -167,6 +175,7 @@ module Tamoz
         end
 
         def run_effect(context:, stage:, approval:, perform:, reconcile:)
+          ensure_candidate_unchanged!
           validate_callable!(perform, "#{stage} effect")
           validate_callable!(reconcile, "#{stage} reconciler")
           outcome = @effect_runner.run(
@@ -185,9 +194,24 @@ module Tamoz
         def effect_request(stage, approval)
           {
             'stage' => stage.to_s, 'proposal_digest' => @proposal.digest,
-            'candidate_digest' => @proposal.to_digest, 'approval_digest' => approval.digest,
+            'candidate_digest' => @proposal.to_digest,
+            'candidate_content_digest' => candidate_content_digest,
+            'approval_digest' => approval.digest,
             'authority_digest' => approval.authority_digest
           }
+        end
+
+        def candidate_content_digest
+          Tamoz::Core.digest(
+            "tamoz.agent.improvement.candidate_content.v1\n", @candidate
+          )
+        end
+
+        def ensure_candidate_unchanged!
+          resolved = Tamoz::Core.deep_freeze(Tamoz::Core.canonical(resolve_candidate))
+          return if resolved == @candidate
+
+          raise EvaluatorTamperError, 'candidate artifact changed after validation'
         end
 
         def stage_result_phase(stage, status)

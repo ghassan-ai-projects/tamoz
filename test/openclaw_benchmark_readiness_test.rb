@@ -42,7 +42,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'metrics_schema_version' => 'openclaw.metrics.v1',
         'metrics' => { 'completion' => 1 },
         'hard_zero' => { 'fabricated_evidence' => 'passed' },
-        'effect_outcomes' => [],
+        'effect_outcomes' => effect_outcomes(run_kind:),
         'surface_executions' => surface_executions(run_kind:),
         'durable_mission' => {
           'mission_id' => 'adaptive-read-only', 'run_id' => 'run-1', 'thread_id' => 'thread-1',
@@ -63,6 +63,12 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     end
   end
 
+  def effect_outcomes(run_kind: 'real_provider')
+    return [] if run_kind == 'fixture'
+
+    [{ 'effect_key' => "logical:#{'a' * 64}", 'status' => 'succeeded' }]
+  end
+
   def test_ready_real_provider_manifest_is_publishable
     Dir.mktmpdir('openclaw-artifacts') do |directory|
       artifact = Pathname.new(directory).join('real-provider', 'run-1', 'adaptive-read-only.json')
@@ -81,7 +87,8 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'result' => {
           'status' => 'ready', 'metrics_schema_version' => 'openclaw.metrics.v1',
           'metrics' => { 'completion' => 1 },
-          'hard_zero' => { 'fabricated_evidence' => 'passed' }, 'effect_outcomes' => [],
+          'hard_zero' => { 'fabricated_evidence' => 'passed' },
+          'effect_outcomes' => effect_outcomes,
           'surface_executions' => surface_executions
         }
       }
@@ -169,7 +176,8 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'result' => {
           'status' => 'ready', 'metrics_schema_version' => 'openclaw.metrics.v1',
           'metrics' => { 'completion' => 1 },
-          'hard_zero' => { 'fabricated_evidence' => 'passed' }, 'effect_outcomes' => [],
+          'hard_zero' => { 'fabricated_evidence' => 'passed' },
+          'effect_outcomes' => effect_outcomes,
           'surface_executions' => surface_executions
         }
       }
@@ -251,6 +259,27 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
     refute_predicate blocked, :ready?
     assert_includes blocked.reasons,
                     'mission_capability_unavailable:adaptive-read-only:local:read_file'
+  end
+
+  def test_ready_mission_cannot_hide_a_failed_hard_zero_or_effect_outcome
+    failed_hard_zero = manifest.merge(
+      'missions' => [manifest.fetch('missions').first.merge(
+        'hard_zero' => { 'fabricated_evidence' => 'failed' }
+      )]
+    )
+    failed_effect = manifest.merge(
+      'missions' => [manifest.fetch('missions').first.merge(
+        'effect_outcomes' => [{ 'effect_key' => 'effect-1', 'status' => 'unknown' }]
+      )]
+    )
+
+    hard_zero_result = Tamoz::Evals::Benchmark::Readiness.evaluate(protocol:, manifest: failed_hard_zero)
+    effect_result = Tamoz::Evals::Benchmark::Readiness.evaluate(protocol:, manifest: failed_effect)
+
+    refute_predicate hard_zero_result, :ready?
+    refute_predicate effect_result, :ready?
+    assert_includes hard_zero_result.reasons, 'mission_hard_zero_not_passed:adaptive-read-only'
+    assert_includes effect_result.reasons, 'mission_effect_outcome_not_succeeded:adaptive-read-only'
   end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/BlockLength, Metrics/MethodLength, Layout/LineLength

@@ -127,5 +127,42 @@ class AgentChildTaskRuntimeTest < Minitest::Test
       end
     end
   end
+
+  def test_parent_concurrency_budget_rejects_a_second_sibling_until_the_first_settles
+    build_child = lambda do |task|
+      Tamoz::Agent::ChildTask.build(
+        parent_thread_id: 'parent-thread', parent_request_id: 'parent-request',
+        task:, capability_profile: {
+          'capabilities' => ['local:read_file'], 'authority_revision' => 'profile:1'
+        }, depth: 1, concurrency: 1
+      )
+    end
+    first = build_child.call('read first note')
+    second = build_child.call('read second note')
+    parent_profile = {
+      'profile_id' => 'trusted',
+      'capabilities' => ['local:read_file'], 'authority_revision' => 'profile:1',
+      'max_child_depth' => 1, 'max_child_concurrency' => 1
+    }
+
+    with_runtime do |rt|
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {}),
+        model_factory: ->(profile:) { read_only_factory.call(profile) }
+      )
+      begin
+        runtime.enqueue_child_task(first, parent_profile:)
+        assert_raises(Tamoz::Agent::ToolPolicyError) do
+          runtime.enqueue_child_task(second, parent_profile:)
+        end
+
+        runtime.transition_child_task(first.child_id, &:start)
+        runtime.transition_child_task(first.child_id) { |record| record.complete(receipt: 'done') }
+        assert_equal second.child_id, runtime.enqueue_child_task(second, parent_profile:).child_id
+      ensure
+        runtime.close
+      end
+    end
+  end
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
 end
