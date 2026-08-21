@@ -52,10 +52,7 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
         'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
         'git_revision' => "sha256:#{'c' * 64}", 'config_sha256' => "sha256:#{'d' * 64}",
         'mission' => mission,
-        'provenance' => {
-          'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
-          'provider_calls' => 1
-        },
+        'provenance' => provider_provenance,
         'result' => { 'status' => 'ready' }
       }
       File.write(artifact, JSON.generate(document))
@@ -71,6 +68,19 @@ class OpenclawBenchmarkReadinessTest < Minitest::Test
       assert_predicate result, :publishable?
       assert_empty result.reasons
     end
+  end
+
+  def provider_provenance
+    receipts = [{
+      'effect_key' => 'logical:' + ('a' * 64),
+      'operation' => 'model.generate.plan',
+      'status' => 'succeeded'
+    }]
+    {
+      'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
+      'provider_effect_receipts' => receipts,
+      'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(receipts))}"
+    }
   end
 
   def test_plain_text_artifact_cannot_be_published_as_provider_evidence

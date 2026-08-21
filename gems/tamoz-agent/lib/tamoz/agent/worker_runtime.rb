@@ -125,6 +125,14 @@ module Tamoz
       def bind_thread_profile(thread_id, profile_id)
         return if profile_id.nil?
 
+        existing = record(THREAD_BINDINGS, thread_id)
+        if existing
+          return if existing.fetch('profile') == profile_id
+
+          raise Tamoz::StoreConflictError,
+                "thread #{thread_id.inspect} is already bound to profile #{existing.fetch('profile').inspect}"
+        end
+
         upsert(THREAD_BINDINGS, thread_id, {"profile" => profile_id})
       end
 
@@ -182,6 +190,7 @@ module Tamoz
       CHILD_TASKS = %w[tamoz worker child_task].freeze
       CHILD_BINDINGS = %w[tamoz worker child_binding].freeze
       CHILD_ADOPTIONS = %w[tamoz worker child_adoption].freeze
+      CHILD_ACTIVE_STATUSES = %w[pending running].freeze
 
       def create_child_task(child_task, parent_profile:)
         unless child_task.is_a?(ChildTask)
@@ -208,19 +217,21 @@ module Tamoz
         profile_id = parent_profile.fetch('profile_id')
         stored = create_child_task(child_task, parent_profile:)
         bound_profile = profile(profile_id)
-        upsert(
-          CHILD_BINDINGS,
-          stored.child_id,
-          {
-            'child_id' => stored.child_id,
-            'parent_profile_id' => String(profile_id),
-            'parent_thread_id' => stored.parent_thread_id,
-            'parent_request_id' => stored.parent_request_id,
-            'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
-            'profile_digest' => bound_profile&.canonical_digest,
-            'capabilities' => stored.capability_profile.fetch('capabilities', [])
-          }.compact
-        )
+        binding = {
+          'child_id' => stored.child_id,
+          'parent_profile_id' => String(profile_id),
+          'parent_thread_id' => stored.parent_thread_id,
+          'parent_request_id' => stored.parent_request_id,
+          'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
+          'profile_digest' => bound_profile&.canonical_digest,
+          'capabilities' => stored.capability_profile.fetch('capabilities', [])
+        }.compact
+        existing_binding = record(CHILD_BINDINGS, stored.child_id)
+        if existing_binding && existing_binding != binding
+          raise Tamoz::StoreConflictError,
+                "child task #{stored.child_id.inspect} is already bound to different authority"
+        end
+        upsert(CHILD_BINDINGS, stored.child_id, binding) unless existing_binding
         bind_thread_profile(stored.child_id, profile_id)
         enqueue_child_request(
           stored
@@ -230,16 +241,48 @@ module Tamoz
 
       def reconcile_child_requests(limit: 500)
         child_tasks(limit:).filter_map do |child|
-          next unless child.status == 'pending'
+          next unless CHILD_ACTIVE_STATUSES.include?(child.status)
 
           request = checkpoints.fetch_request(
             thread_id: child.child_id,
             request_id: child_request_id(child.child_id)
           )
+          if request&.terminal?
+            settle_child_request(child, request)
+            next child.child_id
+          end
+          next unless child.status == 'pending'
           next if request
 
           enqueue_child_request(child)
           child.child_id
+        end
+      end
+
+      def settle_child_task(child_id, view)
+        child = child_task(child_id)
+        return unless child && CHILD_ACTIVE_STATUSES.include?(child.status)
+        return unless %i[completed failed blocked].include?(view.status)
+
+        receipt = Tamoz::Core.jcs(
+          'thread_id' => child_id,
+          'checkpoint_id' => view.checkpoint_id,
+          'execution_id' => view.execution_id,
+          'terminal' => view.terminal,
+          'verification' => view.state[:verification],
+          'effect_receipts' => view.effect_receipts,
+          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
+            Array(compaction['artifact_refs'])
+          end
+        )
+        transition_child_task(child_id) do |current|
+          next current unless CHILD_ACTIVE_STATUSES.include?(current.status)
+
+          case view.status
+          when :completed then current.complete(receipt:)
+          when :failed then current.fail(receipt:)
+          else current.unknown(receipt:)
+          end
         end
       end
 
@@ -459,6 +502,15 @@ module Tamoz
           "error_category" => "schedule_store_unavailable",
           "error" => error.message.byteslice(0, 512)
         }]
+      end
+
+      def schedule_occurrence(request_id)
+        store = schedule_store
+        return unless store.respond_to?(:occurrence_for_request)
+
+        durable("scheduled occurrence #{request_id.inspect}") do
+          store.occurrence_for_request(request_id)
+        end
       end
 
       # Human decisions about paused work, recorded by `tamoz approve` and the
@@ -947,6 +999,19 @@ module Tamoz
 
       def child_request_id(child_id)
         "child-request:#{child_id}"
+      end
+
+      def settle_child_request(child, request)
+        view = session_for_child(child).view(thread: child.child_id)
+        return settle_child_task(child.child_id, view) if
+          view && %i[completed failed blocked].include?(view.status)
+
+        transition_child_task(child.child_id) do |current|
+          next current unless CHILD_ACTIVE_STATUSES.include?(current.status)
+
+          receipt = "child request #{request.request_id} terminated #{request.status}"
+          request.status == :completed ? current.complete(receipt:) : current.fail(receipt:)
+        end
       end
     end
   end

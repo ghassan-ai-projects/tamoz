@@ -106,5 +106,43 @@ class OpenclawMissionRunnerTest < Minitest::Test
       end)
     end
   end
+  def test_real_provider_accepts_only_a_digest_bound_model_receipt_set
+    Dir.mktmpdir('openclaw-runner') do |directory|
+      receipts = [{
+        'effect_key' => 'logical:' + ('a' * 64),
+        'operation' => 'model.generate.plan',
+        'status' => 'succeeded'
+      }]
+      result = runner(directory, run_kind: 'real_provider', executor: lambda { |**|
+        {
+          'status' => 'ready',
+          'provenance' => {
+            'run_kind' => 'real_provider', 'provider' => 'provider-a', 'model' => 'model-a',
+            'provider_effect_receipts' => receipts,
+            'provider_trace_digest' => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Evals::CanonicalJSON.dump(receipts))}"
+          }
+        }
+      }).run
+
+      assert_equal %w[ready ready], result.manifest.fetch('missions').map { |mission| mission.fetch('status') }
+      assert_equal 2, result.artifacts.length
+    end
+  end
+
+  def test_catalog_mission_id_cannot_escape_the_artifact_directory
+    bad_catalog = catalog.merge(
+      'missions' => [catalog.fetch('missions').first.merge('id' => '../../victim')]
+    )
+
+    assert_raises(Tamoz::Evals::SchemaError) do
+      Tamoz::Evals::Benchmark::OpenclawMissionRunner.new(
+        protocol:, catalog: bad_catalog, run_kind: 'fixture', provider: 'fixture-provider',
+        model: 'fixture-model', artifact_root: 'fixtures/run-1', artifact_base: Dir.tmpdir,
+        git_revision: "sha256:#{'c' * 64}", config_sha256: "sha256:#{'d' * 64}",
+        graph: { 'name' => 'tamoz.agent.session', 'version' => '2' }, surfaces: %w[cli telegram],
+        capabilities:, controls_passed: true, command: 'test', executor: ->(**) { { 'status' => 'blocked' } }
+      )
+    end
+  end
 end
 # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions

@@ -46,7 +46,9 @@ class AgentScheduleTest < Minitest::Test
       assert_equal added.fetch("id"), resumed.fetch("id")
 
       rt.cli(%w[worker --once --json], factory: read_only_factory)
-      refute_empty rt.occurrences("nightly"), "a resumed schedule did not fire"
+      occurrences = rt.occurrences("nightly")
+      refute_empty occurrences, "a resumed schedule did not fire"
+      assert_equal "succeeded", occurrences.first.fetch("state"), occurrences.first.inspect
 
       # Removed: stops firing, keeps its history.
       assert_equal 0, rt.cli(%w[schedule remove nightly --json]), rt.err

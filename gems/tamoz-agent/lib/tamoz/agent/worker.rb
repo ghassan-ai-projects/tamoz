@@ -295,14 +295,15 @@ module Tamoz
       rescue StandardError => error
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
-        settle_child_error(thread_id, error)
-        close_failed_occurrence(thread_id)
+        terminal_request = entry.fetch(:head_status) == :queued
+        settle_child_error(thread_id, error) if terminal_request
+        close_failed_occurrence(thread_id) if terminal_request
         emit("request.failed",
              thread: thread_id,
              request_id: occurrence_id,
              duration_ms: @runtime.occurrence_age_milliseconds(thread_id),
              reason: "#{error.class}: #{error.message}")
-        if entry.fetch(:head_status) == :queued
+        if terminal_request
           begin
             @runtime.durably_fail_request(thread_id, occurrence_id, reason: bounded_reason(error))
             # The message is terminally dead; the channel must hear about it
@@ -312,8 +313,13 @@ module Tamoz
             # The claim may have completed under a concurrent pass; the failed
             # park below still stops the hot loop for claimed entries.
           end
+          park(entry, nil, reason: "failed")
+        else
+          # A claimed/running request is recoverable work. Keep its open
+          # occurrence and child in flight so the next pass can recover the
+          # same execution instead of reporting a permanent child failure.
+          unpark(thread_id)
         end
-        park(entry, nil, reason: "failed")
         PARKED
       end
 
@@ -408,9 +414,11 @@ module Tamoz
         notify_sink(thread_id, granted ? "request.approved" : "request.denied",
                     granted ? "Approved." : "Denied.", request_id: occurrence_id)
         unpark(thread_id)
-        session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
-                                owner_id: owner_id)
+        request = session.resume(
+          answers, thread: thread_id, request_id: decision.resume_request_id, owner_id: owner_id
+        )
         @runtime.consume_decision(decision_id, now:)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:)
       end
 
@@ -432,6 +440,7 @@ module Tamoz
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
       end
 
@@ -451,7 +460,54 @@ module Tamoz
         request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      def settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        return unless @runtime.respond_to?(:schedule_occurrence)
+
+        occurrence = @runtime.schedule_occurrence(occurrence_id)
+        return unless occurrence
+
+        view = view_of(session, thread_id)
+        execution_id = view&.execution_id || request&.execution_id
+        return unless execution_id
+
+        if occurrence.state == :enqueued
+          @runtime.schedule_store.acknowledge_occurrence(
+            occurrence.occurrence_id, execution_id:, fence: occurrence.fence
+          )
+          occurrence = @runtime.schedule_occurrence(occurrence_id)
+        end
+        return unless occurrence&.state == :running
+
+        status = scheduled_terminal_status(view, request)
+        return unless status
+
+        @runtime.schedule_store.complete_occurrence(
+          occurrence.occurrence_id,
+          execution_id:,
+          status:,
+          evidence: {
+            'request_id' => occurrence_id,
+            'checkpoint_id' => view&.checkpoint_id,
+            'execution_id' => execution_id,
+            'status' => status.to_s
+          }.compact
+        )
+      rescue Tamoz::Scheduler::SchedulerError, Tamoz::Scheduler::LeaseLostError => error
+        emit('schedule.error', reason: error.message)
+      end
+
+      def scheduled_terminal_status(view, request)
+        return :succeeded if view&.status == :completed
+        return :failed if view&.status == :failed
+        return :unknown if view&.status == :blocked
+        return :succeeded if request&.status == :completed
+        return :failed if request&.status == :failed
+
+        nil
       end
 
       # Where the turn ended up, reported against the OCCURRENCE — the queued
@@ -579,30 +635,7 @@ module Tamoz
       end
 
       def settle_child_task(thread_id, view)
-        child = @runtime.child_task(thread_id)
-        return unless child && %i[completed failed blocked].include?(view.status)
-        return unless %w[pending running].include?(child.status)
-
-        receipt = Tamoz::Core.jcs(
-          'thread_id' => thread_id,
-          'checkpoint_id' => view.checkpoint_id,
-          'execution_id' => view.execution_id,
-          'terminal' => view.terminal,
-          'verification' => view.state[:verification],
-          'effect_receipts' => view.effect_receipts,
-          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
-            Array(compaction['artifact_refs'])
-          end
-        )
-        @runtime.transition_child_task(child.child_id) do |current|
-          next current unless %w[pending running].include?(current.status)
-
-          case view.status
-          when :completed then current.complete(receipt:)
-          when :failed then current.fail(receipt:)
-          else current.unknown(receipt:)
-          end
-        end
+        @runtime.settle_child_task(thread_id, view)
       end
 
       def settle_child_error(thread_id, error)

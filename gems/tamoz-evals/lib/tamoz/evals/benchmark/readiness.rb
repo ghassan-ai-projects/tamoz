@@ -18,6 +18,9 @@ module Tamoz
         CAPABILITY_FIELDS = %w[exists reachable authorized attempted effective completed verified].freeze
         MISSION_CATALOG_FIELDS = %w[goal hard_zero id metrics required_capabilities surfaces].freeze
         MISSION_SURFACES = %w[cli telegram].freeze
+        MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
+        PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
+        PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
         EVIDENCE_SCHEMA_VERSION = 'openclaw.evidence.v1'
         BOOLEAN_VALUES = [true, false].freeze
         REQUIRED_FIELDS = %w[
@@ -188,9 +191,7 @@ module Tamoz
           end
 
           def validate_mission_catalog!(catalog)
-            unless catalog.is_a?(Hash) && catalog['missions'].is_a?(Array) && !catalog['missions'].empty?
-              schema_error('benchmark mission catalog must contain missions')
-            end
+            schema_error('benchmark mission catalog must contain missions') unless valid_catalog_shape?(catalog)
 
             catalog.fetch('missions').each { |mission| validate_catalog_mission!(mission) }
             ids = catalog.fetch('missions').map { |mission| mission.fetch('id') }
@@ -199,11 +200,17 @@ module Tamoz
             schema_error('benchmark mission catalog contains an invalid mission')
           end
 
+          def valid_catalog_shape?(catalog)
+            catalog.is_a?(Hash) && catalog.keys.sort == %w[missions schema_version] &&
+              catalog['schema_version'] == 'openclaw.missions.v1' &&
+              catalog['missions'].is_a?(Array) && !catalog['missions'].empty?
+          end
+
           def validate_catalog_mission!(mission)
             validate_catalog_shape!(mission)
             validate_catalog_identity!(mission)
             validate_catalog_lists!(mission)
-            return if mission.fetch('surfaces').all? { |surface| MISSION_SURFACES.include?(surface) }
+            return if mission.fetch('surfaces').sort == MISSION_SURFACES.sort
 
             schema_error('benchmark mission catalog surfaces are invalid')
           end
@@ -215,7 +222,7 @@ module Tamoz
           end
 
           def validate_catalog_identity!(mission)
-            valid = mission.fetch('id').is_a?(String) && !mission.fetch('id').empty? &&
+            valid = mission.fetch('id').is_a?(String) && MISSION_ID_PATTERN.match?(mission.fetch('id')) &&
                     mission.fetch('goal').is_a?(String) && !mission.fetch('goal').empty?
             return if valid
 
@@ -299,20 +306,26 @@ module Tamoz
             return ['artifacts_unverified'] unless artifact_root_base
 
             manifest.fetch('missions').filter_map do |mission|
-              next unless mission.fetch('status') == 'ready'
-
-              path = File.expand_path(
-                File.join(manifest.fetch('artifact_root'), mission.fetch('artifact_path')),
-                artifact_root_base
-              )
-              next "artifact_missing:#{mission.fetch('id')}" unless File.file?(path)
-
-              actual = "sha256:#{Digest::SHA256.file(path).hexdigest}"
-              next "artifact_digest_mismatch:#{mission.fetch('id')}" unless actual == mission.fetch('artifact_digest')
-
-              document_reasons = artifact_document_reasons(path, mission, manifest, mission_catalog)
-              document_reasons.empty? ? nil : document_reasons.first
+              artifact_reason_for(mission, manifest, artifact_root_base, mission_catalog)
             end
+          end
+
+          def artifact_reason_for(mission, manifest, artifact_root_base, mission_catalog)
+            return unless mission.fetch('status') == 'ready'
+
+            path = File.expand_path(
+              File.join(manifest.fetch('artifact_root'), mission.fetch('artifact_path')),
+              artifact_root_base
+            )
+            return "artifact_missing:#{mission.fetch('id')}" unless File.file?(path)
+
+            actual = "sha256:#{Digest::SHA256.file(path).hexdigest}"
+            return "artifact_digest_mismatch:#{mission.fetch('id')}" unless actual == mission.fetch('artifact_digest')
+
+            document_reasons = artifact_document_reasons(path, mission, manifest, mission_catalog)
+            document_reasons.empty? ? nil : document_reasons.first
+          rescue SystemCallError, EncodingError => e
+            "artifact_unavailable:#{mission.fetch('id')}:#{e.class}"
           end
 
           def artifacts_verified?(manifest, artifact_root_base, mission_catalog = nil)
@@ -321,6 +334,8 @@ module Tamoz
 
           def artifact_document_reasons(path, mission, manifest, mission_catalog)
             document = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
+            return ["artifact_secret_value:#{mission.fetch('id')}"] if Tamoz::Core.secret_shaped?(document)
+
             reason = artifact_binding_reason(document, mission, manifest)
             return [reason] if reason
 
@@ -334,6 +349,8 @@ module Tamoz
             reason ? [reason] : []
           rescue JSON::ParserError, TypeError
             ["artifact_schema_invalid:#{mission.fetch('id')}"]
+          rescue SystemCallError, EncodingError => e
+            ["artifact_unavailable:#{mission.fetch('id')}:#{e.class}"]
           end
 
           def artifact_binding_reason(document, mission, manifest)
@@ -377,9 +394,24 @@ module Tamoz
               provenance['provider'] == manifest.fetch('provider') &&
               provenance['model'] == manifest.fetch('model')
             return unless manifest.fetch('run_kind') == 'real_provider'
-            return if provenance['provider_calls'].is_a?(Integer) && provenance['provider_calls'] >= 1
 
-            "artifact_provider_call_missing:#{mission.fetch('id')}"
+            receipts = provenance['provider_effect_receipts']
+            return "artifact_provider_receipts_invalid:#{mission.fetch('id')}" unless valid_provider_receipts?(receipts)
+            return if provenance['provider_trace_digest'] == canonical_digest(receipts)
+
+            "artifact_provider_trace_mismatch:#{mission.fetch('id')}"
+          end
+
+          def valid_provider_receipts?(receipts)
+            receipts.is_a?(Array) && !receipts.empty? &&
+              receipts.all? { |receipt| valid_provider_receipt?(receipt) } &&
+              receipts.any? { |receipt| receipt.fetch('status') == 'succeeded' }
+          end
+
+          def valid_provider_receipt?(receipt)
+            receipt.is_a?(Hash) && PROVIDER_RECEIPT_FIELDS.all? { |field| receipt[field].is_a?(String) } &&
+              receipt.fetch('operation').start_with?('model.generate.') &&
+              PROVIDER_RECEIPT_STATUSES.include?(receipt.fetch('status'))
           end
 
           def canonical_digest(value)

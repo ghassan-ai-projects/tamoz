@@ -13,8 +13,12 @@ implementation bar are not met.
   provider provenance, safe artifact paths, SHA-256 artifact existence, and
   canonical artifact schema/provenance verification.
 - Added a provider-agnostic canonical mission runner that executes every catalog
-  mission through an injected executor, writes digest-bound evidence artifacts,
-  and blocks real-provider readiness without provider-call provenance.
+  mission through an injected executor, writes size-bounded atomic artifacts,
+  and blocks real-provider readiness without a canonicalized model-effect
+  receipt set and matching trace digest.
+- Mission catalog schema/version, per-mission CLI/Telegram coverage, mission-ID
+  allowlisting, artifact size limits, atomic replacement, and artifact-I/O
+  failure classification are fail-closed.
 - Added a CLI path that refuses publication for fixture runs and for missing or
   unverifiable artifacts.
 - Readiness now accepts the canonical mission catalog and refuses a ready
@@ -38,7 +42,7 @@ implementation bar are not met.
 7 runs, 27 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_mission_runner_test.rb
-2 runs, 16 assertions, 0 failures, 0 errors, 0 skips
+4 runs, 19 assertions, 0 failures, 0 errors, 0 skips
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/openclaw_benchmark_readiness_cli_test.rb
 1 runs, 4 assertions, 0 failures, 0 errors, 0 skips

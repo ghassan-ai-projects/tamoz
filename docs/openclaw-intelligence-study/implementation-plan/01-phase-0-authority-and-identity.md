@@ -5,7 +5,9 @@ Status: partial — descriptor and logical/attempt identity slice implemented on
 Completed in this pass: descriptor policy/schema/source digest completion and
 verification, closed policy vocabulary, source digest-map binding, pure
 logical identity construction with checkpointed iteration/sub-operation, and
-SessionEffects/session-record propagation of those identity fields.
+SessionEffects/session-record propagation of those identity fields. The
+operation-bearing logical identity preimage is explicitly versioned as v3;
+fresh-schema runs must use that protocol.
 
 Remaining blocker: the full phase still needs the MCP untrusted-data fencing
 audit, scheduler template provenance enforcement, descriptor audit artifact,

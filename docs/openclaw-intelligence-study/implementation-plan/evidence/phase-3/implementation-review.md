@@ -29,14 +29,16 @@ Status: partial; the Phase 3 exit bar and global implementation bar are not met.
   artifact resolution coverage, effect-receipt reuse after reopen, and graph
   version 4 for the compaction state channel.
 - Added scheduler status projection with schedule/occurrence/request identity,
-  grant revision, authority state, pause reason, and delivery outcome.
+  grant revision, authority state, pause reason, and delivery outcome; the
+  worker now acknowledges and completes materialized occurrences through the
+  schedule store after durable graph execution.
 
 ## Not delivered
 
 - Restart-across-compaction kill coverage and artifact-resolution assertions
   across all surfaces remain open.
 - Restart across a compaction boundary, composed CLI/Telegram trace parity, and
-  scheduler recovery metadata remain unproven.
+  scheduler crash/recovery acceptance metadata remain unproven.
 - No provider or intelligence evidence is claimed; current tests are fixture
   and durable-plumbing tests.
 
@@ -71,9 +73,9 @@ offenses in older large fixtures.
 Enola post-change verification:
 
 ```text
-snapshot_id: sha256:8708cb336915e6c4708b71b49fe8a6e9cd9b578bb660e4adaf84255c30774f2d
+snapshot_id: sha256:a57332367ea9801dd53fcda2c7d054f649170d3a2000957f3b8d7a8b603d89c1
 enola: 0.2.7-51-g72cd079
-facts: 10031; insights: 52; files parsed: 502/544; parse errors: 0
+facts: 10057; insights: 52; files parsed: 502/544; parse errors: 0
 receipt comparison: equivalent inputs; 0 extraction-quality regressions
 architecture diff: 0 new findings
 ```
@@ -81,7 +83,7 @@ architecture diff: 0 new findings
 The focused continuation suites also passed: adaptive session (5 runs, 42
 assertions), child task (6, 17), child runtime (3, 9), worker (23, 107),
 schedule/status (8, 60), session kill matrix (6, 65), session (11, 73),
-communications gateway (13, 54), readiness (7, 27), runner (2, 16), and
+communications gateway (13, 54), readiness (7, 27), runner (4, 19), and
 readiness CLI (1, 4). The changed production seams linted cleanly with cache
 disabled.
 

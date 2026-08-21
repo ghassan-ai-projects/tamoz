@@ -3,6 +3,7 @@
 require 'digest'
 require 'fileutils'
 require 'pathname'
+require 'tempfile'
 
 module Tamoz
   module Evals
@@ -13,9 +14,13 @@ module Tamoz
       # publication, not a second agent runtime or provider client.
       class OpenclawMissionRunner
         SCHEMA_VERSION = 'openclaw.evidence.v1'
+        CATALOG_SCHEMA_VERSION = 'openclaw.missions.v1'
         RUN_KINDS = %w[fixture real_provider].freeze
         MISSION_STATUSES = %w[ready blocked unavailable].freeze
-        PROVIDER_CALLS = 'provider_calls'
+        PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
+        PROVIDER_RECEIPT_STATUSES = %w[succeeded failed unknown].freeze
+        MISSION_ID_PATTERN = /\A[a-z0-9][a-z0-9_-]{0,127}\z/
+        MAX_ARTIFACT_BYTES = 131_072
 
         Result = Data.define(:manifest, :artifacts)
 
@@ -79,18 +84,24 @@ module Tamoz
         end
 
         def validate_catalog!
-          valid = @catalog.is_a?(Hash) && @catalog['missions'].is_a?(Array) && !@catalog['missions'].empty?
+          valid = valid_catalog_shape?
           raise SchemaError, 'OpenClaw mission catalog must contain missions' unless valid
           raise SchemaError, 'OpenClaw mission ids must be unique' unless mission_ids.uniq == mission_ids
 
           @catalog.fetch('missions').each { |mission| validate_catalog_mission!(mission) }
         end
 
+        def valid_catalog_shape?
+          @catalog.is_a?(Hash) && @catalog.keys.sort == %w[missions schema_version] &&
+            @catalog['schema_version'] == CATALOG_SCHEMA_VERSION &&
+            @catalog['missions'].is_a?(Array) && !@catalog['missions'].empty?
+        end
+
         def validate_catalog_mission!(mission)
           validate_catalog_shape!(mission)
           validate_catalog_identity!(mission)
           validate_catalog_lists!(mission)
-          return if mission.fetch('surfaces').all? { |surface| Readiness::MISSION_SURFACES.include?(surface) }
+          return if mission.fetch('surfaces').sort == Readiness::MISSION_SURFACES.sort
 
           raise SchemaError, 'OpenClaw mission catalog surfaces are invalid'
         end
@@ -103,6 +114,7 @@ module Tamoz
 
         def validate_catalog_identity!(mission)
           return if mission['id'].is_a?(String) && !mission['id'].empty? &&
+                    MISSION_ID_PATTERN.match?(mission['id']) &&
                     mission['goal'].is_a?(String) && !mission['goal'].empty?
 
           raise SchemaError, 'OpenClaw mission catalog mission identity is invalid'
@@ -197,13 +209,47 @@ module Tamoz
             raise SchemaError, 'ready mission is missing run-kind provenance'
           end
           return unless @run_kind == 'real_provider'
-          return if provenance[PROVIDER_CALLS].is_a?(Integer) && provenance[PROVIDER_CALLS] >= 1
 
-          raise SchemaError, 'real-provider mission must record a provider call'
+          receipts = provenance['provider_effect_receipts']
+          validate_provider_receipts!(receipts)
+          return if provenance['provider_trace_digest'] == digest(receipts)
+
+          raise SchemaError, 'real-provider mission trace digest does not match its receipts'
+        end
+
+        def validate_provider_receipts!(receipts)
+          unless valid_provider_receipts?(receipts)
+            raise SchemaError, 'real-provider mission must include effect receipts'
+          end
+
+          return if receipts.any? { |receipt| receipt.fetch('status') == 'succeeded' }
+
+          raise SchemaError, 'real-provider mission must include a succeeded provider receipt'
+        end
+
+        def valid_provider_receipts?(receipts)
+          receipts.is_a?(Array) && !receipts.empty? && receipts.all? { |receipt| valid_provider_receipt?(receipt) }
+        end
+
+        def valid_provider_receipt?(receipt)
+          return false unless receipt.is_a?(Hash)
+          return false unless PROVIDER_RECEIPT_FIELDS.all? { |field| receipt[field].is_a?(String) }
+
+          receipt.fetch('operation').start_with?('model.generate.') &&
+            PROVIDER_RECEIPT_STATUSES.include?(receipt.fetch('status'))
         end
 
         def write_artifact(mission, result, artifact_directory)
           path = "#{mission.fetch('id')}.json"
+          document = artifact_document(mission, result)
+          bytes = "#{CanonicalJSON.dump(document)}\n"
+          raise SchemaError, 'OpenClaw evidence artifact exceeds the size limit' if bytes.bytesize > MAX_ARTIFACT_BYTES
+
+          atomic_write(artifact_directory.join(path), bytes, mission.fetch('id'))
+          { 'path' => path, 'digest' => "sha256:#{Digest::SHA256.hexdigest(bytes)}" }
+        end
+
+        def artifact_document(mission, result)
           document = {
             'schema_version' => SCHEMA_VERSION,
             'protocol_sha256' => Readiness.protocol_digest(@protocol),
@@ -218,10 +264,20 @@ module Tamoz
             'provenance' => result.fetch('provenance'),
             'result' => result.except('provenance')
           }
-          bytes = "#{CanonicalJSON.dump(document)}\n"
-          artifact_path = artifact_directory.join(path)
-          File.write(artifact_path, bytes, encoding: Encoding::UTF_8)
-          { 'path' => path, 'digest' => "sha256:#{Digest::SHA256.hexdigest(bytes)}" }
+          raise Tamoz::SensitiveValueError, 'OpenClaw evidence contains a secret-shaped value' if
+            Tamoz::Core.secret_shaped?(document)
+
+          document
+        end
+
+        def atomic_write(path, bytes, mission_id)
+          Tempfile.create([".#{mission_id}-", '.tmp'], path.dirname) do |temporary|
+            temporary.write(bytes)
+            temporary.flush
+            temporary.fsync
+            temporary.close
+            File.rename(temporary.path, path)
+          end
         end
 
         def mission_ids

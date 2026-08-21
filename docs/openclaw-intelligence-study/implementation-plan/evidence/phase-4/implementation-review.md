@@ -19,9 +19,13 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 - Child tasks now enqueue through the existing request inbox, execute under a
   local-only narrowed toolbox, persist terminal status, and support exactly-once
   digest-bound parent adoption.
-- Child bindings pin the resolved profile digest; worker reconciliation repairs
-  a missing child request, and worker failure/budget paths settle child status
-  and close the open occurrence.
+- Child bindings and thread authority bindings are immutable after admission;
+  worker reconciliation repairs missing requests and settles terminal requests
+  left behind by a crash. Recoverable in-flight errors retain the child and open
+  occurrence for same-execution recovery.
+- Scheduler occurrences are joined to the ordinary request by deterministic
+  request identity and move through acknowledgement and terminal completion
+  after the graph produces a durable view.
 
 ## Not delivered
 
@@ -48,6 +52,9 @@ Status: partial; the Phase 4 exit bar and global implementation bar are not met.
 
 /opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_worker_test.rb
 23 runs, 107 assertions, 0 failures, 0 errors, 0 skips
+
+/opt/homebrew/bin/rbenv exec bundle exec ruby -Itest test/agent_schedule_test.rb
+8 runs, 61 assertions, 0 failures, 0 errors, 0 skips
 ```
 
 These are policy and persistence tests, not evidence that an agent selected or

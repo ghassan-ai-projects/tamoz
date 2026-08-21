@@ -14,7 +14,10 @@ module Tamoz
       # (a fresh execution id is assigned per claim). The key is prefixed so
       # `verify_identity!` can select the logical binding.
       LOGICAL_PREFIX = 'logical:'
-      LOGICAL_IDENTITY_DOMAIN = "tamoz.sqlite.effect.logical.v2\n"
+      # v3 deliberately names the operation-bearing preimage. Existing journal
+      # rows are not replay-compatible with this identity contract; the fresh
+      # schema boundary must therefore use the new protocol explicitly.
+      LOGICAL_IDENTITY_DOMAIN = "tamoz.sqlite.effect.logical.v3\n"
 
       module_function
 
