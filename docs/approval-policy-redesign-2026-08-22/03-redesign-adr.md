@@ -43,7 +43,9 @@ deleted outright.
 - A policy change is a YAML edit in `tamoz-approval` — zero Ruby changes, zero
   core/agent changes, and that includes reclassifying a tool to a stricter tier
   (tier assignment is data, §2.1). A profile change is selecting a different named
-  profile; adding one is dropping a file.
+  profile; adding one is dropping a file. Named profiles also express Claude Code's
+  permission modes (plan / review / implement / auto / bounded bypass), switchable
+  live mid-session (§2.6).
 - Classification collapses from 8 rule sites in 4 gems to 1 data file + 1 evaluator.
 - Denial becomes a structured tool result the model can react to; turns no longer die
   on the first "no".
@@ -334,8 +336,9 @@ human answer and a timeout landing together is decided by `resolve`'s idempotenc
 ### 2.2 Profile mechanism
 
 A session binds one profile by name at start (CLI flag / worker config / schedule
-spec). Profile resolution = base document + profile overlay, computed once at load,
-digest-pinned. The name resolves by pure path lookup — `<document_dir>/profiles/
+spec), and may be explicitly re-bound mid-session by an operator-addressed mode switch
+(§2.6) — the one exception to §1.5's in-flight rev stability. Profile resolution = base
+document + profile overlay, computed once at load, digest-pinned. The name resolves by pure path lookup — `<document_dir>/profiles/
 <name>.yaml`, or the gem's bundled `policy/profiles/` for the bundled base document —
 so a custom document path pairs with the overlays beside it, unknown names fail at
 load, and adding a profile is dropping a file, never a Ruby edit. The old profile
@@ -434,6 +437,62 @@ makes "why was this asked/denied" answerable from the database alone without
 exposing a single argument. Appends are idempotent on `decision_id`, so a graph-node
 retry never double-writes (§8). This log is in
 *addition* to the existing graph-state journaling (`session.rb:427`), which stays.
+
+### 2.6 Mid-session mode switch
+
+Profiles are also the redesign's answer to Claude Code's permission *modes*: a mode is
+a named `tier_defaults` preset, so the mode ladder is expressed as profiles —
+`plan` (reads allow, everything else deny), `review` (workspace_write/local_execute
+ask — "manual"), `implement` (the default — "accept edits"), `auto`
+(workspace_write/local_execute allow), and a bounded `bypass` (all tiers allow, but
+deny **rules** and unknown-tool fail-closed still hold — a profile overrides tier
+defaults, never rules, §2.2). Adding a mode is dropping a profile file.
+
+The one capability profiles-at-start do not give is Claude Code's live mode cycling.
+This ADR adds it, as a **deliberate, bounded exception** to the in-flight rev binding
+of §1.5 — not a general relaxation of it.
+
+**Scope.** A mode switch changes only the **approval engine's active policy profile**
+for one session (`tier_defaults` + `on_timeout`). It does **not** touch the session's
+*agent* profile (`Session#initialize`'s `profile_roles`, `profile_budgets`,
+`profile_narrowed`, allowed tools) or its graph version/nodes — those stay bound at
+construction. Permission behavior changes; capability and budget do not.
+
+**The rule that keeps reload and switch distinct.** §1.5 makes a global reload
+*invisible* to in-flight sessions on purpose (stability). A mode switch is the opposite
+and the only exception: an **explicit, operator-addressed, per-session** rebind that
+applies immediately to *this* session and *only* this session.
+
+- A **global reload** (`tamoz approve --reload`) still never changes a running
+  session's bound rev.
+- A **switch** (`tamoz approve --mode <name> --thread <id>`) rebinds one session's
+  active `(profile, policy_rev)` and never leaks to any other session.
+
+**Delivery reuses proven machinery, no new runtime.** The switch is a durable
+per-thread control message on the **existing request inbox** the worker already drains
+each `poll_once` — the same channel as `submit_cancel` / `submit_follow_up`
+(`cli_session_commands.rb`). The worker's poll pass (already gaining reload pickup,
+§1.5) applies a pending switch at a durable boundary and rebinds the session's rev; the
+interactive one-shot engine (in-memory) swaps its active document directly. Restart
+safety is the inbox's existing property.
+
+**Three pinned semantics** (the decisions this exception forces):
+
+1. **Applies to the next decision only.** A switch never re-decides an in-flight step
+   and never reverses an already-approved or already-executed effect. Approval is a
+   checkpoint, not a boundary (§4.1 deviation 3); a switch moves the checkpoint for
+   future calls, nothing retroactive.
+2. **Tightening drops stale grants automatically.** The switch changes the session's
+   bound `policy_rev`; grant lookup keys on that rev (§2.3), so grants minted under the
+   old mode simply stop matching — fail-closed, no sweep. Loosening issues new grants
+   going forward as normal.
+3. **A parked ask is unaffected.** It resolves against its **issuing decision**'s
+   stored `grant_offer` (§1.3), exactly as under a reload — a switch mid-park changes
+   nothing for the parked ask; the new mode governs the *next* decision.
+
+**Audit.** The switch is recorded in the decision log (a `mode_switch` record: actor,
+thread, from-rev, to-rev, timestamp), so "who changed the mode, when, to what" is
+answerable from the database alone (§2.5 discipline).
 
 ---
 
