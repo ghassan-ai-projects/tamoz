@@ -89,7 +89,7 @@ module Tamoz
       # The bound checkpoint store. Taken from a session rather than bound
       # separately so the worker reads the inbox through exactly the codec the
       # sessions write it with.
-      def checkpoints = canonical_session.app.checkpointer
+      def checkpoints = metadata_session.app.checkpointer
 
       def schedule_store
         @schedule_store ||= @adapter.bind_schedule_store(checkpoints)
@@ -124,6 +124,14 @@ module Tamoz
 
       def bind_thread_profile(thread_id, profile_id)
         return if profile_id.nil?
+
+        existing = record(THREAD_BINDINGS, thread_id)
+        if existing
+          return if existing.fetch('profile') == profile_id
+
+          raise Tamoz::StoreConflictError,
+                "thread #{thread_id.inspect} is already bound to profile #{existing.fetch('profile').inspect}"
+        end
 
         upsert(THREAD_BINDINGS, thread_id, {"profile" => profile_id})
       end
@@ -179,6 +187,187 @@ module Tamoz
       # reaches a terminal state, so it is also the durable identity that lets an
       # approval resume the SAME occurrence rather than starting a new one.
       OPEN_OCCURRENCES = %w[tamoz worker occurrence].freeze
+      CHILD_TASKS = %w[tamoz worker child_task].freeze
+      CHILD_BINDINGS = %w[tamoz worker child_binding].freeze
+      CHILD_ADOPTIONS = %w[tamoz worker child_adoption].freeze
+      CHILD_BUDGETS = %w[tamoz worker child_budget].freeze
+      CHILD_ACTIVE_STATUSES = %w[pending running].freeze
+
+      def create_child_task(child_task, parent_profile:)
+        unless child_task.is_a?(ChildTask)
+          raise ArgumentError, "child_task must be a Tamoz::Agent::ChildTask"
+        end
+
+        child_task.assert_narrowed_to!(parent_profile)
+
+        durable("create child task #{child_task.child_id.inspect}") do
+          existing = @adapter.store.get(CHILD_TASKS, child_task.child_id)
+          if existing && !existing.deleted
+            stored = ChildTask.from_h(existing.value)
+            return stored if stored.to_h == child_task.to_h
+
+            raise Tamoz::StoreConflictError,
+                  "child task #{child_task.child_id.inspect} is already bound to different content"
+          end
+          upsert(CHILD_TASKS, child_task.child_id, child_task.to_h)
+          child_task
+        end
+      end
+
+      def enqueue_child_task(child_task, parent_profile:)
+        reserve_child_slot!(child_task, parent_profile:) if child_active?(child_task)
+        begin
+          profile_id = parent_profile.fetch('profile_id')
+          stored = create_child_task(child_task, parent_profile:)
+          bound_profile = profile(profile_id)
+          binding = {
+            'child_id' => stored.child_id,
+            'parent_profile_id' => String(profile_id),
+            'parent_thread_id' => stored.parent_thread_id,
+            'parent_request_id' => stored.parent_request_id,
+            'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
+            'profile_digest' => bound_profile&.canonical_digest,
+            'capabilities' => stored.capability_profile.fetch('capabilities', [])
+          }.compact
+          existing_binding = record(CHILD_BINDINGS, stored.child_id)
+          if existing_binding && existing_binding != binding
+            raise Tamoz::StoreConflictError,
+                  "child task #{stored.child_id.inspect} is already bound to different authority"
+          end
+          upsert(CHILD_BINDINGS, stored.child_id, binding) unless existing_binding
+          bind_thread_profile(stored.child_id, profile_id)
+          enqueue_child_request(stored)
+          stored
+        rescue StandardError
+          release_child_slot!(child_task) if child_active?(child_task)
+          raise
+        end
+      end
+
+      def reconcile_child_requests(limit: 500)
+        child_tasks(limit:).filter_map do |child|
+          next unless CHILD_ACTIVE_STATUSES.include?(child.status)
+
+          request = checkpoints.fetch_request(
+            thread_id: child.child_id,
+            request_id: child_request_id(child.child_id)
+          )
+          if request&.terminal?
+            settle_child_request(child, request)
+            next child.child_id
+          end
+          next unless child.status == 'pending'
+          next if request
+
+          enqueue_child_request(child)
+          child.child_id
+        end
+      end
+
+      def settle_child_task(child_id, view)
+        child = child_task(child_id)
+        return unless child && CHILD_ACTIVE_STATUSES.include?(child.status)
+        return unless %i[completed failed blocked].include?(view.status)
+
+        receipt = Tamoz::Core.jcs(
+          'thread_id' => child_id,
+          'checkpoint_id' => view.checkpoint_id,
+          'execution_id' => view.execution_id,
+          'terminal' => view.terminal,
+          'verification' => view.state[:verification],
+          'effect_receipts' => view.effect_receipts,
+          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
+            Array(compaction['artifact_refs'])
+          end
+        )
+        transition_child_task(child_id) do |current|
+          next current unless CHILD_ACTIVE_STATUSES.include?(current.status)
+
+          case view.status
+          when :completed then current.complete(receipt:)
+          when :failed then current.fail(receipt:)
+          else current.unknown(receipt:)
+          end
+        end
+      end
+
+      def enqueue_child_request(child)
+        checkpoints.enqueue_request(
+          thread_id: child.child_id,
+          request_id: child_request_id(child.child_id),
+          operation: :turn,
+          payload: { 'task' => child.task },
+          delivery: :queue
+        )
+      end
+
+      def child_task(child_id)
+        durable("child task #{child_id.inspect}") do
+          value = record(CHILD_TASKS, String(child_id))
+          value && ChildTask.from_h(value)
+        end
+      end
+
+      def transition_child_task(child_id)
+        durable("transition child task #{child_id.inspect}") do
+          entry = @adapter.store.get(CHILD_TASKS, String(child_id))
+          unless entry && !entry.deleted
+            raise Tamoz::StoreConflictError,
+                  "child task #{child_id.inspect} does not exist"
+          end
+
+          next_task = yield ChildTask.from_h(entry.value)
+          unless next_task.is_a?(ChildTask) && next_task.child_id == child_id
+            raise ArgumentError, "child task transition returned an invalid record"
+          end
+
+          @adapter.store.put(CHILD_TASKS, String(child_id), next_task.to_h, if_version: entry.version)
+          release_child_slot!(next_task) unless CHILD_ACTIVE_STATUSES.include?(next_task.status)
+          next_task
+        end
+      end
+
+      def child_tasks(limit: 500)
+        durable("child tasks") do
+          @adapter.store.each(CHILD_TASKS, limit:).filter_map do |entry|
+            ChildTask.from_h(entry.value) unless entry.deleted
+          end
+        end
+      end
+
+      def adopt_child_task(child_id, parent_thread_id:)
+        child = child_task(child_id)
+        raise Tamoz::StoreConflictError, "child task #{child_id.inspect} does not exist" unless child
+        unless child.parent_thread_id == String(parent_thread_id)
+          raise Tamoz::Agent::ToolPolicyError, 'child adoption parent does not match'
+        end
+        raise Tamoz::StoreConflictError, "child task #{child_id.inspect} is not terminal" unless child.adoptable?
+
+        durable("adopt child task #{child_id.inspect}") do
+          existing = record(CHILD_ADOPTIONS, child.child_id)
+          if existing
+            raise Tamoz::StoreConflictError, 'child adoption is bound to a different completion' unless
+              existing.fetch('completion_digest') == child.completion_digest
+
+            return existing
+          end
+
+          adoption = {
+            'child_id' => child.child_id,
+            'parent_thread_id' => child.parent_thread_id,
+            'parent_request_id' => child.parent_request_id,
+            'status' => child.status,
+            'completion_digest' => child.completion_digest,
+            'adopted_at' => Time.now.utc.iso8601
+          }
+          upsert(CHILD_ADOPTIONS, child.child_id, adoption)
+          adoption
+        end
+      end
+
+      def child_adoption(child_id)
+        durable("child adoption #{child_id.inspect}") { record(CHILD_ADOPTIONS, String(child_id)) }
+      end
 
       def open_occurrence(thread_id, occurrence_id)
         upsert(OPEN_OCCURRENCES, thread_id,
@@ -289,6 +478,47 @@ module Tamoz
         end
       end
 
+      # The schedule store owns schedule/occurrence state; the worker owns the
+      # operator's current grant. This projection joins them without treating a
+      # queued or delivered request as execution success.
+      def scheduled_work(limit: 500)
+        store = schedule_store
+        return [] unless store.respond_to?(:list_schedules)
+
+        durable("scheduled work") do
+          store.list_schedules(limit:).map do |schedule|
+            occurrence = store.list_occurrences(
+              schedule_id: schedule.id, limit: 100
+            ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
+            grant = Tamoz::Scheduler::GrantIntersector.intersect(
+              schedule.capability_grant, worker_grant
+            )
+            scheduled_work_document(schedule, occurrence, grant)
+          end
+        end
+      rescue StoreUnavailableError => error
+        [{
+          "schema" => "tamoz.scheduled_work.v1",
+          "task_state" => "unavailable",
+          "effect_state" => "unknown",
+          "capability_state" => "unknown",
+          "delivery_state" => "unknown",
+          "phase" => "unknown",
+          "next_action" => "inspect",
+          "error_category" => "schedule_store_unavailable",
+          "error" => error.message.byteslice(0, 512)
+        }]
+      end
+
+      def schedule_occurrence(request_id)
+        store = schedule_store
+        return unless store.respond_to?(:occurrence_for_request)
+
+        durable("scheduled occurrence #{request_id.inspect}") do
+          store.occurrence_for_request(request_id)
+        end
+      end
+
       # Human decisions about paused work, recorded by `tamoz approve` and the
       # channel gateway, consumed by the worker.
       #
@@ -370,10 +600,86 @@ module Tamoz
       # profile) pass through unchanged: they are already the right answer.
       def durable(what)
         yield
-      rescue Error
+      rescue Tamoz::Error
         raise
       rescue StandardError => error
         raise StoreUnavailableError, "#{what} is unavailable: #{error.class}: #{error.message}"
+      end
+
+      def child_active?(child)
+        CHILD_ACTIVE_STATUSES.include?(child.status)
+      end
+
+      def child_budget_key(child)
+        "#{child.parent_thread_id}/#{child.parent_request_id}"
+      end
+
+      def reserve_child_slot!(child, parent_profile:)
+        limit = Integer(parent_profile.fetch('max_child_concurrency'))
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+
+        durable("reserve child capacity for #{child.parent_thread_id.inspect}") do
+          with_child_budget_retry do |store|
+            key = child_budget_key(child)
+            entry, current = child_budget_state(store, key, limit)
+            active = Array(current['active_child_ids'])
+            return if active.include?(child.child_id)
+
+            ensure_child_capacity!(current, active, limit)
+
+            store.put(
+              CHILD_BUDGETS, key,
+              current.merge('limit' => limit, 'active_child_ids' => active + [child.child_id]),
+              if_version: entry&.version
+            )
+          end
+        end
+      end
+
+      def release_child_slot!(child)
+        durable("release child capacity for #{child.parent_thread_id.inspect}") do
+          with_child_budget_retry do |store|
+            key = child_budget_key(child)
+            entry = store.get(CHILD_BUDGETS, key)
+            return unless entry && !entry.deleted
+
+            active = Array(entry.value['active_child_ids'])
+            next unless active.include?(child.child_id)
+
+            store.put(
+              CHILD_BUDGETS, key,
+              entry.value.merge('active_child_ids' => active - [child.child_id]),
+              if_version: entry.version
+            )
+          end
+        end
+      end
+
+      def child_budget_state(store, key, limit)
+        entry = store.get(CHILD_BUDGETS, key)
+        current = if entry && !entry.deleted
+                    entry.value
+                  else
+                    { 'limit' => limit, 'active_child_ids' => [] }
+                  end
+        [entry, current]
+      end
+
+      def ensure_child_capacity!(current, active, limit)
+        return if current['limit'] == limit && active.length < limit
+
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted'
+      end
+
+      def with_child_budget_retry
+        attempts = 0
+        begin
+          yield @adapter.store
+        rescue Tamoz::StoreConflictError
+          attempts += 1
+          retry if attempts < 3
+          raise ToolPolicyError, 'child delegation concurrency reservation conflicted'
+        end
       end
 
       # The record at (namespace, key), or nil when there is none.
@@ -405,7 +711,53 @@ module Tamoz
 
       # The session that will drive `thread_id`, under the authority bound to it.
       def session_for(thread_id)
+        child = child_task(thread_id)
+        return session_for_child(child) if child
+
         session_for_profile(thread_profile(thread_id))
+      end
+
+      def session_for_child(child)
+        binding = durable("child binding #{child.child_id.inspect}") do
+          record(CHILD_BINDINGS, child.child_id)
+        end
+        raise Error, "child task #{child.child_id.inspect} has no authority binding" unless binding
+
+        profile_id = binding.fetch('parent_profile_id')
+        resolved = load_profile(profile_id)
+        expected_digest = binding.fetch('profile_digest', nil)
+        unless expected_digest && resolved.canonical_digest == expected_digest
+          raise ToolPolicyError, "child authority profile changed after enqueue"
+        end
+
+        @monitor.synchronize do
+          key = ['child', child.child_id]
+          @sessions[key] ||= with_child_delegation_context(child) do
+            build_session(
+              profile_id,
+              allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
+              mcp: nil,
+              resolved_profile: resolved
+            )
+          end
+        end
+      end
+
+      def child_delegation_context
+        Thread.current[:tamoz_agent_child_delegation_context]
+      end
+
+      def with_child_delegation_context(child)
+        previous = Thread.current[:tamoz_agent_child_delegation_context]
+        Thread.current[:tamoz_agent_child_delegation_context] = {
+          current_depth: child.depth,
+          remaining_depth: child.delegation_policy.fetch('remaining_depth'),
+          remaining_concurrency: child.delegation_policy.fetch('remaining_concurrency'),
+          capabilities: child.capability_profile.fetch('capabilities')
+        }.freeze
+        yield
+      ensure
+        Thread.current[:tamoz_agent_child_delegation_context] = previous
       end
 
       def session_for_profile(profile_id)
@@ -416,12 +768,20 @@ module Tamoz
 
       def canonical_session = session_for_profile(nil)
 
-      # The capability names the agent can actually dispatch, read off the sealed
-      # registry rather than off configuration. This is the honest answer to "is
-      # websearch really available?", and it is deliberately not the same value as
-      # `RuntimeDirectory#enabled_sources`.
+      # The local capabilities available without materializing any remote source.
+      # Remote tools are intentionally absent until an explicit session build.
       def capability_catalog
-        durable("capability catalog") { canonical_session.capabilities.names(:action).sort }
+        durable("capability catalog") { local_capability_catalog }
+      end
+
+      # Configuration-only capability visibility. `peek` validates the sealed
+      # operator declaration and reports remote sources as unmaterialized; it
+      # never starts a process or opens a network connection.
+      def capability_peek
+        {
+          "local" => capability_catalog,
+          "mcp" => McpSourceBuilder.new(@directory).peek
+        }.freeze
       end
 
       def head_request(thread_id)
@@ -568,30 +928,114 @@ module Tamoz
         @mcp_source = McpSourceBuilder.new(@directory).build
       end
 
+      def local_capability_catalog
+        local_toolbox.names.sort.freeze
+      end
+
       def skill_rejections
         skills_snapshot.respond_to?(:rejections) ? Array(skills_snapshot.rejections) : []
       end
 
       private
 
-      def build_session(profile_id)
-        resolved = profile(profile_id)
-        toolbox = if resolved
-                    Toolbox.new(
-                      root: resolved.canonical_root,
-                      allow_changes: resolved.allow_changes?,
-                      checks: resolved.checks.transform_values { |check| check.fetch("argv") },
-                      check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
-                      allowed_tools: resolved.tools_allowed,
-                      approval_required: unattended_approval_required(resolved),
-                      skills: skills_snapshot
-                    )
-                  else
-                    # No profile means no preauthorization, so the only thing a
-                    # worker may do unattended is read.
-                    Toolbox.new(root: @directory.workspace_root, allow_changes: false,
-                                checks: {}, skills: skills_snapshot)
-                  end
+      def scheduled_work_document(schedule, occurrence, grant)
+        state = occurrence&.state&.to_s || "not_materialized"
+        revoked = grant.fetch("status") == :revoked
+        paused = !schedule.enabled || revoked
+        {
+          "schema" => "tamoz.scheduled_work.v1",
+          "schedule_id" => schedule.id,
+          "schedule_revision" => schedule.revision,
+          "definition_digest" => schedule.definition_digest,
+          "occurrence_id" => occurrence&.occurrence_id,
+          "request_id" => occurrence&.request_id,
+          "execution_state" => state,
+          "task_state" => paused ? "paused" : scheduled_task_state(state),
+          "effect_state" => scheduled_effect_state(state),
+          "capability_state" => grant.fetch("status").to_s,
+          "delivery_state" => scheduled_delivery_state(state),
+          "delivery_outcome" => scheduled_delivery_state(state),
+          "phase" => scheduled_phase(schedule, occurrence, revoked),
+          "pause_reason" => schedule_pause_reason(schedule, revoked),
+          "authority_revision" => schedule.revision,
+          "grant_revision" => Tamoz::Core.digest(
+            "tamoz.scheduler.grant.v1\n", schedule.capability_grant
+          ),
+          "effective_grant" => grant.fetch("effective"),
+          "next_action" => scheduled_next_action(schedule, state, revoked)
+        }.compact
+      end
+
+      def scheduled_task_state(state)
+        %w[due claimed enqueued running].include?(state) ? "active" : "terminal"
+      end
+
+      def scheduled_effect_state(state)
+        case state
+        when "running" then "running"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        else "pending"
+        end
+      end
+
+      def scheduled_delivery_state(state)
+        case state
+        when "enqueued" then "enqueued"
+        when "running" then "delivered"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "settled"
+        else "pending"
+        end
+      end
+
+      def scheduled_phase(schedule, occurrence, revoked)
+        return "paused" unless schedule.enabled
+        return "blocked" if revoked
+        return "scheduled" unless occurrence
+
+        case occurrence.state.to_s
+        when "running" then "running"
+        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        else "queued"
+        end
+      end
+
+      def schedule_pause_reason(schedule, revoked)
+        return "schedule_disabled" unless schedule.enabled
+        return "authority_revoked" if revoked
+
+        nil
+      end
+
+      def scheduled_next_action(schedule, state, revoked)
+        return "resume_schedule" unless schedule.enabled
+        return "review_authority" if revoked
+        return "wait_for_due_occurrence" if state == "not_materialized"
+        return "reconcile_unknown_outcome" if state == "unknown"
+
+        "inspect"
+      end
+
+      def local_toolbox
+        @local_toolbox ||= Toolbox.new(
+          root: @directory.workspace_root,
+          allow_changes: false,
+          checks: {},
+          skills: skills_snapshot
+        )
+      end
+
+      def metadata_session
+        @metadata_session ||= Session.new(
+          model: DeferredModel.new { @model_factory.call(profile: nil) },
+          toolbox: local_toolbox,
+          checkpointer: @adapter,
+          routing: @routing
+        )
+      end
+
+      def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil)
+        resolved = resolved_profile || profile(profile_id)
+        toolbox = session_toolbox(resolved, allowed_tools:)
 
         engine = memory_engine
         Session.new(
@@ -600,11 +1044,76 @@ module Tamoz
           checkpointer: @adapter,
           profile: resolved,
           profile_budgets: resolved && resolved.budgets,
+          profile_narrowed: !allowed_tools.nil?,
           memory: engine,
           memory_owner: engine && memory_owner,
-          mcp: mcp_source,
+          artifact_store: @adapter.bind_artifact_store(
+            tenant: "profile:#{profile_id || 'default'}"
+          ),
+          artifact_tenant: "profile:#{profile_id || 'default'}",
+          child_task_runtime: self,
+          mcp:,
           routing: @routing
         )
+      end
+
+      def session_toolbox(resolved, allowed_tools: nil)
+        unless resolved
+          return Toolbox.new(root: @directory.workspace_root, allow_changes: false,
+                             checks: {}, skills: skills_snapshot)
+        end
+
+        Toolbox.new(
+          root: resolved.canonical_root,
+          allow_changes: resolved.allow_changes?,
+          checks: resolved.checks.transform_values { |check| check.fetch("argv") },
+          check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
+          allowed_tools: narrowed_tools(resolved, allowed_tools),
+          approval_required: narrowed_approval_required(resolved, allowed_tools),
+          skills: skills_snapshot
+        )
+      end
+
+      def narrowed_tools(resolved, allowed_tools)
+        return resolved.tools_allowed unless allowed_tools
+
+        unknown = allowed_tools - resolved.tools_allowed
+        raise ToolPolicyError, "child capabilities exceed profile tools: #{unknown.join(', ')}" unless unknown.empty?
+
+        allowed_tools
+      end
+
+      def narrowed_approval_required(resolved, allowed_tools)
+        required = unattended_approval_required(resolved)
+        allowed_tools ? required & allowed_tools : required
+      end
+
+      def child_local_tools(capabilities)
+        capabilities.map do |capability|
+          name = String(capability)
+          unless name.start_with?('local:')
+            raise ToolPolicyError, "child capability source is not supported: #{name}"
+          end
+
+          name.delete_prefix('local:')
+        end.uniq.freeze
+      end
+
+      def child_request_id(child_id)
+        "child-request:#{child_id}"
+      end
+
+      def settle_child_request(child, request)
+        view = session_for_child(child).view(thread: child.child_id)
+        return settle_child_task(child.child_id, view) if
+          view && %i[completed failed blocked].include?(view.status)
+
+        transition_child_task(child.child_id) do |current|
+          next current unless CHILD_ACTIVE_STATUSES.include?(current.status)
+
+          receipt = "child request #{request.request_id} terminated #{request.status}"
+          request.status == :completed ? current.complete(receipt:) : current.fail(receipt:)
+        end
       end
     end
   end

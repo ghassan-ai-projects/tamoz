@@ -217,7 +217,10 @@ The redesign must preserve or strengthen these invariants:
 - Fix and test Telegram message identity separate from update identity.
 - Hash meaningful inbound payload content and quarantine same-ID/different-content.
 - Carry delivery owner/fence/attempt tokens through send-start and completion.
-- Enforce configured inbound bytes, open requests, response bytes, and capacity.
+- Enforce the validated-but-unenforced limits (`max_open_requests`,
+  `max_inbound_bytes`, `max_response_bytes`) at their real boundaries; keep the
+  already-enforced capacity limits (`outbox_capacity`, `control_capacity`,
+  `max_denial_prompts_per_request`) under regression test.
 - Give the drainer typed handling for auth/storage failures.
 
 ### Stage 1 — truthful status and command parity
@@ -225,7 +228,10 @@ The redesign must preserve or strengthen these invariants:
 - Define the external state vocabulary and reason-code registry.
 - Add request references to acknowledgements and status.
 - Implement or remove `/new`, `/redirect`, and `/whoami`.
-- Make `/status` expose task and delivery axes.
+- Extend `/status` (which already projects task, effect, capability, delivery,
+  phase, and next-action fields) into a caller-bound, reference-addressed read
+  model: render the terminal reason, add queue position/age, and translate
+  internal states into the shared vocabulary.
 - Exclude pending/unknown terminal output from future context.
 
 ### Stage 2 — bounded semantic progress

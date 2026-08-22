@@ -58,6 +58,7 @@ module Tamoz
                          operation: operation_text
                        )
                      end
+        logical_key_text = effect_key
         request_bytes = @store.checkpoint_codec.state_codec.dump(request)
         request_digest = Wire.digest(
           request_bytes,
@@ -95,15 +96,15 @@ module Tamoz
               'effect.prepare.insert',
               <<~SQL,
                 INSERT INTO tamoz_effects(
-                  effect_key, thread_id, namespace, execution_id, task_id,
+                  effect_key, logical_key, thread_id, namespace, execution_id, task_id,
                   call_index, operation, safety, request_digest, status,
                   current_attempt, requires_reconciliation,
                   created_at_ms, updated_at_ms
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', 1, 0, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', 1, 0, ?, ?)
               SQL
               [
-                effect_key, lease.thread_id, lease.namespace, execution, task,
+                effect_key, logical_key_text, lease.thread_id, lease.namespace, execution, task,
                 index, operation_text, safety_text, request_digest, now, now
               ]
             )
@@ -112,6 +113,9 @@ module Tamoz
               effect_key:,
               attempt_number: 1,
               attempt_token: candidate_token,
+              attempt_identity: EffectJournalKey.attempt_identity(
+                logical_key_text, 1, execution_id: execution, fence: lease.fence
+              ),
               fence: lease.fence,
               attempt_ttl: @attempt_ttl,
               now:
@@ -141,7 +145,7 @@ module Tamoz
             request_digest:,
             logical_key:
           )
-          status = row.fetch(8)
+          status = row.fetch(9)
           case status
           when 'succeeded'
             action = :return
@@ -155,7 +159,7 @@ module Tamoz
             attempt = EffectJournalRows.attempt(
               tx,
               effect_key,
-              row.fetch(10),
+              row.fetch(11),
               'effect.prepare.current_attempt'
             )
             raise IntegrityError, 'effect current attempt is missing' unless attempt
@@ -176,13 +180,14 @@ module Tamoz
                   WHERE effect_key = ? AND attempt_number = ?
                     AND status = 'prepared'
                 SQL
-                [now, effect_key, row.fetch(10)]
+                [now, effect_key, row.fetch(11)]
               )
               EffectAttemptLedger.grant_next!(
                 tx,
                 row:,
                 effect_key:,
                 token: candidate_token,
+                execution_id: execution,
                 fence: lease.fence,
                 attempt_ttl: @attempt_ttl,
                 now:
@@ -197,6 +202,7 @@ module Tamoz
                   row:,
                   effect_key:,
                   token: candidate_token,
+                  execution_id: execution,
                   fence: lease.fence,
                   attempt_ttl: @attempt_ttl,
                   now:
@@ -224,7 +230,7 @@ module Tamoz
                     WHERE effect_key = ? AND attempt_number = ?
                       AND status = 'running'
                   SQL
-                  [now, effect_key, row.fetch(10)]
+                  [now, effect_key, row.fetch(11)]
                 )
                 tx.execute(
                   'effect.prepare.unknown_head',

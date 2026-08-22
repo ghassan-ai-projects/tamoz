@@ -213,6 +213,39 @@ class AgentSessionEffectTest < Minitest::Test
     refute_kind_of Tamoz::Agent::ToolError, mapped
   end
 
+  def test_typed_remote_outcome_keeps_provenance_and_redacts_before_journaling
+    observation = Data.define(:server_id, :text, :truncated).new(
+      server_id: "remote-server",
+      text: "answer sk-live-12345678",
+      truncated: true
+    )
+    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+      status: :succeeded, observation:, interrupt: nil, denial: nil
+    )
+    effects = Tamoz::Agent::SessionEffects.allocate
+
+    payload = effects.send(:result_payload, outcome)
+
+    assert_equal "remote-server", payload.fetch("source_id")
+    assert_equal "remote_untrusted", payload.fetch("provenance")
+    assert payload.fetch("truncated")
+    assert_includes payload.fetch("output"), "[REDACTED]"
+    refute_includes payload.fetch("output"), "sk-live-12345678"
+  end
+
+  def test_mcp_denial_reason_is_redacted_before_being_persisted
+    denial = { 'reason' => 'provider rejected OPENAI_API_KEY=sk-live-12345678' }
+    outcome = Data.define(:status, :observation, :interrupt, :denial).new(
+      status: :denied, observation: nil, interrupt: nil, denial:
+    )
+    effects = Tamoz::Agent::SessionEffects.allocate
+
+    error = assert_raises(Tamoz::Agent::ToolError) { effects.send(:result_payload, outcome) }
+
+    assert_includes error.message, '[REDACTED]'
+    refute_includes error.message, 'sk-live-12345678'
+  end
+
   # --- filesystem reconciler ------------------------------------------------
 
   def test_filesystem_reconciler_maps_observations_to_exactly_one_disposition
@@ -328,6 +361,17 @@ class AgentSessionEffectTest < Minitest::Test
                      checks: {"tests" => ["true"]}
                    ).catalog_digest
     end
+  end
+
+  def test_catalog_digest_changes_with_configured_check_arguments
+    first = Tamoz::Agent::Toolbox.new(
+      root: Dir.pwd, allow_changes: true, checks: { 'tests' => ['true'] }
+    )
+    second = Tamoz::Agent::Toolbox.new(
+      root: Dir.pwd, allow_changes: true, checks: { 'tests' => ['false'] }
+    )
+
+    refute_equal first.catalog_digest, second.catalog_digest
   end
 
   def test_effect_intent_preflight_writes_nothing_and_matches_the_preview

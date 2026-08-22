@@ -184,7 +184,9 @@ class StreamInvariantsTest < Minitest::Test
       def claim(_nonce) = true
     end.new
     relay = Tamoz::Stream::ApprovalRelay.new(
-      delivery:, submission:, nonce_store: store, signer:, relay_id: "relay-1"
+      delivery:, submission:, nonce_store: store, signer:, relay_id: "relay-1",
+      # Fixed clock before the approval's expiry keeps this deterministic.
+      clock: -> { Time.utc(2026, 8, 18) }
     )
 
     relay.submit_decision(

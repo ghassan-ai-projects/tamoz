@@ -54,10 +54,12 @@ module Tamoz
         if options[:json]
           emit_cli_event('cli.session', {
             'thread_id' => view.thread_id,
-            'request_id' => view.execution_id,
+            'request_id' => view.request_id,
             'status' => view.status.to_s,
             'progress' => TerminalProgress.summarize(view),
-            'terminal' => view.terminal
+            'terminal' => view.terminal,
+            'status_projection' => SessionStatusProjection.document(view),
+            'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
           })
         else
           render_final_view_human(view)
@@ -147,7 +149,9 @@ module Tamoz
           end,
           'effect_receipts' => receipts,
           'progress' => TerminalProgress.summarize(view),
-          'terminal' => view.terminal
+          'terminal' => view.terminal,
+          'status_projection' => SessionStatusProjection.document(view),
+          'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
         }
       end
 
@@ -162,6 +166,11 @@ module Tamoz
         @out.puts "Thread: #{thread_id}"
         @out.puts "Checkpoint: #{view.checkpoint_id} (sequence #{view.sequence})"
         @out.puts "Status: #{view.status}"
+        projection = SessionStatusProjection.document(view)
+        @out.puts "Task: #{projection.fetch('task_state')} (phase #{projection.fetch('phase')})"
+        @out.puts "Effect: #{projection.fetch('effect_state')}"
+        @out.puts "Capability: #{projection.fetch('capability_state')}"
+        @out.puts "Delivery: #{projection.fetch('delivery_state')}"
         plan = view.accepted_plan
         @out.puts "Accepted plan digest: #{plan.fetch('plan_digest', 'unknown')}" if plan
       end

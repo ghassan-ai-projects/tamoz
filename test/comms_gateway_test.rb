@@ -114,12 +114,44 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal 2, requests.length
       assert_equal 'make it blue', requests.first.payload.fetch('task')
-      assert_equal({ 'text' => 'and the font?', 'conversation' => [{ 'role' => 'user', 'text' => 'make it blue' }] },
-                   requests.last.payload.fetch('task'))
+      task = requests.last.payload.fetch('task')
+      assert_equal 'and the font?', task.fetch('text')
+      context = task.fetch('context')
+      assert_equal thread, context.fetch('thread_id')
+      assert_equal requests.last.request_id, context.fetch('request_id')
+      assert_equal [{ 'role' => 'user', 'text' => 'make it blue' }], context.fetch('fragments')
+      assert_equal Tamoz::Agent::SessionPlanningContext.turn_payload(
+        thread_id: thread,
+        request_id: requests.last.request_id,
+        text: 'and the font?',
+        fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
+      ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
 
       assert_equal 'Accepted. I will report committed progress.', replies.first
       assert_match(/Queued behind earlier work/, replies.last)
+    end
+  end
+
+  def test_a_replayed_update_does_not_create_a_second_accepted_delivery
+    with_gateway do |gateway, transport, store, adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(101, text: 'first'), update(102, text: 'second')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      # The replay sees a different queue state, so its old implementation
+      # rendered a second, different accepted/queued control for update 101.
+      transport.batch([update(101, text: 'first')])
+      restarted_gateway = Tamoz::Agent::CommsGateway.new(
+        adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:restarted'
+      )
+      assert_equal :served, restarted_gateway.serve_once(drain: false)
+
+      accepted = store.outbox_rows(
+        surface_id: 'telegram-ops', statuses: %w[pending]
+      ).select { |row| row.fetch('kind') == 'accepted' }
+      assert_equal 2, accepted.length, 'one accepted control per admitted update'
     end
   end
 

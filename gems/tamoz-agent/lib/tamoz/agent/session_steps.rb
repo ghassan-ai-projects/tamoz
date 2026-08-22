@@ -41,7 +41,10 @@ module Tamoz
 
         evidence = @services.evidence
         intent = evidence.find_intent(state, accepted, step)
-        outcome = @services.effects.dispatch(context, intent, step)
+        outcome = @services.effects.dispatch(
+          context, intent, step,
+          iteration: state.fetch(:step_cursor), sub_operation: 0
+        )
         handle_outcome(state, step, intent, outcome)
       end
 
@@ -56,13 +59,14 @@ module Tamoz
 
       def prepare_step_without_rescue(effects, state, step, tool, accepted)
         arguments = effects.resolved_effect_arguments(step.fetch('arguments'), tool)
-        intent = effects.build_intent(step, accepted, arguments)
-        return no_approval_preparation(intent, arguments) unless effects.approval_required?(tool)
-
+        iteration = state.fetch(:step_cursor)
         budget = effects.maximum_effect_output_bytes(tool)
         if @services.evidence.observation_bytes(state) + budget > SessionNodes::MAX_OBSERVATION_BYTES
           raise ToolError, "insufficient observation budget for #{tool}"
         end
+
+        intent = effects.build_intent(step, accepted, arguments, iteration:)
+        return no_approval_preparation(intent, arguments) unless effects.approval_required?(tool)
 
         Preparation.new(
           intent:,
@@ -188,12 +192,16 @@ module Tamoz
         SessionRecords.build(
           'effect_receipt',
           effect_key: outcome.effect_key,
+          logical_key: outcome.effect_key,
+          attempt_identity: attempt_identity(outcome),
           step_id: step.fetch('id'),
           operation: intent.fetch('operation'),
           safety: intent.fetch('safety'),
           status: 'failed',
           attempt_number: outcome.attempt_number,
-          reconciliation: outcome.reconciliation
+          reconciliation: outcome.reconciliation,
+          iteration: intent.fetch('iteration', 0),
+          sub_operation: intent.fetch('sub_operation', 0)
         )
       end
 
@@ -203,7 +211,7 @@ module Tamoz
         update = {
           step_cursor: state.fetch(:step_cursor) + 1,
           next_node: 'evaluate',
-          observations: [successful_observation(state, step, output, outcome)],
+          observations: [successful_observation(state, step, intent, outcome)],
           effect_receipts: [successful_receipt(step, intent, outcome)]
         }
         update[:check_passed] = outcome.value.fetch('check').fetch('passed') if outcome.value.key?('check')
@@ -217,29 +225,49 @@ module Tamoz
         raise ToolError, "tool observations exceed #{SessionNodes::MAX_OBSERVATION_BYTES} bytes"
       end
 
-      def successful_observation(state, step, output, outcome)
+      # rubocop:disable Metrics/AbcSize -- this maps the complete observation wire
+      # contract at one persistence boundary.
+      def successful_observation(state, step, intent, outcome)
+        value = outcome.value
+        output = String(value.fetch('output'))
         fields = {
           phase: state.fetch(:phase),
           repair_attempt: state.fetch(:repair_attempt),
           step_id: step.fetch('id'),
           output:,
-          tool: step['tool']
+          tool: step['tool'],
+          effect_key: outcome.effect_key,
+          iteration: intent.fetch('iteration', 0),
+          sub_operation: intent.fetch('sub_operation', 0),
+          provenance: value.fetch('provenance', 'workspace'),
+          truncated: value.fetch('truncated', false),
+          output_bytes: value.fetch('output_bytes', output.bytesize)
         }
+        fields[:source_id] = value.fetch('source_id') if value.key?('source_id')
         fields[:check] = outcome.value.fetch('check') if outcome.value.key?('check')
         SessionRecords.build('observation', **fields)
       end
+      # rubocop:enable Metrics/AbcSize
 
       def successful_receipt(step, intent, outcome)
         SessionRecords.build(
           'effect_receipt',
           effect_key: outcome.effect_key,
+          logical_key: outcome.effect_key,
+          attempt_identity: attempt_identity(outcome),
           step_id: step.fetch('id'),
           operation: intent.fetch('operation'),
           safety: intent.fetch('safety'),
           status: 'succeeded',
           attempt_number: outcome.attempt_number,
-          reconciliation: outcome.reconciliation
+          reconciliation: outcome.reconciliation,
+          iteration: intent.fetch('iteration', 0),
+          sub_operation: intent.fetch('sub_operation', 0)
         )
+      end
+
+      def attempt_identity(outcome)
+        outcome.attempt_identity || "#{outcome.effect_key}/attempt/#{outcome.attempt_number}"
       end
     end
   end

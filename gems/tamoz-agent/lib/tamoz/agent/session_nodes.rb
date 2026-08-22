@@ -14,6 +14,7 @@ require_relative "session_deliberation"
 require_relative "session_steps"
 require_relative "session_lifecycle"
 require_relative "session_routing"
+require_relative "session_adaptive"
 
 module Tamoz
   module Agent
@@ -23,6 +24,7 @@ module Tamoz
       MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
       MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
       GRAPH_VERSION = "1"
+      ADAPTIVE_GRAPH_VERSION = "3"
       # Rebinding, not a second definition: durable records keep this spelling while
       # the value is owned by `Tamoz::Agent` for the memory layer.
       BEHAVIOR_VERSION = Tamoz::Agent::BEHAVIOR_VERSION
@@ -38,8 +40,12 @@ module Tamoz
         :mcp,
         :profile_roles,
         :profile_budgets,
+        :profile_narrowed,
         :memory,
         :memory_owner,
+        :artifact_store,
+        :artifact_tenant,
+        :child_task_runtime,
         :capabilities,
         :graph_version
       )
@@ -69,8 +75,12 @@ module Tamoz
         mcp: nil,
         profile_roles: nil,
         profile_budgets: nil,
+        profile_narrowed: false,
         memory: nil,
         memory_owner: nil,
+        artifact_store: nil,
+        artifact_tenant: nil,
+        child_task_runtime: nil,
         transcript_reader: nil,
         graph_version: GRAPH_VERSION
       )
@@ -86,8 +96,9 @@ module Tamoz
         @graph_version = String(graph_version).freeze
         @profile_roles = profile_roles
         @profile_budgets = profile_budgets
+        @profile_narrowed = profile_narrowed
         verify_profile_roles!(profile_roles)
-        @capabilities = CapabilityBinding.build(toolbox:, mcp:)
+        @capabilities = CapabilityBinding.build(toolbox:, mcp:, child_task_runtime:, profile:)
 
         configuration = NodeConfiguration.new(
           model:,
@@ -99,8 +110,12 @@ module Tamoz
           mcp:,
           profile_roles:,
           profile_budgets:,
+          profile_narrowed:,
           memory:,
           memory_owner:,
+          artifact_store:,
+          artifact_tenant:,
+          child_task_runtime:,
           capabilities: @capabilities,
           graph_version: @graph_version
         )
@@ -113,7 +128,9 @@ module Tamoz
         @planning_context = SessionPlanningContext.new(
           configuration:,
           memory: @memory_nodes,
-          transcript_reader:
+          transcript_reader:,
+          artifact_store:,
+          tenant: artifact_tenant
         )
         @plan_outcomes = SessionPlanOutcomes.new(configuration:)
         @effects = SessionEffects.new(configuration:)
@@ -128,6 +145,7 @@ module Tamoz
           evidence: @evidence
         )
         @routing = SessionRouting.new(services:)
+        @adaptive = SessionAdaptive.new(services:)
         @deliberation = SessionDeliberation.new(services:)
         @steps = SessionSteps.new(services:)
         @lifecycle = SessionLifecycle.new(services:)
@@ -161,6 +179,14 @@ module Tamoz
       def deliberate(state, context) = @deliberation.deliberate(state, context)
 
       def route(state, context) = @routing.route(state, context)
+
+      def adaptive_decide(state, context) = @adaptive.decide(state, context)
+
+      def adaptive_validate(state, context) = @adaptive.validate(state, context)
+
+      def adaptive_dispatch(state, context) = @adaptive.dispatch(state, context)
+
+      def adaptive_observe(state, context) = @adaptive.observe(state, context)
 
       def step_gate(state, context) = @steps.step_gate(state, context)
 

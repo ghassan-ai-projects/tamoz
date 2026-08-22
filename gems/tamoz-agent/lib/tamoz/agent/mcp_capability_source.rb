@@ -44,7 +44,8 @@ module Tamoz
       # the caller does not declare a tighter one.
       DEFAULT_MAX_OUTPUT_BYTES = 64 * 1024
 
-      attr_reader :catalogs, :descriptors, :mcp_catalogs, :names, :read_only_names
+      attr_reader :catalogs, :descriptors, :mcp_catalogs, :mcp_source_digests,
+                  :names, :read_only_names
 
       def initialize(
         catalogs:,
@@ -54,7 +55,8 @@ module Tamoz
         previewer: nil,
         effect_intent_builder: nil,
         closer: nil,
-        maximum_effect_output_bytes: DEFAULT_MAX_OUTPUT_BYTES
+        maximum_effect_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
+        source_digests: {}
       )
         unless catalogs.is_a?(Hash)
           raise ArgumentError, "catalogs must be a Hash of server_id => snapshot"
@@ -82,6 +84,7 @@ module Tamoz
                         .sort
                         .to_h { |server_id, snapshot| [server_id, snapshot.snapshot_digest] }
                         .freeze
+        @mcp_source_digests = source_digests.transform_keys(&:to_s).transform_values(&:to_s).freeze
         @names = @descriptors.map(&:id).freeze
         @read_only_names = @descriptors.select { |entry| read_only_descriptor?(entry) }
                                         .map(&:id).freeze

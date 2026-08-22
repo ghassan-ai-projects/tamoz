@@ -83,7 +83,7 @@ module Tamoz
         mcp.empty? ? local : local.merge(mcp)
       end
 
-      def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context, toolbox:, mcp_tools: {})
+      def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context, toolbox:, mcp_tools: {}, capability_descriptions: {})
         phase_instruction = if phase == :discovery
                               "Gather only the evidence needed to prepare a later action plan. Do not mutate or run commands."
                             elsif phase == :action
@@ -123,7 +123,9 @@ module Tamoz
             "expected_sha256 out — the framework binds the digest from the current " \
             "file state before execution, so the patch step still succeeds. If you " \
             "know the digest from a read_file result, copy it verbatim.",
-          "available_tools" => merge_tool_surfaces(toolbox.descriptions, allowed_tools, mcp_tools),
+          "available_tools" => merge_tool_surfaces(
+            toolbox.descriptions.merge(capability_descriptions), allowed_tools, mcp_tools
+          ),
           "evidence_from_discovery" => evidence,
           "feedback_from_previous_attempt" => feedback
         }
@@ -142,13 +144,17 @@ module Tamoz
         JSON.pretty_generate(plan_input)
       end
 
-      def routing_prompt(task, toolbox:)
-        JSON.pretty_generate(
+      def routing_prompt(task, toolbox:, planning_context: {}, capability_descriptions: {})
+        input = {
           "task" => task,
           "available_read_only_tools" => toolbox.read_only_names,
-          "available_work_tools" => toolbox.names,
-          "tool_descriptions" => toolbox.descriptions.slice(*toolbox.names)
-        )
+          "available_work_tools" => (toolbox.names + capability_descriptions.keys).uniq,
+          "tool_descriptions" => toolbox.descriptions.merge(capability_descriptions).slice(
+            *(toolbox.names + capability_descriptions.keys).uniq
+          )
+        }
+        input["planning_context"] = planning_context unless planning_context.empty?
+        JSON.pretty_generate(input)
       end
 
       def review_prompt(task, plan, phase:, evidence:, planning_context:, tool_descriptions: {})
@@ -164,7 +170,7 @@ module Tamoz
         JSON.pretty_generate(review_input)
       end
 
-      def verification_prompt(task, plan, review, observations, verification_context:)
+      def verification_prompt(task, plan, review, observations, verification_context:, planning_context: {})
         verification_input = {
           "task" => task,
           "accepted_plan" => plan.to_h,
@@ -174,6 +180,7 @@ module Tamoz
         unless verification_context.empty?
           verification_input["verification_context"] = verification_context
         end
+        verification_input["planning_context"] = planning_context unless planning_context.empty?
         JSON.pretty_generate(verification_input)
       end
 

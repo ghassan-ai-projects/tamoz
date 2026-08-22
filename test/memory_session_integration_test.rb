@@ -248,7 +248,7 @@ class MemorySessionIntegrationTest < Minitest::Test
       plain_record = plain_session.view(thread: "mem.plain").state.fetch(:session)
       assert_equal Memory::LEGACY_MEMORY_EPOCH, plain_record.fetch("memory_epoch")
       assert_equal "tamoz.agent.session/1", plain_record.fetch("behavior_version")
-      assert_equal 1, plain_record.fetch("record_version")
+      assert_equal 2, plain_record.fetch("record_version")
 
       # Resuming the SAME record through a memory-enabled session loads the
       # "none" sentinel and injects zero memory content (boundary false never

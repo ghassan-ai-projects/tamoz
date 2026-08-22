@@ -97,8 +97,11 @@ These items protect trust and must precede a richer chat experience:
    durable conflict.
 3. Keep Telegram update ID, message ID, quoted message ID, and callback message
    ID distinct.
-4. Enforce declared byte, open-request, response, and capacity limits at their
-   actual admission boundaries.
+4. Enforce the declared limits that are validated but never enforced
+   (`max_open_requests`, `max_inbound_bytes`, `max_response_bytes`) at their
+   actual boundaries. Outbox capacity, control capacity, and denial-prompt
+   limits are already enforced at admission/delivery and only need regression
+   tests.
 5. Add typed drainer handling and operator-visible state for authentication and
    storage failures.
 
@@ -136,7 +139,7 @@ them on both surfaces.
 | --- | --- | --- | --- |
 | Terminal-only projection | Silence during useful work | Users resend or assume failure | `Worker#notify_sink`, `OutboxDeliverySink` |
 | Missing request reference | Cannot query or report a task | Support and recovery become guesswork | `CommsStore`, admission acknowledgement |
-| Shallow status | Task and delivery states are conflated | False success, false retry, context drift | durable status projection |
+| Status without a reference | A turn cannot be named, correlated, or queried; the terminal reason is computed but never rendered | Users resend or give up; support becomes guesswork | durable status projection, request reference |
 | Command divergence | Users discover dead controls | Trust in the whole chat surface drops | command registry + Gateway handlers |
 | Stale delivery ownership | Duplicate or misattributed external send | Correctness and privacy failure | `DeliveryDrainer`, `CommsOutbox` |
 | Incomplete Telegram identity | Wrong deduplication or reply target | Integrity and routing failure | `Normalizer`, `CommsStoreRows` |

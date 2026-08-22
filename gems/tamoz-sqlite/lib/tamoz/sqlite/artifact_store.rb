@@ -13,6 +13,8 @@ module Tamoz
     # fails retention and a tampered retained row fails resolution. The
     # in-memory ArtifactStore stays test-only.
     class ArtifactStore
+      attr_reader :tenant
+
       class ArtifactStoreError < Tamoz::Stream::StreamError
         CATEGORY = "stream_artifact_store"
       end

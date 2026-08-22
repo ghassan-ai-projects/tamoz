@@ -29,7 +29,7 @@ module Tamoz
             tx.rows(
               'effect.fetch.attempts',
               <<~SQL,
-                SELECT attempt_number, attempt_token, fence, status,
+                SELECT attempt_number, attempt_token, attempt_identity, fence, status,
                        deadline_ms, result, result_digest, external_id,
                        error, error_digest, prepared_at_ms, started_at_ms,
                        completed_at_ms
@@ -47,12 +47,12 @@ module Tamoz
       # keeping the mapping here prevents callers from decoding raw rows.
       def materialize(row, attempts)
         safety = EffectJournalValidation.checked_symbol!(
-          row.fetch(7),
+          row.fetch(8),
           @safeties,
           'effect safety'
         )
         status = EffectJournalValidation.checked_symbol!(
-          row.fetch(8),
+          row.fetch(9),
           @statuses,
           'effect status'
         )
@@ -66,20 +66,21 @@ module Tamoz
       def materialize_record(row, safety:, status:, attempts:)
         Tamoz::Graph::EffectRecord.new(
           key: row.fetch(0).dup.freeze,
-          thread_id: row.fetch(1).dup.freeze,
-          namespace: Wire.decode_namespace(row.fetch(2)),
-          execution_id: row.fetch(3).dup.freeze,
-          task_id: row.fetch(4).dup.freeze,
-          call_index: row.fetch(5),
-          operation: row.fetch(6).dup.freeze,
+          logical_key: row.fetch(1).dup.freeze,
+          thread_id: row.fetch(2).dup.freeze,
+          namespace: Wire.decode_namespace(row.fetch(3)),
+          execution_id: row.fetch(4).dup.freeze,
+          task_id: row.fetch(5).dup.freeze,
+          call_index: row.fetch(6),
+          operation: row.fetch(7).dup.freeze,
           safety:,
           status:,
-          request_digest: row.fetch(9).dup.freeze,
-          current_attempt: row.fetch(10),
-          requires_reconciliation: row.fetch(11) == 1,
+          request_digest: row.fetch(10).dup.freeze,
+          current_attempt: row.fetch(11),
+          requires_reconciliation: row.fetch(12) == 1,
           attempts: materialize_attempts(attempts),
-          created_at_ms: row.fetch(12),
-          updated_at_ms: row.fetch(13)
+          created_at_ms: row.fetch(13),
+          updated_at_ms: row.fetch(14)
         )
       end
       # rubocop:enable Metrics/AbcSize
@@ -91,13 +92,13 @@ module Tamoz
       # :reek:FeatureEnvy -- the attempt row is a positional durable wire value.
       def materialize_attempt(attempt)
         result = decode_receipt(
-          attempt.fetch(5),
           attempt.fetch(6),
+          attempt.fetch(7),
           'tamoz.sqlite.effect_result'
         )
         error = decode_receipt(
-          attempt.fetch(8),
           attempt.fetch(9),
+          attempt.fetch(10),
           'tamoz.sqlite.effect_error'
         )
         materialize_attempt_record(attempt, result:, error:)
@@ -108,21 +109,22 @@ module Tamoz
       # together with the record reader's other positional mappings.
       def materialize_attempt_record(attempt, result:, error:)
         Tamoz::Graph::EffectAttempt.new(
+          identity: attempt.fetch(2).dup.freeze,
           attempt_number: attempt.fetch(0),
           attempt_token: attempt.fetch(1).dup.freeze,
-          fence: attempt.fetch(2),
+          fence: attempt.fetch(3),
           status: EffectJournalValidation.checked_symbol!(
-            attempt.fetch(3),
+            attempt.fetch(4),
             %w[prepared running succeeded failed unknown abandoned],
             'effect attempt status'
           ),
-          deadline_ms: attempt.fetch(4),
+          deadline_ms: attempt.fetch(5),
           result:,
-          external_id: attempt.fetch(7)&.dup&.freeze,
+          external_id: attempt.fetch(8)&.dup&.freeze,
           error:,
-          prepared_at_ms: attempt.fetch(10),
-          started_at_ms: attempt.fetch(11),
-          completed_at_ms: attempt.fetch(12)
+          prepared_at_ms: attempt.fetch(11),
+          started_at_ms: attempt.fetch(12),
+          completed_at_ms: attempt.fetch(13)
         )
       end
 

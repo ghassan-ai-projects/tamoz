@@ -127,10 +127,11 @@ module Tamoz
           freeze
         end
 
-        def capture(argv, timeout_ms:, command:, intervention: nil)
+        def capture(argv, timeout_ms:, command:, intervention: nil, poller: nil)
           arguments = normalize_arguments(argv)
           command_label = normalize_label(command, name: "command")
           intervention_object = normalize_intervention(intervention)
+          poller_object = normalize_poller(poller)
           timeout = bounded_integer(
             timeout_ms,
             name: "timeout_ms",
@@ -142,13 +143,14 @@ module Tamoz
             arguments,
             timeout_ms: timeout,
             command: command_label,
-            intervention: intervention_object
+            intervention: intervention_object,
+            poller: poller_object
           )
         end
 
         private
 
-        def execute(arguments, timeout_ms:, command:, intervention:)
+        def execute(arguments, timeout_ms:, command:, intervention:, poller:)
           pid = nil
           reaped = false
           stdout_reader, stdout_writer = IO.pipe
@@ -167,7 +169,8 @@ module Tamoz
           status, timed_out, termination, termination_reason = wait_for_child(
             pid,
             timeout_ms,
-            intervention
+            intervention,
+            poller
           )
           reaped = true
           drain_readers!(
@@ -252,7 +255,7 @@ module Tamoz
           end
         end
 
-        def wait_for_child(pid, timeout_ms, intervention)
+        def wait_for_child(pid, timeout_ms, intervention, poller)
           deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) +
                      timeout_ms.fdiv(1_000)
           stop_signal = nil
@@ -270,6 +273,24 @@ module Tamoz
 
             remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
             break if remaining <= 0
+
+            if poller
+              decision = poll_running_child(
+                poller,
+                pid,
+                [(remaining * 1_000).floor, 0].max
+              )
+              if decision == INTERVENTION_KILL
+                signal_group("KILL", pid)
+                status = wait_for_exit(pid, @termination_grace_ms)
+                unless status&.signaled? && Signal.signame(status.termsig) == "KILL"
+                  raise ExecutionError,
+                        "poller did not produce SIGKILL process status"
+                end
+
+                return [status, false, "kill", "poller"]
+              end
+            end
 
             if stop_signal && intervention
               decision = poll_intervention(
@@ -329,6 +350,23 @@ module Tamoz
           else
             [status, false, "none", "none"]
           end
+        end
+
+        def poll_running_child(poller, pid, remaining_ms)
+          decision = poller.poll(pid:, remaining_ms:)
+          unless decision.nil? ||
+                 (decision.instance_of?(String) && decision == INTERVENTION_KILL)
+            raise ExecutionError,
+                  "poller must return nil or #{INTERVENTION_KILL.inspect}"
+          end
+
+          decision
+        rescue ExecutionError
+          raise
+        rescue StandardError => error
+          raise ExecutionError.new(
+            "poller failed: #{error.class}"
+          ), cause: error
         end
 
         def poll_intervention(intervention, stop_signal, remaining_ms)
@@ -502,6 +540,13 @@ module Tamoz
           return intervention if intervention.respond_to?(:poll)
 
           raise ExecutionError, "intervention must respond to poll"
+        end
+
+        def normalize_poller(poller)
+          return nil if poller.nil?
+          return poller if poller.respond_to?(:poll)
+
+          raise ExecutionError, "poller must respond to poll"
         end
 
         def normalize_text(value, name:, maximum_bytes:, allow_empty: false)

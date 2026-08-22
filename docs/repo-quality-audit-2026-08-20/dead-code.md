@@ -41,7 +41,7 @@ Confidence: 1.00 (confirmed)
 
 Evidence:
 
-- [`bin/tamoz-stream-worker-learning:1-4`](/Users/ghassan/my-projects/tamoz/bin/tamoz-stream-worker-learning:1)
+- `bin/tamoz-stream-worker-learning:1-4`
   is tracked and ends with:
 
   ```ruby
@@ -52,12 +52,12 @@ Evidence:
   source/config/docs found only that self-reference. There is no Rake task, test,
   gemspec entry, README command, or deployment configuration that invokes it.
 - The root source inventory explicitly includes every `bin/*` file in
-  [`Rakefile:6-13`](/Users/ghassan/my-projects/tamoz/Rakefile:6), so the retired
+  `Rakefile:6-13`, so the retired
   launcher remains part of source/quality inventory even though it is not a gem
   executable.
 - The replacement worker has a real implementation and test surface. The gRPC
   server shape is exercised from
-  [`test/stream_worker_server_test.rb:3-14`](/Users/ghassan/my-projects/tamoz/test/stream_worker_server_test.rb:3).
+  `test/stream_worker_server_test.rb:3-14`.
 
 Why it matters: operators and automation can still discover or invoke a command
 that always exits. It increases the apparent supported surface, makes command
@@ -86,40 +86,40 @@ The quality/evidence artifacts were not regenerated after two source changes:
   `memory_store.rb` and `test/memory_repository_test.rb` to
   `test/memory_store_test.rb`.
 - The current source has the replacement files at
-  [`gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:30`](/Users/ghassan/my-projects/tamoz/gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:30)
-  and [`test/memory_store_test.rb:9`](/Users/ghassan/my-projects/tamoz/test/memory_store_test.rb:9);
+  `gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:30`
+  and `test/memory_store_test.rb:9`;
   the old paths do not exist.
 
 Concrete stale references:
 
 - `.rubocop_todo.yml` contains 3,116 path exclusions; 154 entries (21 unique
   paths) point to files that do not exist. The first cluster is visible at
-  [`.rubocop_todo.yml:110-118`](/Users/ghassan/my-projects/tamoz/.rubocop_todo.yml:110),
+  `.rubocop_todo.yml:110-118`,
   and later entries still include the deleted
   `test/memory_repository_test.rb` and old stream tests.
 - The generated Reek ledger has 210 file keys, 12 of which are missing from the
   current tree, including the old SQLite memory/stream files and old stream
   engine files at
-  [`docs/code-quality-baseline.json:336-339`](/Users/ghassan/my-projects/tamoz/docs/code-quality-baseline.json:336)
-  and [`docs/code-quality-baseline.json:474-509`](/Users/ghassan/my-projects/tamoz/docs/code-quality-baseline.json:474).
+  `docs/code-quality-baseline.json:336-339`
+  and `docs/code-quality-baseline.json:474-509`.
   The artifact declares generation by
   `script/regenerate_quality_baseline` at commit `41579c7` in
-  [`docs/code-quality-baseline.json:2-5`](/Users/ghassan/my-projects/tamoz/docs/code-quality-baseline.json:2),
+  `docs/code-quality-baseline.json:2-5`,
   while the current HEAD is `1a61066`.
-- [`docs/CODE_QUALITY.md:3`](/Users/ghassan/my-projects/tamoz/docs/CODE_QUALITY.md:3)
-  and [`docs/CODE_QUALITY.md:239-247`](/Users/ghassan/my-projects/tamoz/docs/CODE_QUALITY.md:239)
+- `docs/CODE_QUALITY.md:3`
+  and `docs/CODE_QUALITY.md:239-247`
   report the older generated commit, 398 files, 56,735 LOC, and the old coverage
   ledger. The current source inventory is different.
 - The quality-program hotspot table still lists deleted files at
-  [`docs/QUALITY_PROGRAM_STATE.md:252-253`](/Users/ghassan/my-projects/tamoz/docs/QUALITY_PROGRAM_STATE.md:252).
+  `docs/QUALITY_PROGRAM_STATE.md:252-253`.
 - The generated requirements manifest names the deleted test path at
-  [`docs/requirements-manifest.json:461`](/Users/ghassan/my-projects/tamoz/docs/requirements-manifest.json:461)
-  and [`docs/requirements-manifest.json:5145`](/Users/ghassan/my-projects/tamoz/docs/requirements-manifest.json:5145).
+  `docs/requirements-manifest.json:461`
+  and `docs/requirements-manifest.json:5145`.
   A recursive check found 98 distinct test files named by the manifest, with one
   missing file: `test/memory_repository_test.rb`.
 - The corresponding generated audit JSON and Markdown repeat the stale evidence,
-  for example [`docs/REQUIREMENTS_AUDIT.md:400`](/Users/ghassan/my-projects/tamoz/docs/REQUIREMENTS_AUDIT.md:400)
-  and [`docs/REQUIREMENTS_AUDIT.md:426-431`](/Users/ghassan/my-projects/tamoz/docs/REQUIREMENTS_AUDIT.md:426).
+  for example `docs/REQUIREMENTS_AUDIT.md:400`
+  and `docs/REQUIREMENTS_AUDIT.md:426-431`.
 
 The repository's own checks confirm the drift:
 
@@ -128,11 +128,11 @@ The repository's own checks confirm the drift:
   and many current files whose Reek counts are absent or lower in the committed
   baseline.
 - The checker is intended to compare against the current tree, as stated in
-  [`script/check_baseline_drift:6-13`](/Users/ghassan/my-projects/tamoz/script/check_baseline_drift:6),
+  `script/check_baseline_drift:6-13`,
   and the Rake quality namespace exposes it at
-  [`Rakefile:334-337`](/Users/ghassan/my-projects/tamoz/Rakefile:334).
+  `Rakefile:334-337`.
 - The requirements-manifest generator explicitly says a missing named test must
-  abort generation at [`script/generate_requirements_manifest:19-23`](/Users/ghassan/my-projects/tamoz/script/generate_requirements_manifest:19).
+  abort generation at `script/generate_requirements_manifest:19-23`.
   Its committed output therefore contains evidence that the generator's own
   invariant would reject today.
 
@@ -167,17 +167,17 @@ Confidence: 1.00 (confirmed)
 Evidence:
 
 - The generic loader promises to discover every domain JSON file through
-  [`test/support/domain_loader.rb:18-29`](/Users/ghassan/my-projects/tamoz/test/support/domain_loader.rb:18),
+  `test/support/domain_loader.rb:18-29`,
   including the `*.json` glob at lines 23-24.
 - The fixture declares the domain identifier `cold-chain` at
-  [`test/fixtures/domains/cold-chain.json:2`](/Users/ghassan/my-projects/tamoz/test/fixtures/domains/cold-chain.json:2).
+  `test/fixtures/domains/cold-chain.json:2`.
 - The benchmark-family builder turns the raw identifier into a Ruby constant by
   calling `Object.const_get("#{domain_name.capitalize}Domain")` at
-  [`test/support/benchmark_families.rb:20-25`](/Users/ghassan/my-projects/tamoz/test/support/benchmark_families.rb:20).
+  `test/support/benchmark_families.rb:20-25`.
   `"cold-chain".capitalize` produces `"Cold-chain"`, not a valid Ruby constant
   identifier such as `ColdChainDomain`.
 - The same module eagerly builds all families from `DomainLoader.domains` at
-  [`test/support/benchmark_families.rb:72-76`](/Users/ghassan/my-projects/tamoz/test/support/benchmark_families.rb:72).
+  `test/support/benchmark_families.rb:72-76`.
 - `rake test_fast` reproduced the non-sandbox error
   `NameError: wrong constant name Cold-chainDomain` in
   `test/support/benchmark_families.rb:24`, causing benchmark-control and
@@ -204,17 +204,17 @@ Confidence: 0.95
 
 This is not executable dead code, but it can make retired code look live:
 
-- [`docs/P15_OWNER_GATE.md:34-55`](/Users/ghassan/my-projects/tamoz/docs/P15_OWNER_GATE.md:34)
+- `docs/P15_OWNER_GATE.md:34-55`
   asks for an owner decision about `Tamoz::Stream::ChannelDescriptor` and its
   queue/overflow declaration.
-- [`script/generate_requirements_manifest:67-69`](/Users/ghassan/my-projects/tamoz/script/generate_requirements_manifest:67)
+- `script/generate_requirements_manifest:67-69`
   says stream clauses 44-51 are retired and are no longer generated as manifest
   requirements.
-- [`gems/tamoz-stream/lib/tamoz/stream.rb:19-25`](/Users/ghassan/my-projects/tamoz/gems/tamoz-stream/lib/tamoz/stream.rb:19)
+- `gems/tamoz-stream/lib/tamoz/stream.rb:19-25`
   says the P14 channels/events/connector/admission/replay engine was retired.
-- [`docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:3-8`](/Users/ghassan/my-projects/tamoz/docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:3)
+- `docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:3-8`
   is explicitly an older audit, and its T8.3 conclusion at
-  [`docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:108`](/Users/ghassan/my-projects/tamoz/docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:108)
+  `docs/STREAM_WORKER_IMPLEMENTATION_AUDIT_2026-08-12.md:108`
   says the old engine files were still present. Commit `1636d3b` subsequently
   removed them.
 
@@ -251,7 +251,7 @@ loaders or external entrypoints:
   a liveness verdict.
 - The local `coverage/` resultset was inspected but excluded from findings: the
   directory is ignored, and SQLite `*.sqlite3-shm`/`*.sqlite3-wal` sidecars are
-  ignored at [`.gitignore:79-81`](/Users/ghassan/my-projects/tamoz/.gitignore:79).
+  ignored at `.gitignore:79-81`.
   Their stale local contents are not committed repository artifacts.
 
 No unused runtime dependency was confirmed. The gemspec closure, generated

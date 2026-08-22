@@ -3,6 +3,7 @@
 module Tamoz
   module Graph
     EffectAttempt = Data.define(
+      :identity,
       :attempt_number,
       :attempt_token,
       :fence,
@@ -18,6 +19,7 @@ module Tamoz
 
     EffectRecord = Data.define(
       :key,
+      :logical_key,
       :thread_id,
       :namespace,
       :execution_id,

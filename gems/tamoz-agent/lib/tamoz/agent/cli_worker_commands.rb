@@ -143,6 +143,7 @@ module Tamoz
         0
       end
 
+      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def observe_doctor(options, argv)
         OptionParser.new do |value|
           value.banner = "Usage: tamoz observe doctor"
@@ -155,11 +156,11 @@ module Tamoz
         token = "doctor-token-shaped-value"
         secret_result = producer.emit(
           "tamoz.worker.error", attributes: {reason: "doctor"},
-          content: {error_detail: {"secret" => secret}}
+                                content: {error_detail: {"secret" => secret}}
         )
         token_result = producer.emit(
           "tamoz.worker.error", attributes: {reason: "doctor"},
-          content: {error_detail: {"token" => token}}
+                                content: {error_detail: {"token" => token}}
         )
         recorder.flush(deadline_ms: 1_000)
         body = File.exist?(recorder.path) ? File.read(recorder.path) : ""
@@ -171,12 +172,22 @@ module Tamoz
           "policy_digest" => Tamoz::Observability::ContentPolicy::NONE.digest,
           "health" => recorder.health
         }
-        options[:json] ? @out.puts(JSON.generate(document)) : @out.puts("observability doctor: #{document.fetch("ok") ? "ok" : "failed"}")
+        if options[:json]
+          @out.puts(JSON.generate(document))
+        else
+          @out.puts("observability doctor: #{document.fetch("ok") ? "ok" : "failed"}")
+        end
         document.fetch("ok") ? 0 : 1
       rescue Tamoz::SensitiveValueError
-        options[:json] ? @out.puts(JSON.generate("ok" => false, "redaction" => false)) : @out.puts("observability doctor: failed")
+        if options[:json]
+          @out.puts(JSON.generate("ok" => false,
+                                  "redaction" => false))
+        else
+          @out.puts("observability doctor: failed")
+        end
         1
       end
+      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       def format_observation(document)
         correlation = document.fetch("correlation", {}).map { |key, value| "#{key}=#{value}" }.join(" ")
@@ -412,7 +423,10 @@ module Tamoz
           # whenever a source is configured but not yet wired, which is a state an
           # operator must be able to see rather than infer.
           "capability_catalog" => runtime.capability_catalog,
+          "capability_peek" => runtime.capability_peek,
+          "scheduled_work" => runtime.scheduled_work,
           "memory" => runtime.memory_summary,
+          "session_status" => session_status(runtime),
           "safety_counters" => safety_counters(effects),
           "paused_approvals" => paused_approvals(runtime),
           "blocked_effects" => effects.select { |row| row[:status] == :unknown }
@@ -451,6 +465,38 @@ module Tamoz
             end
           }
         end
+      end
+
+      def session_status(runtime)
+        runtime.open_occurrences(limit: 500).filter_map do |record|
+          view = begin
+            runtime.session_for(record.fetch(:thread_id)).view(thread: record.fetch(:thread_id))
+          rescue StandardError
+            unavailable_session_status(record)
+          end
+          next view if view.is_a?(Hash)
+
+          SessionStatusProjection.document(
+            view,
+            request_id: record.fetch(:occurrence_id),
+            delivery_state: 'pending'
+          )
+        end
+      end
+
+      def unavailable_session_status(record)
+        {
+          'schema' => SessionStatusProjection::SCHEMA,
+          'thread_id' => record.fetch(:thread_id),
+          'request_id' => record.fetch(:occurrence_id),
+          'task_state' => 'unavailable',
+          'phase' => 'unknown',
+          'effect_state' => 'unknown',
+          'capability_state' => 'unknown',
+          'delivery_state' => 'unknown',
+          'next_action' => 'inspect',
+          'error_category' => 'session_view_unavailable'
+        }
       end
 
       # The plain interrupt shape a decision digest is computed over — the same
@@ -501,11 +547,13 @@ module Tamoz
         @out.puts "runtime:   #{document["runtime_dir"]}"
         @out.puts "workspace: #{document["workspace"]}"
         @out.puts "pending:   #{document["pending_work"].length}"
+        @out.puts "tasks:     #{document.fetch("session_status").length}"
         @out.puts "sources:   #{document["capability_sources"].join(", ")}" unless document["capability_sources"].empty?
         counters = document["safety_counters"]
         @out.puts "safety:    #{counters.map { |name, count| "#{name}=#{count}" }.join(" ")}"
         observation = document.fetch("observability")
-        @out.puts "telemetry: files=#{observation.fetch("files")} bytes=#{observation.fetch("bytes")} drops=#{observation.fetch("drops")}"
+        @out.puts "telemetry: files=#{observation.fetch("files")} " \
+                  "bytes=#{observation.fetch("bytes")} drops=#{observation.fetch("drops")}"
         channels = document["channels"]
         return if channels.fetch("surfaces").empty?
 
@@ -548,7 +596,11 @@ module Tamoz
           directory,
           model_factory: ->(profile:) { build_model(options, profile:) },
           lease_ttl: lease_ttl,
-          routing: options[:experimental_routing] ? :experimental : :legacy
+          routing: if options[:adaptive_routing]
+                     :adaptive
+                   else
+                     (options[:experimental_routing] ? :experimental : :legacy)
+                   end
         )
         begin
           yield runtime
@@ -573,7 +625,11 @@ module Tamoz
       end
 
       def observability_recorder(runtime)
-        Tamoz::Observability::Recorder::Journal.new(directory: runtime.path, role: "worker")
+        DurableRecorder.new(
+          recorder: Tamoz::Observability::Recorder::Journal.new(
+            directory: runtime.path, role: "worker"
+          )
+        )
       rescue StandardError => error
         @err.puts "tamoz: observability disabled: #{error.message}" if @env["TAMOZ_OBSERVABILITY_DEBUG"]
         Tamoz::Observability::Recorder::Null::INSTANCE

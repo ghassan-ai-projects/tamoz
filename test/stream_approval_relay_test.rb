@@ -84,11 +84,14 @@ class StreamApprovalRelayTest < Minitest::Test
     }.merge(overrides)
   end
 
+  # A fixed clock before the fixture's `expires_at` keeps the expiry gate
+  # deterministic: the approval is always live during the test, regardless of
+  # the wall clock the suite runs under.
   def relay(delivery: FakeDelivery.new, submission: FakeSubmission.new,
             nonce_store: FakeNonceStore.new, signer: FakeSigner.new,
-            relay_id: "relay-1")
+            relay_id: "relay-1", clock: -> { Time.utc(2026, 8, 18) })
     Relay.new(
-      delivery:, submission:, nonce_store:, signer:, relay_id:
+      delivery:, submission:, nonce_store:, signer:, relay_id:, clock:
     )
   end
 

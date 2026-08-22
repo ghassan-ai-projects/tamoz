@@ -29,6 +29,7 @@ module Tamoz
             assume_model_exists: false,
             allow_changes: false,
             experimental_routing: false,
+            adaptive_routing: false,
             shadow_routing: false,
             non_interactive: false,
             checks: {}
@@ -82,6 +83,9 @@ module Tamoz
             end
             value.on('--experimental-routing', 'Use the experimental fused request router') do
               options[:experimental_routing] = true
+            end
+            value.on('--adaptive-routing', 'Use the bounded adaptive read-only session graph') do
+              options[:adaptive_routing] = true
             end
             value.on('--shadow-routing', 'Record routing decisions while using the standard workflow') do
               options[:shadow_routing] = true

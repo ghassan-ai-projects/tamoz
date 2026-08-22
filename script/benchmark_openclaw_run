@@ -1,0 +1,113 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+
+require 'digest'
+require 'json'
+require 'optparse'
+require 'open3'
+require 'tamoz/evals'
+
+root = File.expand_path('..', __dir__)
+options = {
+  protocol: File.join(root, 'documentation', 'benchmark', 'BENCHMARK_PROTOCOL.json'),
+  missions: File.join(root, 'documentation', 'benchmark', 'OPENCLAW_MISSIONS.json'),
+  artifact_base: Dir.pwd,
+  workspace: Dir.pwd,
+  env_file: ENV.fetch('TAMOZ_ENV_FILE', File.join(root, '.env')),
+  publish: false,
+  controls_passed: false
+}
+OptionParser.new do |parser|
+  parser.banner = 'Usage: script/benchmark_openclaw_run ' \
+                  '--runtime-dir DIR --provider NAME --model ID ' \
+                  '--capabilities PATH --artifact-root PATH'
+  parser.on('--protocol PATH') { |value| options[:protocol] = value }
+  parser.on('--missions PATH') { |value| options[:missions] = value }
+  parser.on('--runtime-dir PATH') { |value| options[:runtime_dir] = value }
+  parser.on('--workspace PATH') { |value| options[:workspace] = value }
+  parser.on('--env-file PATH') { |value| options[:env_file] = value }
+  parser.on('--artifact-base PATH') { |value| options[:artifact_base] = value }
+  parser.on('--artifact-root PATH') { |value| options[:artifact_root] = value }
+  parser.on('--provider NAME') { |value| options[:provider] = value }
+  parser.on('--model ID') { |value| options[:model] = value }
+  parser.on('--capabilities PATH') { |value| options[:capabilities] = value }
+  parser.on('--config-sha256 DIGEST') { |value| options[:config_sha256] = value }
+  parser.on('--git-revision REVISION') { |value| options[:git_revision] = value }
+  parser.on('--scenario ID') { |value| options[:scenario] = value }
+  parser.on('--controls-passed') { options[:controls_passed] = true }
+  parser.on('--publish') { options[:publish] = true }
+end.parse!
+
+required = %i[runtime_dir artifact_root provider model capabilities]
+missing = required.reject { |key| options[key] }
+abort "missing required options: #{missing.join(', ')}" unless missing.empty?
+
+read_json = lambda do |path|
+  JSON.parse(File.read(path, encoding: Encoding::UTF_8))
+end
+protocol = read_json.call(options.fetch(:protocol))
+catalog = read_json.call(options.fetch(:missions))
+capabilities = read_json.call(options.fetch(:capabilities))
+config_path = File.join(options.fetch(:runtime_dir), 'config.yaml')
+config_sha256 = options[:config_sha256]
+if config_sha256.nil?
+  abort 'missing --config-sha256 and runtime config.yaml does not exist' unless File.file?(config_path)
+
+  config_sha256 = "sha256:#{Digest::SHA256.file(config_path).hexdigest}"
+end
+git_revision = options[:git_revision]
+if git_revision.nil?
+  git_revision, status = Open3.capture2('git', '-C', root, 'rev-parse', 'HEAD')
+  abort 'could not resolve git revision' unless status.success?
+
+  git_revision = git_revision.strip
+end
+
+environment = Tamoz::Evals::Benchmark::EnvironmentLoader.for(
+  provider: options.fetch(:provider), env_file: options.fetch(:env_file)
+)
+adapter = Tamoz::Evals::Benchmark::OpenclawDurableCliAdapter.new(
+  runtime_dir: options.fetch(:runtime_dir), workspace: options.fetch(:workspace), env: environment,
+  routing: options[:scenario] == 'T3-m3m4' ? :legacy : :adaptive
+)
+executor = if options[:scenario] &&
+              Tamoz::Evals::Benchmark::ScenarioDriver.implemented?(options.fetch(:scenario))
+             Tamoz::Evals::Benchmark::ScenarioDriver.new(
+               adapter:, scenario: options.fetch(:scenario)
+             )
+           else
+             adapter
+           end
+runner = Tamoz::Evals::Benchmark::OpenclawMissionRunner.new(
+  protocol:, catalog:, run_kind: 'real_provider', provider: options.fetch(:provider),
+  model: options.fetch(:model), artifact_root: options.fetch(:artifact_root),
+  artifact_base: options.fetch(:artifact_base), git_revision:, config_sha256:, graph: protocol.fetch('graph'),
+  surfaces: %w[cli telegram], capabilities:, controls_passed: options.fetch(:controls_passed),
+  command: "script/benchmark_openclaw_run #{ARGV.join(' ')}", executor:
+)
+run = runner.run
+readiness = Tamoz::Evals::Benchmark::Readiness.evaluate(
+  protocol:, manifest: run.manifest,
+  expected_mission_ids: catalog.fetch('missions').map { |mission| mission.fetch('id') },
+  mission_catalog: catalog, artifact_root_base: options.fetch(:artifact_base)
+)
+
+output = readiness.to_h.merge(
+  'manifest_path' => File.join(options.fetch(:artifact_base), options.fetch(:artifact_root), 'manifest.json')
+)
+if options.fetch(:publish) && readiness.publishable?
+  result = Tamoz::Evals::Benchmark::OpenclawPublisher.publish(
+    manifest: run.manifest, protocol:, readiness:, artifact_base: options.fetch(:artifact_base),
+    scoreboard_path: File.join(root, 'documentation', 'benchmark', 'scoreboard',
+                               'INTELLIGENCE_SCOREBOARD.json')
+  )
+  output['scoreboard'] = {
+    'status' => result.scoreboard.appended? ? 'appended' : 'already_present'
+  }
+end
+
+puts JSON.pretty_generate(output)
+
+exit 2 unless readiness.ready? && (!options.fetch(:publish) || readiness.publishable?)

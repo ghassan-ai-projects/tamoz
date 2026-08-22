@@ -25,6 +25,16 @@ module Tamoz
           model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
         end
 
+        def provider
+          value = model
+          value.respond_to?(:provider) ? value.provider : value.class.name
+        end
+
+        def model_identifier
+          value = model
+          value.respond_to?(:model) ? value.model : value.class.name
+        end
+
         private
 
         def model

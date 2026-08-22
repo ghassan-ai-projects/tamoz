@@ -16,7 +16,7 @@ class AgentSkillsToolboxTest < Minitest::Test
   PRE_P9_READ_ONLY_DIGEST =
     "sha256:5767fd2ac01e89f578e4e440c50b6b57f6763376d3df46587fe99043e2860511"
   PRE_P9_READ_WRITE_DIGEST =
-    "sha256:24a55e8ebb4bfc4efab57b68a60ffff7bf6e7eae25c7b39295459b691c903121"
+    "sha256:af94b8f3175d366f179b14e841415807dc4cf07140be0b9b97f5f27dd205b31a"
 
   def setup
     @dir = Dir.mktmpdir("tamoz-skills-toolbox")
@@ -291,14 +291,13 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_equal box.prompt_surface_digest, record.fetch("prompt_surface_digest")
   end
 
-  def test_a_pre_p9_session_record_loads_with_the_shared_empty_epoch
-    legacy = {
-      "record" => "session", "record_version" => 1, "session_id" => "t1", "task" => "x",
-      "task_digest" => "d", "root" => @workspace, "graph_version" => "1",
-      "behavior_version" => "1", "tool_catalog_digest" => "sha256:#{"0" * 64}",
-      "created_at_ms" => 0
-    }
-    loaded = Tamoz::Agent::SessionRecords.load!(legacy, kind: "session")
+  def test_a_session_without_skills_loads_with_the_shared_empty_epoch
+    record = Tamoz::Agent::SessionRecords.build(
+      "session", session_id: "t1", task: "x", task_digest: "d", root: @workspace,
+      graph_version: "1", behavior_version: "1",
+      tool_catalog_digest: "sha256:#{"0" * 64}", created_at_ms: 0
+    )
+    loaded = Tamoz::Agent::SessionRecords.load!(record, kind: "session")
 
     assert_equal "none", loaded.fetch("skill_epoch")
     assert_equal "legacy:none", loaded.fetch("prompt_surface_digest")

@@ -574,6 +574,29 @@ module Tamoz
         nil
       end
 
+      # Join the scheduler's durable occurrence to the ordinary request inbox
+      # by its deterministic request id. The worker uses this seam to complete
+      # the delivery-to-execution lifecycle after the graph has a durable view.
+      def occurrence_for_request(request_id)
+        normalized = Wire.identity(request_id, name: "schedule request id")
+        row = @adapter.__send__(:read, operation: "schedule.occurrence_for_request") do |tx|
+          tx.first(
+            "schedule.occurrence_for_request.fetch",
+            <<~SQL,
+              SELECT occurrence_id, schedule_id, schedule_revision,
+                     nominal_fire_at_utc, not_before, request_id, state,
+                     fence, owner, reason, created_at_ms, updated_at_ms
+              FROM tamoz_occurrences
+              WHERE request_id = ?
+              ORDER BY updated_at_ms DESC
+              LIMIT 1
+            SQL
+            [normalized]
+          )
+        end
+        row && materialize_occurrence(row)
+      end
+
       def list_occurrences(schedule_id:, cursor: nil, limit: 100)
         bound = limit.clamp(1, 100)
         rows = @adapter.__send__(:read, operation: "schedule.list") do |tx|

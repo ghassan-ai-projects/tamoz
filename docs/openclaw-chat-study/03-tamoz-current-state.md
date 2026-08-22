@@ -178,30 +178,45 @@ after completion.
 
 ### 1. Terminal-only channel projection
 
-`OutboxDeliverySink::EVENT_KINDS` covers accepted, approval, terminal, failed,
-stopped, and blocked outcomes, but not claimed, running, recovered, phase, or
-committed progress events. Worker lifecycle events remain in worker
-observability. Telegram therefore cannot distinguish queued, running, waiting,
-or stopped after the initial receipt.
+`OutboxDeliverySink::EVENT_KINDS` maps only terminal-class worker events to
+outbox projections: `request.accepted` → `accepted`, `request.approved` /
+`request.denied` / `request.completed` → `answer`, `request.failed` → `failed`,
+`request.stopped` → `stopped`, `request.blocked` → `blocked`, and
+`request.approval_request` → `approval_request`. There are no claimed, running,
+recovered, phase, or committed-progress event kinds. Worker lifecycle events
+remain in worker observability. Telegram therefore cannot distinguish queued,
+running, waiting, or stopped after the initial receipt.
 
 This is the primary root cause.
 
-### 2. Status is admission accounting, not a turn read model
+### 2. Status is a raw internal dump, not a turn read model
 
-`CommsStore#conversation_status` and `CommsGateway#status_text` expose only a
-thread, an aggregate state, and open-request count. They do not expose request
-identity, queued/running/waiting phase, current graph phase, committed progress,
-terminal reason, or outbound pending/unknown state.
+`CommsStore#conversation_status` does read durable facts — thread, an
+accepted/idle aggregate, open-request count, the active `request_id`,
+`task_state`, `effect_state`, `capability_state`, `delivery_state`, plus
+checkpoint-derived `phase`, `event_kind`, `event_sequence`, `next_action`, and
+`terminal_reason`. But the projection stops short of being useful:
 
-The internal state exists in request, session, effect, and outbox records, but no
-single safe projection composes it.
+- `CommsGateway#status_text` renders most fields but drops `terminal_reason`
+  and the request identity, so a failed turn cannot be named or correlated.
+- There is no short, human-readable request reference, so a user cannot ask
+  about a specific turn (`/status <ref>`); status is conversation-scoped only.
+- There is no queue position or age for queued work, and no waiting/blocked
+  reason translated into a next action the correspondent can take.
+- The exposed vocabulary is internal worker/effect state, not a small closed
+  external lifecycle the CLI can share.
+
+The internal state exists in request, session, effect, and outbox records;
+what is missing is a caller-bound, reference-addressed projection in a shared
+vocabulary — not the underlying data.
 
 ### 3. Admission acknowledgement is underspecified
 
-`Accepted. I will report committed progress.` means durable admission. It does
-not mean that the worker started, that the model succeeded, or that Telegram
-accepted the acknowledgement. Without a request reference, the user cannot
-query or correlate that work.
+`Accepted. I will report committed progress.` (or, when earlier work is open,
+`Queued behind earlier work; I will report committed progress when it runs.`)
+means durable admission. It does not mean that the worker started, that the
+model succeeded, or that Telegram accepted the acknowledgement. Without a
+request reference, the user cannot query or correlate that work.
 
 ### 4. Command contract diverges from implementation
 
@@ -250,14 +265,21 @@ UX polish:
   owner/fence transition fails; a stale drainer takeover test is missing.
 - `mark_delivery` should carry owner/fence/attempt identity rather than allowing
   a stale caller to mark another owner's row.
-- descriptor limits such as `max_open_requests`, `max_inbound_bytes`, and
-  `max_response_bytes` must be enforced where resources are admitted, not only
-  validated in configuration.
+- descriptor limits are split: `outbox_capacity`, `control_capacity`, and
+  `max_denial_prompts_per_request` are enforced at the admission/delivery
+  boundary (`CommsStore#capacity_saturated?`, `append_delivery`), but
+  `max_open_requests` and `max_inbound_bytes` are only validated in
+  `SurfaceDescriptor` configuration and enforced nowhere, and
+  `max_response_bytes` lives under the descriptor's `transport` section and is
+  likewise validated only — none of the three reaches its resource boundary;
 - the drainer needs typed handling for authentication/storage failures so it
   cannot stop without an operator-visible state.
-- pairing challenge construction appears to be present in tests/operator paths
-  but lacks a confirmed production gateway issuance path; this is a medium-
-  confidence static finding that requires a direct runtime check.
+- pairing challenge issuance has no production path: `Comms::PairingChallenge.build`
+  and `CommsStore#insert_pairing_challenge` exist, but their only call sites are
+  tests; the gateway silently ignores `pairing_pending` senders, and
+  `tamoz comms pair approve` only verifies a code against an existing challenge.
+  Confirmed by direct code inspection (previously a medium-confidence static
+  finding).
 
 ## Evidence limits
 

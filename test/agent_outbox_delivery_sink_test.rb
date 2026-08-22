@@ -206,6 +206,29 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  def test_a_terminal_delivery_replay_after_sink_restart_is_one_row
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      event = { thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'done', request_id: 'occurrence-1' }
+
+      assert_equal :accepted, sink.push(event)
+      restarted_sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
+      assert_equal :accepted, restarted_sink.push(event)
+
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+      assert_equal 1, rows.length
+      assert_equal 'answer', rows.first.fetch('kind')
+      assert_equal rows.first.fetch('delivery_id'),
+                   Comms::Delivery.build(
+                     conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'done',
+                     part_index: 0, part_count: 1, journaled: true, render_version: 1,
+                     content_digest: Comms::Rendering.content_digest('done'),
+                     identity_key: 'occurrence-1'
+                   ).delivery_id
+    end
+  end
+
   def test_an_unbound_thread_delivers_nothing
     with_engine do |sink, adapter, checkpoints|
       result = sink.push(thread_id: 'tg.unbound', kind: 'request.completed', text: 'hi')

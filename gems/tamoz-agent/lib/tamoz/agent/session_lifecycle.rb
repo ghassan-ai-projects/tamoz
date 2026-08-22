@@ -9,7 +9,7 @@ module Tamoz
     class SessionLifecycle
       # Immutable inputs for the verification model prompt.
       VerificationInput = Data.define(
-        :state, :plan, :review, :observations, :context, :terminal_reason
+        :state, :plan, :review, :observations, :context, :planning_context, :compaction, :terminal_reason
       )
 
       def initialize(services:)
@@ -32,18 +32,21 @@ module Tamoz
 
       def verify(state, context)
         configuration = @services.configuration
-        input = verification_input(state, configuration)
+        input = verification_input(state, configuration, context)
         call = verification_call(context, input)
         return @services.evidence.blocked_update(call, 'model call outcome is unknown') unless
           call.status == :succeeded
 
-        verification_update(state, configuration, call, input.terminal_reason)
+        update = verification_update(state, configuration, call, input.terminal_reason)
+        input.compaction && compaction_state_supported? ? update.merge(compactions: [input.compaction]) : update
       end
 
-      def terminal(state, _context)
+      # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- terminal assembly
+      # is the single durable boundary for the completed session and its lifecycle.
+      def terminal(state, context)
         verification = state[:verification]
         @services.memory.record_episode_memory(state, verification) if @services.configuration.memory
-        {
+        update = {
           phase: 'terminal',
           terminal: SessionRecords.build(
             'terminal',
@@ -52,7 +55,26 @@ module Tamoz
             blocked: state[:blocked]
           )
         }
+        return update unless state.key?(:lifecycle_events)
+
+        update.merge(
+          lifecycle_events: [
+            SessionRecords.build(
+              'lifecycle_event',
+              event_type: 'terminal',
+              sequence: state.fetch(:lifecycle_events).length,
+              request_id: context.request_id,
+              thread_id: context.thread_id || state.dig(:session, 'session_id'),
+              execution_id: context.execution_id,
+              phase: 'terminal',
+              effect_state: state[:blocked] ? 'unknown' : 'terminal',
+              delivery_state: 'pending',
+              terminal_reason: state.fetch(:terminal_reason)
+            )
+          ]
+        )
       end
+      # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
       private
 
@@ -91,16 +113,25 @@ module Tamoz
         }
       end
 
-      def verification_input(state, configuration)
+      def verification_input(state, configuration, durable_context)
         accepted = state.fetch(:accepted_plan)
         plan = Plan.parse(accepted.fetch('plan'))
         review = @services.evidence.last_semantic_review(state, accepted)
         observations = state.fetch(:observations).map do |record|
           @services.evidence.observation_payload(record)
         end
+        compacted = @services.planning_context.compact_for(
+          state,
+          :verify,
+          observations:,
+          compaction: { effects: @services.effects, durable_context: }
+        )
         terminal_reason = state.fetch(:terminal_reason)
         context = verification_context(configuration, state, terminal_reason)
-        VerificationInput.new(state:, plan:, review:, observations:, context:, terminal_reason:)
+        VerificationInput.new(
+          state:, plan:, review:, observations: compacted.observations, context:,
+          planning_context: compacted.context, compaction: compacted.record, terminal_reason:
+        )
       end
 
       def verification_call(context, input)
@@ -113,10 +144,15 @@ module Tamoz
             input.plan,
             input.review,
             input.observations,
-            verification_context: input.context
+            verification_context: input.context,
+            planning_context: input.planning_context
           ),
           call_index: 0
         )
+      end
+
+      def compaction_state_supported?
+        @services.configuration.graph_version != SessionNodes::GRAPH_VERSION
       end
 
       def verification_update(state, configuration, call, terminal_reason)

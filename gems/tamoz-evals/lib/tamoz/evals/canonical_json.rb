@@ -17,6 +17,12 @@ module Tamoz
         raise InvalidArtifactError, "value is not canonical JSON: #{error.message}"
       end
 
+      def dump_with_floats(value)
+        JSON.generate(normalize(value, 0, allow_floats: true))
+      rescue JSON::GeneratorError => error
+        raise InvalidArtifactError, "value is not canonical JSON: #{error.message}"
+      end
+
       def content_digest(document, domain:)
         unless document.is_a?(Hash)
           raise InvalidArtifactError, "artifact root must be an object"
@@ -31,26 +37,26 @@ module Tamoz
         "sha256:#{Digest::SHA256.file(path).hexdigest}"
       end
 
-      def normalize(value, depth = 0)
+      def normalize(value, depth = 0, allow_floats: false)
         raise InvalidArtifactError, "artifact nesting exceeds 100" if depth > 100
 
         case value
         when Hash
-          normalize_object(value, depth)
+          normalize_object(value, depth, allow_floats:)
         when Array
-          value.map { |entry| normalize(entry, depth + 1) }
+          value.map { |entry| normalize(entry, depth + 1, allow_floats:) }
         when String
           normalize_string(value)
         when Integer, TrueClass, FalseClass, NilClass
           value
         when Float
-          raise InvalidArtifactError, "floating-point values are forbidden; use scaled integers"
+          normalize_float(value, allow_floats)
         else
           raise InvalidArtifactError, "unsupported canonical JSON value: #{value.class}"
         end
       end
 
-      def normalize_object(value, depth)
+      def normalize_object(value, depth, allow_floats:)
         normalized = {}
 
         value.each do |key, entry|
@@ -61,7 +67,7 @@ module Tamoz
             raise InvalidArtifactError, "object keys collide after Unicode normalization"
           end
 
-          normalized[normalized_key] = normalize(entry, depth + 1)
+          normalized[normalized_key] = normalize(entry, depth + 1, allow_floats:)
         end
 
         normalized.keys.sort.each_with_object({}) do |key, sorted|
@@ -69,6 +75,13 @@ module Tamoz
         end
       end
       private_class_method :normalize_object
+
+      def normalize_float(value, allow_floats)
+        return value if allow_floats && value.finite?
+
+        raise InvalidArtifactError, "floating-point values are forbidden; use scaled integers"
+      end
+      private_class_method :normalize_float
 
       def normalize_string(value)
         utf8 = value.encode(Encoding::UTF_8)

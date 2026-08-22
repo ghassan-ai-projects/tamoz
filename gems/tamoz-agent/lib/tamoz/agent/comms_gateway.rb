@@ -301,10 +301,15 @@ module Tamoz
                     reservation: reservation_slots, capacity: outbox_capacity, now:,
                     history:
         )
-        if %i[enqueued duplicate].include?(outcome)
+        if outcome == :enqueued
           append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
           return
         end
+
+        # A replayed update already has its admission durable.
+        # Re-rendering it here can create a second control row when the queue
+        # state changed between the original attempt and the replay.
+        return if outcome == :duplicate
 
         # Saturated (invariant 57): durable refusal, no turn, and a bounded
         # busy reply that itself may be coalesced.
@@ -347,7 +352,14 @@ module Tamoz
         status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
         return 'No work is admitted for this conversation.' unless status
 
-        "Work status: #{status.fetch('state')}; open requests: #{status.fetch('open_requests')}."
+        "Work status: task=#{status.fetch('task_state')}; " \
+          "phase=#{status.fetch('phase', 'unknown')}; " \
+          "event=#{status.fetch('event_kind', 'unknown')}##{status.fetch('event_sequence', 'unknown')}; " \
+          "effect=#{status.fetch('effect_state')}; " \
+          "capability=#{status.fetch('capability_state')}; " \
+          "delivery=#{status.fetch('delivery_state')}; " \
+          "next=#{status.fetch('next_action', 'inspect')}; " \
+          "open requests=#{status.fetch('open_requests')}."
       end
 
       def cancel_request(envelope)

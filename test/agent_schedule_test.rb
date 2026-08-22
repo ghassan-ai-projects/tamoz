@@ -46,7 +46,9 @@ class AgentScheduleTest < Minitest::Test
       assert_equal added.fetch("id"), resumed.fetch("id")
 
       rt.cli(%w[worker --once --json], factory: read_only_factory)
-      refute_empty rt.occurrences("nightly"), "a resumed schedule did not fire"
+      occurrences = rt.occurrences("nightly")
+      refute_empty occurrences, "a resumed schedule did not fire"
+      assert_equal "succeeded", occurrences.first.fetch("state"), occurrences.first.inspect
 
       # Removed: stops firing, keeps its history.
       assert_equal 0, rt.cli(%w[schedule remove nightly --json]), rt.err
@@ -54,6 +56,29 @@ class AgentScheduleTest < Minitest::Test
       assert_empty JSON.parse(rt.out).fetch("schedules").select { |entry| entry.fetch("enabled") }
       refute_empty rt.occurrences("nightly"),
                    "removing a schedule destroyed the evidence of what it ran"
+    end
+  end
+
+  def test_status_projects_schedule_authority_and_recovery_state
+    with_runtime do |rt|
+      rt.cli(%W[schedule add --id nightly --interval 3600 --task Read note.txt])
+
+      rt.cli(%w[status --json])
+      scheduled = JSON.parse(rt.out).fetch("scheduled_work").fetch(0)
+      assert_equal "nightly", scheduled.fetch("schedule_id")
+      assert_equal "not_materialized", scheduled.fetch("execution_state")
+      assert_equal "scheduled", scheduled.fetch("phase")
+      assert_equal "granted", scheduled.fetch("capability_state")
+      assert_match(/\Asha256:[0-9a-f]{64}\z/, scheduled.fetch("grant_revision"))
+      assert_equal "wait_for_due_occurrence", scheduled.fetch("next_action")
+      refute scheduled.key?("occurrence_id"), "status fabricated an occurrence"
+
+      rt.cli(%w[schedule pause nightly])
+      rt.cli(%w[status --json])
+      paused = JSON.parse(rt.out).fetch("scheduled_work").fetch(0)
+      assert_equal "paused", paused.fetch("phase")
+      assert_equal "schedule_disabled", paused.fetch("pause_reason")
+      assert_equal "resume_schedule", paused.fetch("next_action")
     end
   end
 

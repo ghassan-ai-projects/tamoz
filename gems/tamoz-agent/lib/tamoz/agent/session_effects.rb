@@ -9,19 +9,25 @@ module Tamoz
     # :reek:LongParameterList :reek:MissingSafeMethod :reek:NilCheck :reek:TooManyMethods
     # :reek:TooManyStatements :reek:UtilityFunction
     # Effect requests mirror the journal contract; refusal ordering stays explicit.
+    # rubocop:disable Metrics/ClassLength, Metrics/ParameterLists
     class SessionEffects
       def initialize(configuration:)
         @configuration = configuration
       end
 
-      def model_call(context, stage:, system:, prompt:, call_index:)
+      def model_call(context, stage:, system:, prompt:, call_index:, iteration: call_index, sub_operation: 0)
         outcome = EffectDispatcher.run(
           context:,
           operation: "model.generate.#{stage}",
           safety: @configuration.model_call_safety,
           call_index:,
           request: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
-          actor: 'tamoz.agent.session'
+          actor: 'tamoz.agent.session',
+          logical_identity: logical_identity(
+            context:, operation: "model.generate.#{stage}", capability_id: "model:#{stage}",
+            arguments: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
+            iteration:, sub_operation:
+          )
         ) do
           { 'output' => String(@configuration.model.generate(stage:, system:, prompt:)) }
         end
@@ -36,13 +42,17 @@ module Tamoz
         outcome.with(value: text)
       end
 
-      def dispatch(context, intent, step)
+      def dispatch(context, intent, step, iteration: 0, sub_operation: 0)
         tool = intent.fetch('tool')
         arguments = resolved_execution_arguments(intent, step)
         safety = intent.fetch('safety').to_sym
-        EffectDispatcher.run(
-          **dispatch_options(context, intent, tool, arguments, safety)
-        ) { execute_dispatch(context, intent, tool, arguments) }
+        options = dispatch_options(context, intent, tool, arguments, safety).merge(
+          logical_identity: logical_identity(
+            context:, operation: intent.fetch('operation'), capability_id: tool,
+            arguments:, iteration:, sub_operation:
+          )
+        )
+        EffectDispatcher.run(**options) { execute_dispatch(context, intent, tool, arguments) }
       end
 
       def verify_intent_before_state!(intent)
@@ -92,6 +102,29 @@ module Tamoz
         }
       end
 
+      def logical_identity(context:, operation:, capability_id:, arguments:, iteration:, sub_operation:)
+        {
+          request_id: context.request_id,
+          execution_id: context.execution_id,
+          operation:,
+          capability_id:,
+          arguments: Tamoz::Agent::Deliberation.canonical(arguments),
+          authority_revision: authority_revision,
+          catalog_revision: catalog_revision,
+          iteration: Integer(iteration),
+          sub_operation: Integer(sub_operation)
+        }
+      end
+
+      def authority_revision
+        @configuration.profile&.canonical_digest || @configuration.toolbox.catalog_digest
+      end
+
+      def catalog_revision
+        catalogs = @configuration.mcp&.mcp_catalogs || {}
+        SessionRecords.digest(Tamoz::Agent::Deliberation.canonical(catalogs))
+      end
+
       def dispatch_request(intent, tool, arguments)
         {
           'tool' => tool,
@@ -125,8 +158,45 @@ module Tamoz
 
       def result_payload(result)
         return check_payload(result) if result.is_a?(CheckReceipt)
+        return mcp_payload(result) if mcp_outcome?(result)
 
         { 'output' => String(result) }
+      end
+
+      def mcp_outcome?(result)
+        result.respond_to?(:status) && result.respond_to?(:observation) &&
+          result.respond_to?(:interrupt) && result.respond_to?(:denial)
+      end
+
+      def mcp_payload(result)
+        case result.status
+        when :succeeded
+          observation = result.observation
+          output = sanitize_remote_text(observation.text.to_s)
+          {
+            'output' => output,
+            'source_id' => observation.server_id.to_s,
+            'provenance' => 'remote_untrusted',
+            'truncated' => observation.truncated == true,
+            'output_bytes' => output.bytesize
+          }
+        when :denied, :interrupt
+          reason = result.denial || result.interrupt
+          raise ToolError, "MCP capability did not complete: #{safe_mcp_reason(reason)}"
+        else
+          raise EffectUnknownError, 'MCP capability returned an unknown outcome'
+        end
+      end
+
+      def safe_mcp_reason(reason)
+        text = reason.respond_to?(:to_h) ? reason.to_h.inspect : reason.to_s
+        sanitize_remote_text(text.byteslice(0, 512) || '')
+      end
+
+      def sanitize_remote_text(text)
+        Tamoz::Core::SECRET_VALUE_PATTERNS.reduce(String(text)) do |sanitized, pattern|
+          sanitized.gsub(pattern, '[REDACTED]')
+        end
       end
 
       def check_payload(result)
@@ -143,7 +213,7 @@ module Tamoz
 
       public
 
-      def build_intent(step, accepted, arguments)
+      def build_intent(step, accepted, arguments, iteration: 0, sub_operation: 0)
         tool = step.fetch('tool')
         fields = {
           step_id: step.fetch('id'),
@@ -152,7 +222,9 @@ module Tamoz
           tool:,
           operation: "tool.#{tool}",
           safety: tool_safety(tool, arguments).to_s,
-          arguments_digest: SessionRecords.digest(Tamoz::Agent::Deliberation.canonical(arguments))
+          arguments_digest: SessionRecords.digest(Tamoz::Agent::Deliberation.canonical(arguments)),
+          iteration: Integer(iteration),
+          sub_operation: Integer(sub_operation)
         }
         @configuration.capabilities.effect_intent(tool, arguments).each do |key, value|
           fields[key.to_sym] = value
@@ -242,5 +314,6 @@ module Tamoz
         [name, prompt_safe(description)]
       end
     end
+    # rubocop:enable Metrics/ClassLength, Metrics/ParameterLists
   end
 end

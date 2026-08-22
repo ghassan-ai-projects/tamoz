@@ -116,6 +116,14 @@ module Tamoz
         EffectJournalKey.logical(logical_key)
       end
 
+      def logical_identity(**fields)
+        EffectJournalKey.logical_identity(**fields)
+      end
+
+      def attempt_identity(logical_key, attempt_number, execution_id: nil, fence: nil)
+        EffectJournalKey.attempt_identity(logical_key, attempt_number, execution_id:, fence:)
+      end
+
       def start(key:, attempt_token:)
         @lifecycle.start(key:, attempt_token:)
       end

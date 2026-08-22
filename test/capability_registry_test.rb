@@ -14,8 +14,21 @@ class CapabilityRegistryTest < Minitest::Test
   Capability = Core::Capability
 
   def descriptor(id: "read_file", kind: :tool, source_id: "local", **overrides)
+    egress_ref = %i[mcp_tool websearch].include?(kind) ? "mcp:test" : "none"
     Capability::Descriptor.new(
       id:, kind:, source_id:, trust: :local, effect_class: :read_only,
+      approval_policy: :none,
+      egress_policy_ref: egress_ref,
+      egress_policy_digest: Capability::Descriptor.egress_digest_for(egress_ref),
+      secret_handling: :reject_values,
+      request_budget: { "max_bytes" => 16 * 1024 },
+      output_budget: { "max_bytes" => 64 * 1024 },
+      retry_policy: :read_only,
+      reconciliation_policy: :none,
+      schema_digest: Capability::Descriptor.schema_digest_for(
+        { "type" => "object", "properties" => {} }, { "type" => "object" }
+      ),
+      source_digest: Capability::Descriptor.source_digest_for(source_id),
       protocol_profile: {"transport" => "in_process"},
       input_schema: {"type" => "object", "properties" => {}},
       output_schema: {"type" => "object"}, **overrides
@@ -166,4 +179,3 @@ class CapabilityRegistryTest < Minitest::Test
     assert_includes error.message, "not a built-in"
   end
 end
-

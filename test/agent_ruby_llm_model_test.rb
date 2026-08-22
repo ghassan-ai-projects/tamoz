@@ -3,7 +3,7 @@
 require_relative "test_helper"
 
 class AgentRubyLLMModelTest < Minitest::Test
-  Config = Struct.new(:openai_api_key, :openai_api_base)
+  Config = Struct.new(:openai_api_key, :openai_api_base, :openrouter_api_key, :openrouter_api_base)
 
   class FakeChat
     attr_reader :instructions, :prompt
@@ -67,6 +67,30 @@ class AgentRubyLLMModelTest < Minitest::Test
     end
 
     assert_match(/OPENAI_API_KEY/, error.message)
+  end
+
+  def test_binds_deepseek_to_openrouter_without_using_the_direct_deepseek_provider
+    config = Config.new
+    context = FakeContext.new
+    context_factory = lambda do |&block|
+      block.call(config)
+      context
+    end
+
+    model = Tamoz::Agent::RubyLLMModel.new(
+      model: "deepseek/deepseek-chat",
+      provider: :openrouter,
+      api_key: "openrouter-test-key",
+      context_factory:
+    )
+    model.generate(stage: :plan, system: "system", prompt: "prompt")
+
+    assert_equal "openrouter-test-key", config.openrouter_api_key
+    assert_nil config.openrouter_api_base
+    assert_equal(
+      {model: "deepseek/deepseek-chat", provider: :openrouter, assume_model_exists: false},
+      context.arguments
+    )
   end
 
   def test_ruby_llm_model_registry_loads_under_a_c_locale

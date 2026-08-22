@@ -67,6 +67,8 @@ module Tamoz
         @batch = Integer(batch)
         @cancellation = cancellation || Tamoz::CancellationToken.new
         @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
+        @model_effect_keys = Set.new
+        @model_effect_monitor = Mutex.new
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -111,12 +113,20 @@ module Tamoz
       # is queued. Returns whether anything moved, which is the only input to the
       # idle decision.
       def poll_once
+        reconciled = reconcile_child_requests
         materialized = materialize_due_schedules
         advanced = advance_pending_threads
-        (materialized + advanced).positive?
+        (reconciled + materialized + advanced).positive?
       end
 
       private
+
+      def reconcile_child_requests
+        @runtime.reconcile_child_requests(limit: @batch).length
+      rescue WorkerRuntime::StoreUnavailableError => error
+        emit('worker.error', reason: error.message)
+        0
+      end
 
       # ---------------------------------------------------------------- schedules
 
@@ -287,12 +297,15 @@ module Tamoz
       rescue StandardError => error
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
+        terminal_request = entry.fetch(:head_status) == :queued
+        settle_child_error(thread_id, error) if terminal_request
+        close_failed_occurrence(thread_id) if terminal_request
         emit("request.failed",
              thread: thread_id,
              request_id: occurrence_id,
              duration_ms: @runtime.occurrence_age_milliseconds(thread_id),
              reason: "#{error.class}: #{error.message}")
-        if entry.fetch(:head_status) == :queued
+        if terminal_request
           begin
             @runtime.durably_fail_request(thread_id, occurrence_id, reason: bounded_reason(error))
             # The message is terminally dead; the channel must hear about it
@@ -302,9 +315,20 @@ module Tamoz
             # The claim may have completed under a concurrent pass; the failed
             # park below still stops the hot loop for claimed entries.
           end
+          park(entry, nil, reason: "failed")
+        else
+          # A claimed/running request is recoverable work. Keep its open
+          # occurrence and child in flight so the next pass can recover the
+          # same execution instead of reporting a permanent child failure.
+          unpark(thread_id)
         end
-        park(entry, nil, reason: "failed")
         PARKED
+      end
+
+      def close_failed_occurrence(thread_id)
+        @runtime.close_occurrence(thread_id)
+      rescue StandardError => error
+        emit('worker.error', reason: "failed occurrence cleanup: #{error.message}")
       end
 
       # Which budget, if any, this thread has spent. Returns nil when the profile
@@ -334,6 +358,7 @@ module Tamoz
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+        settle_child_error(thread_id, RuntimeError.new("budget_exhausted: #{budget}: #{detail}"))
         @runtime.record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
         view = session && view_of(session, thread_id)
         notify_sink(
@@ -391,9 +416,11 @@ module Tamoz
         notify_sink(thread_id, granted ? "request.approved" : "request.denied",
                     granted ? "Approved." : "Denied.", request_id: occurrence_id)
         unpark(thread_id)
-        session.resume(answers, thread: thread_id, request_id: decision.resume_request_id,
-                                owner_id: owner_id)
+        request = session.resume(
+          answers, thread: thread_id, request_id: decision.resume_request_id, owner_id: owner_id
+        )
         @runtime.consume_decision(decision_id, now:)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:)
       end
 
@@ -410,11 +437,21 @@ module Tamoz
 
       def claim_and_run(session, thread_id:, occurrence_id:)
         emit("request.claimed", thread: thread_id, request_id: occurrence_id)
+        start_child_task(thread_id)
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      def start_child_task(thread_id)
+        child = @runtime.child_task(thread_id)
+        return unless child
+        return unless child.status == 'pending'
+
+        @runtime.transition_child_task(child.child_id, &:start)
       end
 
       # A request left `claimed`/`running` belongs to a worker that died holding
@@ -425,7 +462,61 @@ module Tamoz
         request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      def settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        return unless @runtime.respond_to?(:schedule_occurrence)
+
+        occurrence = @runtime.schedule_occurrence(occurrence_id)
+        return unless occurrence
+
+        view = view_of(session, thread_id)
+        execution_id = view&.execution_id || request&.execution_id
+        return unless execution_id
+
+        if occurrence.state == :enqueued
+          @runtime.schedule_store.acknowledge_occurrence(
+            occurrence.occurrence_id, execution_id:, fence: occurrence.fence
+          )
+          occurrence = @runtime.schedule_occurrence(occurrence_id)
+        end
+        return unless occurrence&.state == :running
+
+        status = scheduled_terminal_status(view, request)
+        return unless status
+
+        @runtime.schedule_store.complete_occurrence(
+          occurrence.occurrence_id,
+          execution_id:,
+          status:,
+          evidence: {
+            'request_id' => occurrence_id,
+            'checkpoint_id' => view&.checkpoint_id,
+            'execution_id' => execution_id,
+            'status' => status.to_s
+          }.compact
+        )
+      rescue Tamoz::Scheduler::SchedulerError, Tamoz::Scheduler::LeaseLostError => error
+        emit('schedule.error', reason: error.message)
+      end
+
+      def scheduled_terminal_status(view, request)
+        if view&.status == :completed
+          return :succeeded if view.terminal&.fetch('satisfied', false) == true
+
+          return :failed
+        end
+        return :failed if view&.status == :failed
+        return :unknown if view&.status == :blocked
+        # A completed request without its terminal projection is not enough to
+        # prove verification. Keep the occurrence non-green until the projection
+        # is available rather than treating delivery completion as task success.
+        return :unknown if request&.status == :completed
+        return :failed if request&.status == :failed
+
+        nil
       end
 
       # Where the turn ended up, reported against the OCCURRENCE — the queued
@@ -452,9 +543,11 @@ module Tamoz
         end
 
         view = view_of(session, thread_id)
+        emit_durable_model_calls(session, thread_id:, request_id: request&.request_id || occurrence_id)
         return IDLE unless view
 
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
+        settle_child_task(thread_id, view)
 
         # A claim that was rejected as stale returns a terminal-failed request
         # whose view is the thread's OLD latest checkpoint — never this
@@ -488,6 +581,9 @@ module Tamoz
           emit("request.completed",
                thread: thread_id, request_id: occurrence_id, status: "completed",
                duration_ms:,
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :failed
@@ -503,6 +599,9 @@ module Tamoz
                thread: thread_id, request_id: occurrence_id,
                duration_ms:,
                reason: settled_failure_reason(view),
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :blocked
@@ -519,6 +618,9 @@ module Tamoz
                request_id: occurrence_id,
                duration_ms:,
                reason: "effect_unknown",
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
                observability: {execution_id: view.execution_id})
           PROGRESSED
         when :paused
@@ -526,6 +628,9 @@ module Tamoz
             emit("request.paused",
                  thread: thread_id, request_id: occurrence_id, reason: "paused",
                  duration_ms:,
+                 status_projection: SessionStatusProjection.document(
+                   view, request_id: occurrence_id, delivery_state: 'pending'
+                 ),
                  observability: {execution_id: view.execution_id})
           else
             notify_sink(thread_id, "request.approval_request", "Approval requested.",
@@ -539,6 +644,28 @@ module Tamoz
         end
       end
 
+      def settle_child_task(thread_id, view)
+        @runtime.settle_child_task(thread_id, view)
+      end
+
+      def settle_child_error(thread_id, error)
+        child = @runtime.child_task(thread_id)
+        return unless child && %w[pending running].include?(child.status)
+
+        receipt = "#{error.class}: #{error.message}".byteslice(0, 1024)
+        @runtime.transition_child_task(child.child_id) do |current|
+          next current unless %w[pending running].include?(current.status)
+
+          if error.is_a?(Tamoz::EffectUnknownError)
+            current.unknown(receipt:)
+          else
+            current.fail(receipt:)
+          end
+        end
+      rescue StandardError => transition_error
+        emit('worker.error', reason: "child settlement failed: #{transition_error.message}")
+      end
+
       def emit_approval_request(thread_id, occurrence_id, view)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         emit("request.paused",
@@ -547,6 +674,9 @@ module Tamoz
              duration_ms:,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
+             status_projection: SessionStatusProjection.document(
+               view, request_id: occurrence_id, delivery_state: 'pending'
+             ),
              observability: {execution_id: view.execution_id})
       end
 
@@ -783,6 +913,108 @@ module Tamoz
         @observability.emit(name, correlation:, attributes:)
       rescue StandardError
         :dropped
+      end
+
+      def emit_durable_model_calls(session, thread_id:, request_id:)
+        return unless @runtime.respond_to?(:checkpoints) && session.respond_to?(:effect)
+
+        seed_model_effect_keys(thread_id)
+        rows = @runtime.checkpoints.effect_census(limit: 10_000).select do |row|
+          row.fetch(:thread_id) == thread_id &&
+            row.fetch(:status) == :succeeded &&
+            row.fetch(:operation).to_s.start_with?("model.generate.")
+        end
+        rows.each do |row|
+          effect_key = row.fetch(:effect_key)
+          next unless claim_model_effect(effect_key)
+
+          result = emit_durable_model_call(
+            session, thread_id:, request_id:, effect_key:
+          )
+          release_model_effect(effect_key) if result == :dropped
+        end
+      rescue StandardError
+        :dropped
+      end
+
+      def emit_durable_model_call(session, thread_id:, request_id:, effect_key:)
+        record = session.effect(thread: thread_id, effect_key:)
+        return :dropped unless record && record.status == :succeeded
+
+        attempt = record.attempts.reverse.find { |entry| entry.status == :succeeded }
+        return :dropped unless attempt
+
+        model = session.model if session.respond_to?(:model)
+        provider = model_identity(model, :provider)
+        model_name = model_identity(model, :model_identifier)
+        model_call = Tamoz::Observability::ModelCall.new(
+          producer: @observability, provider:, model: model_name
+        )
+        model_call.emit(
+          correlation: {
+            thread_id:, execution_id: record.execution_id, request_id:,
+            task_id: record.task_id, effect_key:
+          },
+          started_at_ms: attempt.started_at_ms,
+          ended_at_ms: attempt.completed_at_ms,
+          usage: model_usage(attempt.result),
+          request_digest: record.request_digest
+        )
+      rescue StandardError
+        :dropped
+      end
+
+      def claim_model_effect(effect_key)
+        @model_effect_monitor.synchronize do
+          next false if @model_effect_keys.include?(effect_key)
+
+          @model_effect_keys.add(effect_key)
+          true
+        end
+      end
+
+      def seed_model_effect_keys(thread_id)
+        return unless @runtime.respond_to?(:path)
+
+        keys = Tamoz::Observability::Recorder::Journal.read(
+          @runtime.path, role: "worker", thread_id:, kind: "event"
+        ).filter_map do |document|
+          document.dig("correlation", "effect_key") if document["name"] == "tamoz.model.call"
+        end
+        @model_effect_monitor.synchronize { @model_effect_keys.merge(keys) }
+      rescue StandardError
+        :dropped
+      end
+
+      def release_model_effect(effect_key)
+        @model_effect_monitor.synchronize { @model_effect_keys.delete(effect_key) }
+      end
+
+      def model_identity(model, method)
+        return "unknown" unless model
+
+        value = model.respond_to?(method) ? model.public_send(method) : model.class.name
+        sanitized = value.to_s.gsub(/[^a-zA-Z0-9_.:-]/, "_")[0, 128]
+        sanitized.empty? ? "unknown" : sanitized
+      end
+
+      def model_usage(result)
+        raw = result.is_a?(Hash) && (result["usage"] || result[:usage])
+        return unless raw.is_a?(Hash)
+
+        Tamoz::Observability::Usage.new(
+          input_tokens: usage_value(raw, "input_tokens"),
+          output_tokens: usage_value(raw, "output_tokens"),
+          cache_read_tokens: usage_value(raw, "cache_read_tokens"),
+          cache_write_tokens: usage_value(raw, "cache_write_tokens")
+        )
+      rescue Tamoz::Observability::ValidationError
+        nil
+      end
+
+      def usage_value(usage, key)
+        value = usage[key] || usage[key.to_sym]
+        value.is_a?(Numeric) ? value.to_i : nil
       end
     end
   end

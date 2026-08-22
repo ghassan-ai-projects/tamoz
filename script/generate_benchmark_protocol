@@ -16,7 +16,13 @@ require "support/climate_domain"
 # SHA-256 pin.
 def main
   sealed = Tamoz::Agent::SealedBuild.new.canonical_fingerprint
-  domains = DomainLoader.domains
+  # The frozen benchmark is exactly two domains. Other domain fixtures
+  # (e.g. cold-chain, shipment) exist for the family-driver tests but are NOT
+  # part of this freeze: adding one is a NEW benchmark version — it needs the
+  # matching `digests`, a family-selection scheme beyond `index % 2`, and a
+  # version bump. Deriving the list from `DomainLoader.domains` would let a
+  # test fixture silently redefine the frozen protocol.
+  domains = %w[aquaculture climate]
   # Scenario families are DATA (the domain JSON's benchmark_family), derived
   # here rather than re-authored. Order is load-bearing: benchmark_holdout
   # alternates families via `index % 2`, which assumes exactly two families —

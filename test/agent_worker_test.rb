@@ -15,6 +15,48 @@ require_relative "support/autonomy_case"
 class AgentWorkerTest < Minitest::Test
   include AutonomyCase
 
+  class CompactionCrash < Exception # rubocop:disable Lint/InheritException
+  end
+
+  class AdaptiveCompactionModel
+    attr_reader :calls
+
+    def initialize(crash: false)
+      @crash = crash
+      @crashed = false
+      @adaptive_calls = 0
+      @calls = []
+    end
+
+    def generate(stage:, system:, prompt:)
+      @calls << {stage:, system:, prompt:}
+      case stage
+      when :adaptive_decide
+        @adaptive_calls += 1
+        if prompt.include?('large observation')
+          JSON.generate(
+            'decision' => 'final', 'answer' => 'the file was inspected',
+            'evidence_refs' => ['observation:0']
+          )
+        else
+          JSON.generate(
+            'decision' => 'action', 'capability_id' => 'read_file',
+            'arguments' => {'path' => 'large.txt'}
+          )
+        end
+      when :context_compact
+        result = JSON.generate('summary' => 'Retain the large observation for the next decision.')
+        if @crash && !@crashed
+          @crashed = true
+          raise CompactionCrash, 'simulated worker loss during compaction'
+        end
+        result
+      else
+        raise "unexpected model stage #{stage.inspect}"
+      end
+    end
+  end
+
   # -------------------------------------------------------------- the directory
 
   def test_init_creates_a_private_runtime_directory
@@ -220,6 +262,57 @@ class AgentWorkerTest < Minitest::Test
         assert_match(/\A\d{4}-\d{2}-\d{2}T/, event.fetch("ts"), "every event carries a timestamp")
       end
       assert_equal 1, events.last.fetch("processed")
+    end
+  end
+
+  def test_worker_reopens_the_same_occurrence_after_a_compaction_crash
+    with_runtime do |rt|
+      File.write(File.join(rt.workspace, "large.txt"), "large observation\n" * 200)
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
+      first_runtime = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) { AdaptiveCompactionModel.new(crash: true) },
+        lease_ttl: 0.2,
+        routing: :adaptive
+      )
+      first_runtime.checkpoints.enqueue_request(
+        thread_id: "compaction-thread", request_id: "compaction-request", operation: :turn,
+        payload: {"task" => "Inspect the large file"}, delivery: :queue
+      )
+      first_worker = Tamoz::Agent::Worker.new(
+        runtime: first_runtime,
+        session_builder: ->(thread_id) { first_runtime.session_for(thread_id) },
+        emitter: ->(_event) {}, once: true
+      )
+
+      assert_raises(CompactionCrash) { first_worker.poll_once }
+      first_runtime.close
+
+      sleep 0.25
+      second_runtime = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) { AdaptiveCompactionModel.new },
+        lease_ttl: 0.2,
+        routing: :adaptive
+      )
+      second_worker = Tamoz::Agent::Worker.new(
+        runtime: second_runtime,
+        session_builder: ->(thread_id) { second_runtime.session_for(thread_id) },
+        emitter: ->(_event) {}, once: true
+      )
+
+      assert second_worker.poll_once
+      view = second_runtime.session_for("compaction-thread").view(thread: "compaction-thread")
+      assert_equal :completed, view.status
+      assert_equal 1, view.state.fetch(:compactions).length
+      assert_equal 1, view.effect_receipts.count { |receipt| receipt.fetch("operation") == "tool.read_file" }
+      assert_equal 1, view.lifecycle_events.count { |event| event.fetch("event_type") == "terminal" }
+      assert second_runtime.checkpoints.fetch_request(
+        thread_id: "compaction-thread", request_id: "compaction-request"
+      ).terminal?
+    ensure
+      second_runtime&.close
+      first_runtime&.close
     end
   end
 

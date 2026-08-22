@@ -31,8 +31,9 @@ module Tamoz
 
         @services.memory.finalize_behavior_claim(state)
         conversation = @services.planning_context.conversation_transcript(context)
-        loop_state = build_loop_state(state, conversation)
-        run_attempts(state, context, loop_state)
+        loop_state, compaction = build_loop_state(state, context, conversation)
+        update = run_attempts(state, context, loop_state)
+        compaction && compaction_state_supported? ? update.merge(compactions: [compaction]) : update
       end
 
       private
@@ -42,27 +43,40 @@ module Tamoz
           state.fetch(:terminal_reason) == 'cancelled_by_user'
       end
 
-      def build_loop_state(state, conversation)
+      def compaction_state_supported?
+        @services.configuration.graph_version != SessionNodes::GRAPH_VERSION
+      end
+
+      # rubocop:disable Metrics/MethodLength -- one ordered planner-context assembly.
+      def build_loop_state(state, context, conversation)
         phase = state.fetch(:phase).to_sym
         effects = @services.effects
         evidence = state.fetch(:observations).map { |record| observation_payload(record) }
         allowed_tools = effects.allowed_tool_names(phase)
         mcp_tools = effects.mcp_planning_surface(allowed_tools)
-        planning_context = @services.planning_context.planning_context_for(state, phase, conversation:)
-        LoopState.new(
+        compaction = { effects:, durable_context: context }
+        compacted = @services.planning_context.compact_for(
+          state,
+          phase,
+          conversation:,
+          observations: evidence,
+          compaction:
+        )
+        [LoopState.new(
           phase:,
           repair_attempt: state.fetch(:repair_attempt),
           task: state.fetch(:task),
-          evidence:,
+          evidence: compacted.observations,
           allowed_tools:,
           mcp_tools:,
-          planning_context:,
+          planning_context: compacted.context,
           feedback: [],
           plans: [],
           reviews: [],
           ambiguity: state.fetch(:provider_ambiguity)
-        )
+        ), compacted.record]
       end
+      # rubocop:enable Metrics/MethodLength
 
       def observation_payload(record)
         @services.evidence.observation_payload(record)

@@ -15,7 +15,7 @@ class AgentWorkerFailureReasonTest < Minitest::Test
 
   def view_with(state)
     Tamoz::Agent::SessionView.new(
-      thread_id: 'tg.t', checkpoint_id: 'c', sequence: 1, execution_id: 'e',
+      thread_id: 'tg.t', checkpoint_id: 'c', sequence: 1, execution_id: 'e', request_id: 'r',
       status: :failed, phase: 'repair', accepted_plan: nil, approvals: [],
       effect_receipts: [], blocked: nil, terminal: nil, provider_ambiguity: nil,
       interrupts: [], state:

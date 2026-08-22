@@ -275,24 +275,23 @@ class MemoryEngineTest < Minitest::Test
     assert_equal 0.9, result.record.confidence
   end
 
-  def test_pre_p11_sessions_resume_with_memory_epoch_none
-    # P11-03 at the record layer: a pre-P11 session record loads with
-    # memory_epoch "none" and RECORD_VERSION stays 1.
-    legacy = {
-      "record" => "session",
-      "record_version" => 1,
-      "session_id" => "thread.x",
-      "task" => "Explain note.txt",
-      "task_digest" => "d",
-      "root" => "/tmp/x",
-      "graph_version" => "1",
-      "behavior_version" => "tamoz.agent.session/1",
-      "tool_catalog_digest" => "c",
-      "created_at_ms" => 1
-    }
-    loaded = Tamoz::Agent::SessionRecords.load!(legacy)
+  def test_sessions_without_memory_load_with_memory_epoch_none
+    # P11-03 at the record layer: a current session without memory still carries
+    # the explicit empty memory sentinel.
+    record = Tamoz::Agent::SessionRecords.build(
+      "session",
+      session_id: "thread.x",
+      task: "Explain note.txt",
+      task_digest: "d",
+      root: "/tmp/x",
+      graph_version: "1",
+      behavior_version: "tamoz.agent.session/1",
+      tool_catalog_digest: "c",
+      created_at_ms: 1
+    )
+    loaded = Tamoz::Agent::SessionRecords.load!(record)
     assert_equal Memory::LEGACY_MEMORY_EPOCH, loaded.fetch("memory_epoch")
-    assert_equal 1, loaded.fetch("record_version")
+    assert_equal 2, loaded.fetch("record_version")
 
     modern = Tamoz::Agent::SessionRecords.build(
       "session",
