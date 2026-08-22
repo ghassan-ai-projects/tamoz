@@ -23,8 +23,10 @@ The redesign (`03-redesign-adr.md`) converges the two local pipelines onto one
 `Engine#decide`, moves all policy content into digest-pinned YAML, replaces the `--all`
 floodgate with session-scoped grants that opaque-argv tools can never hold, makes
 denial a structured result the model reacts to, and delivers policy changes to live
-workers through a validate-before-activate reload. The stream relay (Pipeline C) is
-argued out of scope as a pure relay, not a policy owner. No legacy shims: the old
+workers through a validate-before-activate reload. Permission *modes* (Claude Code's
+plan / accept-edits / auto / bounded-bypass ladder) are named profiles, switchable live
+mid-session through a bounded, audited per-session rebind (`03` §2.6). The stream relay
+(Pipeline C) is argued out of scope as a pure relay, not a policy owner. No legacy shims: the old
 constant, the classification chain, `ApprovalDeniedError`, and the scheduler's dead
 hash are deleted outright.
 

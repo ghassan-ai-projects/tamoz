@@ -132,6 +132,12 @@ it. These are the "strengths preserved" made testable.
 12. **Dependency direction.** `tamoz-approval` depends only on `tamoz-core`. Comms
     exposes its evidence symbols as plain data for injection; the gem never imports
     comms. (`03` §1.5, §9.1)
+13. **Mode switch is bounded and non-retroactive.** A mid-session mode switch is the
+    *only* exception to in-flight rev stability, and stays bounded: it rebinds only one
+    session's approval policy profile (not agent roles/budgets/tools/graph), applies to
+    the next decision only (never re-decides or reverses an in-flight or completed
+    effect), is `session_id`-scoped (never leaks to another session), and a global
+    reload still never changes a switched session's chosen mode. (`03` §2.6)
 
 ## 5. Hard-zero failures
 
@@ -152,7 +158,10 @@ forbid, plus the migration discipline the owner directive demands.
 - **two policy owners in the tree at once** — a commit where the engine decides *and*
   the old `approval_required?` chain still fires — end-state contract 1 breached;
 - a **legacy shim**: an old table tolerated, an old profile key accepted-but-ignored,
-  a read-time compatibility branch — violates the no-backcompat directive (`03` §8).
+  a read-time compatibility branch — violates the no-backcompat directive (`03` §8);
+- a **mode switch re-deciding or reversing** an already-approved or already-executed
+  effect, **applying twice** across a restart, or **leaking to another session** —
+  invariant 13 breached (`03` §2.6).
 
 ## 6. Per-step definition of done
 

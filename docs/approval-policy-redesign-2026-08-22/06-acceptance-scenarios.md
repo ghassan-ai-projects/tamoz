@@ -111,7 +111,22 @@ block (SIM-1) and a real run, never by these fixtures alone (`00` §2, owner dir
 | LG-2 | a graph-node retry re-appending the same `decision_id` → **idempotent**, no double-write. | INV-10 | 3, 5 |
 | SIM-1 **HZ** | the bundled `policy/base.yaml`'s own `simulations:` block runs at load; a document whose simulation expectation fails is **rejected**. The policy content is pinned by data, not a Ruby side-copy (no policy literals in Ruby). | INV-11, contract 7 | 2 |
 
-## 11. Migration discipline (owner directive, `00` §5)
+## 11. Mid-session mode switch (ADR §2.6)
+
+The one bounded exception to in-flight rev stability. Modes are profiles
+(`plan`/`review`/`implement`/`auto`/bounded `bypass`); a switch rebinds one session's
+approval profile, live.
+
+| ID | Given → When → Then | Guards | Step |
+|---|---|---|---|
+| MS-1 | mid-session `--mode auto` on a session that was asking for `local_execute` → the next `run_check` **auto-allows**, no prompt; agent roles/budgets/tools are unchanged. | INV-13 | 7B |
+| MS-2 | mid-session `--mode review` (tighten) → a session grant minted under the old mode **no longer matches** (rev mismatch); the next covered call **asks**. Loosening later mints new grants going forward, never resurrects old-rev ones. | INV-3, INV-13 | 7B |
+| MS-3 | a switch lands while an `:ask` is parked → the parked ask still resolves against its **issuing decision** (unchanged); the new mode governs only the next decision. | contract 8, INV-13 | 7B |
+| MS-4 **HZ** | a switch across worker restart → applied **exactly once**; an already-approved or in-flight step is **never re-decided or reversed**. | INV-10, INV-13 | 7B |
+| MS-5 **HZ** | a switch on thread A → thread B's mode is **unchanged**; the rebind is `session_id`-scoped and never global. | INV-13 | 7B |
+| MS-6 | mid-session `--mode plan` → subsequent `write_file`/`run_check` **deny** as structured results, the turn continues read-only; a global `--reload` in the meantime does **not** change this session's chosen mode. | contract 7, INV-13 | 7B |
+
+## 12. Migration discipline (owner directive, `00` §5)
 
 | ID | Given → When → Then | Guards | Step |
 |---|---|---|---|
