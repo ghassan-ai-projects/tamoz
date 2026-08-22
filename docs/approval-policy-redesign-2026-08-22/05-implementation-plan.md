@@ -1,16 +1,33 @@
 # 05 — Implementation plan: `tamoz-approval` extraction
 
-**Status:** ready for execution
+**Status:** ready for execution — rev 2 (2026-08-22): incorporates a code-verification
+pass (`07-evidence-index.md`); the `approval_required?` deletion inventory in step 7 is
+now the complete nine-method chain, and two omitted deletion sites are added.
 **Date:** 2026-08-22
 **Design source:** `03-redesign-adr.md` rev 2 (final, post-review). Section references
 ("ADR §2.3") point at that file; "audit §6" points at `02-current-state-audit.md`.
+**Acceptance:** every step is graded against `00-acceptance-bar.md` (§6 per-step
+definition of done, §4 invariants, §5 hard-zeros) and must make its mapped
+`06-acceptance-scenarios.md` scenarios pass. Anchors below are the fresher readings
+from `07-evidence-index.md`.
 **Planning process note:** per the task contract, this plan was written without
-running anything. File/line references come from the ADR (rev 2, verified) and audit
-§6; the executor re-verifies each one when the step starts — line numbers drift.
+running anything. File/line references were verified statically against the tree in
+`07-evidence-index.md`; the executor re-verifies each one when the step starts by
+grepping the **symbol**, not the line — line numbers drift (drifts already found are
+in `07` §4).
 
 ---
 
 ## 0. Global conventions (apply to every step)
+
+- **The bar governs.** `00-acceptance-bar.md` is the contract: §4 global invariants
+  (never regress), §5 hard-zero failures (fail a step outright), §6 per-step definition
+  of done, §7 quality gates. Every step below ends "not done until" it satisfies §6,
+  which includes appending a one-line evidence note (date, exact gate commands,
+  changed files or no-change reason, plumbing-vs-real-run split).
+- **Scenarios are the acceptance tests.** Each step names the
+  `06-acceptance-scenarios.md` IDs it must make pass; a step regresses none that
+  previously passed.
 
 - **Gate after every step:** `bundle exec rake ci` green, `bundle exec rubocop` clean,
   `enola check` clean. A step is not done until all three pass. `ci_full` (both
@@ -87,6 +104,9 @@ three profiles, and the loader that parses, validates, digests, and runs the
 document's own `simulations:` block before activation. Still nothing depends on the
 gem at runtime.
 
+**Scenarios (must pass):** O-1, E-2, SIM-1, M-2, L-2 (`06`; the loader/validator half —
+the delivery half of L-2 lands in step 6). **Hard-zeros:** O-1, E-2, SIM-1, L-2, M-2.
+
 **Files created:**
 - `gems/tamoz-approval/policy/base.yaml` — `version`, `tool_tiers`, `fallback_tier`,
   `tiers`, `grant_keys`, `rules` (deny-first noted), `ask` (timeout_s/on_timeout),
@@ -138,6 +158,10 @@ side pin of policy content (B9: domain knowledge stays data).
 
 **Goal.** The whole decision interface works in-process (ADR §1.1–§1.3, §2.3, §2.5):
 canonicalization, evaluation, grants, resolution, simulation, reload.
+
+**Scenarios (must pass):** the semantic core — C-1..C-8, O-1, G-1..G-6, RS-1..RS-4,
+L-3, L-4, L-5, LG-1, LG-2 (`06`), all against the in-memory stores. **Hard-zeros:**
+C-3, C-7, G-2, G-3, RS-1, L-5.
 
 **Files created:**
 - `gems/tamoz-approval/lib/tamoz/approval/engine.rb` —
@@ -227,6 +251,9 @@ enforces; the test pins the equality.
 **Goal.** Durable homes for grants, decisions, and active-policy rev (ADR §2.3, §2.5,
 §1.5, §5 step 2); stream receipt records gain `expires_at` (ADR §2.4).
 
+**Scenarios (must pass):** L-5, M-4, LG-1, LG-2 (`06`; the durable-store half).
+**Hard-zeros:** L-5, M-4.
+
 **Files modified:**
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb` — `MIGRATION_17` +
   `MIGRATION_17_CHECKSUM` per the migrator's existing convention, `CURRENT_VERSION`
@@ -279,6 +306,9 @@ cycle — `tamoz-approval` depends only on `tamoz-core`; `enola check` confirms.
 **Goal.** The worker runtime constructs one `Engine` at boot and the reload-delivery
 loop exists end to end (ADR §1.5) — before any call site uses the engine, so this
 step is behavior-neutral.
+
+**Scenarios (must pass):** L-1, L-2 (`06`; the reload write→poll-pickup delivery path).
+**Hard-zero:** L-2.
 
 **Files modified:**
 - `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` — build the engine at boot:
@@ -334,8 +364,9 @@ engine replaces land in one commit so the tree never carries two policy owners.
   `step_execute`. `:ask` → the **existing** interrupt path, unchanged, with the
   descriptor now carrying the `Decision` (id, reason, grant_offer,
   required_evidence); verdict captured in the graph node's journaled state update
-  (today's `approvals` slot, `:128-140`) so a replayed node re-reads its journaled
-  verdict (ADR §8). `:deny` → structured tool result ("denied: <reason>, rule
+  (today's `approvals` slot, ~`:108-110` — `07` §4 corrects the ADR's `:128-140`) so a
+  replayed node re-reads its journaled verdict (ADR §8). `:deny` → structured tool
+  result ("denied: <reason>, rule
   <rule_id>") fed back to the model; the turn continues (ADR §2.4; fixes audit §5.6).
   The repeated-action guard (`session_plan_outcomes.rb:115-127`) stays.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — resume path (`:398-425`) calls
@@ -351,37 +382,59 @@ engine replaces land in one commit so the tree never carries two policy owners.
   through `Answer.parse`. The operator command `tamoz approve <id>` resolves a parked
   ask against its decision record (which does not expire with the channel prompt,
   ADR §2.1).
-- `gems/tamoz-agent/lib/tamoz/agent/deliberation.rb` — `:307-314` digests steps by
-  the `Decision`'s rule/tier instead of the old `approval_required:` flag.
-- `gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb` — `:144-147` dispatch
-  deleted; `:203,285` keep synthesizing descriptor metadata but no longer answer
-  policy questions.
+- `gems/tamoz-agent/lib/tamoz/agent/deliberation.rb` — the `approval_required?` guard
+  (`:309`, `07` §4 corrects `:307-314`) digests steps by the `Decision`'s rule/tier
+  instead of the old `approval_required:` flag.
+- `gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb` — the three
+  `approval_required?` methods in this file are deleted: the host method (`:144`), the
+  routing dispatcher (`:343`, child-vs-local), and the local wrapper (`:392`,
+  → `source.approval_required?`). `:203,285` keep synthesizing descriptor metadata but
+  no longer answer policy questions. (`07` §1 — these were **not** in rev-1's list.)
 - `gems/tamoz-agent/lib/tamoz/agent/session.rb` — session teardown deletes the
   session's grant rows (`session_id` delete on the grant store, ADR §2.3).
-- `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` — `:864-866` unattended union
-  deleted (replaced by the `unattended` policy profile); toolbox wiring no longer
-  passes approval sets.
+- `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` — `unattended_approval_required`
+  union (`:864`) deleted (replaced by the `unattended` policy profile) **and its
+  consumer** `narrowed_approval_required` (`:1086`, called at `:1072`); toolbox wiring
+  no longer passes approval sets. (`07` §4 — rev-1 named only the `:864` definition.)
 - `gems/tamoz-agent/lib/tamoz/agent/profile.rb`,
   `profile/fields.rb`, `profile/authority_validator.rb` — `tools.approval_required`
   and `unattended.*` keys and their validators deleted; profile files still carrying
   them fail validation loudly at load. `tools.allowed` stays (capability config, not
   approval policy, ADR §2.2).
 - `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — `--all --i-understand-approve-all`
-  (`:472-480`) deleted (the profile system is its replacement, ADR §3 weakness 5).
+  deleted: **both** the audit/guard block (`:472`) **and the option registration**
+  (`:678`) — rev-1 named only the former (`07` §4). The profile system is its
+  replacement (ADR §3 weakness 5).
 
-**Files deleted:**
+**Files deleted (the complete `approval_required?` chain — `07` §1, verified):**
+- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb:291` — the chain entry.
+- `gems/tamoz-tools/lib/tamoz/tools/local_dispatcher.rb:51` —
+  `approval_required?(descriptor)` (delegates to toolbox; **added in rev 2** — pure
+  delegation, dead once `capability_binding`'s wrapper is gone).
 - `gems/tamoz-tools/lib/tamoz/tools/toolbox.rb:105` — `Toolbox#approval_required?`
-  (method removal).
-- `gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb:28` — `DEFAULT_APPROVAL_REQUIRED`.
+  (and the `@approval_required` set it reads).
+- `gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb:28` — `DEFAULT_APPROVAL_REQUIRED`
+  (and its re-export `toolbox.rb:40`).
 - `gems/tamoz-tools/lib/tamoz/tools/tool_policy_normalizer.rb:119-133` — the
   `approval_required ⊆ allowed` validation.
 - `gems/tamoz-agent/lib/tamoz/agent/child_task_dispatcher.rb:117` — the hardcoded
   `approval_required? → true` (always-ask is preserved as data: `child_task` →
   `local_execute`, `grant_scopes: [once]`, ADR §10 S1).
-- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb:291-292` — the
-  `approval_required?` chain entry.
+- `gems/tamoz-agent/lib/tamoz/agent/governed_browser_source.rb:35` and
+  `gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb:129` — the
+  `approval_required?(name) = !read_only?(name)` methods (**added in rev 2**). **Keep
+  `read_only?`** in both: it computes the descriptor's effect class, which the call
+  site now passes into `engine.build_request` and which enforces the `read_only ⇒ read`
+  invariant (`00` INV-2, ADR §1.2). After deleting the `approval_required?` methods,
+  run a dead-code check on each `read_only?`; delete only if it has lost its last
+  caller (do not assume it has).
 - `test/agent_capability_binding_test.rb:44` — the test pinning the deleted dispatch
   (deleted with the seam, ADR §9 item 4).
+
+> The `capability_binding.rb` methods (`:144`, `:343`, `:392`) are removed under
+> **Files modified** above; listed together they are the nine-method chain of `07` §1.
+> Rev 1 of this plan named only four of the nine — the round-2 code-verification pass
+> (`07`) completed the inventory.
 
 **Public-api pins:** update `test/public_api_test.rb`, `docs/public-api.json`,
 `documentation/reference/public-api.md` for every deleted pinned symbol.
@@ -394,10 +447,23 @@ continuation; unattended behavior asserted via the `unattended` policy profile
 (`on_timeout: deny`); CLI scope follow-up test; poll-pass timeout-enforcement test;
 teardown grant-deletion test.
 
+**Scenarios (must pass):** C-1..C-8, O-1, G-1..G-6, RS-1..RS-4, D-1, D-2, T-1..T-3,
+V-2, LG-1, LG-2, L-3, L-4, M-1, M-2 (`06`). **Hard-zeros in this step:** C-3, C-7,
+G-2, G-3, G-4, RS-1, D-1, M-1, M-2.
+
 **Verification:** targeted tests green; full gate green; rubocop + enola clean;
-`enola diff_snapshot` shows the tools→agent classification coupling removed.
+`enola diff_snapshot` shows the tools→agent classification coupling removed. Append the
+§6 evidence note.
 
 **Risks.**
+- **Incomplete-chain deletion:** the `approval_required?` surface is nine methods
+  (`07` §1), not the four rev 1 listed. Delete the whole chain in this commit, or
+  `capability_binding`/`local_dispatcher` are left calling methods that no longer
+  answer — grep `def approval_required?` across `gems/` and confirm zero definitions
+  remain before the step is done.
+- **`read_only?` over-deletion:** delete the `approval_required?` methods on the
+  browser/MCP sources, but `read_only?` feeds `build_request` — do **not** delete it
+  reflexively; dead-code-check each and keep any with a live caller (`07` §1).
 - **Test-breakage window:** this commit intentionally breaks every suite that pinned
   the old chain before the rewrites land — the step is not done until the rewrites
   are green in the same commit. If the diff grows unreviewable, the only legitimate
@@ -416,6 +482,9 @@ teardown grant-deletion test.
 **Goal.** The prompt pins `decision.required_evidence`; the hardcoded constant and
 its file die (ADR §3 weakness 3, §5 step 5, §10 S6).
 
+**Scenarios (must pass):** E-1, E-2 (`06`; E-2's load-time rejection is proven in
+step 2, exercised end-to-end here). **Hard-zero:** E-2.
+
 **Files modified:**
 - `gems/tamoz-comms/lib/tamoz/comms/approval_prompt.rb` — `:85` pins the
   caller-supplied evidence symbol (from the `Decision`) instead of
@@ -425,8 +494,8 @@ its file die (ADR §3 weakness 3, §5 step 5, §10 S6).
   header consequences; see risk note).
 - `gems/tamoz-agent/lib/tamoz/agent/outbox_delivery_sink.rb` — `:171` reads evidence
   from the decision carried by the interrupt, not the constant.
-- `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb` — evidence compare (`:259-262`)
-  reads from the decision.
+- `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb` — evidence compare (`:258-261`,
+  `07` §4 corrects `:259-262`) reads from the decision.
 
 **Files deleted:**
 - `gems/tamoz-comms/lib/tamoz/comms/approval_policy.rb` — the constant (audit §5.3;
@@ -474,7 +543,9 @@ harness (ADR §5 step 7, §10 P7).
 
 **Files deleted:**
 - `gems/tamoz-agent/lib/tamoz/agent/errors.rb:46` — `ApprovalDeniedError` (ADR §1.3:
-  denial is data, not control flow).
+  denial is data, not control flow). Its **raise** (`runtime.rb:603`) and **all
+  rescues** go in this commit: `cli.rb:185` and `agent_smoke_corpus.rb:2939` are the
+  verified sites (`07` §2); the risk note's grep is the completeness check.
 
 **Public-api pins:** `ApprovalDeniedError` out of `test/public_api_test.rb` (`:17`),
 `docs/public-api.json`, `documentation/reference/public-api.md`.
@@ -483,11 +554,15 @@ harness (ADR §5 step 7, §10 P7).
 `test/agent_tool_error_recovery_test.rb` (`:286`) — assert the structured denial
 result instead of the exception.
 
-**Verification:** targeted tests green; eval smoke suite for `07_denied_approval`
-green; full gate green.
+**Scenarios (must pass):** D-3, V-1 (`06`). **Hard-zero in this step:** D-3.
 
-**Risk.** `ApprovalDeniedError` may be rescued in places beyond the audited sites —
-grep the whole repo for it before deleting and update every rescue in this commit.
+**Verification:** targeted tests green; eval smoke suite for `07_denied_approval`
+green; full gate green. Append the §6 evidence note.
+
+**Risk.** `ApprovalDeniedError` is rescued at `cli.rb:185` and
+`agent_smoke_corpus.rb:2939` (verified, `07` §2), raised at `runtime.rb:603`, and
+defined at `errors.rb:46` — but grep the whole repo (`ApprovalDeniedError`) before
+deleting in case a rescue was added since this pass, and update every one in this commit.
 The eval change is data + harness, not a Ruby-side policy literal — the denial
 expectation lives in the `.case.json` suites (B9).
 
@@ -583,6 +658,10 @@ conventions files name the new gem.
   comms edge per step 8's note), the tools→agent classification coupling gone, no new
   cycles.
 
+**Scenarios (must pass):** M-3 (`06`; the zero-live-references sweep) and a final
+re-run confirming every scenario in `06` still passes — this is the whole-program
+definition of done (`00` §8).
+
 **Verification:** full gate green, `ci_full` (packaging/evidence slice) green, sweep
 clean.
 
@@ -630,16 +709,14 @@ against the code it names (the audit's §6.5 rot list is the checklist).
 
 **Every deletion → removing step:**
 
-| Deleted thing (ADR §5, §8) | Step |
+| Deleted thing (ADR §5, §8; anchors `07`) | Step |
 |---|---|
-| `session_effects.rb:291-292` → `capability_binding.rb:144-147` → dispatcher `approval_required?` chain | 7 |
-| `Toolbox#approval_required?` (`toolbox.rb:105`) | 7 |
-| `DEFAULT_APPROVAL_REQUIRED` (`tool_catalog.rb:28`) | 7 |
+| the **nine-method** `approval_required?` chain: `session_effects.rb:291`; `capability_binding.rb:144,343,392`; `local_dispatcher.rb:51`; `toolbox.rb:105`; `child_task_dispatcher.rb:117`; `governed_browser_source.rb:35`; `mcp_capability_source.rb:129` (keep `read_only?`) | 7 |
+| `DEFAULT_APPROVAL_REQUIRED` (`tool_catalog.rb:28` + `toolbox.rb:40`) | 7 |
 | `tool_policy_normalizer.rb:119-133` validation | 7 |
-| `worker_runtime.rb:864-866` unattended union | 7 |
-| `child_task_dispatcher.rb:117` hardcoded `true` | 7 |
+| `worker_runtime.rb:864` unattended union **+ consumer `:1072`/`:1086`** | 7 |
 | Profile keys `tools.approval_required` / `unattended.*` + validators (`profile/fields.rb`, `authority_validator.rb:115-124`) | 7 |
-| `--all --i-understand-approve-all` (`cli.rb:472-480`) | 7 |
+| `--all --i-understand-approve-all` (`cli.rb:472` block **+ `:678` registration**) | 7 |
 | `test/agent_capability_binding_test.rb:44` | 7 |
 | `approval_policy.rb` (`Comms::ApprovalPolicy` constant) | 8 |
 | `ApprovalDeniedError` (`errors.rb:46`) + callback-plus-exception contract | 9 |
@@ -740,3 +817,24 @@ before this log was written.
 8. **Bars re-checked without change:** step ordering dependencies (each step consumes
    only what earlier steps landed: 7 needs 1–6, 8 needs 7, 9 needs 3+6, 11 needs 5),
    one-commit sizing, and per-step gate verification.
+
+**Rev 2 (2026-08-22) — code-verification pass (`07-evidence-index.md`).** The anchors
+were grepped against the tree. Changes:
+
+1. **The `approval_required?` deletion inventory was incomplete.** Rev 1 (and the ADR)
+   listed four of the nine methods in the delegation chain. Step 7 now deletes all
+   nine (`07` §1), keeps the `read_only?` predicates the browser/MCP sources derived
+   from (they feed `build_request`), and adds a dead-code check and a
+   "zero `def approval_required?` remain" completeness grep to the step's risks.
+2. **Two deletion sites were omitted.** The `--all` **option registration**
+   (`cli.rb:678`, beyond the audit block at `:472`) and the unattended-union
+   **consumer** (`worker_runtime.rb:1072`/`:1086`, beyond the definition at `:864`)
+   are now in step 7.
+3. **A third `ApprovalDeniedError` rescue** (`cli.rb:185`, beyond the one-shot site and
+   the evals corpus) is now named in step 9.
+4. **Line drifts corrected** from the fresher reading: `session_steps` approvals slot
+   `:128-140`→~`:108-110`; deliberation `:307-314`→`:309`; gateway `:259-262`→`:258-261`
+   (`07` §4). The `EFFECT_CLASSES` untouched-claim was re-confirmed (`descriptor.rb:52`).
+5. **Acceptance scenarios wired in.** Every step now names the `06-acceptance-scenarios.md`
+   IDs it must make pass and the hard-zeros among them; the bar's per-step evidence
+   note (`00` §6) is required at each step's close.

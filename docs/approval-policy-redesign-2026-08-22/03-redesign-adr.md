@@ -572,7 +572,12 @@ legacy-row handling (owner directive; databases may be reset).
    pass gains the two new jobs from §1.5/§2.1: policy-rev pickup → `engine.reload`,
    and pending-ask deadline checks → `on_timeout`. **Deleted:** the
    `session_effects.rb:291-292` → `capability_binding.rb:144-147` → dispatcher
-   `approval_required?` chain; `Toolbox#approval_required?` (`toolbox.rb:105`);
+   `approval_required?` chain — the full surface is **nine methods**
+   (`session_effects.rb:291`; `capability_binding.rb:144,343,392`;
+   `local_dispatcher.rb:51`; `toolbox.rb:105`; `child_task_dispatcher.rb:117`;
+   `governed_browser_source.rb:35`; `mcp_capability_source.rb:129`, the last two
+   keeping their `read_only?` predicate), inventoried and dispositioned in
+   `07-evidence-index.md` §1; this list abbreviates it. `Toolbox#approval_required?` (`toolbox.rb:105`);
    `DEFAULT_APPROVAL_REQUIRED` (`tool_catalog.rb:28`); `worker_runtime.rb:864-866`'s
    union (replaced by the `unattended` profile); `child_task_dispatcher.rb:117`'s
    hardcoded `true`; the profile keys `tools.approval_required` / `unattended.*` and
