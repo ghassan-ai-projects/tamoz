@@ -1,8 +1,9 @@
 # 05 — Implementation plan: `tamoz-approval` extraction
 
-**Status:** ready for execution — rev 2 (2026-08-22): incorporates a code-verification
-pass (`07-evidence-index.md`); the `approval_required?` deletion inventory in step 7 is
-now the complete nine-method chain, and two omitted deletion sites are added.
+**Status:** ready for execution — rev 3 (2026-08-22): adds step 7B (mid-session mode
+switch, ADR §2.6). Rev 2 incorporated a code-verification pass
+(`07-evidence-index.md`); the `approval_required?` deletion inventory in step 7 is the
+complete nine-method chain, and two omitted deletion sites were added.
 **Date:** 2026-08-22
 **Design source:** `03-redesign-adr.md` rev 2 (final, post-review). Section references
 ("ADR §2.3") point at that file; "audit §6" points at `02-current-state-audit.md`.
@@ -494,6 +495,81 @@ G-2, G-3, G-4, RS-1, D-1, M-1, M-2.
 
 ---
 
+### Step 7B — Mid-session mode switch (ADR §2.6)
+
+**Sequencing.** Depends on steps 3, 5, 6, 7 (engine, durable stores, boot/reload +
+per-session rev binding, Pipeline A). Independent of steps 8–11; land it any time after
+step 7. It is **before** the step-12 final sweep — step 12's grep/enola delta must
+account for it (the new command + record). If you sequence 8–11 first, run this last
+among the feature steps, then let step 12 close out.
+
+**Ship the mode profiles first.** Add `policy/profiles/plan.yaml` (reads allow, other
+tiers deny) and `policy/profiles/auto.yaml` (workspace_write + local_execute allow) so
+the Claude-Code mode ladder — plan / review / implement / auto / bounded bypass — is
+all data (ADR §2.6). A bounded `bypass.yaml` is optional and explicitly documents that
+deny **rules** and unknown-tool fail-closed still hold (a profile overrides tier
+defaults, never rules).
+
+**Goal.** An operator can rebind one running session's approval profile without
+restarting it, as the single bounded exception to §1.5 in-flight rev stability. Only the
+approval policy profile changes; agent roles/budgets/tools and graph nodes are untouched.
+
+**Scenarios (must pass):** MS-1..MS-6 (`06`). **Hard-zeros:** MS-4, MS-5.
+
+**Files created:**
+- `gems/tamoz-approval/policy/profiles/plan.yaml`, `policy/profiles/auto.yaml`
+  (+ optional `bypass.yaml`) — the mode presets as `tier_defaults` overlays.
+
+**Files modified:**
+- `gems/tamoz-approval/lib/tamoz/approval/engine.rb` — add a `rebind_session(profile:,
+  session_id:) -> policy_rev` seam that swaps one session's active `(profile,
+  policy_rev)`; grant lookup already keys on the session's bound rev (§2.3), so
+  tightening drops stale grants with no new code (ADR §2.6 semantic 2). No retroactive
+  re-decide; the rebind governs the next `decide` only (semantic 1).
+- `gems/tamoz-agent/lib/tamoz/agent/cli_session_commands.rb` — add `submit_mode_switch`
+  as a durable per-thread control message, cloning `submit_cancel` (`:209`) /
+  `submit_follow_up` (`:145`); the operator CLI surface `tamoz approve --mode <name>
+  --thread <id>`.
+- `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — the poll pass (already carrying reload
+  pickup + timeout enforcement) gains a third job: drain a pending mode-switch message
+  at a durable boundary and call `engine.rebind_session`; bind the switch as a
+  checkpointed state field so restart applies it exactly once (semantic 1; the inbox's
+  existing at-least-once + idempotent-apply property).
+- `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — the interactive one-shot path swaps its
+  in-memory engine's active document directly (no durable message needed in-process).
+- `gems/tamoz-agent/lib/tamoz/approval/decision_log.rb` (port) +
+  `gems/tamoz-sqlite/.../approval_decision_log.rb` — record a `mode_switch` entry
+  (actor, thread, from-rev, to-rev, ts), append idempotent on the switch id (ADR §2.6
+  audit).
+
+**Files deleted:** none.
+
+**Tests (new):** `test/approval_mode_switch_test.rb` (engine `rebind_session`: loosen
+then next call auto-allows; tighten then prior session grant no longer matches; no
+retroactive re-decide; `mode_switch` logged); `test/agent_mode_switch_test.rb`
+(`submit_mode_switch` → poll-pass apply → next durable decision uses the new mode;
+switch does not leak to a second session; a parked ask is unaffected);
+`test/agent_mode_switch_kill_matrix_test.rb` (switch across restart applied exactly
+once; switch landing between a decision and its dispatch does not re-decide the
+in-flight step; switch mid-park leaves the parked ask resolving against its issuing
+decision).
+
+**Verification:** targeted tests green; full gate green; rubocop + enola clean. **Touches
+durability (the switch message + `mode_switch` record) → run `ci_full` (both locales).**
+Append the §6 evidence note.
+
+**Risks.**
+- **In-flight-stability exception:** this is the one place the global-reload-is-invisible
+  rule is broken on purpose. The kill-matrix test is mandatory, not optional — a switch
+  that re-decides an in-flight step or applies twice across restart is hard-zero MS-4.
+- **Leak across sessions:** the switch is `session_id`-scoped; MS-5 pins that it never
+  changes another session's mode. A global-scoped write here would be the bug.
+- **Grant semantics on loosen:** tightening drops grants for free (rev mismatch);
+  loosening must **not** silently resurrect old-rev grants — new grants are minted going
+  forward under the new rev only (MS-2).
+
+---
+
 ### Step 8 — Comms: evidence from the decision, constant deleted
 
 **Goal.** The prompt pins `decision.required_evidence`; the hardcoded constant and
@@ -670,11 +746,16 @@ conventions files name the new gem.
   — zero hits outside this `docs/` folder and `CHANGELOG.md`.
 - `test/public_api_test.rb`, `docs/public-api.json`,
   `documentation/reference/public-api.md` consistent with the final surface.
-- `test/packaging_test.rb` green with the new gem.
+- `test/packaging_test.rb` green with the new gem, including the `plan`/`auto`
+  (+ optional `bypass`) mode profiles from step 7B if the packaging test pins the
+  profile inventory.
+- `test/public_api_test.rb` covers any public `mode_switch`/`rebind_session` surface
+  added in step 7B.
 - `enola generate_snapshot` + `diff_snapshot` against the pre-step-1 baseline: the
   expected delta is one new gem, three new edges (agent, comms, sqlite → approval;
   comms edge per step 8's note), the tools→agent classification coupling gone, no new
-  cycles.
+  cycles. Step 7B adds no new edge (it reuses the agent→approval edge and the existing
+  request inbox).
 
 **Scenarios (must pass):** M-3 (`06`; the zero-live-references sweep) and a final
 re-run confirming every scenario in `06` still passes — this is the whole-program
@@ -706,6 +787,7 @@ against the code it names (the audit's §6.5 rot list is the checklist).
 | §2.4 Pipeline A convergence | 7 |
 | §2.4 Pipeline B convergence | 9 |
 | §2.4 Pipeline C argued non-convergence; receipt `expires_at` + TTL injection; port shape documented in gem | 5 (column), 11 |
+| §2.6 Mid-session mode switch (mode profiles; `rebind_session`; `submit_mode_switch`; poll-pass apply; `mode_switch` log; three pinned semantics) | 7B |
 | §2.5 Decision log (port, cleartext structural fields, digest args, idempotent append) | 3 (port + memory), 5 (SQLite) |
 | §3 weakness 1–7, 9, 10 fixes | 7 (1,2,5,6,7), 1+7+9 (9), 8 (3), 5+7+11 (4), 10 (10) |
 | §3 weakness 8, 11 (argued, not fixed) | none — see §4 out of scope |
