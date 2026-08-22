@@ -50,11 +50,16 @@ status projection until the fence and identity tests are green.
    message ID, and the callback-message ID. Stop using `update_id` as the control
    reply target where the message ID is meant. Update fixtures that set
    `message_id == update_id` so they cannot mask a real mismatch.
-4. **Enforce declared limits at admission.** Enforce `max_open_requests`,
-   `max_inbound_bytes`, `max_response_bytes`, rate, and capacity where resources
-   are actually admitted (the `CommsStore` admit path and the response boundary),
-   not only where configuration is validated. Each breach returns a typed refusal
-   reason and does not enqueue work.
+4. **Enforce the unenforced declared limits.** `outbox_capacity`,
+   `control_capacity`, and `max_denial_prompts_per_request` are already enforced
+   at the admission/delivery boundary (`CommsStore#capacity_saturated?`,
+   `append_delivery`); keep them under regression test. The gap is
+   `max_open_requests`, `max_inbound_bytes`, and `max_response_bytes`: all three
+   are validated in `SurfaceDescriptor` configuration only and enforced nowhere
+   (`max_response_bytes` lives under the descriptor's `transport` section).
+   Enforce them where the resource is actually admitted (the `CommsStore` admit
+   path and the response boundary). Each breach returns a typed refusal reason
+   and does not enqueue work.
 5. **Typed drainer failure handling.** Give `DeliveryDrainer` typed handling for
    authentication and storage failures so it cannot stop silently. A persistent
    auth failure produces an operator-visible delivery state and a typed reason,
@@ -62,9 +67,11 @@ status projection until the fence and identity tests are green.
 
 ## Tests
 
-- `test/delivery_drainer_test.rb` and `test/comms_outbox_test.rb` (extend) prove
-  a stale drainer that lost the fence performs no external send and records no
-  result, and that `mark_delivery` rejects a stale owner/attempt;
+- `test/delivery_drainer_test.rb` (extend; outbox coverage lives there and in
+  `test/comms_gateway_test.rb` today — there is no `test/comms_outbox_test.rb`,
+  so either extend the existing files or create it deliberately) proves a stale
+  drainer that lost the fence performs no external send and records no result,
+  and that `mark_delivery` rejects a stale owner/attempt;
 - `test/tamoz_telegram_transport_test.rb` and a normalizer test prove exact
   duplicate → one request, same-ID/different-content → durable conflict, and that
   message/update/quoted/callback IDs are carried and used distinctly;

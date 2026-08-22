@@ -24,7 +24,10 @@ is what is missing; almost everything it drives already exists:
 | Fault-injecting durable-session driver | `gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb` (lease/request/claim/recover/checkpoint fault actions on real SQLite). |
 | Catalog run + atomic artifacts + `manifest.json` | `gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb`. |
 | Publication gate / verdict | `.../benchmark/readiness.rb`, `report.rb`, `comparison.rb`. |
-| Production comms/telegram seams under test | `gems/tamoz-comms` (`admission`, `commands`, `comms_store`, `delivery`, `delivery_sink`, `rendering`), `gems/tamoz-telegram` (`normalizer`, `transport`, `client`), `Agent::Worker`, `DeliveryDrainer`, `CommsOutbox`. |
+| Scoreboard / baselines / metrics | `.../benchmark/scoreboard.rb`, `baselines.rb`, `metrics.rb`, `openclaw_publisher.rb`, `environment_loader.rb`. |
+| Scenario driver + fault gate | `.../harness/sqlite_scenario_driver.rb`, `sqlite_scenario_fault_gate.rb`. The existing oracles in `benchmark/scenario_driver.rb` (`T3M1M2Oracle`, `T3M3M4Oracle`) are change-file scenarios, not comms — they are patterns to follow, not reuse. |
+| Adapter/evidence tests | `gems/tamoz-evals` has its own suite: `openclaw_durable_cli_adapter_test.rb`, `durable_session_evidence_reader_test.rb`, `scoreboard_test.rb`, `scenario_driver_test.rb`, `comparison_executor_test.rb`. |
+| Production comms/telegram seams under test | `gems/tamoz-comms` (`admission`, `commands`, `comms_store` — the contract module; the SQLite implementation is in `gems/tamoz-sqlite` — `delivery`, `delivery_sink`, `rendering`), `gems/tamoz-telegram` (`normalizer`, `transport`, `client`), `Agent::Worker`, `DeliveryDrainer`, `CommsOutbox`. |
 
 What is genuinely **new**: comms-specific scenario oracles, and a Telegram surface
 executor/parity harness (the durable CLI adapter currently records Telegram as
@@ -33,9 +36,14 @@ parallel harness.
 
 ## Prerequisites (external — gather before B1)
 
-- An OpenRouter credential (`OPENROUTER_API_KEY`) and the UTF-8 locale for real
-  runs (see the local-run note in the repo memory). Real scenarios use DeepSeek
-  through OpenRouter by default; the provider identity is recorded, never assumed.
+- A real provider credential. Provider and model are explicit choices, not
+  defaults: `script/benchmark_openclaw_run` requires `--provider`/`--model`.
+  OpenRouter is a supported provider path (`OPENROUTER_API_KEY`, resolved by
+  `RubyLLMModel::ENV_KEYS`); the existing live default
+  (`script/live_alms_telegram`) is direct DeepSeek via `DEEPSEEK_API_KEY`, not
+  DeepSeek-via-OpenRouter. Real runs also need the UTF-8 locale (see the
+  local-run note in the repo memory). The provider identity is recorded, never
+  assumed.
 - A **real or recorded-live transport** binding for Telegram. A benchmark run uses
   a fake transport (the `ScriptedTransport` pattern) for Track A; a Track B parity
   claim needs a real send boundary (or a faithfully recorded live session), with

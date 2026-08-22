@@ -51,13 +51,16 @@ stable before Phase 2 adds progress events.
    acknowledgement, and carry it through status, terminal output, and machine
    envelopes. The reference enables `/status`, support, recovery, and machine
    correlation; it grants no authority.
-3. **`/status [reference]` on durable facts.** Build `/status` from the request,
-   session, and outbox records so a caller-bound status returns, per request: the
-   short reference; thread and execution identity; task state and phase; queue
-   position/age when queued; last committed progress; waiting/blocked reason;
-   terminal reason and next action; delivery state and unknown reason; and the
-   exact operator recovery command when authority is required. Both task and
-   delivery axes appear; a bare caller gets one request or an explicit list.
+3. **`/status [reference]` on durable facts.** `CommsStore#conversation_status`
+   already reads durable facts (thread, active `request_id`, `task_state`,
+   `effect_state`, `capability_state`, `delivery_state`, `phase`, `event_kind`,
+   `event_sequence`, `next_action`, `terminal_reason`), and `status_text` renders
+   most of them. The remaining work is the read-model gap: make status
+   caller-bound and reference-addressed (`/status <ref>` resolving one request,
+   or an explicit list); render the request reference and the terminal reason
+   (currently computed but dropped); add queue position/age when queued; and
+   translate internal worker/effect states into the Phase 1 closed vocabulary.
+   Both task and delivery axes must appear.
 4. **Command registry parity.** Make `Comms::Commands` and
    `CommsGateway#handle_command` agree. Implement or remove `/new`, `/redirect`,
    and `/whoami`. Each implemented command has authorization, persistence,

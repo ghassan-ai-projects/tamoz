@@ -92,6 +92,63 @@ After the second pass, the report was corrected against the quality bar:
 - recorded a real sandbox limitation: the Telegram fixture server could not
   bind localhost due to `EPERM` in the review environment.
 
+## Pass 3 — code-verification audit (2026-08-22)
+
+A follow-up audit re-verified every Tamoz code claim in the study and the plans
+against the current source (two independent verification passes over the named
+files, plus direct re-reading of the disputed seams). Most claims held. The
+corrections below were applied to `03`, `04`, `05`, `06`, the implementation
+plan, and the benchmark protocol:
+
+- **Root cause #2 was stale.** `CommsStore#conversation_status` had grown since
+  the second pass: it now returns the active `request_id`, `task_state`,
+  `effect_state`, `capability_state`, `delivery_state`, `phase`, `event_kind`,
+  `event_sequence`, `next_action`, and `terminal_reason`. The remaining gap is
+  narrower than reported: no request reference, `terminal_reason` computed but
+  not rendered, no queue position/age, no per-reference query, and an internal
+  rather than shared vocabulary. Docs updated in `03`, `05`, `06`, Phase 1.
+- **`OutboxDeliverySink::EVENT_KINDS` described imprecisely.** It is a hash
+  mapping `request.*` worker events to outbox kinds (`approved`/`denied`/
+  `completed` all collapse to `answer`); there is no literal `terminal` kind.
+  The exclusion finding (no claimed/running/recovered/phase/progress) stands.
+  Corrected in `03`.
+- **Limits claim made precise.** `outbox_capacity`, `control_capacity`, and
+  `max_denial_prompts_per_request` are enforced at the admission/delivery
+  boundary. The unenforced set is `max_open_requests`, `max_inbound_bytes`, and
+  `max_response_bytes` (the last lives under the descriptor's `transport`
+  section). Corrected in `03`, `04`, `05`, Phase 0.
+- **Pairing issuance upgraded to confirmed.** `Comms::PairingChallenge.build`
+  and `CommsStore#insert_pairing_challenge` have test-only call sites; the
+  gateway ignores `pairing_pending` senders without issuing a challenge, and
+  `tamoz comms pair approve` only verifies an existing challenge. Previously a
+  medium-confidence finding; now confirmed by direct inspection (`03`, `06`).
+- **Phantom test reference removed.** Phase 0 cited `test/comms_outbox_test.rb`,
+  which does not exist; outbox coverage lives in `test/delivery_drainer_test.rb`
+  and `test/comms_gateway_test.rb`.
+- **Benchmark provider claim corrected.** Provider/model are explicit
+  (`script/benchmark_openclaw_run` requires `--provider`/`--model`); OpenRouter
+  via `OPENROUTER_API_KEY` is a supported path, and the existing live default is
+  direct DeepSeek via `DEEPSEEK_API_KEY` — there is no
+  "DeepSeek through OpenRouter by default" wiring. Missing reuse seams were
+  added to the benchmark plan (`scoreboard.rb`, `baselines.rb`, `metrics.rb`,
+  `environment_loader.rb`, `sqlite_scenario_driver.rb`,
+  `sqlite_scenario_fault_gate.rb`, and the tamoz-evals adapter/evidence tests);
+  the existing `scenario_driver.rb` oracles are change-file scenarios, so comms
+  oracles remain genuinely new work.
+- **Acknowledgement text completed.** The queued variant
+  (`Queued behind earlier work; ...`) was added alongside the plain accepted
+  text in `03`.
+
+Confirmed without change: admission/policy scope, atomic `admit_and_enqueue`,
+request-inbox semantics, `SessionEffects`/`EffectDispatcher` routing, the
+outbox/drainer unknown-send model, the `mark_delivery` missing owner/fence
+guard, the normalizer digest and message-identity gaps, unfiltered
+`conversation_history` terminal deliveries, the command registry/handler
+divergence, the durable CLI command set, `StreamPart` identity loss in CLI JSON
+rendering, the ephemeral `Runtime#model_generate` path bypassing the journal,
+`Worker#notify_sink` as the projection seam, `Transport#signal(:ack)` having no
+production call site, and all cited test files except the one noted above.
+
 ## Final audit checklist
 
 - [x] Report bar exists before the comparative recommendations.

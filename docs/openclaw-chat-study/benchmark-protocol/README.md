@@ -38,7 +38,7 @@ parallel benchmark stack.
 
 | Seam | File | Role |
 | --- | --- | --- |
-| Production comms | `gems/tamoz-comms/lib/tamoz/comms/*` | Admission, commands, comms store, delivery, delivery sink, rendering, transport interface, approval/evidence. |
+| Production comms | `gems/tamoz-comms/lib/tamoz/comms/*` | Admission, commands, the comms-store **contract** module (implementation lives in `gems/tamoz-sqlite`), delivery, delivery sink, rendering, transport interface, approval/evidence. |
 | Production Telegram | `gems/tamoz-telegram/lib/tamoz/telegram/*` | Normalizer, transport, client. |
 | Durable execution + delivery | `Agent::Worker`, `Agent::DeliveryDrainer`, `Agent::OutboxDeliverySink`, `Sqlite::CommsOutbox`, `Sqlite::CommsStore` | The real Gateway/Worker/Drainer/outbox path a scenario drives. |
 | Fake transport | `Tamoz::Comms::Transport` interface + `ScriptedTransport` in `test/comms_gateway_test.rb` | Records requests, no egress — the Track A transport. |
