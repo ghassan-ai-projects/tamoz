@@ -160,17 +160,39 @@ class ScenarioDriverTest < Minitest::Test
     end
   end
 
-  def test_compaction_restart_task_keeps_post_effect_work_pending_after_the_kill
+  def test_compaction_restart_task_contains_one_stable_create_file_request
     Dir.mktmpdir('scenario-restart-task') do |workspace|
       adapter = RestartAdapter.new(workspace)
 
       restart_driver(adapter).call(**restart_call_arguments)
 
-      assert_includes adapter.enqueued_tasks.first, 'read that file back'
-      assert_includes adapter.enqueued_tasks.first,
-                      Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_PENDING_FIXTURE_PATH
-      refute_path_exists restart_pending_fixture_path(workspace)
+      task = adapter.enqueued_tasks.first
+      arguments = JSON.generate(
+        'path' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH,
+        'content' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT,
+        'expected_sha256' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_DIGEST,
+        'mode' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_MODE
+      )
+
+      assert_equal 1, task.scan(arguments).length
+      assert_includes task, 'durable checkpoint'
+      assert_includes task, 'without re-journaling the effect'
+      assert_includes task, "Use these exact create_file arguments: #{arguments}."
+      refute_includes task, 'read that file back'
+      refute_includes task, 'pending fixture'
     end
+  end
+
+  def test_compaction_restart_m4_task_describes_journaled_recovery
+    steps = Tamoz::Evals::Benchmark::ScenarioDriver.definition('T3-m3m4').fetch('steps')
+    task = steps.fetch(1).fetch('task')
+
+    assert_includes task, 'durable checkpoint'
+    assert_includes task, 'journaled create_file result'
+    assert_includes task, 'Do not re-journal the effect'
+    assert_includes task, 'summarize the recovery'
+    refute_includes task, 'pending fixture'
+    refute_includes task, 'second bounded fixture'
   end
 
   def test_compaction_restart_keeps_an_unknown_fixture_and_blocks
@@ -292,10 +314,6 @@ class ScenarioDriverTest < Minitest::Test
 
   def restart_fixture_path(workspace)
     File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
-  end
-
-  def restart_pending_fixture_path(workspace)
-    File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_PENDING_FIXTURE_PATH)
   end
 
   def write_restart_fixture(workspace, content)
