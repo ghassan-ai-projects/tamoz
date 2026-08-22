@@ -22,6 +22,10 @@ module Tamoz
         RESTART_FIXTURE_CONTENT = "created after durable restart\n"
         RESTART_FIXTURE_MODE = '0644'
         RESTART_FIXTURE_DIGEST = Digest::SHA256.hexdigest(RESTART_FIXTURE_CONTENT)
+        RESTART_PENDING_FIXTURE_PATH = 'scenario/restart-pending-marker.json'
+        RESTART_PENDING_FIXTURE_CONTENT = "pending after durable restart\n"
+        RESTART_PENDING_FIXTURE_MODE = '0644'
+        RESTART_PENDING_FIXTURE_DIGEST = Digest::SHA256.hexdigest(RESTART_PENDING_FIXTURE_CONTENT)
 
         # Scores the contradiction from journaled tool and terminal evidence.
         class T3M1M2Oracle
@@ -244,15 +248,21 @@ module Tamoz
             'steps' => [
               {
                 'id' => 'M3',
-                'task' => 'Create the exact restart fixture with create_file, then verify the ' \
-                          'created file. The durable worker may be interrupted after the effect is ' \
-                          'journaled; the create_file request must remain logically stable.'
+                'task' => 'On the initial attempt, use the tools in this exact order: create the first ' \
+                          'restart fixture, read that file back, create the separate bounded pending ' \
+                          'fixture, then summarize both results. Do not return a final answer before ' \
+                          'completing that tool sequence. The worker may be interrupted immediately ' \
+                          'after the first effect is journaled; that create_file request must remain ' \
+                          'logically stable. On restart, resume from its journaled result without ' \
+                          're-journaling it, leave the pending fixture absent, and summarize the ' \
+                          'recovery.'
               }.freeze,
               {
                 'id' => 'M4',
                 'task' => 'After the worker restarts, resume this same request from its durable ' \
                           'checkpoint. Complete only from the journaled create_file result and do not ' \
-                          're-journal the effect.'
+                          're-journal the effect. The second bounded fixture was pending at the kill ' \
+                          'and must remain absent.'
               }.freeze
             ].freeze,
             'oracle' => T3M3M4Oracle
@@ -409,7 +419,15 @@ module Tamoz
             'expected_sha256' => fixture.fetch('expected_sha256'),
             'mode' => fixture.fetch('mode')
           )
-          "#{goal}\n\n#{step.fetch('task')} Use these exact create_file arguments: #{arguments}."
+          pending_arguments = JSON.generate(
+            'path' => RESTART_PENDING_FIXTURE_PATH,
+            'content' => RESTART_PENDING_FIXTURE_CONTENT,
+            'expected_sha256' => RESTART_PENDING_FIXTURE_DIGEST,
+            'mode' => RESTART_PENDING_FIXTURE_MODE
+          )
+          "#{goal}\n\n#{step.fetch('task')} Use these exact create_file arguments for the " \
+            "first fixture: #{arguments}. Use this distinct logical create_file request for the " \
+            "pending fixture after the read-back: #{pending_arguments}."
         end
 
         def restart_scenario?

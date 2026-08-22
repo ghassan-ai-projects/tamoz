@@ -26,8 +26,8 @@ module Tamoz
         CHANGE_PROFILE_PREFIX = 'scenario-t3-m3m4'
         CHANGE_TOOLS = %w[read_file list_directory search_text create_file].freeze
         EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
-        EFFECT_POLL_BUSY_TIMEOUT_MS = 5_000
-        EFFECT_POLL_MAX_ATTEMPTS = 10
+        EFFECT_POLL_BUSY_TIMEOUT_MS = 0
+        EFFECT_POLL_MAX_ATTEMPTS = 100
         EFFECT_POLL_RETRY_DELAY_SECONDS = 0.01
 
         attr_reader :runtime_dir, :workspace
@@ -43,14 +43,22 @@ module Tamoz
             @adapter = adapter
             @thread = thread
             @operation = operation
+            @database = adapter.effect_poll_database
           end
 
           def poll(**)
-            receipt = @adapter.effect_receipt_for(thread: @thread, operation: @operation)
+            receipt = @adapter.effect_receipt_for(
+              thread: @thread, operation: @operation, database: @database
+            )
             return unless receipt
 
             @effect_key = receipt['logical_key'] || receipt['effect_key']
             Tamoz::Evals::Harness::SubprocessRunner::INTERVENTION_KILL
+          end
+
+          def close
+            @database&.close
+            @database = nil
           end
         end
 
@@ -115,11 +123,20 @@ module Tamoz
           )
         end
 
-        def effect_receipt_for(thread:, operation:)
+        def effect_poll_database
           database = SQLite3::Database.new(
             File.join(@runtime_dir, Tamoz::Agent::RuntimeDirectory::DATABASE_FILE), readonly: true
           )
           database.busy_timeout = EFFECT_POLL_BUSY_TIMEOUT_MS
+          database
+        rescue SQLite3::Exception => e
+          database&.close
+          raise Tamoz::Evals::ExecutionError, "scenario_effect_poll_failed:#{e.class}"
+        end
+
+        def effect_receipt_for(thread:, operation:, database: nil)
+          owned_database = database.nil?
+          database ||= effect_poll_database
           row = effect_poll_row(database, thread:, operation:)
           row && {
             'effect_key' => row.fetch(0), 'logical_key' => row[1],
@@ -128,7 +145,7 @@ module Tamoz
         rescue SQLite3::Exception => e
           raise Tamoz::Evals::ExecutionError, "scenario_effect_poll_failed:#{e.class}"
         ensure
-          database&.close
+          database&.close if owned_database
         end
 
         # Builds the normal adapter result from a caller-controlled durable
@@ -264,6 +281,8 @@ module Tamoz
           raise Tamoz::Evals::ExecutionError, 'scenario_effect_key_not_observed' unless poller.effect_key
 
           poller.effect_key
+        ensure
+          poller&.close
         end
 
         def worker_subprocess!(provider:, model:)

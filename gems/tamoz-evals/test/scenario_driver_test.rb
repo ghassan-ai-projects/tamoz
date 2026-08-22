@@ -6,12 +6,13 @@ require_relative '../../../test/test_helper'
 class ScenarioDriverTest < Minitest::Test
   # Records the durable seams needed to exercise restart setup without a provider.
   class RestartAdapter
-    attr_reader :worker_until_effect_calls, :worker_subprocess_calls, :workspace
+    attr_reader :worker_until_effect_calls, :worker_subprocess_calls, :workspace, :enqueued_tasks
 
     def initialize(workspace)
       @workspace = workspace
       @worker_until_effect_calls = 0
       @worker_subprocess_calls = 0
+      @enqueued_tasks = []
     end
 
     def prepare!(**); end
@@ -49,7 +50,9 @@ class ScenarioDriverTest < Minitest::Test
       "thread:#{mission_id}"
     end
 
-    def enqueue!(*); end
+    def enqueue!(_thread, task, **)
+      @enqueued_tasks << task
+    end
 
     def worker!; end
 
@@ -154,6 +157,19 @@ class ScenarioDriverTest < Minitest::Test
         [statuses, adapter.worker_until_effect_calls,
          adapter.worker_subprocess_calls, File.binread(restart_fixture_path(workspace))]
       )
+    end
+  end
+
+  def test_compaction_restart_task_keeps_post_effect_work_pending_after_the_kill
+    Dir.mktmpdir('scenario-restart-task') do |workspace|
+      adapter = RestartAdapter.new(workspace)
+
+      restart_driver(adapter).call(**restart_call_arguments)
+
+      assert_includes adapter.enqueued_tasks.first, 'read that file back'
+      assert_includes adapter.enqueued_tasks.first,
+                      Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_PENDING_FIXTURE_PATH
+      refute_path_exists restart_pending_fixture_path(workspace)
     end
   end
 
@@ -276,6 +292,10 @@ class ScenarioDriverTest < Minitest::Test
 
   def restart_fixture_path(workspace)
     File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
+  end
+
+  def restart_pending_fixture_path(workspace)
+    File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_PENDING_FIXTURE_PATH)
   end
 
   def write_restart_fixture(workspace, content)

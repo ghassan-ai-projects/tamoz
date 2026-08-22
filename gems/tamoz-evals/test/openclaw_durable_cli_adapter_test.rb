@@ -37,7 +37,7 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
     end
 
     assert_equal 4, database.query_count
-    assert_equal 5_000, database.busy_timeout
+    assert_equal 0, database.busy_timeout
   end
 
   def test_effect_poller_fails_closed_after_persistent_busy_database
@@ -48,8 +48,23 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
     end
 
     assert_equal 'scenario_effect_poll_failed:SQLite3::BusyException', error.message
-    assert_equal 10, database.query_count
-    assert_equal 5_000, database.busy_timeout
+    assert_equal 100, database.query_count
+    assert_equal 0, database.busy_timeout
+  end
+
+  def test_effect_poller_reuses_one_readonly_database_across_polls
+    database = BusyReadonlyDatabase.new(busy_attempts: 0, row: nil)
+
+    with_effect_database(database) do
+      poller = effect_poller
+
+      assert_nil poller.poll
+      assert_nil poller.poll
+      poller.close
+    end
+
+    assert_equal 1, @effect_database_open_count
+    assert_equal 2, database.query_count
   end
 
   def test_metrics_emit_catalog_values_from_durable_evidence
@@ -331,9 +346,11 @@ class OpenclawDurableCliAdapterTest < Minitest::Test
   def with_effect_database(database)
     database_class = SQLite3::Database.singleton_class
     original_new = database_class.instance_method(:new)
+    @effect_database_open_count = 0
     factory = lambda { |path, readonly:|
       assert_equal File.join(adapter.runtime_dir, Tamoz::Agent::RuntimeDirectory::DATABASE_FILE), path
       assert readonly
+      @effect_database_open_count += 1
       database
     }
     database_class.define_method(:new) { |path, readonly:| factory.call(path, readonly:) }
