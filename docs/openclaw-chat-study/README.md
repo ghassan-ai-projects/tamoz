@@ -15,6 +15,16 @@ chat experience. Read the files in this order:
 8. [07-evidence-index.md](07-evidence-index.md) — claim-to-source index.
 9. [08-review-log.md](08-review-log.md) — five-agent passes, disagreements, corrections, and final audit.
 
+Implementation planning lives in [implementation-plan/](implementation-plan/README.md):
+the acceptance bar and the phased slices (Phases 0–3) derived from 04/05/06, plus
+the per-phase review convention in [implementation-plan/evidence/](implementation-plan/evidence/README.md).
+
+The communication benchmark — the measurement that turns "feels responsive" into a
+verifiable, longitudinal claim — is designed in
+[benchmark-protocol/](benchmark-protocol/README.md): protocol, scenario catalog,
+scoring, and an agent-drivable scenario ladder (C1–C9, plus the F1–F3 frontier
+round) built on the existing comms/eval seams.
+
 ## Executive summary
 
 OpenClaw feels useful because the conversation is treated as a durable work
@@ -58,6 +68,8 @@ command parity, then bounded semantic progress.
 | Target architecture and priorities | Complete |
 | Scenario matrix and implementation gates | Complete |
 | Final audit and definition of done | Complete |
+| Implementation plan (bar + Phases 0–3) | Complete; no code written |
+| Communication benchmark protocol and scenarios | Complete; harness not built |
 
 Static inspection does not prove perceived quality, real provider quality, or a
 full live Telegram conversation. Those limits are recorded explicitly in the
