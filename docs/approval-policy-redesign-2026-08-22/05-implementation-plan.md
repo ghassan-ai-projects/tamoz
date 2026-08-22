@@ -318,8 +318,11 @@ step is behavior-neutral.
   loader; pass it into session effects (via `configuration`, reaching
   `SessionEffects.new(configuration:)` at `session_nodes.rb:136`) as a **constructor
   dependency** (no global, no registry).
-- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb` — accept the engine
-  (constructor dep; unused by call sites until step 7).
+- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb` — reach the engine the same
+  way it reaches capabilities today (`SessionEffects.new(configuration:)` at
+  `session_nodes.rb:136` reads `@configuration.capabilities` — put the engine on
+  `configuration` beside it, rather than adding a new `SessionEffects` constructor
+  arg, to match the existing seam). Unused by call sites until step 7.
 - `gems/tamoz-agent/lib/tamoz/agent/agent.rb` (`:102`, `Runtime.new(...)`) — the
   one-shot entry builds its **own** engine with the **in-memory** grant store (ADR
   §2.3: the one-shot runtime is ephemeral, so its grants die with the process; do
@@ -328,13 +331,6 @@ step is behavior-neutral.
   two entry points (worker, `tamoz run`) are distinct processes.
 - `gems/tamoz-agent/lib/tamoz/agent/runtime.rb` — accept the engine (constructor dep;
   unused until step 9).
-
-> **Two engines, one gem.** The durable worker and the ephemeral one-shot runtime each
-> construct their own `Engine` from the same policy data — the worker's backed by
-> SQLite, the one-shot's by the in-memory stores (ADR §2.3). ADR §1.5's "passed into
-> the session effects and the one-shot runtime" describes the injection *shape*, not a
-> single shared instance; this plan pins the two construction sites so a coding agent
-> does not wire the SQLite engine into `tamoz run`.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — the existing parked-thread poll pass
   gains its first new job: compare the persisted active-policy rev against the
   engine's on each pass and at session start; on difference, load from the persisted
@@ -346,6 +342,13 @@ step is behavior-neutral.
   `tamoz_approval_active_policy`. A document that fails validation never reaches the
   table (the end-to-end `visudo` property).
 - `gems/tamoz-agent/tamoz-agent.gemspec` — dependency edge on `tamoz-approval`.
+
+> **Two engines, one gem.** The durable worker and the ephemeral one-shot runtime each
+> construct their own `Engine` from the same policy data — the worker's backed by
+> SQLite, the one-shot's by the in-memory stores (ADR §2.3). ADR §1.5's "passed into
+> the session effects and the one-shot runtime" describes the injection *shape*, not a
+> single shared instance; this plan pins the two construction sites so a coding agent
+> does not wire the SQLite engine into `tamoz run`.
 
 **Files created/deleted:** none.
 
