@@ -311,16 +311,30 @@ step is behavior-neutral.
 **Hard-zero:** L-2.
 
 **Files modified:**
-- `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` — build the engine at boot:
-  policy path from run config (default: the gem's bundled `base.yaml`), profile name
-  from run/schedule (default: `implement`), inject the SQLite grant store + decision
-  log (step 5) and comms' evidence symbol set (step 4) into the loader; pass the
-  engine into session effects and the one-shot runtime as a **constructor
+- `gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb` — build the **durable** engine
+  at boot: policy path from run config (default: the gem's bundled `base.yaml`),
+  profile name from run/schedule (default: `implement`), inject the **SQLite** grant
+  store + decision log (step 5) and comms' evidence symbol set (step 4) into the
+  loader; pass it into session effects (via `configuration`, reaching
+  `SessionEffects.new(configuration:)` at `session_nodes.rb:136`) as a **constructor
   dependency** (no global, no registry).
 - `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb` — accept the engine
   (constructor dep; unused by call sites until step 7).
+- `gems/tamoz-agent/lib/tamoz/agent/agent.rb` (`:102`, `Runtime.new(...)`) — the
+  one-shot entry builds its **own** engine with the **in-memory** grant store (ADR
+  §2.3: the one-shot runtime is ephemeral, so its grants die with the process; do
+  **not** hand it the worker's SQLite engine). Same bundled policy + profile + comms
+  symbol set; different stores. This is a **second engine**, not a shared one — the
+  two entry points (worker, `tamoz run`) are distinct processes.
 - `gems/tamoz-agent/lib/tamoz/agent/runtime.rb` — accept the engine (constructor dep;
   unused until step 9).
+
+> **Two engines, one gem.** The durable worker and the ephemeral one-shot runtime each
+> construct their own `Engine` from the same policy data — the worker's backed by
+> SQLite, the one-shot's by the in-memory stores (ADR §2.3). ADR §1.5's "passed into
+> the session effects and the one-shot runtime" describes the injection *shape*, not a
+> single shared instance; this plan pins the two construction sites so a coding agent
+> does not wire the SQLite engine into `tamoz run`.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — the existing parked-thread poll pass
   gains its first new job: compare the persisted active-policy rev against the
   engine's on each pass and at session start; on difference, load from the persisted
@@ -528,9 +542,10 @@ harness (ADR §5 step 7, §10 P7).
 
 **Files modified:**
 - `gems/tamoz-agent/lib/tamoz/agent/runtime.rb` — `:582-605` replaced by
-  `engine.build_request` + `engine.decide` with the in-memory grant store; `:ask`
-  prompts through `Answer.parse` (the one-shot path inherits the full vocabulary, ADR
-  §1.4); `:deny` returns the same structured tool result as Pipeline A. The
+  `engine.build_request` + `engine.decide` on the **in-memory-backed one-shot engine**
+  constructed at `agent.rb:102` (step 6), not a fresh store built here; `:ask` prompts
+  through `Answer.parse` (the one-shot path inherits the full vocabulary, ADR §1.4);
+  `:deny` returns the same structured tool result as Pipeline A. The
   callback-plus-exception contract is deleted.
 - `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — `approve_one_shot` (`:853-858`)
   re-pointed at `Answer.parse`.

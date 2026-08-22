@@ -94,6 +94,8 @@ union that widens it for unattended runs).
 | gateway evidence compare | `comms_gateway.rb:258-261` | reads `required_evidence` from the prompt/decision | 8 |
 | worker resume | `worker.rb` (resume/answer path ~`:255-408`) | calls `engine.resolve` for channel answers | 7 |
 | interactive resume | `cli.rb` (interactive approve path) | calls `engine.resolve` in-process before `session.resume`; scope follow-up | 7 |
+| durable engine wiring | `session_nodes.rb:136` `SessionEffects.new(configuration:)` | receives the SQLite-backed engine via `configuration` | 6 |
+| one-shot engine build | `agent.rb:102` `Runtime.new(...)` | builds a **second** engine with **in-memory** stores (ADR §2.3) — not the worker's SQLite engine | 6, 9 |
 
 ## 4. Line drifts found this pass (plan/ADR say → tree shows)
 
