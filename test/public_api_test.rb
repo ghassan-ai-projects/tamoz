@@ -49,6 +49,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Profile" => {},
           "Tamoz::Agent::Profile::VERSION" => {}
         },
+        "tamoz-agent-improvement" => {
+          "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
+          "Tamoz::Agent::Improvement::VERSION" => {}
+        },
         "tamoz-agent-kernel" => {
           "Tamoz::Agent::Deliberation" => {},
           "Tamoz::Agent::EffectDispatcher" => {},
@@ -380,6 +384,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Memory::VERSION,
       Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::Profile::VERSION,
+      Tamoz::Agent::Improvement::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,
