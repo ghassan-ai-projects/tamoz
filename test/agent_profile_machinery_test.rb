@@ -308,8 +308,8 @@ class AgentProfileMachineryTest < Minitest::Test
   # clean-process load chain (the corpus harness's -I lib paths, no bundler).
   def test_clean_subprocess_load_chain_provides_time_iso8601
     load_paths = %w[
-      tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools
-      tamoz-observability tamoz-comms tamoz-agent
+      tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
+      tamoz-tools tamoz-observability tamoz-comms tamoz-agent
     ].flat_map do |gem|
       ["-I", File.join(ROOT, "gems", gem, "lib")]
     end

@@ -59,6 +59,10 @@ tiers:
 
 grant_keys:
   local_execute: [verb, tool, target_root, key_argv]
+  # A remembered session covers any write under the same top-level root: the
+  # root is the blast radius the operator saw, and argument- or tool-level
+  # keys would make the grant useless for the next edit.
+  workspace_write: [verb, target_root]
 
 rules:
   - id: credential-files

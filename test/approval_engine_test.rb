@@ -411,4 +411,32 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal simulated.verdict, decided.verdict
     assert_equal before + 1, eng.decision_log.records.size
   end
+
+  # A remembered session grant covers any write under the same canonical root:
+  # the second write must not ask again, and no :once row is persisted.
+  def test_workspace_write_session_grant_remembers_the_root
+    eng = build_engine(profile: 'review')
+    first = eng.build_request(
+      tool: 'apply_patch', argv: ['a.rb', 'x', 'y'],
+      targets: ['/workspace/a.rb'], effect_class: :bounded, session_id: 's1'
+    )
+    eng.bind_session('s1')
+    decision = eng.decide(first)
+    assert_equal :ask, decision.verdict
+    assert_includes decision.grant_offer.scopes, :session
+
+    eng.resolve(decision_id: decision.id, answer: :approve, scope: :session)
+
+    second = eng.build_request(
+      tool: 'create_file', argv: ['b.rb', 'hi'],
+      targets: ['/workspace/b.rb'], effect_class: :bounded, session_id: 's1'
+    )
+    next_decision = eng.decide(second)
+    assert_equal :allow, next_decision.verdict
+    assert_equal 'engine.grant_hit', next_decision.rule_id
+
+    rows = eng.grant_store.instance_variable_get(:@grants)
+    assert_equal 1, rows.size
+    assert_equal :session, rows.first.scope
+  end
 end

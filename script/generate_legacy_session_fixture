@@ -27,10 +27,12 @@
 require "json"
 require "fileutils"
 require "tmpdir"
+require "delegate"
 
 ROOT = File.expand_path("..", __dir__)
-%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite
-   tamoz-tools tamoz-agent].each do |gem|
+%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
+   tamoz-tools tamoz-observability tamoz-comms tamoz-mcp tamoz-sqlite
+   tamoz-agent].each do |gem|
   $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
 end
 require "tamoz/sqlite"
@@ -143,6 +145,45 @@ payload = nil
       "UPDATE tamoz_checkpoints SET payload = ?, payload_digest = ? WHERE id = ?",
       [SQLite3::Blob.new(payload), payload_digest, checkpoint_id]
     )
+    # The record strip alone does not make the bytes OLD: the current build
+    # sealed every checkpoint under digest_version 2 (JCS), which every guard
+    # would accept. Re-seal EACH of the session's checkpoints as digest_version
+    # 1 (the pre-JCS framing): the definition digest is derived under that
+    # older rule INSIDE the payload too, because a reader cross-checks the
+    # column against the payload before the identity guard fires. A modern
+    # build must stop typed at that guard — the exact contract invariant 22
+    # pins for yesterday's databases.
+    rows = database.execute(
+      "SELECT id, payload, definition_digest FROM tamoz_checkpoints WHERE thread_id = ?",
+      [THREAD]
+    )
+    rows.each do |id, blob, current_digest|
+      legacy_digest = "sha256:#{Digest::SHA256.hexdigest("pre-jcs\0#{current_digest}")}"
+      attrs = codec.load(blob)
+      # A codec bound to the LEGACY identity (digest + graph version) re-encodes
+      # the payload without tripping the identity validation that dump runs
+      # against its own rule.
+      legacy_definition = SimpleDelegator.new(codec.definition)
+      def legacy_definition.version = "1"
+      legacy_codec = Tamoz::Graph::CheckpointCodec.new(
+        definition: legacy_definition,
+        definition_digest: legacy_digest,
+        state_codec: codec.state_codec
+      )
+      mutated = legacy_codec.dump(
+        attrs.merge(definition_digest: legacy_digest, graph_version: "1")
+      )
+      mutated_digest = Tamoz::SQLite.const_get(:Wire).digest(
+        mutated, domain: "tamoz.sqlite.checkpoint_payload"
+      )
+      database.execute(
+        "UPDATE tamoz_checkpoints SET payload = ?, payload_digest = ?, " \
+        "definition_digest = ?, digest_version = 1, graph_version = '1' WHERE id = ?",
+        [SQLite3::Blob.new(mutated), mutated_digest, legacy_digest, id]
+      )
+    end
+    database.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+    database.execute("PRAGMA journal_mode = DELETE")
   ensure
     database.close
   end

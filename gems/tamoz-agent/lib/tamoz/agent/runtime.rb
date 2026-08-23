@@ -656,8 +656,8 @@ module Tamoz
 
         request = @approval_engine.build_request(
           tool: step.tool,
-          argv: approval_argv(step.tool, effect_arguments),
-          targets: approval_targets(step.tool, effect_arguments),
+          argv: RequestProjection.argv(step.tool, effect_arguments),
+          targets: RequestProjection.targets(step.tool, effect_arguments),
           effect_class: gate_effect_class(step.tool),
           session_id: "one-shot",
           workspace_root: toolbox.root.to_s
@@ -721,24 +721,6 @@ module Tamoz
           arguments: step.arguments,
           reason: "denied: #{decision.reason}, rule #{decision.rule_id}"
         )
-      end
-
-      def approval_argv(tool, arguments)
-        case tool
-        when "run_check" then [arguments["name"]].compact
-        when "git" then Array(arguments["argv"])
-        when "apply_patch"
-          [arguments["path"], arguments["before"], arguments["after"]].compact
-        when "create_file" then [arguments["path"], arguments["content"]].compact
-        else []
-        end
-      end
-
-      def approval_targets(tool, arguments)
-        path = arguments["path"]
-        return [] unless %w[read_file list_directory search_text apply_patch create_file].include?(tool) && path
-
-        [path]
       end
 
       # The capability binding owns classification; a tool the host cannot

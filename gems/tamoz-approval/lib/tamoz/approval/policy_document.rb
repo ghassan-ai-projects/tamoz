@@ -215,6 +215,13 @@ module Tamoz
           if tier == :local_execute && tool == :child_task && scopes.include?(:session)
             raise InvalidPolicyError, "tool_tiers #{tool} grant_scopes may not include :session"
           end
+          next unless scopes.include?(:session) && !NO_SESSION_SCOPE_TIERS.include?(tier)
+
+          unless @grant_keys[tier]
+            raise InvalidPolicyError,
+                  "tool_tiers #{tool} maps to #{tier} with :session but grant_keys has no " \
+                  "#{tier} entry; the scope could never be minted"
+          end
           if NO_SESSION_SCOPE_TIERS.include?(tier) && scopes.include?(:session)
             raise InvalidPolicyError, "tool_tiers #{tool} mapped to #{tier}; grant_scopes may not include :session"
           end
@@ -237,6 +244,13 @@ module Tamoz
           scopes = tier[:grant_scopes]
           if NO_SESSION_SCOPE_TIERS.include?(name) && scopes.include?(:session)
             raise InvalidPolicyError, "tier #{name} grant_scopes may not include :session"
+          end
+          next unless scopes.include?(:session)
+
+          unless @grant_keys[name]
+            raise InvalidPolicyError,
+                  "tier #{name} advertises :session but grant_keys has no #{name} entry; " \
+                  "the scope could never be minted"
           end
         end
       end

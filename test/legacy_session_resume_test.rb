@@ -80,7 +80,7 @@ class LegacySessionResumeTest < Minitest::Test
   # refusal fires before any capability check.
   def test_an_old_thread_stops_typed_against_a_capability_it_never_had
     with_fixture do |session, workspace|
-      mcp = Struct.new(:mcp_catalogs) do
+      mcp = Struct.new(:mcp_catalogs, :mcp_source_digests) do
         def catalogs = {"srv" => :snapshot}
         def names = []
         def read_only_names = []
@@ -93,7 +93,7 @@ class LegacySessionResumeTest < Minitest::Test
         def effect_intent(_name, _arguments) = {}
         def preview(_name, _arguments) = ""
         def execute(_context, _name, _arguments) = ""
-      end.new({"srv" => "sha256:#{"c" * 64}"})
+      end.new({"srv" => "sha256:#{"c" * 64}"}, {"srv" => "sha256:#{"d" * 64}"})
 
       with_adapter do |adapter|
         mcp_session = Tamoz::Agent::Session.new(

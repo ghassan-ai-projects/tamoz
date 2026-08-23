@@ -76,8 +76,8 @@ module Tamoz
         validate_actor_evidence(actor_evidence)
 
         # One critical section for lookup→record→insert: two concurrent
-        # replays of the same answer must produce exactly one grant row, so
-        # the loser must observe the winner's resolution, not race it.
+        # replays of the same answer must produce exactly one SESSION grant
+        # row, so the loser must observe the winner's resolution, not race it.
         @mutex.synchronize do
           decision_record = decision_log.lookup(decision_id)
           raise UnknownDecisionError, "no decision #{decision_id}" unless decision_record
@@ -97,7 +97,9 @@ module Tamoz
             grant: grant
           )
           stored_grant = recorded_resolution.fetch(:grant)
-          grant_store.insert(stored_grant) if stored_grant
+          # A :once grant is already journaled on the decision row; only a
+          # :session grant needs the lookupable row find_live_session_grant reads.
+          grant_store.insert(stored_grant) if stored_grant && stored_grant.scope == :session
           stored_grant
         end
       end

@@ -144,7 +144,7 @@ class DomainLoader
         "canonical_root" => root
       },
       "roots" => {"workspace" => root},
-      "tools" => {"allowed" => %w[read_file list_directory], "approval_required" => []},
+      "tools" => {"allowed" => %w[read_file list_directory]},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",

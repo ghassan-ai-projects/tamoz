@@ -265,7 +265,7 @@ EVIDENCE = {
     test: "test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes",
     supporting: [
       "test/agent_digest_resolution_test.rb#test_session_mutation_between_approval_and_dispatch_is_refused_fail_closed",
-      "test/agent_repair_evaluation_test.rb#test_denied_repair_patch_preserves_the_last_approved_state"
+      "test/agent_repair_evaluation_test.rb#test_denied_check_is_a_structured_result_and_preserves_the_approved_state"
     ]
   },
   "INV-27" => {

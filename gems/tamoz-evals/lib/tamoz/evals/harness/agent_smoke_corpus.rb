@@ -495,8 +495,9 @@ module Tamoz
         class CliSubprocessHarness
           REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
           LOAD_PATHS = %w[
-            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools
-            tamoz-observability tamoz-comms tamoz-mcp tamoz-agent
+            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
+            tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms tamoz-mcp
+            tamoz-agent
           ].flat_map do |gem|
             ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
           end.freeze
@@ -941,20 +942,19 @@ module Tamoz
           end
         end
 
-        # A stale `expected_sha256` is refused by the patch preflight before any write.
-        # It is now typed evidence rather than a terminal error, so the bounded repair
-        # loop runs; the model re-offers the same stale plan and the repeated-action
-        # stop ends the session. The case proves three things at once: the stale patch
-        # never reaches the file, the refusal does not become an unbounded retry, and
-        # the framework refuses the model's `satisfied: true` claim because no
-        # configured check passed.
+        # A stale `expected_sha256` is refused by the patch preflight before any
+        # write. Since D-8's committed-intent guard the refusal is a terminal
+        # ToolPolicyError: the agent cannot tell a lying digest from real drift,
+        # so it stops instead of retrying. The case proves the stale patch never
+        # reaches the file and that no bounded loop can talk the refusal into a
+        # retry.
         def run_stale_digest(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
             stale = action_plan(from: 40, to: 42, digest: "0" * 64)
             model = scripted_model(
-              plans: [plan(read_step("broken.rb")), stale, stale],
-              reviews: 3,
+              plans: [plan(read_step("broken.rb")), stale],
+              reviews: 2,
               verification: verified("Broken.answer is 42.", true)
             )
             execute(
@@ -965,15 +965,12 @@ module Tamoz
               allow_changes: true,
               checks: answer_check,
               ask: ->(**) { "approve" },
-              expected_terminal: %w[completed],
+              expected_terminal: %w[tool_error],
               oracle: lambda do |_result, events|
                 mutated = events.any? do |event|
                   event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
                 end
-                stopped = events.any? do |event|
-                  event.type == :repair_stopped && event.data.fetch("reason") == "repeated_action"
-                end
-                !mutated && stopped &&
+                !mutated &&
                   File.read(File.join(root, "broken.rb")) == value_source(40)
               end,
               requires_check: true,

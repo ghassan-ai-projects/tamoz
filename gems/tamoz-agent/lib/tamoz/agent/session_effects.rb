@@ -309,8 +309,7 @@ module Tamoz
           session_id: session_id,
           workspace_root: @configuration.toolbox.root.to_s
         )
-        decision = approval_engine.decide_or_reuse(request, step_scope: step_scope)
-        decision
+        approval_engine.decide_or_reuse(request, step_scope: step_scope)
       end
 
       def resolve_decision(decision_id:, answer:, scope:)
@@ -323,25 +322,9 @@ module Tamoz
 
       private
 
-      def approval_argv(tool, arguments)
-        case tool
-        when 'run_check' then [arguments['name']].compact
-        when 'git' then Array(arguments['argv'])
-        when 'apply_patch'
-          [arguments['path'], arguments['before'], arguments['after']].compact
-        when 'create_file' then [arguments['path'], arguments['content']].compact
-        else []
-        end
-      end
+      def approval_argv(tool, arguments) = RequestProjection.argv(tool, arguments)
 
-      def approval_targets(tool, arguments)
-        path = arguments['path']
-        return [] unless %w[read_file list_directory search_text apply_patch create_file].include?(tool) && path
-
-        [path]
-      end
-
-      private
+      def approval_targets(tool, arguments) = RequestProjection.targets(tool, arguments)
 
       def mcp_entry(source, name)
         return unless source.name?(name)

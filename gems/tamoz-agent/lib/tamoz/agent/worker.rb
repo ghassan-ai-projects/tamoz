@@ -722,8 +722,7 @@ module Tamoz
       # that produced it, which is internal detail and unbounded. A completion
       # that verified nothing still owes the channel a terminal message, so it
       # says so plainly rather than delivering an empty one.
-      # :reek:UtilityFunction -- a pure function of the view.
-      # rubocop:disable Layout/LineLength -- the message remains one bounded
+      # :reek:UtilityFunction -- a pure function of the view. # -- the message remains one bounded
       # deterministic projection of the terminal state.
       def completion_text(view)
         answer = view.state&.dig(:verification, "answer").to_s
@@ -738,7 +737,6 @@ module Tamoz
            "Next action: #{TerminalProgress.next_action(view.terminal&.fetch('reason', nil))}"].compact.reject(&:empty?).join("\n")
         end
       end
-      # rubocop:enable Layout/LineLength
 
       def blocked_text(view)
         stop_text(view, reason: 'effect_unknown')
@@ -974,14 +972,10 @@ module Tamoz
       end
 
       def lane_ask(thread_id, now:)
-        @ask_cache ||= {}
+        engine = @runtime.approval_engine
         key = "profile:#{@runtime.thread_profile(thread_id) || 'default'}"
-        cached = @ask_cache[key]
-        return cached[:ask] if cached && now - cached[:at] < 30
-
-        ask = @runtime.approval_engine.policy_for(key).ask
-        @ask_cache[key] = { at: now, ask: ask }
-        ask
+        document = engine.policy_for(key)
+        (@ask_cache ||= {})[[key, document.policy_rev]] ||= document.ask
       end
 
       def apply_timeout_denial(thread_id)
@@ -1109,7 +1103,7 @@ module Tamoz
           "worker.error" => "tamoz.worker.error",
           "schedule.materialized" => "tamoz.worker.schedule.materialized",
           "schedule.error" => "tamoz.worker.schedule.error"
-        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil } # rubocop:disable Layout/LineLength
+        }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil }
         return unless name && Tamoz::Observability::Catalog.registered?(name)
 
         correlation = {}

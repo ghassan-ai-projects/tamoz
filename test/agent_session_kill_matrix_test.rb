@@ -204,16 +204,22 @@ class AgentSessionKillMatrixTest < Minitest::Test
         abort("wrong") unless File.read("app.rb") == "value = 2\\n"
       end
     CHECK
+    check_command = [RbConfig.ruby, "-e", check_script]
     toolbox = Tamoz::Agent::Toolbox.new(
       root: WORKSPACE,
       allow_changes: true,
-      checks: {"answer" => [RbConfig.ruby, "-e", check_script]}
+      checks: {"answer" => check_command}
     )
     session = Tamoz::Agent::Session.new(
       model: Model.new(ENV.fetch("TAMOZ_BEFORE_DIGEST"), method(:log)),
       toolbox:,
       checkpointer: adapter,
-      model_call_safety: ENV.fetch("TAMOZ_MODEL_SAFETY", "idempotent").to_sym
+      model_call_safety: ENV.fetch("TAMOZ_MODEL_SAFETY", "idempotent").to_sym,
+      # The kill matrix calibrates its seams around an approval BEFORE every
+      # mutation: under the review profile workspace_write asks, so the
+      # apply_patch/create_file approval checkpoint exists again (policy data —
+      # the implement profile would auto-allow the patch and shift every seam).
+      approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "review")
     )
     thread = "session.kill"
 
@@ -248,6 +254,46 @@ class AgentSessionKillMatrixTest < Minitest::Test
     while guard < 8
       guard += 1
       view = session.view(thread:)
+      if (blocked = view.blocked)
+        # The operator surface (cli.rb resolve_effect): attest the truth by
+        # re-running the configured check, then record the verdict on the
+        # effect journal. Only TOOL effects are attestable this way; a blocked
+        # provider call stays blocked. The turn itself was finalized around the
+        # unknown outcome, so a follow-up continue is expected to report the
+        # stale request rather than invent new work.
+        if blocked.fetch("operation").start_with?("tool.")
+          log("attest:#{blocked.fetch('effect_key')}")
+          ok = system(*check_command, chdir: WORKSPACE)
+          log("resolve:#{blocked.fetch('effect_key')}")
+          session.resolve_effect(
+            thread:,
+            effect_key: blocked.fetch("effect_key"),
+            status: ok ? :succeeded : :failed,
+            actor: "kill-matrix-child",
+            evidence: {"how" => "re-ran the configured check"},
+            owner_id: "owner.resolve.#{Process.pid}"
+          )
+          log("resolved:#{blocked.fetch('effect_key')}:#{ok ? 'succeeded' : 'failed'}")
+          request_id = (1..9).find do |candidate|
+            session.app.durable_runner.fetch(thread:, request_id: "r#{candidate}").nil?
+          end
+          break unless request_id
+
+          log("continue:r#{request_id}")
+          begin
+            session.continue(
+              thread:,
+              request_id: "r#{request_id}",
+              owner_id: "owner.continue.#{Process.pid}"
+            )
+          rescue Tamoz::Graph::StaleRequestError
+            log("continue:finalized")
+          end
+          # The verdict is journaled; the finalized turn stays as recorded.
+          break
+        end
+        log("blocked-unresolvable:#{blocked.fetch('operation')}")
+      end
       break if view.interrupts.empty?
 
       request_id = (1..9).find do |candidate|
@@ -411,14 +457,24 @@ class AgentSessionKillMatrixTest < Minitest::Test
       result = JSON.parse(File.read(context.fetch(:result)))
       events = File.readlines(context.fetch(:log), chomp: true)
 
-      assert_equal 1, events.count("check:ran"),
-                   "an unsafe check whose outcome is unknown must never be repeated"
+      # The FRAMEWORK never repeats the command: the only second execution is the
+      # operator's attestation (the re-run between the attest and resolve marks).
+      # The turn stays finalized around the unknown outcome — the operator's
+      # verdict is journaled, not silently converted into progress.
+      framework_runs = events.take_while { |entry| !entry.start_with?("attest:") }
+                             .count("check:ran")
+      assert_equal 1, framework_runs,
+                   "an unsafe check whose outcome is unknown must never be repeated by the framework"
+      assert_equal 2, events.count("check:ran"), "exactly one operator attestation may re-run it"
       assert_equal 1, events.count("publish:apply_patch"),
                    "the filesystem effect must have been applied exactly once"
+      assert_equal ["continue:finalized"], events.grep(/^continue:/),
+                   "a resolved block must not be continued into invented work"
+      assert(events.any? { |entry| entry.start_with?("resolved:") && entry.end_with?(":succeeded") },
+             "the operator verdict must be journaled")
       assert_equal "blocked", result.fetch("status")
-      refute_nil result.fetch("blocked")
       assert_equal "effect_unknown", result.fetch("terminal").fetch("reason")
-      assert_equal "tool.run_check", result.fetch("blocked").fetch("operation")
+      assert_equal "tool.run_check", result.fetch("terminal").fetch("blocked").fetch("operation")
       assert result.fetch("integrity_ok")
       assert_equal 1, result.fetch("execution_ids").length
     end
@@ -577,8 +633,10 @@ class AgentSessionKillMatrixTest < Minitest::Test
 
     approvals = result.fetch("approvals")
     problems << "#{name}: #{approvals.length} approvals" unless approvals.length == 2
-    unless approvals.all? { |record| record.fetch("decision") == "approve" }
-      problems << "#{name}: an approval was not granted"
+    unless %w[apply_patch run_check].all? do |tool|
+      approvals.any? { |record| record.fetch("tool") == tool && record.fetch("decision") == "approve" }
+    end
+      problems << "#{name}: a mutation or check approval was not granted"
     end
 
     receipts = result.fetch("effect_receipts").map { |record| record.fetch("operation") }
@@ -702,9 +760,11 @@ class AgentSessionKillMatrixTest < Minitest::Test
     # path regardless, and a missing runtime dependency could not surface here.
     # Clearing both makes the constraint real: `tamoz/sqlite` requires
     # `tamoz/scheduler` and `tamoz/stream`, and this is where that shows.
+    # The list mirrors the gems' real require edges: tamoz/sqlite and
+    # tamoz/agent both require tamoz/approval (ADR-049 stores + engine).
     load_paths = %w[
       tamoz-comms tamoz-core tamoz-graph tamoz-scheduler tamoz-stream
-      tamoz-sqlite tamoz-tools tamoz-observability tamoz-agent
+      tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability tamoz-agent
     ].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]
     end

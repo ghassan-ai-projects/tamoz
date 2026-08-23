@@ -57,6 +57,40 @@ class ApprovalPolicyDocumentTest < Minitest::Test
     refute_equal document.policy_rev, review.policy_rev
   end
 
+  def test_tier_advertising_session_without_grant_key_is_refused_at_load
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'policy.yaml')
+      File.write(path, <<~YAML)
+        version: 1
+        tool_tiers: {}
+        fallback_tier:
+          tier: read
+          verb: unknown
+          grant_scopes: [once]
+        tiers:
+          read:
+            default: allow
+          workspace_write:
+            default: ask
+            grant_scopes: [once, session]
+        grant_keys: {}
+        rules: []
+        ask:
+          timeout_s: 900
+          on_timeout: park
+        evidence:
+          approve: filesystem_operator
+          deny: chat_bound
+        simulations: []
+      YAML
+
+      error = assert_raises Approval::InvalidPolicyError do
+        Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+      end
+      assert_includes error.message, 'advertises :session'
+    end
+  end
+
   def test_no_op_profile_overlay_keeps_the_policy_rev
     Dir.mktmpdir do |dir|
       path = File.join(dir, 'policy.yaml')

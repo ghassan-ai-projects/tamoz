@@ -25,7 +25,10 @@ module Tamoz
         expected = arguments.fetch('expected_sha256')
         actual = Digest::SHA256.hexdigest(content)
         unless actual == expected
-          raise ToolArgumentError, "file changed: expected digest #{expected}, observed #{actual}"
+          # D-8 committed intent: the digest the operator approved is a claim about
+          # existing bytes, so a mismatch is a policy refusal (ToolPolicyError,
+          # terminal), never a repairable argument value.
+          raise ToolPolicyError, "file changed: expected digest #{expected}, observed #{actual}"
         end
 
         replacements = if arguments.key?('replacements')

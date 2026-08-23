@@ -620,7 +620,15 @@ class SQLiteRawOracleTest < Minitest::Test
     selector:,
     database_path:
   )
-    load_paths = %w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-evals tamoz-sqlite].flat_map do |name|
+    # The child requires tamoz/evals, whose real dependency edge reaches
+    # tamoz/agent and tamoz/sqlite — and through them comms, approval, tools,
+    # observability, and mcp. A missing runtime dependency surfaces here as an
+    # instant child LoadError, which reads as "never authorized".
+    load_paths = %w[
+      tamoz-core tamoz-comms tamoz-graph tamoz-scheduler tamoz-stream
+      tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability tamoz-mcp
+      tamoz-agent tamoz-evals
+    ].flat_map do |name|
       ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
     end
     descriptor = layout.descriptor

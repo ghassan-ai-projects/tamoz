@@ -39,6 +39,7 @@ module Tamoz
             INSERT INTO tamoz_approval_grants
               (key, scope, session_id, policy_rev, created_at_ms, expires_at_ms)
             VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(key, scope, session_id, policy_rev) DO NOTHING
           SQL
         end
         nil

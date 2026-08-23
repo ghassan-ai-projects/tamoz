@@ -248,10 +248,14 @@ class AgentNonAsciiSessionTest < Minitest::Test
   #     construction (`{"graph_status" => …}`, the typed DR-4 payloads)
   #   wire#decode_namespace                  unreachable — namespace parts are
   #     component ids; non-ASCII is refused before this comparison
+  #   openclaw_durable_cli_adapter#decode_journal_result  COVERED (an episode
+  #     result carrying the non-ASCII answer is decoded back through the
+  #     adapter's journal reader)
   #
-  # The last three are defence in depth. They are named here so the boundary is
+  # The last four are defence in depth. They are named here so the boundary is
   # a recorded decision rather than an accident.
   CANONICALITY_SITES = {
+    "tamoz-evals/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
     "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_record_reader.rb" => 1,
