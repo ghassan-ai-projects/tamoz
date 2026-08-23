@@ -21,7 +21,7 @@ module Tamoz
       ].freeze
 
       def self.parse(value)
-        document = Plan.parse_object(value)
+        document = Tamoz::Core.parse_object(value)
         reject_unknown_keys(document)
         name = required_string(document, 'route')
         raise ProtocolError, "unknown route #{name.inspect}" unless NAMES.include?(name)

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
-
 module Tamoz
   module Agent
     Step = Data.define(:id, :purpose, :tool, :arguments, :verification) do
@@ -12,11 +10,11 @@ module Tamoz
         raise ProtocolError, "plan step arguments must be an object" unless arguments.is_a?(Hash)
 
         super(
-          id: Plan.string(id, name: "plan step id"),
-          purpose: Plan.string(purpose, name: "plan step purpose"),
+          id: Tamoz::Core.string(id, name: "plan step id"),
+          purpose: Tamoz::Core.string(purpose, name: "plan step purpose"),
           tool: tool&.dup&.freeze,
-          arguments: Plan.deep_freeze(arguments),
-          verification: Plan.string(verification, name: "plan step verification")
+          arguments: Tamoz::Core.deep_freeze(arguments),
+          verification: Tamoz::Core.string(verification, name: "plan step verification")
         )
       end
 
@@ -35,7 +33,7 @@ module Tamoz
       MAX_STEPS = 12
 
       def self.parse(value)
-        document = parse_object(value)
+        document = Tamoz::Core.parse_object(value)
         raw_steps = document.fetch("steps")
         raise ProtocolError, "plan steps must be an array" unless raw_steps.is_a?(Array)
 
@@ -63,42 +61,10 @@ module Tamoz
         raise ProtocolError, "invalid plan: #{error.message}"
       end
 
-      def self.parse_object(value)
-        return value.transform_keys(&:to_s) if value.is_a?(Hash)
-
-        text = String(value).strip
-        text = text.delete_prefix("```json").delete_prefix("```").delete_suffix("```").strip
-        document = JSON.parse(text)
-        raise ProtocolError, "model response must be a JSON object" unless document.is_a?(Hash)
-
-        document
-      rescue JSON::ParserError => error
-        raise ProtocolError, "model returned invalid JSON: #{error.message}"
-      end
-
-      # P16: the deep freezer is homed in tamoz-core so the skills compiler (in
-      # tamoz-tools) and the durable records share one implementation. The core
-      # version raises `Tamoz::Error` for a non-JSON value where this one raised
-      # `ProtocolError`; the branch is unreachable for the JSON-shaped values both
-      # callers pass, so behavior is identical.
-      def self.deep_freeze(value) = Tamoz::Core.deep_freeze(value)
-
-      def self.string(value, name:)
-        raise ProtocolError, "#{name} must be a string" unless value.is_a?(String)
-
-        value.dup.freeze
-      end
-
-      def self.strings(value, name:)
-        raise ProtocolError, "#{name} must be an array" unless value.is_a?(Array)
-
-        value.map { |entry| string(entry, name: "#{name} entry") }.freeze
-      end
-
       def initialize(goal:, done_when:, steps:)
         super(
-          goal: Plan.string(goal, name: "plan goal"),
-          done_when: Plan.strings(done_when, name: "plan done_when"),
+          goal: Tamoz::Core.string(goal, name: "plan goal"),
+          done_when: Tamoz::Core.strings(done_when, name: "plan done_when"),
           steps: steps.freeze
         )
       end

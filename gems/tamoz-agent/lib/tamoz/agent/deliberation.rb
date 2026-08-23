@@ -274,10 +274,10 @@ module Tamoz
       end
 
       def parse_review(raw)
-        document = Plan.parse_object(raw)
-        decision = Plan.string(document.fetch("decision"), name: "review decision")
-        issues = Plan.strings(document.fetch("issues"), name: "review issues")
-        rationale = Plan.string(document.fetch("rationale"), name: "review rationale")
+        document = Tamoz::Core.parse_object(raw)
+        decision = Tamoz::Core.string(document.fetch("decision"), name: "review decision")
+        issues = Tamoz::Core.strings(document.fetch("issues"), name: "review issues")
+        rationale = Tamoz::Core.string(document.fetch("rationale"), name: "review rationale")
         unless %w[accept revise needs_input].include?(decision)
           raise ProtocolError, "review decision must be accept, revise, or needs_input"
         end
@@ -291,10 +291,10 @@ module Tamoz
       end
 
       def parse_verification(raw)
-        document = Plan.parse_object(raw)
-        answer = Plan.string(document.fetch("answer"), name: "verification answer")
+        document = Tamoz::Core.parse_object(raw)
+        answer = Tamoz::Core.string(document.fetch("answer"), name: "verification answer")
         satisfied = document.fetch("satisfied")
-        evidence = Plan.strings(document.fetch("evidence"), name: "verification evidence")
+        evidence = Tamoz::Core.strings(document.fetch("evidence"), name: "verification evidence")
         unless satisfied == true || satisfied == false
           raise ProtocolError, "verification satisfied must be boolean"
         end

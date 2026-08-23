@@ -4,11 +4,12 @@ module Tamoz
   module Agent
     class Error < Tamoz::Error; end
 
-    # Raised when a model document cannot be parsed. Its message may quote provider
-    # text (`Plan.parse` interpolates `JSON::ParserError#message`, `RubyLLMModel`
-    # interpolates the provider exception), so it deliberately does NOT include
-    # `Tamoz::DisclosableMessage`.
-    class ProtocolError < Error; end
+    # Raised when a model document cannot be parsed. Defined in tamoz-core next
+    # to the parse helpers (the durable-memory consolidation path parses without
+    # an agent edge) and aliased here, exactly like the D-7 tool-error family:
+    # the alias never changes `.name`, so every rescue site and serialized name
+    # keeps resolving identically.
+    ProtocolError = Tamoz::Core::ProtocolError
 
     # P0B/§5: a diagnosis catalog (trusted SituationSpec config, not model
     # output) is structurally invalid — empty, missing `unknown`, duplicate or

@@ -322,11 +322,11 @@ module Tamoz
       end
 
       def parse_decision(raw, iteration)
-        document = Plan.parse_object(raw)
+        document = Tamoz::Core.parse_object(raw)
         unknown = document.keys - %w[decision capability_id arguments answer evidence_refs]
         raise ProtocolError, 'adaptive decision has unknown fields' unless unknown.empty?
 
-        kind = Plan.string(document.fetch('decision'), name: 'adaptive decision')
+        kind = Tamoz::Core.string(document.fetch('decision'), name: 'adaptive decision')
         raise ProtocolError, 'adaptive decision must be action or final' unless DECISION_KIND.include?(kind)
 
         expected_keys = kind == 'action' ? %w[decision capability_id arguments] : %w[decision answer evidence_refs]
@@ -337,12 +337,12 @@ module Tamoz
                      arguments = document.fetch('arguments')
                      raise ProtocolError, 'adaptive action arguments must be an object' unless arguments.is_a?(Hash)
 
-                     capability_id = Plan.string(document.fetch('capability_id'), name: 'capability_id')
+                     capability_id = Tamoz::Core.string(document.fetch('capability_id'), name: 'capability_id')
                      SessionRecords.reject_credential_values!(arguments)
-                     { decision: kind, capability_id:, arguments: Plan.deep_freeze(arguments) }
+                     { decision: kind, capability_id:, arguments: Tamoz::Core.deep_freeze(arguments) }
                    else
-                     answer = Plan.string(document.fetch('answer'), name: 'answer')
-                     evidence_refs = Plan.strings(document.fetch('evidence_refs'), name: 'evidence_refs')
+                     answer = Tamoz::Core.string(document.fetch('answer'), name: 'answer')
+                     evidence_refs = Tamoz::Core.strings(document.fetch('evidence_refs'), name: 'evidence_refs')
                      { decision: kind, answer:, evidence_refs: }
                    end
         [decision, SessionRecords.digest('adaptive_iteration' => iteration, **decision)]

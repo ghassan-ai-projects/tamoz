@@ -218,8 +218,8 @@ module Tamoz
 
         def parse_proposal(response)
           text = response.is_a?(String) ? response : JSON.generate(response)
-          document = Plan.parse_object(text)
-          statement = Plan.string(document.fetch("statement"), name: "consolidation statement")
+          document = Tamoz::Core.parse_object(text)
+          statement = Tamoz::Core.string(document.fetch("statement"), name: "consolidation statement")
           kind = document.fetch("epistemic_kind").to_sym
           unless %i[reported inferred].include?(kind)
             raise MemoryConsolidationError, "consolidation output must be reported or inferred"

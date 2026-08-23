@@ -163,7 +163,7 @@ module Tamoz
         def emit_recall(trace, record)
           trace << Tamoz::Agent::Event.new(
             type: RECALL_EVENT,
-            data: Plan.deep_freeze(
+            data: Tamoz::Core.deep_freeze(
               "memory_id" => record.memory_id,
               "record_version" => record.record_version,
               "layer" => record.layer.to_s,
@@ -179,7 +179,7 @@ module Tamoz
           dropped.each do |record|
             trace << Tamoz::Agent::Event.new(
               type: :memory_dropped,
-              data: Plan.deep_freeze(
+              data: Tamoz::Core.deep_freeze(
                 "memory_id" => record.memory_id,
                 "reason" => "automatic_injection_budget"
               )
