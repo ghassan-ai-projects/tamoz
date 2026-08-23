@@ -126,7 +126,7 @@ module Tamoz
           type:, risk_class:,
           parameter_schema: schema.freeze,
           parameter_schema_digest: schema_digest ? Tamoz::Core.normalize_digest(schema_digest.to_s) : nil,
-          presets: deep_freeze(presets),
+          presets: Tamoz::Core.deep_freeze(presets),
           model_writable_fields: model_writable.map(&:to_s).freeze,
           description: description.freeze,
           policy: (raw[:policy] || raw["policy"] || {}).freeze,
@@ -160,18 +160,6 @@ module Tamoz
         end
       end
       private_class_method :validate_presets!
-
-      def self.deep_freeze(value)
-        case value
-        when Hash
-          value.to_h { |key, entry| [key, deep_freeze(entry)] }.freeze
-        when Array
-          value.map { |entry| deep_freeze(entry) }.freeze
-        else
-          value
-        end
-      end
-      private_class_method :deep_freeze
 
       def initialize(entries)
         types = entries.map(&:type)

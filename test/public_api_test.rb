@@ -123,6 +123,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Core::ToolPolicyError" => {},
           "Tamoz::Core::VERSION" => {},
           "Tamoz::Core.canonical" => {},
+          "Tamoz::Core.deep_freeze" => {},
           "Tamoz::Core.parse_object" => {},
           "Tamoz::Core.string" => {},
           "Tamoz::Core.strings" => {},

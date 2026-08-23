@@ -6,9 +6,11 @@ module Tamoz
 
     # Raised when a model document cannot be parsed. Defined in tamoz-core next
     # to the parse helpers (the durable-memory consolidation path parses without
-    # an agent edge) and aliased here, exactly like the D-7 tool-error family:
-    # the alias never changes `.name`, so every rescue site and serialized name
-    # keeps resolving identically.
+    # an agent edge) and aliased here, exactly like the D-7 tool-error family.
+    # The alias keeps every rescue site on one class object, but unlike D-7 it
+    # re-parents the error (a sibling of `Error` under `Tamoz::Error`) and its
+    # serialized `.name` intentionally reads `Tamoz::Core::ProtocolError` —
+    # boundary rescues name the class explicitly.
     ProtocolError = Tamoz::Core::ProtocolError
 
     # P0B/§5: a diagnosis catalog (trusted SituationSpec config, not model

@@ -2946,6 +2946,11 @@ module Tamoz
           # keeps the terminal classification explicit if the alias ever drifts.
           rescue Tamoz::Agent::ToolError, Tamoz::Core::ToolError
             terminal = "tool_error"
+          # P0-D: ProtocolError re-parented from Agent::Error to a sibling of it
+          # (`Tamoz::Error`); name both spellings so a leaking parse failure still
+          # classifies as "agent_error" rather than "unexpected_error".
+          rescue Tamoz::Agent::ProtocolError, Tamoz::Core::ProtocolError
+            terminal = "agent_error"
           rescue Tamoz::Agent::Error
             terminal = "agent_error"
           rescue StandardError

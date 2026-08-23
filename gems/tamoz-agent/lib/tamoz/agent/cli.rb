@@ -106,6 +106,11 @@ module Tamoz
       # their backtraces into clean "tamoz: …" exit-1 output.
       rescue Tamoz::Core::ToolError => error
         handle_fatal_error(error)
+      # P0-D: the parse helpers moved to tamoz-core, re-parenting ProtocolError
+      # from Agent::Error to a sibling of it (`Tamoz::Error`). Catch explicitly,
+      # same rule as the ToolError family above.
+      rescue Tamoz::Core::ProtocolError => error
+        handle_fatal_error(error)
       rescue Tamoz::CheckpointConflictError => error
         handle_fatal_error(error)
       end
