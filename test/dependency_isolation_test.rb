@@ -41,6 +41,25 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  # P1: the kernel gem loads core + tools and nothing else. Kernel files
+  # install under lib/tamoz/agent/ just like the runtime gem's, so a bare
+  # "tamoz/agent" refute cannot work — allowlist exactly the union of the
+  # three gems' own trees (derived from their roots); any loaded feature
+  # outside the union is an upward or sideways edge.
+  def test_kernel_loads_core_and_tools_only
+    allowed = %w[tamoz-core tamoz-tools tamoz-agent-kernel].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/agent_kernel")
+
+    assert_includes features, "tamoz/core.rb"
+    assert_includes features, "tamoz/tools.rb"
+    assert_includes features, "tamoz/agent_kernel.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
   def test_agent_defers_provider_loading_and_does_not_load_evals_or_sqlite
     features = loaded_features_after("tamoz/agent")
 

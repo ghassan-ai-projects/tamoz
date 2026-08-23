@@ -46,6 +46,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::EffectDispatcher" => {},
           "Tamoz::Agent::Error" => {},
           "Tamoz::Agent::Event" => {},
+          "Tamoz::Agent::GraphVersions" => {},
           "Tamoz::Agent::Kernel::VERSION" => {},
           "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {},
           "Tamoz::Agent::Plan" => {},

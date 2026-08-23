@@ -19,6 +19,9 @@ a base layer instead of the full runtime.
 - **Seams**: `EffectDispatcher` (deterministic logical-key side effects),
   `WitnessGateway` / `WitnessVerifier` (provenance), `ReceiptBudgetController`,
   `EpisodeModelTransport` (digest-bound wire client).
+- **Graph versions**: `GraphVersions` — the durable session-graph family
+  constants (`GRAPH_VERSION`, `CURRENT`, `ADAPTIVE`, `COMPACTION`,
+  `SUPPORTED_GRAPH_VERSIONS`), consumable without loading the session.
 - **Catalogs**: `DiagnosisCatalog`, `IntentCatalog`, `SkillSet`.
 
 ## Dependencies

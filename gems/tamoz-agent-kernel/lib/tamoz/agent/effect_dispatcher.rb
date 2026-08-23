@@ -123,6 +123,9 @@ module Tamoz
         [key, logical_key]
       end
 
+      # Returns [decision, reconciliation_string, recovered] — the string feeds
+      # the Outcome's `reconciliation` field; `recovered` is the reconciler's
+      # value, nil whenever the attempt budget was exhausted before reconciling.
       def run_reconciliation(effects, key, decision, actor:, reconcile:)
         if decision.record.current_attempt >= MAX_ATTEMPTS
           decision = effects.reconcile(
@@ -163,7 +166,10 @@ module Tamoz
         after_start&.call
         begin
           value = perform.call
-        rescue ToolError => error
+        # Spelled fully: the Tamoz::Agent::ToolError spelling is an alias that
+        # only exists after the runtime facade loads, and this gem must rescue
+        # correctly on its own.
+        rescue Tamoz::Tools::ToolError => error
           detail = tool_error_detail(error)
           effects.complete(key:, attempt_token: token, status: :failed, error: detail)
           return recorded_outcome(

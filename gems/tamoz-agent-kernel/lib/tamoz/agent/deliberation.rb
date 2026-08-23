@@ -236,7 +236,10 @@ module Tamoz
         validator = capabilities || toolbox
         validator.validate(step.tool, step.arguments)
         []
-      rescue ToolError => error
+      # Spelled fully: the Tamoz::Agent::ToolError spelling is an alias that only
+      # exists after the runtime facade loads, and this gem must rescue correctly
+      # on its own.
+      rescue Tamoz::Tools::ToolError => error
         ["#{prefix} is invalid: #{error.message}"]
       end
 
