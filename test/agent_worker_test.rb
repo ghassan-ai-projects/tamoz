@@ -500,7 +500,7 @@ class AgentWorkerTest < Minitest::Test
   # Failing it dropped a message the user sent in good faith; closing the
   # paused occurrence out from under the approval stranded the thread forever.
   def test_a_turn_queued_behind_a_paused_turn_waits_then_runs_after_approval
-    with_runtime(unattended: {"reconcilable" => []}) do |rt|
+    with_runtime(approval_profile: "unattended") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       # First turn pauses for approval (apply_patch is not preauthorized).
       rt.cli(%W[queue add --task Fix\ note.txt --thread t1 --profile trusted], factory: edit_factory)
@@ -525,6 +525,9 @@ class AgentWorkerTest < Minitest::Test
       assert_equal 0, rt.cli(%W[approve #{approval} --json]), rt.err
       rt.cli(%w[worker --once --json], factory: read_only_factory)
 
+      if ENV['TAMOZ_DEBUG']
+        warn('DIAG ev=' + rt.events.map { |e| [e['event'], e['reason']].compact.join(':') }.inspect)
+      end
       completed = rt.events.select { |event| event["event"] == "request.completed" }
       assert_equal 2, completed.length, "both the approved turn and the queued message must complete"
       assert_equal 1, rt.events.count { |event| event["event"] == "request.paused" },

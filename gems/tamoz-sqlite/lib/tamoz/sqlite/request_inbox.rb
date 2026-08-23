@@ -13,7 +13,9 @@ module Tamoz
     # keeping enqueue, reads, claims, recovery, and transitions separately cohesive.
     class RequestInbox
       REQUEST_SELECT = RequestInboxRows::REQUEST_SELECT
-      FRESH_EXECUTION_OPERATIONS = %w[turn fork redirect].freeze
+      # A mode switch claims against no active checkpoint: it addresses idle
+      # threads too, so it carries its own execution identity like a turn.
+      FRESH_EXECUTION_OPERATIONS = %w[turn fork redirect mode_switch].freeze
 
       def initialize(store)
         @store = store
@@ -101,6 +103,14 @@ module Tamoz
 
       def mark_request_running(lease:, request_id:, execution_id:)
         @transitions.mark_request_running(
+          lease:,
+          request_id:,
+          execution_id:
+        )
+      end
+
+      def mark_request_completed(lease:, request_id:, execution_id:)
+        @transitions.mark_request_completed(
           lease:,
           request_id:,
           execution_id:

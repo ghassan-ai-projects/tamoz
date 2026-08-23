@@ -14,7 +14,7 @@ module Tamoz
       CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
       DEFAULT_CHECK_SAFETY = :unsafe
 
-      attr_reader :checks, :check_safeties, :allowed_tools, :approval_required
+      attr_reader :checks, :check_safeties, :allowed_tools
 
       def initialize(policy:)
         @checks = normalize_checks(policy.fetch(:checks))
@@ -22,11 +22,6 @@ module Tamoz
         @allowed_tools = normalize_allowed_tools(
           policy.fetch(:allowed_tools),
           available_tools(policy.fetch(:base_available_tools), policy.fetch(:allow_changes))
-        )
-        @approval_required = normalize_approval_required(
-          policy.fetch(:approval_required),
-          @allowed_tools,
-          policy.fetch(:default_approval_required)
         )
         freeze
       end
@@ -116,21 +111,6 @@ module Tamoz
               "(available: #{available.sort.join(', ')})"
       end
 
-      def normalize_approval_required(value, allowed, default)
-        return default if value.nil?
-        unless value.is_a?(Array) &&
-               value.all?(String) && value.uniq == value
-          raise ArgumentError, 'approval_required must be an Array of distinct tool names'
-        end
-
-        unknown = value - allowed
-        unless unknown.empty?
-          raise ArgumentError,
-                "approval_required must be a subset of allowed_tools: #{unknown.sort.join(', ')}"
-        end
-
-        value.map { |name| name.dup.freeze }.freeze
-      end
     end
   end
 end

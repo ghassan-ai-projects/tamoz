@@ -98,12 +98,12 @@ class AgentSkillsToolboxTest < Minitest::Test
     assert_equal first.prompt_surface_digest, toolbox(skills: first.skills).prompt_surface_digest
   end
 
-  def test_skill_tools_never_require_approval_and_declare_no_effect_output
+  def test_skill_tools_are_read_classified_and_declare_no_effect_output
     write_skill("fix-answer")
     box = toolbox(skills: snapshot, allow_changes: true, checks: {"answer" => ["true"]})
 
-    refute box.approval_required?("load_skill")
-    refute box.approval_required?("read_skill_resource")
+    assert_includes box.read_only_names, "load_skill"
+    assert_includes box.read_only_names, "read_skill_resource"
     assert_equal 0, box.maximum_effect_output_bytes("load_skill")
     assert_equal 0, box.maximum_effect_output_bytes("read_skill_resource")
     refute_includes Tamoz::Evals::Harness::AgentRunAudit::EFFECT_TOOLS, "load_skill"

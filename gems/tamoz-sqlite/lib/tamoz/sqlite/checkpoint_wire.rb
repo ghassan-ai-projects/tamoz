@@ -13,7 +13,7 @@ module Tamoz
     class CheckpointWire
       REQUEST_STATUSES = %w[queued claimed running redirecting completed failed].freeze
       REQUEST_OPERATIONS = %w[
-        turn resume retry continue fork redirect
+        turn resume retry continue fork redirect mode_switch
       ].freeze
       DELIVERY_MODES = %w[queue redirect].freeze
 

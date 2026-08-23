@@ -41,6 +41,9 @@ tiers:
     default: allow
   workspace_write:
     default: allow
+    # A profile may tighten this tier to :ask (e.g. unattended); an ask must be
+    # grantable, or approving it could never resolve.
+    grant_scopes: [once, session]
   local_execute:
     default: ask
     grant_scopes: [once, session]

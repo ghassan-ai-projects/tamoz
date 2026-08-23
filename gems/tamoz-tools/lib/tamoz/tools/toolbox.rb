@@ -37,14 +37,13 @@ module Tamoz
       PROMPT_SURFACE_DOMAIN = ToolCatalog::PROMPT_SURFACE_DOMAIN
       CHECK_SAFETIES = %i[read_only idempotent unsafe].freeze
       DEFAULT_CHECK_SAFETY = :unsafe
-      DEFAULT_APPROVAL_REQUIRED = ToolCatalog::DEFAULT_APPROVAL_REQUIRED
       CREDENTIAL_ENV_PATTERN = CheckRunner::ENV_PATTERN
       CREDENTIAL_ENV_NAMES = CheckRunner::ENV_NAMES
       STAGING_PATTERN = StagingReaper::PATTERN
       STAGING_STALE_SECONDS = StagingReaper::DEFAULT_AGE
       MAX_REAPED_STAGING_FILES = StagingReaper::MAX_FILES
 
-      attr_reader :root, :checks, :check_timeout, :check_safeties, :approval_required, :skills, :skill_catalog, :reaped_staging, :catalog_digest, :prompt_surface_digest
+      attr_reader :root, :checks, :check_timeout, :check_safeties, :skills, :skill_catalog, :reaped_staging, :catalog_digest, :prompt_surface_digest
 
       def initialize(
         root:,
@@ -53,7 +52,6 @@ module Tamoz
         check_timeout: DEFAULT_CHECK_TIMEOUT,
         check_safeties: {},
         allowed_tools: nil,
-        approval_required: nil,
         skills: Skills::Snapshot.empty,
         reap_staging: true
       )
@@ -65,7 +63,7 @@ module Tamoz
         @check_timeout = check_timeout.to_f
         @skills = skills
         @skill_catalog = Skills::Catalog.new(skills)
-        catalog = ToolCatalog.new(allow_changes:, checks:, check_safeties:, allowed_tools:, approval_required:, skills:)
+        catalog = ToolCatalog.new(allow_changes:, checks:, check_safeties:, allowed_tools:, skills:)
         assign_catalog(catalog)
         @argument_validator = ToolArgumentValidator.new(
           names: @descriptions.keys, checks: @checks, path_resolver: @path_resolver, skill_catalog: @skill_catalog
@@ -102,7 +100,6 @@ module Tamoz
       def skill_catalog_digest = @skills.catalog_digest
       def skill_epoch = @skills.empty? ? Tamoz::Core::LEGACY_SKILL_EPOCH : @skills.epoch
       def action_capable? = @allow_changes
-      def approval_required?(name) = @approval_required.include?(String(name))
       def check_safety(name) = @catalog.check_safety(name)
 
       def maximum_effect_output_bytes(name)
@@ -183,7 +180,6 @@ module Tamoz
         @checks = catalog.checks
         @check_safeties = catalog.check_safeties
         @allowed_tools = catalog.allowed_tools
-        @approval_required = catalog.approval_required
         @descriptions = catalog.descriptions
         @catalog_digest = catalog.catalog_digest
         @prompt_surface_digest = catalog.prompt_surface_digest

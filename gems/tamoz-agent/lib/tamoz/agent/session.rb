@@ -74,6 +74,7 @@ module Tamoz
         max_plan_attempts: 3,
         max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
         approval_engine: nil,
+        approval_session_id: nil,
         model_call_safety: :idempotent,
         profile: nil,
         mcp: nil,
@@ -106,6 +107,10 @@ module Tamoz
         end
 
         verify_mcp_source!(mcp)
+        # Pipeline A: every durable session has exactly one policy owner. A
+        # caller that supplies none gets the bundled implement profile over
+        # memory stores — gating is never skipped, only defaulted.
+        approval_engine ||= Tamoz::Agent.build_approval_engine(profile_name: 'implement')
         @toolbox = toolbox
         @model = model
         @mcp = mcp
@@ -126,6 +131,7 @@ module Tamoz
           max_plan_attempts:,
           max_repair_attempts:,
           approval_engine:,
+          approval_session_id:,
           model_call_safety:,
           profile:,
           mcp:,
@@ -139,6 +145,8 @@ module Tamoz
           child_task_runtime:,
           transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
         }
+        @approval_engine = approval_engine
+        @approval_session_id = approval_session_id
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
         @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: ADAPTIVE_GRAPH_VERSION)
@@ -175,7 +183,7 @@ module Tamoz
 
         required = %i[
           mcp_catalogs catalogs names read_only_names name? read_only?
-          approval_required? maximum_effect_output_bytes validate effect_intent
+          maximum_effect_output_bytes validate effect_intent
           preview execute descriptors descriptor_for
         ]
         missing = required.reject { |method| mcp.respond_to?(method) }
@@ -610,6 +618,13 @@ module Tamoz
           owner_id: owner_id || SecureRandom.uuid
         )
         outcome(thread:, request_id:)
+      end
+
+      # ADR §2.3: a session that ends deletes its grant rows — grants never
+      # outlive the session they were remembered for.
+      def close
+        @approval_engine&.close_session(@approval_session_id) if @approval_session_id
+        nil
       end
 
       def view(thread:)

@@ -288,16 +288,57 @@ module Tamoz
         @configuration.capabilities.names(phase)
       end
 
-      def approval_required?(tool)
-        @configuration.capabilities.approval_required?(tool)
-      end
-
       def maximum_effect_output_bytes(tool)
         @configuration.capabilities.maximum_effect_output_bytes(tool)
       end
 
       def preview_for(tool, arguments)
         @configuration.capabilities.preview(tool, arguments)
+      end
+
+      # Pipeline A's one policy owner: build the engine Request from the
+      # prepared step and return the Decision. The argv/target projection is
+      # the only place tool argument structure is translated into grant-key
+      # material; unknown tools project nothing and fail closed to :once.
+      def decide_step_tool(tool:, arguments:, session_id:, step_scope: '')
+        request = approval_engine.build_request(
+          tool: tool,
+          argv: approval_argv(tool, arguments),
+          targets: approval_targets(tool, arguments),
+          effect_class: @configuration.capabilities.effect_class(tool),
+          session_id: session_id,
+          workspace_root: @configuration.toolbox.root.to_s
+        )
+        decision = approval_engine.decide_or_reuse(request, step_scope: step_scope)
+        decision
+      end
+
+      def resolve_decision(decision_id:, answer:, scope:)
+        approval_engine.resolve(decision_id: decision_id, answer: answer, scope: scope)
+      end
+
+      def approval_engine
+        @configuration.approval_engine
+      end
+
+      private
+
+      def approval_argv(tool, arguments)
+        case tool
+        when 'run_check' then [arguments['name']].compact
+        when 'git' then Array(arguments['argv'])
+        when 'apply_patch'
+          [arguments['path'], arguments['before'], arguments['after']].compact
+        when 'create_file' then [arguments['path'], arguments['content']].compact
+        else []
+        end
+      end
+
+      def approval_targets(tool, arguments)
+        path = arguments['path']
+        return [] unless %w[read_file list_directory search_text apply_patch create_file].include?(tool) && path
+
+        [path]
       end
 
       private

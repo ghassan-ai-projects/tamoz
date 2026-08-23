@@ -41,7 +41,6 @@ class AgentCapabilityBindingTest < Minitest::Test
     def name?(name) = @index.key?(String(name))
     def descriptor_for(name) = @index[String(name)]
     def read_only?(name) = @index.fetch(String(name)).effect_class == :read_only
-    def approval_required?(name) = record(:approval_required?, name) { !read_only?(name) }
     def maximum_effect_output_bytes(_name) = record(:maximum_effect_output_bytes) { 64 * 1024 }
     def validate(name, arguments) = record(:validate, name) { arguments }
     def preview(name, _arguments) = record(:preview, name) { "preview #{name}" }
@@ -208,7 +207,6 @@ class AgentCapabilityBindingTest < Minitest::Test
       source = mcp_source
       binding = Tamoz::Agent::CapabilityBinding.build(toolbox:, mcp: source)
 
-      binding.approval_required?("mcp:test-server/write")
       binding.maximum_effect_output_bytes("mcp:test-server/write")
       binding.preview("mcp:test-server/write", {"value" => "x"})
       binding.effect_intent("mcp:test-server/write", {"value" => "x"})
@@ -217,7 +215,6 @@ class AgentCapabilityBindingTest < Minitest::Test
 
       methods = source.calls.map(&:first)
 
-      assert_includes methods, :approval_required?
       assert_includes methods, :maximum_effect_output_bytes
       assert_includes methods, :preview
       assert_includes methods, :effect_intent
@@ -229,13 +226,16 @@ class AgentCapabilityBindingTest < Minitest::Test
 
   # A local decision never reaches the MCP source: the two sources are separate
   # dispatchers, and the host holds no source-typed branch that could confuse
-  # them.
+  # them. Approval classification lives in the descriptor metadata the binding
+  # synthesizes (:none for read-only surface, :required otherwise) — never in a
+  # dispatcher method.
   def test_local_decisions_never_reach_the_mcp_source
     with_toolbox do |toolbox|
       source = mcp_source
       binding = Tamoz::Agent::CapabilityBinding.build(toolbox:, mcp: source)
 
-      assert binding.approval_required?("apply_patch")
+      assert_equal :required, binding.registry.descriptors.fetch("apply_patch").approval_policy
+      assert_equal :none, binding.registry.descriptors.fetch("read_file").approval_policy
       assert_equal :reconcilable, binding.safety("apply_patch", {})
       assert_equal :read_only, binding.safety("read_file", {})
       assert_equal 6 * 1024, binding.maximum_effect_output_bytes("apply_patch")
@@ -245,15 +245,16 @@ class AgentCapabilityBindingTest < Minitest::Test
 
   # MCP safety is `:unsafe` unless the caller declared the capability
   # read-only: an ambiguous remote outcome must stop, never repeat
-  # (invariants 21/37).
+  # (invariants 21/37). The same declaration drives the descriptor's
+  # approval_policy metadata.
   def test_mcp_safety_defaults_to_unsafe_and_read_only_is_declared
     with_toolbox do |toolbox|
       binding = Tamoz::Agent::CapabilityBinding.build(toolbox:, mcp: mcp_source)
 
       assert_equal :unsafe, binding.safety("mcp:test-server/write", {})
       assert_equal :read_only, binding.safety("mcp:test-server/echo", {})
-      assert binding.approval_required?("mcp:test-server/write")
-      refute binding.approval_required?("mcp:test-server/echo")
+      assert_equal :required, binding.registry.descriptors.fetch("mcp:test-server/write").approval_policy
+      assert_equal :none, binding.registry.descriptors.fetch("mcp:test-server/echo").approval_policy
     end
   end
 
@@ -427,7 +428,9 @@ class AgentCapabilityBindingTest < Minitest::Test
       yield Tamoz::Agent::Session.new(
         model:,
         toolbox: Tamoz::Tools::Toolbox.new(root:),
-        checkpointer: adapter
+        checkpointer: adapter,
+        approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "implement"),
+        approval_session_id: "binding-resume"
       )
     ensure
       adapter.close

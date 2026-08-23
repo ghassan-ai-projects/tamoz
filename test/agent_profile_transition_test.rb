@@ -77,7 +77,6 @@ class AgentProfileTransitionTest < Minitest::Test
     assert_equal profile.canonical_digest, replayed.canonical_digest
     assert_equal profile.canonical_root, replayed.canonical_root
     assert_equal profile.tools_allowed, replayed.tools_allowed
-    assert_equal profile.tools_approval_required, replayed.tools_approval_required
     assert_equal profile.checks, replayed.checks
     assert_equal profile.policy, replayed.policy
     assert_equal toolbox_for(profile).catalog_digest, toolbox_for(replayed).catalog_digest
@@ -254,7 +253,7 @@ class AgentProfileTransitionTest < Minitest::Test
     profile = load_profile(document)
     other = load_profile(document, name: "second.yaml")
     narrowed = load_profile(
-      document("tools" => {"allowed" => %w[read_file], "approval_required" => []}),
+      document("tools" => {"allowed" => %w[read_file]}),
       name: "narrow.yaml",
       catalog_tools: %w[read_file]
     )
@@ -286,8 +285,7 @@ class AgentProfileTransitionTest < Minitest::Test
       allow_changes: profile.allow_changes?,
       checks: profile.checks.transform_values { |check| check.fetch("argv") },
       check_safeties: profile.checks.transform_values { |check| check.fetch("safety").to_sym },
-      allowed_tools: profile.tools_allowed,
-      approval_required: profile.tools_approval_required
+      allowed_tools: profile.tools_allowed
     )
   end
 
@@ -301,14 +299,13 @@ class AgentProfileTransitionTest < Minitest::Test
     end
   end
 
-  def catalog_digest(allowed_tools:, allow_changes: false, checks: {}, check_safeties: {}, approval_required: [])
+  def catalog_digest(allowed_tools:, allow_changes: false, checks: {}, check_safeties: {})
     Tamoz::Agent::Toolbox.new(
       root: @workspace,
       allow_changes:,
       checks:,
       check_safeties:,
-      allowed_tools:,
-      approval_required:
+      allowed_tools:
     ).catalog_digest
   end
 
@@ -321,7 +318,7 @@ class AgentProfileTransitionTest < Minitest::Test
         "canonical_root" => @workspace
       },
       "roots" => {"workspace" => @workspace},
-      "tools" => {"allowed" => READ_ONLY_TOOLS, "approval_required" => []},
+      "tools" => {"allowed" => READ_ONLY_TOOLS},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -339,7 +336,7 @@ class AgentProfileTransitionTest < Minitest::Test
     allowed = %w[read_file list_directory apply_patch create_file run_check]
     document(
       "checks" => checks,
-      "tools" => {"allowed" => allowed, "approval_required" => %w[apply_patch create_file run_check]},
+      "tools" => {"allowed" => allowed},
       "model_roles" => {"primary" => {"provider" => "openai", "model" => "gpt-5"}},
       "policy" => {
         "allow_changes" => true,
@@ -350,8 +347,7 @@ class AgentProfileTransitionTest < Minitest::Test
           allowed_tools: allowed,
           allow_changes: true,
           checks: {"answer" => [RbConfig.ruby, "-e", "exit 0"]},
-          check_safeties: {"answer" => :unsafe},
-          approval_required: %w[apply_patch create_file run_check]
+          check_safeties: {"answer" => :unsafe}
         )
       }
     )

@@ -75,6 +75,7 @@ module Tamoz
       def claim_next_request(...) = @requests.claim_next_request(...)
       def recover_request(...) = @requests.recover_request(...)
       def mark_request_running(...) = @requests.mark_request_running(...)
+      def mark_request_completed(...) = @requests.mark_request_completed(...)
       def terminal_fail(...) = @requests.terminal_fail(...)
       def request_transition(...) = @requests.request_transition(...)
       def redirect_ready?(...) = @requests.redirect_ready?(...)

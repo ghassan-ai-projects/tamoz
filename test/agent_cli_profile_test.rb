@@ -378,8 +378,7 @@ class AgentCLIProfileTest < Minitest::Test
       root: workspace,
       allow_changes: false,
       checks: {},
-      allowed_tools: tools,
-      approval_required: []
+      allowed_tools: tools
     ).catalog_digest
     document = {
       "profile" => {
@@ -389,7 +388,7 @@ class AgentCLIProfileTest < Minitest::Test
         "canonical_root" => workspace
       },
       "roots" => {"workspace" => workspace},
-      "tools" => {"allowed" => tools, "approval_required" => []},
+      "tools" => {"allowed" => tools},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",

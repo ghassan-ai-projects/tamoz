@@ -123,11 +123,6 @@ module Tamoz
         read_only_descriptor?(descriptor_for!(name))
       end
 
-      # §5: `:unknown_effects` is the default effect class (approval required,
-      # non-idempotent); only a caller-declared `:read_only` descriptor skips the
-      # approval gate. Nothing a server says can change this.
-      def approval_required?(name) = !read_only?(name)
-
       def validate(name, arguments)
         descriptor = descriptor_for!(name)
         arguments = {} if arguments.nil?

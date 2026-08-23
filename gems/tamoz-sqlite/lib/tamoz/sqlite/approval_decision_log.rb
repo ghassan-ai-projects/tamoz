@@ -13,7 +13,7 @@ module Tamoz
     class ApprovalDecisionLog < Approval::DecisionLog
       DECISION_COLUMNS = 'decision_id, session_id, tool, verb, tier, rule_id, verdict, ' \
                          'reason, evidence, policy_rev, argv_digest, targets_digest, ' \
-                         'grant_scopes, grant_key'.freeze
+                         'step_scope, grant_scopes, grant_key'.freeze
 
       # Decision identity + minted grant = cols 0..4, resolution = cols 5..9.
       RESOLUTION_SELECT = <<~SQL.freeze
@@ -45,7 +45,7 @@ module Tamoz
           txn.execute('approval.decision.append', <<~SQL, append_binds(record))
             INSERT INTO tamoz_approval_decisions (
               #{DECISION_COLUMNS}, created_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           SQL
           nil
         end
@@ -91,6 +91,69 @@ module Tamoz
         end
       end
 
+      SWITCH_COLUMNS = 'switch_id, session_id, actor_id, from_rev, to_rev, profile_name, ts_ms'.freeze
+
+      # Idempotent on the switch id. The switch identity is who/where/from/to:
+      # a replayed append carries a fresh ts_ms, so the timestamp of the first
+      # application is what the audit keeps.
+      def record_mode_switch(id:, session_id:, actor_id:, from_rev:, to_rev:, profile_name:, ts_ms:)
+        record = {
+          id: id, session_id: session_id, actor_id: actor_id,
+          from_rev: from_rev, to_rev: to_rev, profile_name: profile_name, ts_ms: ts_ms
+        }.freeze
+        @adapter.__send__(:transaction, operation: 'approval.mode_switch.record') do |txn|
+          row = txn.first('approval.mode_switch.existing', <<~SQL, [id])
+            SELECT #{SWITCH_COLUMNS} FROM tamoz_approval_mode_switches WHERE switch_id = ?
+          SQL
+          if row
+            stored = switch_from_row(row)
+            unless stored.fetch(:session_id) == session_id && stored.fetch(:actor_id) == actor_id &&
+                   stored.fetch(:from_rev) == from_rev && stored.fetch(:to_rev) == to_rev
+              raise Approval::ConflictingResolutionError,
+                    "mode switch #{id} already recorded with different content"
+            end
+
+            next stored
+          end
+
+          txn.execute('approval.mode_switch.record', <<~SQL, [id, session_id, actor_id, from_rev, to_rev, profile_name, ts_ms])
+            INSERT INTO tamoz_approval_mode_switches (#{SWITCH_COLUMNS})
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          SQL
+          record
+        end
+      end
+
+      def latest_decision_for(session_id:, argv_digest:, targets_digest:, step_scope:)
+        @adapter.__send__(:read, operation: 'approval.decision.latest_for') do |txn|
+          row = txn.first('approval.decision.latest_for', <<~SQL, [session_id, argv_digest, targets_digest, step_scope])
+            SELECT #{DECISION_COLUMNS} FROM tamoz_approval_decisions
+            WHERE session_id = ? AND argv_digest = ? AND targets_digest = ? AND step_scope = ?
+            ORDER BY created_at_ms DESC LIMIT 1
+          SQL
+          row && decision_from_row(row)
+        end
+      end
+
+      def lookup_mode_switch(id)
+        @adapter.__send__(:read, operation: 'approval.mode_switch.lookup') do |txn|
+          row = txn.first('approval.mode_switch.lookup', <<~SQL, [id])
+            SELECT #{SWITCH_COLUMNS} FROM tamoz_approval_mode_switches WHERE switch_id = ?
+          SQL
+          row && switch_from_row(row)
+        end
+      end
+
+      def latest_mode_switch(session_id)
+        @adapter.__send__(:read, operation: 'approval.mode_switch.latest') do |txn|
+          row = txn.first('approval.mode_switch.latest', <<~SQL, [session_id.to_s])
+            SELECT #{SWITCH_COLUMNS} FROM tamoz_approval_mode_switches
+            WHERE session_id = ? ORDER BY ts_ms DESC LIMIT 1
+          SQL
+          row && switch_from_row(row)
+        end
+      end
+
       private
 
       def same_decision?(row, record)
@@ -107,13 +170,9 @@ module Tamoz
         ]
       end
 
+      # Identity skips step_scope (column 12): provenance, not content.
       def fields_from_row(row)
-        [
-          row.fetch(1), row.fetch(2), row.fetch(3),
-          row.fetch(4), row.fetch(5), row.fetch(6),
-          row.fetch(7), row.fetch(8), row.fetch(9),
-          row.fetch(10), row.fetch(11), row.fetch(12), row.fetch(13)
-        ]
+        [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14].map { |index| row.fetch(index) }
       end
 
       # The replayed resolve returns the originally recorded grant,
@@ -161,12 +220,12 @@ module Tamoz
       end
 
       def grant_offer_from_row(row)
-        scopes_json = row.fetch(12)
+        scopes_json = row.fetch(13)
         return nil unless scopes_json
 
         Approval::GrantOffer.new(
           scopes: JSON.parse(scopes_json).map(&:to_sym),
-          key: row.fetch(13) ? JSON.parse(row.fetch(13), symbolize_names: true) : {}
+          key: row.fetch(14) ? JSON.parse(row.fetch(14), symbolize_names: true) : {}
         )
       end
 
@@ -183,6 +242,18 @@ module Tamoz
         )
       end
 
+      def switch_from_row(row)
+        {
+          id: row.fetch(0),
+          session_id: row.fetch(1),
+          actor_id: row.fetch(2),
+          from_rev: row.fetch(3),
+          to_rev: row.fetch(4),
+          profile_name: row.fetch(5),
+          ts_ms: row.fetch(6)
+        }.freeze
+      end
+
       def scopes_text(scopes)
         JSON.generate(scopes.map(&:to_s)) if scopes
       end
@@ -197,6 +268,7 @@ module Tamoz
           record.fetch(:verb), record.fetch(:tier), record.fetch(:rule_id),
           record.fetch(:verdict), record.fetch(:reason), record.fetch(:evidence),
           record.fetch(:policy_rev), record.fetch(:argv_digest), record.fetch(:targets_digest),
+          record.fetch(:step_scope),
           scopes_text(record[:grant_scopes]), key_text_or_nil(record[:grant_key]), now_ms
         ]
       end

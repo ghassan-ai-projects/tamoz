@@ -31,7 +31,9 @@ module Tamoz
             return nil if line.nil?
 
             case line.strip.downcase
-            when *APPROVE then return true
+            when *APPROVE
+              @approved_descriptor = descriptor
+              return true
             when *DENY then return false
             when *HELP then print_approval_help
             else print_invalid_approval
@@ -57,6 +59,18 @@ module Tamoz
         def interrupt(descriptor)
           @err.puts "Interrupt: #{descriptor['kind']}"
           read_line('Answer: ')&.strip
+        end
+
+        # §1.4 scope follow-up: only offered when the decision's grant offer
+        # includes :session; a bare Enter or anything non-affirmative keeps the
+        # grant to this one ask.
+        def remember_for_session(descriptor)
+          return false unless Array(descriptor.dig('decision', 'grant_scopes')).include?('session')
+
+          line = read_line('Remember for this session? [y/N] ')
+          return false if line.nil?
+
+          Tamoz::Approval::Answer.parse(line) == :approve
         end
 
         private

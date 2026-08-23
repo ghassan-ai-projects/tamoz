@@ -168,16 +168,12 @@ module AutonomyCase
         )]
       ).compile
       tools = document.fetch("tools").fetch("allowed")
-      preauthorized = document.dig("unattended", "read_only").to_a +
-                      document.dig("unattended", "reconcilable").to_a
-      document["policy"]["tool_catalog_digest"] = Tamoz::Agent::Toolbox.new(
+      digest = Tamoz::Agent::Toolbox.new(
         root: workspace, allow_changes: true, checks: {},
-        allowed_tools: tools, approval_required: [], skills: snapshot
+        allowed_tools: tools, skills: snapshot
       ).catalog_digest
-      document["policy"]["unattended_catalog_digest"] = Tamoz::Agent::Toolbox.new(
-        root: workspace, allow_changes: true, checks: {},
-        allowed_tools: tools, approval_required: (tools - preauthorized), skills: snapshot
-      ).catalog_digest
+      document["policy"]["tool_catalog_digest"] = digest
+      document["policy"]["unattended_catalog_digest"] = digest
       File.write(path, Psych.dump(document))
       File.chmod(0o600, path)
     end
@@ -209,7 +205,7 @@ module AutonomyCase
 
   # -------------------------------------------------------------- fixtures
 
-  def with_runtime(unattended: nil, budgets: nil, channels: nil)
+  def with_runtime(approval_profile: nil, budgets: nil, channels: nil, approval_ask: nil)
     Dir.mktmpdir("tamoz-autonomy") do |directory|
       runtime_dir = File.join(directory, "runtime")
       workspace = File.join(directory, "workspace")
@@ -217,8 +213,8 @@ module AutonomyCase
       FileUtils.mkdir_p(runtime_dir, mode: 0o700)
       File.chmod(0o700, runtime_dir)
 
-      write_config(runtime_dir, workspace, channels:)
-      write_trusted_profile(runtime_dir, workspace, unattended:, budgets:)
+      write_config(runtime_dir, workspace, channels:, approval_profile:, approval_ask:)
+      write_trusted_profile(runtime_dir, workspace, budgets:)
 
       runtime = Runtime.new(dir: runtime_dir, workspace:)
       runtime.client = FixtureTelegramClient.new if channels
@@ -244,38 +240,39 @@ module AutonomyCase
     directory
   end
 
-  def write_config(runtime_dir, workspace, channels: nil)
+  def write_config(runtime_dir, workspace, channels: nil, approval_profile: nil, approval_ask: nil)
     document = {
       "runtime" => {"schema_version" => channels ? 2 : 1},
       "workspace" => {"root" => workspace},
       "sources" => {}
     }
     document["channels"] = channels if channels
+    # What runs unattended is approval-policy data, not a profile section: the
+    # operator names the policy profile (e.g. "unattended") in their config.
+    if approval_ask
+      policy_dir = File.join(runtime_dir, "policy")
+      write_ask_policy(policy_dir, **approval_ask)
+      document["approval"] = {
+        "profile" => "unattended",
+        "policy_path" => File.join(policy_dir, "base.yaml")
+      }
+    elsif approval_profile
+      document["approval"] = {"profile" => approval_profile}
+    end
     File.write(File.join(runtime_dir, "config.yaml"), Psych.dump(document))
     File.chmod(0o600, File.join(runtime_dir, "config.yaml"))
   end
 
-  # The trusted profile is the ONLY thing that may preauthorize unattended work.
-  # The profile always ALLOWS the edit tools — `tools.allowed` is what is
-  # possible on this project. What varies per case is the `unattended` section:
-  # what may happen with nobody watching. That separation is the whole point of
-  # the policy, so the fixture must not collapse the two.
-  def write_trusted_profile(runtime_dir, workspace, unattended: nil, budgets: nil)
+  # The trusted profile is capability authority only: what is possible on this
+  # project (`tools.allowed`), the pinned catalog, budgets. Whether a queued
+  # effect asks a human first is the approval engine's policy decision.
+  def write_trusted_profile(runtime_dir, workspace, budgets: nil)
     tools = READ_ONLY_TOOLS + %w[apply_patch create_file]
     allow_changes = true
 
-    preauthorized = READ_ONLY_TOOLS + Array(unattended && unattended["reconcilable"])
-    unattended_approval = tools - preauthorized
-
     digest = Tamoz::Agent::Toolbox.new(
       root: workspace, allow_changes:, checks: {},
-      allowed_tools: tools, approval_required: []
-    ).catalog_digest
-    # The catalog a WORKER sees: same tools, approval required on everything the
-    # unattended section did not preauthorize.
-    unattended_digest = Tamoz::Agent::Toolbox.new(
-      root: workspace, allow_changes:, checks: {},
-      allowed_tools: tools, approval_required: unattended_approval
+      allowed_tools: tools
     ).catalog_digest
 
     document = {
@@ -286,23 +283,15 @@ module AutonomyCase
         "canonical_root" => workspace
       },
       "roots" => {"workspace" => workspace},
-      "tools" => {"allowed" => tools, "approval_required" => []},
+      "tools" => {"allowed" => tools},
       "policy" => {
         "allow_changes" => allow_changes,
         "default_check_safety" => "read_only",
         "graph_version" => "1",
         "behavior_version" => "1.0",
         "tool_catalog_digest" => digest,
-        "unattended_catalog_digest" => unattended_digest
+        "unattended_catalog_digest" => digest
       }
-    }
-    # The unattended section names, by risk class, what may run with nobody
-    # watching. Absent section = nothing runs unattended beyond read-only.
-    document["unattended"] = {
-      "read_only" => READ_ONLY_TOOLS,
-      "reconcilable" => Array(unattended && unattended["reconcilable"]),
-      "approval_required" => [],
-      "forbidden" => []
     }
     document["budgets"] = budgets if budgets
 
@@ -357,6 +346,49 @@ module AutonomyCase
   end
 
   # -------------------------------------------------------------- factories
+
+  # A minimal valid policy base with one ask tier, for tests that need to pin
+  # the ask deadline and its expiry outcome.
+  def write_ask_policy(dir, timeout_s:, on_timeout:)
+    require "fileutils"
+    FileUtils.mkdir_p(File.join(dir, "profiles"))
+    File.write(File.join(dir, "base.yaml"), <<~YAML)
+      version: 1
+      tool_tiers:
+        apply_patch:
+          tier: local_execute
+          verb: execute
+          grant_scopes: [once]
+        run_check:
+          tier: local_execute
+          verb: execute
+          grant_scopes: [once]
+      fallback_tier:
+        tier: read
+        verb: unknown
+        grant_scopes: [once]
+      tiers:
+        read:
+          default: allow
+        local_execute:
+          default: ask
+          grant_scopes: [once]
+      grant_keys:
+        local_execute: [verb, tool]
+      rules: []
+      evidence:
+        approve: filesystem_operator
+        deny: chat_bound
+      simulations: []
+      ask:
+        timeout_s: #{timeout_s}
+        on_timeout: #{on_timeout}
+    YAML
+    File.write(File.join(dir, "profiles", "unattended.yaml"), <<~YAML)
+      profile:
+        name: unattended
+    YAML
+  end
 
   def read_only_factory
     ->(_options) do

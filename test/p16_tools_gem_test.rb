@@ -13,7 +13,7 @@ class P16ToolsGemTest < Minitest::Test
 
   # ---- P16-start reference pins (captured from the pre-move code) -----------
 
-  MATRIX_DIGEST = "sha256:f87625c578108031993b53935a83e07680e0d00320e9e37995eef4414e6606a9"
+  MATRIX_DIGEST = "sha256:7bb2e9761f1e90ea0ff044fc38717cf992bf7dd142517bb8b8a1eef07a495c90"
 
   REJECTION_MESSAGES = {
     "bad_skills_type" => "skills must be a Tamoz::Agent::Skills::SkillSnapshot",
@@ -26,7 +26,6 @@ class P16ToolsGemTest < Minitest::Test
     "bad_safety" => "check \"c\" safety must be one of read_only, idempotent, unsafe",
     "bad_allowed" =>
       "allowed_tools names unavailable tools: nope (available: list_directory, read_file, search_text)",
-    "bad_approval" => "approval_required must be a subset of allowed_tools: apply_patch",
     "bad_allow_changes" => "allow_changes must be true or false",
     "bad_timeout" => "check_timeout must be between 0 and 600 seconds"
   }.freeze
@@ -281,7 +280,7 @@ class P16ToolsGemTest < Minitest::Test
       assert_equal 32, Tamoz::Agent::Toolbox::MAX_REPLACEMENTS
       assert_equal({}, box.checks)
       assert_equal File.realpath(root), box.root.to_s
-      assert_equal %w[apply_patch run_check create_file], box.approval_required
+      assert_equal %w[apply_patch create_file list_directory read_file search_text], box.names.sort
       assert box.skills.empty?
     end
 
@@ -335,51 +334,47 @@ class P16ToolsGemTest < Minitest::Test
         [false, true].each do |allow_changes|
           [nil, checks].each do |checks_value|
             [nil, safeties].each do |safeties_value|
-              [nil, %w[apply_patch create_file]].each do |approval|
-                [nil, %w[read_file apply_patch]].each do |allowed|
-                  begin
-                    box = Tamoz::Tools::Toolbox.new(
-                      root:, allow_changes:, checks: checks_value || {}, check_safeties: safeties_value || {},
-                      approval_required: approval, allowed_tools: allowed, skills:
-                    )
-                    cells << {
-                      "skills" => skills.empty? ? "empty" : "full",
-                      "allow_changes" => allow_changes,
-                      "checks" => checks_value ? "present" : "absent",
-                      "safeties" => safeties_value ? "present" : "absent",
-                      "approval" => approval.nil? ? "nil" : approval.join(","),
-                      "allowed" => allowed.nil? ? "nil" : allowed.join(","),
-                      "catalog_digest" => box.catalog_digest,
-                      "prompt_surface_digest" => box.prompt_surface_digest,
-                      "descriptions" => box.descriptions,
-                      "skill_epoch" => box.skill_epoch,
-                      "names" => box.names
-                    }
-                  rescue ArgumentError => error
-                    cells << {
-                      "skills" => skills.empty? ? "empty" : "full",
-                      "allow_changes" => allow_changes,
-                      "checks" => checks_value ? "present" : "absent",
-                      "safeties" => safeties_value ? "present" : "absent",
-                      "approval" => approval.nil? ? "nil" : approval.join(","),
-                      "allowed" => allowed.nil? ? "nil" : allowed.join(","),
-                      "error" => error.message
-                    }
-                  end
+              [nil, %w[read_file apply_patch]].each do |allowed|
+                begin
+                  box = Tamoz::Tools::Toolbox.new(
+                    root:, allow_changes:, checks: checks_value || {}, check_safeties: safeties_value || {},
+                    allowed_tools: allowed, skills:
+                  )
+                  cells << {
+                    "skills" => skills.empty? ? "empty" : "full",
+                    "allow_changes" => allow_changes,
+                    "checks" => checks_value ? "present" : "absent",
+                    "safeties" => safeties_value ? "present" : "absent",
+                    "allowed" => allowed.nil? ? "nil" : allowed.join(","),
+                    "catalog_digest" => box.catalog_digest,
+                    "prompt_surface_digest" => box.prompt_surface_digest,
+                    "descriptions" => box.descriptions,
+                    "skill_epoch" => box.skill_epoch,
+                    "names" => box.names
+                  }
+                rescue ArgumentError => error
+                  cells << {
+                    "skills" => skills.empty? ? "empty" : "full",
+                    "allow_changes" => allow_changes,
+                    "checks" => checks_value ? "present" : "absent",
+                    "safeties" => safeties_value ? "present" : "absent",
+                    "allowed" => allowed.nil? ? "nil" : allowed.join(","),
+                    "error" => error.message
+                  }
                 end
               end
             end
           end
         end
       end
-      assert_equal 64, cells.length
+      assert_equal 32, cells.length
 
       normalized = cells.sort_by do |cell|
-        [cell["skills"], cell["allow_changes"].to_s, cell["checks"], cell["safeties"], cell["approval"], cell["allowed"]]
+        [cell["skills"], cell["allow_changes"].to_s, cell["checks"], cell["safeties"], cell["allowed"]]
       end.map do |cell|
         {
           "skills" => cell["skills"], "allow_changes" => cell["allow_changes"], "checks" => cell["checks"],
-          "safeties" => cell["safeties"], "approval" => cell["approval"], "allowed" => cell["allowed"],
+          "safeties" => cell["safeties"], "allowed" => cell["allowed"],
           "catalog_digest" => cell["catalog_digest"], "prompt_surface_digest" => cell["prompt_surface_digest"],
           "skill_epoch" => cell["skill_epoch"], "names" => cell["names"], "descriptions" => cell["descriptions"],
           "error" => cell["error"]
@@ -434,12 +429,6 @@ class P16ToolsGemTest < Minitest::Test
         Tamoz::Tools::Toolbox.new(root:, allowed_tools: ["nope"])
       rescue ArgumentError => error
         assert_equal refute_messages.delete("bad_allowed"), error.message
-      end
-
-      begin
-        Tamoz::Tools::Toolbox.new(root:, allowed_tools: %w[read_file], approval_required: %w[apply_patch])
-      rescue ArgumentError => error
-        assert_equal refute_messages.delete("bad_approval"), error.message
       end
 
       begin

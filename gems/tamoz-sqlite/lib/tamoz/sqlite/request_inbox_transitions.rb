@@ -24,6 +24,17 @@ module Tamoz
         )
       end
 
+      # Control requests (mode switches) never produce a checkpoint, so their
+      # completion is fenced standalone instead of riding a checkpoint append.
+      def mark_request_completed(lease:, request_id:, execution_id:)
+        transition_request_without_checkpoint!(
+          lease:,
+          request_id:,
+          execution_id:,
+          action: :completed
+        )
+      end
+
       # rubocop:disable Metrics/MethodLength -- the transition payload mirrors the durable wire contract.
       def request_transition(
         request_id:,

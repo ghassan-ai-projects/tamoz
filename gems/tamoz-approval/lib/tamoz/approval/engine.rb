@@ -24,6 +24,7 @@ module Tamoz
         @workspace_root = workspace_root || Dir.pwd
         @documents = { policy.policy_rev => policy }
         @session_revs = {}
+        @switch_sequence = 0
         @mutex = Mutex.new
       end
 
@@ -39,7 +40,7 @@ module Tamoz
         )
       end
 
-      def decide(request)
+      def decide(request, step_scope: '')
         policy = policy_for(request.session_id)
         decision = Evaluator.new(policy).evaluate(request)
 
@@ -48,8 +49,25 @@ module Tamoz
           return log_grant_hit(decision, request) if grant
         end
 
-        log_decision(decision, request)
+        log_decision(decision, request, step_scope:)
         decision
+      end
+
+      # A durable gate replays: after a crash or pause the same gate evaluates
+      # again. The ISSUING decision owns the step — the replay reuses it even
+      # after the operator answered it or the policy moved meanwhile, so an
+      # in-flight step is never re-decided (MS-4). A different question carries
+      # a different step scope or argv and never collides.
+      def decide_or_reuse(request, step_scope:)
+        existing = decision_log.latest_decision_for(
+          session_id: request.session_id,
+          argv_digest: Canonical.hexdigest(request.argv),
+          targets_digest: Canonical.hexdigest(request.targets),
+          step_scope:
+        )
+        return existing if existing
+
+        decide(request, step_scope:)
       end
 
       def resolve(decision_id:, answer:, scope:, actor_evidence: nil, expires_at_ms: nil)
@@ -100,11 +118,49 @@ module Tamoz
       end
 
       def bind_session(session_id)
+        id = session_id.to_s
         @mutex.synchronize do
-          rev = @policy.policy_rev
-          @session_revs[session_id.to_s] = rev
+          # A durable switch outranks the boot rev: engines are rebuilt per
+          # process, and the operator's mid-session mode must survive that.
+          rev = durable_override(id) || @policy.policy_rev
+          @session_revs[id] = rev
           rev
         end
+      end
+
+      # The §2.6 exception to in-flight rev stability: an explicit,
+      # operator-addressed rebind of ONE session's (profile, policy_rev). It
+      # governs the next decide only — nothing retroactive; tightening drops
+      # the session's old-rev grants for free, because grant lookup keys on the
+      # bound rev. A caller-supplied switch_id makes a replayed application
+      # append at most one audit record.
+      def rebind_session(profile:, session_id:, actor_id: 'operator', switch_id: nil)
+        new_policy = PolicyDocument.load_profile(@policy.path, profile.to_s, evidence_symbols: @evidence_symbols)
+        prior = nil
+        @mutex.synchronize do
+          prior = @session_revs[session_id.to_s]
+          next if prior == new_policy.policy_rev
+
+          # The documents entry lands before the pointer flips so the next
+          # decide never observes a gap (same invariant as reload).
+          @documents[new_policy.policy_rev] = new_policy
+          @session_revs[session_id.to_s] = new_policy.policy_rev
+        end
+        return new_policy.policy_rev if prior == new_policy.policy_rev
+
+        record_switch(
+          switch_id || next_switch_id(session_id, prior, new_policy.policy_rev),
+          session_id: session_id.to_s,
+          actor_id: actor_id,
+          from_rev: prior,
+          to_rev: new_policy.policy_rev,
+          profile_name: profile.to_s
+        )
+        new_policy.policy_rev
+      end
+
+      def bound?(session_id)
+        @mutex.synchronize { @session_revs.key?(session_id.to_s) }
       end
 
       def release_session(session_id)
@@ -129,6 +185,48 @@ module Tamoz
       end
 
       private
+
+      def record_switch(id, session_id:, actor_id:, from_rev:, to_rev:, profile_name:)
+        decision_log.record_mode_switch(
+          id: id,
+          session_id: session_id,
+          actor_id: actor_id,
+          from_rev: from_rev,
+          to_rev: to_rev,
+          profile_name:,
+          ts_ms: now_ms
+        )
+      rescue ConflictingResolutionError
+        # A replayed switch whose from-rev drifted (the global pointer moved
+        # between crash and retry) still applied exactly once as long as the
+        # recorded destination is this one.
+        recorded = decision_log.lookup_mode_switch(id)
+        raise if recorded.nil? || recorded.fetch(:to_rev) != to_rev
+      end
+
+      def next_switch_id(session_id, from_rev, to_rev)
+        sequence = @mutex.synchronize { @switch_sequence += 1 }
+        Canonical.hexdigest(['tamoz.approval.mode_switch', session_id, from_rev, to_rev, sequence])
+      end
+
+      # The newest recorded switch for a session, loaded through the decision
+      # log so a rebind outlives the engine instance that applied it. The
+      # document is registered so lookups never observe a gap.
+      def durable_override(session_id)
+        latest = decision_log.latest_mode_switch(session_id)
+        return nil unless latest
+
+        rev = latest.fetch(:to_rev)
+        unless @documents.key?(rev)
+          rebuilt = PolicyDocument.load_profile(
+            @policy.path, latest.fetch(:profile_name), evidence_symbols: @evidence_symbols
+          )
+          @documents[rev] = rebuilt if rebuilt.policy_rev == rev
+        end
+        raise UnknownDecisionError, "cannot reconstruct policy #{rev}" unless @documents.key?(rev)
+
+        rev
+      end
 
       def validate_answer(answer)
         return if Answer::VERDICTS.include?(answer)
@@ -173,8 +271,13 @@ module Tamoz
       end
 
       def policy_for(session_id)
+        id = session_id.to_s
         @mutex.synchronize do
-          rev = @session_revs[session_id.to_s]
+          rev = @session_revs[id]
+          unless rev
+            rev = durable_override(id)
+            @session_revs[id] = rev if rev
+          end
           rev ? @documents.fetch(rev) : @policy
         end
       end
@@ -212,19 +315,23 @@ module Tamoz
         hit
       end
 
-      def log_decision(decision, request)
+      def log_decision(decision, request, step_scope: '')
         decision_log.append(
           decision_id: decision.id,
+          step_scope: step_scope,
           tool: request.tool.to_s,
           verb: request.verb.to_s,
           tier: decision.tier.to_s,
           rule_id: decision.rule_id.to_s,
           verdict: decision.verdict.to_s,
+          reason: decision.reason,
           evidence: decision.required_evidence&.to_s,
           policy_rev: decision.policy_rev,
           argv_digest: Canonical.hexdigest(request.argv),
           targets_digest: Canonical.hexdigest(request.targets),
           session_id: request.session_id,
+          grant_scopes: decision.grant_offer&.scopes,
+          grant_key: decision.grant_offer&.key,
           decision: decision
         )
       end

@@ -40,7 +40,10 @@ module Tamoz
       # MIGRATION_17, which adds the durable approval-policy homes — session
       # grants, the append-only decision log with resolution columns, and the
       # single-row active-policy record the reload loop reads.
-      CURRENT_VERSION = 17
+      # Approval redesign 05 step 7B: 17 -> 18 through MIGRATION_18, which adds
+      # the mode-switch audit table and rebuilds tamoz_requests so its operation
+      # CHECK admits `mode_switch` — SQLite cannot alter a CHECK in place.
+      CURRENT_VERSION = 18
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1186,6 +1189,113 @@ module Tamoz
         MIGRATION_17.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # The request inbox is rebuilt (copy, drop, rename, re-index) because the
+      # operation CHECK lives inside MIGRATION_1's CREATE TABLE. Rows do not
+      # survive by design; the dropping parent cascades the transition rows.
+      MIGRATION_18 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_requests_rebuilt (
+            thread_id TEXT NOT NULL,
+            namespace TEXT NOT NULL,
+            request_id TEXT NOT NULL,
+            enqueue_sequence INTEGER NOT NULL CHECK (enqueue_sequence >= 0),
+            input_digest TEXT NOT NULL,
+            operation TEXT NOT NULL CHECK (
+              operation IN ('turn', 'resume', 'retry', 'continue', 'fork', 'redirect', 'mode_switch')
+            ),
+            delivery_mode TEXT NOT NULL CHECK (
+              delivery_mode IN ('queue', 'redirect')
+            ),
+            status TEXT NOT NULL CHECK (
+              status IN (
+                'queued', 'claimed', 'running', 'redirecting', 'completed', 'failed'
+              )
+            ),
+            payload BLOB NOT NULL,
+            payload_digest TEXT NOT NULL,
+            execution_id TEXT,
+            target_execution_id TEXT,
+            cancellation_generation INTEGER,
+            owner_fence INTEGER,
+            checkpoint_id TEXT,
+            response BLOB,
+            response_digest TEXT,
+            terminal_error BLOB,
+            terminal_error_digest TEXT,
+            retryable INTEGER CHECK (retryable IN (0, 1)),
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (thread_id, namespace, request_id),
+            UNIQUE (thread_id, namespace, enqueue_sequence),
+            FOREIGN KEY (thread_id, namespace)
+              REFERENCES tamoz_namespaces(thread_id, namespace)
+              ON DELETE CASCADE,
+            FOREIGN KEY (checkpoint_id) REFERENCES tamoz_checkpoints(id)
+              ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          INSERT INTO tamoz_requests_rebuilt SELECT * FROM tamoz_requests
+        SQL
+        "DROP TABLE tamoz_requests",
+        "ALTER TABLE tamoz_requests_rebuilt RENAME TO tamoz_requests",
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_request_queue
+            ON tamoz_requests(thread_id, namespace, enqueue_sequence)
+            WHERE status NOT IN ('completed', 'failed')
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_approval_decisions_rebuilt (
+            decision_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            verb TEXT NOT NULL,
+            tier TEXT NOT NULL,
+            rule_id TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            evidence TEXT,
+            policy_rev TEXT NOT NULL,
+            argv_digest TEXT NOT NULL,
+            targets_digest TEXT NOT NULL,
+            step_scope TEXT NOT NULL DEFAULT '',
+            grant_scopes TEXT,
+            grant_key TEXT,
+            answer TEXT,
+            resolved_scope TEXT,
+            actor_evidence TEXT,
+            resolved_at_ms INTEGER,
+            grant_created_at_ms INTEGER,
+            grant_expires_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        "INSERT INTO tamoz_approval_decisions_rebuilt
+           SELECT decision_id, session_id, tool, verb, tier, rule_id, verdict,
+                  reason, evidence, policy_rev, argv_digest, targets_digest,
+                  '', grant_scopes, grant_key, answer, resolved_scope,
+                  actor_evidence, resolved_at_ms, grant_created_at_ms,
+                  grant_expires_at_ms, created_at_ms
+           FROM tamoz_approval_decisions",
+        "DROP TABLE tamoz_approval_decisions",
+        "ALTER TABLE tamoz_approval_decisions_rebuilt RENAME TO tamoz_approval_decisions",
+        <<~SQL.freeze
+          CREATE TABLE tamoz_approval_mode_switches (
+            switch_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            actor_id TEXT NOT NULL,
+            from_rev TEXT NOT NULL,
+            to_rev TEXT NOT NULL,
+            profile_name TEXT NOT NULL,
+            ts_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+      ]
+
+      MIGRATION_18_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_18.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1205,7 +1315,8 @@ module Tamoz
         14 => [MIGRATION_14, MIGRATION_14_CHECKSUM],
         15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
         16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
-        17 => [MIGRATION_17, MIGRATION_17_CHECKSUM]
+        17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
+        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

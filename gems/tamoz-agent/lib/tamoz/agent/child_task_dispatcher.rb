@@ -114,7 +114,6 @@ module Tamoz
         }.freeze
       end
 
-      def approval_required?(_descriptor) = true
       def maximum_effect_output_bytes(_descriptor) = MAX_PREVIEW_BYTES
       def safety(_descriptor, _arguments) = :idempotent
 

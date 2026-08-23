@@ -31,6 +31,12 @@ module Tamoz
 
       attr_reader :directory, :adapter, :delivery_sink, :approval_engine
 
+      # ADR §2.3 teardown: the bound profile session's grants die with it.
+      def close_approval_session
+        @approval_engine&.close_session(@approval_session_key) if @approval_session_key
+        nil
+      end
+
       def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
@@ -406,7 +412,8 @@ module Tamoz
       def open_occurrences(limit: 500)
         durable("open occurrences") do
           @adapter.store.each(OPEN_OCCURRENCES, limit:).map do |entry|
-            {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"]}
+            {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"],
+             opened_at: entry.value["opened_at"]}
           end
         end
       end
@@ -866,22 +873,6 @@ module Tamoz
         expanded
       end
 
-      # What this profile makes the worker stop and ask about.
-      #
-      # The interactive CLI asks a human about `tools.approval_required`. A worker
-      # has no human to ask, so it asks about everything the profile has not
-      # explicitly PREAUTHORIZED for unattended use — which is a strictly larger
-      # set, never a smaller one. Both lists are unioned so a tool marked
-      # approval-required interactively can never become automatic just because
-      # nobody is watching.
-      #
-      # The whole computation reads from the profile bound to this exact digest.
-      # Nothing the model says, no repository file, no skill, no MCP descriptor
-      # and no memory record participates.
-      def unattended_approval_required(profile)
-        (profile.tools_approval_required | profile.unattended_requires_approval).uniq
-      end
-
       # The compiled skill snapshot, or the empty one.
       #
       # Skills are only ever DISCOVERED from the operator's own directory — never
@@ -1056,10 +1047,12 @@ module Tamoz
         sync_approval_policy
         session_key = "profile:#{profile_id || 'default'}"
         @approval_engine.bind_session(session_key)
+        @approval_session_key = session_key
 
         engine = memory_engine
         Session.new(
           approval_engine: @approval_engine,
+          approval_session_id: session_key,
           model: DeferredModel.new { @model_factory.call(profile: resolved) },
           toolbox:,
           checkpointer: @adapter,
@@ -1108,7 +1101,6 @@ module Tamoz
           checks: resolved.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
           allowed_tools: narrowed_tools(resolved, allowed_tools),
-          approval_required: narrowed_approval_required(resolved, allowed_tools),
           skills: skills_snapshot
         )
       end
@@ -1120,11 +1112,6 @@ module Tamoz
         raise ToolPolicyError, "child capabilities exceed profile tools: #{unknown.join(', ')}" unless unknown.empty?
 
         allowed_tools
-      end
-
-      def narrowed_approval_required(resolved, allowed_tools)
-        required = unattended_approval_required(resolved)
-        allowed_tools ? required & allowed_tools : required
       end
 
       def child_local_tools(capabilities)

@@ -103,6 +103,12 @@ module Tamoz
         end
         reason
       ensure
+        # Grants never outlive the worker that bound their profile session.
+        begin
+          @runtime.close_approval_session
+        rescue StandardError
+          nil
+        end
         emit("worker.stopped",
              reason: reason || "error",
              processed: @processed,
@@ -114,10 +120,12 @@ module Tamoz
       # idle decision.
       def poll_once
         @runtime.sync_approval_policy
+        enforce_ask_deadlines
         reconciled = reconcile_child_requests
         materialized = materialize_due_schedules
+        switched = drain_mode_switches
         advanced = advance_pending_threads
-        (reconciled + materialized + advanced).positive?
+        (reconciled + materialized + switched + advanced).positive?
       end
 
       private
@@ -408,6 +416,16 @@ module Tamoz
         granted = decision.granted?
         answers = {}
         view.interrupts.each do |interrupt|
+          descriptor = interrupt.descriptor || {}
+          if descriptor['kind'] == 'approve_tool' && (asked = descriptor['decision'])
+            # The engine is the resolution authority: the journaled verdict and
+            # any minted grant both come from this one call (replay-safe).
+            @runtime.approval_engine.resolve(
+              decision_id: asked.fetch('id'),
+              answer: granted ? :approve : :deny,
+              scope: granted ? :once : nil
+            )
+          end
           (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
         end
 
@@ -804,19 +822,175 @@ module Tamoz
         end
       end
 
+      # ------------------------------------------------------------- mode switch
+
+      # The third inbox job (ADR §2.6): apply an operator's mode switch at a
+      # durable boundary, BEFORE the request queue can mistake it for a turn.
+      # A queued switch always sits behind an open occurrence by inbox
+      # ordering, so an in-flight turn is never re-decided — the rebind lands
+      # between turns and governs the next decision only.
+      def drain_mode_switches
+        applied = 0
+        @runtime.checkpoints.pending_threads(limit: @batch).each do |entry|
+          request = @runtime.checkpoints.fetch_request(
+            thread_id: entry.fetch(:thread_id),
+            namespace: entry.fetch(:namespace),
+            request_id: entry.fetch(:head_request_id)
+          )
+          next unless request&.operation == :mode_switch && !request.terminal?
+
+          applied += 1 if apply_mode_switch(request)
+        end
+        applied
+      rescue WorkerRuntime::StoreUnavailableError => error
+        emit('worker.error', reason: error.message)
+        0
+      end
+
+      # Claim → rebind → complete, each step fenced or idempotent: the claim is
+      # a leased compare-and-set, the rebind is set-semantics whose audit
+      # record dedupes on the switch id (the request id), and completion is one
+      # fenced transition. A crash anywhere replays to exactly one application.
+      def apply_mode_switch(request)
+        thread_id = request.thread_id
+        profile_id = @runtime.thread_profile(thread_id)
+        # Bind before rebinding: a lazy session build stamps the live global
+        # rev onto this key, which would silently discard the switch.
+        @runtime.session_for_profile(profile_id)
+
+        @runtime.checkpoints.open_writer(
+          thread_id: thread_id,
+          namespace: request.namespace,
+          owner_id: owner_id,
+          ttl: @runtime.checkpoints.writer_ttl
+        ) do |writer|
+          claimed = claim_mode_switch(writer, request)
+          return false unless claimed
+
+          begin
+            @runtime.approval_engine.rebind_session(
+              profile: request.payload.fetch('mode'),
+              session_id: "profile:#{profile_id || 'default'}",
+              switch_id: request.request_id
+            )
+          rescue Tamoz::Approval::InvalidPolicyError => error
+            # An operator typo must not poison the inbox: fail the request
+            # terminally under our own lease and report it.
+            writer.terminal_fail(request_id: request.request_id,
+                                 operation: :mode_switch,
+                                 reason: bounded_reason(error))
+            emit('worker.error', reason: "mode switch rejected: #{error.message}")
+            return true
+          end
+
+          writer.complete_request(request_id: request.request_id, execution_id: claimed.execution_id)
+          emit('request.mode_switched',
+               thread: thread_id,
+               request_id: request.request_id,
+               mode: request.payload.fetch('mode'))
+        end
+        true
+      rescue StandardError => error
+        emit('worker.error', reason: "mode switch #{request.request_id}: #{error.message}")
+        false
+      end
+
+      def claim_mode_switch(writer, request)
+        if request.status == :queued
+          candidate = writer.claim_next_request(validator: nil)
+          return candidate if candidate&.request_id == request.request_id
+
+          return nil
+        end
+
+        # A crash left the switch claimed under an expired lease; recovery
+        # takes it over under this pass's fresh fence.
+        writer.recover_request(request_id: request.request_id, validator: nil)
+      end
+
       # ----------------------------------------------------------------- parking
 
       # A parked thread is one whose next move belongs to a human. It is skipped
       # until its head request changes, so an approval delivered by another
       # process un-parks it on the next pass with no signalling between them.
       def park(entry, view, reason: "approval_required")
-        signature = [entry.fetch(:head_request_id), view&.status, reason]
-        @monitor.synchronize { @parked[entry.fetch(:thread_id)] = signature }
+        meta = {
+          signature: [entry.fetch(:head_request_id), view&.status, reason],
+          since: Time.now.utc,
+          view:,
+          occurrence_id: entry.fetch(:head_request_id)
+        }
+        @monitor.synchronize { @parked[entry.fetch(:thread_id)] = meta }
         true
       end
 
       def unpark(thread_id)
         @monitor.synchronize { @parked.delete(thread_id) }
+      end
+
+      # A policy with on_timeout: deny does not wait forever for a human: a
+      # parked approval whose ask has been pending past ask.timeout_s resolves
+      # to a structured denial and the turn continues. Park (:park policy)
+      # leaves the decision resolvable by an operator indefinitely.
+      def enforce_ask_deadlines
+        ask = @runtime.approval_engine.policy.ask
+        return unless ask.fetch(:on_timeout) == :deny
+
+        deadline = ask.fetch(:timeout_s)
+        now = Time.now.utc
+        due = nil
+        @monitor.synchronize do
+          due = @parked.select { |_tid, meta|
+            meta[:signature].last == 'approval_required' && now - meta[:since] >= deadline
+          }.keys
+        end
+        due.each { |thread_id| apply_timeout_denial(thread_id) }
+
+        # A worker restarted after the park holds no memory of it; the durable
+        # open occurrence carries the same clock for the restarted process.
+        @runtime.open_occurrences(limit: 500).each do |occurrence|
+          opened = occurrence[:opened_at]
+          next unless opened
+
+          age_s = now - Time.parse(opened)
+          apply_timeout_denial(occurrence.fetch(:thread_id)) if age_s >= deadline
+        end
+      end
+
+      def apply_timeout_denial(thread_id)
+        meta = @monitor.synchronize { @parked[thread_id] }
+        occurrence_id =
+          meta&.fetch(:occurrence_id) ||
+          @runtime.open_occurrences(limit: 500)
+                  .find { |occ| occ.fetch(:thread_id) == thread_id }
+                  &.fetch(:occurrence_id)
+        return unless occurrence_id
+
+        session = @runtime.session_for(thread_id)
+        # Re-read the view: the ask may have been answered by another channel
+        # while parked; only a still-paused approval may time out.
+        view = view_of(session, thread_id)
+        return unless view && view.status == :paused && !view.interrupts.empty?
+
+        descriptor = view.interrupts.map(&:descriptor).compact.find { |d| d['kind'] == 'approve_tool' }
+        decision = descriptor&.dig('decision')
+        return unless decision
+
+        @runtime.approval_engine.resolve(decision_id: decision.fetch('id'), answer: :deny, scope: nil)
+        answers = {}
+        view.interrupts.each do |interrupt|
+          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, false)
+        end
+        emit('request.denied', thread: thread_id, request_id: occurrence_id,
+                               actor: 'policy.timeout', observability: {execution_id: view.execution_id})
+        notify_sink(thread_id, 'request.denied', 'Denied.', request_id: occurrence_id)
+        unpark(thread_id)
+        request = session.resume(answers, thread: thread_id,
+                                 request_id: "timeout-#{occurrence_id}", owner_id: owner_id)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        settle(session, thread_id:, occurrence_id:)
+      rescue StandardError => error
+        emit('worker.error', reason: error.message)
       end
 
       # The terminal error column bounds its reason (512 bytes, no control
@@ -841,8 +1015,9 @@ module Tamoz
 
       def parked?(entry)
         @monitor.synchronize do
-          signature = @parked[entry.fetch(:thread_id)]
-          next false unless signature
+          meta = @parked[entry.fetch(:thread_id)]
+          next false unless meta
+          signature = meta.fetch(:signature)
 
           # A failed claim parks even a :queued entry: without this, the worker
           # would re-claim it every poll and hot-loop (bounded to one attempt

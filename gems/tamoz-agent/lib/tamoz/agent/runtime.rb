@@ -580,7 +580,7 @@ module Tamoz
           # execution metadata binding execution to the approved state.
           effect_arguments = resolved_effect_arguments(step)
           begin
-            if toolbox.approval_required?(step.tool)
+            if policy_gated?(step.tool)
               maximum_output = toolbox.maximum_effect_output_bytes(step.tool)
               if total_bytes + maximum_output > MAX_OBSERVATION_BYTES
                 raise ToolError, "insufficient observation budget for #{step.tool}"
@@ -767,7 +767,23 @@ module Tamoz
       end
 
       def action_signature(plan)
-        Deliberation.action_signature(plan, toolbox:)
+        # One-shot convergence lands in step 9; until then the engine's
+        # current policy partitions gated from ungated with a conservative
+        # effect class.
+        Deliberation.action_signature(
+          plan,
+          gated: lambda { |tool| policy_gated?(tool) }
+        )
+      end
+
+      # The engine is the only classification owner; the one-shot runtime asks
+      # its operator exactly when the active policy would not auto-allow.
+      def policy_gated?(tool)
+        request = @approval_engine.build_request(
+          tool: tool, argv: [], targets: [],
+          effect_class: :bounded, session_id: 'one-shot'
+        )
+        @approval_engine.simulate(request).verdict != :allow
       end
 
       def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context)

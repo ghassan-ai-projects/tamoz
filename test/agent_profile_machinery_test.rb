@@ -348,8 +348,7 @@ class AgentProfileMachineryTest < Minitest::Test
       dummy = Object.new
       def dummy.generate(**) = "{}"
       toolbox = Tamoz::Agent::Toolbox.new(
-        root: workspace, allow_changes: false, checks: {}, allowed_tools: READ_ONLY_TOOLS,
-        approval_required: []
+        root: workspace, allow_changes: false, checks: {}, allowed_tools: READ_ONLY_TOOLS
       )
       FileUtils.mkdir_p(session_dir, mode: 0o700)
       adapter = Tamoz::SQLite::Adapter.new(
@@ -1019,7 +1018,7 @@ class AgentProfileMachineryTest < Minitest::Test
         "canonical_root" => workspace
       },
       "roots" => {"workspace" => workspace},
-      "tools" => {"allowed" => tools, "approval_required" => []},
+      "tools" => {"allowed" => tools},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -1057,7 +1056,7 @@ class AgentProfileMachineryTest < Minitest::Test
     {
       "profile" => profile,
       "roots" => {"workspace" => @workspace},
-      "tools" => {"allowed" => READ_ONLY_TOOLS, "approval_required" => []},
+      "tools" => {"allowed" => READ_ONLY_TOOLS},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -1070,8 +1069,7 @@ class AgentProfileMachineryTest < Minitest::Test
 
   def catalog_digest(workspace:, tools:)
     Tamoz::Agent::Toolbox.new(
-      root: workspace, allow_changes: false, checks: {}, allowed_tools: tools,
-      approval_required: []
+      root: workspace, allow_changes: false, checks: {}, allowed_tools: tools
     ).catalog_digest
   end
 

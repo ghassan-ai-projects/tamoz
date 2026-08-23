@@ -25,25 +25,23 @@ module Tamoz
         'read_skill_resource' => 'Read one indexed reference or asset of a catalogued skill. Arguments: {"skill": "source/name", "path": "references/file.md"}; path must be an exact entry of that skill\'s resource inventory.'
       }.freeze
       PROMPT_SURFACE_DOMAIN = "tamoz.agent.prompt_surface.v1\n"
-      DEFAULT_APPROVAL_REQUIRED = ACTION_DESCRIPTIONS.keys.freeze
 
-      attr_reader :checks, :check_safeties, :allowed_tools, :approval_required,
+      attr_reader :checks, :check_safeties, :allowed_tools,
                   :descriptions, :catalog_digest, :prompt_surface_digest
 
-      def initialize(allow_changes:, checks:, check_safeties:, allowed_tools:, approval_required:, skills:)
+      def initialize(allow_changes:, checks:, check_safeties:, allowed_tools:, skills:)
         available = READ_DESCRIPTIONS.keys.dup
         available.concat(SKILL_DESCRIPTIONS.keys) unless skills.empty?
         available.push('apply_patch', 'create_file') if allow_changes
         policy = ToolPolicyNormalizer.new(
-          policy: { checks:, check_safeties:, allowed_tools:, approval_required:, base_available_tools: available,
-                    allow_changes:, default_approval_required: DEFAULT_APPROVAL_REQUIRED }
+          policy: { checks:, check_safeties:, allowed_tools:, base_available_tools: available,
+                    allow_changes: }
         )
         @checks = policy.checks
         @check_safeties = policy.check_safeties
         @allowed_tools = policy.allowed_tools
-        @approval_required = policy.approval_required
         @descriptions = descriptions_for(allow_changes, skills)
-        @catalog_digest = digest([@allowed_tools.sort, @approval_required.sort, @descriptions.keys.sort,
+        @catalog_digest = digest([@allowed_tools.sort, @descriptions.keys.sort,
                                   @descriptions.sort.to_h, @checks.keys.sort,
                                   @checks.keys.sort.map do |name|
                                     [name, check_safety(name).to_s, @checks.fetch(name)]

@@ -90,7 +90,10 @@ module Tamoz
           raise InvalidPolicyError, "profile name mismatch: #{profile.fetch('name').inspect} != #{profile_name.inspect}"
         end
 
-        allowed_keys = %w[name tier_defaults on_timeout]
+        # A mode may restate the canned expectations its defaults actually
+        # guarantee: base pins unknown-tool ask, which a deny-all or allow-most
+        # tier overlay legitimately changes. Absent key keeps base's block.
+        allowed_keys = %w[name tier_defaults on_timeout simulations]
         unknown = profile.keys - allowed_keys
         unless unknown.empty?
           raise InvalidPolicyError, "profile #{profile_name} contains unknown keys: #{unknown.join(', ')}"
@@ -99,6 +102,7 @@ module Tamoz
         @profile_name = profile_name
         apply_tier_defaults(profile['tier_defaults'])
         apply_on_timeout(profile['on_timeout'])
+        apply_simulations(profile['simulations'])
         recompute_digest_and_validate!
         self
       end
@@ -299,6 +303,12 @@ module Tamoz
           raise InvalidPolicyError, "profile on_timeout must be :park or :deny, got #{value.inspect}"
         end
         @ask[:on_timeout] = symbol
+      end
+
+      def apply_simulations(raw)
+        return unless raw
+
+        @simulations = normalize_simulations(raw)
       end
 
       # The rev digests the NORMALIZED structures, never the raw YAML, so the

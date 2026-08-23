@@ -21,7 +21,7 @@ class AgentDecisionFlowTest < Minitest::Test
   # decision must never answer the second: the second pause has a different
   # interrupt digest, so it stays parked until its own decision arrives.
   def test_a_decision_for_one_round_never_answers_a_later_round_in_the_same_occurrence
-    with_runtime(unattended: { 'reconcilable' => [] }) do |rt|
+    with_runtime(approval_profile: 'unattended') do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
       rt.cli(['queue', 'add', '--task', 'Fix twice', '--profile', 'trusted'], factory: two_edits_factory)
       rt.cli(%w[worker --once --json], factory: two_edits_factory)
@@ -59,7 +59,7 @@ class AgentDecisionFlowTest < Minitest::Test
   # refused: the digest is part of the record's identity, so a stale decision
   # can never be silently consumed by a changed question.
   def test_a_wrong_digest_decision_is_refused_and_the_turn_stays_parked
-    with_runtime(unattended: { 'reconcilable' => [] }) do |rt|
+    with_runtime(approval_profile: 'unattended') do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
       rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--profile', 'trusted'], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)
@@ -84,7 +84,7 @@ class AgentDecisionFlowTest < Minitest::Test
   # lifetime (15 minutes default), and after that the turn stays parked until
   # the operator records a fresh decision.
   def test_an_expired_decision_is_refused_and_the_turn_stays_parked
-    with_runtime(unattended: { 'reconcilable' => [] }) do |rt|
+    with_runtime(approval_profile: 'unattended') do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
       rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--profile', 'trusted'], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)
@@ -107,7 +107,7 @@ class AgentDecisionFlowTest < Minitest::Test
   # The operator's latest word on the SAME question wins: approve then deny
   # before the worker sees either leaves the turn parked with the denial.
   def test_a_later_decision_on_the_same_question_supersedes_an_earlier_one
-    with_runtime(unattended: { 'reconcilable' => [] }) do |rt|
+    with_runtime(approval_profile: 'unattended') do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
       rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--profile', 'trusted'], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)
@@ -130,7 +130,7 @@ class AgentDecisionFlowTest < Minitest::Test
   # reclaimed on the next pass, and the derived resume request id means the
   # re-submission cannot duplicate the resume (invariant 23).
   def test_an_expired_claim_is_recovered_without_duplicating_the_resume
-    with_runtime(unattended: { 'reconcilable' => [] }) do |rt|
+    with_runtime(approval_profile: 'unattended') do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
       rt.cli(['queue', 'add', '--task', 'Fix note.txt', '--profile', 'trusted'], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)

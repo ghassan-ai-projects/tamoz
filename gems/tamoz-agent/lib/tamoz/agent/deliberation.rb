@@ -304,9 +304,12 @@ module Tamoz
         raise ProtocolError, "invalid verification: #{error.message}"
       end
 
-      def action_signature(plan, toolbox:)
+      # `gated` answers whether the approval policy governs this tool — the
+      # engine decides per request at step_gate; the signature only needs the
+      # same partition so repeats of GATED work are what it catches.
+      def action_signature(plan, gated:)
         actions = plan.steps.filter_map do |step|
-          next unless step.tool && toolbox.approval_required?(step.tool)
+          next unless step.tool && gated.call(step.tool)
 
           {"tool" => step.tool, "arguments" => canonicalize_apply_patch_arguments(step.arguments)}
         end

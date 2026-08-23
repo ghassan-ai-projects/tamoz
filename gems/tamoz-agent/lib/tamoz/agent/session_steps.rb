@@ -11,7 +11,7 @@ module Tamoz
     # Step helpers preserve approval, digest, effect, and observation ordering.
     class SessionSteps
       # Immutable preflight result used by the approval boundary.
-      Preparation = Data.define(:intent, :arguments, :preview, :approval_required)
+      Preparation = Data.define(:intent, :arguments, :preview, :approval_required, :decision)
 
       def initialize(services:)
         @services = services
@@ -27,7 +27,7 @@ module Tamoz
         tool = step['tool']
         return { next_node: 'step_execute' } if tool.nil?
 
-        prepared = prepare_step(state, step, tool, accepted)
+        prepared = prepare_step(state, step, tool, accepted, context)
         return prepared if prepared.is_a?(Hash)
         return execute_without_approval(prepared) unless prepared.approval_required
 
@@ -50,14 +50,14 @@ module Tamoz
 
       private
 
-      def prepare_step(state, step, tool, accepted)
+      def prepare_step(state, step, tool, accepted, context)
         effects = @services.effects
-        prepare_step_without_rescue(effects, state, step, tool, accepted)
+        prepare_step_without_rescue(effects, state, step, tool, accepted, context)
       rescue ToolArgumentError => e
         argument_failure(state, step, tool, e)
       end
 
-      def prepare_step_without_rescue(effects, state, step, tool, accepted)
+      def prepare_step_without_rescue(effects, state, step, tool, accepted, context)
         arguments = effects.resolved_effect_arguments(step.fetch('arguments'), tool)
         iteration = state.fetch(:step_cursor)
         budget = effects.maximum_effect_output_bytes(tool)
@@ -66,18 +66,59 @@ module Tamoz
         end
 
         intent = effects.build_intent(step, accepted, arguments, iteration:)
-        return no_approval_preparation(intent, arguments) unless effects.approval_required?(tool)
+
+        # ADR §8: a replayed gate re-reads its journaled verdict instead of
+        # asking again — decide must never run twice for one gated step.
+        case journaled_verdict(state, accepted, step)
+        when 'approve' then return no_approval_preparation(intent, arguments)
+        when 'deny' then return denied_update(state, step, nil)
+        end
+
+        decision = effects.decide_step_tool(
+          tool: tool,
+          arguments: arguments,
+          session_id: @services.configuration.approval_session_id,
+          step_scope: "#{context.execution_id}.#{accepted.fetch('plan_id')}.#{step.fetch('id')}"
+        )
+        case decision.verdict
+        when :allow then return no_approval_preparation(intent, arguments)
+        when :deny then return denied_update(state, step, decision)
+        end
 
         Preparation.new(
           intent:,
           arguments:,
           preview: effects.preview_for(tool, arguments),
-          approval_required: true
+          approval_required: true,
+          decision:
         )
       end
 
       def no_approval_preparation(intent, arguments)
-        Preparation.new(intent:, arguments:, preview: nil, approval_required: false)
+        Preparation.new(intent:, arguments:, preview: nil, approval_required: false, decision: nil)
+      end
+
+      # A deny is a structured tool result fed back to the model; the turn
+      # continues (ADR §2.4) — the workspace was not touched.
+      def denied_update(state, step, decision)
+        reason = decision ? "#{decision.reason}, rule #{decision.rule_id}" : 'denied by operator'
+        @services.evidence.tool_failure_update(
+          state,
+          failure: SessionEvidence::ToolFailure.new(
+            step:,
+            tool: step['tool'],
+            error_class: 'ToolPolicyError',
+            reason: "denied: #{reason}",
+            effect_receipt: nil
+          )
+        )
+      end
+
+      def journaled_verdict(state, accepted, step)
+        record = state.fetch(:approvals, []).find do |entry|
+          entry['approval_id'] == "#{accepted.fetch('plan_id')}.#{step.fetch('id')}"
+        end
+        record && record['decision']
       end
 
       def argument_failure(state, step, tool, error)
@@ -113,6 +154,14 @@ module Tamoz
       def approval_descriptor(state, accepted, step, prepared, preview_digest)
         {
           'kind' => 'approve_tool',
+          'decision' => {
+            'id' => prepared.decision.id,
+            'verdict' => prepared.decision.verdict.to_s,
+            'reason' => prepared.decision.reason,
+            'rule_id' => prepared.decision.rule_id,
+            'required_evidence' => prepared.decision.required_evidence&.to_s,
+            'grant_scopes' => prepared.decision.grant_offer&.scopes&.map(&:to_s)
+          },
           'session_id' => state.fetch(:session).fetch('session_id'),
           'plan_id' => accepted.fetch('plan_id'),
           'plan_digest' => accepted.fetch('plan_digest'),

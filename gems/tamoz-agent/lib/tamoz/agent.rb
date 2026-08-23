@@ -104,17 +104,24 @@ module Tamoz
       # The one-shot runtime is ephemeral: its grants live and die with this
       # process, so it gets the in-memory stores — never the worker's SQLite
       # engine (ADR §2.3).
+      approval_engine = build_approval_engine(profile_name: "implement")
+      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:, approval_engine:)
+    end
+
+    # An ephemeral engine over memory stores for processes that own their own
+    # approvals (the one-shot runtime, the interactive CLI). Durable workers
+    # build theirs over SQLite at boot (ADR §2.3) — never share instances.
+    def self.build_approval_engine(profile_name:, policy_path: Tamoz::Approval.bundled_policy_path)
       evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
-      approval_engine = Tamoz::Approval::Engine.new(
+      Tamoz::Approval::Engine.new(
         policy: Tamoz::Approval::PolicyDocument.load_profile(
-          Tamoz::Approval.bundled_policy_path, "implement", evidence_symbols: evidence_symbols
+          policy_path, profile_name, evidence_symbols: evidence_symbols
         ),
         grant_store: Tamoz::Approval::MemoryGrantStore.new,
         decision_log: Tamoz::Approval::MemoryDecisionLog.new,
         clock: -> { Time.now },
         evidence_symbols: evidence_symbols
       )
-      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:, approval_engine:)
     end
   end
 end
