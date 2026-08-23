@@ -44,7 +44,6 @@ class SQLiteScheduleDeterminismTest < Minitest::Test
       start_at: anchor, payload_ref: PAYLOAD, thread_policy: "thread.scheduler",
       capability_grant: {"scopes" => ["read"]},
       behavior_version: "tamoz.agent.session/1",
-      approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
       delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
       created_by: "human:op", created_at: anchor, **overrides
     )

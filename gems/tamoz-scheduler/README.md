@@ -16,7 +16,7 @@ schedule = Tamoz::Scheduler::Schedule.new(
   thread_policy: "thread.scheduler",
   capability_grant: {"scopes" => ["read"]},
   behavior_version: "tamoz.agent.session/1",
-  approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
+  approval_profile: "implement",
   delivery_policy: {"mode" => "inbox"},
   budgets: {"max_steps" => 10},
   created_by: "human:operator",

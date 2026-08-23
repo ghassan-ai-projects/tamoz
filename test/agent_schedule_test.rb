@@ -59,6 +59,22 @@ class AgentScheduleTest < Minitest::Test
     end
   end
 
+  # A schedule names the approval profile its occurrences run under. The flag
+  # is optional: absent means the default profile, not no profile.
+  def test_schedule_add_names_an_approval_profile
+    with_runtime do |rt|
+      assert_equal 0,
+                   rt.cli(%W[schedule add --id nightly --interval 3600 --task X --approval-profile unattended --json]),
+                   rt.err
+      rt.cli(%w[schedule show nightly --json])
+      assert_equal "unattended", JSON.parse(rt.out).fetch("approval_profile")
+
+      assert_equal 0, rt.cli(%W[schedule add --id plain --interval 3600 --task X --json]), rt.err
+      rt.cli(%w[schedule show plain --json])
+      assert_equal "implement", JSON.parse(rt.out).fetch("approval_profile")
+    end
+  end
+
   def test_status_projects_schedule_authority_and_recovery_state
     with_runtime do |rt|
       rt.cli(%W[schedule add --id nightly --interval 3600 --task Read note.txt])

@@ -2798,7 +2798,6 @@ module Tamoz
                 start_at: anchor, payload_ref:, thread_policy: "thread.scheduler",
                 capability_grant: consumer_grant,
                 behavior_version: "tamoz.agent.session/1",
-                approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
                 delivery_policy: {"mode" => "inbox"},
                 budgets: {"max_steps" => 10},
                 created_by: "human:operator", created_at: anchor

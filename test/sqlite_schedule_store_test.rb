@@ -42,7 +42,6 @@ class SQLiteScheduleStoreTest < Minitest::Test
       start_at: start_at, payload_ref: PAYLOAD, thread_policy: "thread.scheduler",
       capability_grant: {"scopes" => ["read"]},
       behavior_version: "tamoz.agent.session/1",
-      approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
       delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
       created_by: "human:op", created_at: start_at || 1_700_000_000,
       **overrides
@@ -116,6 +115,19 @@ class SQLiteScheduleStoreTest < Minitest::Test
         thread_id: "thread.scheduler", request_id: occurrences.first.request_id
       )
       assert_equal :queued, request.status
+    end
+  end
+
+  # The stored profile name is what the worker's boot wiring reads when it
+  # binds the approval engine for an occurrence, so it must survive the
+  # JSON payload round trip exactly.
+  def test_schedule_approval_profile_round_trips_through_storage
+    with_engine do |store, _adapter, _checkpoints, _path|
+      store.put_schedule(schedule)
+      assert_equal "implement", store.fetch_schedule("daily").approval_profile
+
+      store.put_schedule(schedule(id: "profiled", approval_profile: "unattended"))
+      assert_equal "unattended", store.fetch_schedule("profiled").approval_profile
     end
   end
 
