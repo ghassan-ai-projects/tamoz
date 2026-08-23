@@ -1,4 +1,10 @@
 PATH
+  remote: gems/tamoz-agent-cli
+  specs:
+    tamoz-agent-cli (0.1.0.alpha.1)
+      tamoz-agent (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent-healing
   specs:
     tamoz-agent-healing (0.1.0.alpha.1)
@@ -305,6 +311,7 @@ DEPENDENCIES
   rubocop-performance (~> 1.25)
   simplecov (~> 0.22)
   tamoz-agent!
+  tamoz-agent-cli!
   tamoz-agent-healing!
   tamoz-agent-improvement!
   tamoz-agent-kernel!
@@ -384,6 +391,7 @@ CHECKSUMS
   simpleidn (0.2.3) sha256=08ce96f03fa1605286be22651ba0fc9c0b2d6272c9b27a260bc88be05b0d2c29
   sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
+  tamoz-agent-cli (0.1.0.alpha.1)
   tamoz-agent-healing (0.1.0.alpha.1)
   tamoz-agent-improvement (0.1.0.alpha.1)
   tamoz-agent-kernel (0.1.0.alpha.1)

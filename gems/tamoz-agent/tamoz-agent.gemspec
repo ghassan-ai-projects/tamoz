@@ -21,6 +21,5 @@ TamozGemspec.build(
     ["tamoz-approval", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-observability", "= #{Tamoz::Agent::VERSION}"],
     ["ruby_llm", "~> 1.16.0"]
-  ],
-  executable: "tamoz"
+  ]
 )

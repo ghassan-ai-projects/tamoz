@@ -209,7 +209,7 @@ class DependencyIsolationTest < Minitest::Test
   # development/release harness, not a production gem (GB-02) — it exercises
   # every public boundary, including agent, and nothing depends on it in turn.
   def test_no_production_gemspec_depends_on_agent_except_agents_own_dependents
-    allowed = %w[tamoz-agent tamoz-tools]
+    allowed = %w[tamoz-agent tamoz-tools tamoz-agent-cli]
 
     GEM_ROOTS.except("tamoz-evals").each do |name, root|
       next if allowed.include?(name)

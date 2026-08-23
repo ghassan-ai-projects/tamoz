@@ -53,6 +53,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
           "Tamoz::Agent::Improvement::VERSION" => {}
         },
+        "tamoz-agent-cli" => {
+          "Tamoz::Agent::CLI" => {},
+          "Tamoz::Agent::CLI::VERSION" => {}
+        },
         "tamoz-agent-kernel" => {
           "Tamoz::Agent::Deliberation" => {},
           "Tamoz::Agent::EffectDispatcher" => {},
@@ -385,6 +389,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::Profile::VERSION,
       Tamoz::Agent::Improvement::VERSION,
+      Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,
@@ -408,7 +413,7 @@ class PublicAPITest < Minitest::Test
 
     assert_equal "Tamoz Agent", manifest.fetch("name")
     assert_equal "Tamoz::App", manifest.fetch("namespace")
-    assert_equal "tamoz-agent", manifest.fetch("runtime_package")
+    assert_equal "tamoz-agent-cli", manifest.fetch("runtime_package")
     assert_equal "bounded-repair-cli", manifest.fetch("status")
     assert_equal "working-slice-3", manifest.fetch("activation_milestone")
   end

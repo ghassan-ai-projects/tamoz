@@ -26,9 +26,11 @@ class PackagingTest < Minitest::Test
           assert(contents.any? { |path| path.start_with?("lib/") }, name)
           refute(contents.any? { |path| path.match?(%r{\A(?:test|spec|tmp|vendor|\.git)/}) }, name)
 
-          if name == "tamoz-agent"
+          if name == "tamoz-agent-cli"
             assert_equal ["tamoz"], spec.executables
             assert_includes contents, "exe/tamoz"
+          elsif name == "tamoz-agent"
+            assert_empty spec.executables
           end
 
           if name == "tamoz-stream"
@@ -70,7 +72,7 @@ class PackagingTest < Minitest::Test
   # than asking `gem install` to resolve them from a registry.
   def test_packaged_evals_executable_runs_without_repository_load_paths
     names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
-               tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+               tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
     with_isolated_install(names, "evals") do |environment|
       install_root = environment.fetch("GEM_HOME")
       spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-evals").join("tamoz-evals.gemspec").to_s)
@@ -122,7 +124,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")

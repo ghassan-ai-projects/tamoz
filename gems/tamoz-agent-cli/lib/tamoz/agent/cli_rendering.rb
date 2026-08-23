@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative 'terminal_progress'
 
 module Tamoz
   module Agent

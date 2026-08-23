@@ -54,6 +54,10 @@
       "Tamoz::Agent::Improvement::CandidateLifecycle": {},
       "Tamoz::Agent::Improvement::VERSION": {}
     },
+    "tamoz-agent-cli": {
+      "Tamoz::Agent::CLI": {},
+      "Tamoz::Agent::CLI::VERSION": {}
+    },
     "tamoz-agent-kernel": {
       "Tamoz::Agent::Deliberation": {},
       "Tamoz::Agent::EffectDispatcher": {},

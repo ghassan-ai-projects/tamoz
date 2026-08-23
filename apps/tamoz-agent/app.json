@@ -3,6 +3,6 @@
   "format_version": 1,
   "name": "Tamoz Agent",
   "namespace": "Tamoz::App",
-  "runtime_package": "tamoz-agent",
+  "runtime_package": "tamoz-agent-cli",
   "status": "bounded-repair-cli"
 }
