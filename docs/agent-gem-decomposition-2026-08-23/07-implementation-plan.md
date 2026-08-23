@@ -46,7 +46,11 @@ Measured on the working tree (2026-08-23, `main` @ 0c913ad):
    filter). Unlisted = silently unaudited.
 3. `test/packaging_test.rb`: extend both hardcoded lists (isolated-install,
    scorecard) the moment tamoz-agent's gemspec gains the dep.
-4. New gem: gemspec via `TamozGemspec.build` (lockstep literal VERSION),
+4. `docs/public-api.json` + `test/public_api_test.rb`: new gem gets its own
+   packages section (`GEM_ROOTS.keys == packages.keys` is asserted); any
+   constant whose canonical home moves to another gem flips to
+   `deprecated: true` in BOTH files (Tool* precedent).
+5. New gem: gemspec via `TamozGemspec.build` (lockstep literal VERSION),
    `version.rb`, LICENSE, README stating public surface, chmod 644.
 
 ## The bar (applies to every phase)
@@ -82,7 +86,7 @@ committed; `tamoz-agent` ≈ 10.9k-line runtime + extracted family in lockstep.
 | D | `Plan.parse_object/string/strings` → core | Home in `tamoz-core`; raises a core-level error (`< Tamoz::Core::Error`). Same commit: switch the ~12 `ProtocolError` rescue sites (errors.rb def, session_plan_attempt:76,197, episode_nodes:449, session_planning_context:127, session_adaptive:84, episode_model_transport:160, witness_gateway:155,206, session_routing:35,165, runtime:176,491) + fold `deep_freeze` dupes in intent_catalog/profile onto core. |
 | 3 | `Event` → own file | Out of `runtime.rb:9` into `lib/tamoz/agent/event.rb`; zero churn (verified). |
 | C | `raw_http.rb` → tamoz-core | Repoint `witness_gateway.rb:11` require + `test/support/local_model_endpoint`. |
-| B | `durable_recorder.rb` → tamoz-observability | Consumers: cli_worker_commands + evals durable-cli adapter require path. |
+| B | `durable_recorder.rb` → tamoz-observability | **SKIPPED (audit)** — the file is `private_constant`, its only consumer is `cli_worker_commands.rb:679`, and doc 04-B's "one evals test" consumer does not exist in the tree. Extracting would manufacture public API with a single internal user. Stays in the runtime cluster; re-evaluate if a second consumer appears. |
 
 Gates: memory/healing/session smoke suites + evals harness load + stream
 episode fixed-graph test (exercises Event/episode paths).

@@ -8,7 +8,6 @@ require "uri"
 require "openssl"
 require "tamoz/core"
 require "tamoz/agent/errors"
-require "tamoz/agent/raw_http"
 
 module Tamoz
   module Agent
@@ -124,7 +123,7 @@ module Tamoz
       #     "settings_digest", "request_bytes" }  — the request body is the
       #   frozen provider request the gateway rehashes and forwards.
       def handle(client)
-        request_bytes = RawHttp.read_request(client)
+        request_bytes = Tamoz::Core::RawHttp.read_request(client)
         return if request_bytes.nil?
 
         envelope = parse_envelope(request_bytes)
@@ -151,7 +150,7 @@ module Tamoz
           @records.shift if @records.length > MAX_RECORDS
         end
         append_log(signed) if @log_path
-        RawHttp.write_response(client, response_body, status:)
+        Tamoz::Core::RawHttp.write_response(client, response_body, status:)
       rescue ProtocolError => error
         # A bad envelope is the client's fault (400); an upstream failure
         # keeps its typed code but is a gateway-side 502.
@@ -227,7 +226,7 @@ module Tamoz
       def write_error(client, error, status:)
         code = error.is_a?(ProtocolError) ? error.message : "witness_gateway/internal_error"
         body = JSON.generate({"error" => code})
-        RawHttp.write_response(
+        Tamoz::Core::RawHttp.write_response(
           client, body, status:,
           reason: status == 400 ? "Bad Request" : "Bad Gateway"
         )

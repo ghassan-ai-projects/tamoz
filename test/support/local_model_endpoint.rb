@@ -5,7 +5,7 @@ require "json"
 require "digest"
 require "net/http"
 require "uri"
-require "tamoz/agent/raw_http"
+require "tamoz/core"
 
 # P1 test infrastructure: a real, separately-controlled local model endpoint.
 #
@@ -88,7 +88,7 @@ class LocalModelEndpoint
   private
 
   def handle(client)
-    request_bytes = Tamoz::Agent::RawHttp.read_request(client)
+    request_bytes = Tamoz::Core::RawHttp.read_request(client)
     return if request_bytes.nil?
 
     if @mode == :fixture
@@ -96,11 +96,11 @@ class LocalModelEndpoint
       @index += 1
       envelope = fixture_envelope(content)
       append_log(request_bytes:, response_bytes: envelope)
-      Tamoz::Agent::RawHttp.write_response(client, envelope, status: 200)
+      Tamoz::Core::RawHttp.write_response(client, envelope, status: 200)
     else
       status, body = forward(request_bytes)
       append_log(request_bytes:, response_bytes: body, upstream_status: status)
-      Tamoz::Agent::RawHttp.write_response(client, body, status:)
+      Tamoz::Core::RawHttp.write_response(client, body, status:)
     end
   rescue StandardError
     nil

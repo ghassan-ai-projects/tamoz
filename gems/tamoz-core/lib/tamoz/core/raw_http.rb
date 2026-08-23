@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
 module Tamoz
-  module Agent
-    # P3: the minimal raw-HTTP framing shared by the witness gateway (lib) and
-    # the local model endpoint (test support) — ONE read path and ONE write
-    # path, so the two servers cannot drift on request parsing or response
-    # framing.
+  module Core
+    # P3: the minimal raw-HTTP framing shared by the witness gateway and the
+    # local model endpoint (test support) — ONE read path and ONE write path,
+    # so the two servers cannot drift on request parsing or response framing.
+    # Homed in tamoz-core so both consumers share it without an agent edge.
     module RawHttp
       module_function
 

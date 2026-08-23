@@ -6,7 +6,6 @@ require "securerandom"
 
 module Tamoz
   module Agent
-    Event = Data.define(:type, :data)
     Result = Data.define(:answer, :satisfied, :evidence, :plan, :review, :observations) do
       def responded?
         plan.nil? && review.nil? && observations.empty? && !satisfied

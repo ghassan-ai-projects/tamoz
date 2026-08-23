@@ -105,6 +105,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Core::LEGACY_SKILL_EPOCH" => {},
           "Tamoz::Core::TOOL_ERROR_CLASS_NAMES" => {},
           "Tamoz::Core::ProtocolError" => {},
+          "Tamoz::Core::RawHttp" => {},
           "Tamoz::Core::ToolArgumentError" => {},
           "Tamoz::Core::ToolError" => {},
           "Tamoz::Core::ToolPolicyError" => {},
