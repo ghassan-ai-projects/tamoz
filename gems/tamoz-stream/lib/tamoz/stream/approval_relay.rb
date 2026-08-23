@@ -48,7 +48,18 @@ module Tamoz
       # submission: submit(approval_id:, decision:, reason:, idempotency_key:, assertion:)
       # nonce_store: claim(nonce) -> true when first seen, false on replay
       # signer:     key_id; sign(canonical_bytes) -> signature hex
-      # approval_state: optional durable state reader returning the receipt row
+      # approval_state: optional durable receipt port — fetch(approval_id) ->
+      #             row Hash | nil; the row carries "state"
+      #             (requested|withdrawn|resolved) and "expires_at". The
+      #             implementing store stamps "expires_at" from an integer
+      #             TTL injected at subscriber boot and reads an expired
+      #             receipt as ABSENT (nil): a lapsed approval re-asks instead
+      #             of resolving. Expiry therefore fails closed twice — here,
+      #             via the absent or non-requested row, and again below when
+      #             the payload's own expires_at has passed. The TTL is a
+      #             plain integer like every other injected dependency;
+      #             tamoz-stream loads no policy documents and gains no comms
+      #             dependency.
       def initialize(delivery:, submission:, nonce_store:, signer:, relay_id:,
                      approval_state: nil, clock: -> { Time.now })
         unless delivery.respond_to?(:deliver) && delivery.respond_to?(:edit_in_place)
@@ -62,6 +73,9 @@ module Tamoz
         end
         unless signer.respond_to?(:sign) && signer.respond_to?(:key_id)
           raise ApprovalRelayError, "approval signer must implement sign and key_id"
+        end
+        unless approval_state.nil? || approval_state.respond_to?(:fetch)
+          raise ApprovalRelayError, "approval state must implement fetch"
         end
         @delivery = delivery
         @submission = submission

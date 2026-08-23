@@ -14,7 +14,7 @@ module Tamoz
 
       def initialize(verification:, memory:, durable:, tenant:, logger:,
                      approval_receipts: nil, approval_relay: nil,
-                     conversation_id: nil)
+                     conversation_id: nil, approval_ttl_s: nil)
         @verification = verification
         @memory = memory
         @durable = durable
@@ -23,6 +23,7 @@ module Tamoz
         @approval_receipts = approval_receipts
         @approval_relay = approval_relay
         @conversation_id = conversation_id
+        @approval_ttl_s = approval_ttl_s
       end
 
       def callables
@@ -107,7 +108,8 @@ module Tamoz
         @approval_receipts.reserve_requested(
           approval_id:, tenant_id: @tenant, payload_digest: digest,
           identity: approval_identity(data),
-          traceparent: event.traceparent, tracestate: event.tracestate
+          traceparent: event.traceparent, tracestate: event.tracestate,
+          ttl_s: @approval_ttl_s
         )
         claim = @approval_receipts.claim_delivery(approval_id:)
         return unless claim == :claimed
