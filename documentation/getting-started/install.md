@@ -65,7 +65,8 @@ named example task in a clean subprocess.
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
 | `tamoz-agent-kernel` | The deliberation substrate: records, receipts, plan/review/execute/verify engine, effect seam | `tamoz-core`, `tamoz-tools` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-agent-kernel`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent-memory` | The durable memory vertical: `Memory::Engine`, admission/retrieval/consolidation/lifecycle, wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
 | `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | core, agent, sqlite, mcp, graph, scheduler (development/release only) |
 

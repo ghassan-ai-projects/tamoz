@@ -54,6 +54,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
           "Tamoz::Agent::Step" => {}
         },
+        "tamoz-agent-memory" => {
+          "Tamoz::Agent::Memory::Engine" => {},
+          "Tamoz::Agent::Memory::VERSION" => {}
+        },
         "tamoz-approval" => {
           "Tamoz::Approval::Answer.parse" => {},
           "Tamoz::Approval::ConflictingResolutionError" => {},
@@ -364,6 +368,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Stream::VERSION,
       Tamoz::Tools::VERSION,
       Tamoz::Agent::Kernel::VERSION,
+      Tamoz::Agent::Memory::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,

@@ -55,6 +55,10 @@
       "Tamoz::Agent::SkillSnapshotUnavailableError": {},
       "Tamoz::Agent::Step": {}
     },
+    "tamoz-agent-memory": {
+      "Tamoz::Agent::Memory::Engine": {},
+      "Tamoz::Agent::Memory::VERSION": {}
+    },
     "tamoz-approval": {
       "Tamoz::Approval::Answer.parse": {},
       "Tamoz::Approval::ConflictingResolutionError": {},
