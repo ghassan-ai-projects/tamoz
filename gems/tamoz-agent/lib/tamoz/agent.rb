@@ -3,6 +3,8 @@
 require "tamoz/graph"
 require "tamoz/tools"
 require "tamoz/observability"
+require "tamoz/comms"
+require "tamoz/approval"
 require_relative "agent/version"
 require_relative "agent/errors"
 require_relative "agent/diagnosis_catalog"
@@ -99,7 +101,20 @@ module Tamoz
       # It is never discovered by scanning the workspace, so repository content can
       # never put a skill on the catalog (plan §2).
       toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:, skills:)
-      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:)
+      # The one-shot runtime is ephemeral: its grants live and die with this
+      # process, so it gets the in-memory stores — never the worker's SQLite
+      # engine (ADR §2.3).
+      evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
+      approval_engine = Tamoz::Approval::Engine.new(
+        policy: Tamoz::Approval::PolicyDocument.load_profile(
+          Tamoz::Approval.bundled_policy_path, "implement", evidence_symbols: evidence_symbols
+        ),
+        grant_store: Tamoz::Approval::MemoryGrantStore.new,
+        decision_log: Tamoz::Approval::MemoryDecisionLog.new,
+        clock: -> { Time.now },
+        evidence_symbols: evidence_symbols
+      )
+      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:, approval_engine:)
     end
   end
 end

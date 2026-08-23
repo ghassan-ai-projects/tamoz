@@ -33,10 +33,10 @@ module Tamoz
       REVIEW_SYSTEM = Deliberation::REVIEW_SYSTEM
       VERIFY_SYSTEM = Deliberation::VERIFY_SYSTEM
 
-      attr_reader :model, :toolbox, :max_plan_attempts, :approval, :routing
+      attr_reader :model, :toolbox, :max_plan_attempts, :approval, :routing, :approval_engine
 
       def initialize(model:, toolbox:, max_plan_attempts: 3, approval: nil, routing: :legacy,
-                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE)
+                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil)
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
           raise ArgumentError, "max_plan_attempts must be between 1 and 10"
@@ -48,6 +48,7 @@ module Tamoz
         @toolbox = toolbox
         @max_plan_attempts = max_plan_attempts
         @approval = approval
+        @approval_engine = approval_engine
         @routing = routing
         @observability = Tamoz::Observability::Producer.new(recorder:)
         @correlation = nil

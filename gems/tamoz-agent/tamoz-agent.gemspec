@@ -13,6 +13,7 @@ TamozGemspec.build(
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-comms", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-approval", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-observability", "= #{Tamoz::Agent::VERSION}"],
     ["ruby_llm", "~> 1.16.0"]
   ],

@@ -113,6 +113,7 @@ module Tamoz
       # is queued. Returns whether anything moved, which is the only input to the
       # idle decision.
       def poll_once
+        @runtime.sync_approval_policy
         reconciled = reconcile_child_requests
         materialized = materialize_due_schedules
         advanced = advance_pending_threads

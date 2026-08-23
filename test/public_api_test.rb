@@ -47,6 +47,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::ConflictingResolutionError" => {},
           "Tamoz::Approval::Decision" => {},
           "Tamoz::Approval::DecisionLog" => {},
+          "Tamoz::Approval.bundled_policy_path" => {},
           "Tamoz::Approval::Engine" => {},
           "Tamoz::Approval::Error" => {},
           "Tamoz::Approval::Grant" => {},

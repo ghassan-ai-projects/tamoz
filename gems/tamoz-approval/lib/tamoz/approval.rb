@@ -18,5 +18,11 @@ module Tamoz
   # Approval/permission policy: one component that decides whether a tool call
   # needs approval, reading digest-pinned YAML policy data.
   module Approval
+    # The policy data this gem ships (base + profiles). Profiles resolve
+    # relative to the base file's directory, so one path hands the loader the
+    # whole bundled set — in-repo and installed alike.
+    def self.bundled_policy_path
+      File.expand_path('../../policy/base.yaml', __dir__)
+    end
   end
 end

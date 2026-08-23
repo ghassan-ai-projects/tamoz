@@ -15,7 +15,7 @@ module Tamoz
                          'reason, evidence, policy_rev, argv_digest, targets_digest, ' \
                          'grant_scopes, grant_key'.freeze
 
-      # Decision identity (0..4) + minted-grant fields (5..9) + resolution (10..12).
+      # Decision identity + minted grant = cols 0..4, resolution = cols 5..9.
       RESOLUTION_SELECT = <<~SQL.freeze
         SELECT session_id, policy_rev, grant_key,
                grant_created_at_ms, grant_expires_at_ms, verdict,
@@ -101,8 +101,9 @@ module Tamoz
         [
           record.fetch(:session_id), record.fetch(:tool), record.fetch(:verb),
           record.fetch(:tier), record.fetch(:rule_id), record.fetch(:verdict),
-          record.fetch(:evidence), record.fetch(:policy_rev), record.fetch(:argv_digest),
-          record.fetch(:targets_digest), scopes_text(record[:grant_scopes]), key_text_or_nil(record[:grant_key])
+          record.fetch(:reason), record.fetch(:evidence), record.fetch(:policy_rev),
+          record.fetch(:argv_digest), record.fetch(:targets_digest),
+          scopes_text(record[:grant_scopes]), key_text_or_nil(record[:grant_key])
         ]
       end
 
@@ -110,8 +111,8 @@ module Tamoz
         [
           row.fetch(1), row.fetch(2), row.fetch(3),
           row.fetch(4), row.fetch(5), row.fetch(6),
-          row.fetch(8), row.fetch(9), row.fetch(10),
-          row.fetch(11), row.fetch(12), row.fetch(13)
+          row.fetch(7), row.fetch(8), row.fetch(9),
+          row.fetch(10), row.fetch(11), row.fetch(12), row.fetch(13)
         ]
       end
 

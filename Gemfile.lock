@@ -3,6 +3,7 @@ PATH
   specs:
     tamoz-agent (0.1.0.alpha.1)
       ruby_llm (~> 1.16.0)
+      tamoz-approval (= 0.1.0.alpha.1)
       tamoz-comms (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
