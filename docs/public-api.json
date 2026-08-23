@@ -50,6 +50,10 @@
       "Tamoz::Agent::Profile": {},
       "Tamoz::Agent::Profile::VERSION": {}
     },
+    "tamoz-agent-improvement": {
+      "Tamoz::Agent::Improvement::CandidateLifecycle": {},
+      "Tamoz::Agent::Improvement::VERSION": {}
+    },
     "tamoz-agent-kernel": {
       "Tamoz::Agent::Deliberation": {},
       "Tamoz::Agent::EffectDispatcher": {},

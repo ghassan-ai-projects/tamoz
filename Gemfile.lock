@@ -7,6 +7,13 @@ PATH
       tamoz-tools (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-agent-improvement
+  specs:
+    tamoz-agent-improvement (0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-agent-memory (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent-kernel
   specs:
     tamoz-agent-kernel (0.1.0.alpha.1)
@@ -35,6 +42,7 @@ PATH
     tamoz-agent (0.1.0.alpha.1)
       ruby_llm (~> 1.16.0)
       tamoz-agent-healing (= 0.1.0.alpha.1)
+      tamoz-agent-improvement (= 0.1.0.alpha.1)
       tamoz-agent-kernel (= 0.1.0.alpha.1)
       tamoz-agent-memory (= 0.1.0.alpha.1)
       tamoz-agent-profile (= 0.1.0.alpha.1)
@@ -298,6 +306,7 @@ DEPENDENCIES
   simplecov (~> 0.22)
   tamoz-agent!
   tamoz-agent-healing!
+  tamoz-agent-improvement!
   tamoz-agent-kernel!
   tamoz-agent-memory!
   tamoz-agent-profile!
@@ -376,6 +385,7 @@ CHECKSUMS
   sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
   tamoz-agent-healing (0.1.0.alpha.1)
+  tamoz-agent-improvement (0.1.0.alpha.1)
   tamoz-agent-kernel (0.1.0.alpha.1)
   tamoz-agent-memory (0.1.0.alpha.1)
   tamoz-agent-profile (0.1.0.alpha.1)
