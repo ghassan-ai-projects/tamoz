@@ -5,6 +5,7 @@ module Tamoz
     module Answer
       APPROVE_TOKENS = %w[y yes a approve].freeze
       DENY_TOKENS = %w[n no d deny].freeze
+      VERDICTS = %i[approve deny].freeze
 
       module_function
 

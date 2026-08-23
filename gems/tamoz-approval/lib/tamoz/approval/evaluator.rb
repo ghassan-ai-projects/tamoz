@@ -2,8 +2,9 @@
 
 module Tamoz
   module Approval
-    # Minimal evaluator used for document simulations in Phase 2; the full
-    # Engine in Phase 3 reuses the same evaluation rules.
+    # Rules to verdict: deny rules first regardless of document order, then
+    # first-match ask/allow, then the tier default. Never raises for a policy
+    # reason — an unmatched request falls to the tier machinery.
     class Evaluator
       CLOSED_MATCHERS = %i[verb tool target_glob argv_prefix argv_flag].freeze
 
@@ -51,13 +52,7 @@ module Tamoz
       end
 
       def tier_for(request)
-        entry = @document.tool_tiers[request.tool]
-        name = if request.effect_class == :read_only
-                 :read
-               else
-                 entry ? entry[:tier] : @document.fallback_tier[:tier]
-               end
-        @document.tiers.fetch(name).merge(name: name)
+        @document.tier_for(request.tool, request.effect_class)
       end
 
       def decision_from(rule, request, verdict)
@@ -78,7 +73,8 @@ module Tamoz
           tier: tier.fetch(:name),
           grant_offer: grant_offer_for(request, tier, verdict),
           required_evidence: verdict == :ask ? @document.evidence[:approve] : nil,
-          policy_rev: @document.policy_rev
+          policy_rev: @document.policy_rev,
+          session_id: request.session_id
         )
       end
 
@@ -103,11 +99,14 @@ module Tamoz
         fields = @document.grant_keys[tier.fetch(:name)]
         return nil unless fields
 
+        # Key fields are opaque equality tokens; stringifying them here makes
+        # the durable (JSON-serialized) grant form identical to the in-memory
+        # one.
         key = {}
         fields.each do |field|
           value = case field
-                  when :verb then request.verb
-                  when :tool then request.tool
+                  when :verb then request.verb.to_s
+                  when :tool then request.tool.to_s
                   when :target_root then target_root(request)
                   when :key_argv then key_argv(request)
                   else nil
@@ -139,21 +138,17 @@ module Tamoz
       end
 
       def decision_id(request)
-        "#{request.session_id}:#{@document.policy_rev}:#{request_digest(request)}"
-      end
-
-      def request_digest(request)
-        Digest::SHA256.hexdigest(canonical_request(request))
+        "#{request.session_id}:#{@document.policy_rev}:#{Canonical.hexdigest(canonical_request(request))}"
       end
 
       def canonical_request(request)
-        JSON.generate(
+        {
           tool: request.tool,
           verb: request.verb,
           argv: request.argv,
           targets: request.targets,
           effect_class: request.effect_class
-        )
+        }
       end
     end
   end

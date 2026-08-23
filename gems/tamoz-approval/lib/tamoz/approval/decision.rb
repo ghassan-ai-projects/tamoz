@@ -10,7 +10,8 @@ module Tamoz
       :tier,
       :grant_offer,
       :required_evidence,
-      :policy_rev
+      :policy_rev,
+      :session_id
     )
 
     GrantOffer = Data.define(:scopes, :key)

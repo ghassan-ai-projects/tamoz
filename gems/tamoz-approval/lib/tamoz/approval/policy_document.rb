@@ -45,6 +45,30 @@ module Tamoz
         base.send(:apply_profile, profile_name)
       end
 
+      # The structural rule has one home (ADR §7): an unclassified tool falls
+      # to the fallback tier no matter what its descriptor claims; a
+      # classified :read_only tool lands in tier read even over contradicting
+      # data.
+      def tier_for(tool, effect_class)
+        entry = tool_tiers[tool]
+        name = if entry.nil?
+                 fallback_tier[:tier]
+               elsif effect_class.to_sym == :read_only
+                 :read
+               else
+                 entry[:tier]
+               end
+        tiers.fetch(name).merge(name: name)
+      end
+
+      def verb_for(tool, effect_class)
+        entry = tool_tiers[tool]
+        return fallback_tier[:verb] if entry.nil?
+        return :read if effect_class.to_sym == :read_only
+
+        entry[:verb]
+      end
+
       private
 
       def fetch_key(hash, key)

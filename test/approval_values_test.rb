@@ -35,7 +35,8 @@ class ApprovalValuesTest < Minitest::Test
       tier: :local_execute,
       grant_offer: offer,
       required_evidence: :filesystem_operator,
-      policy_rev: 'rev-1'
+      policy_rev: 'rev-1',
+      session_id: 'session-1'
     )
 
     assert_predicate decision, :frozen?

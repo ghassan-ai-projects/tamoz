@@ -5,10 +5,14 @@ require_relative 'approval/version'
 require_relative 'approval/errors'
 require_relative 'approval/request'
 require_relative 'approval/decision'
+require_relative 'approval/canonical'
 require_relative 'approval/grant'
 require_relative 'approval/answer'
 require_relative 'approval/evaluator'
 require_relative 'approval/policy_document'
+require_relative 'approval/grant_store'
+require_relative 'approval/decision_log'
+require_relative 'approval/engine'
 
 module Tamoz
   # Approval/permission policy: one component that decides whether a tool call
