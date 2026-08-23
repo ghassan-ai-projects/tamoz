@@ -381,8 +381,7 @@ module Tamoz
 
         def change_profile_document
           toolbox = Tamoz::Tools::Toolbox.new(
-            root: @workspace, allow_changes: true, allowed_tools: CHANGE_TOOLS,
-            approval_required: []
+            root: @workspace, allow_changes: true, allowed_tools: CHANGE_TOOLS
           )
           {
             'profile' => {
@@ -392,17 +391,13 @@ module Tamoz
               'canonical_root' => @workspace
             },
             'roots' => { 'workspace' => @workspace },
-            'tools' => { 'allowed' => CHANGE_TOOLS, 'approval_required' => [] },
+            'tools' => { 'allowed' => CHANGE_TOOLS },
             'policy' => {
               'allow_changes' => true,
               'default_check_safety' => 'read_only',
               'graph_version' => Tamoz::Agent::Session::GRAPH_VERSION,
               'behavior_version' => Tamoz::Agent::BEHAVIOR_VERSION,
               'tool_catalog_digest' => toolbox.catalog_digest
-            },
-            'unattended' => {
-              'read_only' => %w[read_file list_directory search_text],
-              'reconcilable' => ['create_file']
             }
           }
         end

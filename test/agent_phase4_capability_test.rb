@@ -17,7 +17,10 @@ class AgentPhase4CapabilityTest < Minitest::Test
 
   ProfileStub = Data.define(:profile_id, :tools_allowed, :canonical_digest)
 
-  def test_delegation_is_a_sealed_approval_required_capability_and_enqueues_durable_child
+  # Delegation is sealed (never discoverable) and carries a non-read-only
+  # descriptor, so the approval policy's own tier data (`child_task` →
+  # `local_execute`, grant_scopes [once]) is what makes it always-ask.
+  def test_delegation_is_a_sealed_bounded_capability_and_enqueues_durable_child
     runtime = ChildRuntime.new
     profile = ProfileStub.new(
       profile_id: 'trusted',
@@ -31,7 +34,9 @@ class AgentPhase4CapabilityTest < Minitest::Test
 
     assert_includes binding.names(:action), 'delegate_child_task'
     refute_includes binding.names(:discovery), 'delegate_child_task'
-    assert binding.approval_required?('delegate_child_task')
+    descriptor = binding.registry.descriptors.fetch('delegate_child_task')
+    assert_equal :bounded, descriptor.effect_class.to_sym
+    assert_equal :required, descriptor.approval_policy
     assert_equal :idempotent, binding.safety(
       'delegate_child_task', { 'task' => 'inspect note', 'capabilities' => ['local:read_file'] }
     )

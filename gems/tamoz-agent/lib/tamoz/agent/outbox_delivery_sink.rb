@@ -103,24 +103,29 @@ module Tamoz
 
       private
 
-      # v1 deny-only (ADR-043): a fresh single-use prompt is stored inactive,
-      # and the control delivery's markup carries the plaintext reference so
-      # the gateway can activate it after the send receipt is durable.
+      # A fresh single-use prompt is stored inactive, and the control
+      # delivery's markup carries the plaintext reference so the gateway can
+      # activate it after the send receipt is durable. The pinned evidence is
+      # read from the decision the engine journaled into the interrupt
+      # descriptor (INV-C) — never synthesized here, never taken from wire
+      # input.
       def push_approval_prompt(event, route, surface)
         binding = @store.binding_by_conversation(surface_id: route.fetch('surface_id'),
                                                  conversation_id: route.fetch('conversation_id'))
         return nil unless binding
 
+        evidence = decision_evidence(event.fetch(:interrupts))
         reference, prompt = Comms::ApprovalPrompt.build(
           surface_id: route.fetch('surface_id'), surface_revision: surface.fetch('revision'),
           thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
           interrupts: event.fetch(:interrupts),
+          required_evidence: evidence,
           correspondent_id: binding.fetch('correspondent_id'),
           conversation_id: route.fetch('conversation_id'),
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
         @store.insert_prompt(prompt.wire)
-        markup = JSON.generate('reference' => reference, 'actions' => offered_actions(event.fetch(:interrupts)))
+        markup = JSON.generate('reference' => reference, 'actions' => offered_actions(evidence))
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
@@ -160,17 +165,23 @@ module Tamoz
         :accepted
       end
 
-      # ADR-049 INV-D (Phase 5): the markup reflects the policy, not a
-      # hardcoded list. An approve button is offered only when some interrupt
-      # in the prompt is approvable by `chat_bound` evidence; under the v1
-      # policy every effect requires `filesystem_operator`, so the prompt
-      # renders Deny-only. A stray `approve:` callback is still refused by the
-      # Phase 3 gate — the button's absence is UX, not the security boundary.
-      def offered_actions(interrupts)
-        approvable = interrupts.any? do |interrupt|
-          Comms::AuthorityEvidence.chat_bound >= Comms::ApprovalPolicy.required_evidence([interrupt])
-        end
-        approvable ? %w[approve deny] : %w[deny]
+      # ADR-049 INV-C/INV-D: the requirement is the `required_evidence` the
+      # engine's Decision carries in the journaled interrupt descriptor — a
+      # model-supplied claim inside the descriptor body is never read. The
+      # prompt and the rendered keyboard pin the SAME value, so the buttons
+      # never offer an action the evidence gate would refuse.
+      def decision_evidence(interrupts)
+        Comms::AuthorityEvidence.from(
+          interrupts.first.fetch(:descriptor).fetch('decision').fetch('required_evidence').to_s
+        )
+      end
+
+      # An approve button is offered only when `chat_bound` evidence can meet
+      # the decision's pinned requirement; its absence is UX, not the
+      # security boundary — a stray `approve:` callback is still refused by
+      # the gateway's evidence compare.
+      def offered_actions(evidence)
+        Comms::AuthorityEvidence.chat_bound >= evidence ? %w[approve deny] : %w[deny]
       end
 
       def outbox_capacity(surface)

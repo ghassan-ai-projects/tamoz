@@ -1,3 +1,4 @@
+require 'set'
 # frozen_string_literal: true
 
 require "digest"
@@ -29,13 +30,22 @@ module Tamoz
       # gate has to REFUSE rather than guess, and it may clear on the next poll.
       class StoreUnavailableError < Error; end
 
-      attr_reader :directory, :adapter, :delivery_sink
+      attr_reader :directory, :adapter, :delivery_sink, :approval_engine
+
+      # ADR §2.3 teardown: the bound profile session's grants die with it.
+      def close_approval_session
+        return unless @approval_engine
+
+        @bound_approval_sessions.each { |key| @approval_engine.close_session(key) }
+        nil
+      end
 
       def self.open(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
         # Deferred exactly as `run_durable` defers it: tamoz-agent must not load
         # the storage or channel packages at require time.
         require "tamoz/sqlite"
         require "tamoz/comms"
+        require "tamoz/approval"
         runtime = new(directory, model_factory:, lease_ttl:, delivery_sink:, routing:)
         runtime.install_channel_delivery_sink unless delivery_sink
         runtime
@@ -68,6 +78,7 @@ module Tamoz
         # for `profile`, which takes it again. Ruby's Mutex is not reentrant, so
         # that same-thread re-entry would deadlock the worker outright.
         @monitor = Monitor.new
+        @approval_engine = build_approval_engine
       end
 
       def path = @directory.path
@@ -404,7 +415,8 @@ module Tamoz
       def open_occurrences(limit: 500)
         durable("open occurrences") do
           @adapter.store.each(OPEN_OCCURRENCES, limit:).map do |entry|
-            {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"]}
+            {thread_id: entry.key, occurrence_id: entry.value["occurrence_id"],
+             opened_at: entry.value["opened_at"]}
           end
         end
       end
@@ -766,6 +778,26 @@ module Tamoz
         end
       end
 
+      # The engine's policy is only current until the operator reloads. Every
+      # poll pass and every session start compares the persisted active-policy
+      # pointer against the live rev; a difference loads from the persisted
+      # path (ADR §1.5). A document that fails to load never reached the
+      # pointer through the CLI, so the fail direction is keep-running.
+      def sync_approval_policy
+        pointer = @adapter.bind_approval_active_policy.read
+        return unless pointer
+        return if pointer.fetch(:rev) == @approval_engine.policy.policy_rev
+
+        reloaded = @approval_engine.reload(pointer.fetch(:path))
+        # The pointer carries the rev the CLI validated; adopting a document
+        # whose file drifted past that rev would bypass validate-before-activate.
+        return nil if reloaded.policy_rev != pointer.fetch(:rev)
+
+        reloaded
+      rescue Tamoz::Approval::InvalidPolicyError
+        nil
+      end
+
       def canonical_session = session_for_profile(nil)
 
       # The local capabilities available without materializing any remote source.
@@ -847,22 +879,6 @@ module Tamoz
         end
 
         expanded
-      end
-
-      # What this profile makes the worker stop and ask about.
-      #
-      # The interactive CLI asks a human about `tools.approval_required`. A worker
-      # has no human to ask, so it asks about everything the profile has not
-      # explicitly PREAUTHORIZED for unattended use — which is a strictly larger
-      # set, never a smaller one. Both lists are unioned so a tool marked
-      # approval-required interactively can never become automatic just because
-      # nobody is watching.
-      #
-      # The whole computation reads from the profile bound to this exact digest.
-      # Nothing the model says, no repository file, no skill, no MCP descriptor
-      # and no memory record participates.
-      def unattended_approval_required(profile)
-        (profile.tools_approval_required | profile.unattended_requires_approval).uniq
       end
 
       # The compiled skill snapshot, or the empty one.
@@ -1036,9 +1052,15 @@ module Tamoz
       def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil)
         resolved = resolved_profile || profile(profile_id)
         toolbox = session_toolbox(resolved, allowed_tools:)
+        sync_approval_policy
+        session_key = "profile:#{profile_id || 'default'}"
+        @approval_engine.bind_session(session_key)
+        (@bound_approval_sessions ||= Set.new) << session_key
 
         engine = memory_engine
         Session.new(
+          approval_engine: @approval_engine,
+          approval_session_id: session_key,
           model: DeferredModel.new { @model_factory.call(profile: resolved) },
           toolbox:,
           checkpointer: @adapter,
@@ -1057,6 +1079,24 @@ module Tamoz
         )
       end
 
+      private
+
+      def build_approval_engine
+        evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
+        policy = Tamoz::Approval::PolicyDocument.load_profile(
+          @directory.approval_policy_path,
+          @directory.approval_profile,
+          evidence_symbols: evidence_symbols
+        )
+        Tamoz::Approval::Engine.new(
+          policy: policy,
+          grant_store: @adapter.bind_approval_grant_store,
+          decision_log: @adapter.bind_approval_decision_log,
+          clock: -> { Time.now },
+          evidence_symbols: evidence_symbols
+        )
+      end
+
       def session_toolbox(resolved, allowed_tools: nil)
         unless resolved
           return Toolbox.new(root: @directory.workspace_root, allow_changes: false,
@@ -1069,7 +1109,6 @@ module Tamoz
           checks: resolved.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
           allowed_tools: narrowed_tools(resolved, allowed_tools),
-          approval_required: narrowed_approval_required(resolved, allowed_tools),
           skills: skills_snapshot
         )
       end
@@ -1081,11 +1120,6 @@ module Tamoz
         raise ToolPolicyError, "child capabilities exceed profile tools: #{unknown.join(', ')}" unless unknown.empty?
 
         allowed_tools
-      end
-
-      def narrowed_approval_required(resolved, allowed_tools)
-        required = unattended_approval_required(resolved)
-        allowed_tools ? required & allowed_tools : required
       end
 
       def child_local_tools(capabilities)

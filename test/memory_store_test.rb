@@ -17,13 +17,25 @@ class MemoryStoreTest < Minitest::Test
     compatibility_behavior: "tamoz.agent.session/1"
   }.freeze
 
-  def reset_effect_identity_schema(database)
-    assert_equal 0, database.get_first_value("SELECT COUNT(*) FROM tamoz_effects")
-    %w[tamoz_effect_transitions tamoz_effect_attempts tamoz_effects].each do |table|
-      database.execute("DROP TABLE #{table}")
+  # Build a GENUINE legacy database by executing the real MIGRATION_1..N
+  # constants and recording their real checksums — no drop-and-carve of a
+  # current-shape file, so the forward migration exercises exactly what an
+  # old database contains.
+  def build_legacy_database(path, through:)
+    database = SQLite3::Database.new(path)
+    (1..through).each do |ordinal|
+      statements = Tamoz::SQLite::Migrator.const_get(:"MIGRATION_#{ordinal}")
+      statements.each { |statement| database.execute(statement) }
+      checksum = Digest::SHA256.hexdigest(statements.join("\n-- tamoz migration boundary --\n"))
+      database.execute(
+        "INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms) VALUES (?, ?, ?)",
+        [ordinal, checksum, 1]
+      )
     end
-    migration = Tamoz::SQLite::Migrator.const_get(:MIGRATION_1)
-    migration.select { |sql| sql.include?("tamoz_effect") }.each { |sql| database.execute(sql) }
+    database.execute("PRAGMA application_id = #{Tamoz::SQLite::Migrator.const_get(:APPLICATION_ID)}")
+    database.execute("PRAGMA user_version = #{through}")
+    File.chmod(0o600, path)
+    database
   end
 
   # A deterministic protection codec (XOR) with a decrypt counter — the
@@ -110,12 +122,12 @@ class MemoryStoreTest < Minitest::Test
     # MIGRATION_15 (P3); effect logical/attempt identities moved 15 -> 16
     # through MIGRATION_16. The monotonic-ordering guard makes ordinal reuse
     # impossible.
-    assert_equal 16, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal (1..Tamoz::SQLite::Migrator::CURRENT_VERSION).to_a,
                  Tamoz::SQLite::Migrator.migration_ordinals
 
     database = SQLite3::Database.new(File.join(@directory, "memory.db"))
-    assert_equal 16, database.get_first_value("PRAGMA user_version")
+    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, database.get_first_value("PRAGMA user_version")
     tables = database.execute(
       "SELECT name FROM sqlite_schema WHERE type = 'table' AND name = 'tamoz_memory_index'"
     )
@@ -142,47 +154,30 @@ class MemoryStoreTest < Minitest::Test
     database.close
 
     # A pre-P11 database (schema version 1) upgrades in place with existing
-    # Store data intact.
+    # Store data intact: build a genuine v1 database from the real MIGRATION_1,
+    # then let the adapter migrate it all the way forward.
     old = File.join(@directory, "old.db")
-    legacy = Tamoz::SQLite::Adapter.new(path: old)
-    legacy.store.put("tamoz.plain", "key", {"value" => 1}, if_version: nil)
-    legacy.close
-    database = SQLite3::Database.new(old)
-    database.execute("DROP TABLE tamoz_memory_index")
-    database.execute("DROP TABLE IF EXISTS tamoz_digest_epoch")
-    database.execute("DROP TABLE IF EXISTS tamoz_schedules")
-    database.execute("DROP TABLE IF EXISTS tamoz_occurrences")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_channels")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_events")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_partitions")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_operator_state")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_situations")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_situation_current")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_triggers")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_outbox")
-    database.execute("DROP INDEX IF EXISTS idx_tamoz_stream_verifications_state")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_verifications")
-    # P3: MIGRATION_15's verified artifact store must also be absent for the
-    # version-1 upgrade to re-create it.
-    database.execute("DROP INDEX IF EXISTS idx_tamoz_artifacts_retained")
-    database.execute("DROP TABLE IF EXISTS tamoz_artifacts")
-    reset_effect_identity_schema(database)
-    %w[
-      tamoz_comms_surfaces tamoz_comms_bindings tamoz_comms_pairing_challenges
-      tamoz_comms_conversations tamoz_comms_inbound tamoz_comms_requests
-      tamoz_comms_poll_state tamoz_comms_outbox tamoz_comms_approval_prompts
-      tamoz_comms_decisions tamoz_comms_gaps tamoz_comms_delivery_pacing
-    ].each do |table|
-      database.execute("DROP TABLE IF EXISTS #{table}")
-    end
-    database.execute("PRAGMA user_version = 1")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)")
+    database = build_legacy_database(old, through: 1)
+    bytes = Tamoz::StateCodec.new.dump({ "value" => 1 })
+    body = "tamoz.sqlite.store_value\0v1\0".b
+    digest = "sha256:#{Digest::SHA256.hexdigest(body + bytes.b)}"
+    database.execute(<<~SQL, [SQLite3::Blob.new(bytes.b), digest])
+      INSERT INTO tamoz_store_versions(
+        namespace, key, version, deleted, sensitive,
+        format_version, payload, payload_digest, created_at_ms
+      ) VALUES ('tamoz.plain', 'key', 1, 0, 0, 1, ?, ?, 1)
+    SQL
+    database.execute(<<~SQL)
+      INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms)
+      VALUES ('tamoz.plain', 'key', 1, 0, 0, 1)
+    SQL
     database.close
     upgraded = Tamoz::SQLite::Adapter.new(path: old)
     assert_equal({"value" => 1}, upgraded.store.get("tamoz.plain", "key").value)
-    assert_equal 16, upgraded.integrity_check.fetch("schema_version")
+    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
+
 
   # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1). A pre-JCS database
   # carrying circuit rows migrates forward: MIGRATION_11 registers the digest
@@ -190,38 +185,16 @@ class MemoryStoreTest < Minitest::Test
   # connection verifies. (The stream-engine rows MIGRATION_11 once cleared are
   # gone with the tables themselves — MIGRATION_13 retires them, T8.3.)
   def test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows
+    # JCS digest-rule cutover (T0.1): a genuine pre-JCS database built from
+    # MIGRATION_1..10 carries a circuit row and a real memory row; the reopen
+    # runs MIGRATION_11 (epoch + clears) AND MIGRATION_12 (situation columns)
+    # against them.
     path = File.join(@directory, "cutover.db")
-    adapter = Tamoz::SQLite::Adapter.new(path:)
-    database = SQLite3::Database.new(path)
+    database = build_legacy_database(path, through: 10)
     database.execute(
       "INSERT INTO tamoz_store_heads(namespace, key, current_version, deleted, sensitive, updated_at_ms) VALUES (?, ?, 1, 0, 0, 1)",
       ["tamoz.circuit.test", "sha256:#{"b" * 64}"]
     )
-    # Rebuild the memory index in its pre-MIGRATION_12 shape (15 columns) with
-    # a REAL ordinary row, then downgrade the migration state to 10: the reopen
-    # must run MIGRATION_11 (epoch + clears) AND MIGRATION_12 (situation
-    # columns via the table rebuild) against old rows.
-    database.execute("DROP TABLE tamoz_memory_index")
-    database.execute(<<~SQL)
-      CREATE TABLE tamoz_memory_index (
-        store_namespace TEXT NOT NULL,
-        memory_id TEXT NOT NULL,
-        record_version INTEGER NOT NULL CHECK (record_version > 0),
-        layer TEXT NOT NULL,
-        class TEXT NOT NULL,
-        state TEXT NOT NULL,
-        scopes_tenant TEXT NOT NULL,
-        scopes_user TEXT NOT NULL,
-        scopes_project TEXT NOT NULL,
-        sensitivity TEXT NOT NULL,
-        valid_until_ms INTEGER,
-        compatibility_graph TEXT NOT NULL,
-        compatibility_behavior TEXT NOT NULL,
-        statement_search TEXT,
-        searchable INTEGER NOT NULL CHECK (searchable IN (0, 1)),
-        PRIMARY KEY (store_namespace, memory_id, record_version)
-      ) STRICT
-    SQL
     database.execute(<<~SQL)
       INSERT INTO tamoz_memory_index(
         store_namespace, memory_id, record_version, layer, class, state,
@@ -232,26 +205,7 @@ class MemoryStoreTest < Minitest::Test
                 'acme', 'u', 'p', 'public', NULL, '1', 'tamoz.agent.session/1',
                 'retained', 1)
     SQL
-    database.execute("DROP TABLE tamoz_digest_epoch")
-    database.execute("DROP INDEX IF EXISTS idx_tamoz_stream_verifications_state")
-    database.execute("DROP TABLE IF EXISTS tamoz_stream_verifications")
-    # P3: MIGRATION_15 (verified artifact store) created these when the DB was
-    # first opened at v15; drop them so the reopen can re-run MIGRATION_15.
-    database.execute("DROP INDEX IF EXISTS idx_tamoz_artifacts_retained")
-    database.execute("DROP TABLE IF EXISTS tamoz_artifacts")
-    reset_effect_identity_schema(database)
-    # The DB was built at v14, which already dropped the old stream tables;
-    # recreate them from the real migration definitions so the downgrade can
-    # exercise MIGRATION_11's stream clears, then let MIGRATION_13 drop them
-    # again on the way back up.
-    (Tamoz::SQLite::Migrator.const_get(:MIGRATION_4) +
-     Tamoz::SQLite::Migrator.const_get(:MIGRATION_5)).each do |statement|
-      database.execute(statement)
-    end
-    database.execute("PRAGMA user_version = 10")
-    database.execute("DELETE FROM tamoz_schema_migrations WHERE version IN (11, 12, 13, 14, 15, 16)")
     database.close
-    adapter.close
 
     upgraded = Tamoz::SQLite::Adapter.new(path:)
     database = SQLite3::Database.new(path)
@@ -279,7 +233,7 @@ class MemoryStoreTest < Minitest::Test
     assert_includes indexes, "idx_tamoz_memory_index_scope"
     assert_includes indexes, "idx_tamoz_memory_index_situation"
     database.close
-    assert_equal 16, upgraded.integrity_check.fetch("schema_version")
+    assert_equal Tamoz::SQLite::Migrator::CURRENT_VERSION, upgraded.integrity_check.fetch("schema_version")
     upgraded.close
   end
 

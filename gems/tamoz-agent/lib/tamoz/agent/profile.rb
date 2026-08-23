@@ -31,7 +31,8 @@ module Tamoz
   module Agent
     # Operator-owned trusted profile (P8). A profile is authority: it pins the
     # canonical root identity, named argv checks, symbolic model roles, budgets,
-    # capability/policy versions, and approval defaults for a durable session.
+    # and capability/policy versions for a durable session. Approval policy is
+    # not a profile concern: it lives in the approval engine's policy document.
     # Profiles live outside any repository; repository suggestions are evidence
     # only and never become authority without explicit operator adoption.
     #
@@ -64,12 +65,7 @@ module Tamoz
       KNOWN_TOOLS = %w[read_file list_directory search_text apply_patch create_file run_check].freeze
       KNOWN_PROVIDERS = RubyLLMModel::ENV_KEYS.keys.map(&:to_s).freeze
 
-      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress unattended].freeze
-      # What may run with NOBODY WATCHING. This is deliberately a separate axis
-      # from `tools`: `tools.allowed` says what the agent can ever do on this
-      # project, `unattended` says what a worker may do without asking first.
-      # A tool can be allowed and still require a human every time.
-      UNATTENDED_KEYS = %w[read_only reconcilable approval_required forbidden].freeze
+      TOP_LEVEL_KEYS = %w[profile roots model_roles budgets checks tools policy egress].freeze
       PROFILE_KEYS = %w[schema_version profile_id profile_version canonical_root description].freeze
       ROOTS_KEYS = %w[workspace].freeze
       # P0B/§4.2: `normalized_settings` (e.g. api_base) is the minimally
@@ -86,7 +82,7 @@ module Tamoz
         cost_usd input_tokens output_tokens wall_clock_seconds steps model_calls
       ].freeze
       CHECK_KEYS = %w[argv safety].freeze
-      TOOLS_KEYS = %w[allowed approval_required].freeze
+      TOOLS_KEYS = %w[allowed].freeze
       POLICY_KEYS = %w[
         allow_changes default_check_safety graph_version behavior_version tool_catalog_digest
         unattended_catalog_digest
@@ -174,9 +170,8 @@ module Tamoz
       def_delegators :fields,
                      :profile_id, :profile_version, :canonical_root, :description,
                      :model_roles, :budgets, :checks, :tools_allowed,
-                     :tools_approval_required, :policy, :canonical_digest,
-                     :suggestion, :pinned, :allow_changes?, :high_risk?, :egress,
-                     :unattended, :unattended_preauthorized, :unattended_requires_approval
+                     :policy, :canonical_digest,
+                     :suggestion, :pinned, :allow_changes?, :high_risk?, :egress
 
       # P8-B §5.1/§5.4: the exact capability authority a durable session was
       # started under, in a form that can be replayed from the checkpoint alone.
@@ -202,8 +197,7 @@ module Tamoz
           end,
           "checks" => checks,
           "tools" => {
-            "allowed" => tools_allowed,
-            "approval_required" => tools_approval_required
+            "allowed" => tools_allowed
           },
           "policy" => policy
         }
@@ -472,7 +466,6 @@ module Tamoz
         end
 
         validate_strings!(hash, path)
-        validate_unattended!(hash, path)
         validate_profile_fields!(profile, path)
         validate_roots!(hash, profile, path)
         validate_model_roles!(hash, path)
@@ -525,15 +518,11 @@ module Tamoz
         CheckSpecValidator.call(hash, path)
       end
 
-      # `tools`, `unattended` and `policy` constrain each other, so AuthorityValidator
-      # owns all three. They stay three entry points because the loader calls them at
+      # `tools` and `policy` constrain each other, so AuthorityValidator
+      # owns both. They stay two entry points because the loader calls them at
       # different points and the ORDER decides which error an operator sees first.
       def self.validate_tools!(hash, path)
         AuthorityValidator.tools!(hash, path)
-      end
-
-      def self.validate_unattended!(hash, path)
-        AuthorityValidator.unattended!(hash, path)
       end
 
       def self.validate_policy!(hash, tools, path)

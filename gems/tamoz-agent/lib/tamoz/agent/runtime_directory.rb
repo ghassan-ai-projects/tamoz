@@ -120,6 +120,18 @@ module Tamoz
       def profiles_path = File.join(path, PROFILES_DIR)
       def workspace_root = @config.dig("workspace", "root")
 
+      # Approval policy source of truth: an optional operator override in the
+      # run config, else the policy data bundled with tamoz-approval.
+      def approval_policy_path
+        value = @config.dig("approval", "policy_path")
+        value.is_a?(String) && !value.empty? ? File.expand_path(value) : Tamoz::Approval.bundled_policy_path
+      end
+
+      def approval_profile
+        value = @config.dig("approval", "profile")
+        value.is_a?(String) && !value.empty? ? value : "implement"
+      end
+
       # The sources the OPERATOR enabled. Content, model output, skills, MCP
       # metadata and memory never reach this list — they cannot, because it is
       # read from a file outside the workspace and validated against a closed set.

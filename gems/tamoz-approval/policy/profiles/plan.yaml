@@ -1,0 +1,19 @@
+# Mode preset: read-only planning. Reads allow, every other tier denies.
+profile:
+  name: plan
+  tier_defaults:
+    workspace_write: deny
+    local_execute: deny
+    network: deny
+    external_publish: deny
+    destructive: deny
+  simulations:
+    - request:
+        tool: read_file
+        verb: read
+        targets: ["**/.env"]
+      expect: deny
+    - request:
+        tool: "mcp:unknown:anything"
+        verb: unknown
+      expect: deny

@@ -87,14 +87,18 @@ module Tamoz
         ), cause: error
       end
 
-      def load(bytes)
+      # Telemetry readers (status surfaces, the comms gateway) decode lanes
+      # owned by OTHER graphs: identity and node membership are graph-local
+      # facts, so only run-path reads enforce them.
+      def load(bytes, validate_identity: true)
         text = validate_input(bytes)
         wire = JSON.parse(text, create_additions: false, max_nesting: 512)
         unless JSON.generate(wire) == text
           raise CheckpointCorruptionError, "checkpoint envelope is not canonical JSON"
         end
         require_array!(wire, WIRE_SIZE, "checkpoint envelope")
-        validate_identity!(wire)
+        strict = validate_identity
+        validate_identity!(wire) if strict
 
         attributes = {
           graph_name: wire.fetch(2).dup.freeze,
@@ -104,7 +108,7 @@ module Tamoz
           status: status!(wire.fetch(6)),
           logical_step: non_negative_integer!(wire.fetch(7), "logical step"),
           state_bytes: canonical_value_bytes(wire.fetch(8)),
-          frontier: decode_frontier(wire.fetch(9)),
+          frontier: decode_frontier(wire.fetch(9), strict:),
           pending: decode_pending(wire.fetch(10)),
           interrupts: decode_interrupts(wire.fetch(11)),
           resume_values: decode_resume_values(wire.fetch(12)),
@@ -112,7 +116,7 @@ module Tamoz
           failure: load_value(wire.fetch(14)),
           total_tasks: non_negative_integer!(wire.fetch(15), "total tasks")
         }
-        attributes[:state] = decode_state(attributes.fetch(:state_bytes))
+        attributes[:state] = decode_state(attributes.fetch(:state_bytes), strict:)
         attributes.freeze
       rescue CheckpointVersionError, CheckpointCorruptionError
         raise
@@ -338,11 +342,12 @@ module Tamoz
         end
       end
 
-      def decode_frontier(wire)
+      def decode_frontier(wire, strict: true)
         require_array!(wire, nil, "frontier")
         wire.map.with_index do |entry, index|
           require_array!(entry, FRONTIER_SIZE, "frontier[#{index}]")
-          node = node!(entry.fetch(0), "frontier[#{index}] node")
+          node = strict ? node!(entry.fetch(0), "frontier[#{index}] node")
+                        : bounded_string!(entry.fetch(0), "frontier[#{index}] node")
           kind = entry.fetch(1)
           unless KINDS.include?(kind)
             raise CheckpointCorruptionError,
@@ -518,11 +523,13 @@ module Tamoz
         end.freeze
       end
 
-      def decode_state(bytes)
+      def decode_state(bytes, strict: true)
         raw = load_value(bytes)
         unless raw.is_a?(Hash)
           raise CheckpointCorruptionError, "checkpoint state must decode to a Hash"
         end
+        return raw.freeze if !strict && @channels_by_name.keys.sort != raw.keys.sort
+
         if raw.keys.sort != @channels_by_name.keys.sort
           raise CheckpointCorruptionError,
                 "checkpoint state channels do not match the compiled graph"

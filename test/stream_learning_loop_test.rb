@@ -199,20 +199,24 @@ class StreamLearningLoopTest < Minitest::Test
     assert_equal [{"value" => "one"}], calls, "a conflicting redelivery is never dispatched"
   end
 
+  def approval_request_event
+    envelope = read_json(
+      ROOT.join("gems", "tamoz-stream", "contracts", "notification-goldens-v1.json")
+    ).fetch("events").find { |candidate| candidate.fetch("type") == "io.agenticstream.approval.requested.v1" }
+    Subscriber::CloudEvent.new(
+      id: envelope.fetch("id"), source: envelope.fetch("source"), type: envelope.fetch("type"),
+      data: envelope.fetch("data"), time: envelope.fetch("time"),
+      traceparent: envelope["traceparent"], tracestate: envelope["tracestate"], envelope:
+    )
+  end
+
   def test_approval_request_delivers_once_and_records_a_durable_receipt
     directory = Dir.mktmpdir("tamoz-approval-handler")
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
     durable = adapter.bind_durable_subscriber_store(tenant: "acme")
     receipts = adapter.bind_approval_receipt_store(tenant: "acme")
     relay = ApprovalRelayDouble.new
-    envelope = read_json(
-      ROOT.join("gems", "tamoz-stream", "contracts", "notification-goldens-v1.json")
-    ).fetch("events").find { |candidate| candidate.fetch("type") == "io.agenticstream.approval.requested.v1" }
-    event = Subscriber::CloudEvent.new(
-      id: envelope.fetch("id"), source: envelope.fetch("source"), type: envelope.fetch("type"),
-      data: envelope.fetch("data"), time: envelope.fetch("time"),
-      traceparent: envelope["traceparent"], tracestate: envelope["tracestate"], envelope:
-    )
+    event = approval_request_event
     handlers = Tamoz::Stream::LiveLearningHandlers.new(
       verification: nil, memory: nil, durable:, tenant: "acme", logger: nil,
       approval_receipts: receipts, approval_relay: relay, conversation_id: "chat-1"
@@ -221,11 +225,36 @@ class StreamLearningLoopTest < Minitest::Test
     2.times { handlers.fetch(event.type).call(event) }
 
     assert_equal 1, relay.deliveries.length
-    assert_equal envelope.fetch("data"), relay.deliveries.fetch(0).fetch(:approval)
+    assert_equal event.data, relay.deliveries.fetch(0).fetch(:approval)
     assert_equal "chat-1", relay.deliveries.fetch(0).fetch(:conversation_id)
     assert_equal({"message_id" => "approval-message-1"},
                  receipts.fetch("appr_1").fetch("delivery_receipt"))
     assert_equal false, receipts.fetch("appr_1").fetch("delivery_claimed")
+  ensure
+    adapter&.close
+    FileUtils.remove_entry(directory) if directory
+  end
+
+  # The receipt TTL is a plain integer injected at subscriber boot; the store
+  # stamps expires_at from it and an expired receipt reads as absent.
+  def test_approval_receipts_expire_on_the_ttl_injected_at_boot
+    directory = Dir.mktmpdir("tamoz-approval-ttl")
+    adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+    t0 = Time.utc(2026, 8, 23, 12, 0, 0)
+    receipts = adapter.bind_approval_receipt_store(tenant: "acme", clock: -> { t0 })
+    durable = adapter.bind_durable_subscriber_store(tenant: "acme")
+    handlers = Tamoz::Stream::LiveLearningHandlers.new(
+      verification: nil, memory: nil, durable:, tenant: "acme", logger: nil,
+      approval_receipts: receipts, approval_relay: ApprovalRelayDouble.new,
+      conversation_id: "chat-1", approval_ttl_s: 900
+    ).callables
+
+    handlers.fetch("io.agenticstream.approval.requested.v1").call(approval_request_event)
+
+    assert_equal t0 + 900, Time.at(receipts.fetch("appr_1").fetch("expires_at"))
+    lapsed = adapter.bind_approval_receipt_store(tenant: "acme", clock: -> { t0 + 901 })
+    assert_nil lapsed.fetch("appr_1"),
+               "an expired receipt reads as absent — the approval re-asks"
   ensure
     adapter&.close
     FileUtils.remove_entry(directory) if directory

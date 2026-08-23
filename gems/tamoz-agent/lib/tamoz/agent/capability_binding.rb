@@ -141,9 +141,11 @@ module Tamoz
         dispatcher.effect_intent(descriptor, arguments)
       end
 
-      def approval_required?(name)
-        descriptor, dispatcher = host.route(String(name))
-        dispatcher.approval_required?(descriptor)
+      # The closed effect class of the host descriptor — the value the
+      # approval engine's request carries (read_only ⇒ read invariant).
+      def effect_class(name)
+        descriptor, = host.route(String(name))
+        descriptor.effect_class.to_sym
       end
 
       def maximum_effect_output_bytes(name)
@@ -340,10 +342,6 @@ module Tamoz
         child?(descriptor) ? @child.effect_intent(descriptor, arguments) : @local.effect_intent(descriptor, arguments)
       end
 
-      def approval_required?(descriptor)
-        child?(descriptor) ? @child.approval_required?(descriptor) : @local.approval_required?(descriptor)
-      end
-
       def maximum_effect_output_bytes(descriptor)
         return @child.maximum_effect_output_bytes(descriptor) if child?(descriptor)
 
@@ -387,10 +385,6 @@ module Tamoz
 
       def effect_intent(descriptor, arguments)
         source.effect_intent(descriptor.id, arguments)
-      end
-
-      def approval_required?(descriptor)
-        source.approval_required?(descriptor.id)
       end
 
       def maximum_effect_output_bytes(descriptor)

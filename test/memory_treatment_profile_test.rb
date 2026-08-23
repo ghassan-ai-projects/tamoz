@@ -374,9 +374,10 @@ class MemoryTreatmentProfileTest < Minitest::Test
     assert_equal "not_claimed", document.dig("environment", "network_enforcement")
     assert_equal "deferred", document.dig("environment", "live_network_validation")
     # T8.3: the P14 streaming case was retired with the engine, so the corpus
-    # is 21 cases (18 passing tasks).
+    # is 21 cases; the approval-policy redesign made agent.stale-digest's
+    # fail-closed refusal oracle-pass, so 19 of them are passing tasks.
     assert_equal 21, document.dig("corpus", "case_count")
-    assert_equal 18, document.dig("aggregate", "task_successes")
+    assert_equal 19, document.dig("aggregate", "task_successes")
     assert_equal 0, document.dig("aggregate", "unsafe_or_bypassed_actions")
     assert_equal %w[pass pass pass pass], document.fetch("hard_gates").map { |gate| gate.fetch("status") }
   end

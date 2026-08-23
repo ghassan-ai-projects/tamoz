@@ -14,7 +14,6 @@ class PublicAPITest < Minitest::Test
       {
         "tamoz-agent" => {
           "Tamoz::Agent.build" => {},
-          "Tamoz::Agent::ApprovalDeniedError" => {},
           "Tamoz::Agent::CLI.run" => {},
           "Tamoz::Agent::CheckReceipt" => {"deprecated" => true},
           "Tamoz::Agent::Deliberation" => {},
@@ -42,10 +41,31 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-approval" => {
+          "Tamoz::Approval::Answer.parse" => {},
+          "Tamoz::Approval::ConflictingResolutionError" => {},
+          "Tamoz::Approval::Decision" => {},
+          "Tamoz::Approval::DecisionLog" => {},
+          "Tamoz::Approval.bundled_policy_path" => {},
+          "Tamoz::Approval::Engine" => {},
+          "Tamoz::Approval::Error" => {},
+          "Tamoz::Approval::Grant" => {},
+          "Tamoz::Approval::GrantOffer" => {},
+          "Tamoz::Approval::GrantStore" => {},
+          "Tamoz::Approval::InvalidPolicyError" => {},
+          "Tamoz::Approval::InvalidScopeError" => {},
+          "Tamoz::Approval::MemoryDecisionLog" => {},
+          "Tamoz::Approval::MemoryGrantStore" => {},
+          "Tamoz::Approval::PolicyDocument" => {},
+          "Tamoz::Approval::Request" => {},
+          "Tamoz::Approval::UnknownDecisionError" => {},
+          "Tamoz::Approval::VERSION" => {}
+        },
         "tamoz-comms" => {
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
           "Tamoz::Comms::ApprovalPrompt" => {},
           "Tamoz::Comms::AuthenticationError" => {},
+          "Tamoz::Comms::AuthorityEvidence.members" => {},
           "Tamoz::Comms::Binding" => {},
           "Tamoz::Comms::Canonical" => {},
           "Tamoz::Comms::Commands" => {},
@@ -325,6 +345,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Stream::VERSION,
       Tamoz::Tools::VERSION,
       Tamoz::Agent::VERSION,
+      Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
       Tamoz::Comms::VERSION,

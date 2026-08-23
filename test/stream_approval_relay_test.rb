@@ -66,6 +66,16 @@ class StreamApprovalRelayTest < Minitest::Test
     end
   end
 
+  # Stands in for the durable receipt store port: fetch(approval_id) ->
+  # row Hash | nil. A nil row is how the real store reports an EXPIRED
+  # receipt — expired is absent, so the relay refuses and the approval
+  # re-asks (fail closed).
+  class FakeReceiptStore
+    def initialize(rows = {}) = @rows = rows
+
+    def fetch(approval_id) = @rows[approval_id]
+  end
+
   def approval(overrides = {})
     {
       "approval_id" => "apr-1",
@@ -89,9 +99,11 @@ class StreamApprovalRelayTest < Minitest::Test
   # the wall clock the suite runs under.
   def relay(delivery: FakeDelivery.new, submission: FakeSubmission.new,
             nonce_store: FakeNonceStore.new, signer: FakeSigner.new,
-            relay_id: "relay-1", clock: -> { Time.utc(2026, 8, 18) })
+            relay_id: "relay-1", approval_state: nil,
+            clock: -> { Time.utc(2026, 8, 18) })
     Relay.new(
-      delivery:, submission:, nonce_store:, signer:, relay_id:, clock:
+      delivery:, submission:, nonce_store:, signer:, relay_id:,
+      approval_state:, clock:
     )
   end
 
@@ -244,6 +256,63 @@ class StreamApprovalRelayTest < Minitest::Test
         approver_id: "technician-7", decision: "approve"
       )
     end
+  end
+
+  # The receipt port's expiry contract: a live receipt (present, still
+  # "requested") lets the answer through.
+  def test_submit_honors_a_live_receipt_from_the_state_port
+    store = FakeReceiptStore.new("apr-1" => {"state" => "requested"})
+    submission = FakeSubmission.new
+
+    relay(submission:, approval_state: store).submit_decision(
+      approval: approval, approver_id: "technician-7", decision: "approve"
+    )
+
+    assert_equal 1, submission.submitted.length
+  end
+
+  # The store reads an expired receipt as ABSENT, so the relay sees nil and
+  # refuses: a lapsed approval re-asks instead of resolving (fail closed).
+  def test_an_expired_receipt_reads_as_absent_and_is_refused
+    store = FakeReceiptStore.new("apr-1" => nil)
+
+    error = assert_raises(Relay::ApprovalRelayError) do
+      relay(approval_state: store).submit_decision(
+        approval: approval, approver_id: "technician-7", decision: "approve"
+      )
+    end
+    assert_includes error.message, "no longer actionable"
+  end
+
+  def test_a_terminal_receipt_state_is_refused
+    %w[withdrawn resolved].each do |state|
+      store = FakeReceiptStore.new("apr-1" => {"state" => state})
+
+      error = assert_raises(Relay::ApprovalRelayError) do
+        relay(approval_state: store).submit_decision(
+          approval: approval, approver_id: "technician-7", decision: "approve"
+        )
+      end
+      assert_includes error.message, "no longer actionable"
+    end
+  end
+
+  # Second expiry gate, on the payload itself: a signed answer for an
+  # approval that already lapsed never leaves the relay. expires_at itself
+  # is still live — the guard refuses only a lapsed answer.
+  def test_submit_fails_closed_after_the_payload_expiry
+    lapsed = relay(clock: -> { Time.utc(2026, 8, 19, 0, 0, 1) })
+    error = assert_raises(Relay::ApprovalRelayError) do
+      lapsed.submit_decision(
+        approval: approval, approver_id: "technician-7", decision: "approve"
+      )
+    end
+    assert_includes error.message, "expired"
+
+    at_expiry = relay(clock: -> { Time.utc(2026, 8, 19, 0, 0, 0) })
+    assert_equal "apr-1", at_expiry.submit_decision(
+      approval: approval, approver_id: "technician-7", decision: "approve"
+    )
   end
 
   def test_escalation_is_deterministic_and_skips_the_current_approver

@@ -1,0 +1,17 @@
+# Mode preset: autonomous workspace work. Workspace writes and local command
+# execution allow without prompting; network and publish stay gated by base.
+profile:
+  name: auto
+  tier_defaults:
+    workspace_write: allow
+    local_execute: allow
+  simulations:
+    - request:
+        tool: read_file
+        verb: read
+        targets: ["**/.env"]
+      expect: deny
+    - request:
+        tool: "mcp:unknown:anything"
+        verb: unknown
+      expect: allow

@@ -26,7 +26,7 @@ until this file is regenerated.
 | `logger` | 1.7.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/logger |
 | `marcel` | 1.2.1 | MIT, Apache-2.0 | transitive |  | https://github.com/rails/marcel |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
-| `mini_portile2` | 2.8.9 | MIT | transitive |  |  |
+| `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
 | `multipart-post` | 2.4.1 | MIT | transitive |  | https://github.com/socketry/multipart-post |
 | `net-http` | 0.9.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/net-http |
 | `rake` | 13.4.2 | MIT | transitive |  | https://github.com/ruby/rake |

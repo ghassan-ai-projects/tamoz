@@ -361,7 +361,7 @@ module Tamoz
       end
 
       def effect_statuses(thread_id)
-        state = @checkpoints.latest(thread_id:, namespace: [])&.state
+        state = @checkpoints.latest(thread_id:, namespace: [], validate_identity: false)&.state
         statuses = Array(state&.fetch(:effect_receipts, nil)).filter_map do |row|
           row.fetch('status', nil).to_s
         end
@@ -385,7 +385,7 @@ module Tamoz
         return 'not_started' unless @checkpoints
         return 'not_started' unless request_id
 
-        checkpoint = @checkpoints.latest(thread_id:, namespace: [])
+        checkpoint = @checkpoints.latest(thread_id:, namespace: [], validate_identity: false)
         session = checkpoint&.state&.fetch(:session, nil)
         events = lifecycle_events_for(checkpoint, request_id)
         return 'invoked' if capability_invoked?(events)
@@ -395,7 +395,7 @@ module Tamoz
       end
 
       def lifecycle_status_for(thread_id, request_id)
-        checkpoint = @checkpoints&.latest(thread_id:, namespace: [])
+        checkpoint = @checkpoints&.latest(thread_id:, namespace: [], validate_identity: false)
         event = lifecycle_events_for(checkpoint, request_id).last
         unless event
           return {

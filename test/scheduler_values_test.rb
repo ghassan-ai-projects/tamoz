@@ -19,7 +19,7 @@ class SchedulerValuesTest < Minitest::Test
       start_at: ANCHOR, payload_ref: PAYLOAD, thread_policy: "thread.default",
       capability_grant: {"scopes" => ["read"]},
       behavior_version: "tamoz.agent.session/1",
-      approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
+      approval_profile: "implement",
       delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
       created_by: "human:op", created_at: ANCHOR, **overrides
     )
@@ -31,7 +31,6 @@ class SchedulerValuesTest < Minitest::Test
       payload_ref: PAYLOAD, thread_policy: "thread.default",
       capability_grant: {"scopes" => ["read"]},
       behavior_version: "tamoz.agent.session/1",
-      approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
       delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
       created_by: "human:op", created_at: ANCHOR, **overrides
     )
@@ -98,6 +97,18 @@ class SchedulerValuesTest < Minitest::Test
     assert_equal base.definition_digest, interval_schedule.definition_digest
   end
 
+  # A schedule names the approval profile its occurrences run under, like any
+  # other run. Omitting it selects the default profile; naming one binds it
+  # into the definition digest, so re-profiling is a new revision.
+  def test_approval_profile_defaults_to_implement_and_round_trips
+    assert_equal "implement", at_schedule.approval_profile
+
+    named = interval_schedule(approval_profile: "unattended")
+    assert_equal "unattended", named.approval_profile
+    assert_equal "unattended", named.to_h.fetch("approval_profile")
+    refute_equal interval_schedule.definition_digest, named.definition_digest
+  end
+
   def test_validation_refuses_bad_values
     assert_raises(Tamoz::ConfigurationError) { interval_schedule(kind: :cron) }
     assert_raises(Tamoz::ConfigurationError) { interval_schedule(expression: "abc") }
@@ -109,6 +120,11 @@ class SchedulerValuesTest < Minitest::Test
     assert_raises(Tamoz::ConfigurationError) { interval_schedule(revision: 0) }
     assert_raises(Tamoz::ConfigurationError) { interval_schedule(start_at: 200, end_at: 100) }
     assert_raises(Tamoz::ConfigurationError) { interval_schedule(budgets: {"max_steps" => -1}) }
+    assert_raises(Tamoz::ConfigurationError) { interval_schedule(approval_profile: "") }
+    # The retired informational hash shape is not a profile name.
+    assert_raises(Tamoz::ConfigurationError) do
+      interval_schedule(approval_profile: {"mode" => "deterministic"})
+    end
   end
 
   def test_enabled_and_horizon_control_next_fire

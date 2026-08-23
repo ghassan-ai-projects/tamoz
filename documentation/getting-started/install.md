@@ -58,6 +58,7 @@ named example task in a clean subprocess.
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
 | `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
+| `tamoz-approval` | Approval/permission policy owner: decisions, grants, policy-as-data | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |

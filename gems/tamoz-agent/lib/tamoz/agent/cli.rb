@@ -161,7 +161,7 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
-          approval: method(:approve_one_shot),
+          ask: method(:approve_one_shot),
           routing: if options[:experimental_routing]
                      :experimental
                    elsif options[:shadow_routing]
@@ -182,9 +182,6 @@ module Tamoz
           @out.puts("\n#{label}")
         end
         result.exit_status
-      rescue Tamoz::Agent::ApprovalDeniedError
-        @err.puts "tamoz: approval denied"
-        1
       end
 
       def drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
@@ -458,26 +455,39 @@ module Tamoz
           value = answer_for(interrupt, options:, resume_options:)
           return nil if value.nil?
 
+          interactive = !options[:non_interactive] && resume_options[:answer].nil?
+          resolve_interrupt_decision(interrupt, value, interactive:)
           answers[interrupt.task_id] ||= {}
           answers[interrupt.task_id][interrupt.call_index] = value
         end
         answers
       end
 
+      # The interactive operator is a resolution channel like any other — when
+      # this process's engine holds the decision (it made the ask). A decision
+      # recorded by another process resolves there; the resume only answers the
+      # interrupt.
+      def resolve_interrupt_decision(interrupt, value, interactive: true)
+        descriptor = interrupt.descriptor
+        return unless descriptor['kind'] == 'approve_tool'
+        asked = descriptor['decision']
+        return unless @approval_engine && asked
+
+        decision_id = asked.fetch('id')
+        return unless @approval_engine.decision_log.lookup(decision_id)
+
+        remembered = interactive && value &&
+                     Array(asked['grant_scopes']).include?('session') &&
+                     @prompts.remember_for_session(descriptor)
+        @approval_engine.resolve(
+          decision_id:, answer: value ? :approve : :deny,
+          scope: value ? (remembered ? :session : :once) : nil
+        )
+      end
+
       def answer_for(interrupt, options:, resume_options:)
         descriptor = interrupt.descriptor
-        if resume_options[:answer]
-          return map_answer(descriptor["kind"], resume_options[:answer])
-        end
-        if options[:all] && options[:i_understand_approve_all] && descriptor["kind"] == "approve_tool"
-          emit_cli_event("audit.approve_all", {
-            "thread_id" => "unknown",
-            "request_id" => "unknown",
-            "count" => 1,
-            "opt_in" => "i-understand-approve-all"
-          }) if options[:json]
-          return true
-        end
+        return map_answer(descriptor["kind"], resume_options[:answer]) if resume_options[:answer]
         return nil if options[:non_interactive]
 
         prompt_for_interrupt(descriptor)
@@ -495,12 +505,10 @@ module Tamoz
         answer = raw.to_s.strip.downcase
         case kind
         when "approve_tool"
-          case answer
-          when "y", "yes", "a", "approve" then true
-          when "n", "no", "d", "deny" then false
-          else
-            raise ArgumentError, "invalid approve_tool answer: #{raw.inspect}"
-          end
+          parsed = Tamoz::Approval::Answer.parse(answer)
+          raise ArgumentError, "invalid approve_tool answer: #{raw.inspect}" if parsed.nil?
+
+          parsed == :approve
         when "clarify"
           answer.empty? ? nil : raw.to_s.strip
         when "resolve_effect"
@@ -553,11 +561,17 @@ module Tamoz
           # computed HERE, in cli.rb, and folded into the session record at intake
           # via the extra constructor parameters — the same shared resolution
           # function build_model used, so the record never disagrees with the run.
+          # Interactive default gates mutations behind a confirm: the
+          # operator opts into autonomy by naming a looser profile.
+          @approval_engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
+          @approval_engine.bind_session('interactive')
           session = Tamoz::Agent::Session.new(
             model:,
             toolbox:,
             checkpointer: adapter,
             profile:,
+            approval_engine: @approval_engine,
+            approval_session_id: 'interactive',
             profile_roles: resolve_profile_roles(profile, options),
             profile_budgets: profile && profile.budgets,
             mcp:,
@@ -611,8 +625,7 @@ module Tamoz
           allow_changes: profile.allow_changes?,
           checks: profile.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: profile.checks.transform_values { |check| check.fetch("safety").to_sym },
-          allowed_tools: profile.tools_allowed,
-          approval_required: profile.tools_approval_required
+          allowed_tools: profile.tools_allowed
         )
       end
 
@@ -674,9 +687,8 @@ module Tamoz
         options = {}
         OptionParser.new do |value|
           value.on("--answer ANSWER", "Non-interactive answer") { |entry| options[:answer] = entry }
-          value.on("--all", "Approve all pending interrupts") { options[:all] = true }
-          value.on("--i-understand-approve-all", "Dangerous opt-in for --all") { options[:i_understand_approve_all] = true }
           value.on("--recover", "Force recovery before resuming") { options[:recover] = true }
+          value.on("--approval-profile NAME", "Approval policy profile for this session") { |entry| options[:approval_profile] = entry }
         end.parse!(argv)
         options
       end
@@ -845,16 +857,17 @@ module Tamoz
         when :tool_started
           @err.puts "Running #{event.data.fetch("tool")}..."
         when :approval_requested
-          @err.puts "Approval required for #{event.data.fetch("tool")}:"
-          @err.puts event.data.fetch("preview")
+          if event.data["verdict"] == "ask"
+            @err.puts "Approval required for #{event.data.fetch("tool")}:"
+            @err.puts event.data.fetch("preview")
+          end
         end
       end
 
-      def approve_one_shot(tool:, arguments:, preview:)
-        @err.print "Approve #{tool}? [y/N] "
+      def approve_one_shot(tool:, preview:, decision:)
+        @err.print "Approve #{tool} [a/approve, d/deny]? "
         @err.flush
-        answer = @input.gets
-        answer && %w[y yes].include?(answer.strip.downcase)
+        Tamoz::Approval::Answer.parse(@input.gets.to_s)
       end
 
       def emit_cli_event(type, data)

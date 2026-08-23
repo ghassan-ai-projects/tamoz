@@ -2,9 +2,10 @@
 
 require_relative 'test_helper'
 
-# ADR-049 / PLAN_ADR049 Phase 1 — the evidence lattice and the v1 approval
-# policy (trusted core, inert): closed total order, sanctioned minting only,
-# and a policy whose input is provably ignored (INV-C lock).
+# ADR-049 / PLAN_ADR049 Phase 1 — the evidence lattice (trusted core): closed
+# total order, sanctioned minting only, persistence round-trip. The v1
+# constant policy is gone; prompts pin the symbol the engine's Decision
+# carries (plan step 8).
 # rubocop:disable Minitest/MultipleAssertions
 class CommsAuthorityEvidenceTest < Minitest::Test
   Comms = Tamoz::Comms
@@ -39,18 +40,18 @@ class CommsAuthorityEvidenceTest < Minitest::Test
     assert_predicate Comms::AuthorityEvidence.chat_bound, :chat_bound?
   end
 
-  # INV-C + INV-D lock: the v1 policy ignores its input entirely and returns
-  # filesystem_operator for every effect, including a hostile model-shaped
-  # descriptor that tries to declare itself cheap.
-  def test_v1_policy_requires_filesystem_operator_for_every_effect
-    hostile = { 'tool' => 'rm', 'target' => '/', 'kind' => 'approve_tool',
-                'required_evidence' => 'chat_bound' }
+  def test_members_exposes_the_lattice_exactly
+    assert_equal %i[chat_bound filesystem_operator], Comms::AuthorityEvidence.members
+    assert_equal Comms::AuthorityEvidence::LEVELS.map(&:to_sym), Comms::AuthorityEvidence.members
+  end
 
-    [nil, {}, { 'kind' => 'approve_tool' }, hostile].each do |effect|
-      assert_equal 'filesystem_operator',
-                   Comms::ApprovalPolicy.required_evidence(effect).to_s,
-                   "effect #{effect.inspect} must require filesystem_operator (INV-D)"
-    end
+  # The v1 constant policy is deleted: no `Comms::ApprovalPolicy` exists, and
+  # the evidence a prompt pins is whatever symbol the caller passes from the
+  # engine's Decision (pinned in comms_values_test and
+  # comms_evidence_gated_approval_test).
+  def test_the_constant_policy_is_gone
+    refute Comms.const_defined?(:ApprovalPolicy, false),
+           'the hardcoded evidence constant must not exist (plan step 8)'
   end
 end
 # rubocop:enable Minitest/MultipleAssertions

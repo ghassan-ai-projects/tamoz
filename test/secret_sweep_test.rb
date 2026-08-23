@@ -144,7 +144,6 @@ class SecretSweepTest < Minitest::Test
         payload_ref: SECRET, thread_policy: "thread.default",
         capability_grant: {"scopes" => ["read"]},
         behavior_version: "tamoz.agent.session/1",
-        approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
         delivery_policy: {"mode" => "inbox"}, budgets: {"max_steps" => 10},
         created_by: "human:op", created_at: 1_785_000_000
       )

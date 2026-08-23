@@ -367,7 +367,7 @@ module Tamoz
             task: definition.fetch("task"),
             allow_changes: true,
             checks: answer_check,
-            approval: ->(**) { true },
+            ask: ->(**) { "approve" },
             store:,
             memory_config:,
             memory_capture:,

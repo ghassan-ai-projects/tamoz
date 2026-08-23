@@ -14,14 +14,17 @@ module TamozSQLiteOracle
   # P14: 3 -> 4 through MIGRATION_4 (stream tables). Comms: 5 -> 6 through
   # MIGRATION_6 (channel tables). Delivery pacing moved 7 -> 8 through
   # MIGRATION_8. ADR-049: 8 -> 9 (prompt required_evidence) and 9 -> 10
-  # (decision audit evidence/reason). T8.3: 12 -> 13 retires the old stream
-  # engine (MIGRATION_13 drops its tables).
+  # (decision audit evidence/reason).
+  # The approval-policy redesign collapsed the tail of the registry into
+  # MIGRATION_17 (fresh-schema convention): 15 -> 16 gives the effect journal
+  # its logical-key identity columns, and 16 -> 17 carries the final approval
+  # schema.
   # The oracle is a second, independent read-only verifier: it
   # must agree with the migrated schema or every scenario database is
   # schema_invalid.
-  SCHEMA_VERSION = 15
+  SCHEMA_VERSION = 17
   MIGRATION_1_CHECKSUM =
-    "a92a8c0fe09f058bd4a36e294fd08006f0041fc945ef1c93545120f59872ee06"
+    "d27658b46031e0484dac3ab1a37364b125b01c4a2dbc8a72f3be71e2771c8814"
   MIGRATION_2_CHECKSUM =
     "1fa635c75408f2d75d7c9a026d25ae1fc10948152b84e07ed144f20c8c0d837f"
   MIGRATION_3_CHECKSUM =
@@ -67,6 +70,12 @@ module TamozSQLiteOracle
     "140fec98900d15bb2b94d2dc21cd05c1fd83fdcc9162117d866f0530b48c8d48"
   MIGRATION_15_CHECKSUM =
     "bf62f82543551681ca6e3796cf5df76a9a3e3972aae7e9e587e19c2f81ad90e7"
+  # MIGRATION_16 adds the effect journal's logical-key identity columns;
+  # MIGRATION_17 carries the final approval schema (fresh-schema convention).
+  MIGRATION_16_CHECKSUM =
+    "d4411481bdc8d42633564195bd3306e2b5bbc4654dc7ce5de575c873cac74701"
+  MIGRATION_17_CHECKSUM =
+    "b416ee56b38eb9559301cd2084299dabeee1470e61ed5f36d208f5adf865dd60"
   MAX_PATH_BYTES = 4_096
   MAX_DATABASE_BYTES = 256 * 1024 * 1024
   MAX_ROWS = 256
@@ -795,7 +804,9 @@ module TamozSQLiteOracle
         [12, MIGRATION_12_CHECKSUM],
         [13, MIGRATION_13_CHECKSUM],
         [14, MIGRATION_14_CHECKSUM],
-        [15, MIGRATION_15_CHECKSUM]
+        [15, MIGRATION_15_CHECKSUM],
+        [16, MIGRATION_16_CHECKSUM],
+        [17, MIGRATION_17_CHECKSUM]
       ]
       rows = @database.execute(
         "SELECT version, checksum FROM tamoz_schema_migrations ORDER BY version"

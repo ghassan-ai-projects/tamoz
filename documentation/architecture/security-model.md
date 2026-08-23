@@ -44,6 +44,8 @@ The capability registry is a **closed set of four built-in sources** — local t
 
 Every new user, scheduled, delegated, or internally generated task persists a versioned plan and an accepted review bound to its canonical digest before capabilities run (invariant 25). No file changes without an approval granted for that exact diff: a mutation between approval and dispatch is refused, not reconciled (invariant 26). Insufficient evidence produces a reviewed, read-only discovery plan that cannot authorize action (invariant 55).
 
+Whether an action needs approval — and under what evidence an approve resolves — is **policy as data**: digest-pinned YAML documents in `gems/tamoz-approval/policy/` (`base.yaml` plus profiles such as `implement`, `plan`, `review`, `auto`, `unattended`). The engine (`gems/tamoz-approval`) evaluates deny-first against the document current for the session; every verdict is journaled in the durable decision log with the argv/targets digests that identify the question. Grants are scoped (`once`/`session`), expiring, and bound to the policy revision that minted them — tightening the policy drops old-rev grants for free. Policy reload fails closed: a broken pointer or unloadable document keeps the live revision running rather than downgrading authority. An operator can rebind one session lane mid-flight (`tamoz approve --mode`), recorded as an auditable mode switch that survives worker restarts.
+
 ## No arbitrary shell
 
 `run_check` runs one operator-configured argv **by name**. The model chooses which configured check runs and can never alter its program, its arguments, or its environment. Credential-shaped variables are stripped from every check subprocess. The model's only effector surface is the governed tool catalog; there is no generic shell tool.
@@ -67,7 +69,7 @@ Evaluation code can exercise every public boundary but can never reach a product
 ## The governed integrations
 
 - **MCP.** Governed client/host over the official Ruby SDK: immutable server admission, pinned catalogs, invocation supervision, credential handling. Remote metadata never owns local authorization, trust, or effect safety (invariants 35–37). Websearch is an MCP server with the reserved id `websearch`, behind an egress policy and a circuit.
-- **Telegram.** A channel is a user surface, not a model-callable capability. Admission is allowlist-based; the gateway holds the bot token and never constructs a session, loads a model credential, or opens a workspace file. Approval is **evidence-gated**: `chat_bound < filesystem_operator`, and the v1 policy requires `filesystem_operator` for every effect, so Telegram is deny-only in practice ([../adr/adr-049-telegram-approval.md](../adr/adr-049-telegram-approval.md)).
+- **Telegram.** A channel is a user surface, not a model-callable capability. Admission is allowlist-based; the gateway holds the bot token and never constructs a session, loads a model credential, or opens a workspace file. Approval is **evidence-gated**: `chat_bound < filesystem_operator`, and required evidence travels with the journaled engine Decision from the digest-pinned policy data, so Telegram is deny-only wherever the document does not deliberately grant it ([../adr/adr-049-telegram-approval.md](../adr/adr-049-telegram-approval.md)).
 
 ## Reporting vulnerabilities
 

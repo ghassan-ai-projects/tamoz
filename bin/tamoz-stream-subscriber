@@ -22,6 +22,10 @@ parser = OptionParser.new do |opts|
   opts.on("--subscriber-token TOKEN", "Channel-B subscriber credential") do |value|
     options[:subscriber_token] = value
   end
+  opts.on("--approval-ttl-seconds N", Integer,
+          "Approval receipt lifetime; an expired receipt reads as absent and re-asks") do |value|
+    options[:approval_ttl_seconds] = value
+  end
   opts.on("--approval-relay FILE", "Ruby file defining build_approval_relay") do |value|
     options[:approval_relay] = value
   end
@@ -31,7 +35,7 @@ parser = OptionParser.new do |opts|
 end
 parser.parse!(ARGV)
 
-required = %i[tenant database events_url subscriber_token]
+required = %i[tenant database events_url subscriber_token approval_ttl_seconds]
 unless required.all? { |key| options[key] && !options[key].to_s.empty? }
   warn parser
   exit 2
@@ -61,7 +65,8 @@ handlers = Tamoz::Stream::LiveLearningHandlers.new(
   tenant:,
   logger:,
   approval_receipts:,
-  approval_relay:
+  approval_relay:,
+  approval_ttl_s: options.fetch(:approval_ttl_seconds)
 )
 subscriber = Tamoz::Stream::OutcomeSubscriber.new(
   cursor_store: adapter.bind_durable_subscriber_store(tenant:),

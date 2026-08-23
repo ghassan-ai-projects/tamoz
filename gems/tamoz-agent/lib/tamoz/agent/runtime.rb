@@ -33,10 +33,10 @@ module Tamoz
       REVIEW_SYSTEM = Deliberation::REVIEW_SYSTEM
       VERIFY_SYSTEM = Deliberation::VERIFY_SYSTEM
 
-      attr_reader :model, :toolbox, :max_plan_attempts, :approval, :routing
+      attr_reader :model, :toolbox, :max_plan_attempts, :ask, :routing, :approval_engine
 
-      def initialize(model:, toolbox:, max_plan_attempts: 3, approval: nil, routing: :legacy,
-                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE)
+      def initialize(model:, toolbox:, max_plan_attempts: 3, ask: nil, routing: :legacy,
+                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil)
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
           raise ArgumentError, "max_plan_attempts must be between 1 and 10"
@@ -47,11 +47,13 @@ module Tamoz
         @model = model
         @toolbox = toolbox
         @max_plan_attempts = max_plan_attempts
-        @approval = approval
+        @ask = ask
+        @approval_engine = approval_engine
         @routing = routing
         @observability = Tamoz::Observability::Producer.new(recorder:)
         @correlation = nil
         @model_call_count = 0
+        @capabilities = CapabilityBinding.build(toolbox:)
       end
 
       def run(task)
@@ -579,30 +581,17 @@ module Tamoz
           # execution metadata binding execution to the approved state.
           effect_arguments = resolved_effect_arguments(step)
           begin
-            if toolbox.approval_required?(step.tool)
-              maximum_output = toolbox.maximum_effect_output_bytes(step.tool)
-              if total_bytes + maximum_output > MAX_OBSERVATION_BYTES
-                raise ToolError, "insufficient observation budget for #{step.tool}"
-              end
-              preview = toolbox.preview(step.tool, effect_arguments)
-              request = {
-                **event_context,
-                "step_id" => step.id,
-                "tool" => step.tool,
-                "arguments" => step.arguments,
-                "preview" => preview
-              }
-              emit(:approval_requested, request) { |event| yield event }
-              approved = approval&.call(
-                tool: step.tool,
-                arguments: effect_arguments,
-                preview:
-              )
-              unless approved == true
-                emit(:approval_denied, request.except("preview")) { |event| yield event }
-                raise ApprovalDeniedError, "approval denied for #{step.tool}"
-              end
-              emit(:approval_granted, request.except("preview")) { |event| yield event }
+            if total_bytes + toolbox.maximum_effect_output_bytes(step.tool) > MAX_OBSERVATION_BYTES
+              raise ToolError, "insufficient observation budget for #{step.tool}"
+            end
+            denial = gate_step(step, effect_arguments, event_context) { |event| yield event }
+            if denial
+              observations << denial
+              total_bytes += denial.fetch("output").bytesize
+              next unless %i[action repair].include?(phase)
+
+              tool_failure = denial.fetch("failure")
+              break
             end
 
             emit(
@@ -656,6 +645,119 @@ module Tamoz
           end
         end
         [Plan.deep_freeze(observations), last_check_receipt, Plan.deep_freeze(tool_failure)].freeze
+      end
+
+      # Pipeline B's single call site: the SAME engine the durable sessions use
+      # decides every step. :allow proceeds; :deny and an unanswered/refused ask
+      # become the structured denial result Pipeline A feeds back (the turn
+      # continues); an approved ask resolves :once against the ephemeral session.
+      def gate_step(step, effect_arguments, event_context)
+        return nil unless @approval_engine
+
+        request = @approval_engine.build_request(
+          tool: step.tool,
+          argv: RequestProjection.argv(step.tool, effect_arguments),
+          targets: RequestProjection.targets(step.tool, effect_arguments),
+          effect_class: gate_effect_class(step.tool),
+          session_id: "one-shot",
+          workspace_root: toolbox.root.to_s
+        )
+        decision = @approval_engine.decide(request)
+        preview = decision.verdict == :allow ? nil : toolbox.preview(step.tool, effect_arguments)
+        request_event = {
+          **event_context,
+          "step_id" => step.id,
+          "tool" => step.tool,
+          "arguments" => step.arguments,
+          "verdict" => decision.verdict.to_s
+        }
+        request_event["preview"] = preview if preview
+        emit(:approval_requested, request_event) { |event| yield event }
+
+        case decision.verdict
+        when :allow
+          emit(:approval_granted, request_event.except("preview")) { |event| yield event }
+          nil
+        when :deny
+          emit(:approval_denied, request_event.except("preview")) { |event| yield event }
+          denial_observation(step, event_context, decision)
+        else
+          resolve_ask(request_event, decision) { |event| yield event }
+        end
+      end
+
+      def resolve_ask(request_event, decision)
+        raw = @ask&.call(
+          tool: request_event.fetch("tool"),
+          preview: request_event["preview"],
+          decision:
+        )
+        answer = raw.is_a?(Symbol) ? raw : Tamoz::Approval::Answer.parse(raw.to_s)
+        if answer == :approve
+          @approval_engine.resolve(decision_id: decision.id, answer: :approve, scope: :once)
+          emit(:approval_granted, request_event.except("preview")) { |event| yield event }
+          return nil
+        end
+
+        @approval_engine.resolve(decision_id: decision.id, answer: :deny, scope: nil)
+        emit(:approval_denied, request_event.except("preview")) { |event| yield event }
+        observation_for_denial(
+          request_event.except("preview", "verdict"),
+          step_id: request_event.fetch("step_id"),
+          tool: request_event.fetch("tool"),
+          arguments: request_event.fetch("arguments"),
+          reason: "denied by operator"
+        )
+      end
+
+      # Mirrors `SessionSteps#denied_update`: same failure record shape, same
+      # "denied: <reason>, rule <rule_id>" phrasing, ToolPolicyError class —
+      # the two pipelines must never disagree about what a denial looks like.
+      def denial_observation(step, event_context, decision)
+        observation_for_denial(
+          event_context,
+          step_id: step.id,
+          tool: step.tool,
+          arguments: step.arguments,
+          reason: "denied: #{decision.reason}, rule #{decision.rule_id}"
+        )
+      end
+
+      # The capability binding owns classification; a tool the host cannot
+      # route fails closed to :bounded like `CapabilityBinding#closed_effect_class`.
+      def gate_effect_class(tool)
+        @capabilities.effect_class(tool)
+      rescue ToolError
+        :bounded
+      end
+
+      def observation_for_denial(event_context, step_id:, tool:, arguments:, reason:)
+        {
+          **event_context,
+          "step_id" => step_id,
+          "tool" => tool,
+          "output" => <<~TEXT.chomp,
+            Tool #{tool} was rejected: #{reason}
+            The workspace was not changed. Re-read the target with read_file and use its
+            exact current bytes and digest before proposing a different action.
+          TEXT
+          "failure" => {
+            "kind" => "tool_error",
+            "tool" => tool,
+            "error_class" => "ToolPolicyError",
+            "reason" => reason,
+            "failure_signature" => Digest::SHA256.hexdigest(
+              JSON.generate(
+                "kind" => "tool_error",
+                "tool" => tool,
+                "reason" => reason,
+                "arguments_digest" => SessionRecords.digest(
+                  Deliberation.canonical(arguments)
+                )
+              )
+            )
+          }
+        }
       end
 
       # Mirrors `SessionNodes#tool_failure_update`: the two drivers must never disagree
@@ -765,8 +867,16 @@ module Tamoz
         )
       end
 
-      def action_signature(plan)
-        Deliberation.action_signature(plan, toolbox:)
+      def action_signature(plan) = Deliberation.action_signature(plan)
+
+      # The engine is the only classification owner; the one-shot runtime asks
+      # its operator exactly when the active policy would not auto-allow.
+      def policy_gated?(tool)
+        request = @approval_engine.build_request(
+          tool: tool, argv: [], targets: [],
+          effect_class: :bounded, session_id: 'one-shot'
+        )
+        @approval_engine.simulate(request).verdict != :allow
       end
 
       def planning_prompt(task, phase, allowed_tools, evidence, feedback, planning_context)

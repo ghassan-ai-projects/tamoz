@@ -22,11 +22,8 @@ module Tamoz
       # Pinned by test/agent_profile_test.rb (canonical_digest stable,
       # distinguishes, adoption not in digest) and test/agent_session_test.rb.
       #
-      # :reek:NilCheck — `unattended` nil is the domain sentinel: a profile that
-      # never declared an unattended section preauthorizes NOTHING, which is a
-      # different state from one that declared an empty section.
-      # :reek:FeatureEnvy — `initialize` fills in the two optional members before
-      # handing them to Data's own initializer; the hash is the subject.
+      # :reek:FeatureEnvy — `initialize` fills in the one optional member before
+      # handing it to Data's own initializer; the hash is the subject.
       # :reek:BooleanParameter :reek:LongParameterList — `build`'s four arguments
       # are the document plus the three facts that are NOT in it (the digest, and
       # whether this came from a repository suggestion or a pinned replay).
@@ -35,12 +32,11 @@ module Tamoz
       # change, so it is a **Q4 candidate**, not part of a move.
       Fields = Data.define(
         :profile_id, :profile_version, :canonical_root, :description,
-        :model_roles, :budgets, :checks, :tools_allowed, :tools_approval_required,
-        :policy, :canonical_digest, :suggestion, :pinned, :egress, :unattended
+        :model_roles, :budgets, :checks, :tools_allowed,
+        :policy, :canonical_digest, :suggestion, :pinned, :egress
       ) do
         def initialize(pinned: false, **members)
           members[:egress] = nil unless members.key?(:egress)
-          members[:unattended] = nil unless members.key?(:unattended)
           super(pinned:, **Profile.deep_freeze(members))
         end
 
@@ -59,13 +55,11 @@ module Tamoz
             budgets: hash['budgets'] || {},
             checks: canonical_checks(hash),
             tools_allowed: tools.fetch('allowed'),
-            tools_approval_required: tools['approval_required'] || [],
             policy: hash.fetch('policy'),
             canonical_digest: digest,
             suggestion:,
             pinned:,
-            egress: hash['egress'],
-            unattended: hash['unattended']
+            egress: hash['egress']
           )
         end
 
@@ -78,23 +72,6 @@ module Tamoz
         end
 
         def allow_changes? = policy.fetch('allow_changes')
-
-        # The tools a worker may use with nobody watching. Absent section means
-        # NOTHING is preauthorized — a profile that has never thought about
-        # unattended execution does not accidentally authorize it.
-        #
-        # `forbidden` is subtracted last so it cannot be overridden.
-        def unattended_preauthorized
-          return [] if unattended.nil?
-
-          preauthorized = Array(unattended['read_only']) + Array(unattended['reconcilable'])
-          (preauthorized - Array(unattended['forbidden'])).uniq.freeze
-        end
-
-        # Everything else the profile allows: possible, but only with a human.
-        def unattended_requires_approval
-          (tools_allowed - unattended_preauthorized).uniq.freeze
-        end
 
         def high_risk? = model_roles.values.any? { |role| role.key?('credential_ref') }
       end

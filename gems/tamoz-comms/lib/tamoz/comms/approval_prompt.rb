@@ -7,7 +7,6 @@ require_relative 'canonical'
 require_relative 'errors'
 require_relative 'interrupt_digest'
 require_relative 'authority_evidence'
-require_relative 'approval_policy'
 require_relative 'shapes'
 
 module Tamoz
@@ -69,12 +68,15 @@ module Tamoz
       # Builds the prompt from a fresh 128-bit reference; only its digest is
       # ever stored. The plaintext reference lives in memory for exactly one
       # control-send attempt (design §7). The requirement is pinned at build
-      # time from the trusted policy (INV-C), in the same value as the
+      # time from the caller-supplied symbol — the `required_evidence` the
+      # engine's Decision carries (INV-C) — in the same value as the
       # interrupt digest, and the surface binding is captured so the callback
-      # comparison can verify it (contract §7.1).
+      # comparison can verify it (contract §7.1). A symbol outside the closed
+      # lattice raises here; it is never coerced to a weaker one.
       def self.build(
         surface_id:, surface_revision:, thread_id:, occurrence_id:, interrupts:,
-        correspondent_id:, conversation_id:, prompt_ttl_s:, created_at: Time.now.utc
+        required_evidence:, correspondent_id:, conversation_id:, prompt_ttl_s:,
+        created_at: Time.now.utc
       )
         reference = SecureRandom.random_bytes(16).unpack1('H*')
         digest = Canonical.hexdigest(REFERENCE_DOMAIN, reference)
@@ -82,7 +84,7 @@ module Tamoz
           reference_digest: digest, surface_id:, surface_revision:,
           thread_id:, occurrence_id:, interrupt_digest: InterruptDigest.of(interrupts),
           correspondent_id:, conversation_id:,
-          required_evidence: ApprovalPolicy.required_evidence(interrupts).to_s,
+          required_evidence: required_evidence.to_s,
           created_at:, expires_at: created_at + prompt_ttl_s
         )
         [reference, prompt]

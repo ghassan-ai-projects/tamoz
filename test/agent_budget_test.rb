@@ -110,7 +110,7 @@ class AgentBudgetTest < Minitest::Test
         "profile" => {"schema_version" => 1, "profile_id" => "p", "profile_version" => "1.0",
                       "canonical_root" => workspace},
         "roots" => {"workspace" => workspace},
-        "tools" => {"allowed" => READ_ONLY_TOOLS, "approval_required" => []},
+        "tools" => {"allowed" => READ_ONLY_TOOLS},
         "policy" => {"allow_changes" => false, "default_check_safety" => "read_only",
                      "graph_version" => "1", "behavior_version" => "1.0",
                      "tool_catalog_digest" => "sha256:#{"0" * 64}"},

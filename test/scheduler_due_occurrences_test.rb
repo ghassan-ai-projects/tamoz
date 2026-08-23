@@ -19,7 +19,6 @@ class SchedulerDueOccurrencesTest < Minitest::Test
       start_at: ANCHOR, payload_ref: PAYLOAD, thread_policy: 'thread.default',
       capability_grant: { 'scopes' => ['read'] },
       behavior_version: 'tamoz.agent.session/1',
-      approval_policy: { 'mode' => 'deterministic', 'risk' => 'read_only' },
       delivery_policy: { 'mode' => 'inbox' }, budgets: { 'max_steps' => 10 },
       created_by: 'human:op', created_at: ANCHOR, **overrides
     )
@@ -31,7 +30,6 @@ class SchedulerDueOccurrencesTest < Minitest::Test
       payload_ref: PAYLOAD, thread_policy: 'thread.default',
       capability_grant: { 'scopes' => ['read'] },
       behavior_version: 'tamoz.agent.session/1',
-      approval_policy: { 'mode' => 'deterministic', 'risk' => 'read_only' },
       delivery_policy: { 'mode' => 'inbox' }, budgets: { 'max_steps' => 10 },
       created_by: 'human:op', created_at: ANCHOR, **overrides
     )

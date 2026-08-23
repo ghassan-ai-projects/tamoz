@@ -26,7 +26,7 @@ class AgentProfileTest < Minitest::Test
         "canonical_root" => @dir
       },
       "roots" => {"workspace" => @dir},
-      "tools" => {"allowed" => %w[read_file list_directory], "approval_required" => []},
+      "tools" => {"allowed" => %w[read_file list_directory]},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -191,10 +191,26 @@ class AgentProfileTest < Minitest::Test
     assert_match(/unknown sections/, error.message)
   end
 
+  # Approval classification is not profile authority anymore: it lives in the
+  # approval engine's policy document. A file still carrying the deleted keys
+  # is refused at load — accepted-but-ignored config is the failure mode this
+  # redesign removes.
+  def test_deleted_approval_keys_are_rejected_loudly
+    document = valid_document
+    document["tools"]["approval_required"] = ["read_file"]
+    error = assert_raises(Profile::ValidationError) { preview(document) }
+    assert_match(/unknown tools fields \["approval_required"\]/, error.message)
+
+    document = valid_document
+    document["unattended"] = {"reconcilable" => %w[read_file]}
+    error = assert_raises(Profile::ValidationError) { preview(document) }
+    assert_match(/unknown sections \["unattended"\]/, error.message)
+  end
+
   def test_shell_metacharacter_in_argv
     document = valid_document("checks" => {})
     document["checks"] = {"c1" => {"argv" => ["sh", "-c", "echo ok; rm -rf x"], "safety" => "unsafe"}}
-    document["tools"] = {"allowed" => %w[read_file run_check], "approval_required" => ["run_check"]}
+    document["tools"] = {"allowed" => %w[read_file run_check]}
     document["policy"] = valid_document.fetch("policy").merge("allow_changes" => true)
     error = assert_raises(Profile::ValidationError) { preview(document) }
     assert_match(/metacharacters/, error.message)
@@ -248,7 +264,7 @@ class AgentProfileTest < Minitest::Test
         "schema_version" => 1
       },
       "policy" => valid_document.fetch("policy"),
-      "tools" => {"approval_required" => [], "allowed" => %w[read_file list_directory]}
+      "tools" => {"allowed" => %w[read_file list_directory]}
     }
     second = preview(reordered)
     assert_equal first.canonical_digest, second.canonical_digest
@@ -315,7 +331,7 @@ class AgentProfileTest < Minitest::Test
 
   def test_allow_changes_false_rejects_action_tools
     document = valid_document("tools" => {})
-    document["tools"] = {"allowed" => %w[read_file apply_patch], "approval_required" => ["apply_patch"]}
+    document["tools"] = {"allowed" => %w[read_file apply_patch]}
     error = assert_raises(Profile::ValidationError) { preview(document) }
     assert_match(/allow_changes is false/, error.message)
   end
@@ -480,7 +496,7 @@ class AgentProfileTest < Minitest::Test
   def check_document(argv)
     document = valid_document("checks" => {})
     document["checks"] = {"c1" => {"argv" => argv, "safety" => "read_only"}}
-    document["tools"] = {"allowed" => %w[read_file run_check], "approval_required" => ["run_check"]}
+    document["tools"] = {"allowed" => %w[read_file run_check]}
     document["policy"] = valid_document.fetch("policy").merge("allow_changes" => true)
     document
   end

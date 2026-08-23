@@ -59,6 +59,18 @@ module Tamoz
           read_line('Answer: ')&.strip
         end
 
+        # §1.4 scope follow-up: only offered when the decision's grant offer
+        # includes :session; a bare Enter or anything non-affirmative keeps the
+        # grant to this one ask.
+        def remember_for_session(descriptor)
+          return false unless Array(descriptor.dig('decision', 'grant_scopes')).include?('session')
+
+          line = read_line('Remember for this session? [y/N] ')
+          return false if line.nil?
+
+          Tamoz::Approval::Answer.parse(line) == :approve
+        end
+
         private
 
         def print_approval_help

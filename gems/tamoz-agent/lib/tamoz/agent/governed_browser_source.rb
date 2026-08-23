@@ -31,8 +31,6 @@ module Tamoz
 
       def name?(name) = @index.key?(String(name))
       def descriptor_for(name) = @index.fetch(String(name))
-      def read_only?(name) = descriptor_for(name).effect_class.to_sym == :read_only
-      def approval_required?(name) = !read_only?(name)
       def maximum_effect_output_bytes(_name) = MAX_OUTPUT_BYTES
       def effect_intent(_name, arguments) = { 'arguments_digest' => Tamoz::Core.digest("tamoz.browser.arguments.v1\n", validate_arguments(arguments)) }
 

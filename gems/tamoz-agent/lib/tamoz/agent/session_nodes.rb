@@ -47,6 +47,8 @@ module Tamoz
         :artifact_tenant,
         :child_task_runtime,
         :capabilities,
+        :approval_engine,
+        :approval_session_id,
         :graph_version
       )
 
@@ -70,6 +72,8 @@ module Tamoz
         toolbox:,
         max_plan_attempts:,
         max_repair_attempts:,
+        approval_engine: nil,
+        approval_session_id: nil,
         model_call_safety:,
         profile: nil,
         mcp: nil,
@@ -105,6 +109,8 @@ module Tamoz
           toolbox:,
           max_plan_attempts:,
           max_repair_attempts:,
+          approval_engine:,
+          approval_session_id:,
           model_call_safety:,
           profile:,
           mcp:,

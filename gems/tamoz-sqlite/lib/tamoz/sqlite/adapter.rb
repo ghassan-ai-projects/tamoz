@@ -55,9 +55,27 @@ module Tamoz
         DurableSubscriberStore.new(adapter: self, tenant:)
       end
 
-      def bind_approval_receipt_store(tenant:)
+      def bind_approval_receipt_store(tenant:, clock: -> { Time.now })
         guard_open!
-        ApprovalReceiptStore.new(adapter: self, tenant:)
+        ApprovalReceiptStore.new(adapter: self, tenant:, clock:)
+      end
+
+      # Approval redesign (ADR §2.3/§2.5/§1.5): the durable homes behind the
+      # Tamoz::Approval ports — grants, the decision log, and the active-policy
+      # record the reload loop reads.
+      def bind_approval_grant_store
+        guard_open!
+        ApprovalGrantStore.new(adapter: self)
+      end
+
+      def bind_approval_decision_log(clock: -> { Time.now })
+        guard_open!
+        ApprovalDecisionLog.new(adapter: self, clock:)
+      end
+
+      def bind_approval_active_policy(clock: -> { Time.now })
+        guard_open!
+        ApprovalActivePolicy.new(adapter: self, clock:)
       end
 
       def initialize(

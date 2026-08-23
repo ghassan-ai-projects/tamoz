@@ -116,7 +116,9 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
-      interrupts = [{ task_id: 'task', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }]
+      interrupts = [{ task_id: 'task', call_index: 0,
+                      descriptor: { 'kind' => 'approve_tool',
+                                    'decision' => { 'required_evidence' => 'filesystem_operator' } } }]
 
       2.times do |index|
         result = sink.push(
@@ -134,18 +136,21 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
-  def approval_event(request_id)
+  def approval_event(request_id, required_evidence: 'filesystem_operator')
     { thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
       request_id:,
-      interrupts: [{ task_id: 'task', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }] }
+      interrupts: [{ task_id: 'task', call_index: 0,
+                     descriptor: { 'kind' => 'approve_tool',
+                                   'decision' => { 'required_evidence' => required_evidence } } }] }
   end
 
-  # ADR-049 Phase 5 (defense in depth): under the v1 policy every interrupt
-  # requires filesystem_operator evidence, so the rendered keyboard offers
-  # Deny only — the markup reflects the policy, never a hardcoded list. A
-  # stray approve callback is still refused by the Phase 3 gate; the button's
-  # absence is UX, not the security boundary.
-  def test_an_approval_request_renders_a_deny_only_keyboard_under_v1_policy
+  # ADR-049 INV-C/INV-D (plan step 8): the pinned evidence is read from the
+  # decision the engine journaled into the interrupt descriptor. An
+  # operator-gated decision renders Deny only — the markup reflects the
+  # decision, never a hardcoded list. A stray approve callback is still
+  # refused by the gateway's evidence compare; the button's absence is UX,
+  # not the security boundary.
+  def test_an_approval_request_for_an_operator_gated_decision_renders_a_deny_only_keyboard
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
       bind_thread_to_conversation(store)
@@ -156,8 +161,29 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       markup = JSON.parse(row.fetch('markup'))
 
       assert_equal %w[deny], markup.fetch('actions'),
-                   'a v1-policy prompt must not render an approve button (ADR-049 INV-D)'
+                   'a filesystem_operator decision must not render an approve button (ADR-049 INV-D)'
       assert_match(/\A[0-9a-f]{32}\z/, markup.fetch('reference'))
+    end
+  end
+
+  # E-1 at the sink: a decision that carries `chat_bound` yields BOTH buttons,
+  # and the stored prompt pins that same decision value — markup and gate can
+  # never disagree about what the decision required.
+  def test_an_approval_request_pins_the_decisions_evidence_on_prompt_and_markup
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1', required_evidence: 'chat_bound'))
+
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
+      markup = JSON.parse(row.fetch('markup'))
+      digest = Comms::Canonical.hexdigest(Comms::ApprovalPrompt::REFERENCE_DOMAIN, markup.fetch('reference'))
+      prompt = store.prompt(reference_digest: digest)
+
+      assert_equal 'chat_bound', prompt.fetch('required_evidence')
+      assert_equal %w[approve deny], markup.fetch('actions'),
+                   'a chat_bound decision is approvable by the channel correspondent'
     end
   end
 

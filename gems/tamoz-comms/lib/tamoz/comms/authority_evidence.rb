@@ -35,6 +35,11 @@ module Tamoz
 
       def self.filesystem_operator = new(FILESYSTEM_OPERATOR)
 
+      # The lattice members as plain symbols — the set callers validate a
+      # symbol vocabulary against at load. Derived from LEVELS so membership
+      # has one home.
+      def self.members = LEVELS.map(&:to_sym).freeze
+
       # Round-trips a persisted lattice member (the pinned prompt field); a
       # value that is not a member is rejected, never coerced to a weaker one.
       def self.from(level)

@@ -216,6 +216,20 @@ module Tamoz
         )
       end
 
+      # The §2.6 operator surface: a durable per-thread control message the
+      # worker applies at its next durable boundary. Delivery waits in the
+      # request inbox like any other message, so it can never jump ahead of an
+      # unsettled turn.
+      def submit_mode_switch(session, thread_id, request_id, mode)
+        session.app.durable_runner.submit(
+          { 'mode' => mode },
+          thread: thread_id,
+          request_id:,
+          operation: :mode_switch,
+          delivery: :queue
+        )
+      end
+
       def cancel_exit(view)
         return exit_for_view(view) unless view.state&.fetch(:terminal_reason, nil) == 'cancelled_by_user'
         return exit_for_cancellation if @cancellation&.cancelled?

@@ -48,10 +48,6 @@ module Tamoz
         toolbox.effect_intent(descriptor.id, arguments)
       end
 
-      def approval_required?(descriptor)
-        toolbox.approval_required?(descriptor.id)
-      end
-
       def maximum_effect_output_bytes(descriptor)
         toolbox.maximum_effect_output_bytes(descriptor.id)
       end

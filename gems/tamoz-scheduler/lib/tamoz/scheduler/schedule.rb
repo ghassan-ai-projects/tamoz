@@ -32,7 +32,7 @@ module Tamoz
       :thread_policy,           # how the occurrence maps to a thread id
       :capability_grant,        # stored maximum grant (P13-C intersects with current)
       :behavior_version,
-      :approval_policy,
+      :approval_profile,        # named approval profile occurrences run under
       :delivery_policy,
       :budgets,
       :created_by,
@@ -44,6 +44,7 @@ module Tamoz
       OVERLAP_POLICIES = %i[forbid queue_one allow].freeze
       DIGEST_DOMAIN = "tamoz.scheduler.schedule.v1\n"
       MAX_BUDGET_MAGNITUDE = 1_000_000
+      DEFAULT_APPROVAL_PROFILE = "implement"
 
       def initialize(
         id:, revision: 1, owner:, enabled: true,
@@ -53,7 +54,7 @@ module Tamoz
         overlap_policy: :forbid, max_concurrency: 1,
         jitter_window: 0, payload_ref:, thread_policy:,
         capability_grant:, behavior_version:,
-        approval_policy:, delivery_policy:, budgets:,
+        approval_profile: DEFAULT_APPROVAL_PROFILE, delivery_policy:, budgets:,
         created_by:, created_at:,
         definition_digest: nil
       )
@@ -62,7 +63,7 @@ module Tamoz
           start_at:, end_at:, misfire_policy:, misfire_limit:,
           overlap_policy:, max_concurrency:, jitter_window:,
           payload_ref:, thread_policy:, capability_grant:,
-          behavior_version:, approval_policy:, delivery_policy:,
+          behavior_version:, approval_profile:, delivery_policy:,
           budgets:, created_by:, created_at:
         )
         @digest = definition_digest || compute_digest(@validated)
@@ -80,7 +81,7 @@ module Tamoz
           thread_policy: @validated.fetch(:thread_policy),
           capability_grant: @validated.fetch(:capability_grant),
           behavior_version: @validated.fetch(:behavior_version),
-          approval_policy: @validated.fetch(:approval_policy),
+          approval_profile: @validated.fetch(:approval_profile),
           delivery_policy: @validated.fetch(:delivery_policy),
           budgets: @validated.fetch(:budgets),
           created_by: @validated.fetch(:created_by),
@@ -271,7 +272,7 @@ module Tamoz
           "thread_policy" => thread_policy,
           "capability_grant" => capability_grant,
           "behavior_version" => behavior_version,
-          "approval_policy" => approval_policy,
+          "approval_profile" => approval_profile,
           "delivery_policy" => delivery_policy,
           "budgets" => budgets, "created_by" => created_by,
           "created_at" => created_at, "definition_digest" => definition_digest
@@ -285,9 +286,12 @@ module Tamoz
         start_at:, end_at:, misfire_policy:, misfire_limit:,
         overlap_policy:, max_concurrency:, jitter_window:,
         payload_ref:, thread_policy:, capability_grant:,
-        behavior_version:, approval_policy:, delivery_policy:,
+        behavior_version:, approval_profile:, delivery_policy:,
         budgets:, created_by:, created_at:
       )
+        # An omitted profile is the default one, not an error, so a schedule
+        # that says nothing runs under the same policy as ordinary work.
+        approval_profile = DEFAULT_APPROVAL_PROFILE if approval_profile.nil?
         validate_id!(id)
         validate_revision!(revision)
         validate_string!(owner, "owner")
@@ -302,7 +306,7 @@ module Tamoz
         validate_string!(thread_policy, "thread_policy")
         validate_hash!(capability_grant, "capability_grant")
         validate_string!(behavior_version, "behavior_version")
-        validate_hash!(approval_policy, "approval_policy")
+        validate_string!(approval_profile, "approval_profile")
         validate_hash!(delivery_policy, "delivery_policy")
         validate_budgets!(budgets)
         validate_string!(created_by, "created_by")
@@ -313,7 +317,7 @@ module Tamoz
           start_at:, end_at:, misfire_policy:, misfire_limit:,
           overlap_policy:, max_concurrency:, jitter_window:,
           payload_ref:, thread_policy:, capability_grant:,
-          behavior_version:, approval_policy:, delivery_policy:,
+          behavior_version:, approval_profile:, delivery_policy:,
           budgets:, created_by:, created_at:
         }.freeze
       end

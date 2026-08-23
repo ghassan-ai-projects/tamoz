@@ -313,7 +313,6 @@ module Tamoz
         @out.puts "canonical_digest: #{document.canonical_digest}"
         @out.puts "allow_changes: #{document.allow_changes?}"
         @out.puts "tools.allowed: #{document.tools_allowed.join(', ')}"
-        @out.puts "tools.approval_required: #{document.tools_approval_required.join(', ')}"
       end
 
       def render_profile_policy(document)

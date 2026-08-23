@@ -345,14 +345,25 @@ module Tamoz
       # (design §9).
       def cmd_approve(options, argv)
         deny = false
+        reload_path = nil
+        mode = nil
+        thread_id = nil
         parser = OptionParser.new do |value|
-          value.banner = "Usage: tamoz approve REQUEST_ID [--deny]"
+          value.banner = "Usage: tamoz approve REQUEST_ID [--deny] | tamoz approve --reload POLICY_PATH | " \
+                         "tamoz approve --mode NAME --thread ID"
           accept_json(value, options)
           value.on("--deny", "Refuse the request instead of granting it") { deny = true }
+          value.on("--reload PATH", "Validate a policy document, then publish it to workers") { |candidate| reload_path = candidate }
+          value.on("--mode NAME", "Queue a mid-session approval-mode switch for the thread's profile lane") { |name| mode = name }
+          value.on("--thread ID", "Target thread of --mode") { |candidate| thread_id = candidate }
         end
         parser.order!(argv)
         request_id = argv.shift
         parser.parse!(argv)
+
+        return approve_reload(options, reload_path) if reload_path
+        return approve_mode_switch(options, mode, thread_id) if mode
+
         raise OptionParser::MissingArgument, "REQUEST_ID" if request_id.to_s.empty?
 
         with_worker_runtime(options) do |runtime|
@@ -365,6 +376,46 @@ module Tamoz
           direction = deny ? :deny : :approve
           record = record_approval(runtime, entry, direction:)
           report_decision(record, direction:, json: options[:json])
+          0
+        end
+      end
+
+      # The visudo property lives here: this CLI process validates the whole
+      # document BEFORE anything is persisted, so a broken document never
+      # reaches the active-policy row and running workers keep their rev.
+      def approve_reload(options, path)
+        evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
+        document = Tamoz::Approval::PolicyDocument.load(File.expand_path(path), evidence_symbols: evidence_symbols)
+      rescue Tamoz::Approval::InvalidPolicyError => error
+        @err.puts "tamoz: policy rejected: #{error.message}"
+        1
+      else
+        with_worker_runtime(options) do |runtime|
+          runtime.adapter.bind_approval_active_policy.write(document.path, document.policy_rev)
+          if options[:json]
+            @out.puts JSON.generate("policy_path" => document.path, "policy_rev" => document.policy_rev)
+          else
+            @out.puts "Published policy #{document.path} at rev #{document.policy_rev}"
+          end
+          0
+        end
+      end
+
+      # The mode switch is submitted, not applied: the worker owns application
+      # at a durable boundary (ADR §2.6). An unknown mode name is rejected by
+      # the engine there and the request terminally fails — loudly, not
+      # silently.
+      def approve_mode_switch(options, mode, thread_id)
+        raise OptionParser::MissingArgument, "--thread" if thread_id.to_s.empty?
+
+        request_id = SecureRandom.uuid
+        with_worker_runtime(options) do |runtime|
+          submit_mode_switch(runtime.session_for_profile(nil), thread_id, request_id, mode)
+          if options[:json]
+            @out.puts JSON.generate("thread" => thread_id, "mode" => mode, "request_id" => request_id)
+          else
+            @out.puts "Queued mode switch to #{mode} for thread #{thread_id}."
+          end
           0
         end
       end

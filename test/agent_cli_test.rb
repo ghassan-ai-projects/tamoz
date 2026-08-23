@@ -774,20 +774,6 @@ class AgentCLITest < Minitest::Test
     assert_match(/tamoz: conflict/, err.string)
   end
 
-  def test_approval_denied_exits_one_with_message
-    out = StringIO.new
-    err = StringIO.new
-
-    status = Tamoz::Agent::CLI.run(
-      ["edit app.rb"],
-      out:, err:, env: {},
-      model_factory: raising_factory(Tamoz::Agent::ApprovalDeniedError.new("nope"))
-    )
-
-    assert_equal 1, status
-    assert_match(/tamoz: approval denied/, err.string)
-  end
-
   def test_unexpected_error_propagates_instead_of_clean_exit
     out = StringIO.new
     err = StringIO.new

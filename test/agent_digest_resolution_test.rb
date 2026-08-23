@@ -12,8 +12,9 @@ require "digest"
 #   T4  PlanRejectedError discloses a bounded summary of structural issues only;
 #   T5  Session driver: a mutation between approval and dispatch is refused by
 #       `verify_intent_before_state!` (ToolPolicyError), file byte-identical;
-#   T5R Runtime driver: an approval callback that mutates the target is refused by
-#       `prepare_patch`'s live equality check ("file changed"), file byte-identical;
+#   T5R Runtime driver: a stale committed digest is refused fail closed by
+#       `prepare_patch`'s live equality check (ToolPolicyError — terminal, not a
+#       repairable argument value), file byte-identical;
 #   T8  repeated identical absent-digest plans stop on `repeated_action`;
 #   T9  create_file absent content digest resolves from `hexdigest(content)`.
 class AgentDigestResolutionTest < Minitest::Test
@@ -40,7 +41,6 @@ class AgentDigestResolutionTest < Minitest::Test
     Dir.mktmpdir("tamoz-digest-runtime") do |root|
       write_value(root, 40)
       observed = Digest::SHA256.hexdigest(value_source(40))
-      seen = []
       model = scripted_model(
         plans: [discovery_plan, absent_action_plan],
         reviews: 2,
@@ -48,24 +48,24 @@ class AgentDigestResolutionTest < Minitest::Test
       )
       events = []
 
-      result = runtime(
-        root,
-        model,
-        approval: lambda do |tool:, arguments:, preview:|
-          seen << [tool, arguments, preview]
-          true
-        end
-      ).run("Make Broken.answer equal 42") { |event| events << event }
+      result = runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
 
       assert result.satisfied
       assert_equal 42, load_value(root)
 
-      # The approval saw the RESOLVED digest, and it is the observed digest.
-      patch_approval = seen.find { |tool, _arguments, _preview| tool == "apply_patch" }
-      assert patch_approval, "apply_patch approval was never offered"
-      _tool, arguments, preview = patch_approval
-      assert_equal observed, arguments.fetch("expected_sha256")
-      assert_includes preview, "def self.answer = 42"
+      # The approval asked about the RESOLVED state: the preview shows the bound
+      # after-bytes (emitted events carry the PLAN's arguments; the injected
+      # digest is execution metadata, asserted through the receipt below).
+      patch_approval = events.find do |event|
+        event.type == :approval_requested && event.data.fetch("tool") == "apply_patch"
+      end
+      assert patch_approval, "apply_patch approval was never requested"
+      assert_equal "ask", patch_approval.data.fetch("verdict")
+      assert_includes patch_approval.data.fetch("preview"), "def self.answer = 42"
+      granted = events.find do |event|
+        event.type == :approval_granted && event.data.fetch("tool") == "apply_patch"
+      end
+      assert granted, "the apply_patch ask was never answered"
 
       # The executed patch bound to the SAME digest: preview and execution bytes agree.
       completed = events.find do |event|
@@ -80,7 +80,7 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  def test_runtime_present_stale_digest_is_still_refused
+  def test_runtime_present_stale_digest_is_refused_fail_closed
     Dir.mktmpdir("tamoz-digest-stale") do |root|
       write_value(root, 40)
       model = scripted_model(
@@ -96,13 +96,14 @@ class AgentDigestResolutionTest < Minitest::Test
       )
       events = []
 
-      result = runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
+      error = assert_raises(Tamoz::Agent::ToolPolicyError) do
+        runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
+      end
 
-      refute result.satisfied
+      # A stale committed digest is a policy refusal, terminal by construction —
+      # never a repairable value the planner can iterate against.
+      assert_includes error.message, "file changed"
       assert_equal 40, load_value(root)
-      rejected = events.select { |event| event.type == :tool_rejected }
-      assert_equal 1, rejected.length
-      assert_includes rejected.first.data.dig("failure", "reason"), "file changed"
       completed_patches = events.count { |event|
         event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
       }
@@ -226,7 +227,7 @@ class AgentDigestResolutionTest < Minitest::Test
 
       # No configured checks: the action plan needs no run_check step, so the
       # structural review outcome is decided purely by the placeholder heuristic.
-      result = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { true })
+      result = Tamoz::Agent.build(model:, root:, allow_changes: true, ask: ->(**_kw) { :approve })
                           .run("Fix the comparison") { |event| events << event }
 
       assert result.satisfied
@@ -273,7 +274,7 @@ class AgentDigestResolutionTest < Minitest::Test
         final_satisfied: true
       )
       events = []
-      result = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { true })
+      result = Tamoz::Agent.build(model:, root:, allow_changes: true, ask: ->(**_kw) { :approve })
                           .run("Fix the step reference") { |event| events << event }
 
       assert result.satisfied
@@ -462,43 +463,6 @@ class AgentDigestResolutionTest < Minitest::Test
     end
   end
 
-  # --- T5R: Runtime driver — approval callback mutates the target ------------------
-
-  def test_runtime_approval_callback_mutation_refuses_the_patch_fail_closed
-    Dir.mktmpdir("tamoz-digest-t5r") do |root|
-      write_value(root, 40)
-      mutated = "module Broken\n  def self.answer = 99\nend\n"
-      absent = absent_action_plan
-      model = scripted_model(
-        plans: [discovery_plan, absent, absent],
-        reviews: 3,
-        final_satisfied: false
-      )
-      events = []
-      patched = lambda do |tool:, arguments:, preview:|
-        File.write(File.join(root, "broken.rb"), mutated)
-        true
-      end
-
-      result = runtime(root, model, approval: patched).run("Make Broken.answer equal 42") { |event| events << event }
-
-      refute result.satisfied
-      # The patch must NOT apply to the mutated bytes: fail closed (probe 1). The
-      # identical repair plan is stopped by the repeated-action signature.
-      assert_equal mutated, File.read(File.join(root, "broken.rb"))
-      completed_patches = events.count { |event|
-        event.type == :tool_completed && event.data.fetch("tool") == "apply_patch"
-      }
-      assert_equal 0, completed_patches
-      rejected = events.select { |event| event.type == :tool_rejected }
-      assert_equal 1, rejected.length
-      assert_includes rejected.first.data.dig("failure", "reason"), "file changed"
-      stopped = events.find { |event| event.type == :repair_stopped }
-      assert stopped
-      assert_equal "repeated_action", stopped.data.fetch("reason")
-    end
-  end
-
   # --- T8: repeated identical absent-digest plans ----------------------------------
 
   def test_repeated_identical_absent_digest_plans_stop_on_repeated_action
@@ -571,7 +535,7 @@ class AgentDigestResolutionTest < Minitest::Test
             %q{abort("wrong") unless File.read("greeting.txt") == "hello\n"}
           ]
         },
-        approval: ->(**) { true }
+        ask: ->(**_kw) { :approve }
       ).run("Create greeting.txt") { |event| events << event }
 
       assert result.satisfied
@@ -634,13 +598,15 @@ class AgentDigestResolutionTest < Minitest::Test
     )
   end
 
-  def runtime(root, model, approval: ->(**) { true })
-    Tamoz::Agent.build(
+  # The review profile makes workspace_write ASK, so apply_patch produces a real
+  # approval decision (with a preview bound to the resolved digest) instead of the
+  # implement profile's silent allow.
+  def runtime(root, model)
+    Tamoz::Agent::Runtime.new(
       model:,
-      root:,
-      allow_changes: true,
-      checks: answer_check,
-      approval:
+      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: answer_check),
+      approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "review"),
+      ask: ->(**_kw) { :approve }
     )
   end
 
@@ -664,7 +630,8 @@ class AgentDigestResolutionTest < Minitest::Test
     Tamoz::Agent::Session.new(
       model:,
       toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: answer_check),
-      checkpointer: adapter
+      checkpointer: adapter,
+      approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "review")
     )
   end
 

@@ -197,10 +197,11 @@ module Tamoz
       private
 
       # ADR-049 (INV-A/B/D, contract §7.1): an approve is refused unless the
-      # presser's evidence meets the prompt's pinned requirement. A Telegram
-      # callback supplies `chat_bound` — under the v1 policy every effect
-      # requires `filesystem_operator`, so an approve is always refused with a
-      # durable refusal and NO decision; deny remains unconditional (INV-A).
+      # presser's evidence meets the prompt's pinned requirement — the value
+      # the engine's Decision carried, pinned at prompt build. A Telegram
+      # callback supplies `chat_bound`; a decision requiring
+      # `filesystem_operator` is refused with a durable refusal and NO
+      # decision; deny remains unconditional (INV-A).
       # A refusal never consumes the prompt, so a legitimate deny on the same
       # reference stays possible. The binding is exact: surface id+revision,
       # correspondent and conversation must match the prompt row the reference

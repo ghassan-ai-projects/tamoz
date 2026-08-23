@@ -73,6 +73,8 @@ module Tamoz
         checkpointer:,
         max_plan_attempts: 3,
         max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
+        approval_engine: nil,
+        approval_session_id: nil,
         model_call_safety: :idempotent,
         profile: nil,
         mcp: nil,
@@ -105,6 +107,10 @@ module Tamoz
         end
 
         verify_mcp_source!(mcp)
+        # Pipeline A: every durable session has exactly one policy owner. A
+        # caller that supplies none gets the bundled implement profile over
+        # memory stores — gating is never skipped, only defaulted.
+        approval_engine ||= Tamoz::Agent.build_approval_engine(profile_name: 'implement')
         @toolbox = toolbox
         @model = model
         @mcp = mcp
@@ -124,6 +130,8 @@ module Tamoz
           toolbox:,
           max_plan_attempts:,
           max_repair_attempts:,
+          approval_engine:,
+          approval_session_id:,
           model_call_safety:,
           profile:,
           mcp:,
@@ -137,6 +145,8 @@ module Tamoz
           child_task_runtime:,
           transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
         }
+        @approval_engine = approval_engine
+        @approval_session_id = approval_session_id
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
         @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: ADAPTIVE_GRAPH_VERSION)
@@ -173,7 +183,7 @@ module Tamoz
 
         required = %i[
           mcp_catalogs catalogs names read_only_names name? read_only?
-          approval_required? maximum_effect_output_bytes validate effect_intent
+          maximum_effect_output_bytes validate effect_intent
           preview execute descriptors descriptor_for
         ]
         missing = required.reject { |method| mcp.respond_to?(method) }
@@ -197,20 +207,16 @@ module Tamoz
       def verify_profile_binding!(profile)
         return unless profile
 
-        # A profile pins TWO catalogs, because it describes two situations. The
-        # interactive catalog is what a human drives; the unattended catalog is
-        # what a worker drives, and it differs only by needing approval on more
-        # tools — the `unattended` section decides which. Both are pinned
-        # explicitly, so neither can be reached by mutating the other, and a
-        # session that matches neither is refused.
+        # The profile pins its catalog explicitly, so it cannot be reached by
+        # mutating another one, and a session that matches nothing is refused.
         expected = profile.policy.fetch("tool_catalog_digest")
-        unattended = profile.policy["unattended_catalog_digest"]
+        legacy_digest = profile.policy["unattended_catalog_digest"]
         catalog_matches = toolbox.catalog_digest == expected ||
-                          (unattended && toolbox.catalog_digest == unattended)
+                          (legacy_digest && toolbox.catalog_digest == legacy_digest)
         catalog_matches ||= @profile_narrowed &&
                             (toolbox.allowed_tools - profile.tools_allowed).empty?
         unless catalog_matches
-          pinned = [expected, unattended].compact.join(" or ")
+          pinned = [expected, legacy_digest].compact.join(" or ")
           raise Profile::ValidationError,
                 "toolbox catalog digest #{toolbox.catalog_digest} does not match " \
                 "profile #{profile.profile_id.inspect} policy.tool_catalog_digest #{pinned}"
@@ -608,6 +614,13 @@ module Tamoz
           owner_id: owner_id || SecureRandom.uuid
         )
         outcome(thread:, request_id:)
+      end
+
+      # ADR §2.3: a session that ends deletes its grant rows — grants never
+      # outlive the session they were remembered for.
+      def close
+        @approval_engine&.close_session(@approval_session_id) if @approval_session_id
+        nil
       end
 
       def view(thread:)

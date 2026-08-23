@@ -292,7 +292,7 @@ class AgentSkillsAdversarialTest < Minitest::Test
     assert_includes record.body, "SYSTEM OVERRIDE"
     assert_equal before.names, after.names
     assert_equal before.catalog_digest, after.catalog_digest
-    assert_equal before.approval_required, after.approval_required
+    assert_equal before.read_only_names, after.read_only_names
     assert_equal before.checks, after.checks
     assert_equal before.root, after.root
     assert_raises(Tamoz::Agent::ToolError) { after.validate("shell", {}) }

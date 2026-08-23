@@ -42,6 +42,7 @@ module Tamoz
         at = nil
         task = nil
         profile_id = nil
+        approval_profile = nil
         thread = nil
         max_steps = nil
         max_wall_seconds = nil
@@ -53,6 +54,9 @@ module Tamoz
           value.on("--at TIME", "Fire once at an ISO-8601 UTC instant") { |entry| at = entry }
           value.on("--task TASK", "The task to run each occurrence") { |entry| task = entry }
           value.on("--profile ID", "Trusted profile the occurrences run under") { |entry| profile_id = entry }
+          value.on("--approval-profile NAME", "Approval profile occurrences run under (default: implement)") do |entry|
+            approval_profile = entry
+          end
           value.on("--thread NAME", "Thread occurrences run on (default: schedule id)") do |entry|
             thread = entry
           end
@@ -89,7 +93,7 @@ module Tamoz
             payload_ref:, thread_policy: thread_id,
             capability_grant: {"scopes" => ["read"]},
             behavior_version: "tamoz.agent.session/1",
-            approval_policy: {"mode" => "deterministic", "risk" => "read_only"},
+            approval_profile:,
             delivery_policy: {"mode" => "inbox"},
             # A schedule must carry a per-occurrence budget — unattended work with
             # no ceiling is how a runtime quietly burns a night. These are the
@@ -315,6 +319,7 @@ module Tamoz
           "revision" => schedule.revision,
           "enabled" => schedule.enabled,
           "thread" => schedule.thread_policy,
+          "approval_profile" => schedule.approval_profile,
           "definition_digest" => schedule.definition_digest,
           "task" => runtime.schedule_payload(schedule.id)
         }

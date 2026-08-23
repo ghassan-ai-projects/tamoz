@@ -3,6 +3,9 @@
 require "tamoz/graph"
 require "tamoz/tools"
 require "tamoz/observability"
+require "tamoz/comms"
+require "tamoz/approval"
+require_relative "agent/request_projection"
 require_relative "agent/version"
 require_relative "agent/errors"
 require_relative "agent/diagnosis_catalog"
@@ -90,7 +93,7 @@ module Tamoz
       allow_changes: false,
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
-      approval: nil,
+      ask: nil,
       skills: Skills::Snapshot.empty,
       routing: :legacy,
       recorder: Tamoz::Observability::Recorder::Null::INSTANCE
@@ -99,7 +102,27 @@ module Tamoz
       # It is never discovered by scanning the workspace, so repository content can
       # never put a skill on the catalog (plan §2).
       toolbox = Toolbox.new(root:, allow_changes:, checks:, check_timeout:, skills:)
-      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:)
+      # The one-shot runtime is ephemeral: its grants live and die with this
+      # process, so it gets the in-memory stores — never the worker's SQLite
+      # engine (ADR §2.3).
+      approval_engine = build_approval_engine(profile_name: "implement")
+      Runtime.new(model:, toolbox:, max_plan_attempts:, ask:, routing:, recorder:, approval_engine:)
+    end
+
+    # An ephemeral engine over memory stores for processes that own their own
+    # approvals (the one-shot runtime, the interactive CLI). Durable workers
+    # build theirs over SQLite at boot (ADR §2.3) — never share instances.
+    def self.build_approval_engine(profile_name:, policy_path: Tamoz::Approval.bundled_policy_path)
+      evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
+      Tamoz::Approval::Engine.new(
+        policy: Tamoz::Approval::PolicyDocument.load_profile(
+          policy_path, profile_name, evidence_symbols: evidence_symbols
+        ),
+        grant_store: Tamoz::Approval::MemoryGrantStore.new,
+        decision_log: Tamoz::Approval::MemoryDecisionLog.new,
+        clock: -> { Time.now },
+        evidence_symbols: evidence_symbols
+      )
     end
   end
 end

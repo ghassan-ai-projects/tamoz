@@ -61,7 +61,7 @@ class AgentWorkerMcpTest < Minitest::Test
     end
   end
 
-  # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+  # rubocop:disable Metrics/MethodLength
   def test_the_worker_calls_a_real_mcp_server_over_http
     server = McpHttpFixtureServer.new
     previous_token = ENV.fetch("TAMOZ_MCP_HTTP_TOKEN", nil)
@@ -99,7 +99,7 @@ class AgentWorkerMcpTest < Minitest::Test
     server&.stop
     ENV["TAMOZ_MCP_HTTP_TOKEN"] = previous_token
   end
-  # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
+  # rubocop:enable Metrics/MethodLength
 
   # Websearch is an MCP server with a reserved id, which is what keeps it one of
   # the four closed-world sources rather than a fifth.

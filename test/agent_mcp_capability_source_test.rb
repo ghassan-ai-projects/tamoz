@@ -159,8 +159,6 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
     refute source.name?("mcp:test-server/../escape")
     assert source.read_only?("mcp:test-server/echo")
     refute source.read_only?("mcp:test-server/set_answer")
-    assert source.approval_required?("mcp:test-server/set_answer")
-    refute source.approval_required?("mcp:test-server/echo")
     assert_equal snapshot.snapshot_digest, source.mcp_catalogs.fetch("test-server")
     assert_equal(
       snapshot.entries.find { |candidate| candidate.name == "echo" }.definition_digest,
@@ -388,7 +386,10 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       review: [accepted_review, accepted_review],
       verify: [verified("The answer was written through the governed MCP call.", true)]
     )
-    session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, mcp: source)
+    session = Tamoz::Agent::Session.new(
+      model:, toolbox:, checkpointer: adapter, mcp: source,
+      approval_engine: memory_approval_engine
+    )
     [session, model]
   end
 
@@ -464,7 +465,8 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
           model: ScriptedModel.new(plan: [], review: [], verify: []),
           toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: {}),
           checkpointer: adapter,
-          mcp: source_again
+          mcp: source_again,
+          approval_engine: memory_approval_engine
         )
         assert_nil resumed.verify_mcp_binding!(thread: "session.mcp.resume")
 
@@ -500,7 +502,8 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       plain = Tamoz::Agent::Session.new(
         model:,
         toolbox: Tamoz::Agent::Toolbox.new(root:),
-        checkpointer: adapter
+        checkpointer: adapter,
+        approval_engine: memory_approval_engine
       )
       outcome = plain.start(
         "What does note.txt say?",
@@ -753,7 +756,8 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
         model:,
         toolbox: Tamoz::Agent::Toolbox.new(root:),
         checkpointer: adapter,
-        mcp: source
+        mcp: source,
+        approval_engine: memory_approval_engine
       )
       outcome = session.start(
         "What does note.txt say?",
@@ -805,6 +809,12 @@ class AgentMcpCapabilitySourceTest < Minitest::Test
       "satisfied" => satisfied,
       "evidence" => ["controller-owned deterministic evidence"]
     }
+  end
+
+  # A session that runs steps decides them through an approval engine; the
+  # one-shot in-memory engine over the bundled policy data is the fixture.
+  def memory_approval_engine
+    Tamoz::Agent.build_approval_engine(profile_name: "implement")
   end
 
   def approve_all(session, outcome, thread:, request_id:)

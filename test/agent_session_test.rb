@@ -166,6 +166,9 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
+  # The edit asks because the session's policy profile says so (unattended
+  # tightens workspace_write to ask) — classification is engine policy data,
+  # not a toolbox predicate.
   def test_action_session_pauses_for_approval_and_applies_one_reviewed_effect
     with_workspace do |root, adapter|
       target = File.join(root, "app.rb")
@@ -176,7 +179,8 @@ class AgentSessionTest < Minitest::Test
         root:,
         adapter:,
         allow_changes: true,
-        checks: {"answer" => check_argv}
+        checks: {"answer" => check_argv},
+        approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "unattended")
       )
 
       paused = session.start(
@@ -208,6 +212,8 @@ class AgentSessionTest < Minitest::Test
     end
   end
 
+  # A denial is a structured result fed back to the model; the turn continues
+  # (ADR §2.4) — and the denied effect never lands.
   def test_denied_approval_stops_before_any_filesystem_effect
     with_workspace do |root, adapter|
       target = File.join(root, "app.rb")
@@ -218,7 +224,8 @@ class AgentSessionTest < Minitest::Test
         root:,
         adapter:,
         allow_changes: true,
-        checks: {"answer" => check_argv}
+        checks: {"answer" => check_argv},
+        approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "unattended")
       )
 
       paused = session.start(
@@ -236,7 +243,6 @@ class AgentSessionTest < Minitest::Test
       assert_equal "value = 1\n", File.read(target)
       view = session.view(thread: "session.deny")
       assert_equal "deny", view.approvals.first.fetch("decision")
-      assert_equal "approval_denied", view.terminal.fetch("reason")
       assert_empty view.effect_receipts.select { |r| r.fetch("operation") == "tool.apply_patch" }
     end
   end
@@ -459,7 +465,6 @@ class AgentSessionTest < Minitest::Test
         budgets: {},
         checks: {},
         tools_allowed: %w[read_file list_directory search_text],
-        tools_approval_required: [],
         policy: {
           "allow_changes" => false,
           "default_check_safety" => "unsafe",

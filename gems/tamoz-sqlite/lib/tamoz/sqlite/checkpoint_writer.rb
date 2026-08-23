@@ -125,6 +125,14 @@ module Tamoz
         )
       end
 
+      def complete_request(request_id:, execution_id:)
+        @store.mark_request_completed(
+          lease: @guard.lease,
+          request_id:,
+          execution_id:
+        )
+      end
+
       # :reek:LongParameterList -- the five keyword args are the transition
       # action contract; collapsing them would hide what a transition is.
       def request_transition(

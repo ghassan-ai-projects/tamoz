@@ -1235,34 +1235,23 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
-  def test_approval_required_defaults_to_action_tools_and_can_be_restricted
+  # The toolbox describes the surface; it no longer classifies approval. What
+  # still is classification-adjacent and construction-derived: the effect-class
+  # projection (read_only names) and the digest over the allowed surface.
+  def test_toolbox_exposes_read_only_classification_but_no_approval_policy
     Dir.mktmpdir("tamoz-toolbox") do |root|
-      default = Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: {"tests" => ["true"]})
-      assert default.approval_required?("apply_patch")
-      assert default.approval_required?("run_check")
-      refute default.approval_required?("read_file")
-
-      restricted = Tamoz::Agent::Toolbox.new(
-        root:,
-        allow_changes: true,
-        checks: {"tests" => ["true"]},
-        approval_required: %w[run_check]
-      )
-      refute restricted.approval_required?("apply_patch")
-      assert restricted.approval_required?("run_check")
+      box = Tamoz::Agent::Toolbox.new(root:, allow_changes: true, checks: {"tests" => ["true"]})
+      assert_includes box.read_only_names, "read_file"
+      refute_includes box.read_only_names, "apply_patch"
+      refute_includes box.read_only_names, "run_check"
 
       assert_raises(ArgumentError) do
-        Tamoz::Agent::Toolbox.new(
-          root:,
-          allow_changes: true,
-          allowed_tools: %w[read_file apply_patch],
-          approval_required: %w[run_check]
-        )
+        Tamoz::Agent::Toolbox.new(root:, allow_changes: true, approval_required: %w[run_check])
       end
     end
   end
 
-  def test_catalog_digest_tracks_the_allowed_surface_and_approval_policy
+  def test_catalog_digest_tracks_the_allowed_surface
     Dir.mktmpdir("tamoz-toolbox") do |root|
       base = Tamoz::Agent::Toolbox.new(
         root:, allow_changes: true, checks: {"tests" => ["true"]}
@@ -1271,16 +1260,11 @@ class AgentToolboxTest < Minitest::Test
         root:, allow_changes: true, checks: {"tests" => ["true"]},
         allowed_tools: %w[read_file list_directory search_text apply_patch create_file]
       )
-      approvals = Tamoz::Agent::Toolbox.new(
-        root:, allow_changes: true, checks: {"tests" => ["true"]},
-        approval_required: %w[apply_patch]
-      )
       same = Tamoz::Agent::Toolbox.new(
         root:, allow_changes: true, checks: {"tests" => ["true"]}
       )
 
       refute_equal base.catalog_digest, narrower.catalog_digest
-      refute_equal base.catalog_digest, approvals.catalog_digest
       assert_equal base.catalog_digest, same.catalog_digest
     end
   end

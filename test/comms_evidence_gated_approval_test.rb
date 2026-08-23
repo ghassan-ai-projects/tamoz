@@ -50,10 +50,11 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     )
   end
 
-  # C1 / INV-B + INV-D (GREEN since Phase 3): under the v1 policy every effect
-  # requires `filesystem_operator`, so a chat_bound Telegram approve must be
-  # refused and must NOT put an approve decision in front of the worker.
-  def test_a_chat_bound_approve_is_refused_under_v1_policy
+  # C1 / INV-B + INV-D (GREEN since Phase 3): the prompt pins what its
+  # decision carries (`filesystem_operator` for operator-gated effects), so a
+  # chat_bound Telegram approve must be refused and must NOT put an approve
+  # decision in front of the worker.
+  def test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence
     with_engine do |adapter, checkpoints|
       store, gateway = boot(adapter, checkpoints)
       reference, prompt = active_prompt(store)
@@ -65,7 +66,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
 
       refute approve_reached_worker,
              'a chat_bound Telegram approve must not release a filesystem_operator action ' \
-             '(ADR-049 INV-B/INV-D); no approve decision may reach the worker under v1 policy'
+             '(ADR-049 INV-B/INV-D); no approve decision may reach the worker'
     end
   end
 
@@ -161,16 +162,17 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     end
   end
 
-  # C2 / INV-C (GREEN since Phase 6): `required_evidence` is a trusted,
-  # deterministic function of the pinned interrupts — never model-settable. A
-  # hostile interrupt descriptor that tries to declare itself cheap is
-  # ignored by the constant policy.
+  # C2 / INV-C: `required_evidence` enters the prompt only as the
+  # caller-supplied symbol read from the engine's Decision. A hostile
+  # interrupt descriptor that declares itself cheap has no vote — build pins
+  # what the decision carries, never what the descriptor body claims.
   def test_required_evidence_is_trusted_and_not_model_settable
     hostile = [{ task_id: 't', call_index: 0,
-                 descriptor: { 'kind' => 'approve_tool', 'required_evidence' => 'chat_bound' } }]
+                 descriptor: { 'kind' => 'approve_tool', 'decision' => { 'required_evidence' => 'chat_bound' } } }]
     reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1', interrupts: hostile,
+      required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
@@ -178,6 +180,23 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     assert_equal 'filesystem_operator', prompt.required_evidence,
                  'the model-supplied requirement in the descriptor is ignored (INV-C)'
     refute_nil reference
+  end
+
+  # E-1 / INV-B end to end: a decision that carries `chat_bound` produces a
+  # prompt whose approve IS resolvable by the bound correspondent — the gate
+  # compares against the pinned value, not against the transport.
+  def test_an_approve_on_a_prompt_built_from_a_chat_bound_decision_is_granted
+    with_engine do |adapter, checkpoints|
+      store, gateway = boot(adapter, checkpoints)
+      reference, prompt = active_prompt(store, required_evidence: :chat_bound)
+
+      press(gateway, "approve:#{reference}", update_id: 63)
+
+      decision = pending(adapter, prompt)
+
+      assert_equal 'approve', decision.fetch('direction'),
+                   'a chat_bound decision yields a prompt a chat_bound press can resolve'
+    end
   end
 
   # C3 / INV-E extension: an approve on an unknown reference (missing
@@ -335,11 +354,12 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     [store, gateway]
   end
 
-  def active_prompt(store, ttl_s: 900)
+  def active_prompt(store, ttl_s: 900, required_evidence: :filesystem_operator)
     reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence:,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: ttl_s, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
