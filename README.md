@@ -29,7 +29,13 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-approval`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent-kernel` | The deliberation substrate: episode records and receipts, the plan/review/execute/verify engine, the effect seam, catalogs, error taxonomy | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-memory` | Durable memory: `Memory::Engine` — admission, retrieval, lifecycle with deletion receipts, consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
+| `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification with abstention, immutable rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
+| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
+| `tamoz-agent` | The deliberative agent runtime (library): session state machine over the graph, worker and durable execution, capability/model wiring | `tamoz-agent-kernel`, the four verticals above, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
 Each gem installs and runs with only its declared dependencies, proven per gem

@@ -69,7 +69,13 @@ Two edges deserve emphasis:
 | `tamoz-observability` | Closed versioned signal catalog, correlation identity, immutable signals, bounded recorders, local journal, content/secret policy, metrics and trace projection. `SCHEMA_VERSION = 1` | `tamoz-core` |
 | `tamoz-otel` | Bounded OTLP/HTTP exporter for observability signals | `tamoz-observability` |
 | `tamoz-telegram` | Telegram Bot API transport implementing the `Tamoz::Comms::Transport` seam; stdlib-only HTTP | `tamoz-comms` |
-| `tamoz-agent` | The deliberative agent runtime (plan/review/verify, memory, healing) and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
+| `tamoz-agent-kernel` | The deliberation substrate: episode records/receipts, reasoning documents, the plan/review/execute/verify engine, `EffectDispatcher`, witness gateway/verifier, catalogs, the agent error taxonomy, and the provider/env-key catalog | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-memory` | Durable memory: `Memory::Engine` assembling admission, retrieval, lifecycle (deletion with receipts), consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
+| `tamoz-agent-healing` | Bounded self-healing: typed failure contract, classification with abstention, immutable digest-bound rules, reviewed remediation protocol, promotion gate | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validators, secure files, adoption and transition registries | `tamoz-agent-kernel`, `tamoz-core` |
+| `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent` |
+| `tamoz-agent` | The deliberative agent runtime as a library: session state machine over the graph, worker/durable execution, capability and model wiring (`RubyLLMModel`) | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-improvement`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
 | `tamoz-evals` | Evaluation and release evidence: conformance suites, scorecards, release gates. Development/release gem; nothing depends on it | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-graph`, `tamoz-scheduler` |
 
 ## Dependency rules that are enforced, not suggested
