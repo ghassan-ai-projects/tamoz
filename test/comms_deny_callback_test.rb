@@ -62,6 +62,7 @@ class CommsDenyCallbackTest < Minitest::Test
         surface_id: 'telegram-ops', surface_revision: 1,
         thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+        required_evidence: :filesystem_operator,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
         prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
       )
@@ -139,6 +140,7 @@ class CommsDenyCallbackTest < Minitest::Test
         surface_id: 'telegram-ops', surface_revision: 1,
         thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
         interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+        required_evidence: :filesystem_operator,
         correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
         prompt_ttl_s: 1, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
       )

@@ -212,6 +212,7 @@ class CommsValuesTest < Minitest::Test
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
@@ -219,6 +220,7 @@ class CommsValuesTest < Minitest::Test
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
@@ -231,33 +233,46 @@ class CommsValuesTest < Minitest::Test
     assert_equal prompt_a.wire, Comms::ApprovalPrompt.from_wire(prompt_a.wire).wire
   end
 
-  def test_prompt_pins_required_evidence_from_the_trusted_policy
+  def test_prompt_pins_the_evidence_symbol_the_decision_carries
     _reference, prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     )
 
     assert_equal 'filesystem_operator', prompt.required_evidence,
-                 'under v1 policy every prompt pins filesystem_operator (ADR-049 INV-D)'
+                 'the prompt pins exactly the symbol the caller passes (the Decision carries it)'
     assert_equal prompt.required_evidence, Comms::ApprovalPrompt.from_wire(prompt.wire).required_evidence
   end
 
   def test_prompt_rejects_a_non_lattice_required_evidence
+    error = assert_raises(Comms::ValidationError) do
+      Comms::ApprovalPrompt.build(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
+        interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+        required_evidence: :root,
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
+      )
+    end
+    assert_match(/evidence must be one of/, error.message)
+
     prompt = Comms::ApprovalPrompt.build(
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence: :chat_bound,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     ).last
 
-    error = assert_raises(Comms::ValidationError) do
+    assert_raises(Comms::ValidationError) do
       Comms::ApprovalPrompt.from_wire(prompt.wire.merge('required_evidence' => 'root'))
     end
-    assert_match(/evidence must be one of/, error.message)
   end
 
   def test_prompt_validates_lifecycle_fields
@@ -265,6 +280,7 @@ class CommsValuesTest < Minitest::Test
       surface_id: 'telegram-ops', surface_revision: 1,
       thread_id: 'tg.ops.abc', occurrence_id: 'req-1',
       interrupts: [{ task_id: 't', call_index: 0, descriptor: { 'kind' => 'approve_tool' } }],
+      required_evidence: :filesystem_operator,
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
       prompt_ttl_s: 900, created_at: Time.utc(2026, 8, 10, 12, 0, 0)
     ).last
