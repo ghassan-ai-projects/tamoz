@@ -42,6 +42,19 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-approval" => {
+          "Tamoz::Approval::Answer.parse" => {},
+          "Tamoz::Approval::ConflictingResolutionError" => {},
+          "Tamoz::Approval::Decision" => {},
+          "Tamoz::Approval::Error" => {},
+          "Tamoz::Approval::Grant" => {},
+          "Tamoz::Approval::GrantOffer" => {},
+          "Tamoz::Approval::InvalidPolicyError" => {},
+          "Tamoz::Approval::InvalidScopeError" => {},
+          "Tamoz::Approval::Request" => {},
+          "Tamoz::Approval::UnknownDecisionError" => {},
+          "Tamoz::Approval::VERSION" => {}
+        },
         "tamoz-comms" => {
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
           "Tamoz::Comms::ApprovalPrompt" => {},
@@ -325,6 +338,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Stream::VERSION,
       Tamoz::Tools::VERSION,
       Tamoz::Agent::VERSION,
+      Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
       Tamoz::Comms::VERSION,

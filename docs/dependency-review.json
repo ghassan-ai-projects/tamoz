@@ -3,6 +3,7 @@
   "generated_by": "script/generate_dependency_review",
   "reviewed_gems": [
     "tamoz-agent",
+    "tamoz-approval",
     "tamoz-comms",
     "tamoz-core",
     "tamoz-evals",
@@ -221,7 +222,7 @@
       "licenses": [
         "MIT"
       ],
-      "homepage": null,
+      "homepage": "https://github.com/flavorjones/mini_portile",
       "required_by": [],
       "direct": false,
       "exception": null
