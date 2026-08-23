@@ -41,9 +41,9 @@ tests at each claim.
   bounded rendering, send boundary, retry classification, and unknown delivery.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — worker claim, lifecycle
   emission, settlement, and notification seams.
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb`,
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`,
   `gems/tamoz-agent/lib/tamoz/agent/cli_session_commands.rb`, and
-  `gems/tamoz-agent/lib/tamoz/agent/cli_rendering.rb` — ephemeral versus
+  `gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb` — ephemeral versus
   durable CLI paths, stream rendering, controls, and exit taxonomy.
 - `documentation/design/comms.md`,
   `documentation/guides/telegram.md`, and

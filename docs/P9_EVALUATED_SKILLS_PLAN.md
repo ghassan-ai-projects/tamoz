@@ -17,7 +17,7 @@ This plan is derived from:
   - `gems/tamoz-agent/lib/tamoz/agent/toolbox.rb:62-143` (constructor, tool surface,
     `catalog_digest` at `:129-140`), `:174-265` (`validate`), `:267-287` (`execute`),
     `:855-877` (`resolve` path containment), `:72-81` (tool descriptions).
-  - `gems/tamoz-agent/lib/tamoz/agent/profile.rb:249-305` (`scan_yaml!` two-pass YAML
+  - `gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:249-305` (`scan_yaml!` two-pass YAML
     hardening), `:307-311` (`safe_parse`), `:209-243` (`verify_permissions!`),
     `:598-602` (`canonical_digest`), `:604-613` (`deep_freeze`).
   - `gems/tamoz-agent/lib/tamoz/agent/deliberation.rb:41-63` (`planning_prompt`),

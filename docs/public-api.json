@@ -7,15 +7,31 @@
       "Tamoz::Agent::CheckReceipt": {
         "deprecated": true
       },
-      "Tamoz::Agent::Deliberation": { "deprecated": true },
-      "Tamoz::Agent::EffectDispatcher": { "deprecated": true },
-      "Tamoz::Agent::Error": { "deprecated": true },
-      "Tamoz::Agent::Event": { "deprecated": true },
+      "Tamoz::Agent::Deliberation": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::EffectDispatcher": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::Error": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::Event": {
+        "deprecated": true
+      },
       "Tamoz::Agent::McpCapabilitySource": {},
-      "Tamoz::Agent::McpCatalogSnapshotUnavailableError": { "deprecated": true },
-      "Tamoz::Agent::Plan": { "deprecated": true },
-      "Tamoz::Agent::PlanRejectedError": { "deprecated": true },
-      "Tamoz::Agent::ProtocolError": { "deprecated": true },
+      "Tamoz::Agent::McpCatalogSnapshotUnavailableError": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::Plan": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::PlanRejectedError": {
+        "deprecated": true
+      },
+      "Tamoz::Agent::ProtocolError": {
+        "deprecated": true
+      },
       "Tamoz::Agent::Result": {},
       "Tamoz::Agent::RubyLLMModel": {},
       "Tamoz::Agent::Runtime": {},
@@ -23,11 +39,15 @@
       "Tamoz::Agent::SessionOutcome": {},
       "Tamoz::Agent::SessionRecords": {},
       "Tamoz::Agent::SessionView": {},
-      "Tamoz::Agent::SkillSnapshotUnavailableError": { "deprecated": true },
+      "Tamoz::Agent::SkillSnapshotUnavailableError": {
+        "deprecated": true
+      },
       "Tamoz::Agent::Skills": {
         "deprecated": true
       },
-      "Tamoz::Agent::Step": { "deprecated": true },
+      "Tamoz::Agent::Step": {
+        "deprecated": true
+      },
       "Tamoz::Agent::ToolArgumentError": {
         "deprecated": true
       },
@@ -100,7 +120,6 @@
       "Tamoz::Comms::DeliveryDrainer": {},
       "Tamoz::Comms::Gateway": {},
       "Tamoz::Comms::OutboxDeliverySink": {},
-
       "Tamoz::Comms::AmbiguousDeliveryError": {},
       "Tamoz::Comms::ApprovalPrompt": {},
       "Tamoz::Comms::AuthenticationError": {},

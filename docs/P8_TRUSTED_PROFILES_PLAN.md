@@ -14,7 +14,7 @@ This plan is derived from:
 - Existing code:
   - `gems/tamoz-agent/lib/tamoz/agent/session.rb` (session records, graph version, behavior version pinning).
   - `gems/tamoz-agent/lib/tamoz/agent/session_records.rb` (versioned allowlisted records, canonical digests).
-  - `gems/tamoz-agent/lib/tamoz/agent/cli.rb` (one-shot CLI, option parsing).
+  - `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` (one-shot CLI, option parsing).
   - `gems/tamoz-agent/lib/tamoz/agent/toolbox.rb` (roots, checks, tool catalog digest, approval defaults).
   - `gems/tamoz-agent/lib/tamoz/agent/deliberation.rb` (tool descriptions, structural review).
 - `SECURITY.md` at repo root (pre-release boundary, no production systems).

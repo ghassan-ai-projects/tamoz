@@ -145,7 +145,7 @@ Status: confirmed
 
 Evidence:
 
-- `gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb:182` calls
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb:182` calls
   `model.generate(stage: :consolidate, system:, prompt:)` directly.
 - The method is reached by `Consolidation#consolidate`, which receives a model
   but no `EffectDispatcher` or `SessionEffects` seam.
@@ -174,10 +174,10 @@ Status: confirmed package-boundary defect
 
 Evidence:
 
-- `gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb:4` requires
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb:4` requires
   `tamoz/stream/situation_recall`.
 - The agent gemspec does not declare `tamoz-stream` as a dependency.
-- `gems/tamoz-agent/lib/tamoz/agent/memory.rb` eagerly loads the recaller, so a
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory.rb` eagerly loads the recaller, so a
   standalone `require "tamoz/agent"` can fail under package-isolated load paths.
 - The agent directly references `Tamoz::Stream::SituationRecall::Result` and
   `Projection`, although the design describes the recaller as an injected port.

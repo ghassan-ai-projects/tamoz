@@ -92,8 +92,8 @@ Categories: validation, policy, protocol, cross-gem
 
 Evidence:
 
-- gems/tamoz-agent/lib/tamoz/agent/profile.rb:101-130 defines the egress key set, HTTPS-only scheme, request/response/timeout/redirect/circuit bounds, host/IP patterns, and credential-shaped-name policy.
-- gems/tamoz-agent/lib/tamoz/agent/profile/egress_validator.rb:50-224 validates the profile declaration: shape, exact FQDNs, IP-literal refusal, limits, circuit fields, and credential references.
+- gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:101-130 defines the egress key set, HTTPS-only scheme, request/response/timeout/redirect/circuit bounds, host/IP patterns, and credential-shaped-name policy.
+- gems/tamoz-agent-profile/lib/tamoz/agent/profile/egress_validator.rb:50-224 validates the profile declaration: shape, exact FQDNs, IP-literal refusal, limits, circuit fields, and credential references.
 - gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb:9-42 explicitly describes the copy as deliberate and repeats the same schema vocabulary, bounds, regexes, and policy constants. Construction and validation are at :54-88 and :178-230.
 - The MCP policy also owns runtime/per-hop behavior at egress_policy.rb:97-154; the agent validator does not. Tamoz::Mcp::Websearch::EgressClient is therefore not a duplicate of the profile validator even though it consumes the same declaration.
 - docs/P17_WEBSEARCH_PLAN.md:82-88 acknowledges the duplication and requires one budget vocabulary. test/websearch_egress_test.rb:87-115 exercises profile admission/replay, while test/websearch_adapter_test.rb:47-115 exercises per-hop enforcement.
@@ -118,7 +118,7 @@ Categories: validation, policy, cross-gem, syntactic
 
 Evidence:
 
-- gems/tamoz-agent/lib/tamoz/agent/profile.rb:138-145 owns shell metacharacter and argv policy constants; gems/tamoz-agent/lib/tamoz/agent/profile/check_spec_validator.rb:79-105 validates argv elements.
+- gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:138-145 owns shell metacharacter and argv policy constants; gems/tamoz-agent-profile/lib/tamoz/agent/profile/check_spec_validator.rb:79-105 validates argv elements.
 - gems/tamoz-tools/lib/tamoz/tools/check_runner.rb:13-24 centralizes the tools gem's credential environment pattern and names; gems/tamoz-tools/lib/tamoz/tools/toolbox.rb:41-42 delegates its public constants to CheckRunner.
 - gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb:37-56 repeats the shell metacharacter pattern, credential pattern, and credential-name list. It applies them at :347-405, including argument and environment allowlist validation.
 - docs/P10_MCP_PLAN.md:115-125 explicitly calls the credential-env copy deliberate so tamoz-mcp does not depend on tamoz-agent.

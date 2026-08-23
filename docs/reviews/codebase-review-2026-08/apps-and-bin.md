@@ -1,6 +1,6 @@
 # Codebase Review — apps/tamoz-agent + bin/
 
-*12-agent codebase review, 2026-08. See [INDEX.md](INDEX.md). Scope: `apps/tamoz-agent`, `bin/`, plus the CLI wiring they delegate to — `gems/tamoz-agent/exe/tamoz`, `gems/tamoz-agent/lib/tamoz/agent/cli.rb`, `cli_session_commands.rb`, and the eval CLI behind `bin/tamoz-eval`.*
+*12-agent codebase review, 2026-08. See [INDEX.md](INDEX.md). Scope: `apps/tamoz-agent`, `bin/`, plus the CLI wiring they delegate to — `gems/tamoz-agent-cli/exe/tamoz`, `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`, `cli_session_commands.rb`, and the eval CLI behind `bin/tamoz-eval`.*
 
 ## Overall assessment
 

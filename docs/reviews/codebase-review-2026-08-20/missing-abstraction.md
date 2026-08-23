@@ -127,7 +127,7 @@ Finding counts: **2 High, 8 Medium, 3 Low.**
 | `gems/tamoz-core/lib/tamoz/core.rb:145` | copies (`to_h`/`map`), re-stringifies + freezes keys, **raises** `Tamoz::Error` on an unsupported type |
 | `gems/tamoz-agent/lib/tamoz/agent/plan.rb:84` | `Tamoz::Core.deep_freeze(value)` — **the one correct delegator** |
 | `gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:261` | copies via `each_with_object`, does **not** freeze/restringify keys, silently `.freeze`s any unsupported type instead of raising |
-| `gems/tamoz-agent/lib/tamoz/agent/profile.rb:560` | **mutates in place** (`each { freeze key; freeze entry }`), no raise |
+| `gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb:560` | **mutates in place** (`each { freeze key; freeze entry }`), no raise |
 | `gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb:164` | copies via `to_h`, does not freeze scalars at all, no raise |
 | `gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb:249` | mutates in place, freezes `String` keys only (not Symbol/Integer keys) |
 | `gems/tamoz-mcp/lib/tamoz/mcp/canonical_json.rb:23` | mutates in place via `each_value` — does not touch keys at all |

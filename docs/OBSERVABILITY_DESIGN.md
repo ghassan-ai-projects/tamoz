@@ -488,7 +488,7 @@ Every method takes bounded pages and adds no table and no migration.
 
 **Which database.** Reconstruction targets the worker's shared `runtime.sqlite3`. The
 interactive CLI writes one database per thread at `<session_dir>/<thread_id>.sqlite3`
-([`cli.rb:514`](../gems/tamoz-agent/lib/tamoz/agent/cli.rb)), so `tamoz trace` takes an
+([`cli.rb:514`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb)), so `tamoz trace` takes an
 explicit `--session-dir` for that layout and refuses to guess. `tamoz observe metrics`
 computes thread-wide gauges only for the shared layout, and says so rather than reporting a
 partial census as a whole one.
@@ -644,7 +644,7 @@ the model path — a change to the cognition hot path, which is a far larger cla
 **Derived gauges** are computed from the durable record. They are the same numbers
 `tamoz status` reports, and revision 1 promised they would "share the code path so the two can
 never disagree" — which is impossible as stated, because `build_status` lives in `tamoz-agent`
-([`cli_worker_commands.rb:261`](../gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb))
+([`cli_worker_commands.rb:261`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb))
 and `tamoz-observability` depends on `tamoz-core` only. v2's answer: **the census derivation
 moves down into `tamoz-sqlite` behind `TelemetryReader`, and `tamoz status` is refactored onto
 it in the same slice.** If that refactor is not done, "by construction" becomes "by a golden

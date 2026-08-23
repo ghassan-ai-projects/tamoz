@@ -75,7 +75,7 @@ metadata, and content requires an explicit named policy.
 **P3 — Safety numbers are derived, never self-reported.** `tamoz status` already follows the
 rule that a component must not be the only witness to its own safety: its counters are
 computed from the effect census, not reported by the worker
-([`cli_worker_commands.rb:259`](../gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb)).
+([`cli_worker_commands.rb:259`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb)).
 Any counter that asserts a safety property must keep that shape. A component that says
 "I performed zero unauthorized actions" is not evidence.
 
@@ -183,7 +183,7 @@ the design documents.
 
 **The durable record is the strongest observability asset in the project, and it is
 underused.** `tamoz status`
-([`cli_worker_commands.rb:259`](../gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb))
+([`cli_worker_commands.rb:259`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb))
 computes pending work, capability sources, the dispatchable catalog, memory summary, safety
 counters, paused approvals, blocked effects and budget exhaustions — all derived from the
 effect census and open occurrences rather than self-reported. This already satisfies P3 and
@@ -193,7 +193,7 @@ answers most of Q1 and Q4. It is L1, done properly.
 `Graph::StreamEmitter` deliver a bounded, cancellable projection of one run, with the
 type table in [`design-v0.1/CORE_DESIGN.md`](design-v0.1/CORE_DESIGN.md) §3 and the
 backpressure rules of invariant 15. `tamoz ask --json` renders these parts
-([`cli.rb:326`](../gems/tamoz-agent/lib/tamoz/agent/cli.rb)).
+([`cli.rb:326`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb)).
 
 **The instrumentation seam exists and is carefully built.**
 [`gems/tamoz-core/lib/tamoz/instrumentation.rb`](../gems/tamoz-core/lib/tamoz/instrumentation.rb)
@@ -218,7 +218,7 @@ violation that exists precisely because the correct plane is empty.
 **The worker's event surface is ad hoc.**
 [`worker.rb:515`](../gems/tamoz-agent/lib/tamoz/agent/worker.rb) emits
 `{"event", "ts", …}` through a callable installed by
-[`cli_worker_commands.rb:412`](../gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb).
+[`cli_worker_commands.rb:412`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb).
 Three event names exist: `request.completed`, `request.failed`, `request.paused`. There is
 no schema, no version, no registry, no correlation beyond thread and request id, and no
 consumer other than stdout. [`OPERATIONS.md`](../documentation/operations/operations.md) §Observability describes
@@ -241,7 +241,7 @@ endpoint, no export. Q5 and Q7 are unanswerable except by hand-reading storage.
 **Token and cost accounting do not exist, and this has already cost the product a
 feature.** `Profile::BUDGET_KEYS` declares `cost_usd`, `input_tokens`, `output_tokens`,
 `wall_clock_seconds`, `steps` and `model_calls`
-([`profile.rb:83`](../gems/tamoz-agent/lib/tamoz/agent/profile.rb)), but
+([`profile.rb:83`](../gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb)), but
 `WorkerRuntime#budget_usage`
 ([`worker_runtime.rb:213`](../gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb)) computes
 only `model_calls` (counted from the effect census) and `wall_clock_seconds`.
@@ -255,7 +255,7 @@ available here and the reason cost accounting is not deferred to a later phase.
 
 **There is no correlation identity.** Errors do not carry a trace id. `Context` receives
 `execution_id: SecureRandom.uuid` per CLI process
-([`cli.rb:335`](../gems/tamoz-agent/lib/tamoz/agent/cli.rb)), so nothing today ties a signal
+([`cli.rb:335`](../gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb)), so nothing today ties a signal
 to a durable checkpoint without manual reasoning about thread and request ids.
 
 ### 7.3 The score

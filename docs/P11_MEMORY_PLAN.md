@@ -41,7 +41,7 @@ No `tamoz-memory` gem ships in v0.1 (design §2). Ownership:
 - `tamoz-graph` — checkpoints; stays memory-agnostic (no memory semantics leak in).
 - `tamoz-agent` — owns `Tamoz::Agent::Memory`: canonical record, admission, retrieval,
   consolidation, promotion, correction/deletion protocols. All P11 code lands under
-  `gems/tamoz-agent/lib/tamoz/agent/memory/`.
+  `gems/tamoz-agent-memory/lib/tamoz/agent/memory/`.
 - `tamoz-evals` — the P11-ED treatment harness and P11-E comparison; never a production
   dependency (lazy-load rule, invariant 54-adjacent).
 

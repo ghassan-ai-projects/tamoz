@@ -51,7 +51,7 @@ Evidence:
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb`;
 - `gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb`;
 - `gems/tamoz-agent/lib/tamoz/agent/session.rb`;
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb`;
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`;
 - `test/comms_gateway_test.rb`;
 - `test/agent_cli_test.rb`.
 

@@ -90,7 +90,7 @@ WHERE thread_id='<thread>' AND status='completed';
 ### 🔴 FIX-1 (high): plain `tamoz ask` CLI path does NOT wire the MCP source into the Session
 - **Symptom:** `tamoz ... "task"` (interactive/ask path) runs the planner, but the plan reviewer rejects any MCP step with:
   `step "x" uses unavailable tool "mcp:alms/learning.search"; unknown tool`
-- **Root cause:** `run_durable` in `gems/tamoz-agent/lib/tamoz/agent/cli.rb` builds `Session.new(...)` **without** the `mcp:` argument. The **worker** path (`worker_runtime.rb`) DOES pass `mcp: mcp_source` (line ~590), which is why the worker turn worked and the ask path did not.
+- **Root cause:** `run_durable` in `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` builds `Session.new(...)` **without** the `mcp:` argument. The **worker** path (`worker_runtime.rb`) DOES pass `mcp: mcp_source` (line ~590), which is why the worker turn worked and the ask path did not.
 - **Fix:** in `cli.rb` `run_durable`, build the MCP source from the runtime dir and pass `mcp:` to `Session.new` — mirroring `worker_runtime.rb#build_session`. (A temporary local edit proved this works; it was then reverted per operator instruction "do not change code".)
 - **Note for routing:** this is a code change to the tamoz repo, to be applied deliberately — not part of the read-only test.
 

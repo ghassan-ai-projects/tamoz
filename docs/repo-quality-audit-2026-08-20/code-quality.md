@@ -101,7 +101,7 @@ Evidence:
   `DuplicateMethodCall` (1,353), `TooManyStatements` (828), `FeatureEnvy`
   (409), `LongParameterList` (333), `UtilityFunction` (281), and
   `MissingSafeMethod` (272). Current top files included
-  `gems/tamoz-agent/lib/tamoz/agent/cli.rb` (124),
+  `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` (124),
   `gems/tamoz-stream/lib/tamoz/stream/situation_request.rb` (120), and
   `gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb` (77).
 
@@ -286,7 +286,7 @@ must preserve transaction, wire, effect, authority, and ordering semantics.
 
 Current physical-size hotspots from the complete inventory include
 `gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb` (1,303 lines),
-`gems/tamoz-agent/lib/tamoz/agent/cli.rb` (857),
+`gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` (857),
 `gems/tamoz-stream/lib/tamoz/stream/situation_request.rb` (857),
 `gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb` (712),
 `gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb` (694), and
