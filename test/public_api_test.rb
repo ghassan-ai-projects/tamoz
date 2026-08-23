@@ -45,6 +45,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Healing::Remediation" => {},
           "Tamoz::Agent::Healing::VERSION" => {}
         },
+        "tamoz-agent-profile" => {
+          "Tamoz::Agent::Profile" => {},
+          "Tamoz::Agent::Profile::VERSION" => {}
+        },
         "tamoz-agent-kernel" => {
           "Tamoz::Agent::Deliberation" => {},
           "Tamoz::Agent::EffectDispatcher" => {},
@@ -55,6 +59,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {},
           "Tamoz::Agent::Plan" => {},
           "Tamoz::Agent::PlanRejectedError" => {},
+          "Tamoz::Agent::Providers" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
           "Tamoz::Agent::Step" => {}
         },
@@ -374,6 +379,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Kernel::VERSION,
       Tamoz::Agent::Memory::VERSION,
       Tamoz::Agent::Healing::VERSION,
+      Tamoz::Agent::Profile::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,

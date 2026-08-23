@@ -46,6 +46,10 @@
       "Tamoz::Agent::Healing::Remediation": {},
       "Tamoz::Agent::Healing::VERSION": {}
     },
+    "tamoz-agent-profile": {
+      "Tamoz::Agent::Profile": {},
+      "Tamoz::Agent::Profile::VERSION": {}
+    },
     "tamoz-agent-kernel": {
       "Tamoz::Agent::Deliberation": {},
       "Tamoz::Agent::EffectDispatcher": {},
@@ -56,6 +60,7 @@
       "Tamoz::Agent::McpCatalogSnapshotUnavailableError": {},
       "Tamoz::Agent::Plan": {},
       "Tamoz::Agent::PlanRejectedError": {},
+      "Tamoz::Agent::Providers": {},
       "Tamoz::Agent::SkillSnapshotUnavailableError": {},
       "Tamoz::Agent::Step": {}
     },

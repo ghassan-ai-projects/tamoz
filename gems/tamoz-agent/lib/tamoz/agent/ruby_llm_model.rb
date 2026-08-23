@@ -3,17 +3,7 @@
 module Tamoz
   module Agent
     class RubyLLMModel
-      ENV_KEYS = {
-        anthropic: "ANTHROPIC_API_KEY",
-        deepseek: "DEEPSEEK_API_KEY",
-        gemini: "GEMINI_API_KEY",
-        mistral: "MISTRAL_API_KEY",
-        ollama: "OLLAMA_API_KEY",
-        openai: "OPENAI_API_KEY",
-        openrouter: "OPENROUTER_API_KEY",
-        perplexity: "PERPLEXITY_API_KEY",
-        xai: "XAI_API_KEY"
-      }.freeze
+      ENV_KEYS = Providers::ENV_KEYS
 
       attr_reader :model, :provider
 

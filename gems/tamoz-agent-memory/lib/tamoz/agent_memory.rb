@@ -6,7 +6,6 @@
 # into session, worker, or CLI code.
 require "tamoz/core"
 require "tamoz/tools"
-require "tamoz/sqlite"
 require "tamoz/agent_kernel"
 
 require_relative "agent/memory/version"

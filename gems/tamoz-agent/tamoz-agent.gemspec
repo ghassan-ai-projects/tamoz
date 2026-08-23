@@ -12,6 +12,7 @@ TamozGemspec.build(
     ["tamoz-agent-kernel", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-memory", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-healing", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-agent-profile", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],
