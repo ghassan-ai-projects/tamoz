@@ -1,0 +1,1 @@
+[{"severity":"warning","location":{"begin_pos":12042,"end_pos":12117},"message":"Lint/RedundantCopDisableDirective: Unnecessary disabling of `Metrics/CyclomaticComplexity`, `Metrics/PerceivedComplexity`.","cop_name":"Lint/RedundantCopDisableDirective","status":"uncorrected"}]

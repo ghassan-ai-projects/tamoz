@@ -41,6 +41,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
         },
+        "tamoz-agent-healing" => {
+          "Tamoz::Agent::Healing::Remediation" => {},
+          "Tamoz::Agent::Healing::VERSION" => {}
+        },
         "tamoz-agent-kernel" => {
           "Tamoz::Agent::Deliberation" => {},
           "Tamoz::Agent::EffectDispatcher" => {},
@@ -369,6 +373,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Tools::VERSION,
       Tamoz::Agent::Kernel::VERSION,
       Tamoz::Agent::Memory::VERSION,
+      Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,

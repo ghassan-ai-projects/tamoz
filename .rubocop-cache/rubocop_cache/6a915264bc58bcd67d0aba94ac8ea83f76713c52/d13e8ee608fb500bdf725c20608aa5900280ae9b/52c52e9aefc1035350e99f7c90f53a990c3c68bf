@@ -1,0 +1,1 @@
+[{"severity":"warning","location":{"begin_pos":483,"end_pos":530},"message":"Lint/ConstantDefinitionInBlock: Do not define constants this way within a block.","cop_name":"Lint/ConstantDefinitionInBlock","status":"unsupported"}]

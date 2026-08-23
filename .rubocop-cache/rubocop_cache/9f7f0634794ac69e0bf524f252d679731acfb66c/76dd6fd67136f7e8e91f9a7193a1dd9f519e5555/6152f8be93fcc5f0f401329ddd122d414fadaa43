@@ -1,0 +1,1 @@
+[{"severity":"convention","location":{"begin_pos":2392,"end_pos":2412},"message":"Naming/PredicateMethod: Predicate method names should end with `?`.","cop_name":"Naming/PredicateMethod","status":"unsupported"}]

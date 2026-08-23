@@ -1,0 +1,1 @@
+[{"severity":"convention","location":{"begin_pos":3782,"end_pos":3840},"message":"Style/SafeNavigation: Use safe navigation (`&.`) instead of checking if an object exists before calling the method.","cop_name":"Style/SafeNavigation","status":"uncorrected"}]

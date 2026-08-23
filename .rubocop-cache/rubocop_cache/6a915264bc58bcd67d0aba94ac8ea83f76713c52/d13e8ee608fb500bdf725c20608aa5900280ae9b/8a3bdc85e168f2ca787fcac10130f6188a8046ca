@@ -1,0 +1,1 @@
+[{"severity":"warning","location":{"begin_pos":830,"end_pos":902},"message":"Lint/MissingSuper: Call `super` to initialize state of the parent class.","cop_name":"Lint/MissingSuper","status":"unsupported"}]

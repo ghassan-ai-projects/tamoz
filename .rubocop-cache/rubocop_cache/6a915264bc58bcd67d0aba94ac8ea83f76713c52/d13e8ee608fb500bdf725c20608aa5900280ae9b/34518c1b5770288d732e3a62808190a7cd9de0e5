@@ -1,0 +1,1 @@
+[{"severity":"convention","location":{"begin_pos":66,"end_pos":76},"message":"Style/Documentation: Missing top-level documentation comment for `class Tamoz::Notifier::Null`.","cop_name":"Style/Documentation","status":"unsupported"}]

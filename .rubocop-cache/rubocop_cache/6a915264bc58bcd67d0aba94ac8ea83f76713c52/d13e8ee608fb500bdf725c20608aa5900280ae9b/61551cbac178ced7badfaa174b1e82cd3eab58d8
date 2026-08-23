@@ -1,0 +1,1 @@
+[{"severity":"convention","location":{"begin_pos":4007,"end_pos":4035},"message":"Performance/StringInclude: Use `String#include?` instead of a regex match with literal-only pattern.","cop_name":"Performance/StringInclude","status":"uncorrected"}]
