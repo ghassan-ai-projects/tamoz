@@ -1,6 +1,6 @@
 # AGENTS.md — tamoz
 
-Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tamoz-mcp, tamoz-graph, tamoz-scheduler, tamoz-sqlite, tamoz-stream, tamoz-tools, tamoz-evals).
+Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, tamoz-agent, tamoz-mcp, tamoz-graph, tamoz-scheduler, tamoz-sqlite, tamoz-stream, tamoz-tools, tamoz-evals).
 
 - Ruby version pinned in `.ruby-version`; gems live in `gems/`, entry points in `apps/` and `bin/`.
 - Tests: `test/` (Minitest), run via `rake`. One test FILE per command — `ruby -Itest a_test.rb b_test.rb` runs only the first.
@@ -44,6 +44,10 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-agent, tam
   route it through `EffectDispatcher.run` (see `SessionEffects#model_call`) so a
   replay returns the recorded receipt, not a fresh, different answer. Key identity
   and dedup on the request, never on the answer.
+- **Approval policy is data too.** Whether an action needs approval, and under
+  what evidence, lives only in `gems/tamoz-approval/policy/*.yaml` (base +
+  digest-pinned profiles); the engine in `gems/tamoz-approval` interprets it.
+  Never hardcode a verdict, an approval constant, or a bypass flag elsewhere.
 - **Domain knowledge is data, never code (B9 / P4 gate-4).** Diagnosis catalogs,
   operator prompts, intent types + risk classes, compensation maps, watch-property
   rules and presets, snapshot fact templates, fixture responses, and benchmark-family

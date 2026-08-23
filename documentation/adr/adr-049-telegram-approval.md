@@ -37,8 +37,8 @@ A bound Telegram correspondent supplies `chat_bound`. An authenticated local ope
 
 - **INV-A — denial is unconditional.** The bound correspondent may deny any active prompt, regardless of `required_evidence`. Denial only withholds work already gated; it is fail-safe.
 - **INV-B — approval is evidence-gated.** A decision resolves as *approve* only when `approver_evidence >= required_evidence`. Approval releases withheld work; it is fail-dangerous and never shares deny's unguarded path.
-- **INV-C — the requirement is trusted and pinned.** `required_evidence` is a deterministic function of the pinned interrupt/effect digest that will execute, computed by the trusted layer that binds capabilities (tool, argument-schema digest, effect class, target scope), reproducible offline, and part of the prompt context the callback comparison must match. The model never sets it, and a plan cannot be re-bound to a cheaper authority after the prompt is shown.
-- **INV-D — v1 policy is deny-only by evaluation.** The v1 policy returns `required_evidence = filesystem_operator` for every effect class. So a `chat_bound` approve is refused for every action, and Telegram is deny-only in practice — without a hardcoded transport special-case.
+- **INV-C — the requirement is trusted and pinned.** `required_evidence` comes from the engine's Decision — evaluated against the digest-pinned policy document (`gems/tamoz-approval/policy/*.yaml`) at gate time, journaled with the decision, validated against the evidence lattice when a prompt is built, and part of the prompt context the callback comparison must match. The model never sets it, and a plan cannot be re-bound to a cheaper authority after the prompt is shown.
+- **INV-D — the shipped v1 profile was deny-only by evaluation.** The original v1 policy returned `required_evidence = filesystem_operator` for every effect class; the approval-policy redesign replaced that constant with per-tier defaults in the policy data (profiles may set `chat_bound`-approvable tiers deliberately). A `chat_bound` approve is refused wherever the document does not grant it — still without any transport special-case.
 - **INV-E — absent or ambiguous evidence never approves.** Missing, expired, or `UNKNOWN` approver evidence resolves as withheld, never as approve.
 
 ## 4. Requirements for a future grant (the bar)
@@ -51,11 +51,17 @@ This ADR grants no Telegram approval capability. A later ADR may set `required_e
 4. **Auditable and short-lived.** A `chat_bound` approval carries a shorter prompt TTL than an operator approval and a distinct, louder audit record (identity, evidence level, reason, timestamp).
 5. **Default stays deny.** Any effect not explicitly enumerated keeps `required_evidence = filesystem_operator`.
 
-## 5. Deny-only v1 policy
+## 5. Policy status after the approval-policy redesign (2026-08-22)
 
-Under the v1 policy no effect is `chat_bound`-approvable: the single trusted policy function returns the constant `filesystem_operator` for every effect class, and the callback compares `approver_evidence` against it. A `chat_bound` approve is therefore refused for every action, and Telegram is deny-only in practice — without a hardcoded transport special-case.
-
-Implementation is deliberately minimal: one trusted policy function returning `filesystem_operator`, and one lattice comparison at the callback. The generality lives in this decision, not in code; a lattice is not to be built out. Denial is unconditional; approval routes through the check that currently denies all, closing the shipped approve-everything defect.
+The constant `filesystem_operator` policy function was deleted: whether an action
+asks, allows, or denies, and under which evidence level an approve resolves, now
+lives entirely in the digest-pinned YAML documents of `gems/tamoz-approval`
+(`policy/base.yaml` plus `profiles/*.yaml`). The delivery path reads the required
+evidence from the journaled engine Decision (`ApprovalPrompt.build` validates it
+against this lattice) and never synthesizes it. Denial stays unconditional;
+approval still routes through the lattice check; absent or ambiguous evidence
+still never approves. Bundled profiles keep `network`/`external_publish`
+gated above what `chat_bound` can approve unless a future ADR invokes §4.
 
 ## 6. Threat model summary
 

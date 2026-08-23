@@ -778,20 +778,6 @@
       "package": "tamoz-agent"
     },
     {
-      "id": "API-tamoz-agent-Tamoz::Agent::ApprovalDeniedError",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Agent::ApprovalDeniedError",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-agent"
-    },
-    {
       "id": "API-tamoz-agent-Tamoz::Agent::CLI.run",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -1154,6 +1140,20 @@
       "rationale": null,
       "promotion_exclusion": null,
       "package": "tamoz-agent"
+    },
+    {
+      "id": "API-tamoz-approval-Tamoz::Approval.bundled_policy_path",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Approval.bundled_policy_path",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-approval"
     },
     {
       "id": "API-tamoz-approval-Tamoz::Approval::Answer.parse",
@@ -5332,7 +5332,7 @@
       "named_test": "test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes",
       "supporting_tests": [
         "test/agent_digest_resolution_test.rb#test_session_mutation_between_approval_and_dispatch_is_refused_fail_closed",
-        "test/agent_repair_evaluation_test.rb#test_denied_repair_patch_preserves_the_last_approved_state"
+        "test/agent_repair_evaluation_test.rb#test_denied_check_is_a_structured_result_and_preserves_the_approved_state"
       ],
       "classification": "direct",
       "rationale": null,

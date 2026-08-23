@@ -54,7 +54,7 @@ Work you are watching, against a session directory.
 | Subcommand | Purpose | Key options |
 |---|---|---|
 | `ask` | Start a new turn on a thread | `TASK` (positional) |
-| `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--all`, `--i-understand-approve-all`, `--recover` |
+| `resume` | Answer the approvals or questions a paused thread is waiting on | `THREAD`, `--answer ANSWER`, `--approval-profile NAME`, `--recover` |
 | `continue` | Drive a paused thread forward without new input | `THREAD` |
 | `list` | Show every thread in the session directory | |
 | `show` | Render one thread's state, plan digest, receipts and outcome | `THREAD`, `--transcript N` |
@@ -64,8 +64,9 @@ Work you are watching, against a session directory.
 | `resolve` | Record a human decision about an `:unknown` effect | `THREAD EFFECT_KEY {succeeded\|failed\|abandoned}` |
 | `profile` | Manage trusted profiles | verbs below |
 
-`resume --all` approves every pending interrupt and requires the explicit
-`--i-understand-approve-all` opt-in. `resolve` accepts exactly three statuses:
+`resume` answers the pending interrupts of ONE thread; each approval is
+resolved through the session's approval engine (an operator deny is a
+first-class answer, never an error). `resolve` accepts exactly three statuses:
 `succeeded`, `failed`, `abandoned` — `unknown` is the state being resolved out
 of and is refused.
 

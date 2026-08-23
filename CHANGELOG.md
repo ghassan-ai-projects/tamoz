@@ -6,6 +6,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 from its public release line onward.
 
+## [Unreleased]
+
+### Added
+
+- `tamoz-approval`: approval policy as digest-pinned YAML data (`policy/base.yaml`
+  plus `implement`/`plan`/`review`/`auto`/`unattended` profiles) with a deny-first
+  engine, scoped expiring grants, a durable decision log, and mid-session mode
+  switches that survive restarts.
+
+### Changed
+
+- One approval engine everywhere: durable sessions and the one-shot runtime ask
+  the same policy owner; a denial is a structured result the turn continues from.
+- Approval prompts carry the evidence level from the journaled engine Decision;
+  the hardcoded comms constant policy is gone.
+
+### Removed
+
+- `ApprovalDeniedError`, the tools-gem approval plumbing, and every
+  approve-all bypass flag; unattended behavior is a policy profile, not a flag.
+
 ## [0.1.0.alpha.1] - 2026-08-13
 
 ### Added

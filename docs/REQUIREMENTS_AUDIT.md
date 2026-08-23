@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 429 | 256 | 15 | **no** |
+| 449 | 260 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 399 |
+| pass | 419 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -66,7 +66,7 @@ generating run.
 | `ADR-022` | adr | yes | pass | `test/agent_runtime_test.rb#test_never_executes_when_no_plan_passes_review` |
 | `ADR-023` | adr | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `ADR-024` | adr | yes | pass | `test/agent_scorecard_test.rb#test_auditor_rejects_missing_review_missing_approval_and_false_completion` |
-| `ADR-025` | adr | yes | pass | `test/dependency_isolation_test.rb#test_evals_is_stdlib_only_and_loads_no_runtime_package` |
+| `ADR-025` | adr | yes | pass | `test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals` |
 | `ADR-026` | adr | yes | pass | `test/memory_engine_test.rb#test_lifecycle_transitions_and_eligible_state_set_are_exact` |
 | `ADR-027` | adr | yes | pass | `test/memory_engine_test.rb#test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge` |
 | `ADR-028` | adr | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
@@ -79,7 +79,7 @@ generating run.
 | `ADR-035` | adr | yes | pass | `test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary` |
 | `ADR-036` | adr | yes | pass | `test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused` |
 | `ADR-037` | adr | yes | pass | `test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts` |
-| `ADR-038` | adr | yes | pass | `test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal` |
+| `ADR-038` | adr | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
 | `ADR-039` | adr | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `ADR-040` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
 | `ADR-041` | adr | yes | missing | `—` |
@@ -90,7 +90,6 @@ generating run.
 | `ADR-046` | adr | yes | missing | `—` |
 | `ADR-047` | adr | yes | missing | `—` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-agent-Tamoz::Agent::ApprovalDeniedError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Deliberation` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -117,9 +116,28 @@ generating run.
 | `API-tamoz-agent-Tamoz::Agent::ToolPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Toolbox` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval.bundled_policy_path` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Answer.parse` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::ConflictingResolutionError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Decision` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::DecisionLog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Engine` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Error` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Grant` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::GrantOffer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::GrantStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::InvalidPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::InvalidScopeError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::MemoryDecisionLog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::MemoryGrantStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::PolicyDocument` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::Request` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::UnknownDecisionError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-approval-Tamoz::Approval::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::AmbiguousDeliveryError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::ApprovalPrompt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::AuthenticationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::AuthorityEvidence.members` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Binding` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Canonical` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Commands` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -397,7 +415,7 @@ generating run.
 | `INV-27` | invariant | yes | pass | `test/agent_scorecard_test.rb#test_auditor_rejects_missing_review_missing_approval_and_false_completion` |
 | `INV-28` | invariant | no | deferred-by-contract | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `INV-29` | invariant | no | deferred-by-contract | `test/memory_engine_test.rb#test_admission_reject_matrix_is_durable_and_never_raises` |
-| `INV-30` | invariant | no | deferred-by-contract | `test/memory_repository_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption` |
+| `INV-30` | invariant | no | deferred-by-contract | `test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption` |
 | `INV-31` | invariant | no | deferred-by-contract | `test/memory_engine_test.rb#test_deletion_emits_receipt_and_propagates_to_index` |
 | `INV-32` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_scope_intersection_refuses_a_target_outside_authorized_resources` |
 | `INV-33` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_recovered_always_carries_a_passing_oracle_result` |
@@ -423,12 +441,14 @@ generating run.
 | `INV-61` | invariant | yes | missing | `—` |
 | `MIG-1` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
 | `MIG-10` | migration | yes | pass | `test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store` |
-| `MIG-11` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
-| `MIG-12` | migration | yes | pass | `test/memory_repository_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
-| `MIG-13` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
-| `MIG-14` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
+| `MIG-11` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
+| `MIG-12` | migration | yes | pass | `test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
+| `MIG-13` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
+| `MIG-14` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
-| `MIG-2` | migration | yes | pass | `test/memory_repository_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
+| `MIG-16` | migration | yes | pass | `test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it` |
+| `MIG-17` | migration | yes | pass | `test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies` |
+| `MIG-2` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
@@ -447,7 +467,7 @@ generating run.
 | `OBJ-3` | objective | yes | pass | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
 | `OBJ-4` | objective | yes | pass | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
 | `OBJ-5` | objective | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
-| `OBJ-6` | objective | yes | pass | `test/stream_decision_builder_test.rb#test_an_allowlist_without_the_action_type_demotes_the_proposal` |
+| `OBJ-6` | objective | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
 | `OBJ-7` | objective | yes | missing | `—` |
 | `PHASE-DR-2` | phase_exit_criterion | yes | pass | `test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask` |
 | `PHASE-DR-3` | phase_exit_criterion | yes | pass | `test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution` |

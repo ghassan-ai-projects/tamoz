@@ -87,7 +87,7 @@ The highest-risk surface in the feature, and off by default. `tamoz approve` is 
 | `:none` | render a notice; the operator uses local `tamoz approve` | yes |
 | `:deny_only` | one Deny button bound to the exact pending interrupt set | no |
 
-There is no dormant granting enum in v1. The evidence-gated approval framework of ADR-049 fixes the shipped approve-everything defect and supplies the mechanism a future grant would use; under the v1 policy every effect requires `filesystem_operator` evidence, which a chat identity does not supply, so Telegram remains deny-only in practice. `headless_auto_approvals` and `chat_grants` must both remain zero.
+There is no dormant granting enum. The evidence-gated approval framework of ADR-049 fixed the shipped approve-everything defect and supplies the mechanism a future grant would use; required evidence now comes from the engine Decision (policy data in `gems/tamoz-approval/policy/*.yaml`), which a chat identity does not meet above its bound, so Telegram remains deny-only in practice. `headless_auto_approvals` and `chat_grants` must both remain zero.
 
 ## 9. Decision records
 
@@ -132,18 +132,19 @@ The token is referenced by **name** (`credential_ref`) and never by value; it is
 - **ADR-043 — Telegram is deny-only by default, reference-bound.** A chat identity is weaker
   evidence than filesystem authority. The channel may submit an exact, attributable,
   expiring denial. It may not grant an approval by default: under the evidence-gated policy
-  of **ADR-049**, every effect requires `filesystem_operator` evidence, which a chat
-  identity does not supply. Lowering a specific, reversible, argument-bounded effect to
-  `chat_bound` approval is possible only through a follow-up ADR meeting the bar in
-  ADR-049 §4; absent such an ADR, Telegram remains deny-only in practice.
+  of **ADR-049**, approval resolves only when the approver's evidence meets the level the
+  decision carries, and a chat identity supplies none of the higher levels. Lowering a
+  specific, reversible, argument-bounded effect to `chat_bound` approval is possible only
+  through a follow-up ADR meeting the bar in ADR-049 §4; absent such an ADR, Telegram stays
+  deny-only in practice.
 - **ADR-049 — Telegram approval is evidence-gated, not transport-gated.** Approval authority
   is a function of evidence strength (`chat_bound < filesystem_operator`), not of which
   transport pressed a button. Denial is unconditional; approval requires
-  `approver_evidence >= required_evidence`, computed by trusted code from the pinned effect
-  digest. The v1 policy requires `filesystem_operator` for every effect, so Telegram is
-  deny-only in practice; lowering any effect to `chat_bound` requires a follow-up ADR
-  meeting the bar in ADR-049 §4. Supersedes the shipped approve-everything path, which
-  skipped the check.
+  `approver_evidence >= required_evidence`. Since the 2026-08-22 approval-policy redesign,
+  that requirement is read from the journaled engine Decision (evaluated against the
+  digest-pinned YAML documents in `gems/tamoz-approval`) and pinned into the prompt at
+  build time — no constant policy function survives. Lowering any effect to `chat_bound`
+  is a policy-data edit plus a follow-up ADR meeting the bar in ADR-049 §4.
 
 ## Next reads
 

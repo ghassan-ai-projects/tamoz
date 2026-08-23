@@ -21,14 +21,15 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-core` |
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
-| `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
+| `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
 | `tamoz-mcp` | Governed MCP client/host and governed websearch | `tamoz-core`, the official MCP SDK |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
+| `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
-| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent` | The deliberative agent runtime and the `tamoz` CLI | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-approval`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
 Each gem installs and runs with only its declared dependencies, proven per gem

@@ -1,8 +1,11 @@
 # 03 — ADR: Isolate approval policy into `tamoz-approval`
 
-**Status:** proposed — rev 2 (2026-08-22): incorporates the three staff reviews
-(`04-review-security.md`, `04-review-simplicity.md`, `04-review-api.md`); every
-finding is mapped in §10.
+**Status:** implemented — phases 1–12 of `05-implementation-plan.md` landed on
+`redesign-approval-policy`; final evidence in `08-implementation-bars.md`
+(head commits: `c1de9be` phases 7+7B, `c8ee0b1` phase 8,
+`6096996` phase 9 + review fixes). rev 2 (2026-08-22) incorporated the three
+staff reviews (`04-review-security.md`, `04-review-simplicity.md`,
+`04-review-api.md`); every finding is mapped in §10.
 **Date:** 2026-08-22
 **Inputs:** `01-independent-study.md` (green-field study), `02-current-state-audit.md` (current-state audit). Section references like "audit §5.3" and "study §4.1" point at those files.
 
