@@ -1,0 +1,6 @@
+profile:
+  name: unattended
+  tier_defaults:
+    workspace_write: ask
+    local_execute: ask
+  on_timeout: deny

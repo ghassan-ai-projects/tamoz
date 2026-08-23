@@ -188,6 +188,7 @@ chain, old constants, profile keys, `--all` flag deleted in one commit.
 | Phase | Date | Command(s) | Files / no-change | Plumbing vs real |
 |-------|------|------------|-------------------|------------------|
 | 1 | 2026-08-23 | `bundle exec ruby -Itest test/approval_values_test.rb test/approval_answer_test.rb` (green); `bundle exec ruby -Itest test/public_api_test.rb` (green); `bundle exec ruby -Itest test/benchmark_protocol_test.rb` (green); `bundle exec ruby -Itest test/documentation_surface_test.rb` (green) | Created `gems/tamoz-approval/` scaffold + tests; wired Gemfile/test_helper/public API pins; regenerated dependency review + benchmark protocol | Plumbing |
+| 2 | 2026-08-23 | `bundle exec ruby -Itest test/approval_policy_document_test.rb` (green); `bundle exec ruby -Itest test/public_api_test.rb` (green); `bundle exec ruby -Itest test/packaging_test.rb -n test_every_gem_is_strict_valid_and_contains_only_release_files` (green); `enola check` (PASS) | Created `policy/base.yaml` + profiles; `PolicyDocument` loader/validator; `Evaluator`; public API pins updated | Plumbing |
 
 ## Amendments from pre-implementation gap review
 

@@ -1,0 +1,5 @@
+profile:
+  name: review
+  tier_defaults:
+    workspace_write: ask
+    local_execute: ask

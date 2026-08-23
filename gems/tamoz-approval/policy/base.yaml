@@ -1,0 +1,91 @@
+version: 1
+
+tool_tiers:
+  read_file:
+    tier: read
+    verb: read
+  list_directory:
+    tier: read
+    verb: read
+  search_text:
+    tier: read
+    verb: read
+  load_skill:
+    tier: read
+    verb: read
+  read_skill_resource:
+    tier: read
+    verb: read
+  apply_patch:
+    tier: workspace_write
+    verb: write
+  create_file:
+    tier: workspace_write
+    verb: write
+  run_check:
+    tier: local_execute
+    verb: execute
+    key_argv: [0]
+  child_task:
+    tier: local_execute
+    verb: execute
+    grant_scopes: [once]
+
+fallback_tier:
+  tier: local_execute
+  verb: unknown
+  grant_scopes: [once]
+
+tiers:
+  read:
+    default: allow
+  workspace_write:
+    default: allow
+  local_execute:
+    default: ask
+    grant_scopes: [once, session]
+  network:
+    default: ask
+    grant_scopes: [once]
+  external_publish:
+    default: ask
+    grant_scopes: [once]
+  destructive:
+    default: ask
+    grant_scopes: [once]
+
+grant_keys:
+  local_execute: [verb, tool, target_root, key_argv]
+
+rules:
+  - id: credential-files
+    match:
+      verb: read
+      target_glob: "**/.env*"
+    verdict: deny
+    reason: credential files are outside the agent's read scope
+  - id: force-push
+    match:
+      argv_prefix: ["git", "push"]
+      argv_flag: "--force"
+    verdict: ask
+    reason: force-push rewrites published history
+
+ask:
+  timeout_s: 900
+  on_timeout: park
+
+evidence:
+  approve: filesystem_operator
+  deny: chat_bound
+
+simulations:
+  - request:
+      tool: read_file
+      verb: read
+      targets: ["**/.env"]
+    expect: deny
+  - request:
+      tool: "mcp:unknown:anything"
+      verb: unknown
+    expect: ask

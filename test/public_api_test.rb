@@ -51,6 +51,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::GrantOffer" => {},
           "Tamoz::Approval::InvalidPolicyError" => {},
           "Tamoz::Approval::InvalidScopeError" => {},
+          "Tamoz::Approval::PolicyDocument" => {},
           "Tamoz::Approval::Request" => {},
           "Tamoz::Approval::UnknownDecisionError" => {},
           "Tamoz::Approval::VERSION" => {}

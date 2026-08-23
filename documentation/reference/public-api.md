@@ -44,7 +44,7 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-observability` | The closed signal catalog: `SignalCatalog`, `Signal`, `Correlation`, `ContentPolicy`, the `Recorder` implementations, `Metrics`, `ModelCall`, `Cost`, `PricingTable`, `Trace`, and the schema-version/evolution errors |
 | `tamoz-otel` | The optional governed exporter: `HTTPExporter`, `AsyncExporter`, `EgressPolicy` |
 | `tamoz-agent` | The deliberative runtime and CLI: `Tamoz::Agent.build`, `Runtime`, `Session`, `Result`, `Plan`, `Step`, `Event`, `RubyLLMModel`, `CLI.run`, `McpCapabilitySource`, and the agent error taxonomy |
-| `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, and `Answer.parse` |
+| `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, `Answer.parse`, and `PolicyDocument` |
 | `tamoz-mcp` | The governed MCP client/host: `Catalog`, `Entry`, `ServerConfig`, `Supervisor`, `Invocation`, `Elicitation`, and the MCP error taxonomy |
 | `tamoz-evals` | The evaluation harness surface: `Tamoz::Evals.verify`, `Case.load`, `Evidence.load`, `Result.load` — a development/release gem no production gemspec may depend on |
 
