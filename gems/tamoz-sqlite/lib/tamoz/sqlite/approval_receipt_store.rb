@@ -8,17 +8,24 @@ module Tamoz
       NAMESPACE_PREFIX = "tamoz.stream.approvals"
       STATES = %w[requested withdrawn resolved].freeze
 
-      def initialize(adapter:, tenant:)
+      def initialize(adapter:, tenant:, clock: -> { Time.now })
         @store = adapter.store
         @tenant = text!(tenant, "tenant")
         @namespace = "#{NAMESPACE_PREFIX}.#{@tenant}".freeze
+        @clock = clock
       end
 
+      # An expired receipt IS an absent receipt (fail closed): every state
+      # read goes through here, so a lapsed approval re-asks instead of
+      # resolving.
       def fetch(approval_id)
-        value(key(approval_id))
+        current = value(key(approval_id))
+        return nil if current && expired?(current)
+
+        current
       end
 
-      def reserve_requested(approval_id:, tenant_id:, payload_digest:, identity:, traceparent: nil, tracestate: nil)
+      def reserve_requested(approval_id:, tenant_id:, payload_digest:, identity:, traceparent: nil, tracestate: nil, ttl_s: nil)
         unless tenant_id == @tenant
           raise Tamoz::StoreConflictError, "approval tenant does not match"
         end
@@ -41,7 +48,8 @@ module Tamoz
             "delivery_claimed" => false,
             "last_event_digest" => payload_digest,
             "traceparent" => traceparent,
-            "tracestate" => tracestate
+            "tracestate" => tracestate,
+            "expires_at" => ttl_s ? now + ttl_s : nil
           }
         )
         true
@@ -114,6 +122,17 @@ module Tamoz
 
       def fetch!(approval_id)
         fetch(approval_id) || raise(Tamoz::StoreConflictError, "unknown approval #{approval_id}")
+      end
+
+      def expired?(current)
+        expires_at = current["expires_at"]
+        return false unless expires_at
+
+        now >= expires_at
+      end
+
+      def now
+        @clock.call.to_i
       end
 
       def value(storage_key)

@@ -36,7 +36,11 @@ module Tamoz
       # with rehash-on-admission).
       # OpenClaw Phase 0 identity: persist logical and attempt identities rather
       # than reconstructing them from the current worker process.
-      CURRENT_VERSION = 16
+      # Approval redesign (approval-policy-redesign 05 step 5): 16 -> 17 through
+      # MIGRATION_17, which adds the durable approval-policy homes — session
+      # grants, the append-only decision log with resolution columns, and the
+      # single-row active-policy record the reload loop reads.
+      CURRENT_VERSION = 17
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1128,6 +1132,60 @@ module Tamoz
         MIGRATION_16.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      MIGRATION_17 = [
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_approval_grants (
+            key TEXT NOT NULL,
+            scope TEXT NOT NULL,
+            session_id TEXT NOT NULL,
+            policy_rev TEXT NOT NULL,
+            created_at_ms INTEGER NOT NULL,
+            expires_at_ms INTEGER
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          CREATE INDEX idx_tamoz_approval_grants_lookup
+            ON tamoz_approval_grants(session_id, policy_rev, key, scope)
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_approval_decisions (
+            decision_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            tool TEXT NOT NULL,
+            verb TEXT NOT NULL,
+            tier TEXT NOT NULL,
+            rule_id TEXT NOT NULL,
+            verdict TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            evidence TEXT,
+            policy_rev TEXT NOT NULL,
+            argv_digest TEXT NOT NULL,
+            targets_digest TEXT NOT NULL,
+            grant_scopes TEXT,
+            grant_key TEXT,
+            answer TEXT,
+            resolved_scope TEXT,
+            actor_evidence TEXT,
+            resolved_at_ms INTEGER,
+            grant_created_at_ms INTEGER,
+            grant_expires_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_approval_active_policy (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            policy_path TEXT NOT NULL,
+            policy_rev TEXT NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_17_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_17.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
       # the ordinals are exactly 1..CURRENT_VERSION with no gap and no reuse.
       MIGRATIONS = {
@@ -1146,7 +1204,8 @@ module Tamoz
         13 => [MIGRATION_13, MIGRATION_13_CHECKSUM],
         14 => [MIGRATION_14, MIGRATION_14_CHECKSUM],
         15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
-        16 => [MIGRATION_16, MIGRATION_16_CHECKSUM]
+        16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
+        17 => [MIGRATION_17, MIGRATION_17_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

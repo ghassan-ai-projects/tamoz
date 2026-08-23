@@ -75,6 +75,7 @@ PATH
   specs:
     tamoz-sqlite (0.1.0.alpha.1)
       sqlite3 (~> 2.9)
+      tamoz-approval (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-scheduler (= 0.1.0.alpha.1)
       tamoz-stream (= 0.1.0.alpha.1)
