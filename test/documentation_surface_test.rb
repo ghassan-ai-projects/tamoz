@@ -87,7 +87,7 @@ class DocumentationSurfaceTest < Minitest::Test
   # the check that would have caught tamoz-scheduler and tamoz-stream shipping
   # with no documentation at all.
   def test_the_install_guide_lists_every_packaged_gem
-    documented = text(INSTALL).scan(/^\| `(tamoz-[a-z]+)` \| /).flatten
+    documented = text(INSTALL).scan(/^\| `(tamoz-[a-z]+(?:-[a-z]+)*)` \| /).flatten
 
     assert_equal GEM_ROOTS.keys.sort, documented.sort
   end

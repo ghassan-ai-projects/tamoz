@@ -310,7 +310,7 @@ module Tamoz
       # moved digest-resolution path never references agent machinery; this keeps
       # the agent-side callers (`verify_intent_before_state!`,
       # `resolved_effect_arguments`) on the same single implementation.
-      def observe(path) = Toolbox.observe(path)
+      def observe(path) = Tamoz::Tools::Toolbox.observe(path)
 
       def mode_matches?(tool, intent, observed)
         return true unless tool == "create_file"
