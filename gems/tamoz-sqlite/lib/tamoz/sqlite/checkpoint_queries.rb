@@ -15,7 +15,7 @@ module Tamoz
         freeze
       end
 
-      def latest(thread_id:, namespace: [])
+      def latest(thread_id:, namespace: [], validate_identity: true)
         address = @store.normalize_address(thread_id, namespace)
         row = adapter.__send__(:read, operation: 'checkpoint.latest') do |tx|
           tx.first(
@@ -36,7 +36,7 @@ module Tamoz
         # Preserve the original nil/false guard rather than changing its return value.
         return nil unless row && row.fetch(0) # rubocop:disable Style/SafeNavigation
 
-        @store.materialize(row)
+        @store.materialize(row, validate_identity:)
       end
 
       def latest_graph_version(thread_id:, namespace: [])
@@ -138,7 +138,7 @@ module Tamoz
       end
       # rubocop:enable Naming/MethodParameterName
 
-      def materialize(row)
+      def materialize(row, validate_identity: true)
         durable_pending = if row.fetch(0) == row.fetch(13)
                             @store.pending_outcomes(
                               thread_id: row.fetch(2),
@@ -146,7 +146,7 @@ module Tamoz
                               execution_id: row.fetch(6)
                             )
                           end
-        wire.materialize(row, durable_pending:)
+        wire.materialize(row, durable_pending:, validate_identity:)
       end
 
       # These are deliberately separate read barriers; changing them to a JOIN or

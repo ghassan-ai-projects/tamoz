@@ -38,8 +38,8 @@ module Tamoz
         adapter.bind_graph(checkpoint_codec:)
       end
 
-      def latest(thread_id:, namespace: [])
-        @queries.latest(thread_id:, namespace:)
+      def latest(thread_id:, namespace: [], validate_identity: true)
+        @queries.latest(thread_id:, namespace:, validate_identity:)
       end
 
       # Select graph identity without decoding the graph-specific checkpoint
@@ -188,7 +188,9 @@ module Tamoz
         value
       end
 
-      def materialize(row) = @queries.materialize(row)
+      def materialize(row, validate_identity: true)
+        @queries.materialize(row, validate_identity:)
+      end
 
       def pending_outcomes(thread_id:, namespace:, execution_id:)
         @queries.pending_outcomes(thread_id:, namespace:, execution_id:)

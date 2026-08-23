@@ -145,9 +145,9 @@ module Tamoz
       # :reek:TooManyStatements :reek:NilCheck -- the active-checkpoint decode +
       # reconcile flow is one contract; the nil-check is the fail-closed
       # precondition (an active checkpoint without pending outcomes is a bug).
-      def materialize(row, durable_pending: nil)
+      def materialize(row, durable_pending: nil, validate_identity: true)
         checkpoint_id = row.fetch(0)
-        attributes = verified_attributes(row)
+        attributes = verified_attributes(row, validate_identity:)
         pending = attributes.fetch(:pending)
         if checkpoint_id == row.fetch(13)
           raise ArgumentError, 'materialize of the active checkpoint requires durable_pending' if durable_pending.nil?
@@ -179,14 +179,14 @@ module Tamoz
       # tamoz_checkpoints row. Returns the loaded (unverified) attributes.
       # :reek:FeatureEnvy -- verifying the row IS this helper's entire purpose;
       # the digest and column contract cannot move to the row or the codec.
-      def verified_attributes(row)
+      def verified_attributes(row, validate_identity: true)
         payload = row.fetch(11)
         Wire.verify_digest!(
           payload,
           row.fetch(12),
           domain: 'tamoz.sqlite.checkpoint_payload'
         )
-        attributes = @checkpoint_codec.load(payload)
+        attributes = @checkpoint_codec.load(payload, validate_identity:)
         unless attributes.fetch(:execution_id) == row.fetch(6) &&
                attributes.fetch(:graph_name) == row.fetch(7) &&
                attributes.fetch(:graph_version) == row.fetch(8) &&

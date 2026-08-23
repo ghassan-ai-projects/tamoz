@@ -195,6 +195,8 @@ chain, old constants, profile keys, `--all` flag deleted in one commit.
 | 6 | 2026-08-23 | `bundle exec ruby -Itest test/agent_worker_test.rb` (24 green); `test/agent_child_task_runtime_test.rb` (4 green); `test/agent_cli_test.rb` (33 green); `test/agent_approval_boot_test.rb` (5 green); `test/public_api_test.rb` green; approval suites re-run green | Boot wiring: WorkerRuntime builds the durable engine at boot (SQLite binds, wall clock, AuthorityEvidence.members), sync_approval_policy delivers reload via the active-policy pointer (visudo property tested both halves: good pointer picked up on next pass/session start, broken pointer keeps the live rev); CLI `approve --reload PATH` validates in-process before publishing; sessions bind `profile:<id>` and pass the engine through node configuration. Deferred: per-schedule profile consumption beyond the stored field (phase 9/12 wiring) | Real (durable engine + real write→poll ordering) |
 | 10 | 2026-08-23 | scheduler_values 17/110, sqlite_schedule_store 21/73, determinism 4/15, due_occurrences 9/24, packaging 9/300, secret_sweep 12/26, agent_schedule 9/65 — all green one-file-per-command | Schedule gains digest-bound `approval_profile` string (default implement, binding amendment); `tamoz schedule add --approval-profile`; informational `approval_policy` hash deleted with every consumer (evals corpus/adapters, README, six test files). Deviation: amendment-mandated field added though plan text said only "optional profile name". Known unrelated red: autonomy_scorecard cases 16/18 error with checkpoint graph-identity mismatch — reproduced at pre-redesign baseline f21808d | Plumbing |
 | 11 | 2026-08-23 | stream_approval_relay 17 tests green; stream_learning_loop 17 tests green; stream_invariants untouched (9/212) | Receipt TTL injected at subscriber boot (`--approval-ttl-seconds` REQUIRED — an omitted TTL would keep receipts immortal); relay refuses expired receipts before payload gating; live_learning_handlers touched only at its reserve_requested call site. Plan drift noted: relay suite had 13 tests, not 14 | Plumbing |
+| 7+7B | 2026-08-23 | worker 24/114, session 11/72, cli 33/231, unattended 6/26 (rewritten against the engine per plan §461 incl. durable deny-on-timeout), decision_flow 5/23, kill_matrix 2/17, mode_switch 4/45, approval_engine/mode_switch/sqlite_stores/flow green — one file per command |
+| scorecard-fix | 2026-08-23 | autonomy_scorecard 17/17 (was 16/18, red at baseline f21808d); seam re-runs: sqlite_approval_stores 10/45, approval_flow 2/6, approval_mode_switch 11/30, agent_worker_test 24/114 |
 
 ## Amendments from pre-implementation gap review
 
@@ -303,3 +305,14 @@ gap and completeness subagents and are binding on implementation.
 
 ### Phase 12
 - Grep terms include `approval_required\?` and `DEFAULT_APPROVAL_REQUIRED`.
+
+### Scorecard 16/18 (fixed within this redesign, owner-selected)
+- Root cause: comms_store telemetry reads (`effect_statuses`, `capability_state_for`,
+  `lifecycle_status_for`) call `checkpoints.latest` on a checkpointer compiled against the
+  channel-gateway graph while the latest row belongs to the session graph; the codec's
+  graph-local checks (identity `wire[2..4]`, frontier node membership, state-channel match)
+  each reject in turn.
+- Design: one `validate_identity:` flag threaded store→queries→wire→codec; non-strict decode
+  skips only graph-local facts and is used exclusively by those three comms reads. Run-path
+  reads keep strict default; audit greps every caller of latest/materialize/load.
+- Scorecard acceptance cases repointed to profiles: preauthorized→auto, strict asks→review.

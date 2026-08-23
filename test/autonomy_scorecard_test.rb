@@ -93,7 +93,7 @@ class AutonomyScorecardTest < Minitest::Test
   # A workspace edit the trusted profile explicitly preauthorized as a
   # reconcilable effect completes with no human present.
   def test_case_04_preauthorized_reconcilable_edit_completes_unattended
-    with_runtime(unattended: {"reconcilable" => %w[apply_patch]}) do |rt|
+    with_runtime(approval_profile: "auto") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Fix\ note.txt --profile trusted], factory: edit_factory)
 
@@ -108,7 +108,7 @@ class AutonomyScorecardTest < Minitest::Test
   # The same edit, NOT preauthorized, must stop before it mutates anything and
   # ask for a human. The file on disk is the proof.
   def test_case_05_unauthorized_edit_pauses_before_mutation
-    with_runtime(unattended: {"reconcilable" => []}) do |rt|
+    with_runtime(approval_profile: "review") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Fix\ note.txt --profile trusted], factory: edit_factory)
 
@@ -127,7 +127,7 @@ class AutonomyScorecardTest < Minitest::Test
   # Granting the approval resumes the SAME occurrence rather than starting a new
   # one, and only then does the effect land.
   def test_case_06_approval_resumes_the_same_occurrence
-    with_runtime(unattended: {"reconcilable" => []}) do |rt|
+    with_runtime(approval_profile: "review") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Fix\ note.txt --profile trusted], factory: edit_factory)
       rt.cli(%w[worker --once --json], factory: edit_factory)
@@ -220,7 +220,7 @@ class AutonomyScorecardTest < Minitest::Test
 
   # An effect whose outcome is genuinely unknown is never retried by a machine.
   def test_case_10_unknown_effect_never_retries_automatically
-    with_runtime(unattended: {"reconcilable" => %w[apply_patch]}) do |rt|
+    with_runtime(approval_profile: "auto") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.cli(%W[queue add --task Fix\ note.txt --profile trusted], factory: edit_factory)
 
@@ -299,7 +299,7 @@ class AutonomyScorecardTest < Minitest::Test
   # nothing answered for the human (design §16 case 13, ADR-043, invariant 58).
   def test_case_13_a_deny_press_denies_the_exact_interrupt_set
     with_runtime(channels: channel_map(approvals: {"mode" => "deny_only", "prompt_ttl_s" => 900}),
-                 unattended: {"reconcilable" => []}) do |rt|
+                 approval_profile: "review") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.client.updates = [message_update(1, "Fix note.txt")]
 
@@ -389,7 +389,7 @@ class AutonomyScorecardTest < Minitest::Test
               "max_denial_prompts_per_request" => 1}
     with_runtime(channels: channel_map(limits:, approvals: {"mode" => "deny_only", "prompt_ttl_s" => 900},
                                        rendering: {"max_parts" => 1}),
-                 unattended: {"reconcilable" => []}) do |rt|
+                 approval_profile: "review") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       # One request's reservation (parts + denial prompts) fills the cap; a
       # second request must be refused while the first is still open.
@@ -459,7 +459,7 @@ class AutonomyScorecardTest < Minitest::Test
   # hears why the work is waiting, follow-ups wait instead of dying, and the
   # thread resumes cleanly when the operator approves out of band.
   def test_case_18_an_approval_pause_without_prompts_notifies_and_never_strands
-    with_runtime(channels: channel_map, unattended: {"reconcilable" => []}) do |rt|
+    with_runtime(channels: channel_map, approval_profile: "review") do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")
       rt.client.updates = [message_update(1, "Fix note.txt")]
 
