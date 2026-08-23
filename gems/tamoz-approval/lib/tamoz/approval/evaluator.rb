@@ -92,7 +92,12 @@ module Tamoz
 
       def tool_scopes_for(request, tier)
         entry = @document.tool_tiers[request.tool]
-        entry&.fetch(:grant_scopes, nil) || tier.fetch(:grant_scopes, [])
+        # An unclassified tool takes its scopes from fallback_tier itself —
+        # the field the loader validates — never from the tier map, or a
+        # document could hand :session to tools it never classified.
+        return @document.fallback_tier[:grant_scopes] if entry.nil?
+
+        entry.fetch(:grant_scopes, nil) || tier.fetch(:grant_scopes, [])
       end
 
       def grant_key_for(request, tier)
@@ -119,11 +124,16 @@ module Tamoz
       end
 
       def target_root(request)
-        return nil if request.targets.empty?
+        # Every presented target folds into the key: one approval must cover
+        # exactly the paths the human saw, so a second, unseen target forces
+        # a fresh ask.
+        request.targets.map { |target| path_root(target) }.uniq.sort
+      end
 
-        target = request.targets.first
-        target = target.delete_prefix('/') while target.start_with?('/')
-        target.split('/').first
+      def path_root(target)
+        component = target
+        component = component.delete_prefix('/') while component.start_with?('/')
+        component.split('/').first
       end
 
       def key_argv(request)

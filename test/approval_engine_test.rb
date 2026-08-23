@@ -288,6 +288,115 @@ class ApprovalEngineTest < Minitest::Test
     assert_equal Approval::Canonical.hexdigest([request.targets.first]), record[:targets_digest]
   end
 
+  def test_unknown_tool_takes_scopes_from_fallback_field_not_the_tier_map
+    policy_yaml = <<~YAML
+      version: 1
+      tool_tiers:
+        run_check:
+          tier: local_execute
+          verb: execute
+      fallback_tier:
+        tier: local_execute
+        verb: unknown
+        grant_scopes: [once]
+      tiers:
+        read:
+          default: allow
+        local_execute:
+          default: ask
+          grant_scopes: [once, session]
+      grant_keys:
+        local_execute: [verb, tool, target_root]
+      rules: []
+      ask:
+        timeout_s: 900
+        on_timeout: park
+      evidence:
+        approve: filesystem_operator
+        deny: chat_bound
+      simulations:
+        - request:
+            tool: mcp:unknown:anything
+            verb: unknown
+            argv: []
+            targets: []
+          expect: ask
+    YAML
+    with_policy(policy_yaml) do |path|
+      eng = build_engine(policy: load_policy_document(path))
+      request = eng.build_request(tool: 'mcp:unknown:anything', argv: [], targets: [], effect_class: :unbounded, session_id: 's1')
+      decision = eng.decide(request)
+
+      assert_equal :ask, decision.verdict
+      # The tier map carries :session, but an unclassified tool never sees it.
+      assert_equal [:once], decision.grant_offer.scopes
+    end
+  end
+
+  def test_session_grant_never_covers_an_unseen_second_target
+    eng = build_engine
+    seen = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src'], effect_class: :bounded, session_id: 's1')
+    first = eng.decide(seen)
+    eng.resolve(decision_id: first.id, answer: :approve, scope: :session)
+
+    wider = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src', '/etc/shadow'], effect_class: :bounded, session_id: 's1')
+    decision = eng.decide(wider)
+
+    assert_equal :ask, decision.verdict, 'a target the human never saw must force a fresh ask'
+  end
+
+  def test_concurrent_replays_of_one_answer_mint_exactly_one_grant_row
+    eng = build_engine
+    request = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src'], effect_class: :bounded, session_id: 's1')
+    decision = eng.decide(request)
+
+    results = Array.new(8) do
+      Thread.new { eng.resolve(decision_id: decision.id, answer: :approve, scope: :session) }
+    end.map(&:value)
+
+    assert_equal 1, eng.grant_store.size
+    assert_equal 1, results.compact.map { |grant| [grant.key, grant.scope, grant.created_at_ms] }.uniq.size
+  end
+
+  def test_reload_failures_raise_invalid_policy_and_keep_previous_policy_live
+    eng = build_engine
+    previous_rev = eng.policy.policy_rev
+
+    broken_yaml = <<~YAML
+      version: 1
+      tool_tiers: {}
+      fallback_tier:
+        tier: read
+        verb: unknown
+        grant_scopes: [once]
+      tiers:
+        read:
+          default: allow
+      grant_keys: {}
+      rules: []
+      ask:
+        timeout_s: &loop [*loop]
+        on_timeout: park
+      evidence:
+        approve: filesystem_operator
+        deny: chat_bound
+      simulations: []
+    YAML
+    with_policy(broken_yaml) do |recursive_path|
+      assert_raises(Approval::InvalidPolicyError) { eng.reload('/nonexistent/policy.yaml') }
+      assert_raises(Approval::InvalidPolicyError) { eng.reload(recursive_path) }
+    end
+    assert_equal previous_rev, eng.policy.policy_rev
+  end
+
+  def test_build_request_tolerates_nil_argv_and_targets
+    eng = build_engine
+    request = eng.build_request(tool: 'mcp:unknown:anything', argv: nil, targets: nil, effect_class: :unbounded, session_id: 's1')
+
+    assert_empty request.argv
+    assert_empty request.targets
+  end
+
   def test_simulate_mirrors_decide_without_side_effects
     eng = build_engine
     request = eng.build_request(tool: 'run_check', argv: ['lint'], targets: ['/workspace/src'], effect_class: :bounded, session_id: 's1')

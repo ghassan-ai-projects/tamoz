@@ -33,16 +33,21 @@ module Tamoz
         @ask = normalize_ask(fetch_key(raw, 'ask'))
         @evidence = normalize_evidence(fetch_key(raw, 'evidence'))
         @simulations = normalize_simulations(fetch_key(raw, 'simulations'))
-        @policy_rev = compute_digest(raw)
-        validate!
-        run_simulations!
-      rescue KeyError, NoMethodError => error
-        raise InvalidPolicyError, "policy document structure error in #{@path}: #{error.message}"
+        recompute_digest_and_validate!
+      rescue KeyError, NoMethodError, Errno::ENOENT, Errno::EISDIR, Errno::EACCES,
+             Psych::Exception, TypeError, SystemStackError => error
+        raise InvalidPolicyError, "policy document structure error in #{@path}: #{error.class}: #{error.message}"
       end
 
       def self.load_profile(base_path, profile_name, evidence_symbols:, simulator: nil)
         base = load(base_path, evidence_symbols: evidence_symbols, simulator: simulator)
         base.send(:apply_profile, profile_name)
+      rescue InvalidPolicyError
+        raise
+      rescue KeyError, NoMethodError, Errno::ENOENT, Errno::EISDIR, Errno::EACCES,
+             Psych::Exception, TypeError, SystemStackError => error
+        raise InvalidPolicyError,
+              "profile #{profile_name.inspect} could not be applied to #{base_path}: #{error.class}: #{error.message}"
       end
 
       # The structural rule has one home (ADR §7): an unclassified tool falls
@@ -185,16 +190,8 @@ module Tamoz
         end
       end
 
-      def compute_digest(raw)
-        Digest::SHA256.hexdigest(JSON.generate(sort_keys(raw)))
-      end
-
-      def sort_keys(value)
-        case value
-        when Hash then value.transform_keys(&:to_s).sort.to_h.transform_values { |v| sort_keys(v) }
-        when Array then value.map { |v| sort_keys(v) }
-        else value
-        end
+      def compute_digest(value)
+        Canonical.hexdigest(value)
       end
 
       def validate!
@@ -304,8 +301,17 @@ module Tamoz
         @ask[:on_timeout] = symbol
       end
 
+      # The rev digests the NORMALIZED structures, never the raw YAML, so the
+      # same effective policy yields the same rev whichever load path built
+      # it — a no-op profile overlay must not invalidate live grants.
       def recompute_digest_and_validate!
-        raw = {
+        @policy_rev = compute_digest(digest_basis)
+        validate!
+        run_simulations!
+      end
+
+      def digest_basis
+        {
           'version' => @version,
           'tool_tiers' => @tool_tiers,
           'fallback_tier' => @fallback_tier,
@@ -316,10 +322,8 @@ module Tamoz
           'evidence' => @evidence,
           'simulations' => @simulations
         }
-        @policy_rev = compute_digest(raw)
-        validate!
-        run_simulations!
       end
+
     end
   end
 end

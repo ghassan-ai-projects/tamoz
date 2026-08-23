@@ -32,8 +32,8 @@ module Tamoz
         Request.new(
           tool: tool.to_sym,
           verb: policy.verb_for(tool.to_sym, effect_class),
-          argv: argv.map(&:to_s),
-          targets: targets.map { |target| canonicalize_target(target, workspace_root || @workspace_root) },
+          argv: Array(argv).map(&:to_s),
+          targets: Array(targets).map { |target| canonicalize_target(target, workspace_root || @workspace_root) },
           effect_class: effect_class.to_sym,
           session_id: session_id.to_s
         )
@@ -57,26 +57,31 @@ module Tamoz
         raise InvalidScopeError, 'deny takes no scope' if answer == :deny && !scope.nil?
         validate_actor_evidence(actor_evidence)
 
-        decision_record = decision_log.lookup(decision_id)
-        raise UnknownDecisionError, "no decision #{decision_id}" unless decision_record
+        # One critical section for lookup→record→insert: two concurrent
+        # replays of the same answer must produce exactly one grant row, so
+        # the loser must observe the winner's resolution, not race it.
+        @mutex.synchronize do
+          decision_record = decision_log.lookup(decision_id)
+          raise UnknownDecisionError, "no decision #{decision_id}" unless decision_record
 
-        recorded = decision_log.lookup_resolution(decision_id)
-        return recorded.fetch(:grant) if replay?(recorded, answer, scope)
-        raise ConflictingResolutionError, conflicting_message(decision_id, recorded) if recorded
+          recorded = decision_log.lookup_resolution(decision_id)
+          return recorded.fetch(:grant) if replay?(recorded, answer, scope)
+          raise ConflictingResolutionError, conflicting_message(decision_id, recorded) if recorded
 
-        # Record first, insert second: the log is the source of truth and the
-        # grant store a projection, so a crash between the two replays into a
-        # fresh ask instead of a duplicated grant row.
-        grant = mint_grant(decision_record.fetch(:decision), answer, scope, expires_at_ms)
-        decision_log.record_resolution(
-          decision_id: decision_id,
-          answer: answer,
-          scope: scope,
-          actor_evidence: actor_evidence,
-          grant: grant
-        )
-        grant_store.insert(grant) if grant
-        grant
+          # Record first, insert second — and insert exactly what the log
+          # recorded, never a freshly minted duplicate.
+          grant = mint_grant(decision_record.fetch(:decision), answer, scope, expires_at_ms)
+          recorded_resolution = decision_log.record_resolution(
+            decision_id: decision_id,
+            answer: answer,
+            scope: scope,
+            actor_evidence: actor_evidence,
+            grant: grant
+          )
+          stored_grant = recorded_resolution.fetch(:grant)
+          grant_store.insert(stored_grant) if stored_grant
+          stored_grant
+        end
       end
 
       def simulate(request)

@@ -57,6 +57,81 @@ class ApprovalPolicyDocumentTest < Minitest::Test
     refute_equal document.policy_rev, review.policy_rev
   end
 
+  def test_no_op_profile_overlay_keeps_the_policy_rev
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'policy.yaml')
+      File.write(path, <<~YAML)
+        version: 1
+        tool_tiers:
+          run_check:
+            tier: local_execute
+            verb: execute
+            key_argv: [0]
+        fallback_tier:
+          tier: read
+          verb: unknown
+          grant_scopes: [once]
+        tiers:
+          read:
+            default: allow
+          local_execute:
+            default: ask
+            grant_scopes: [once, session]
+        grant_keys:
+          local_execute: [verb, tool, target_root, key_argv]
+        rules: []
+        ask:
+          timeout_s: 900
+          on_timeout: park
+        evidence:
+          approve: filesystem_operator
+          deny: chat_bound
+        simulations: []
+      YAML
+      FileUtils.mkdir_p(File.join(dir, 'profiles'))
+      File.write(File.join(dir, 'profiles', 'noop.yaml'), <<~PROFILE)
+        version: 1
+        profile:
+          name: noop
+      PROFILE
+
+      plain = Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+      overlayed = Approval::PolicyDocument.load_profile(path, 'noop', evidence_symbols: evidence_symbols)
+
+      assert_equal plain.policy_rev, overlayed.policy_rev,
+                   'a semantically empty overlay must not change the rev'
+    end
+  end
+
+  def test_fallback_grant_scopes_may_not_include_session
+    write_policy_yaml(<<~YAML) do |path|
+      version: 1
+      tool_tiers: {}
+      fallback_tier:
+        tier: read
+        verb: unknown
+        grant_scopes: [once, session]
+      tiers:
+        read:
+          default: ask
+          grant_scopes: [once]
+      grant_keys: {}
+      rules: []
+      ask:
+        timeout_s: 900
+        on_timeout: park
+      evidence:
+        approve: filesystem_operator
+        deny: chat_bound
+      simulations: []
+    YAML
+      error = assert_raises(Approval::InvalidPolicyError) do
+        Approval::PolicyDocument.load(path, evidence_symbols: evidence_symbols)
+      end
+      assert_match(/fallback_tier grant_scopes may not include :session/, error.message)
+    end
+  end
+
   def test_unknown_profile_name_fails_at_load
     error = assert_raises(Approval::InvalidPolicyError) do
       Approval::PolicyDocument.load_profile(base_path, 'missing', evidence_symbols: evidence_symbols)
