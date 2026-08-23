@@ -39,6 +39,11 @@ class CommsAuthorityEvidenceTest < Minitest::Test
     assert_predicate Comms::AuthorityEvidence.chat_bound, :chat_bound?
   end
 
+  def test_members_exposes_the_lattice_exactly
+    assert_equal %i[chat_bound filesystem_operator], Comms::AuthorityEvidence.members
+    assert_equal Comms::AuthorityEvidence::LEVELS.map(&:to_sym), Comms::AuthorityEvidence.members
+  end
+
   # INV-C + INV-D lock: the v1 policy ignores its input entirely and returns
   # filesystem_operator for every effect, including a hostile model-shaped
   # descriptor that tries to declare itself cheap.

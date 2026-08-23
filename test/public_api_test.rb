@@ -65,6 +65,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
           "Tamoz::Comms::ApprovalPrompt" => {},
           "Tamoz::Comms::AuthenticationError" => {},
+          "Tamoz::Comms::AuthorityEvidence.members" => {},
           "Tamoz::Comms::Binding" => {},
           "Tamoz::Comms::Canonical" => {},
           "Tamoz::Comms::Commands" => {},
