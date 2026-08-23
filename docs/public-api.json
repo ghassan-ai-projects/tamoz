@@ -42,6 +42,10 @@
       },
       "Tamoz::Agent::VERSION": {}
     },
+    "tamoz-agent-healing": {
+      "Tamoz::Agent::Healing::Remediation": {},
+      "Tamoz::Agent::Healing::VERSION": {}
+    },
     "tamoz-agent-kernel": {
       "Tamoz::Agent::Deliberation": {},
       "Tamoz::Agent::EffectDispatcher": {},

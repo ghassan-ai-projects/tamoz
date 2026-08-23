@@ -10,6 +10,7 @@ TamozGemspec.build(
   description: "Plan, review, execute, verify, remember, and improve over Tamoz graphs.",
   dependencies: [
     ["tamoz-agent-kernel", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-agent-healing", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],

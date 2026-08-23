@@ -70,7 +70,7 @@ class PackagingTest < Minitest::Test
   # than asking `gem install` to resolve them from a registry.
   def test_packaged_evals_executable_runs_without_repository_load_paths
     names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
-               tamoz-agent-kernel tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+               tamoz-agent-kernel tamoz-agent-healing tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
     with_isolated_install(names, "evals") do |environment|
       install_root = environment.fetch("GEM_HOME")
       spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-evals").join("tamoz-evals.gemspec").to_s)
@@ -122,7 +122,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-healing tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")

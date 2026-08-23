@@ -1,18 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "healing/errors"
-require_relative "healing/scope"
-require_relative "healing/failure_record"
-require_relative "healing/classification"
-require_relative "healing/preflight"
-require_relative "healing/rule"
-require_relative "healing/seams"
-require_relative "healing/rule_registry"
-require_relative "healing/effect_identity"
-require_relative "healing/oracle"
-require_relative "healing/promotion_gate"
-require_relative "healing/remediation"
-
 module Tamoz
   module Agent
     # P12 bounded self-healing (work packages P12-HD / H1 / H2).
