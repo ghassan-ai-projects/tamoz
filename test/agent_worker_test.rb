@@ -367,7 +367,9 @@ class AgentWorkerTest < Minitest::Test
       err_read, err_write = IO.pipe
       load_paths = %w[
         tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
-        tamoz-tools tamoz-observability tamoz-comms tamoz-mcp tamoz-agent
+        tamoz-tools tamoz-observability tamoz-comms tamoz-mcp
+        tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile
+        tamoz-agent
       ].flat_map { |gem| ["-I", GEM_ROOTS.fetch(gem).join("lib").to_s] }
       pid = Process.spawn(RbConfig.ruby, *load_paths, "-e", script, out: out_write, err: err_write)
       out_write.close

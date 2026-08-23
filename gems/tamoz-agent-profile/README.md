@@ -29,3 +29,9 @@ worker, CLI, graph, comms, approval, or stream code — the subtree's only
 
 Consumers: the agent session/CLI wiring and the eval harness bind to the
 `Tamoz::Agent::Profile` facade; nothing reaches past it.
+
+## Versioning
+
+Released in lockstep with the rest of the Tamoz family: every gem pins its
+dependencies at `= #{VERSION}` and all gems share the single hand-synced
+version literal (`0.1.0.alpha.1`).
