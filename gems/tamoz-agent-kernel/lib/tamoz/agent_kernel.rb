@@ -6,6 +6,7 @@
 require "tamoz/core"
 require "tamoz/tools"
 
+require_relative "agent/kernel/version"
 require_relative "agent/errors"
 require_relative "agent/event"
 require_relative "agent/graph_versions"
