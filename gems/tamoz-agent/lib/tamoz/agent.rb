@@ -31,8 +31,6 @@ require_relative "agent/governed_browser_source"
 require_relative "agent/worker_runtime"
 require_relative "agent/child_environments"
 require_relative "agent/child_task"
-require_relative "agent/outbox_delivery_sink"
-require_relative "agent/comms_gateway"
 require_relative "agent/durable_recorder"
 require_relative "agent/worker"
 

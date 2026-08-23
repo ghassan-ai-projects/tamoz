@@ -3,11 +3,10 @@
 require 'time'
 require 'json'
 
-require 'tamoz/comms'
 require_relative 'delivery_drainer'
 
 module Tamoz
-  module Agent
+  module Comms
     # The channel gateway (design §5/§10, ADR-042): the only long-running
     # process that talks to the transport. It holds the credential, admits and
     # normalizes inbound updates, records the durable disposition, drains the
@@ -24,7 +23,7 @@ module Tamoz
     # :reek:TooManyInstanceVariables, :reek:TooManyMethods -- one loop owns
     #   every seam; splitting it would scatter the ordering invariant.
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/ParameterLists, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Performance/CollectionLiteralInLoop, Naming/PredicateMethod
-    class CommsGateway
+    class Gateway
       THREAD_PROFILE_NAMESPACE = %w[tamoz worker thread_profile].freeze
       POLLER_TTL_S = 60.0
       CLAIM_TTL_S = 30.0

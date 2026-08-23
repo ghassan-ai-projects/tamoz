@@ -765,7 +765,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
     load_paths = %w[
       tamoz-comms tamoz-core tamoz-graph tamoz-scheduler tamoz-stream
       tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile
+      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
       tamoz-agent
     ].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]

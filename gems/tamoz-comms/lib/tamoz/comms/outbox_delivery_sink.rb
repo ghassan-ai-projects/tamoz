@@ -3,10 +3,9 @@
 require 'time'
 require 'json'
 
-require 'tamoz/comms'
 
 module Tamoz
-  module Agent
+  module Comms
     # The worker's DeliverySink projection (design §11, ADR-041/042): worker
     # lifecycle events become Delivery rows in the outbox, appended BEFORE
     # close_occurrence so a crash never loses the terminal answer. The sink

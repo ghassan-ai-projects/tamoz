@@ -10,7 +10,7 @@ class DeliveryDrainerTest < Minitest::Test
       main_store.append_delivery(delivery('answer'), surface_id: 'telegram-ops', capacity: 10, now: now)
       poll_transport = ScriptedTransport.new
       send_transport = ScriptedTransport.new
-      drainer = Tamoz::Agent::DeliveryDrainer.new(
+      drainer = Tamoz::Comms::DeliveryDrainer.new(
         store: drainer_adapter.bind_comms_store,
         transport: send_transport,
         descriptor: descriptor,
@@ -18,7 +18,7 @@ class DeliveryDrainerTest < Minitest::Test
         clock: -> { now },
         sleeper: ->(_seconds) {}
       )
-      gateway = Tamoz::Agent::CommsGateway.new(
+      gateway = Tamoz::Comms::Gateway.new(
         adapter: main_adapter,
         checkpoints:,
         transport: poll_transport,
@@ -146,7 +146,7 @@ class DeliveryDrainerTest < Minitest::Test
   end
 
   def build_drainer(adapter, transport, owner, sleeps: [])
-    Tamoz::Agent::DeliveryDrainer.new(
+    Tamoz::Comms::DeliveryDrainer.new(
       store: adapter.bind_comms_store,
       transport:,
       descriptor:,

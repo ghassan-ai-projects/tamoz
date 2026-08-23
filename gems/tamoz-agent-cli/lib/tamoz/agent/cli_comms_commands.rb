@@ -60,7 +60,7 @@ module Tamoz
           with_delivery_drainers(directory, descriptors) do |drainers|
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
               transport = build_transport(descriptor, credential(descriptor))
-              Tamoz::Agent::CommsGateway.new(
+              Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
                 poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:
               )
@@ -167,7 +167,7 @@ module Tamoz
             )
             store = adapter.bind_comms_store
             transport = build_transport(descriptor, credential(descriptor))
-            drainer = Tamoz::Agent::DeliveryDrainer.new(
+            drainer = Tamoz::Comms::DeliveryDrainer.new(
               store:, transport:, descriptor:,
               owner: "#{GATEWAY_POLLER_PREFIX}:drainer:#{Process.pid}:#{descriptor.surface_id}",
               batch_size: descriptor.transport.fetch(:batch)

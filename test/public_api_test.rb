@@ -96,6 +96,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::VERSION" => {}
         },
         "tamoz-comms" => {
+          "Tamoz::Comms::DeliveryDrainer" => {},
+          "Tamoz::Comms::Gateway" => {},
+          "Tamoz::Comms::OutboxDeliverySink" => {},
+
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
           "Tamoz::Comms::ApprovalPrompt" => {},
           "Tamoz::Comms::AuthenticationError" => {},

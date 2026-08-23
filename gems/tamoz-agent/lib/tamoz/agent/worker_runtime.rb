@@ -89,7 +89,7 @@ module Tamoz
       def install_channel_delivery_sink
         return if @directory.channels.empty?
 
-        @delivery_sink = OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints)
+        @delivery_sink = Tamoz::Comms::OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints)
       end
 
       def close

@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'tamoz/comms'
 
 module Tamoz
-  module Agent
+  module Comms
     # Drains durable outbound rows independently from inbound polling. Claims,
     # pacing reservations, effect bindings, receipts, and ambiguous-send
     # handling all remain on the shared SQLite contract.

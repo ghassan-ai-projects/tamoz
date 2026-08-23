@@ -22,7 +22,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
           edge :finish, Tamoz::END
         end
         checkpoints = definition.compile(checkpointer: adapter).checkpointer
-        sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
+        sink = Tamoz::Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
         yield sink, adapter, checkpoints
       ensure
         adapter&.close
@@ -239,7 +239,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       event = { thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'done', request_id: 'occurrence-1' }
 
       assert_equal :accepted, sink.push(event)
-      restarted_sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
+      restarted_sink = Tamoz::Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
       assert_equal :accepted, restarted_sink.push(event)
 
       rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
@@ -279,7 +279,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
   def test_the_default_worker_runtime_sink_is_nil_safe
     with_engine do |_sink, adapter, checkpoints|
       store = adapter.bind_comms_store(checkpoints)
-      sink = Tamoz::Agent::OutboxDeliverySink.new(adapter:, checkpoints:)
+      sink = Tamoz::Comms::OutboxDeliverySink.new(adapter:, checkpoints:)
 
       assert_nil sink.push(thread_id: 'tg.x', kind: 'request.completed', text: '')
       assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])

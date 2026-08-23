@@ -26,7 +26,7 @@ class CommsGatewayTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
         transport = ScriptedTransport.new
-        gateway = Tamoz::Agent::CommsGateway.new(
+        gateway = Tamoz::Comms::Gateway.new(
           adapter:, checkpoints:, transport:, descriptor:,
           poller_owner: 'gateway:test'
         )
@@ -143,7 +143,7 @@ class CommsGatewayTest < Minitest::Test
       # The replay sees a different queue state, so its old implementation
       # rendered a second, different accepted/queued control for update 101.
       transport.batch([update(101, text: 'first')])
-      restarted_gateway = Tamoz::Agent::CommsGateway.new(
+      restarted_gateway = Tamoz::Comms::Gateway.new(
         adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:restarted'
       )
       assert_equal :served, restarted_gateway.serve_once(drain: false)
@@ -335,7 +335,7 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal :started, gateway.start
 
-      second = Tamoz::Agent::CommsGateway.new(
+      second = Tamoz::Comms::Gateway.new(
         adapter:, checkpoints: build_checkpoints(adapter),
         transport:, descriptor:, poller_owner: 'gateway:other'
       )
