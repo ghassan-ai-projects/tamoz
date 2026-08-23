@@ -889,7 +889,7 @@ module Tamoz
                   %q{abort("wrong") unless File.read("values.rb") == "A = 2\nB = 2\n"}
                 ]
               },
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: ->(_result, _events) { File.read(File.join(root, "values.rb")) == desired },
               requires_check: true,
@@ -931,7 +931,7 @@ module Tamoz
                   %q{abort("wrong") unless File.read("greeting.txt") == "hello\n"}
                 ]
               },
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: ->(_result, _events) { File.read(File.join(root, "greeting.txt")) == desired },
               requires_check: true,
@@ -964,7 +964,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: lambda do |_result, events|
                 mutated = events.any? do |event|
@@ -1004,7 +1004,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal: %w[completed],
               oracle: lambda do |_result, events|
                 patches = events.select do |event|
@@ -1028,9 +1028,9 @@ module Tamoz
           run_in_workspace(case_artifact, definition) do |root|
             write_value(root, 40)
             model = scripted_model(
-              plans: [plan(read_step("broken.rb")), action_plan(from: 40, to: 42)],
-              reviews: 2,
-              verification: nil
+              plans: [plan(read_step("broken.rb")), action_plan(from: 40, to: 42), action_plan(from: 40, to: 42)],
+              reviews: 3,
+              verification: verified("The operator denied the asked check; the run is not a success.", false)
             )
             execute(
               case_artifact,
@@ -1039,9 +1039,15 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { false },
-              expected_terminal: %w[approval_denied],
-              oracle: ->(_result, _events) { load_value(root) == 42 },
+              ask: ->(**) { "deny" },
+              expected_terminal: %w[completed],
+              oracle: lambda do |result, events|
+                load_value(root) == 42 && !result.satisfied &&
+                  events.any? { |event| event.type == :approval_denied } &&
+                  result.observations.any? do |entry|
+                    entry.dig("failure", "error_class") == "ToolPolicyError"
+                  end
+              end,
               requires_check: true,
               mutation_needed: true,
               allowed_tools: %w[read_file apply_patch run_check]
@@ -1071,7 +1077,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: fixed_failure,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: ->(_result, _events) { load_value(root) == 42 },
               requires_check: true,
               mutation_needed: true,
@@ -1097,7 +1103,7 @@ module Tamoz
               allow_changes: true,
               checks: {"answer" => [RbConfig.ruby, "-e", "sleep 2"]},
               check_timeout: 0.05,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: ->(_result, _events) { false },
               requires_check: true,
               allowed_tools: %w[read_file run_check]
@@ -1156,7 +1162,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks:,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: lambda do |result, _events|
                 result&.satisfied && result.answer == "message.rb defines the MESSAGE constant."
               end,
@@ -1456,7 +1462,7 @@ module Tamoz
               task: definition.fetch("task"),
               allow_changes: true,
               checks: answer_check,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               expected_terminal:,
               oracle: ->(_result, _events) { load_value(root) == 42 },
               requires_check: true,
@@ -1513,7 +1519,7 @@ module Tamoz
               allow_changes: true,
               checks: answer_check,
               skills: snapshot,
-              approval: ->(**) { true },
+              ask: ->(**) { "approve" },
               oracle: lambda do |_result, events|
                 skill_no_authority_oracle(events, workspace:, snapshot:, record:, surface:)
               end,
@@ -2901,7 +2907,7 @@ module Tamoz
           allow_changes: false,
           checks: {},
           check_timeout: 60.0,
-          approval: nil,
+          ask: nil,
           expected_terminal: %w[completed],
           requires_check: false,
           mutation_needed: false,
@@ -2932,12 +2938,10 @@ module Tamoz
               allow_changes:,
               checks:,
               check_timeout:,
-              approval:,
+              ask:,
               skills:
             )
             result = runtime.run(task) { |event| events << event }
-          rescue Tamoz::Agent::ApprovalDeniedError
-            terminal = "approval_denied"
           rescue Tamoz::Agent::PlanRejectedError
             terminal = "plan_rejected"
           # P16: the D-7 taxonomy lives in tamoz-core. `Tamoz::Agent::ToolError` is a

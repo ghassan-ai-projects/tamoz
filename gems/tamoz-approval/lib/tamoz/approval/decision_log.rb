@@ -46,7 +46,14 @@ module Tamoz
       # The newest decision already logged for this exact request identity, or
       # nil. A replayed gate reuses it instead of deciding again under a moved
       # policy — the issuing decision owns the step until it settles.
-      def latest_decision_for(session_id:, argv_digest:, targets_digest:)
+      def latest_decision_for(session_id:, argv_digest:, targets_digest:, step_scope:)
+        raise NotImplementedError
+      end
+
+      # When the decision was logged (epoch ms), for ask-age clocks: a parked
+      # approval times out by how long the ASK has been pending, not by how
+      # long its occurrence has existed.
+      def decision_created_at_ms(decision_id)
         raise NotImplementedError
       end
     end
@@ -66,8 +73,8 @@ module Tamoz
           if existing
             # step_scope is provenance, not identity: one question asked in two
             # executions shares the decision id and keeps the first scope.
-            return if existing.reject { |key, _| key == :step_scope } ==
-                      record.reject { |key, _| key == :step_scope }
+            return if existing.reject { |key, _| key == :step_scope || key == :created_at_ms } ==
+                      record.reject { |key, _| key == :step_scope || key == :created_at_ms }
 
             raise ConflictingResolutionError,
                   "decision #{record[:decision_id]} already logged with different content"
@@ -118,7 +125,8 @@ module Tamoz
           existing = @mode_switches[id]
           if existing
             unless existing[:session_id] == session_id && existing[:actor_id] == actor_id &&
-                   existing[:from_rev] == from_rev && existing[:to_rev] == to_rev
+                   existing[:from_rev] == from_rev && existing[:to_rev] == to_rev &&
+                   existing[:profile_name] == profile_name
               raise ConflictingResolutionError,
                     "mode switch #{id} already recorded with different content"
             end
@@ -140,8 +148,13 @@ module Tamoz
         @mutex.synchronize do
           @mode_switches.values
                         .select { |record| record[:session_id] == session_id.to_s }
-                        .max_by { |record| record[:ts_ms] }
+                        .max_by { |record| [record[:ts_ms], record[:id]] }
         end
+      end
+
+      def decision_created_at_ms(decision_id)
+        record = lookup(decision_id)
+        record && record[:created_at_ms]
       end
 
       def latest_decision_for(session_id:, argv_digest:, targets_digest:, step_scope:)

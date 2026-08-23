@@ -354,7 +354,7 @@ module Tamoz
           accept_json(value, options)
           value.on("--deny", "Refuse the request instead of granting it") { deny = true }
           value.on("--reload PATH", "Validate a policy document, then publish it to workers") { |candidate| reload_path = candidate }
-          value.on("--mode NAME", "Queue a mid-session approval-mode switch for one thread") { |name| mode = name }
+          value.on("--mode NAME", "Queue a mid-session approval-mode switch for the thread's profile lane") { |name| mode = name }
           value.on("--thread ID", "Target thread of --mode") { |candidate| thread_id = candidate }
         end
         parser.order!(argv)

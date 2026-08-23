@@ -1,3 +1,4 @@
+require 'set'
 # frozen_string_literal: true
 
 require "digest"
@@ -33,7 +34,9 @@ module Tamoz
 
       # ADR §2.3 teardown: the bound profile session's grants die with it.
       def close_approval_session
-        @approval_engine&.close_session(@approval_session_key) if @approval_session_key
+        return unless @approval_engine
+
+        @bound_approval_sessions.each { |key| @approval_engine.close_session(key) }
         nil
       end
 
@@ -1047,7 +1050,7 @@ module Tamoz
         sync_approval_policy
         session_key = "profile:#{profile_id || 'default'}"
         @approval_engine.bind_session(session_key)
-        @approval_session_key = session_key
+        (@bound_approval_sessions ||= Set.new) << session_key
 
         engine = memory_engine
         Session.new(

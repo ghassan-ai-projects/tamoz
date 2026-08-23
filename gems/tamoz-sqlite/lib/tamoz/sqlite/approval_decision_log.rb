@@ -108,7 +108,8 @@ module Tamoz
           if row
             stored = switch_from_row(row)
             unless stored.fetch(:session_id) == session_id && stored.fetch(:actor_id) == actor_id &&
-                   stored.fetch(:from_rev) == from_rev && stored.fetch(:to_rev) == to_rev
+                   stored.fetch(:from_rev) == from_rev && stored.fetch(:to_rev) == to_rev &&
+                   stored.fetch(:profile_name) == profile_name
               raise Approval::ConflictingResolutionError,
                     "mode switch #{id} already recorded with different content"
             end
@@ -129,9 +130,19 @@ module Tamoz
           row = txn.first('approval.decision.latest_for', <<~SQL, [session_id, argv_digest, targets_digest, step_scope])
             SELECT #{DECISION_COLUMNS} FROM tamoz_approval_decisions
             WHERE session_id = ? AND argv_digest = ? AND targets_digest = ? AND step_scope = ?
-            ORDER BY created_at_ms DESC LIMIT 1
+            ORDER BY created_at_ms DESC, decision_id DESC LIMIT 1
           SQL
           row && decision_from_row(row)
+        end
+      end
+
+      def decision_created_at_ms(decision_id)
+        @adapter.__send__(:read, operation: 'approval.decision.created_at') do |txn|
+          txn.scalar(
+            'approval.decision.created_at',
+            'SELECT created_at_ms FROM tamoz_approval_decisions WHERE decision_id = ?',
+            [decision_id]
+          )&.to_i
         end
       end
 

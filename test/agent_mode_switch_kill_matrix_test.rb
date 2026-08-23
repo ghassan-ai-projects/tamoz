@@ -139,7 +139,6 @@ class AgentModeSwitchKillMatrixTest < Minitest::Test
     ).policy_rev
   end
 
-  def review_rev = bundled_profile_rev('review')
 
   def auto_rev = bundled_profile_rev('auto')
 

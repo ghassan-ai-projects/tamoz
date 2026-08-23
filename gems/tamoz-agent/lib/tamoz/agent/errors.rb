@@ -43,7 +43,6 @@ module Tamoz
     class PlanRejectedError < Error
       include Tamoz::DisclosableMessage
     end
-    class ApprovalDeniedError < Error; end
 
     # P9: a resumed session cannot bind the exact skill trees it was planned
     # against. This is a stop, not a recoverable tool result: continuing would run

@@ -43,7 +43,7 @@ module Tamoz
       # Approval redesign 05 step 7B: 17 -> 18 through MIGRATION_18, which adds
       # the mode-switch audit table and rebuilds tamoz_requests so its operation
       # CHECK admits `mode_switch` — SQLite cannot alter a CHECK in place.
-      CURRENT_VERSION = 18
+      CURRENT_VERSION = 19
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1189,9 +1189,10 @@ module Tamoz
         MIGRATION_17.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
-      # The request inbox is rebuilt (copy, drop, rename, re-index) because the
-      # operation CHECK lives inside MIGRATION_1's CREATE TABLE. Rows do not
-      # survive by design; the dropping parent cascades the transition rows.
+      # The request inbox and the decision log are rebuilt (create, drop,
+      # rename) because their CHECKs/columns live inside earlier CREATEs. Rows
+      # do not survive: every migration assumes a fresh schema, and dropping
+      # tamoz_requests cascades its transition rows.
       MIGRATION_18 = [
         <<~SQL.freeze,
           CREATE TABLE tamoz_requests_rebuilt (
@@ -1234,9 +1235,6 @@ module Tamoz
               ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED
           ) STRICT
         SQL
-        <<~SQL.freeze,
-          INSERT INTO tamoz_requests_rebuilt SELECT * FROM tamoz_requests
-        SQL
         "DROP TABLE tamoz_requests",
         "ALTER TABLE tamoz_requests_rebuilt RENAME TO tamoz_requests",
         <<~SQL.freeze,
@@ -1270,13 +1268,6 @@ module Tamoz
             created_at_ms INTEGER NOT NULL
           ) STRICT
         SQL
-        "INSERT INTO tamoz_approval_decisions_rebuilt
-           SELECT decision_id, session_id, tool, verb, tier, rule_id, verdict,
-                  reason, evidence, policy_rev, argv_digest, targets_digest,
-                  '', grant_scopes, grant_key, answer, resolved_scope,
-                  actor_evidence, resolved_at_ms, grant_created_at_ms,
-                  grant_expires_at_ms, created_at_ms
-           FROM tamoz_approval_decisions",
         "DROP TABLE tamoz_approval_decisions",
         "ALTER TABLE tamoz_approval_decisions_rebuilt RENAME TO tamoz_approval_decisions",
         <<~SQL.freeze
@@ -1294,6 +1285,19 @@ module Tamoz
 
       MIGRATION_18_CHECKSUM = Digest::SHA256.hexdigest(
         MIGRATION_18.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
+      # decide_or_reuse looks up (session, argv, targets, scope) on the hot
+      # gate path of an append-only log.
+      MIGRATION_19 = [
+        <<~SQL.freeze
+          CREATE INDEX idx_tamoz_approval_decisions_reuse
+            ON tamoz_approval_decisions(session_id, argv_digest, targets_digest, step_scope, created_at_ms)
+        SQL
+      ].freeze
+
+      MIGRATION_19_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_19.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
       # Ordinal -> [statements, checksum]. The monotonic-ordering test asserts
@@ -1316,7 +1320,8 @@ module Tamoz
         15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
         16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
         17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
-        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM]
+        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM],
+        19 => [MIGRATION_19, MIGRATION_19_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

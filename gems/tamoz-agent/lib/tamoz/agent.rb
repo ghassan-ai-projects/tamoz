@@ -92,7 +92,7 @@ module Tamoz
       allow_changes: false,
       checks: {},
       check_timeout: Toolbox::DEFAULT_CHECK_TIMEOUT,
-      approval: nil,
+      ask: nil,
       skills: Skills::Snapshot.empty,
       routing: :legacy,
       recorder: Tamoz::Observability::Recorder::Null::INSTANCE
@@ -105,7 +105,7 @@ module Tamoz
       # process, so it gets the in-memory stores — never the worker's SQLite
       # engine (ADR §2.3).
       approval_engine = build_approval_engine(profile_name: "implement")
-      Runtime.new(model:, toolbox:, max_plan_attempts:, approval:, routing:, recorder:, approval_engine:)
+      Runtime.new(model:, toolbox:, max_plan_attempts:, ask:, routing:, recorder:, approval_engine:)
     end
 
     # An ephemeral engine over memory stores for processes that own their own

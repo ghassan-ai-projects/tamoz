@@ -3,7 +3,6 @@
   "packages": {
     "tamoz-agent": {
       "Tamoz::Agent.build": {},
-      "Tamoz::Agent::ApprovalDeniedError": {},
       "Tamoz::Agent::CLI.run": {},
       "Tamoz::Agent::CheckReceipt": {
         "deprecated": true

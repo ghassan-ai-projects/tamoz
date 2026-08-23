@@ -120,10 +120,10 @@ module Tamoz
       # idle decision.
       def poll_once
         @runtime.sync_approval_policy
+        switched = drain_mode_switches
         enforce_ask_deadlines
         reconciled = reconcile_child_requests
         materialized = materialize_due_schedules
-        switched = drain_mode_switches
         advanced = advance_pending_threads
         (reconciled + materialized + switched + advanced).positive?
       end
@@ -429,16 +429,25 @@ module Tamoz
           (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
         end
 
-        emit("request.#{granted ? "approved" : "denied"}",
-             thread: thread_id, request_id: occurrence_id, actor: decision.actor_id,
-             observability: {execution_id: view.execution_id})
-        notify_sink(thread_id, granted ? "request.approved" : "request.denied",
-                    granted ? "Approved." : "Denied.", request_id: occurrence_id)
+        conclude_resolution(session,
+                            thread_id: thread_id, occurrence_id: occurrence_id, view: view,
+                            granted: granted, actor: decision.actor_id,
+                            message: granted ? 'Approved.' : 'Denied.',
+                            resume_request_id: decision.resume_request_id, answers: answers,
+                            consume_decision_id: decision_id, consumed_at: now)
+      end
+
+      # One settle contract for every resolution channel (operator press,
+      # timeout denial): announce, notify, unpark, resume, then reconcile the
+      # schedule and terminal state.
+      def conclude_resolution(session, thread_id:, occurrence_id:, view:, granted:, actor:, message:, resume_request_id:, answers:, consume_decision_id: nil, consumed_at: nil)
+        event = granted ? 'request.approved' : 'request.denied'
+        emit(event, thread: thread_id, request_id: occurrence_id, actor: actor,
+                    observability: {execution_id: view.execution_id})
+        notify_sink(thread_id, event, message, request_id: occurrence_id)
         unpark(thread_id)
-        request = session.resume(
-          answers, thread: thread_id, request_id: decision.resume_request_id, owner_id: owner_id
-        )
-        @runtime.consume_decision(decision_id, now:)
+        request = session.resume(answers, thread: thread_id, request_id: resume_request_id, owner_id: owner_id)
+        @runtime.consume_decision(consume_decision_id, now: consumed_at) if consume_decision_id
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:)
       end
@@ -917,7 +926,6 @@ module Tamoz
         meta = {
           signature: [entry.fetch(:head_request_id), view&.status, reason],
           since: Time.now.utc,
-          view:,
           occurrence_id: entry.fetch(:head_request_id)
         }
         @monitor.synchronize { @parked[entry.fetch(:thread_id)] = meta }
@@ -932,29 +940,48 @@ module Tamoz
       # parked approval whose ask has been pending past ask.timeout_s resolves
       # to a structured denial and the turn continues. Park (:park policy)
       # leaves the decision resolvable by an operator indefinitely.
+      # Timeout is judged per LANE by the document that lane is bound to (a
+      # mid-session switch may have moved it off the boot policy), and by how
+      # long the ASK has been pending — never by how long the occurrence has
+      # existed. The occurrence age is only a cheap upper-bound prefilter;
+      # apply_timeout_denial re-checks the real ask clock from the decision
+      # row before resolving.
       def enforce_ask_deadlines
-        ask = @runtime.approval_engine.policy.ask
-        return unless ask.fetch(:on_timeout) == :deny
-
-        deadline = ask.fetch(:timeout_s)
         now = Time.now.utc
-        due = nil
+        candidates = {}
         @monitor.synchronize do
-          due = @parked.select { |_tid, meta|
-            meta[:signature].last == 'approval_required' && now - meta[:since] >= deadline
-          }.keys
-        end
-        due.each { |thread_id| apply_timeout_denial(thread_id) }
+          @parked.each do |thread_id, meta|
+            next unless meta[:signature].last == 'approval_required'
 
-        # A worker restarted after the park holds no memory of it; the durable
-        # open occurrence carries the same clock for the restarted process.
+            candidates[thread_id] = now - meta[:since]
+          end
+        end
         @runtime.open_occurrences(limit: 500).each do |occurrence|
           opened = occurrence[:opened_at]
           next unless opened
 
-          age_s = now - Time.parse(opened)
-          apply_timeout_denial(occurrence.fetch(:thread_id)) if age_s >= deadline
+          thread_id = occurrence.fetch(:thread_id)
+          candidates[thread_id] = now - Time.parse(opened) unless candidates.key?(thread_id)
         end
+
+        candidates.each do |thread_id, lower_bound_age_s|
+          ask = lane_ask(thread_id, now:)
+          next unless ask.fetch(:on_timeout) == :deny
+          next unless lower_bound_age_s >= ask.fetch(:timeout_s)
+
+          apply_timeout_denial(thread_id)
+        end
+      end
+
+      def lane_ask(thread_id, now:)
+        @ask_cache ||= {}
+        key = "profile:#{@runtime.thread_profile(thread_id) || 'default'}"
+        cached = @ask_cache[key]
+        return cached[:ask] if cached && now - cached[:at] < 30
+
+        ask = @runtime.approval_engine.policy_for(key).ask
+        @ask_cache[key] = { at: now, ask: ask }
+        ask
       end
 
       def apply_timeout_denial(thread_id)
@@ -972,25 +999,39 @@ module Tamoz
         view = view_of(session, thread_id)
         return unless view && view.status == :paused && !view.interrupts.empty?
 
-        descriptor = view.interrupts.map(&:descriptor).compact.find { |d| d['kind'] == 'approve_tool' }
-        decision = descriptor&.dig('decision')
-        return unless decision
+        ask = lane_ask(thread_id, now: Time.now.utc)
+        return unless ask.fetch(:on_timeout) == :deny
+        pending_ms = oldest_open_ask_ms(view.interrupts, now_ms: (Time.now.to_f * 1000).to_i)
+        return unless pending_ms && pending_ms >= ask.fetch(:timeout_s) * 1000
 
-        @runtime.approval_engine.resolve(decision_id: decision.fetch('id'), answer: :deny, scope: nil)
+        view.interrupts.each do |interrupt|
+          descriptor = interrupt.descriptor || {}
+          next unless descriptor['kind'] == 'approve_tool' && (asked = descriptor['decision'])
+
+          @runtime.approval_engine.resolve(decision_id: asked.fetch('id'), answer: :deny, scope: nil)
+        end
         answers = {}
         view.interrupts.each do |interrupt|
           (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, false)
         end
-        emit('request.denied', thread: thread_id, request_id: occurrence_id,
-                               actor: 'policy.timeout', observability: {execution_id: view.execution_id})
-        notify_sink(thread_id, 'request.denied', 'Denied.', request_id: occurrence_id)
-        unpark(thread_id)
-        request = session.resume(answers, thread: thread_id,
-                                 request_id: "timeout-#{occurrence_id}", owner_id: owner_id)
-        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
-        settle(session, thread_id:, occurrence_id:)
+        conclude_resolution(session,
+                            thread_id: thread_id, occurrence_id: occurrence_id, view: view,
+                            granted: false, actor: 'policy.timeout', message: 'Denied.',
+                            resume_request_id: "timeout-#{occurrence_id}", answers: answers)
       rescue StandardError => error
         emit('worker.error', reason: error.message)
+      end
+
+      # How long the OLDEST open approval ask in this pause has been pending.
+      def oldest_open_ask_ms(interrupts, now_ms:)
+        interrupts.map(&:descriptor).compact.filter_map do |descriptor|
+          next unless descriptor['kind'] == 'approve_tool'
+
+          created = @runtime.approval_engine.decision_log.decision_created_at_ms(
+            descriptor.dig('decision', 'id')
+          )
+          now_ms - created if created
+        end.max
       end
 
       # The terminal error column bounds its reason (512 bytes, no control

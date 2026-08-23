@@ -113,10 +113,7 @@ module Tamoz
       end
 
       def repeated_action_update(state, details, base)
-        signature = Tamoz::Agent::Deliberation.action_signature(
-          details.plan,
-          gated: ->(tool) { governed?(tool) }
-        )
+        signature = Tamoz::Agent::Deliberation.action_signature(details.plan)
         return base.merge(next_node: 'verify', terminal_reason: 'repeated_action') if
           state.fetch(:seen_action_signatures).include?(signature)
 

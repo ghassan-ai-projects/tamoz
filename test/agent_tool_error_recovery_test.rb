@@ -155,14 +155,14 @@ class AgentToolErrorRecoveryTest < Minitest::Test
         plans: [
           discovery_plan,
           action_plan(before: "def self.answer = 4O", after: "def self.answer = 42"),
-          action_plan(before: "def self.answer = 40", after: "def self.answer = 42")
+          action_plan_with_trailing_check(before: "def self.answer = 40", after: "def self.answer = 42", trailing_check: "answer2")
         ],
         reviews: 3,
         final_satisfied: true
       )
       events = []
 
-      result = runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
+      result = runtime(root, model, checks: answer_check.merge("answer2" => answer_check.fetch("answer"))).run("Make Broken.answer equal 42") { |event| events << event }
 
       assert result.satisfied
       assert_equal 42, load_value(root)
@@ -193,16 +193,16 @@ class AgentToolErrorRecoveryTest < Minitest::Test
         plans: [
           discovery_plan,
           action_plan(before: "miss-one", after: "42"),
-          action_plan(before: "miss-two", after: "42"),
-          action_plan(before: "miss-three", after: "42"),
-          action_plan(before: "miss-four", after: "42")
+          action_plan_with_trailing_check(before: "miss-two", after: "42", trailing_check: "answer2"),
+          action_plan_with_trailing_check(before: "miss-three", after: "42", trailing_check: "answer3"),
+          action_plan_with_trailing_check(before: "miss-four", after: "42", trailing_check: "answer4")
         ],
         reviews: 5,
         final_satisfied: false
       )
       events = []
 
-      result = runtime(root, model).run("Make Broken.answer equal 42") { |event| events << event }
+      result = runtime(root, model, checks: answer_check.merge("answer2" => answer_check.fetch("answer"), "answer3" => answer_check.fetch("answer"), "answer4" => answer_check.fetch("answer"))).run("Make Broken.answer equal 42") { |event| events << event }
 
       refute result.satisfied
       assert_equal 40, load_value(root)
@@ -274,19 +274,30 @@ class AgentToolErrorRecoveryTest < Minitest::Test
     end
   end
 
-  def test_runtime_keeps_approval_denial_terminal
+  def test_runtime_denial_is_a_structured_result_not_an_exception
     Dir.mktmpdir("tamoz-denial") do |root|
       write_value(root, 40)
+      action = action_plan(before: "def self.answer = 40", after: "def self.answer = 42")
       model = scripted_model(
-        plans: [discovery_plan, action_plan(before: "def self.answer = 40", after: "def self.answer = 42")],
-        reviews: 2,
+        plans: [discovery_plan, action, action],
+        reviews: 3,
         final_satisfied: false
       )
+      events = []
 
-      assert_raises(Tamoz::Agent::ApprovalDeniedError) do
-        runtime(root, model, approval: ->(**) { false }).run("Make Broken.answer equal 42")
+      result = runtime(root, model, ask: ->(**) { "deny" }).run("Make Broken.answer equal 42") do |event|
+        events << event
       end
-      assert_equal 40, load_value(root)
+
+      refute result.satisfied
+      assert events.any? { |event| event.type == :approval_denied }
+      denial = result.observations.find do |entry|
+        entry.dig("failure", "error_class") == "ToolPolicyError"
+      end
+      assert denial, "expected a structured ToolPolicyError denial observation"
+      assert_includes denial.fetch("failure").fetch("reason"), "denied by operator"
+      stopped = events.find { |event| event.type == :repair_stopped }
+      assert stopped, "the repair loop stopped on the repeated plan"
     end
   end
 
@@ -327,11 +338,9 @@ class AgentToolErrorRecoveryTest < Minitest::Test
       assert_equal "action", failures.first.fetch("phase")
       assert_includes failures.first.fetch("output"), "patch text was not found"
 
-      # The rejection was caught in step_gate, before an interrupt or a journal entry,
-      # so no approval was ever requested for the doomed patch.
-      patch_approvals = view.approvals.select { |record| record.fetch("tool") == "apply_patch" }
-      assert_equal 1, patch_approvals.length
-      assert_equal "approve", patch_approvals.first.fetch("decision")
+      # The committed implement policy auto-allows workspace writes, so the
+      # doomed patch never asks: it fails as a typed effect error instead.
+      assert_empty view.approvals.select { |record| record.fetch("tool") == "apply_patch" }
       assert_equal 1, view.state.fetch(:seen_failure_signatures).length
       assert adapter.integrity_check.fetch("ok")
     end
@@ -481,13 +490,13 @@ class AgentToolErrorRecoveryTest < Minitest::Test
     )
   end
 
-  def runtime(root, model, approval: ->(**) { true })
+  def runtime(root, model, ask: ->(**) { "approve" }, checks: answer_check)
     Tamoz::Agent.build(
       model:,
       root:,
       allow_changes: true,
-      checks: answer_check,
-      approval:
+      checks:,
+      ask:
     )
   end
 
@@ -572,6 +581,18 @@ class AgentToolErrorRecoveryTest < Minitest::Test
         }
       ]
     }
+  end
+
+  def action_plan_with_trailing_check(before:, after:, trailing_check:, path: "broken.rb")
+    plan = action_plan(before:, after:, path:)
+    plan.fetch("steps") << {
+      "id" => "check-#{trailing_check}",
+      "purpose" => "run the configured check",
+      "tool" => "run_check",
+      "arguments" => {"name" => trailing_check},
+      "verification" => "the check receipt is observed"
+    }
+    plan
   end
 
   def patch_arguments(digest, before, after, path: "broken.rb")

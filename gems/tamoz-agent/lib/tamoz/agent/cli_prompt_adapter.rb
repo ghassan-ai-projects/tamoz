@@ -31,9 +31,7 @@ module Tamoz
             return nil if line.nil?
 
             case line.strip.downcase
-            when *APPROVE
-              @approved_descriptor = descriptor
-              return true
+            when *APPROVE then return true
             when *DENY then return false
             when *HELP then print_approval_help
             else print_invalid_approval

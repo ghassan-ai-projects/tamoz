@@ -14,7 +14,6 @@ class PublicAPITest < Minitest::Test
       {
         "tamoz-agent" => {
           "Tamoz::Agent.build" => {},
-          "Tamoz::Agent::ApprovalDeniedError" => {},
           "Tamoz::Agent::CLI.run" => {},
           "Tamoz::Agent::CheckReceipt" => {"deprecated" => true},
           "Tamoz::Agent::Deliberation" => {},

@@ -188,7 +188,7 @@ class AgentRuntimeTest < Minitest::Test
     end
   end
 
-  def test_compound_apply_patch_signature_changes_when_within_before_order_changes
+  def test_signature_ignores_ungated_patches_but_their_execution_still_differs
     Dir.mktmpdir("tamoz-agent") do |root|
       original = "X = 1\nX = 2\n"
       digest = Digest::SHA256.hexdigest(original)
@@ -212,7 +212,11 @@ class AgentRuntimeTest < Minitest::Test
       runtime = build_runtime(root)
       sig_first = runtime.send(:action_signature, Tamoz::Agent::Plan.parse(plan_for("apply_patch", args_first)))
       sig_second = runtime.send(:action_signature, Tamoz::Agent::Plan.parse(plan_for("apply_patch", args_second)))
+      # The signature sees the WHOLE plan: two different patch attempts are
+      # different tries (distinct signatures), while a literal repeat of the
+      # same plan is the collision the repeated-action guard exists for.
       refute_equal sig_first, sig_second
+      assert_equal sig_first, runtime.send(:action_signature, Tamoz::Agent::Plan.parse(plan_for("apply_patch", args_first)))
 
       first_result = nil
       Dir.mktmpdir("tamoz-agent-first") do |first_root|
@@ -230,35 +234,65 @@ class AgentRuntimeTest < Minitest::Test
     end
   end
 
-  def test_approval_denial_stops_compound_patch_before_write
+  def test_approval_denial_is_a_structured_result_and_the_turn_continues
     Dir.mktmpdir("tamoz-agent") do |root|
       path = File.join(root, "values.rb")
       original = "A = 1\nB = 2\n"
       File.write(path, original)
       digest = Digest::SHA256.hexdigest(original)
       discovery_plan = plan_for("read_file", "path" => "values.rb")
-      action_plan = plan_for("apply_patch", {
-        "path" => "values.rb",
-        "expected_sha256" => digest,
-        "replacements" => [
-          {"before" => "A = 1", "after" => "A = 2"},
-          {"before" => "B = 2", "after" => "B = 3"}
+      action_plan = {
+        "goal" => "Update values",
+        "done_when" => ["The configured check runs."],
+        "steps" => [
+          {
+            "id" => "patch",
+            "purpose" => "Update values.rb.",
+            "tool" => "apply_patch",
+            "arguments" => {
+              "path" => "values.rb",
+              "expected_sha256" => digest,
+              "replacements" => [
+                {"before" => "A = 1", "after" => "A = 2"},
+                {"before" => "B = 2", "after" => "B = 3"}
+              ]
+            },
+            "verification" => "values.rb reads A = 2."
+          },
+          {
+            "id" => "check",
+            "purpose" => "Run the configured check.",
+            "tool" => "run_check",
+            "arguments" => {"name" => "values"},
+            "verification" => "Use the observed receipt."
+          }
         ]
-      })
+      }
       model = ScriptedModel.new(
-        plan: [discovery_plan, action_plan],
-        review: [accepted_review, accepted_review],
-        verify: []
+        plan: [discovery_plan, action_plan, action_plan],
+        review: [accepted_review, accepted_review, accepted_review],
+        verify: [{"answer" => "The operator denied the check.", "satisfied" => false, "evidence" => []}]
       )
-      runtime = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { false })
+      runtime = Tamoz::Agent.build(
+        model:,
+        root:,
+        allow_changes: true,
+        checks: {"values" => [RbConfig.ruby, "-e", "exit 0"]},
+        ask: ->(**) { "deny" }
+      )
       events = []
 
-      assert_raises(Tamoz::Agent::ApprovalDeniedError) do
-        runtime.run("Update values") { |event| events << event }
+      result = runtime.run("Update values") { |event| events << event }
+
+      refute result.satisfied
+      assert events.any? { |event| event.type == :approval_denied }
+      denial = result.observations.find do |entry|
+        entry.dig("failure", "error_class") == "ToolPolicyError"
       end
-      assert events.any? { |event| event.type == :approval_requested }
-      refute events.any? { |event| event.type == :tool_started && event.data.fetch("tool") == "apply_patch" }
-      assert_equal original, File.read(path)
+      assert denial, "expected a structured ToolPolicyError denial observation"
+      # The mutation itself is workspace_write tier: the engine allowed it; only
+      # the asked check was refused.
+      assert_includes File.read(path), "A = 2"
     end
   end
 
@@ -295,17 +329,21 @@ class AgentRuntimeTest < Minitest::Test
           }
         ]
       }
-      approvals = []
+      events = []
       model = ScriptedModel.new(
         plan: [discovery_plan, action_plan],
         review: [accepted_review, accepted_review],
         verify: [{"answer" => "done", "satisfied" => true, "evidence" => ["a.rb", "b.rb"]}]
       )
-      runtime = Tamoz::Agent.build(model:, root:, allow_changes: true, approval: ->(**) { approvals << true; true })
+      runtime = Tamoz::Agent.build(model:, root:, allow_changes: true)
 
-      runtime.run("Update both files")
+      runtime.run("Update both files") { |event| events << event }
 
-      assert_equal 2, approvals.length
+      # Each patch step carries its own engine decision before it runs.
+      patch_decisions = events.count do |event|
+        event.type == :approval_granted && event.data.fetch("tool") == "apply_patch"
+      end
+      assert_equal 2, patch_decisions
       assert_equal "A = 2\n", File.read(File.join(root, "a.rb"))
       assert_equal "B = 2\n", File.read(File.join(root, "b.rb"))
       review_prompt = model.calls.reverse.find { |call| call.fetch(:stage) == :review }.fetch(:prompt)
@@ -323,7 +361,8 @@ class AgentRuntimeTest < Minitest::Test
     end.new
     Tamoz::Agent::Runtime.new(
       model:,
-      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      toolbox: Tamoz::Agent::Toolbox.new(root:, allow_changes: true),
+      approval_engine: Tamoz::Agent.build_approval_engine(profile_name: "implement")
     )
   end
 

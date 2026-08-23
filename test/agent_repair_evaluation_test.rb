@@ -24,22 +24,25 @@ class AgentRepairEvaluationTest < Minitest::Test
       model = scripted_model(
         plans: [
           discovery_plan,
-          action_plan(from: 40, to: 41),
-          action_plan(from: 41, to: 42)
+          action_plan(from: 40, to: 41, check: "answer"),
+          action_plan(from: 41, to: 42, check: "answer2")
         ],
         reviews: 3,
         final_satisfied: true
       )
-      approvals = []
+      asks = []
       events = []
 
-      result = runtime(root, model, approvals:).run("Make Broken.answer equal 42") do |event|
-        events << event
-      end
+      result = runtime(
+        root,
+        model,
+        asks:,
+        checks: answer_checks("answer", "answer2")
+      ).run("Make Broken.answer equal 42") { |event| events << event }
 
       assert result.satisfied
       assert_equal 42, load_value(root)
-      assert_equal %w[apply_patch run_check apply_patch run_check], approval_tools(approvals)
+      assert_equal %w[run_check run_check], ask_tools(asks)
       repair_attempts = events.filter_map do |event|
         event.data["repair_attempt"] if event.type == :plan_accepted && %w[action repair].include?(event.data["phase"])
       end
@@ -62,16 +65,16 @@ class AgentRepairEvaluationTest < Minitest::Test
         reviews: 3,
         final_satisfied: true
       )
-      approvals = []
+      asks = []
       events = []
 
-      result = runtime(root, model, approvals:).run("Make Broken.answer equal 42") do |event|
+      result = runtime(root, model, asks:).run("Make Broken.answer equal 42") do |event|
         events << event
       end
 
       refute result.satisfied
       assert_equal 41, load_value(root)
-      assert_equal %w[apply_patch run_check], approval_tools(approvals)
+      assert_equal %w[run_check], ask_tools(asks)
       stopped = events.find { |event| event.type == :repair_stopped }
       assert_equal "repeated_action", stopped.data.fetch("reason")
       assert_includes result.evidence.last, "repeated_action"
@@ -85,22 +88,28 @@ class AgentRepairEvaluationTest < Minitest::Test
         plans: [
           discovery_plan,
           action_plan(from: 40, to: 41),
-          action_plan(from: 41, to: 43)
+          action_plan_with_trailing_check(from: 41, to: 43, check: "answer", trailing_check: "answer2")
         ],
         reviews: 3,
         final_satisfied: true,
         fixed_failure: true
       )
-      approvals = []
+      asks = []
       events = []
 
-      result = runtime(root, model, approvals:, fixed_failure: true).run(
-        "Make Broken.answer equal 42"
-      ) { |event| events << event }
+      result = runtime(
+        root,
+        model,
+        asks:,
+        fixed_failure: true,
+        checks: answer_checks("answer", "answer2", failure: "same failure")
+      ).run("Make Broken.answer equal 42") { |event| events << event }
 
       refute result.satisfied
       assert_equal 43, load_value(root)
-      assert_equal %w[apply_patch run_check apply_patch run_check], approval_tools(approvals)
+      # A :once grant covers a single execution, so the repair attempt's check
+      # asks again before failing with the same signature.
+      assert_equal %w[run_check run_check], ask_tools(asks)
       stopped = events.find { |event| event.type == :repair_stopped }
       assert_equal "repeated_failure", stopped.data.fetch("reason")
       assert_equal 1, stopped.data.fetch("repair_attempt")
@@ -113,55 +122,66 @@ class AgentRepairEvaluationTest < Minitest::Test
       model = scripted_model(
         plans: [
           discovery_plan,
-          action_plan(from: 40, to: 41),
-          action_plan(from: 41, to: 43),
-          action_plan(from: 43, to: 44)
+          action_plan(from: 40, to: 41, check: "answer"),
+          action_plan(from: 41, to: 43, check: "answer2"),
+          action_plan(from: 43, to: 44, check: "answer3")
         ],
         reviews: 4,
         final_satisfied: true
       )
-      approvals = []
+      asks = []
       events = []
 
-      result = runtime(root, model, approvals:).run("Make Broken.answer equal 42") do |event|
-        events << event
-      end
+      result = runtime(
+        root,
+        model,
+        asks:,
+        checks: answer_checks("answer", "answer2", "answer3")
+      ).run("Make Broken.answer equal 42") { |event| events << event }
 
       refute result.satisfied
       assert_equal 44, load_value(root)
-      assert_equal 6, approvals.length
+      # Every distinct check name is a new governed step: one operator ask each.
+      assert_equal %w[run_check run_check run_check], ask_tools(asks)
+      assert_equal 3, events.count { |event| event.type == :approval_requested && event.data["tool"] == "run_check" }
       stopped = events.find { |event| event.type == :repair_stopped }
       assert_equal "repair_attempts_exhausted", stopped.data.fetch("reason")
       assert_equal 2, stopped.data.fetch("repair_attempt")
-      assert_equal 3, events.count { |event| event.type == :approval_requested && event.data["tool"] == "run_check" }
     end
   end
 
-  def test_denied_repair_patch_preserves_the_last_approved_state
+  def test_denied_check_is_a_structured_result_and_preserves_the_approved_state
     Dir.mktmpdir("tamoz-repair-eval") do |root|
       write_value(root, 40)
       model = scripted_model(
         plans: [
           discovery_plan,
-          action_plan(from: 40, to: 41),
-          action_plan(from: 41, to: 42)
+          action_plan(from: 40, to: 41, check: "answer"),
+          action_plan(from: 40, to: 41, check: "answer")
         ],
         reviews: 3,
-        final_satisfied: true
+        final_satisfied: false
       )
-      approvals = []
-      approval = lambda do |**request|
-        approvals << request
-        approvals.length <= 2
-      end
+      asks = []
+      events = []
 
-      error = assert_raises(Tamoz::Agent::ApprovalDeniedError) do
-        build_runtime(root, model, approval:).run("Make Broken.answer equal 42")
-      end
+      result = build_runtime(root, model, ask: lambda do |**request|
+        asks << request
+        "deny"
+      end).run("Make Broken.answer equal 42") { |event| events << event }
 
-      assert_match(/apply_patch/, error.message)
+      refute result.satisfied
+      denials = result.observations.select do |entry|
+        entry.dig("failure", "error_class") == "ToolPolicyError"
+      end
+      assert_equal 1, denials.length
+      assert_includes denials.first.fetch("failure").fetch("reason"), "denied by operator"
+      # The turn continues after the denial; the repeated repair plan is what
+      # stops the loop, and the workspace keeps its last approved state.
       assert_equal 41, load_value(root)
-      assert_equal %w[apply_patch run_check apply_patch], approval_tools(approvals)
+      stopped = events.find { |event| event.type == :repair_stopped }
+      assert_equal "repeated_action", stopped.data.fetch("reason")
+      assert_includes result.evidence.last, "repeated_action"
     end
   end
 
@@ -193,7 +213,7 @@ class AgentRepairEvaluationTest < Minitest::Test
         reviews: 3,
         final_satisfied: true
       )
-      approvals = []
+      asks = []
       events = []
       runtime = Tamoz::Agent.build(
         model:,
@@ -201,9 +221,9 @@ class AgentRepairEvaluationTest < Minitest::Test
         allow_changes: true,
         checks: {"answer" => [RbConfig.ruby, "-e", "sleep 2"]},
         check_timeout: 0.05,
-        approval: lambda do |**request|
-          approvals << request
-          true
+        ask: lambda do |**request|
+          asks << request
+          "approve"
         end
       )
 
@@ -214,7 +234,7 @@ class AgentRepairEvaluationTest < Minitest::Test
       assert_equal "timed_out", check.fetch("outcome")
       refute check.fetch("passed")
       assert_match(/\A[0-9a-f]{64}\z/, check.fetch("failure_signature"))
-      assert_equal ["run_check"], approval_tools(approvals)
+      assert_equal ["run_check"], ask_tools(asks)
       stopped = events.find { |event| event.type == :repair_stopped }
       assert_equal "repeated_action", stopped.data.fetch("reason")
       assert_includes result.evidence.last, "repeated_action"
@@ -236,10 +256,10 @@ class AgentRepairEvaluationTest < Minitest::Test
         reviews: 2,
         final_satisfied: true
       )
-      approvals = []
+      asks = []
       events = []
 
-      result = runtime(root, model, approvals:).run("Make Broken.answer equal 42") do |event|
+      result = runtime(root, model, asks:).run("Make Broken.answer equal 42") do |event|
         events << event
       end
 
@@ -254,7 +274,7 @@ class AgentRepairEvaluationTest < Minitest::Test
       assert_equal 2, structural_revisions.length
       assert_includes structural_revisions.first.data.fetch("issues"), "action plan must run a configured check"
       assert_includes structural_revisions.last.data.fetch("issues"), "action plan must not mutate after its final configured check"
-      assert_equal %w[apply_patch run_check], approval_tools(approvals)
+      assert_equal %w[run_check], ask_tools(asks)
     end
   end
 
@@ -274,31 +294,42 @@ class AgentRepairEvaluationTest < Minitest::Test
     )
   end
 
-  def runtime(root, model, approvals:, fixed_failure: false)
+  def runtime(root, model, asks:, fixed_failure: false, checks: nil)
     build_runtime(
       root,
       model,
       fixed_failure:,
-      approval: lambda do |**request|
-        approvals << request
-        true
+      checks: checks || answer_checks("answer"),
+      ask: lambda do |**request|
+        asks << request
+        "approve"
       end
     )
   end
 
-  def build_runtime(root, model, approval:, fixed_failure: false)
-    check_code = if fixed_failure
-                   "require './broken'; abort('same failure') unless Broken.answer == 42"
-                 else
-                   "require './broken'; abort(\"wrong answer \#{Broken.answer}\") unless Broken.answer == 42"
-                 end
+  def build_runtime(root, model, ask:, fixed_failure: false, checks: nil)
+    checks ||= answer_checks("answer")
+    check_code = ->(name) do
+      if fixed_failure
+        "require './broken'; abort('same failure') unless Broken.answer == 42"
+      else
+        "require './broken'; abort(\"wrong answer \#{Broken.answer}\") unless Broken.answer == 42"
+      end
+    end
     Tamoz::Agent.build(
       model:,
       root:,
       allow_changes: true,
-      checks: {"answer" => [RbConfig.ruby, "-I.", "-e", check_code]},
-      approval:
+      checks:,
+      ask:
     )
+  end
+
+  def answer_checks(*names, failure: nil)
+    condition = failure || "wrong answer \#{Broken.answer}"
+    names.to_h do |name|
+      [name, [RbConfig.ruby, "-I.", "-e", "require './broken'; abort(\"#{condition}\") unless Broken.answer == 42"]]
+    end
   end
 
   def discovery_plan
@@ -311,7 +342,7 @@ class AgentRepairEvaluationTest < Minitest::Test
     )
   end
 
-  def action_plan(from:, to:)
+  def action_plan(from:, to:, check: "answer")
     plan(
       step(
         id: "patch-#{from}-#{to}",
@@ -326,8 +357,25 @@ class AgentRepairEvaluationTest < Minitest::Test
       step(
         id: "check-#{to}",
         tool: "run_check",
-        arguments: {"name" => "answer"}
+        arguments: {"name" => check}
       )
+    )
+  end
+
+  def action_plan_with_trailing_check(from:, to:, check:, trailing_check:)
+    plan(
+      step(
+        id: "patch-#{from}-#{to}",
+        tool: "apply_patch",
+        arguments: {
+          "path" => "broken.rb",
+          "expected_sha256" => Digest::SHA256.hexdigest(value_source(from)),
+          "before" => "def self.answer = #{from}",
+          "after" => "def self.answer = #{to}"
+        }
+      ),
+      step(id: "check-#{to}", tool: "run_check", arguments: {"name" => check}),
+      step(id: "check-#{trailing_check}", tool: "run_check", arguments: {"name" => trailing_check})
     )
   end
 
@@ -374,7 +422,7 @@ class AgentRepairEvaluationTest < Minitest::Test
     Integer(source.match(/answer = (\d+)/)[1])
   end
 
-  def approval_tools(approvals)
-    approvals.map { |entry| entry.fetch(:tool) }
+  def ask_tools(asks)
+    asks.map { |entry| entry.fetch(:tool) }
   end
 end

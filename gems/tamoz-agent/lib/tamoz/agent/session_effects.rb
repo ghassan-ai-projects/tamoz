@@ -300,7 +300,7 @@ module Tamoz
       # prepared step and return the Decision. The argv/target projection is
       # the only place tool argument structure is translated into grant-key
       # material; unknown tools project nothing and fail closed to :once.
-      def decide_step_tool(tool:, arguments:, session_id:, step_scope: '')
+      def decide_step_tool(tool:, arguments:, session_id:, step_scope:)
         request = approval_engine.build_request(
           tool: tool,
           argv: approval_argv(tool, arguments),

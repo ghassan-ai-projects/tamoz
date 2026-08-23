@@ -161,7 +161,7 @@ module Tamoz
           root: options[:root],
           allow_changes: options[:allow_changes],
           checks: options[:checks],
-          approval: method(:approve_one_shot),
+          ask: method(:approve_one_shot),
           routing: if options[:experimental_routing]
                      :experimental
                    elsif options[:shadow_routing]
@@ -182,9 +182,6 @@ module Tamoz
           @out.puts("\n#{label}")
         end
         result.exit_status
-      rescue Tamoz::Agent::ApprovalDeniedError
-        @err.puts "tamoz: approval denied"
-        1
       end
 
       def drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
@@ -458,7 +455,8 @@ module Tamoz
           value = answer_for(interrupt, options:, resume_options:)
           return nil if value.nil?
 
-          resolve_interrupt_decision(interrupt, value)
+          interactive = !options[:non_interactive] && resume_options[:answer].nil?
+          resolve_interrupt_decision(interrupt, value, interactive:)
           answers[interrupt.task_id] ||= {}
           answers[interrupt.task_id][interrupt.call_index] = value
         end
@@ -469,7 +467,7 @@ module Tamoz
       # this process's engine holds the decision (it made the ask). A decision
       # recorded by another process resolves there; the resume only answers the
       # interrupt.
-      def resolve_interrupt_decision(interrupt, value)
+      def resolve_interrupt_decision(interrupt, value, interactive: true)
         descriptor = interrupt.descriptor
         return unless descriptor['kind'] == 'approve_tool'
         asked = descriptor['decision']
@@ -478,11 +476,13 @@ module Tamoz
         decision_id = asked.fetch('id')
         return unless @approval_engine.decision_log.lookup(decision_id)
 
-        scope = :once
-        if value && Array(asked['grant_scopes']).include?('session') && @prompts.remember_for_session(descriptor)
-          scope = :session
-        end
-        @approval_engine.resolve(decision_id:, answer: value ? :approve : :deny, scope:)
+        remembered = interactive && value &&
+                     Array(asked['grant_scopes']).include?('session') &&
+                     @prompts.remember_for_session(descriptor)
+        @approval_engine.resolve(
+          decision_id:, answer: value ? :approve : :deny,
+          scope: value ? (remembered ? :session : :once) : nil
+        )
       end
 
       def answer_for(interrupt, options:, resume_options:)
@@ -857,16 +857,17 @@ module Tamoz
         when :tool_started
           @err.puts "Running #{event.data.fetch("tool")}..."
         when :approval_requested
-          @err.puts "Approval required for #{event.data.fetch("tool")}:"
-          @err.puts event.data.fetch("preview")
+          if event.data["verdict"] == "ask"
+            @err.puts "Approval required for #{event.data.fetch("tool")}:"
+            @err.puts event.data.fetch("preview")
+          end
         end
       end
 
-      def approve_one_shot(tool:, arguments:, preview:)
-        @err.print "Approve #{tool}? [y/N] "
+      def approve_one_shot(tool:, preview:, decision:)
+        @err.print "Approve #{tool} [a/approve, d/deny]? "
         @err.flush
-        answer = @input.gets
-        answer && %w[y yes].include?(answer.strip.downcase)
+        Tamoz::Approval::Answer.parse(@input.gets.to_s)
       end
 
       def emit_cli_event(type, data)

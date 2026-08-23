@@ -159,10 +159,6 @@ module Tamoz
         new_policy.policy_rev
       end
 
-      def bound?(session_id)
-        @mutex.synchronize { @session_revs.key?(session_id.to_s) }
-      end
-
       def release_session(session_id)
         @mutex.synchronize do
           id = session_id.to_s
@@ -223,7 +219,7 @@ module Tamoz
           )
           @documents[rev] = rebuilt if rebuilt.policy_rev == rev
         end
-        raise UnknownDecisionError, "cannot reconstruct policy #{rev}" unless @documents.key?(rev)
+        raise InvalidPolicyError, "cannot reconstruct policy #{rev}" unless @documents.key?(rev)
 
         rev
       end
@@ -270,7 +266,10 @@ module Tamoz
         end
       end
 
-      def policy_for(session_id)
+      # The document a session is bound to RIGHT NOW (boot rev unless a
+      # durable switch moved it): run-path consumers of policy semantics,
+      # like the worker's deadline sweep, must ask here, not at @policy.
+      public def policy_for(session_id)
         id = session_id.to_s
         @mutex.synchronize do
           rev = @session_revs[id]
@@ -319,6 +318,7 @@ module Tamoz
         decision_log.append(
           decision_id: decision.id,
           step_scope: step_scope,
+          created_at_ms: now_ms,
           tool: request.tool.to_s,
           verb: request.verb.to_s,
           tier: decision.tier.to_s,
