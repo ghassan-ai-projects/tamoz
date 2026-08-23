@@ -197,49 +197,60 @@ module Tamoz
         issues << "steps must contain at least one step" if plan.steps.empty?
         issues << "step ids must be unique" if plan.steps.map(&:id).uniq.length != plan.steps.length
         plan.steps.each do |step|
-          prefix = "step #{step.id.inspect}"
-          issues << "#{prefix} id must not be empty" if step.id.strip.empty?
-          issues << "#{prefix} purpose must not be empty" if step.purpose.strip.empty?
-          issues << "#{prefix} verification must not be empty" if step.verification.strip.empty?
-          if step.tool && !allowed_tools.include?(step.tool)
-            issues << "#{prefix} uses unavailable tool #{step.tool.inspect}"
-          end
-          unless step.arguments.is_a?(Hash)
-            issues << "#{prefix} arguments must be an object"
-          end
-          if step.tool && step.arguments.is_a?(Hash) && placeholder_arguments?(step.arguments)
-            issues << "#{prefix} #{PLACEHOLDER_ISSUE}"
-          end
-          if step.tool.nil? && !step.arguments.empty?
-            issues << "#{prefix} has arguments without a tool"
-          elsif step.tool
-            begin
-              # P10 §3 / P15-W: validation is the descriptor's own source's
-              # dispatcher (no I/O), so a schema-invalid MCP step is a
-              # plan-time repairable rejection exactly like a bad local
-              # argument. A bare, non-source-qualified name never reaches this
-              # branch: it is not in `allowed_tools`, so the "unavailable tool"
-              # issue above already rejected it (P10 §10.2 malicious-tool-name
-              # row).
-              if capabilities
-                capabilities.validate(step.tool, step.arguments)
-              else
-                toolbox.validate(step.tool, step.arguments)
-              end
-            rescue ToolError => error
-              issues << "#{prefix} is invalid: #{error.message}"
-            end
-          end
+          issues.concat(step_issues(step, allowed_tools:, toolbox:, capabilities:))
         end
-        if %i[action repair].include?(phase) && !toolbox.checks.empty?
-          check_indexes = plan.steps.each_index.select { |index| plan.steps[index].tool == "run_check" }
-          mutation_indexes = plan.steps.each_index.select do |index|
-            MUTATION_TOOLS.include?(plan.steps[index].tool)
-          end
-          issues << "action plan must run a configured check" if check_indexes.empty?
-          if !mutation_indexes.empty? && !check_indexes.empty? && mutation_indexes.max > check_indexes.max
-            issues << "action plan must not mutate after its final configured check"
-          end
+        issues.concat(check_order_issues(plan, phase:, toolbox:))
+        issues.freeze
+      end
+
+      def step_issues(step, allowed_tools:, toolbox:, capabilities:)
+        prefix = "step #{step.id.inspect}"
+        issues = []
+        issues << "#{prefix} id must not be empty" if step.id.strip.empty?
+        issues << "#{prefix} purpose must not be empty" if step.purpose.strip.empty?
+        issues << "#{prefix} verification must not be empty" if step.verification.strip.empty?
+        if step.tool && !allowed_tools.include?(step.tool)
+          issues << "#{prefix} uses unavailable tool #{step.tool.inspect}"
+        end
+        unless step.arguments.is_a?(Hash)
+          issues << "#{prefix} arguments must be an object"
+        end
+        if step.tool && step.arguments.is_a?(Hash) && placeholder_arguments?(step.arguments)
+          issues << "#{prefix} #{PLACEHOLDER_ISSUE}"
+        end
+        if step.tool.nil? && !step.arguments.empty?
+          issues << "#{prefix} has arguments without a tool"
+        elsif step.tool
+          issues.concat(descriptor_issues(prefix, step, toolbox:, capabilities:))
+        end
+        issues.freeze
+      end
+
+      # P10 §3 / P15-W: validation is the descriptor's own source's dispatcher
+      # (no I/O), so a schema-invalid MCP step is a plan-time repairable
+      # rejection exactly like a bad local argument. A bare,
+      # non-source-qualified name never reaches this branch: it is not in
+      # `allowed_tools`, so the "unavailable tool" issue already rejected it
+      # (P10 §10.2 malicious-tool-name row).
+      def descriptor_issues(prefix, step, toolbox:, capabilities:)
+        validator = capabilities || toolbox
+        validator.validate(step.tool, step.arguments)
+        []
+      rescue ToolError => error
+        ["#{prefix} is invalid: #{error.message}"]
+      end
+
+      def check_order_issues(plan, phase:, toolbox:)
+        return [].freeze unless %i[action repair].include?(phase) && !toolbox.checks.empty?
+
+        check_indexes = plan.steps.each_index.select { |index| plan.steps[index].tool == "run_check" }
+        mutation_indexes = plan.steps.each_index.select do |index|
+          MUTATION_TOOLS.include?(plan.steps[index].tool)
+        end
+        issues = []
+        issues << "action plan must run a configured check" if check_indexes.empty?
+        if !mutation_indexes.empty? && !check_indexes.empty? && mutation_indexes.max > check_indexes.max
+          issues << "action plan must not mutate after its final configured check"
         end
         issues.freeze
       end

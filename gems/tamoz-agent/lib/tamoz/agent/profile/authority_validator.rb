@@ -97,7 +97,7 @@ module Tamoz
         end
 
         def validate_graph_version!(policy)
-          expected = Tamoz::Agent::Session::GRAPH_VERSION
+          expected = Tamoz::Agent::GraphVersions::GRAPH_VERSION
           return if policy['graph_version'] == expected
 
           raise ValidationError, "#{@path}: policy.graph_version must equal #{expected.inspect}"

@@ -44,7 +44,7 @@ module Tamoz
       end
 
       def compaction_state_supported?
-        @services.configuration.graph_version != SessionNodes::GRAPH_VERSION
+        @services.configuration.graph_version != GraphVersions::GRAPH_VERSION
       end
 
       # rubocop:disable Metrics/MethodLength -- one ordered planner-context assembly.

@@ -52,6 +52,55 @@ module Tamoz
           raise ConfigurationError, "a reconcilable effect requires a reconciler"
         end
 
+        key, logical_key = resolve_key(
+          effects, context, operation:, call_index:, logical_key:, logical_identity:
+        )
+        decision = effects.prepare(
+          execution_id: context.execution_id,
+          task_id: context.task_id,
+          call_index:,
+          operation:,
+          safety: safety.to_s,
+          request:,
+          logical_key:
+        )
+        reconciliation = nil
+
+        if decision.action == :reconcile
+          decision, reconciliation, recovered =
+            run_reconciliation(effects, key, decision, actor:, reconcile:)
+          if decision.action == :return
+            return recorded_outcome(
+              :succeeded, decision.record, key, reconciliation:, value: recovered, reused: true
+            )
+          end
+        end
+
+        case decision.action
+        when :return
+          attempt = terminal_attempt(decision.record)
+          recorded_outcome(
+            :succeeded, decision.record, key, reconciliation:, value: attempt&.result, reused: true
+          )
+        when :failed
+          attempt = terminal_attempt(decision.record)
+          recorded_outcome(
+            :failed, decision.record, key, reconciliation:, error: attempt&.error, reused: true
+          )
+        when :unknown, :wait
+          recorded_outcome(decision.action, decision.record, key, reconciliation:, reused: false)
+        when :execute
+          execute_outcome(effects, decision, key, reconciliation:, after_start:, &perform)
+        else
+          raise CheckpointCorruptionError,
+                "unhandled effect decision #{decision.action.inspect}"
+        end
+      end
+
+      # Returns [key, logical_key] — the journal's prepare needs the effective
+      # logical key (built from the identity when the caller passed none), so
+      # both resolved values flow back to `run`.
+      def resolve_key(effects, context, operation:, call_index:, logical_key:, logical_identity:)
         generated_logical_key = logical_key.nil? && logical_identity
         logical_key ||= build_logical_key(effects, context, logical_identity)
         key = if logical_key
@@ -71,154 +120,73 @@ module Tamoz
                   operation:
                 )
               end
-        decision = effects.prepare(
-          execution_id: context.execution_id,
-          task_id: context.task_id,
-          call_index:,
-          operation:,
-          safety: safety.to_s,
-          request:,
-          logical_key:
-        )
-        reconciliation = nil
+        [key, logical_key]
+      end
 
-        if decision.action == :reconcile
-          if decision.record.current_attempt >= MAX_ATTEMPTS
-            decision = effects.reconcile(
-              key:,
-              disposition: :unknown,
-              actor:,
-              evidence: {"reason" => "reconciliation attempt budget exhausted"}
-            )
-            reconciliation = "unknown"
-          else
-            disposition, evidence, recovered = reconcile.call
-            reconciliation = disposition.to_s
-            decision = effects.reconcile(
-              key:,
-              disposition:,
-              actor:,
-              evidence: evidence || {}
-            )
-            if decision.action == :return
-              return Outcome.new(
-                status: :succeeded,
-                value: recovered,
-                error: nil,
-                effect_key: key,
-                attempt_number: decision.record.current_attempt,
-                attempt_identity: current_attempt_identity(decision.record),
-                reconciliation:,
-                reused: true
-              )
-            end
-          end
-        end
-
-        case decision.action
-        when :return
-          attempt = terminal_attempt(decision.record)
-          return Outcome.new(
-            status: :succeeded,
-            value: attempt&.result,
-            error: nil,
-            effect_key: key,
-            attempt_number: decision.record.current_attempt,
-            attempt_identity: current_attempt_identity(decision.record),
-            reconciliation:,
-            reused: true
-          )
-        when :failed
-          attempt = terminal_attempt(decision.record)
-          return Outcome.new(
-            status: :failed,
-            value: nil,
-            error: attempt&.error,
-            effect_key: key,
-            attempt_number: decision.record.current_attempt,
-            attempt_identity: current_attempt_identity(decision.record),
-            reconciliation:,
-            reused: true
-          )
-        when :unknown
-          return Outcome.new(
-            status: :unknown,
-            value: nil,
-            error: nil,
-            effect_key: key,
-            attempt_number: decision.record.current_attempt,
-            attempt_identity: current_attempt_identity(decision.record),
-            reconciliation:,
-            reused: false
-          )
-        when :wait
-          return Outcome.new(
-            status: :wait,
-            value: nil,
-            error: nil,
-            effect_key: key,
-            attempt_number: decision.record.current_attempt,
-            attempt_identity: current_attempt_identity(decision.record),
-            reconciliation:,
-            reused: false
-          )
-        when :execute
-          token = decision.attempt_token
-          effects.start(key:, attempt_token: token)
-          after_start&.call
-          begin
-            value = perform.call
-          rescue ToolError => error
-            detail = tool_error_detail(error)
-            effects.complete(key:, attempt_token: token, status: :failed, error: detail)
-            return Outcome.new(
-              status: :failed,
-              value: nil,
-              error: detail,
-              effect_key: key,
-              attempt_number: decision.record.current_attempt,
-              attempt_identity: current_attempt_identity(decision.record),
-              reconciliation:,
-              reused: false
-            )
-          rescue Tamoz::EffectUnknownError => error
-            # A request was sent whose external outcome is unknown (e.g. an MCP
-            # non-idempotent call that failed after send). Record the started
-            # attempt as terminal :unknown here rather than letting it stay
-            # running until a later recovery pass, and never repair it.
-            detail = unknown_error_detail(error)
-            effects.complete(key:, attempt_token: token, status: :unknown, error: detail)
-            return Outcome.new(
-              status: :unknown,
-              value: nil,
-              error: detail,
-              effect_key: key,
-              attempt_number: decision.record.current_attempt,
-              attempt_identity: current_attempt_identity(decision.record),
-              reconciliation:,
-              reused: false
-            )
-          end
-          record = effects.complete(
+      def run_reconciliation(effects, key, decision, actor:, reconcile:)
+        if decision.record.current_attempt >= MAX_ATTEMPTS
+          decision = effects.reconcile(
             key:,
-            attempt_token: token,
-            status: :succeeded,
-            result: value
+            disposition: :unknown,
+            actor:,
+            evidence: {"reason" => "reconciliation attempt budget exhausted"}
           )
-          Outcome.new(
-            status: :succeeded,
-            value:,
-            error: nil,
-            effect_key: key,
-            attempt_number: record.current_attempt,
-            attempt_identity: current_attempt_identity(record),
-            reconciliation:,
-            reused: false
-          )
+          [decision, "unknown", nil]
         else
-          raise CheckpointCorruptionError,
-                "unhandled effect decision #{decision.action.inspect}"
+          disposition, evidence, recovered = reconcile.call
+          decision = effects.reconcile(
+            key:,
+            disposition:,
+            actor:,
+            evidence: evidence || {}
+          )
+          [decision, disposition.to_s, recovered]
         end
+      end
+
+      def recorded_outcome(status, record, key, reconciliation:, value: nil, error: nil, reused:)
+        Outcome.new(
+          status:,
+          value:,
+          error:,
+          effect_key: key,
+          attempt_number: record.current_attempt,
+          attempt_identity: current_attempt_identity(record),
+          reconciliation:,
+          reused:
+        )
+      end
+
+      def execute_outcome(effects, decision, key, reconciliation:, after_start:, &perform)
+        token = decision.attempt_token
+        effects.start(key:, attempt_token: token)
+        after_start&.call
+        begin
+          value = perform.call
+        rescue ToolError => error
+          detail = tool_error_detail(error)
+          effects.complete(key:, attempt_token: token, status: :failed, error: detail)
+          return recorded_outcome(
+            :failed, decision.record, key, reconciliation:, error: detail, reused: false
+          )
+        rescue Tamoz::EffectUnknownError => error
+          # A request was sent whose external outcome is unknown (e.g. an MCP
+          # non-idempotent call that failed after send). Record the started
+          # attempt as terminal :unknown here rather than letting it stay
+          # running until a later recovery pass, and never repair it.
+          detail = unknown_error_detail(error)
+          effects.complete(key:, attempt_token: token, status: :unknown, error: detail)
+          return recorded_outcome(
+            :unknown, decision.record, key, reconciliation:, error: detail, reused: false
+          )
+        end
+        record = effects.complete(
+          key:,
+          attempt_token: token,
+          status: :succeeded,
+          result: value
+        )
+        recorded_outcome(:succeeded, record, key, reconciliation:, value:, reused: false)
       end
 
       def build_logical_key(effects, context, identity)

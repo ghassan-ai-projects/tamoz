@@ -23,8 +23,6 @@ module Tamoz
     class SessionNodes
       MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
       MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
-      GRAPH_VERSION = "1"
-      ADAPTIVE_GRAPH_VERSION = "3"
       # Rebinding, not a second definition: durable records keep this spelling while
       # the value is owned by `Tamoz::Agent` for the memory layer.
       BEHAVIOR_VERSION = Tamoz::Agent::BEHAVIOR_VERSION
@@ -86,7 +84,7 @@ module Tamoz
         artifact_tenant: nil,
         child_task_runtime: nil,
         transcript_reader: nil,
-        graph_version: GRAPH_VERSION
+        graph_version: GraphVersions::GRAPH_VERSION
       )
         @model = model
         @toolbox = toolbox

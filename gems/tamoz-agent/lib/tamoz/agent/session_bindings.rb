@@ -8,7 +8,7 @@ module Tamoz
     # :reek:DuplicateMethodCall :reek:FeatureEnvy :reek:LongParameterList :reek:NilCheck
     # The record schema and optional binding sentinels are the stable wire contract.
     class SessionBindings
-      def initialize(configuration:, memory:, graph_version: SessionNodes::GRAPH_VERSION)
+      def initialize(configuration:, memory:, graph_version: GraphVersions::GRAPH_VERSION)
         @configuration = configuration
         @memory = memory
         @graph_version = String(graph_version).freeze
@@ -111,7 +111,7 @@ module Tamoz
       end
 
       def adaptive_graph?
-        @graph_version == SessionNodes::ADAPTIVE_GRAPH_VERSION
+        @graph_version == GraphVersions::ADAPTIVE_GRAPH_VERSION
       end
 
       def adaptive_session_update(task, context, claimed, toolbox)

@@ -8,6 +8,7 @@ require "tamoz/tools"
 
 require_relative "agent/errors"
 require_relative "agent/event"
+require_relative "agent/graph_versions"
 require_relative "agent/diagnosis_catalog"
 require_relative "agent/intent_catalog"
 require_relative "agent/skill_set"
