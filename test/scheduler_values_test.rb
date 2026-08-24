@@ -314,9 +314,8 @@ class SchedulerValuesTest < Minitest::Test
   def test_grant_intersection_classifies_granted_narrowed_revoked
     stored = {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}
 
-    granted = Scheduler::GrantIntersector.intersect(
-      stored, {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}
-    )
+    current = {"scopes" => ["read"], "capabilities" => ["tool.run-check"]}
+    granted = Scheduler::GrantIntersector.intersect(stored, current)
     assert_equal :granted, granted.fetch("status")
     assert_equal ["read"], granted.fetch("effective").fetch("scopes")
 
@@ -332,6 +331,11 @@ class SchedulerValuesTest < Minitest::Test
     )
     assert_equal :revoked, revoked.fetch("status")
     assert_empty revoked.fetch("effective").fetch("scopes")
+
+    error = assert_raises(Tamoz::ConfigurationError) do
+      Scheduler::GrantIntersector.intersect({"capabilities" => "bad"}, {"scopes" => "bad"})
+    end
+    assert_equal "grant scopes must be an array", error.message
   end
 
   def test_effective_grant_refuses_revocation_and_optionally_narrowing

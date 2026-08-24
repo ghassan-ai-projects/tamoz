@@ -37,34 +37,10 @@ module Tamoz
       # @return [Hash] {status: :granted|:narrowed|:revoked, effective: Hash,
       #                 removed_scopes: [...], removed_capabilities: [...]}
       def intersect(stored, current)
-        stored_scopes = normalize(stored, "scopes")
-        current_scopes = normalize(current, "scopes")
-        stored_caps = normalize(stored, "capabilities")
-        current_caps = normalize(current, "capabilities")
-
-        kept_scopes = stored_scopes & current_scopes
-        kept_caps = stored_caps & current_caps
-        removed_scopes = stored_scopes - current_scopes
-        removed_caps = stored_caps - current_caps
-
-        status =
-          if removed_scopes.empty? && removed_caps.empty?
-            :granted
-          elsif kept_scopes.empty? && kept_caps.empty?
-            :revoked
-          else
-            :narrowed
-          end
-
-        {
-          "status" => status,
-          "effective" => {
-            "scopes" => kept_scopes.sort,
-            "capabilities" => kept_caps.sort
-          },
-          "removed_scopes" => removed_scopes.sort,
-          "removed_capabilities" => removed_caps.sort
-        }.freeze
+        stored_grant, current_grant = normalize_grants(stored, current)
+        effective = grant_intersection(stored_grant, current_grant)
+        removed = removed_grant(stored_grant, current_grant)
+        build_result(intersection_status(effective, removed), effective, removed)
       end
 
       # Whether the schedule may still materialize under the current policy.
@@ -83,14 +59,71 @@ module Tamoz
         end
       end
 
-      def normalize(grant, key)
+      def normalize_grants(stored_input, current_input)
+        stored_scopes, current_scopes = normalize_pair(stored_input, current_input, "scopes")
+        stored_caps, current_caps = normalize_pair(stored_input, current_input, "capabilities")
+        [
+          { "scopes" => stored_scopes, "capabilities" => stored_caps },
+          { "scopes" => current_scopes, "capabilities" => current_caps }
+        ]
+      end
+      private_class_method :normalize_grants
+
+      def normalize_pair(left, right, key)
+        [normalize_values(left, key), normalize_values(right, key)]
+      end
+      private_class_method :normalize_pair
+
+      def normalize_values(grant, key)
         values = grant.is_a?(Hash) ? grant.fetch(key, []) : []
         unless values.is_a?(Array)
           raise Tamoz::ConfigurationError, "grant #{key} must be an array"
         end
         values.map { |value| String(value) }.uniq
       end
-      private_class_method :normalize
+      private_class_method :normalize_values
+
+      def grant_intersection(maximum, policy)
+        {
+          "scopes" => maximum.fetch("scopes") & policy.fetch("scopes"),
+          "capabilities" => maximum.fetch("capabilities") & policy.fetch("capabilities")
+        }
+      end
+      private_class_method :grant_intersection
+
+      def removed_grant(maximum, policy)
+        {
+          "scopes" => maximum.fetch("scopes") - policy.fetch("scopes"),
+          "capabilities" => maximum.fetch("capabilities") - policy.fetch("capabilities")
+        }
+      end
+      private_class_method :removed_grant
+
+      def intersection_status(effective, removed)
+        return :granted if removed.values.all?(&:empty?)
+        return :revoked if effective.values.all?(&:empty?)
+
+        :narrowed
+      end
+      private_class_method :intersection_status
+
+      def build_result(status, effective, removed)
+        {
+          "status" => status,
+          "effective" => sorted_grant(effective),
+          "removed_scopes" => removed.fetch("scopes").sort,
+          "removed_capabilities" => removed.fetch("capabilities").sort
+        }.freeze
+      end
+      private_class_method :build_result
+
+      def sorted_grant(grant)
+        {
+          "scopes" => grant.fetch("scopes").sort,
+          "capabilities" => grant.fetch("capabilities").sort
+        }
+      end
+      private_class_method :sorted_grant
     end
   end
 end

@@ -58,6 +58,16 @@ class SchedulerConsumerTest < Minitest::Test
     assert_equal "scorecard output is not JSON", bad.fetch("reason")
   end
 
+  def test_consumer_fails_closed_when_json_omits_required_summary_fields
+    consumer = Scheduler::ScorecardSummaryConsumer.new
+    command = [RbConfig.ruby, "-rjson", "-e", "puts JSON.generate({'decision' => 'pass'})"]
+
+    summary = consumer.run(scorecard_command: command)
+
+    assert_equal false, summary.fetch("ok")
+    assert_equal "scorecard report is missing required fields", summary.fetch("reason")
+  end
+
   # The default command is `tamoz-eval`, which is not on PATH in every
   # deployment. `Open3.capture3` answers that with Errno::ENOENT — the one
   # failure in this method that used to escape as an exception while every

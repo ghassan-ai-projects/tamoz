@@ -6,6 +6,7 @@ require_relative "scheduler/errors"
 require_relative "scheduler/schedule"
 require_relative "scheduler/occurrence"
 require_relative "scheduler/grant_intersector"
+require_relative "scheduler/scorecard_result"
 require_relative "scheduler/scorecard_summary_consumer"
 require_relative "scheduler/schedule_store"
 
@@ -18,5 +19,6 @@ module Tamoz
   # never executes agent logic, approves actions, retries effects, or reports
   # delivery as execution success.
   module Scheduler
+    private_constant :ScorecardResult
   end
 end
