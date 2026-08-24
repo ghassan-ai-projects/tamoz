@@ -20,6 +20,9 @@ $LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 
 require "optparse"
 require "json"
+# The umbrella establishes the dependency order (core defines Tamoz::Error,
+# which stream/errors compiles against); subfiles alone would not.
+require "tamoz/stream"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/worker_server"
 require "tamoz/stream/verification_store"
