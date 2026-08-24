@@ -5,7 +5,7 @@ End-result checklist. One row per source file. Mark complete only when the file 
 | File | Refactored | Reviewed | Committed | Notes |
 |------|------------|----------|-----------|-------|
 | `lib/tamoz/observability.rb` | - | - | - | bootstrap only; likely no change |
-| `lib/tamoz/observability/recorders.rb` | - | - | - | Journal class is the largest target |
+| `lib/tamoz/observability/recorders.rb` | done | done | done | Journal class is the largest target |
 | `lib/tamoz/observability/model_call.rb` | - | - | - | small, clean |
 | `lib/tamoz/observability/usage.rb` | - | - | - | Data classes |
 | `lib/tamoz/observability/signal_catalog.rb` | - | - | - | validate_signal / register are long |
