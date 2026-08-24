@@ -85,3 +85,9 @@
   list with the P8 fixture policy as its own named refusal; the stream
   validator steps sequence/size/terminal checks one level down.
 - Status: done
+
+### notification_contract.rb
+- Bar: `validate!` reads hash-gate → schema → conditional branches →
+  relations; the flat constraint validators were already single-purpose
+  checklists at one level (left alone).
+- Status: done

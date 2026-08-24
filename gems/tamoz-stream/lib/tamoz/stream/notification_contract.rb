@@ -23,15 +23,21 @@ module Tamoz
 
         contract = load_contract
         validate_schema!(document, contract, "$")
+        validate_conditional_branches!(document, contract)
+        validate_relations!(document)
+        event
+      rescue KeyError, TypeError => error
+        raise ConformanceError, "notification contract is malformed: #{error.message}"
+      end
+
+      # if/then branches: a document matching an "if" schema must also
+      # satisfy that branch's "then" schema.
+      def validate_conditional_branches!(document, contract)
         contract.fetch("allOf").each do |branch|
           next unless matches_schema?(document, branch.fetch("if"))
 
           validate_schema!(document, branch.fetch("then"), "$")
         end
-        validate_relations!(document)
-        event
-      rescue KeyError, TypeError => error
-        raise ConformanceError, "notification contract is malformed: #{error.message}"
       end
 
       def known_family?(type)
