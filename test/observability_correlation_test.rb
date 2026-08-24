@@ -56,8 +56,7 @@ class ObservabilityCorrelationTest < Minitest::Test
     RUBY
     stdout, stderr, status = Open3.capture3(
       RbConfig.ruby,
-      '-I', GEM_ROOTS.fetch('tamoz-core').join('lib').to_s,
-      '-I', GEM_ROOTS.fetch('tamoz-observability').join('lib').to_s,
+      *GEM_ROOTS.values.flat_map { |gem_root| ['-I', gem_root.join('lib').to_s] },
       '-e', script
     )
 
