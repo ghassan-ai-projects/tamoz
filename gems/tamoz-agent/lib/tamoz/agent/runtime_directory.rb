@@ -62,21 +62,8 @@ module Tamoz
       # can read or write: it holds the schedules and profiles that decide what
       # runs unattended.
       def self.create!(path, workspace:)
-        FileUtils.mkdir_p(path, mode: 0o700)
-        File.chmod(0o700, path)
-        FileUtils.mkdir_p(File.join(path, PROFILES_DIR), mode: 0o700)
-        File.chmod(0o700, File.join(path, PROFILES_DIR))
-        config_path = File.join(path, CONFIG_FILE)
-        unless File.exist?(config_path)
-          document = {
-            "runtime" => {"schema_version" => SCHEMA_VERSION},
-            "workspace" => {"root" => File.expand_path(workspace)},
-            "sources" => {},
-            "channels" => {}
-          }
-          File.write(config_path, Psych.dump(document))
-          File.chmod(0o600, config_path)
-        end
+        ensure_private_runtime_directories!(path)
+        write_default_config!(path, workspace:) unless File.exist?(config_path(path))
         new(path)
       end
 
@@ -88,31 +75,21 @@ module Tamoz
       #   gate, a backup, and an atomic rename.
       def self.migrate!(path, env: ENV)
         directory = resolve(path:, env:)
-        config_path = File.join(directory.path, CONFIG_FILE)
-        document = Psych.safe_load_file(config_path, permitted_classes: [], aliases: false)
+        config_path = config_path(directory.path)
+        document = read_config_document(config_path)
         version = document.dig("runtime", "schema_version")
         return [:already_current, directory] if version == SCHEMA_VERSION
-        unless version == LEGACY_SCHEMA_VERSION
-          raise Error, "runtime configuration schema_version #{version.inspect} " \
-                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
-        end
 
-        migrated = document.merge(
-          "runtime" => {"schema_version" => SCHEMA_VERSION},
-          "channels" => {}
-        )
+        ensure_legacy_schema!(version)
+
+        migrated = migrated_document(document)
         # The whole migrated document must validate before anything is written:
         # a config that would be refused after migration must be refused now,
         # with the original file still untouched.
         validate_document!(migrated)
 
-        backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}"
-        FileUtils.cp(config_path, backup)
-        File.chmod(0o600, backup)
-        temp = "#{config_path}.tmp-#{Process.pid}"
-        File.write(temp, Psych.dump(migrated))
-        File.chmod(0o600, temp)
-        File.rename(temp, config_path)
+        backup = backup_config!(config_path)
+        write_migrated_config!(config_path, migrated)
         [:migrated, new(directory.path), backup]
       end
 
@@ -191,19 +168,9 @@ module Tamoz
       end
 
       def self.validate_document!(document)
-        version = document.dig("runtime", "schema_version")
-        unless SCHEMA_VERSIONS.include?(version)
-          raise Error, "runtime configuration schema_version #{version.inspect} " \
-                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
-        end
-
-        root = document.dig("workspace", "root")
-        raise Error, "runtime configuration must set workspace.root" unless root.is_a?(String) && !root.empty?
-
-        raw = document["channels"]
-        return unless raw.is_a?(Hash)
-
-        raw.each_key { |surface_id| validate_channel!(surface_id, raw.fetch(surface_id)) }
+        validate_schema_version!(document)
+        validate_workspace_root!(document)
+        validate_channels!(document["channels"])
       end
 
       # Strict per-entry validation (COMMS_DESIGN §14): the kind comes from the
@@ -255,27 +222,119 @@ module Tamoz
       end
       # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
+      class << self
+        private
+
+        def config_path(path)
+          File.join(path, CONFIG_FILE)
+        end
+
+        def ensure_private_runtime_directories!(path)
+          FileUtils.mkdir_p(path, mode: 0o700)
+          File.chmod(0o700, path)
+          profiles_path = File.join(path, PROFILES_DIR)
+          FileUtils.mkdir_p(profiles_path, mode: 0o700)
+          File.chmod(0o700, profiles_path)
+        end
+
+        def write_default_config!(path, workspace:)
+          document = {
+            "runtime" => {"schema_version" => SCHEMA_VERSION},
+            "workspace" => {"root" => File.expand_path(workspace)},
+            "sources" => {},
+            "channels" => {}
+          }
+          config_path = config_path(path)
+          File.write(config_path, Psych.dump(document))
+          File.chmod(0o600, config_path)
+        end
+
+        def read_config_document(config_path)
+          Psych.safe_load_file(config_path, permitted_classes: [], aliases: false)
+        end
+
+        def ensure_legacy_schema!(version)
+          return if version == LEGACY_SCHEMA_VERSION
+
+          raise Error, "runtime configuration schema_version #{version.inspect} " \
+                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
+        end
+
+        def migrated_document(document)
+          document.merge(
+            "runtime" => {"schema_version" => SCHEMA_VERSION},
+            "channels" => {}
+          )
+        end
+
+        def backup_config!(config_path)
+          backup = "#{config_path}.bak-#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}"
+          FileUtils.cp(config_path, backup)
+          File.chmod(0o600, backup)
+          backup
+        end
+
+        def write_migrated_config!(config_path, document)
+          temp = "#{config_path}.tmp-#{Process.pid}"
+          File.write(temp, Psych.dump(document))
+          File.chmod(0o600, temp)
+          File.rename(temp, config_path)
+        end
+
+        def validate_schema_version!(document)
+          version = document.dig("runtime", "schema_version")
+          return if SCHEMA_VERSIONS.include?(version)
+
+          raise Error, "runtime configuration schema_version #{version.inspect} " \
+                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
+        end
+
+        def validate_workspace_root!(document)
+          root = document.dig("workspace", "root")
+          return if root.is_a?(String) && !root.empty?
+
+          raise Error, "runtime configuration must set workspace.root"
+        end
+
+        def validate_channels!(raw)
+          return unless raw.is_a?(Hash)
+
+          raw.each_key { |surface_id| validate_channel!(surface_id, raw.fetch(surface_id)) }
+        end
+      end
+
       private
 
       def load_config
+        ensure_runtime_directory_available
+        config_path = private_config_path
+        document = read_config_document(config_path)
+        raise Error, "runtime configuration must be a mapping" unless document.is_a?(Hash)
+
+        self.class.validate_document!(document)
+        document.freeze
+      end
+
+      def ensure_runtime_directory_available
         unless File.directory?(path)
           raise Error, "runtime directory #{path} does not exist; run 'tamoz init' first"
         end
 
         assert_private!(path, "runtime directory")
-        config_path = File.join(path, CONFIG_FILE)
+      end
+
+      def private_config_path
+        config_path = self.class.send(:config_path, path)
         raise Error, "#{config_path} does not exist; run 'tamoz init' first" unless File.exist?(config_path)
 
         assert_private!(config_path, "runtime configuration")
-        document = begin
-          Psych.safe_load_file(config_path, permitted_classes: [], aliases: false)
-        rescue Psych::Exception => error
-          raise Error, "runtime configuration is not valid YAML: #{error.message}"
-        end
-        raise Error, "runtime configuration must be a mapping" unless document.is_a?(Hash)
+        config_path
+      end
 
-        self.class.validate_document!(document)
-        document.freeze
+      def read_config_document(config_path)
+        self.class.send(:read_config_document, config_path)
+      rescue Psych::Exception => error
+        raise Error, "runtime configuration is not valid YAML: #{error.message}"
       end
 
       def assert_private!(target, label)

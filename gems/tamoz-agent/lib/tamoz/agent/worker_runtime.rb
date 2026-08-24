@@ -54,30 +54,13 @@ module Tamoz
       def initialize(directory, model_factory:, lease_ttl: 30.0, delivery_sink: nil, routing: :legacy)
         @directory = directory
         @model_factory = model_factory
-        @routing = routing.to_sym
-        unless Session::ROUTINGS.include?(@routing)
-          raise ArgumentError, "routing must be one of #{Session::ROUTINGS.join(', ')}"
-        end
+        @routing = normalize_routing(routing)
 
         # The channel projection is nil-safe by default (ADR-042): a worker
         # without a comms surface delivers nothing and never raises.
         @delivery_sink = delivery_sink || Tamoz::Comms::DeliverySink.null
-        # The memory codec is the default codec PLUS one registration for
-        # MemoryRecord, so it decodes everything the default could. Installing it
-        # only when memory is enabled keeps a runtime that never asked for memory
-        # byte-identical to what it was before.
-        codec = directory.enabled_sources.include?("memory") ? Memory::Surface.codec : nil
-        @adapter = Tamoz::SQLite::Adapter.new(
-          path: directory.database_path,
-          limits: Tamoz::SQLite::Limits.new(lease_ttl:),
-          **(codec ? {state_codec: codec} : {})
-        )
-        @sessions = {}
-        @profiles = {}
-        # A Monitor, not a Mutex: `build_session` runs under this lock and asks
-        # for `profile`, which takes it again. Ruby's Mutex is not reentrant, so
-        # that same-thread re-entry would deadlock the worker outright.
-        @monitor = Monitor.new
+        @adapter = build_adapter(lease_ttl)
+        initialize_session_caches
         @approval_engine = build_approval_engine
       end
 
@@ -230,22 +213,7 @@ module Tamoz
         begin
           profile_id = parent_profile.fetch('profile_id')
           stored = create_child_task(child_task, parent_profile:)
-          bound_profile = profile(profile_id)
-          binding = {
-            'child_id' => stored.child_id,
-            'parent_profile_id' => String(profile_id),
-            'parent_thread_id' => stored.parent_thread_id,
-            'parent_request_id' => stored.parent_request_id,
-            'authority_revision' => stored.capability_profile.fetch('authority_revision', nil),
-            'profile_digest' => bound_profile&.canonical_digest,
-            'capabilities' => stored.capability_profile.fetch('capabilities', [])
-          }.compact
-          existing_binding = record(CHILD_BINDINGS, stored.child_id)
-          if existing_binding && existing_binding != binding
-            raise Tamoz::StoreConflictError,
-                  "child task #{stored.child_id.inspect} is already bound to different authority"
-          end
-          upsert(CHILD_BINDINGS, stored.child_id, binding) unless existing_binding
+          persist_child_authority_binding(stored, profile_id)
           bind_thread_profile(stored.child_id, profile_id)
           enqueue_child_request(stored)
           stored
@@ -256,23 +224,7 @@ module Tamoz
       end
 
       def reconcile_child_requests(limit: 500)
-        child_tasks(limit:).filter_map do |child|
-          next unless CHILD_ACTIVE_STATUSES.include?(child.status)
-
-          request = checkpoints.fetch_request(
-            thread_id: child.child_id,
-            request_id: child_request_id(child.child_id)
-          )
-          if request&.terminal?
-            settle_child_request(child, request)
-            next child.child_id
-          end
-          next unless child.status == 'pending'
-          next if request
-
-          enqueue_child_request(child)
-          child.child_id
-        end
+        child_tasks(limit:).filter_map { |child| reconcile_child_request(child) }
       end
 
       def settle_child_task(child_id, view)
@@ -280,17 +232,7 @@ module Tamoz
         return unless child && CHILD_ACTIVE_STATUSES.include?(child.status)
         return unless %i[completed failed blocked].include?(view.status)
 
-        receipt = Tamoz::Core.jcs(
-          'thread_id' => child_id,
-          'checkpoint_id' => view.checkpoint_id,
-          'execution_id' => view.execution_id,
-          'terminal' => view.terminal,
-          'verification' => view.state[:verification],
-          'effect_receipts' => view.effect_receipts,
-          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
-            Array(compaction['artifact_refs'])
-          end
-        )
+        receipt = child_completion_receipt(child_id, view)
         transition_child_task(child_id) do |current|
           next current unless CHILD_ACTIVE_STATUSES.include?(current.status)
 
@@ -321,16 +263,10 @@ module Tamoz
 
       def transition_child_task(child_id)
         durable("transition child task #{child_id.inspect}") do
-          entry = @adapter.store.get(CHILD_TASKS, String(child_id))
-          unless entry && !entry.deleted
-            raise Tamoz::StoreConflictError,
-                  "child task #{child_id.inspect} does not exist"
-          end
+          entry = load_child_task_entry!(child_id)
 
           next_task = yield ChildTask.from_h(entry.value)
-          unless next_task.is_a?(ChildTask) && next_task.child_id == child_id
-            raise ArgumentError, "child task transition returned an invalid record"
-          end
+          validate_child_transition!(child_id, next_task)
 
           @adapter.store.put(CHILD_TASKS, String(child_id), next_task.to_h, if_version: entry.version)
           release_child_slot!(next_task) unless CHILD_ACTIVE_STATUSES.include?(next_task.status)
@@ -498,15 +434,7 @@ module Tamoz
         return [] unless store.respond_to?(:list_schedules)
 
         durable("scheduled work") do
-          store.list_schedules(limit:).map do |schedule|
-            occurrence = store.list_occurrences(
-              schedule_id: schedule.id, limit: 100
-            ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
-            grant = Tamoz::Scheduler::GrantIntersector.intersect(
-              schedule.capability_grant, worker_grant
-            )
-            scheduled_work_document(schedule, occurrence, grant)
-          end
+          store.list_schedules(limit:).map { |schedule| scheduled_work_projection(store, schedule) }
         end
       rescue StoreUnavailableError => error
         [{
@@ -520,6 +448,20 @@ module Tamoz
           "error_category" => "schedule_store_unavailable",
           "error" => error.message.byteslice(0, 512)
         }]
+      end
+
+      def scheduled_work_projection(store, schedule)
+        occurrence = latest_schedule_occurrence(store, schedule)
+        grant = Tamoz::Scheduler::GrantIntersector.intersect(
+          schedule.capability_grant, worker_grant
+        )
+        scheduled_work_document(schedule, occurrence, grant)
+      end
+
+      def latest_schedule_occurrence(store, schedule)
+        store.list_occurrences(
+          schedule_id: schedule.id, limit: 100
+        ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
       end
 
       def schedule_occurrence(request_id)
@@ -627,8 +569,7 @@ module Tamoz
       end
 
       def reserve_child_slot!(child, parent_profile:)
-        limit = Integer(parent_profile.fetch('max_child_concurrency'))
-        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+        limit = child_concurrency_limit(parent_profile)
 
         durable("reserve child capacity for #{child.parent_thread_id.inspect}") do
           with_child_budget_retry do |store|
@@ -648,23 +589,34 @@ module Tamoz
         end
       end
 
+      def child_concurrency_limit(parent_profile)
+        limit = Integer(parent_profile.fetch('max_child_concurrency'))
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+
+        limit
+      end
+
       def release_child_slot!(child)
         durable("release child capacity for #{child.parent_thread_id.inspect}") do
           with_child_budget_retry do |store|
-            key = child_budget_key(child)
-            entry = store.get(CHILD_BUDGETS, key)
-            return unless entry && !entry.deleted
-
-            active = Array(entry.value['active_child_ids'])
-            next unless active.include?(child.child_id)
-
-            store.put(
-              CHILD_BUDGETS, key,
-              entry.value.merge('active_child_ids' => active - [child.child_id]),
-              if_version: entry.version
-            )
+            release_child_capacity(store, child)
           end
         end
+      end
+
+      def release_child_capacity(store, child)
+        key = child_budget_key(child)
+        entry = store.get(CHILD_BUDGETS, key)
+        return unless entry && !entry.deleted
+
+        active = Array(entry.value['active_child_ids'])
+        return unless active.include?(child.child_id)
+
+        store.put(
+          CHILD_BUDGETS, key,
+          entry.value.merge('active_child_ids' => active - [child.child_id]),
+          if_version: entry.version
+        )
       end
 
       def child_budget_state(store, key, limit)
@@ -730,30 +682,29 @@ module Tamoz
       end
 
       def session_for_child(child)
-        binding = durable("child binding #{child.child_id.inspect}") do
-          record(CHILD_BINDINGS, child.child_id)
-        end
-        raise Error, "child task #{child.child_id.inspect} has no authority binding" unless binding
-
+        binding = child_authority_binding(child)
         profile_id = binding.fetch('parent_profile_id')
-        resolved = load_profile(profile_id)
-        expected_digest = binding.fetch('profile_digest', nil)
-        unless expected_digest && resolved.canonical_digest == expected_digest
-          raise ToolPolicyError, "child authority profile changed after enqueue"
-        end
+        resolved = child_profile_for(binding)
 
         @monitor.synchronize do
           key = ['child', child.child_id]
           @sessions[key] ||= with_child_delegation_context(child) do
-            build_session(
-              profile_id,
-              allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
-              mcp: nil,
-              resolved_profile: resolved
-            )
+            build_child_session(child, profile_id, resolved)
           end
         end
       end
+
+      def build_child_session(child, profile_id, resolved_profile)
+        build_session(
+          profile_id,
+          allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
+          mcp: nil,
+          resolved_profile:
+        )
+      end
+
+      private :scheduled_work_projection, :latest_schedule_occurrence,
+              :child_concurrency_limit, :release_child_capacity, :build_child_session
 
       def child_delegation_context
         Thread.current[:tamoz_agent_child_delegation_context]
@@ -1055,10 +1006,7 @@ module Tamoz
       def build_session(profile_id, allowed_tools: nil, mcp: mcp_source, resolved_profile: nil)
         resolved = resolved_profile || profile(profile_id)
         toolbox = session_toolbox(resolved, allowed_tools:)
-        sync_approval_policy
-        session_key = "profile:#{profile_id || 'default'}"
-        @approval_engine.bind_session(session_key)
-        (@bound_approval_sessions ||= Set.new) << session_key
+        session_key = bind_approval_session(profile_id)
 
         engine = memory_engine
         Session.new(
@@ -1083,6 +1031,126 @@ module Tamoz
       end
 
       private
+
+      def normalize_routing(routing)
+        normalized = routing.to_sym
+        return normalized if Session::ROUTINGS.include?(normalized)
+
+        raise ArgumentError, "routing must be one of #{Session::ROUTINGS.join(', ')}"
+      end
+
+      def build_adapter(lease_ttl)
+        # The memory codec is the default codec PLUS one registration for
+        # MemoryRecord. Installing it only when memory is enabled keeps a runtime
+        # that never asked for memory byte-identical to what it was before.
+        codec = @directory.enabled_sources.include?("memory") ? Memory::Surface.codec : nil
+        Tamoz::SQLite::Adapter.new(
+          path: @directory.database_path,
+          limits: Tamoz::SQLite::Limits.new(lease_ttl:),
+          **(codec ? {state_codec: codec} : {})
+        )
+      end
+
+      def initialize_session_caches
+        @sessions = {}
+        @profiles = {}
+        # A Monitor, not a Mutex: `build_session` runs under this lock and asks
+        # for `profile`, which takes it again. Ruby's Mutex is not reentrant, so
+        # that same-thread re-entry would deadlock the worker outright.
+        @monitor = Monitor.new
+      end
+
+      def persist_child_authority_binding(child, profile_id)
+        bound_profile = profile(profile_id)
+        binding = {
+          'child_id' => child.child_id,
+          'parent_profile_id' => String(profile_id),
+          'parent_thread_id' => child.parent_thread_id,
+          'parent_request_id' => child.parent_request_id,
+          'authority_revision' => child.capability_profile.fetch('authority_revision', nil),
+          'profile_digest' => bound_profile&.canonical_digest,
+          'capabilities' => child.capability_profile.fetch('capabilities', [])
+        }.compact
+        existing_binding = record(CHILD_BINDINGS, child.child_id)
+        if existing_binding && existing_binding != binding
+          raise Tamoz::StoreConflictError,
+                "child task #{child.child_id.inspect} is already bound to different authority"
+        end
+        upsert(CHILD_BINDINGS, child.child_id, binding) unless existing_binding
+        profile_id
+      end
+
+      def child_authority_binding(child)
+        binding = durable("child binding #{child.child_id.inspect}") do
+          record(CHILD_BINDINGS, child.child_id)
+        end
+        return binding if binding
+
+        raise Error, "child task #{child.child_id.inspect} has no authority binding"
+      end
+
+      def child_profile_for(binding)
+        profile_id = binding.fetch('parent_profile_id')
+        resolved = load_profile(profile_id)
+        expected_digest = binding.fetch('profile_digest', nil)
+        return resolved if expected_digest && resolved.canonical_digest == expected_digest
+
+        raise ToolPolicyError, "child authority profile changed after enqueue"
+      end
+
+      def reconcile_child_request(child)
+        return unless CHILD_ACTIVE_STATUSES.include?(child.status)
+
+        request = checkpoints.fetch_request(
+          thread_id: child.child_id,
+          request_id: child_request_id(child.child_id)
+        )
+        if request&.terminal?
+          settle_child_request(child, request)
+          return child.child_id
+        end
+        return unless child.status == 'pending'
+        return if request
+
+        enqueue_child_request(child)
+        child.child_id
+      end
+
+      def child_completion_receipt(child_id, view)
+        Tamoz::Core.jcs(
+          'thread_id' => child_id,
+          'checkpoint_id' => view.checkpoint_id,
+          'execution_id' => view.execution_id,
+          'terminal' => view.terminal,
+          'verification' => view.state[:verification],
+          'effect_receipts' => view.effect_receipts,
+          'artifact_refs' => view.state.fetch(:compactions, []).flat_map do |compaction|
+            Array(compaction['artifact_refs'])
+          end
+        )
+      end
+
+      def load_child_task_entry!(child_id)
+        entry = @adapter.store.get(CHILD_TASKS, String(child_id))
+        return entry if entry && !entry.deleted
+
+        raise Tamoz::StoreConflictError,
+              "child task #{child_id.inspect} does not exist"
+      end
+
+      def validate_child_transition!(child_id, next_task)
+        return if next_task.is_a?(ChildTask) && next_task.child_id == child_id
+
+        raise ArgumentError, "child task transition returned an invalid record"
+      end
+
+      def bind_approval_session(profile_id)
+        sync_approval_policy
+        session_key = "profile:#{profile_id || 'default'}"
+        @approval_engine.bind_session(session_key)
+        (@bound_approval_sessions ||= Set.new) << session_key
+        session_key
+      end
 
       def build_approval_engine
         evidence_symbols = Tamoz::Comms::AuthorityEvidence.members
