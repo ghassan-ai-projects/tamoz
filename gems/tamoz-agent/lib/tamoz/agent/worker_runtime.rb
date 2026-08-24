@@ -434,15 +434,7 @@ module Tamoz
         return [] unless store.respond_to?(:list_schedules)
 
         durable("scheduled work") do
-          store.list_schedules(limit:).map do |schedule|
-            occurrence = store.list_occurrences(
-              schedule_id: schedule.id, limit: 100
-            ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
-            grant = Tamoz::Scheduler::GrantIntersector.intersect(
-              schedule.capability_grant, worker_grant
-            )
-            scheduled_work_document(schedule, occurrence, grant)
-          end
+          store.list_schedules(limit:).map { |schedule| scheduled_work_projection(store, schedule) }
         end
       rescue StoreUnavailableError => error
         [{
@@ -456,6 +448,20 @@ module Tamoz
           "error_category" => "schedule_store_unavailable",
           "error" => error.message.byteslice(0, 512)
         }]
+      end
+
+      def scheduled_work_projection(store, schedule)
+        occurrence = latest_schedule_occurrence(store, schedule)
+        grant = Tamoz::Scheduler::GrantIntersector.intersect(
+          schedule.capability_grant, worker_grant
+        )
+        scheduled_work_document(schedule, occurrence, grant)
+      end
+
+      def latest_schedule_occurrence(store, schedule)
+        store.list_occurrences(
+          schedule_id: schedule.id, limit: 100
+        ).max_by { |entry| [entry.updated_at, entry.occurrence_id] }
       end
 
       def schedule_occurrence(request_id)
@@ -563,8 +569,7 @@ module Tamoz
       end
 
       def reserve_child_slot!(child, parent_profile:)
-        limit = Integer(parent_profile.fetch('max_child_concurrency'))
-        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+        limit = child_concurrency_limit(parent_profile)
 
         durable("reserve child capacity for #{child.parent_thread_id.inspect}") do
           with_child_budget_retry do |store|
@@ -584,23 +589,34 @@ module Tamoz
         end
       end
 
+      def child_concurrency_limit(parent_profile)
+        limit = Integer(parent_profile.fetch('max_child_concurrency'))
+        raise ToolPolicyError, 'child delegation concurrency budget is exhausted' if limit < 1
+
+        limit
+      end
+
       def release_child_slot!(child)
         durable("release child capacity for #{child.parent_thread_id.inspect}") do
           with_child_budget_retry do |store|
-            key = child_budget_key(child)
-            entry = store.get(CHILD_BUDGETS, key)
-            return unless entry && !entry.deleted
-
-            active = Array(entry.value['active_child_ids'])
-            next unless active.include?(child.child_id)
-
-            store.put(
-              CHILD_BUDGETS, key,
-              entry.value.merge('active_child_ids' => active - [child.child_id]),
-              if_version: entry.version
-            )
+            release_child_capacity(store, child)
           end
         end
+      end
+
+      def release_child_capacity(store, child)
+        key = child_budget_key(child)
+        entry = store.get(CHILD_BUDGETS, key)
+        return unless entry && !entry.deleted
+
+        active = Array(entry.value['active_child_ids'])
+        return unless active.include?(child.child_id)
+
+        store.put(
+          CHILD_BUDGETS, key,
+          entry.value.merge('active_child_ids' => active - [child.child_id]),
+          if_version: entry.version
+        )
       end
 
       def child_budget_state(store, key, limit)
@@ -673,15 +689,22 @@ module Tamoz
         @monitor.synchronize do
           key = ['child', child.child_id]
           @sessions[key] ||= with_child_delegation_context(child) do
-            build_session(
-              profile_id,
-              allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
-              mcp: nil,
-              resolved_profile: resolved
-            )
+            build_child_session(child, profile_id, resolved)
           end
         end
       end
+
+      def build_child_session(child, profile_id, resolved_profile)
+        build_session(
+          profile_id,
+          allowed_tools: child_local_tools(child.capability_profile.fetch('capabilities', [])),
+          mcp: nil,
+          resolved_profile:
+        )
+      end
+
+      private :scheduled_work_projection, :latest_schedule_occurrence,
+              :child_concurrency_limit, :release_child_capacity, :build_child_session
 
       def child_delegation_context
         Thread.current[:tamoz_agent_child_delegation_context]
