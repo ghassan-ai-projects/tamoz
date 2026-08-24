@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'digest'
 
 # Phase B0 (docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md):
 # the nine canonical comms scenarios run through the composition harness as a
@@ -66,6 +67,96 @@ class BenchmarkCommsB0Test < Minitest::Test
     end
   end
 
+  def test_c1_cross_surface_parity_compares_meaning_not_bytes
+    with_runner(scenarios: ['C1']) do |runner, _|
+      records = scores(runner)
+      record = records.fetch('C1')
+
+      assert_equal 'ready', record.fetch('status'), record['reason']
+      assert_equal 1, record.dig('metrics', 'parity')
+      parity = record.fetch('parity')
+      assert_equal 'scored', parity.fetch('status')
+      assert_equal 1, parity.fetch('score')
+      CoreParityFacts.each do |fact|
+        assert_equal 1, parity.dig('compared', fact), "C1 #{fact} must be compared and equal"
+      end
+      edges = parity.fetch('edges')
+      assert edges.any? { |edge| edge['fact'] == 'conversation_scoped_cli_reference' }
+      edges.each do |edge|
+        assert_equal 'unavailable', edge.fetch('status')
+        assert_instance_of String, edge.fetch('reason')
+      end
+    end
+  end
+
+  def test_c5_controls_subset_parity_covers_status_and_cancel_only
+    with_runner(scenarios: ['C5']) do |runner, _|
+      records = scores(runner)
+      record = records.fetch('C5')
+
+      assert_equal 'ready', record.fetch('status'), record['reason']
+      assert_equal 1, record.dig('metrics', 'parity')
+      parity = record.fetch('parity')
+      assert_equal 'scored', parity.fetch('status')
+      assert_equal({ 'status_semantics' => 1, 'cancel_semantics' => 1 }, parity.fetch('compared'))
+      facts = parity.fetch('edges').map { |edge| edge.fetch('fact') }
+      assert_includes facts, 'command_sweep_breadth'
+      assert_includes facts, 'pairing_and_admission'
+    end
+  end
+
+  def test_c6_flips_to_scored_cross_surface_parity_with_typed_unavailable_edges
+    with_runner(scenarios: ['C6']) do |runner, _|
+      records = scores(runner)
+      record = records.fetch('C6')
+
+      assert_equal 'ready', record.fetch('status'), record['reason']
+      assert_equal 1, record.dig('metrics', 'parity')
+      assert_equal 1, record.dig('metrics', 'context_inclusion')
+      assert_equal 1, record.dig('metrics', 'reference_stability')
+      parity = record.fetch('parity')
+
+      assert_equal 'scored', parity.fetch('status')
+      CoreParityFacts.each do |fact|
+        assert_equal 1, parity.dig('compared', fact), "C6 #{fact} must be compared and equal"
+      end
+      # parity_by_text is proven, not assumed: the two surfaces answered with
+      # different scripted texts while every meaning-level fact still matched.
+      assert parity.fetch('distinct_answer_texts')
+      assert_equal 'passed', record.dig('hard_zero', 'parity_by_text')
+      assert_equal 'passed', record.dig('hard_zero', 'surface_outcome_divergence')
+      cancellation = parity.fetch('cancellation')
+      assert_equal 1, cancellation.fetch('score')
+      event = cancellation.fetch('observed').first
+      assert_equal true, event.fetch('payloads_match')
+      assert_equal true, event.fetch('terminal_delivered')
+      assert_equal 'cancelled_by_user', event.fetch('terminal_reason')
+    end
+  end
+
+  def test_c9_isolation_parity_holds_across_both_conversations
+    with_runner(scenarios: ['C9']) do |runner, _|
+      records = scores(runner)
+      record = records.fetch('C9')
+
+      assert_equal 'ready', record.fetch('status'), record['reason']
+      assert_equal 1, record.dig('metrics', 'isolation')
+      assert_equal 1, record.dig('metrics', 'parity')
+      assert_equal 'scored', record.dig('parity', 'status')
+    end
+  end
+
+  def test_scenarios_without_a_cli_leg_keep_typed_unavailable_parity
+    with_runner(scenarios: ['C2']) do |runner, _|
+      records = scores(runner)
+
+      assert_equal 'unavailable', records.fetch('C2').dig('metrics', 'parity', 'status')
+      assert_nil records.fetch('C2')['parity']
+    end
+  end
+
+  CoreParityFacts = Tamoz::Evals::Benchmark::OpenclawCommsOracles::CORE_PARITY_FACTS.freeze
+
   def test_identical_runs_produce_byte_identical_scores
     first = nil
     second = nil
@@ -79,17 +170,36 @@ class BenchmarkCommsB0Test < Minitest::Test
     assert_equal first, second, 'scores must be deterministic across two identical runs'
   end
 
+  def test_artifacts_are_byte_identical_across_two_runs
+    digests = 2.times.map do
+      with_runner do |runner, directory|
+        runner.run
+        files = %w[manifest.json C1.json C5.json C6.json C9.json]
+        files.to_h { |name| [name, Digest::SHA256.file(File.join(directory, 'fixtures/scenarios', name)).hexdigest] }
+      end
+    end
+
+    assert_equal digests.first, digests.last,
+                 'artifact bytes (manifest + parity artifacts) must be identical across two runs'
+  end
+
   def test_all_nine_catalog_scenarios_appear_with_pending_seams_named_not_faked
     with_runner do |runner, directory|
       result = runner.run
       manifest = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/manifest.json')))
 
       assert_equal %w[C1 C2 C3 C4 C5 C6 C7 C8 C9], manifest.fetch('scenarios')
-      assert_equal %w[C6 C8], manifest.fetch('pending_seam').keys.sort
+      assert_equal %w[C8], manifest.fetch('pending_seam').keys.sort
+      assert_equal(
+        { 'C1' => %w[cli telegram], 'C2' => %w[telegram], 'C3' => %w[telegram], 'C4' => %w[telegram],
+          'C5' => %w[cli telegram], 'C6' => %w[cli telegram], 'C7' => %w[telegram],
+          'C8' => %w[telegram], 'C9' => %w[cli telegram] },
+        manifest.fetch('surfaces_driven')
+      )
       assert_equal 'fixture', manifest.fetch('run_kind')
       assert manifest.fetch('fixture')
       assert_includes manifest.fetch('transport'), 'no_egress'
-      scored = %w[C1 C2 C3 C4 C5 C7 C9]
+      scored = %w[C1 C2 C3 C4 C5 C6 C7 C9]
       scored.each do |scenario|
         artifact = JSON.parse(
           File.read(File.join(directory, "fixtures/scenarios/#{scenario}.json"))
@@ -99,6 +209,7 @@ class BenchmarkCommsB0Test < Minitest::Test
         assert artifact.fetch('fixture')
         assert_equal Runner.const_get(:PROVIDER), artifact.fetch('provider')
         refute_nil artifact.fetch('seam_revisions')
+        assert_equal manifest.dig('surfaces_driven', scenario), artifact.fetch('surfaces_driven')
       end
       pending = JSON.parse(
         File.read(File.join(directory, 'fixtures/scenarios/C8.json'))
@@ -106,6 +217,10 @@ class BenchmarkCommsB0Test < Minitest::Test
 
       assert_equal 'pending_seam', pending.dig('result', 'status')
       assert_instance_of String, pending.dig('result', 'reason')
+      c6 = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/C6.json')))
+
+      assert_equal 'ready', c6.dig('result', 'status'), c6.dig('result', 'reason')
+      assert_equal 'scored', c6.dig('result', 'parity', 'status')
       assert_equal result.manifest.fetch('results'), manifest.fetch('results')
     end
   end

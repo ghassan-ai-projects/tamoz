@@ -141,6 +141,62 @@ module Tamoz
           ->(_options) { CrashingModel.new(after:, **responses) }
         end
 
+        # The durable CLI queue path (the seam gems/tamoz-agent-cli's
+        # `queue add` / `cancel` drive): authority is bound write-once, then
+        # the turn is submitted to the SAME durable request inbox the gateway
+        # admits into, so one thread is reachable from both surfaces. The
+        # request id is digest-derived from (thread, purpose), never random,
+        # so two runs enqueue byte-identical work.
+        CLI_REQUEST_DOMAIN = 'tamoz.evals.benchmark.cli.v1'
+        CANCEL_REASON = 'cancelled_by_user'
+        CLI_CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => CANCEL_REASON } }.freeze
+
+        def cli_request_id(thread_id, purpose)
+          Tamoz::Comms::Canonical.hexdigest(CLI_REQUEST_DOMAIN, [thread_id, purpose])
+        end
+
+        def submit_cli_task(thread_id:, purpose:, task:)
+          bind_cli_thread(thread_id)
+          request_id = cli_request_id(thread_id, purpose)
+          @runtime.session_for(thread_id).app.durable_runner.submit(
+            { 'task' => task }, thread: thread_id, request_id: request_id,
+                                 operation: :turn, delivery: :queue
+          )
+          request_id
+        end
+
+        def submit_cli_cancel(thread_id:, purpose: 'cancel')
+          bind_cli_thread(thread_id)
+          request_id = cli_request_id(thread_id, purpose)
+          @runtime.session_for(thread_id).app.durable_runner.submit(
+            CLI_CANCEL_PAYLOAD, thread: thread_id, request_id: request_id,
+                                operation: :redirect, delivery: :redirect
+          )
+          request_id
+        end
+
+        def request_row(thread_id, request_id)
+          @runtime.checkpoints.fetch_request(
+            thread_id: thread_id, request_id: request_id, namespace: []
+          )
+        end
+
+        def durable_request_rows(thread_id)
+          @runtime.checkpoints.request_history(thread_id: thread_id, namespace: []).map do |record|
+            {
+              'request_id' => record.request_id, 'operation' => record.operation.to_s,
+              'status' => record.status.to_s, 'payload' => record.payload
+            }
+          end
+        end
+
+        private def bind_cli_thread(thread_id)
+          bound = @runtime.thread_profile(thread_id)
+          return if bound == PROFILE_ID
+
+          @runtime.bind_thread_profile(thread_id, PROFILE_ID)
+        end
+
         PLAN_STEPS = [
           { 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
             'steps' => [
@@ -233,6 +289,17 @@ module Tamoz
           Tamoz::Comms::Admission.thread_id(SURFACE_ID, conversation_id)
         end
 
+        # The thread CURRENT admissions derive: control commands such as /new
+        # rotate the conversation generation, so drivers must resolve the
+        # thread through the same generation derivation as the gateway.
+        def current_thread(conversation_id)
+          Tamoz::Comms::Admission.thread_id(
+            SURFACE_ID, conversation_id,
+            generation: @store.conversation_generation(surface_id: SURFACE_ID,
+                                                      conversation_id: conversation_id)
+          )
+        end
+
         def bind_thread(conversation_id)
           @runtime.bind_thread_profile(thread_for(conversation_id), PROFILE_ID)
         end
@@ -265,6 +332,15 @@ module Tamoz
 
         def request_status(conversation_id, ref)
           @store.request_status(surface_id: SURFACE_ID, conversation_id: conversation_id, ref: ref, now: @now)
+        end
+
+        def request_ids_for(conversation_id)
+          read_rows(
+            %w[request_id],
+            'SELECT request_id FROM tamoz_comms_requests WHERE conversation_id = ?
+             ORDER BY created_at_ms ASC, request_id ASC',
+            [conversation_id]
+          ).map { |row| row.fetch('request_id') }
         end
 
         def history(conversation_id)
@@ -362,9 +438,9 @@ module Tamoz
           end
         end
 
-        def read_rows(columns, sql)
+        def read_rows(columns, sql, params = [])
           @runtime.adapter.__send__(:read, operation: 'benchmark.comms_fixture') do |txn|
-            txn.rows('benchmark.comms_fixture.select', sql, []).map do |row_array|
+            txn.rows('benchmark.comms_fixture.select', sql, params).map do |row_array|
               columns.zip(row_array).to_h
             end
           end

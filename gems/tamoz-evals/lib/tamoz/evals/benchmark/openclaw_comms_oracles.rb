@@ -108,6 +108,7 @@ module Tamoz
           ack_row = rows_of_kind(facts, 'accepted').find { |row| row['conversation_id'] == conversation }
           admitted = dispositions(facts, facts['driven_update_ids'].first) == [['request', 'accepted']] &&
                      !requests_for(facts, conversation).empty?
+          parity = core_parity_document(facts)
           {
             'metrics' => {
               'admission_before_ack' => admitted && ack_row ? PASS : FAIL,
@@ -115,25 +116,24 @@ module Tamoz
               'completion' => completion(facts, conversation),
               'delivery_axis' => delivery_axis(facts, conversation),
               'context_inclusion' => context_inclusion(facts, conversation),
-              'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
+              'parity' => parity.fetch('score')
             },
             'hard_zero' => {
               'ack_before_admission' => (!admitted && ack_row) ? 'failed' : 'passed',
               'unconfirmed_output_in_history' =>
                 unconfirmed_output_in_history?(facts, conversation) ? 'failed' : 'passed',
               'identity_conflict_deduplicated' => identity_conflict?(facts) ? 'failed' : 'passed'
-            }
+            },
+            'parity' => parity
           }
         end
 
         def delivery_axis(facts, conversation)
           answers = rows_of_kind(facts, 'answer').select { |row| row['conversation_id'] == conversation }
-          return FAIL unless answers.length == 1
+          return FAIL unless !answers.empty? && answers.all? { |row| row['status'] == 'succeeded' }
 
-          answer = answers.first
           task = task_word(facts.fetch('session').dig(conversation, 'status'))
-          delivered = delivery_word(answer['status'])
-          task == 'completed' && delivered == 'delivered' ? PASS : FAIL
+          task == 'completed' && delivery_word(answers.last['status']) == 'delivered' ? PASS : FAIL
         end
 
         # C2 ----------------------------------------------------------------
@@ -188,7 +188,7 @@ module Tamoz
           'help' => ['Commands: /help'],
           'status' => ['Work status:'],
           'new' => ['New conversation started'],
-          'cancel' => ['No active work', 'Cancellation requested'],
+          'cancel' => ['No running request to cancel', 'Cancellation requested'],
           'redirect' => ['Redirecting', 'That request has already finished.', 'Usage: /redirect'],
           'whoami' => ['You are telegram:user:'],
           'start' => ['Usage: /start']
@@ -210,19 +210,21 @@ module Tamoz
             expected = facts['message_id_by_update_id'][row['reply_to']]
             expected || row['reply_to'].nil? ? true : false
           end
+          parity = controls_parity_document(facts)
           {
             'metrics' => {
               'command_parity' => executed && !phantom ? PASS : FAIL,
               'inbound_identity' => inbound_identity(facts),
               'authority_stability' => authority,
               'context_inclusion' => injection_inert(facts, conversation),
-              'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
+              'parity' => parity.fetch('score')
             },
             'hard_zero' => {
               'phantom_command' => phantom ? 'failed' : 'passed',
               'authority_from_content' => authority == PASS ? 'passed' : 'failed',
               'identity_conflict_deduplicated' => conflict_merged?(facts) ? 'failed' : 'passed'
-            }
+            },
+            'parity' => parity
           }
         end
 
@@ -300,6 +302,8 @@ module Tamoz
           end
           sends_isolated = facts['sends'].group_by { |send| send['conversation_id'] }.keys.sort ==
                            conversations.sort
+          own_references = refs.values.flatten +
+                           facts.fetch('cli_legs', []).map { |leg| leg.fetch('reference') }
           history_isolated = conversations.all? do |conversation|
             own = requests_for(facts, conversation).map { |row| row.fetch('request_id') }
             assistant_entries(facts, conversation).length ==
@@ -309,12 +313,10 @@ module Tamoz
               end
           end
           milestone_isolated = milestone_rows(facts).all? do |row|
-            conversations.any? do |conversation|
-              requests_for(facts, conversation).any? do |request|
-                request.fetch('request_ref') == row['milestone_facts'].fetch('request_ref')
-              end
-            end
+            reference = row['milestone_facts'].fetch('request_ref')
+            own_references.include?(reference)
           end
+          parity = core_parity_document(facts)
           {
             'metrics' => {
               'isolation' => !cross_resolved && sends_isolated && history_isolated &&
@@ -323,13 +325,14 @@ module Tamoz
                 conversations.all? { |conversation| context_inclusion(facts, conversation) } ? PASS : FAIL,
               'reference_stability' =>
                 conversations.all? { |conversation| reference_stability(facts, conversation) } ? PASS : FAIL,
-              'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
+              'parity' => parity.fetch('score')
             },
             'hard_zero' => {
               'cross_conversation_attribution' => sends_isolated && milestone_isolated ? 'passed' : 'failed',
               'status_cross_resolution' => cross_resolved ? 'failed' : 'passed',
               'wrong_conversation_history' => history_isolated ? 'passed' : 'failed'
-            }
+            },
+            'parity' => parity
           }
         end
 
@@ -387,6 +390,210 @@ module Tamoz
               'unknown_reported_as_terminal' =>
                 unknown_rows.none? { |row| %w[succeeded failed].include?(row['status']) } ? 'passed' : 'failed'
             }
+          }
+        end
+
+        # Reference stability for scenarios that drive further turns after the
+        # first admitted request: the FIRST telegram reference must still
+        # resolve to its own row through the conversation projection.
+        def first_reference_stable(facts, conversation)
+          reference = facts['requests'].select { |row| row['conversation_id'] == conversation }
+                                       .filter_map { |row| row['request_ref'] }.first
+          return FAIL unless reference
+
+          accepted = rows_of_kind(facts, 'accepted').find { |row| row['conversation_id'] == conversation }
+          projection = facts.fetch('request_projections')[reference]
+          accepted&.dig('text').to_s.include?(reference) &&
+            projection.is_a?(Hash) && projection['request_ref'] == reference ? PASS : FAIL
+        end
+
+        # C6 ----------------------------------------------------------------
+        # Cross-surface parity over ONE durable thread reachable from both
+        # surfaces: the telegram leg and the durable-CLI leg are compared on
+        # MEANING — the Lifecycle vocabulary each surface's internal state
+        # translates to, whether each surface's reference resolves to its own
+        # executed request row, the terminal reason, and history under the
+        # confirmed-deliveries rule — never on rendered bytes.
+
+        CORE_PARITY_FACTS = %w[lifecycle_vocabulary reference_resolution
+                               terminal_reason history_confirmed_deliveries].freeze
+
+        def unavailable_edge(fact, reason)
+          { 'fact' => fact, 'status' => 'unavailable', 'reason' => reason }
+        end
+
+        def paired_legs(facts)
+          cli = facts.fetch('cli_legs', [])
+          facts.fetch('telegram_legs', []).filter_map do |telegram|
+            partner = cli.find { |leg| leg['conversation_id'] == telegram['conversation_id'] }
+            next nil unless partner
+
+            [telegram, partner]
+          end
+        end
+
+        def lifecycle_vocabulary(facts)
+          pairs = paired_legs(facts)
+          return FAIL if pairs.empty?
+
+          matched = pairs.all? do |telegram, cli|
+            telegram_word = leg_task_word(telegram)
+            !telegram_word.nil? && telegram_word == leg_task_word(cli)
+          end
+          deliveries = pairs.flat_map do |telegram, cli|
+            [delivery_word(telegram['delivery_state']), delivery_word(cli['delivery_state'])]
+          end
+          matched && deliveries.uniq.length == 1 && deliveries.first != 'none' ? PASS : FAIL
+        rescue Tamoz::Comms::ValidationError
+          FAIL
+        end
+
+        def leg_task_word(leg)
+          state = leg['request_status']
+          return nil if state.to_s.empty?
+
+          task_word(state)
+        end
+
+        def milestone_references(facts)
+          facts['outbox'].filter_map { |row| row.dig('milestone_facts', 'request_ref') }.uniq
+        end
+
+        def reference_resolution(facts)
+          pairs = paired_legs(facts)
+          return FAIL if pairs.empty?
+
+          cards = milestone_references(facts)
+          resolved = pairs.all? do |telegram, cli|
+            leg_reference_resolves?(facts, telegram) && leg_reference_resolves?(facts, cli) &&
+              cards.include?(telegram['reference']) && cards.include?(cli['reference'])
+          end
+          resolved ? PASS : FAIL
+        end
+
+        def leg_reference_resolves?(facts, leg)
+          leg['request_row_present'] &&
+            leg['reference'] == Tamoz::Comms::Lifecycle::RequestRef.for(leg['request_id'])
+        end
+
+        def terminal_reason(facts)
+          pairs = paired_legs(facts)
+          return FAIL if pairs.empty?
+
+          pairs.all? do |telegram, cli|
+            reason = telegram['terminal_reason'].to_s
+            !reason.empty? && reason == cli['terminal_reason'].to_s
+          end ? PASS : FAIL
+        end
+
+        def history_confirmed_deliveries(facts)
+          conversations = paired_legs(facts).map { |telegram, _| telegram['conversation_id'] }
+          return FAIL if conversations.empty?
+
+          conversations.all? { |conversation| context_inclusion(facts, conversation) == PASS } ? PASS : FAIL
+        end
+
+        def core_parity_compared(facts)
+          {
+            'lifecycle_vocabulary' => lifecycle_vocabulary(facts),
+            'reference_resolution' => reference_resolution(facts),
+            'terminal_reason' => terminal_reason(facts),
+            'history_confirmed_deliveries' => history_confirmed_deliveries(facts)
+          }
+        end
+
+        def core_parity_document(facts, extra_edges: [])
+          compared = core_parity_compared(facts)
+          edges = extra_edges + [cli_visibility_edge] + [
+            unavailable_edge('conversation_scoped_cli_reference',
+                             'a CLI-submitted request has no comms conversation scope, so ' \
+                             'store.request_status cannot resolve it; thread-scoped resolution is compared instead')
+          ]
+          document = {
+            'status' => 'scored',
+            'compared' => compared,
+            'score' => compared.value?(FAIL) ? FAIL : PASS,
+            'edges' => edges
+          }
+          document
+        end
+
+        # The conversation projection counts comms-admitted requests only, so
+        # CLI-queued work has no /status or /cancel expression at the command
+        # layer; parity therefore compares thread-scoped durable facts.
+        def cli_visibility_edge
+          unavailable_edge('cli_queued_work_conversation_visibility',
+                           'the conversation projection sees comms-admitted requests only, so the ' \
+                           '/status and /cancel command guards cannot express CLI-queued work')
+        end
+
+        def c6(facts, conversation:)
+          document = core_parity_document(facts)
+          parity_score = document.fetch('score')
+          authority = authority_stable?(facts)
+          cancellation = cancellation_parity(facts)
+          distinct_texts = facts['distinct_answer_texts'] == true
+          {
+            'metrics' => {
+              'parity' => parity_score,
+              'context_inclusion' => context_inclusion(facts, conversation),
+              'reference_stability' => first_reference_stable(facts, conversation)
+            },
+            'hard_zero' => {
+              'parity_by_text' => distinct_texts && parity_score == PASS ? 'passed' : 'failed',
+              'surface_outcome_divergence' => parity_score == PASS ? 'passed' : 'failed',
+              'one_sided_cancellation' => cancellation == PASS ? 'passed' : 'failed'
+            },
+            'parity' => document.merge(
+              'cancellation' => { 'score' => cancellation,
+                                  'observed' => facts.fetch('cancellations', []) },
+              'distinct_answer_texts' => distinct_texts
+            )
+          }
+        end
+
+        # A cancellation is one-sided when only the issuing surface can express
+        # the outcome. The fixture cancels CLI-submitted work from the telegram
+        # control path and CLI-side work from the CLI redirect path; both must
+        # land the same durable payload and the same terminal reason, visible
+        # as a delivered terminal row on the shared conversation.
+        def cancellation_parity(facts)
+          events = facts.fetch('cancellations', [])
+          return FAIL if events.empty?
+
+          events.all? do |event|
+            event['terminal_reason'] == 'cancelled_by_user' &&
+              event['payloads_match'] == true && event['terminal_delivered'] == true
+          end ? PASS : FAIL
+        end
+
+        # C5 controls subset that exists on BOTH surfaces: /status word agreement
+        # and /cancel semantics (same durable payload contract, same terminal
+        # reason). The remaining sweep commands have no operator-CLI counterpart
+        # inside this harness seam and stay typed-unavailable edges.
+        def controls_parity_document(facts)
+          status_reply = facts['cli_status_probe']
+          swept = status_reply.is_a?(Hash) ? status_reply['reply_word'] : nil
+          viewed = status_reply.is_a?(Hash) ? status_reply['view_word'] : nil
+          status_semantics = !swept.nil? && swept == viewed ? PASS : FAIL
+          cancel = cancellation_parity(facts)
+          compared = {
+            'status_semantics' => status_semantics,
+            'cancel_semantics' => cancel
+          }
+          edges = [
+            unavailable_edge('command_sweep_breadth',
+                             'help/new/redirect/whoami/start have no operator-CLI counterpart in this ' \
+                             'harness seam; only /status and /cancel are compared'),
+            unavailable_edge('pairing_and_admission',
+                             'the operator CLI has no untrusted-sender admission concept to compare against'),
+            cli_visibility_edge
+          ]
+          {
+            'status' => 'scored',
+            'compared' => compared,
+            'score' => compared.value?(FAIL) ? FAIL : PASS,
+            'edges' => edges
           }
         end
       end
