@@ -536,3 +536,6 @@ module Tamoz
 end
 
 require_relative 'openclaw_durable_cli_adapter'
+require_relative 'openclaw_comms_oracles'
+require_relative 'openclaw_comms_fixture'
+require_relative 'openclaw_comms_runner'
