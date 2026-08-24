@@ -157,59 +157,70 @@ module Tamoz
           signal = record.typed_signal
           fingerprint = record.fingerprint
           category = signal.fetch("category").to_sym
-          never_mutate = record.never_mutate?
-          never_mutate_class = record.never_mutate_class
 
-          # A never-mutate class short-circuits BEFORE the rule trigger is even
-          # consulted, so no rule can opt itself into mutating one of the five.
-          if never_mutate
-            family = CATEGORY_ACTION_FAMILY.fetch(category)
-            family = :contain_escalate if MUTATING_FAMILIES.include?(family)
-            return build(
-              category:, action_family: family,
-              confidence: category == :unknown ? NO_CONFIDENCE : EVIDENCED_CONFIDENCE,
-              abstained: category == :unknown,
-              never_mutate: true, never_mutate_class:,
-              reason: "never_mutate_class:#{never_mutate_class}",
-              evidence: evidence_for(signal, category),
-              failure_fingerprint: fingerprint, rule:
-            )
-          end
-
-          unless rule.triggers?(signal)
-            return build(
-              category:, action_family: :abstain, confidence: NO_CONFIDENCE,
-              abstained: true, never_mutate: false, never_mutate_class: nil,
-              reason: "trigger_mismatch",
-              evidence: evidence_for(signal, category),
-              failure_fingerprint: fingerprint, rule:
-            )
-          end
+          return never_mutate_decision(record, category, signal, fingerprint, rule) if record.never_mutate?
+          return trigger_mismatch_decision(category, signal, fingerprint, rule) unless rule.triggers?(signal)
 
           confidence = confidence_for(signal, category)
-          if confidence < rule.minimum_confidence
-            return build(
-              category:, action_family: :abstain, confidence:,
-              abstained: true, never_mutate: false, never_mutate_class: nil,
-              reason: "below_minimum_confidence:#{rule.minimum_confidence}",
-              evidence: evidence_for(signal, category),
-              failure_fingerprint: fingerprint, rule:
-            )
-          end
+          return below_confidence_decision(category, signal, fingerprint, rule, confidence) if
+            confidence < rule.minimum_confidence
 
           family = CATEGORY_ACTION_FAMILY.fetch(category)
-          # A rule may only take an action family it is authorized for. It may
-          # NARROW (fall back to contain-and-escalate); it may never widen.
-          unless rule.authorized_family?(family)
-            return build(
-              category:, action_family: :contain_escalate, confidence:,
-              abstained: false, never_mutate: false, never_mutate_class: nil,
-              reason: "family_not_authorized:#{family}",
-              evidence: evidence_for(signal, category),
-              failure_fingerprint: fingerprint, rule:
-            )
-          end
+          return family_unauthorized_decision(category, signal, fingerprint, rule, confidence, family) unless
+            rule.authorized_family?(family)
 
+          typed_evidence_decision(category, signal, fingerprint, rule, confidence, family)
+        end
+
+        def never_mutate_decision(record, category, signal, fingerprint, rule)
+          family = CATEGORY_ACTION_FAMILY.fetch(category)
+          family = :contain_escalate if MUTATING_FAMILIES.include?(family)
+          build(
+            category:, action_family: family,
+            confidence: category == :unknown ? NO_CONFIDENCE : EVIDENCED_CONFIDENCE,
+            abstained: category == :unknown,
+            never_mutate: true, never_mutate_class: record.never_mutate_class,
+            reason: "never_mutate_class:#{record.never_mutate_class}",
+            evidence: evidence_for(signal, category),
+            failure_fingerprint: fingerprint, rule:
+          )
+        end
+        private_class_method :never_mutate_decision
+
+        def trigger_mismatch_decision(category, signal, fingerprint, rule)
+          build(
+            category:, action_family: :abstain, confidence: NO_CONFIDENCE,
+            abstained: true, never_mutate: false, never_mutate_class: nil,
+            reason: "trigger_mismatch",
+            evidence: evidence_for(signal, category),
+            failure_fingerprint: fingerprint, rule:
+          )
+        end
+        private_class_method :trigger_mismatch_decision
+
+        def below_confidence_decision(category, signal, fingerprint, rule, confidence)
+          build(
+            category:, action_family: :abstain, confidence:,
+            abstained: true, never_mutate: false, never_mutate_class: nil,
+            reason: "below_minimum_confidence:#{rule.minimum_confidence}",
+            evidence: evidence_for(signal, category),
+            failure_fingerprint: fingerprint, rule:
+          )
+        end
+        private_class_method :below_confidence_decision
+
+        def family_unauthorized_decision(category, signal, fingerprint, rule, confidence, family)
+          build(
+            category:, action_family: :contain_escalate, confidence:,
+            abstained: false, never_mutate: false, never_mutate_class: nil,
+            reason: "family_not_authorized:#{family}",
+            evidence: evidence_for(signal, category),
+            failure_fingerprint: fingerprint, rule:
+          )
+        end
+        private_class_method :family_unauthorized_decision
+
+        def typed_evidence_decision(category, signal, fingerprint, rule, confidence, family)
           build(
             category:, action_family: family, confidence:, abstained: false,
             never_mutate: false, never_mutate_class: nil,
@@ -218,6 +229,7 @@ module Tamoz
             failure_fingerprint: fingerprint, rule:
           )
         end
+        private_class_method :typed_evidence_decision
 
         def build(category:, action_family:, confidence:, abstained:, never_mutate:,
                   never_mutate_class:, reason:, evidence:, failure_fingerprint:, rule:)
