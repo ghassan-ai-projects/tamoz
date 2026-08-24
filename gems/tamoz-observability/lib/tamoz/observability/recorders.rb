@@ -152,20 +152,15 @@ module Tamoz
         attr_reader :path
 
         def self.read(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
-          read_entries(directory, role:, since_ms:, thread_id:, kind:).map(&:first)
+          Files.read(directory, role:, since_ms:, thread_id:, kind:)
         end
 
         def self.read_entries(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
-          matching_files(directory, role)
-            .flat_map { |file| read_file_entries(file, since_ms:, thread_id:, kind:) }
-            .sort_by { |document, _identity| document.fetch('observed_at_ms', 0) }
+          Files.read_entries(directory, role:, since_ms:, thread_id:, kind:)
         end
 
         def self.inventory(directory)
-          ndjson_files, health_files = inventory_files(directory)
-          build_inventory(ndjson_files, health_files)
-        rescue Errno::ENOENT
-          empty_inventory
+          Files.inventory(directory)
         end
 
         def initialize(directory:, role:, pid: Process.pid, catalog: Catalog, policy: ContentPolicy::NONE,
@@ -218,71 +213,6 @@ module Tamoz
         end
 
         private
-
-        def self.matching_files(directory, role)
-          Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
-             .reject { |file| file.end_with?('.health.json') }
-             .sort
-        end
-
-        def self.read_file_entries(file, since_ms:, thread_id:, kind:)
-          identity = file_identity(file)
-          File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
-            parse_entry(line, identity, index, since_ms:, thread_id:, kind:)
-          end
-        rescue Errno::ENOENT
-          []
-        end
-
-        def self.file_identity(file)
-          stat = File.stat(file)
-          "#{stat.dev}:#{stat.ino}"
-        end
-
-        def self.parse_entry(line, file_identity, index, since_ms:, thread_id:, kind:)
-          return nil if line.strip.empty?
-
-          document = JSON.parse(line)
-          return nil unless matches_filters?(document, since_ms:, thread_id:, kind:)
-
-          [document, "#{file_identity}:#{index}"]
-        rescue JSON::ParserError
-          nil
-        end
-
-        def self.matches_filters?(document, since_ms:, thread_id:, kind:)
-          return false if since_ms && document.fetch('observed_at_ms', 0) < since_ms
-          return false if thread_id && document.dig('correlation', 'thread_id') != thread_id
-          return false if kind && document.fetch('kind') != kind.to_s
-
-          true
-        end
-
-        def self.inventory_files(directory)
-          expanded = File.expand_path(directory)
-          ndjson_files = Dir.glob(File.join(expanded, '*.ndjson*')).reject { |file| file.end_with?('.health.json') }
-          health_files = Dir.glob(File.join(expanded, '*.health.json'))
-          [ndjson_files, health_files]
-        end
-
-        def self.build_inventory(ndjson_files, health_files)
-          {
-            'files' => ndjson_files.length,
-            'bytes' => ndjson_files.sum { |file| File.size(file) },
-            'drops' => health_files.sum { |file| drops_from_health_file(file) },
-            'paths' => ndjson_files.sort
-          }
-        end
-
-        def self.drops_from_health_file(file)
-          JSON.parse(File.read(file)).fetch('drops', {}).values.sum
-        rescue JSON::ParserError, SystemCallError
-          0
-        end
-
-        def self.empty_inventory
-          {'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => []}
-        end
 
         def positive_integer(value, name)
           return value if value.is_a?(Integer) && value.positive?
@@ -460,6 +390,102 @@ module Tamoz
 
         def drops_hash
           @drops.to_h { |(name, reason, lane), count| [drop_key(name, reason, lane), count] }
+        end
+
+        # File-system reads and inventory are stateless queries over the journal
+        # directory. They live next to Journal because they interpret its file
+        # naming and sidecar conventions, but they need no instance state.
+        class Files
+          def self.read(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
+            read_entries(directory, role:, since_ms:, thread_id:, kind:).map(&:first)
+          end
+
+          def self.read_entries(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
+            matching_files(directory, role)
+              .flat_map { |file| read_file_entries(file, since_ms:, thread_id:, kind:) }
+              .sort_by { |document, _identity| document.fetch('observed_at_ms', 0) }
+          end
+
+          def self.inventory(directory)
+            ndjson_files, health_files = inventory_files(directory)
+            build_inventory(ndjson_files, health_files)
+          rescue Errno::ENOENT
+            empty_inventory
+          end
+
+          def self.matching_files(directory, role)
+            Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
+               .reject { |file| file.end_with?('.health.json') }
+               .sort
+          end
+          private_class_method :matching_files
+
+          def self.read_file_entries(file, since_ms:, thread_id:, kind:)
+            identity = file_identity(file)
+            File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
+              parse_entry(line, identity, index, since_ms:, thread_id:, kind:)
+            end
+          rescue Errno::ENOENT
+            []
+          end
+          private_class_method :read_file_entries
+
+          def self.file_identity(file)
+            stat = File.stat(file)
+            "#{stat.dev}:#{stat.ino}"
+          end
+          private_class_method :file_identity
+
+          def self.parse_entry(line, file_identity, index, since_ms:, thread_id:, kind:)
+            return nil if line.strip.empty?
+
+            document = JSON.parse(line)
+            return nil unless matches_filters?(document, since_ms:, thread_id:, kind:)
+
+            [document, "#{file_identity}:#{index}"]
+          rescue JSON::ParserError
+            nil
+          end
+          private_class_method :parse_entry
+
+          def self.matches_filters?(document, since_ms:, thread_id:, kind:)
+            return false if since_ms && document.fetch('observed_at_ms', 0) < since_ms
+            return false if thread_id && document.dig('correlation', 'thread_id') != thread_id
+            return false if kind && document.fetch('kind') != kind.to_s
+
+            true
+          end
+          private_class_method :matches_filters?
+
+          def self.inventory_files(directory)
+            expanded = File.expand_path(directory)
+            ndjson_files = Dir.glob(File.join(expanded, '*.ndjson*')).reject { |file| file.end_with?('.health.json') }
+            health_files = Dir.glob(File.join(expanded, '*.health.json'))
+            [ndjson_files, health_files]
+          end
+          private_class_method :inventory_files
+
+          def self.build_inventory(ndjson_files, health_files)
+            {
+              'files' => ndjson_files.length,
+              'bytes' => ndjson_files.sum { |file| File.size(file) },
+              'drops' => health_files.sum { |file| drops_from_health_file(file) },
+              'paths' => ndjson_files.sort
+            }
+          end
+          private_class_method :build_inventory
+
+          def self.drops_from_health_file(file)
+            JSON.parse(File.read(file)).fetch('drops', {}).values.sum
+          rescue JSON::ParserError, SystemCallError
+            0
+          end
+          private_class_method :drops_from_health_file
+
+          def self.empty_inventory
+            {'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => []}
+          end
+          private_class_method :empty_inventory
         end
       end
     end

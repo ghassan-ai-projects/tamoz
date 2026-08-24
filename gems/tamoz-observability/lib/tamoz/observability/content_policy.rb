@@ -220,9 +220,7 @@ module Tamoz
       end
 
       def repair_utf8_tail(value)
-        while !value.valid_encoding? && value.bytesize.positive?
-          value = value.byteslice(0, value.bytesize - 1).to_s
-        end
+        value = value.byteslice(0, value.bytesize - 1).to_s while !value.valid_encoding? && value.bytesize.positive?
         value
       end
 

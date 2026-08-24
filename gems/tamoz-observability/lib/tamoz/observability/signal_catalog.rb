@@ -84,8 +84,11 @@ module Tamoz
         attributes = validate_attributes(required, optional)
         correlation = validate_correlation_keys!(name, correlation)
 
-        store(build_entry(name:, kind:, since:, stability:, safety_bearing:,
-                          correlation:, attributes:, content:))
+        store(Entry.new(
+                name:, kind:, since:, stability:, safety_bearing:,
+                correlation:, required: attributes.fetch(:required),
+                optional: attributes.fetch(:optional), content: content.map(&:to_sym).freeze
+              ))
       end
       # rubocop:enable Metrics/ParameterLists
 
@@ -157,14 +160,6 @@ module Tamoz
 
           [attribute.to_sym, type]
         end.freeze
-      end
-
-      def build_entry(name:, kind:, since:, stability:, safety_bearing:, correlation:, attributes:, content:)
-        Entry.new(
-          name:, kind:, since:, stability:, safety_bearing:,
-          correlation:, required: attributes.fetch(:required),
-          optional: attributes.fetch(:optional), content: content.map(&:to_sym).freeze
-        )
       end
 
       def signature_unchanged?(existing, entry)

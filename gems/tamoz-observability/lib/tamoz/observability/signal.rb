@@ -112,6 +112,8 @@ module Tamoz
         raise ValidationError, 'observed_at_ms must be an integer' unless observed_at_ms.is_a?(Integer)
       end
 
+      # rubocop:disable Metrics/ParameterLists -- build_state is a straight
+      # field-by-field unpacking of the constructor's immutable value list.
       def build_state(kind:, name:, schema_version:, correlation:, timing:,
                       started_at_ms:, ended_at_ms:, observed_at_ms:,
                       attributes:, content:, policy_digest:, outcome:, error_class:)
@@ -129,6 +131,7 @@ module Tamoz
         @outcome = outcome
         @error_class = error_class&.to_s&.freeze
       end
+      # rubocop:enable Metrics/ParameterLists
 
       def freeze_attributes(values, field)
         validate_attribute_hash!(values, field)

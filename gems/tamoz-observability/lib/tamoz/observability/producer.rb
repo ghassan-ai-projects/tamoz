@@ -86,7 +86,7 @@ module Tamoz
       def duration_ms_for(name, started_at_ms, ended_at_ms)
         return {} unless Catalog.fetch(name).optional.key?(:duration_ms)
 
-        {duration_ms: ended_at_ms - started_at_ms}
+        { duration_ms: ended_at_ms - started_at_ms }
       end
     end
   end
