@@ -193,24 +193,33 @@ module Tamoz
       # ------------------------------------------------------------------ inbox
 
       def advance_pending_threads
-        actionable = begin
-          work_list.reject { |entry| parked?(entry) }
-        rescue WorkerRuntime::StoreUnavailableError => error
-          # The work list could not be read. That is reported and retried on the
-          # next poll — it is NOT an empty inbox, and the difference has to be
-          # visible or a sick store looks exactly like a quiet one.
-          emit("worker.error", reason: error.message)
-          []
-        end
+        actionable = actionable_entries
         return 0 if actionable.empty?
 
+        progressed_results(advance_entries(actionable))
+      end
+
+      def actionable_entries
+        work_list.reject { |entry| parked?(entry) }
+      rescue WorkerRuntime::StoreUnavailableError => error
+        # The work list could not be read. That is reported and retried on the
+        # next pass — it is NOT an empty inbox, and the difference has to be
+        # visible or a sick store looks exactly like a quiet one.
+        emit("worker.error", reason: error.message)
+        []
+      end
+
+      def advance_entries(entries)
         pool = Tamoz::Pool.for(
           @concurrency > 1 ? :threads : :inline,
           size: @concurrency,
           max_tasks: @batch,
           cancellation: @cancellation
         )
-        results = pool.map(actionable) { |entry| advance_thread(entry) }
+        pool.map(entries) { |entry| advance_thread(entry) }
+      end
+
+      def progressed_results(results)
         results.count { |result| value_of(result) == PROGRESSED }
       end
 
@@ -254,49 +263,8 @@ module Tamoz
         session = @session_builder.call(thread_id)
         return IDLE unless session
 
-        case entry.fetch(:head_status)
-        when :queued
-          # A queued request has no checkpoint yet — there is nothing to view and
-          # nothing to recover. Run it.
-          claim_and_run(session, thread_id:, occurrence_id:)
-        when :claimed, :running, :redirecting, :open
-          # Non-terminal with a checkpoint behind it: either a human owes this
-          # thread an answer, or a worker died holding it. The VIEW decides which,
-          # because the request status alone cannot tell those two apart.
-          view = view_of(session, thread_id)
-          if view && view.status == :paused && !view.interrupts.empty?
-            # A human may have answered since the last pass. If they have, the
-            # SAME occurrence continues; if they have not, it stays parked.
-            # The decision must bind the exact interrupt set this turn is
-            # paused on, so a decision for one question can never answer a
-            # later one in the same occurrence (design §9).
-            digest = interrupt_digest(view)
-            decision = @runtime.pending_decision(
-              thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
-            )
-            return park(entry, view) && PARKED if decision.nil?
+        return advance_entry(entry, session, thread_id:, occurrence_id:)
 
-            return apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
-          end
-
-          # An open occurrence whose thread has no checkpoint at all is the
-          # crash window between `open_occurrence` and the first commit: the
-          # queued request is still waiting and only a fresh claim starts it.
-          # A terminal view is a thread that finished while this worker was
-          # not looking; settle closes the record. Anything else mid-flight is
-          # a worker that died holding the turn — re-enter THAT execution,
-          # exactly like a claimed inbox entry.
-          if entry.fetch(:head_status) == :open
-            return claim_and_run(session, thread_id:, occurrence_id:) unless view
-            return settle(session, thread_id:, occurrence_id:) if %i[completed failed blocked].include?(view.status)
-
-            return recover(session, thread_id:, occurrence_id:)
-          end
-
-          recover(session, thread_id:, occurrence_id:)
-        else
-          IDLE
-        end
       rescue Tamoz::RecursionLimitError => error
         # The graph refused to take another super-step because the profile's
         # `steps` budget is spent. This is a STOP, not a failure: the work was
@@ -304,6 +272,50 @@ module Tamoz
         # typed event and recorded durably for `tamoz status`.
         budget_exhausted(entry, budget: "steps", detail: error.message, session:)
       rescue StandardError => error
+        return handle_thread_failure(entry, error)
+      end
+
+      def advance_entry(entry, session, thread_id:, occurrence_id:)
+        case entry.fetch(:head_status)
+        when :queued
+          claim_and_run(session, thread_id:, occurrence_id:)
+        when :claimed, :running, :redirecting, :open
+          advance_nonterminal_entry(entry, session, thread_id:, occurrence_id:)
+        else
+          IDLE
+        end
+      end
+
+      def advance_nonterminal_entry(entry, session, thread_id:, occurrence_id:)
+        view = view_of(session, thread_id)
+        return resume_paused_entry(entry, session, thread_id:, occurrence_id:, view:) if paused_view?(view)
+        return advance_open_occurrence(session, thread_id:, occurrence_id:, view:) if entry.fetch(:head_status) == :open
+
+        recover(session, thread_id:, occurrence_id:)
+      end
+
+      def paused_view?(view)
+        view && view.status == :paused && !view.interrupts.empty?
+      end
+
+      def resume_paused_entry(entry, session, thread_id:, occurrence_id:, view:)
+        digest = interrupt_digest(view)
+        decision = @runtime.pending_decision(
+          thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
+        )
+        return park(entry, view) && PARKED if decision.nil?
+
+        apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
+      end
+
+      def advance_open_occurrence(session, thread_id:, occurrence_id:, view:)
+        return claim_and_run(session, thread_id:, occurrence_id:) unless view
+        return settle(session, thread_id:, occurrence_id:) if %i[completed failed blocked].include?(view.status)
+
+        recover(session, thread_id:, occurrence_id:)
+      end
+
+      def handle_thread_failure(entry, error)
         thread_id = entry.fetch(:thread_id)
         occurrence_id = entry.fetch(:head_request_id)
         terminal_request = entry.fetch(:head_status) == :queued
@@ -317,18 +329,12 @@ module Tamoz
         if terminal_request
           begin
             @runtime.durably_fail_request(thread_id, occurrence_id, reason: bounded_reason(error))
-            # The message is terminally dead; the channel must hear about it
-            # rather than wait on a reply that never comes.
             notify_sink(thread_id, "request.failed", crashed_text(error), request_id: occurrence_id)
           rescue StandardError
-            # The claim may have completed under a concurrent pass; the failed
-            # park below still stops the hot loop for claimed entries.
+            nil
           end
           park(entry, nil, reason: "failed")
         else
-          # A claimed/running request is recoverable work. Keep its open
-          # occurrence and child in flight so the next pass can recover the
-          # same execution instead of reporting a permanent child failure.
           unpark(thread_id)
         end
         PARKED
