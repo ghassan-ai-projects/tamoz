@@ -27,27 +27,37 @@ module Tamoz
         # [promotable_boolean, [reason, ...]] — reasons are STABLE ids, never
         # prose to be parsed.
         def evaluate(matrix, mode:)
-          reasons = []
-          return [true, reasons.freeze] unless EVIDENCE_REQUIRED_MODES.include?(mode.to_sym)
+          return [true, [].freeze] unless EVIDENCE_REQUIRED_MODES.include?(mode.to_sym)
 
-          denominator = matrix.fetch("denominator")
-          reasons << :no_denominator if denominator.zero?
-          if denominator.positive? && matrix.fetch("abstention_rate") >= MAX_ABSTENTION_RATE
-            reasons << :total_abstention
-          end
-          if matrix.fetch("per_category").any? { |name, bucket|
-               FailureRecord::NEVER_MUTATE_CATEGORIES.map(&:to_s).include?(name) &&
-                 bucket.fetch("mutating").positive?
-             }
-            reasons << :never_mutate_class_reached_a_mutating_family
-          end
-          reasons << :negative_abstention_quality if
-            matrix.fetch("abstention_quality").fetch("score").negative?
-
+          reasons = collect_reasons(matrix)
           [reasons.empty?, reasons.freeze]
         end
 
         def promotable?(matrix, mode:) = evaluate(matrix, mode:).first
+
+        def collect_reasons(matrix)
+          reasons = []
+          denominator = matrix.fetch("denominator")
+          reasons << :no_denominator if denominator.zero?
+          reasons << :total_abstention if total_abstention?(matrix, denominator)
+          reasons << :never_mutate_class_reached_a_mutating_family if never_mutate_violation?(matrix)
+          reasons << :negative_abstention_quality if matrix.fetch("abstention_quality").fetch("score").negative?
+          reasons
+        end
+        private_class_method :collect_reasons
+
+        def total_abstention?(matrix, denominator)
+          denominator.positive? && matrix.fetch("abstention_rate") >= MAX_ABSTENTION_RATE
+        end
+        private_class_method :total_abstention?
+
+        def never_mutate_violation?(matrix)
+          matrix.fetch("per_category").any? do |name, bucket|
+            FailureRecord::NEVER_MUTATE_CATEGORIES.map(&:to_s).include?(name) &&
+              bucket.fetch("mutating").positive?
+          end
+        end
+        private_class_method :never_mutate_violation?
       end
     end
   end
