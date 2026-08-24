@@ -115,6 +115,7 @@ class DocumentationSurfaceTest < Minitest::Test
   # Each measured gap has a human name on the page; the mapping is explicit
   # so a renamed requirement cannot silently drop its disclosure.
   GAP_DISCLOSURES = {
+    'INV-19' => 'Atomic compare-and-append commit evidence is environment-bound (invariant 19)',
     'ADR-015' => 'Durable barrier timing remains partial (ADR-015)',
     'INV-20' => 'Single-writer recovery evidence remains partial (invariant 20)',
     'INV-39' => 'Cron and civil-time scheduling (invariant 39)',
@@ -133,6 +134,7 @@ class DocumentationSurfaceTest < Minitest::Test
     'INV-60' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
     'INV-61' => 'Observability remains partial (invariants 59–61, ADR-044–047)',
     'OBJ-3' => 'Evaluation hard gates are not currently release-green (objective 3)',
+    'OBJ-4' => 'Durable-effect ambiguity evidence is environment-bound (objective 4)',
     'PHASE-P3' => 'Coding behavior scorecard remains incomplete (phase P3)',
     'OBJ-7' => '## Release readiness'
   }.freeze

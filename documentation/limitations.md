@@ -16,6 +16,29 @@ Read it before deciding whether Tamoz fits your problem.
 These are the gaps the measured release audit currently reports. Each one has a
 heading below; when a gap closes, this page is corrected at the same time.
 
+### Atomic compare-and-append commit evidence is environment-bound (invariant 19)
+
+The invariant's named case
+(`test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state`)
+passes standalone. Its supporting kill-window evidence
+(`sqlite_raw_oracle_test.rb`) drives real SIGKILLs through the evals harness's
+selector-control intervention, and that intervention cannot complete in a
+constrained environment — the harness reports "selector control was not
+authorized before process completion". Audits generated in such an environment
+therefore mark the invariant unproven rather than passing. Regenerate the audit
+on a machine where the kill-based probes run before treating this as closed.
+
+### Durable-effect ambiguity evidence is environment-bound (objective 4)
+
+The objective's named case
+(`test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven`)
+passes standalone, and two of its three supporting cases pass here. The third
+(`agent_session_kill_matrix_test`) sends real SIGTERM/SIGINT/SIGKILL to child
+workers, and one of its semantic assertions does not reproduce in a constrained
+environment — the same failure exists at the pre-extraction baseline. Audits
+generated here therefore mark the objective unproven. Regenerate the audit
+where signal delivery to children is authorized before treating this as closed.
+
 ### Durable barrier timing remains partial (ADR-015)
 
 Tamoz commits durable graph barriers synchronously, but the release evidence does
