@@ -16,6 +16,8 @@ TamozGemspec.build(
     ["tamoz-agent-memory", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-agent-profile", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-agent-healing", "= #{Tamoz::Agent::SessionGem::VERSION}"],
-    ["tamoz-core", "= #{Tamoz::Agent::SessionGem::VERSION}"]
+    ["tamoz-core", "= #{Tamoz::Agent::SessionGem::VERSION}"],
+    ["tamoz-cancellation", "= #{Tamoz::Agent::SessionGem::VERSION}"],
+    ["tamoz-tools", "= #{Tamoz::Agent::SessionGem::VERSION}"]
   ]
 )

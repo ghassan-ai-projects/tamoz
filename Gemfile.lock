@@ -64,7 +64,9 @@ PATH
       tamoz-agent-kernel (= 0.1.0.alpha.1)
       tamoz-agent-memory (= 0.1.0.alpha.1)
       tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent
@@ -184,6 +186,7 @@ PATH
     tamoz-stream (0.1.0.alpha.1)
       google-protobuf (~> 4.35)
       grpc (~> 1.83)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH

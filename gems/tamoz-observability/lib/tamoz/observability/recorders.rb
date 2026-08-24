@@ -274,7 +274,7 @@ module Tamoz
         end
 
         def handle_loop_error(_error)
-          disable!('writer_failure')
+          synchronize { disable!('writer_failure') }
         end
 
         def on_thread_exit

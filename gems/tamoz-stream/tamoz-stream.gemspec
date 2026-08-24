@@ -10,6 +10,7 @@ TamozGemspec.build(
   description: "The gRPC EpisodeWorker service (the stream's runtime dials it), the containment host, snapshot verification, the typed Decision builder, the reverse channel (evidence client, outcome subscriber, verification store, approval relay, situation memory), and the artifact manifest/retention. The old P14 streaming-input engine was retired by forward migration (MIGRATION_13).",
   dependencies: [
     ["tamoz-core", "= #{Tamoz::Stream::VERSION}"],
+    ["tamoz-cancellation", "= #{Tamoz::Stream::VERSION}"],
     ["grpc", "~> 1.83"],
     ["google-protobuf", "~> 4.35"]
   ],

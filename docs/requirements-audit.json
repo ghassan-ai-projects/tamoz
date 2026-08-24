@@ -50,7 +50,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -102,7 +104,9 @@
       "release_blocking": false,
       "status": "indirect",
       "named_test": "test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "indirect",
       "rationale": "Composition style decision. No `Proc#>>` surface exists to test; the named test proves the explicit declaration form is the only compile path.",
       "promotion_exclusion": null,
@@ -155,7 +159,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/graph_state_manager_test.rb#test_unknown_unsupported_and_sensitive_updates_fail_before_candidate",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -189,7 +195,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -223,7 +231,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -239,7 +249,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -255,7 +267,9 @@
       "release_blocking": false,
       "status": "indirect",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "indirect",
       "rationale": "A vocabulary budget is a review policy, not a runtime behavior. The pinned public inventory is the closest direct artifact: the surface cannot grow without changing it.",
       "promotion_exclusion": null,
@@ -291,7 +305,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -307,7 +323,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_effect_journal_test.rb#test_expired_unsafe_running_attempt_becomes_unknown_and_can_record_late_truth",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -323,7 +341,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_checkpoint_test.rb#test_lease_fences_increase_after_release_and_reject_concurrent_owner",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -339,7 +359,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/graph_identity_test.rb#test_memory_checkpointer_assigns_strict_sequence_and_rejects_stale_base",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -355,7 +377,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/graph_history_test.rb#test_graph_identity_is_checked_before_state_access_or_user_code",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -407,7 +431,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_runtime_test.rb#test_never_executes_when_no_plan_passes_review",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -423,7 +449,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -439,7 +467,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_auditor_rejects_missing_review_missing_approval_and_false_completion",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -473,7 +503,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_engine_test.rb#test_lifecycle_transitions_and_eligible_state_set_are_exact",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -507,7 +539,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -579,7 +613,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -595,7 +631,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_skills_test.rb#test_compiles_a_portable_skill_into_an_immutable_content_addressed_record",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -611,7 +649,9 @@
       "release_blocking": false,
       "status": "deferred-by-contract",
       "named_test": "test/agent_skills_test.rb#test_tree_digest_changes_on_body_description_content_and_executable_bit",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "deferred-by-contract",
       "rationale": "Tree-digest identity is directly evidenced (named test). The supply-chain activation half is the deferred P9-C/D2/E install pipeline — invariant 43, which the invariants document assigns to v0.2. No install path exists to test.",
       "promotion_exclusion": null,
@@ -628,7 +668,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/dependency_isolation_test.rb#test_core_loads_only_its_declared_runtime_boundary",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -717,7 +759,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -733,7 +777,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves.",
       "promotion_exclusion": null,
@@ -749,7 +795,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice.",
       "promotion_exclusion": null,
@@ -765,7 +813,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence.",
       "promotion_exclusion": null,
@@ -781,7 +831,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Observability gem split (OBSERVABILITY_PLAN slices A/I). The packaging and dependency-isolation proof for tamoz-observability/tamoz-otel lands with the gems themselves.",
       "promotion_exclusion": null,
@@ -797,7 +849,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The migration-count proof and the separately authorized model usage persistence land with slice E.",
       "promotion_exclusion": null,
@@ -813,7 +867,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice.",
       "promotion_exclusion": null,
@@ -829,7 +885,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice.",
       "promotion_exclusion": null,
@@ -845,7 +903,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -861,7 +921,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -877,7 +939,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -893,7 +957,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -909,7 +975,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -925,7 +993,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -941,7 +1011,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -957,7 +1029,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -973,7 +1047,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -989,7 +1065,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1005,7 +1083,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1021,7 +1101,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1037,7 +1119,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1053,7 +1137,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1069,7 +1155,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1085,7 +1173,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1101,7 +1191,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1117,7 +1209,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1133,7 +1227,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1149,7 +1245,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1165,7 +1263,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1181,7 +1281,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1197,7 +1299,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1213,7 +1317,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1229,7 +1335,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1245,7 +1353,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1261,7 +1371,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1277,7 +1389,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1293,7 +1407,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1309,7 +1425,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1325,7 +1443,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1341,7 +1461,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1357,7 +1479,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1373,7 +1497,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1389,7 +1515,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1405,7 +1533,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1421,7 +1551,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1437,7 +1569,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1453,7 +1587,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1469,7 +1605,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1485,7 +1623,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1501,7 +1641,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1517,7 +1659,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1533,7 +1677,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1549,7 +1695,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1565,7 +1713,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1581,7 +1731,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1597,7 +1749,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1613,7 +1767,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1629,7 +1785,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1645,7 +1803,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1661,7 +1821,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1677,7 +1839,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1693,7 +1857,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1709,7 +1875,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1725,7 +1893,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1741,7 +1911,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1757,7 +1929,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1773,7 +1947,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1789,7 +1965,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1805,7 +1983,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1821,7 +2001,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1837,7 +2019,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1853,7 +2037,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1869,7 +2055,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1885,7 +2073,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1901,7 +2091,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1917,7 +2109,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1933,7 +2127,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1949,7 +2145,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1965,7 +2163,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1981,7 +2181,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -1997,7 +2199,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2013,7 +2217,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2029,7 +2235,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2045,7 +2253,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2061,7 +2271,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2077,7 +2289,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2093,7 +2307,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2109,7 +2325,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2125,7 +2343,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2141,7 +2361,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2157,7 +2379,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2173,7 +2397,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2189,7 +2415,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2205,7 +2433,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2221,7 +2451,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2237,7 +2469,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2253,7 +2487,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2269,7 +2505,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2285,7 +2523,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2301,7 +2541,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2317,7 +2559,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2333,7 +2577,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2349,7 +2595,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2365,7 +2613,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2381,7 +2631,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2397,7 +2649,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2413,7 +2667,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2429,7 +2685,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2445,7 +2703,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2461,7 +2721,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2477,7 +2739,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2493,7 +2757,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2509,7 +2775,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2525,7 +2793,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2541,7 +2811,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2557,7 +2829,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2573,7 +2847,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2589,7 +2865,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2605,7 +2883,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2621,7 +2901,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2637,7 +2919,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2653,7 +2937,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2669,7 +2955,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2685,7 +2973,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2701,7 +2991,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2717,7 +3009,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2733,7 +3027,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2749,7 +3045,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2765,7 +3063,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2781,7 +3081,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2797,7 +3099,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2813,7 +3117,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2829,7 +3135,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2845,7 +3153,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2861,7 +3171,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2877,7 +3189,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2893,7 +3207,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2909,7 +3225,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2925,7 +3243,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2941,7 +3261,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2957,7 +3279,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2973,7 +3297,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -2989,7 +3315,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3005,7 +3333,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3021,7 +3351,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3037,7 +3369,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3053,7 +3387,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3069,7 +3405,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3085,7 +3423,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3101,7 +3441,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3117,7 +3459,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3133,7 +3477,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3149,7 +3495,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3165,7 +3513,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3181,7 +3531,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3197,7 +3549,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3213,7 +3567,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3229,7 +3585,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3245,7 +3603,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3261,7 +3621,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3277,7 +3639,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3293,7 +3657,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3309,7 +3675,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3325,7 +3693,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3341,7 +3711,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3357,7 +3729,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3373,7 +3747,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3389,7 +3765,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3405,7 +3783,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3421,7 +3801,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3437,7 +3819,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3453,7 +3837,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3469,7 +3855,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3485,7 +3873,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3501,7 +3891,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3517,7 +3909,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3533,7 +3927,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3549,7 +3945,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3565,7 +3963,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3581,7 +3981,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3597,7 +3999,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3613,7 +4017,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3629,7 +4035,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3645,7 +4053,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3661,7 +4071,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3677,7 +4089,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3693,7 +4107,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3709,7 +4125,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3725,7 +4143,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3741,7 +4161,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3757,7 +4179,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3773,7 +4197,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3789,7 +4215,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3805,7 +4233,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3821,7 +4251,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3837,7 +4269,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3853,7 +4287,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3869,7 +4305,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3885,7 +4323,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3901,7 +4341,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3917,7 +4359,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3933,7 +4377,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3949,7 +4395,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3965,7 +4413,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3981,7 +4431,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -3997,7 +4449,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4013,7 +4467,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4029,7 +4485,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4045,7 +4503,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4061,7 +4521,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4077,7 +4539,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4093,7 +4557,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4109,7 +4575,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4125,7 +4593,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4141,7 +4611,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4157,7 +4629,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4173,7 +4647,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4189,7 +4665,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4205,7 +4683,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4221,7 +4701,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4237,7 +4719,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4253,7 +4737,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4269,7 +4755,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4285,7 +4773,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4301,7 +4791,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4317,7 +4809,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4333,7 +4827,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4349,7 +4845,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4365,7 +4863,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4381,7 +4881,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4397,7 +4899,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4413,7 +4917,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4429,7 +4935,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4445,7 +4953,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4461,7 +4971,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4477,7 +4989,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4493,7 +5007,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4509,7 +5025,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4525,7 +5043,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4541,7 +5061,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4557,7 +5079,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4573,7 +5097,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4589,7 +5115,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4605,7 +5133,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4621,7 +5151,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4637,7 +5169,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4653,7 +5187,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4669,7 +5205,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4685,7 +5223,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4701,7 +5241,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4717,7 +5259,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4733,7 +5277,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4749,7 +5295,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4765,7 +5313,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4781,7 +5331,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4797,7 +5349,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4813,7 +5367,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4829,7 +5385,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4845,7 +5403,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4861,7 +5421,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4877,7 +5439,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4893,7 +5457,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4909,7 +5475,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4925,7 +5493,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4941,7 +5511,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4957,7 +5529,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4973,7 +5547,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -4989,7 +5565,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5005,7 +5583,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5021,7 +5601,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5037,7 +5619,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5053,7 +5637,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5069,7 +5655,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5085,7 +5673,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5101,7 +5691,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5117,7 +5709,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5133,7 +5727,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5149,7 +5745,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5165,7 +5763,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5181,7 +5781,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5197,7 +5799,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5213,7 +5817,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5229,7 +5835,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5245,7 +5853,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5261,7 +5871,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5277,7 +5889,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5293,7 +5907,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5309,7 +5925,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5325,7 +5943,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5341,7 +5961,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5357,7 +5979,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5373,7 +5997,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5389,7 +6015,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5405,7 +6033,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5421,7 +6051,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5437,7 +6069,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5453,7 +6087,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5469,7 +6105,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5485,7 +6123,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5501,7 +6141,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5517,7 +6159,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5533,7 +6177,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5549,7 +6195,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5565,7 +6213,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5581,7 +6231,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5597,7 +6249,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5613,7 +6267,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5629,7 +6285,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5645,7 +6303,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5661,7 +6321,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5677,7 +6339,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5693,7 +6357,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5709,7 +6375,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5725,7 +6393,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5741,7 +6411,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5757,7 +6429,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5773,7 +6447,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5789,7 +6465,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5805,7 +6483,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5821,7 +6501,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5837,7 +6519,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5853,7 +6537,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5869,7 +6555,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5885,7 +6573,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5901,7 +6591,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5917,7 +6609,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5933,7 +6627,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5949,7 +6645,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5965,7 +6663,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5981,7 +6681,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -5997,7 +6699,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6013,7 +6717,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6029,7 +6735,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6064,7 +6772,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_ask_creates_session_file",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6079,7 +6789,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_cancel_routes_to_terminal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6128,7 +6840,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6143,7 +6857,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6175,7 +6891,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_list_reports_a_written_session",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6190,7 +6908,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_observe_commands_read_the_local_journal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6240,7 +6960,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_redirect_replaces_in_flight_goal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6255,7 +6977,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6304,7 +7028,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -6336,7 +7062,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7142,7 +7870,9 @@
       "release_blocking": false,
       "status": "deferred-by-contract",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "deferred-by-contract",
       "rationale": "v0.2 clause. Skill install/update/self-improvement staging is not implemented (P9-C/D2/E deferred, disclosed): there is no install path in the v0.1 surface, so the clause is neither claimed nor failed. Catalogs are operator-configured only.",
       "promotion_exclusion": "Skill install/update/self-improvement staging is not implemented (P9-C/D2/E deferred); the shipped surface is operator-configured catalogs only. No install path exists to claim or fail this clause.",
@@ -7231,7 +7961,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence.",
       "promotion_exclusion": null,
@@ -7246,7 +7978,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Channel outbox, offset persistence, and ambiguity handling (COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel gems are built; the kill matrix in the telegram slices converts this row to direct evidence.",
       "promotion_exclusion": null,
@@ -7261,7 +7995,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Deny-only callback and exact decision records (COMMS_TELEGRAM_PLAN slices A/H). No test exists before the channel gems are built; the adversarial approval suite in slice H converts this row to direct evidence.",
       "promotion_exclusion": null,
@@ -7276,7 +8012,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual.",
       "promotion_exclusion": null,
@@ -7291,7 +8029,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual.",
       "promotion_exclusion": null,
@@ -7306,7 +8046,9 @@
       "release_blocking": true,
       "status": "missing",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "pending-owner-residual",
       "rationale": "Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding.",
       "promotion_exclusion": null,
@@ -7338,7 +8080,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/comms_decision_record_test.rb#test_operator_evidence_and_reason_round_trip_through_the_store",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7387,7 +8131,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7402,7 +8148,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7468,7 +8216,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7483,7 +8233,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7498,7 +8250,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7513,7 +8267,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7528,7 +8284,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7543,7 +8301,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7558,7 +8318,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_raw_oracle_test.rb#test_every_fixed_success_and_pre_action_state_classifies_exactly",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7573,7 +8335,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_comms_store_test.rb#test_a_prompt_round_trips_its_required_evidence_through_the_store",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7658,7 +8422,9 @@
       "release_blocking": false,
       "status": "indirect",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "indirect",
       "rationale": "A structural non-goal: the repository contains exactly one user surface (apps/tamoz-agent + the tamoz CLI). No runtime behavior can prove the absence of a UI that was never built; the packaging test pins the shipped executables.",
       "promotion_exclusion": null,
@@ -7690,7 +8456,9 @@
       "release_blocking": false,
       "status": "indirect",
       "named_test": null,
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "indirect",
       "rationale": "An aggregate of the PHASE-* rows in this manifest; it has no behaviour of its own to test. Each phase row carries its own direct evidence, and a deferred scope is named on the row it belongs to.",
       "promotion_exclusion": null,
@@ -7822,7 +8590,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7837,7 +8607,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7852,7 +8624,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_stale_request_test.rb#test_stale_resume_against_paused_different_generation_terminal_fails_at_claim",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7867,7 +8641,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_profile_machinery_test.rb#test_flocked_consume_is_exactly_once_across_concurrent_writers",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7882,7 +8658,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_runtime_test.rb#test_runs_a_reviewed_plan_before_reading_and_verifies_the_answer",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7897,7 +8675,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_change_evaluation_test.rb#test_end_to_end_evaluation_repairs_a_broken_ruby_project",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7912,7 +8692,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_mcp_capability_source_test.rb#test_session_pins_mcp_catalogs_and_executes_the_governed_call_through_the_journal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7927,7 +8709,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/memory_session_integration_test.rb#test_memory_enabled_session_records_epoch_and_writes_episode_memory",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7942,7 +8726,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7957,7 +8743,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7972,7 +8760,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7987,7 +8777,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8002,7 +8794,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8017,7 +8811,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8032,7 +8828,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8047,7 +8845,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8062,7 +8862,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8077,7 +8879,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_toolbox_test.rb#test_create_file_writes_exact_bytes_with_default_mode",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8092,7 +8896,9 @@
       "release_blocking": true,
       "status": "failing",
       "named_test": "test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8107,7 +8913,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8122,7 +8930,9 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_cli_profile_test.rb#test_ask_with_profile_starts_a_bound_session",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -8137,10 +8947,102 @@
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/agent_skills_toolbox_test.rb#test_load_skill_returns_attributed_bounded_identity_bound_text",
-      "supporting_tests": [],
+      "supporting_tests": [
+
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-agent-kernel-Tamoz::Agent::RequestProjection",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Agent::RequestProjection",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [
+
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-agent-kernel",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-agent-kernel-Tamoz::Agent::RequestRoute",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Agent::RequestRoute",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [
+
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-agent-kernel",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-agent-session-Tamoz::Agent::SessionNodes",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Agent::SessionNodes",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [
+
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-agent-session",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-concurrency-Tamoz::Concurrency::Drain",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Concurrency::Drain",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [
+
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-concurrency",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-core-Tamoz::Core::LEGACY_PROFILE_ID",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Core::LEGACY_PROFILE_ID",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [
+
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-core",
       "evidence_result": "pass",
       "owner_signature": null
     }

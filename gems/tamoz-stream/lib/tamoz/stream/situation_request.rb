@@ -372,7 +372,10 @@ module Tamoz
               emitter: adapter,
               deadline: monotonic_deadline(wire_request.deadline),
               metadata: trace_metadata(envelope),
-              episode_tools: @episode_tools || build_capability_host(wire_request, snapshot)
+              episode_tools: @episode_tools || build_capability_host(wire_request, snapshot),
+              # The supersession watcher below cancels through this token; core's
+              # Context default is nil, so the token must be explicit here.
+              cancellation: Tamoz::CancellationToken.new
             )
             watcher = watch_cancellation(call, context)
             payload = envelope.payload.merge("snapshot" => snapshot)

@@ -61,6 +61,7 @@ class PublicAPITest < Minitest::Test
         "tamoz-agent-session" => {
           "Tamoz::Agent::Session" => {},
           "Tamoz::Agent::SessionGem::VERSION" => {},
+          "Tamoz::Agent::SessionNodes" => {},
           "Tamoz::Agent::SessionOutcome" => {},
           "Tamoz::Agent::SessionPlanningContext" => {},
           "Tamoz::Agent::SessionRecords" => {},
@@ -82,6 +83,8 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Plan" => {},
           "Tamoz::Agent::PlanRejectedError" => {},
           "Tamoz::Agent::Providers" => {},
+          "Tamoz::Agent::RequestProjection" => {},
+          "Tamoz::Agent::RequestRoute" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
           "Tamoz::Agent::Step" => {}
         },
@@ -146,6 +149,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::VERSION" => {}
         },
         "tamoz-concurrency" => {
+          "Tamoz::Concurrency::Drain" => {},
           "Tamoz::Concurrency::EventStream" => {},
           "Tamoz::Concurrency::VERSION" => {},
           "Tamoz::Concurrency.join_all" => {},
@@ -167,6 +171,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Configuration" => {},
           "Tamoz::ConfigurationError" => {},
           "Tamoz::Context" => {},
+          "Tamoz::Core::LEGACY_PROFILE_ID" => {},
           "Tamoz::Core::LEGACY_SKILL_EPOCH" => {},
           "Tamoz::Core::TOOL_ERROR_CLASS_NAMES" => {},
           "Tamoz::Core::ProtocolError" => {},

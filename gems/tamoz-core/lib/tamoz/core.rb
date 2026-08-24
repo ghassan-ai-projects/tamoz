@@ -15,6 +15,12 @@ module Tamoz
     # `skill_epoch` resolves without any agent constant.
     LEGACY_SKILL_EPOCH = "none"
 
+    # DR-5 RC3: the session-record sentinel for sessions that predate trusted
+    # profiles. Homed in tamoz-core so the profile validator can reserve the id
+    # (a real profile named "legacy" would silently destroy the sentinel
+    # semantics) without a session dependency edge.
+    LEGACY_PROFILE_ID = "legacy"
+
     # Audit F2: the intent-catalog watch type. Homed in tamoz-core so the
     # tamoz-stream decision builder (the injected-port boundary) resolves it
     # WITHOUT a tamoz-agent dependency edge; tamoz-agent's IntentCatalog

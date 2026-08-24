@@ -884,7 +884,7 @@ Lint/ConstantDefinitionInBlock:
   Exclude:
     - 'Rakefile'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/request_route.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/request_route.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/request_record.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb'

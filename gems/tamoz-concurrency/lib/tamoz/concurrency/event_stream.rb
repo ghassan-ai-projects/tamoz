@@ -73,7 +73,7 @@ module Tamoz
           return if @coordinator
 
           @coordinator = Thread.new do
-            Thread.current.name = "tamoz-graph-stream" if Thread.current.respond_to?(:name=)
+            Thread.current.name = "tamoz-concurrency-event-stream" if Thread.current.respond_to?(:name=)
             begin
               @result = @runner.call
             rescue StandardError => error

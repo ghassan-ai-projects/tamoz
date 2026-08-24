@@ -19,7 +19,9 @@ module Tamoz
       # compatibility policy.
       RECORD_VERSION = 2
       DIGEST_DOMAIN = "tamoz.agent.session_record.v1"
-      LEGACY_PROFILE_ID = "legacy"
+      # Homed in tamoz-core (`Tamoz::Core::LEGACY_PROFILE_ID`) so the profile
+      # validator can reserve the id without a session dependency edge.
+      LEGACY_PROFILE_ID = Tamoz::Core::LEGACY_PROFILE_ID
       LEGACY_PROFILE_DIGEST = "legacy:none"
       # P16: `LEGACY_SKILL_EPOCH` moved to tamoz-core (`Tamoz::Core::LEGACY_SKILL_EPOCH`),
       # shared with the moved toolbox's empty-snapshot `skill_epoch`.

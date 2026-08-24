@@ -7,12 +7,10 @@ require "tamoz/tools"
 require "tamoz/observability"
 require "tamoz/comms"
 require "tamoz/approval"
-require_relative "agent/request_projection"
 require_relative "agent/version"
 require "tamoz/agent_kernel"
 require "tamoz/agent_capabilities"
 require_relative "agent/episode_graph"
-require_relative "agent/request_route"
 require_relative "agent/ruby_llm_model"
 require_relative "agent/lane_config"
 require_relative "agent/runtime"
@@ -82,6 +80,14 @@ module Tamoz
         clock: -> { Time.now },
         evidence_symbols: evidence_symbols
       )
+    end
+
+    module SessionApprovalWiring
+      class << self
+        def default_engine
+          Tamoz::Agent.build_approval_engine(profile_name: "implement")
+        end
+      end
     end
   end
 end

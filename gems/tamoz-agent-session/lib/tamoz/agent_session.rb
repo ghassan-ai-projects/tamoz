@@ -10,6 +10,7 @@ require "tamoz/agent_memory"
 require "tamoz/agent_profile"
 
 require_relative "agent/session_gem/version"
+require_relative "agent/session_approval_wiring"
 require_relative "agent/session_records"
 require_relative "agent/session_bindings"
 require_relative "agent/session_memory"

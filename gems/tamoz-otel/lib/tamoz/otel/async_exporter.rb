@@ -75,7 +75,14 @@ module Tamoz
         @exporter.export(batch, deadline_ms: 2_000)
       end
 
+      # Runs on the drain thread outside the lock; health() reads these under
+      # the mutex, so the accounting stays inside synchronize as before.
       def delivery_result(result, batch)
+        @mutex.synchronize { account_delivery(result, batch) }
+        disable_drain! if result != :delivered && @failures >= @failure_limit
+      end
+
+      def account_delivery(result, batch)
         case result
         when :delivered
           @failures = 0
@@ -85,7 +92,6 @@ module Tamoz
           @drops[result.to_s] += batch.length
           delay = [@interval * (2**([@failures - 1, 8].min)), 30.0].min
           @next_attempt_at = monotonic_now + delay
-          disable_drain! if @failures >= @failure_limit
         end
       end
 

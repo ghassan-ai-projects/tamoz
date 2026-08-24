@@ -13,7 +13,7 @@ error hierarchy); it spawns no pools and joins no threads of its own.
   `EXIT_CODES` maps `"sigint"` → 130, `"sigterm"` → 143.
 - `Tamoz::Cancellation.interruptible_sleep(seconds, token:)` — sleep to a
   deadline, wake instantly on cancel; true when cancelled.
-- `Tamoz::Cancellation::ProcessGroup` — `.alive?(pid)`, `.signal(pid, name)`,
-  and `.terminate(pid, grace:, poll_interval:)` for TERM → wait → KILL → wait
-  teardown against `-pid`.
+- `Tamoz::Cancellation::ProcessGroup` — `.alive?(pid)` and
+  `.signal(pid, name)` against `-pid`; each caller keeps its own teardown
+  ladder and denial policy.
 - `Tamoz::Cancellation::VERSION`

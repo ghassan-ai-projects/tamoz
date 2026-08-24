@@ -16,11 +16,13 @@ state = Tamoz::StateCodec.new.normalize(
   "steps" => [{"id" => "inspect"}]
 )
 
-results = Tamoz::Pool.for(:threads, size: 4).map(state.fetch("steps")) do |step|
-  context.child(step.fetch("id")).check!
-  step.fetch("id")
-end
+context.child("inspect").check!
 ```
+
+Bounded execution (`Tamoz::Pool`, `Tamoz::StreamSink`) and the thread substrate
+(`Tamoz::CancellationToken` and friends) now live in the `tamoz-concurrency`
+and `tamoz-cancellation` gems; core keeps the values, protocols, and errors
+they build on.
 
 M1 includes explicit Context propagation, cooperative cancellation and monotonic deadlines,
 versioned allowlisted state encoding, bounded execution streaming, safe instrumentation,

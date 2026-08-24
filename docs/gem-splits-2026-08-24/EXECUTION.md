@@ -41,10 +41,13 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
 1. **No alias-in-core for the moved primitives** (FINDINGS §5 step 1/2).
    Aliases would force `tamoz-core ⇄ tamoz-cancellation` mutual gem deps —
    rubygems cannot install that. Instead the constant paths never move
-   (`Tamoz::CancellationToken`, `Tamoz::Pool`, `Tamoz::StreamSink`,
-   `Tamoz::Graph::EventStream` stay exactly as they are); only the FILES change
-   gems, and each consumer gem declares the explicit dependency. Same zero
-   call-site churn, no cycle.
+   (`Tamoz::CancellationToken`, `Tamoz::Pool`, `Tamoz::StreamSink` stay exactly
+   as they are); only the FILES change gems, and each consumer gem declares the
+   explicit dependency. Same zero call-site churn, no cycle.
+   Deliberate exception: `Tamoz::Graph::EventStream` DID rename to
+   `Tamoz::Concurrency::EventStream` — it is concurrency machinery that graph
+   merely consumed; the rename is a one-site call churn (`lifecycle_executor`)
+   recorded here as intended.
 2. **Error classes stay in core; concurrency depends on core** for
    `PoolCircuitOpenError` etc. Acyclic: `concurrency → cancellation → core`.
    (FINDINGS' diagram had signals→core AND core→signals-via-alias.)
@@ -109,3 +112,42 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
   integrator commits with explicit pathspecs ONLY (a bare `git add -A` +
   commit briefly swept the in-flight PB renames into a review-fix commit;
   caught and separated via soft reset within the same minute).
+- **C-phase deviations (commit a648c44 claimed these; recorded here now):**
+  - minitest 6.0.6 hard-fails nil expectations inside `assert_same`/`assert_equal`,
+    so `core_context_test`'s cancellation-inheritance pin became an identity
+    assertion (`assert parent.cancellation.equal?(child.cancellation)`) —
+    same invariant, nil and object cases both covered.
+  - Stale test-local load-path lists repaired where the moves exposed them:
+    `agent_worker_test` (also missing capabilities/session — failing before
+    this branch), `p16_tools_gem_test` CLEAN_LIB_PATHS, sqlite
+    convergence/crash/scenario child lists, evals `CliSubprocessHarness::LOAD_PATHS`.
+  - connection_pool checkout-wait / lease condition waits deliberately NOT
+    drained (FINDINGS §4 deviation noted): they are deadline waits, not drains.
+  - Evals harness keeps its own process-group primitives (`signal_group`,
+    liveness probes, direct kills) and did NOT adopt ProcessGroup — evals never
+    depended on tamoz-cancellation and its kill-scenario harness is
+    sandbox-sensitive; exclusion recorded rather than consolidated.
+- **PB review fixes (post-8d949b3 lens pair):** request_route.rb +
+  request_projection.rb moved down into tamoz-agent-kernel (both drivers
+  consume them); `CheckReceipt` site qualified to `Tamoz::Tools::CheckReceipt`
+  with an explicit session→tools gemspec edge; the approval-engine default
+  became a driver-overridden seam (`SessionApprovalWiring.default_engine`;
+  tamoz-agent supplies the implement profile) instead of the reviewer's
+  caller-injection: it keeps Pipeline-A's single policy statement, fails loudly
+  for bare consumers, and avoids churning ~30 test constructors;
+  `LEGACY_PROFILE_ID` hoisted to core beside `LEGACY_SKILL_EPOCH` (fixes the
+  pre-existing profile→session reach); `SessionNodes`, `RequestRoute`,
+  `RequestProjection`, `Core::LEGACY_PROFILE_ID` exported in public-api.
+  Standalone-soundness proof added to gates: bare
+  `require "tamoz/agent_session"` exercises routing/projection/wiring green.
+- **C review fixes:** `Concurrency::Drain` exported (consumed cross-gem by
+  otel + observability); session declares tamoz-cancellation (the token at
+  session.rb resolved via a load side effect);
+  `ProcessGroup.terminate` deleted (zero callers — supervisor/check_runner
+  keep their local ladders by design); stale thread name fixed.
+- **Audit regen environment note:** the requirements-audit generator must run
+  unsandboxed — kill-matrix/raw-oracle evidence cases cannot inject real
+  SIGKILLs here and regenerating under this sandbox would falsely flip
+  release-blocking rows to missing/failing. The manifest (public-api-derived)
+  was regenerated; audit files left at their committed state for phase Z on a
+  full run.

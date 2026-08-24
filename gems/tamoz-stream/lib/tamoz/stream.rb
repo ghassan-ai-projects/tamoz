@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tamoz/core"
+require "tamoz/cancellation"
 require_relative "stream/version"
 require_relative "stream/errors"
 require_relative "stream/capability_host"

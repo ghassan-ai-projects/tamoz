@@ -82,6 +82,7 @@
     "tamoz-agent-session": {
       "Tamoz::Agent::Session": {},
       "Tamoz::Agent::SessionGem::VERSION": {},
+      "Tamoz::Agent::SessionNodes": {},
       "Tamoz::Agent::SessionOutcome": {},
       "Tamoz::Agent::SessionPlanningContext": {},
       "Tamoz::Agent::SessionRecords": {},
@@ -103,6 +104,8 @@
       "Tamoz::Agent::Plan": {},
       "Tamoz::Agent::PlanRejectedError": {},
       "Tamoz::Agent::Providers": {},
+      "Tamoz::Agent::RequestProjection": {},
+      "Tamoz::Agent::RequestRoute": {},
       "Tamoz::Agent::SkillSnapshotUnavailableError": {},
       "Tamoz::Agent::Step": {}
     },
@@ -166,6 +169,7 @@
       "Tamoz::Comms::VERSION": {}
     },
     "tamoz-concurrency": {
+      "Tamoz::Concurrency::Drain": {},
       "Tamoz::Concurrency::EventStream": {},
       "Tamoz::Concurrency::VERSION": {},
       "Tamoz::Concurrency.join_all": {},
@@ -187,6 +191,7 @@
       "Tamoz::Configuration": {},
       "Tamoz::ConfigurationError": {},
       "Tamoz::Context": {},
+      "Tamoz::Core::LEGACY_PROFILE_ID": {},
       "Tamoz::Core::LEGACY_SKILL_EPOCH": {},
       "Tamoz::Core::TOOL_ERROR_CLASS_NAMES": {},
       "Tamoz::Core::ProtocolError": {},

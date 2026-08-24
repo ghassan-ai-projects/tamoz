@@ -23,18 +23,27 @@ Under `Tamoz::Agent` (unchanged constant paths):
   over a session view (CLI rendering and worker status output).
 - **SessionPlanningContext** — follow-up payload assembly; the CLI calls
   `.follow_up_payload` directly.
+- **SessionNodes** — the graph-node module whose size limits
+  (`MAX_TASK_BYTES`, `MAX_REPAIR_ATTEMPTS`, `MAX_OBSERVATION_BYTES`) the
+  ephemeral runtime reads to stay in lockstep with durable sessions.
 
 `Tamoz::Agent::SessionGem::VERSION` ships in lockstep with the rest of the
 monorepo (`0.1.0.alpha.1` literal per gem, hand-synced like every sibling).
 The version lives on the sibling module `SessionGem`, not on `Session`
 itself: `Tamoz::Agent::Session` is the session CLASS, so a `VERSION`
 constant under it would hang off the class rather than mark the gem.
+A session built without an approval engine resolves one through
+`SessionApprovalWiring.default_engine` — overridden by `tamoz-agent` with
+its bundled implement profile; a bare consumer of this gem fails loudly.
 
 ## Dependencies
 
 `tamoz-agent-kernel` (the deliberation substrate), `tamoz-agent-capabilities`
 (the sealed capability catalog Session binds at build), `tamoz-agent-memory`,
-`tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-core`. Nothing here
+`tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-core`,
+`tamoz-cancellation` (the run-context token),
+`tamoz-tools` (the receipt type effects type-check). Nothing here
 reaches up into worker, runtime, or CLI code: consumers point down only.
-Graph, comms, approval, and MCP are injected and duck-typed (`session.rb`),
-so there is no gem edge to them.
+Graph, comms, and approval are injected and duck-typed (`session.rb`),
+so there is no gem edge to them — the bundled approval default is a
+driver-supplied override of `SessionApprovalWiring`.
