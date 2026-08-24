@@ -169,3 +169,12 @@ The study is complete as a report. The implementation is not complete. The next
 work should begin at P0 in `05-comparison-and-priorities.md`, add the composition
 tests in `06-scenario-matrix.md`, and only then expose richer progress or context
 controls. No production code was changed by this study.
+
+## Addendum 2026-08-24
+
+A later refactor moved several classes cited by the passes above without changing
+their behavior: `Comms::Gateway`, `DeliveryDrainer`, and `OutboxDeliverySink` now
+live in `gems/tamoz-comms`; `SessionEffects` in `gems/tamoz-agent-session`;
+`EffectDispatcher` in `gems/tamoz-agent-kernel`. Follow the corrected paths in
+`03-tamoz-current-state.md` and `07-evidence-index.md`, not the paths as written
+at review time.

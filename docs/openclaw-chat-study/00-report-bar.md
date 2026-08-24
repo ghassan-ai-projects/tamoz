@@ -96,6 +96,11 @@ The final folder must contain:
 - `08-review-log.md` — the two five-review passes, disagreements, corrections, and final audit.
 - `README.md` — reading order, executive summary, and definition of done status.
 
+Supplementary folders required by the reading order:
+
+- `implementation-plan/` — the phased implementation plan derived from this study (bar, Phases 0–3, evidence convention).
+- `benchmark-protocol/` — the communication benchmark design built on the existing comms/eval seams.
+
 ## Decision quality gates
 
 The report passes when:
