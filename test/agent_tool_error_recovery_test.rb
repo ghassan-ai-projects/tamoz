@@ -104,9 +104,6 @@ class AgentToolErrorRecoveryTest < Minitest::Test
 
         recoverable = {
           "not found" => -> { toolbox.execute("apply_patch", patch_arguments(digest, "nope", "x")) },
-          "stale digest" => lambda do
-            toolbox.execute("apply_patch", patch_arguments("0" * 64, "40", "42"))
-          end,
           "ambiguous" => lambda do
             File.write(File.join(root, "dup.rb"), "same\nsame\n")
             toolbox.execute(
@@ -128,6 +125,9 @@ class AgentToolErrorRecoveryTest < Minitest::Test
         end
 
         policy = {
+          "stale digest" => lambda do
+            toolbox.execute("apply_patch", patch_arguments("0" * 64, "40", "42"))
+          end,
           "symlink escape" => -> { toolbox.execute("read_file", "path" => "escape/secret.txt") },
           "absolute path" => -> { toolbox.execute("read_file", "path" => "/etc/passwd") },
           "parent escape" => -> { toolbox.execute("read_file", "path" => "../outside.txt") },

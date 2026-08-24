@@ -16,7 +16,10 @@ class CommsAdr049ConsistencyTest < Minitest::Test
     adr = read_utf8('documentation/adr/adr-049-telegram-approval.md')
 
     assert_match(/\*\*Status:\*\* Accepted 2026-08-12/, adr)
-    assert_match(/INV-D — v1 policy is deny-only by evaluation\.\*\* The v1 policy returns/, adr)
+    assert_match(
+      /INV-D — the shipped v1 profile was deny-only by evaluation\.\*\* The original v1 policy returned/,
+      adr
+    )
   end
 
   def test_comms_design_carries_the_amended_adr_043_and_the_adr_049_entry

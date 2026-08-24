@@ -588,7 +588,7 @@ class P16ToolsGemTest < Minitest::Test
       runtime = Tamoz::Agent.build(
         model:, root:, allow_changes: true,
         checks: {"answer" => ["sh", "-c", "grep -q 42 broken.rb"]},
-        approval: ->(**) { true }
+        ask: ->(**_kw) { :approve }
       )
       runtime.run("Make Broken.answer equal 42.") { |event| events << event }
 

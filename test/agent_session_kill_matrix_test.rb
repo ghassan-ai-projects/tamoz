@@ -279,16 +279,21 @@ class AgentSessionKillMatrixTest < Minitest::Test
           end
           break unless request_id
 
-          log("continue:r#{request_id}")
-          begin
-            session.continue(
-              thread:,
-              request_id: "r#{request_id}",
-              owner_id: "owner.continue.#{Process.pid}"
-            )
-          rescue Tamoz::Graph::StaleRequestError
-            log("continue:finalized")
+          request_id = (1..9).find do |candidate|
+            session.app.durable_runner.fetch(thread:, request_id: "r#{candidate}").nil?
           end
+          break unless request_id
+
+          # DR-4 (5c16bed): a stale continue fails as a typed terminal request
+          # value, never as a raised error — and never re-runs resolved work.
+          # Any invented work here crashes the child loudly instead.
+          outcome = session.continue(
+            thread:,
+            request_id: "r#{request_id}",
+            owner_id: "owner.continue.#{Process.pid}"
+          )
+          raise "a resolved block was continued into work" unless outcome.request_status == :failed
+          log("continue:finalized")
           # The verdict is journaled; the finalized turn stays as recorded.
           break
         end
@@ -766,6 +771,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
       tamoz-comms tamoz-core tamoz-graph tamoz-scheduler tamoz-stream
       tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability
       tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
+      tamoz-cancellation tamoz-concurrency tamoz-agent-capabilities tamoz-agent-session
       tamoz-agent
     ].flat_map do |gem|
       ["-I", ROOT.join("gems", gem, "lib").to_s]

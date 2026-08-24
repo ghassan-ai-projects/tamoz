@@ -125,15 +125,29 @@ class AgentMcpAdversarialTest < Minitest::Test
     end
   end
 
-  def read_only_session(root:, adapter:, source:, tool:, arguments:)
+  def read_only_session(root:, adapter:, source:, plan:, approval_engine: nil)
     toolbox = Tamoz::Agent::Toolbox.new(root:)
     model = ScriptedModel.new(
-      plan: [plan_for(tool, arguments)],
+      plan: [plan],
       review: [accepted_review],
       verify: []
     )
-    session = Tamoz::Agent::Session.new(model:, toolbox:, checkpointer: adapter, mcp: source)
+    session = Tamoz::Agent::Session.new(
+      model:, toolbox:, checkpointer: adapter, mcp: source,
+      approval_engine:
+    )
     [session, model]
+  end
+
+  def echo_plan
+    plan_for("mcp:test-server/echo_constant", {"value" => "x"})
+  end
+
+  # The auto profile decides fallback-tier MCP effects allow, so a wire-fault
+  # scenario reaches the corruption it exists to prove instead of pausing on
+  # the default engine's ask.
+  def ungated_approval_engine
+    Tamoz::Agent.build_approval_engine(profile_name: "auto")
   end
 
   def plan_for(tool, arguments, id: "s1")
@@ -189,8 +203,7 @@ class AgentMcpAdversarialTest < Minitest::Test
       begin
         source = source_for(snapshot, supervisor:, names: %w[echo_constant], effect_class: :read_only)
         session, model = read_only_session(
-          root:, adapter:, source:,
-          tool: "mcp:test-server/echo_constant", arguments: {"value" => "x"}
+          root:, adapter:, source:, plan: echo_plan, approval_engine: ungated_approval_engine
         )
 
         outcome = session.start(
@@ -220,8 +233,7 @@ class AgentMcpAdversarialTest < Minitest::Test
       begin
         source = source_for(snapshot, supervisor:, names: %w[echo_constant], effect_class: :read_only)
         session, = read_only_session(
-          root:, adapter:, source:,
-          tool: "mcp:test-server/echo_constant", arguments: {"value" => "x"}
+          root:, adapter:, source:, plan: echo_plan, approval_engine: ungated_approval_engine
         )
 
         outcome = session.start(
@@ -272,8 +284,8 @@ class AgentMcpAdversarialTest < Minitest::Test
         # A resumed session bound to the same supervisor stops the same way; the
         # glue never bypasses the circuit.
         session, = read_only_session(
-          root:, adapter:, source: source_b,
-          tool: "mcp:test-server/echo_constant", arguments: {"value" => "x"}
+          root:, adapter:, source: source_b, plan: echo_plan,
+          approval_engine: ungated_approval_engine
         )
         outcome = session.start(
           "Echo a constant.",
@@ -304,7 +316,7 @@ class AgentMcpAdversarialTest < Minitest::Test
         )
         session, model = read_only_session(
           root:, adapter:, source:,
-          tool: "mcp:test-server/sleep_ms", arguments: {"ms" => 1}
+          plan: plan_for("mcp:test-server/sleep_ms", {"ms" => 1})
         )
 
         outcome = session.start(
@@ -335,8 +347,7 @@ class AgentMcpAdversarialTest < Minitest::Test
       begin
         source = source_for(snapshot, supervisor:, names: %w[echo_constant], effect_class: :read_only)
         session, = read_only_session(
-          root:, adapter:, source:,
-          tool: "mcp:test-server/echo_constant", arguments: {"value" => "x"}
+          root:, adapter:, source:, plan: echo_plan, approval_engine: ungated_approval_engine
         )
 
         outcome = session.start(

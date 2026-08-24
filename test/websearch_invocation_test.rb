@@ -413,7 +413,7 @@ class WebsearchInvocationTest < Minitest::Test
       )
       toolbox = Tamoz::Agent::Toolbox.new(
         root: workspace, allow_changes: true, checks: {},
-        allowed_tools: %w[read_file], approval_required: []
+        allowed_tools: %w[read_file]
       )
       session = Tamoz::Agent::Session.new(
         model: SessionJSONWrapper.new(model), toolbox:, checkpointer: adapter, mcp: source
