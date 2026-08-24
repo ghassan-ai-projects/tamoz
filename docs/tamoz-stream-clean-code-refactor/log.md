@@ -10,5 +10,14 @@
 ## Files processed
 
 ### situation_request.rb
-- Bar: `validate!` reads as a list of domain validations; `run` reads as a short sequence of episode phases; helpers remove duplication (`positive_or_nil`, `journal_digest_for`, `verify_receipt!`, etc.).
-- Status: pending
+- Bar: `validate!` reads as a list of domain validations; `run` reads as a short sequence of episode phases; helpers remove duplication.
+- Status: done
+- Commit: 62d9071
+
+### approval_relay.rb
+- Bar: `submit_decision` reads as the PROTOCOL §5/§10 submission sequence;
+  `deliver` reads as validate → render → deliver; `initialize` is a list of
+  port contracts; `escalate` decomposes into normalize → pick → payload.
+- Status: done
+- Notes: see behavior-notes.md (comma-joined port error text; rejected
+  require_field! simplification).
