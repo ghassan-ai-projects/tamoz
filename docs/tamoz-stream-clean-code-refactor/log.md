@@ -30,3 +30,9 @@
 - Notes: wire surface frozen — hash insertion order, truncation limits
   (now named MAX_HYPOTHESIS_BYTES/MAX_SUMMARY_BYTES), exception order and
   messages unchanged.
+
+### episode_stream.rb
+- Bar: EpisodeStream event verbs already read as the wire DSL (left alone);
+  `emit_stream_part` now dispatches one level down instead of inlining the
+  receipt→wire plumbing.
+- Status: done
