@@ -80,7 +80,6 @@ module Tamoz
 
         normalized
       end
-      private_class_method :normalize_server_id
 
       def self.normalize_max_rows(max_rows)
         normalized = Integer(max_rows)
@@ -90,7 +89,6 @@ module Tamoz
 
         normalized
       end
-      private_class_method :normalize_max_rows
 
       def execute(context, capability_id, arguments)
         name = String(capability_id)
