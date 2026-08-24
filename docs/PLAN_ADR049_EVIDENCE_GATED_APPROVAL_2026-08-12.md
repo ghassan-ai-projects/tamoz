@@ -67,7 +67,7 @@ isolated in Phase 3.
 | Interrupt facts (pin source) | `gems/tamoz-agent/lib/tamoz/agent/worker.rb` | `interrupt_facts`, `interrupt_digest`, `emit_approval_request` |
 | Receipt persistence | `gems/tamoz-agent/lib/tamoz/agent/delivery_drainer.rb` | durable send receipt and UNKNOWN handling |
 | Button rendering | `gems/tamoz-telegram/lib/tamoz/telegram/transport.rb` | approval markup → `inline_keyboard` |
-| Local operator approve | `gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb` and CLI resume path | trusted OS authorization then shared approval operation |
+| Local operator approve | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb` and CLI resume path | trusted OS authorization then shared approval operation |
 | Process credential boundary | `scripts/start-tamoz-comms.sh`, `script/live_alms_telegram` | explicit gateway/worker/harness environment allowlists |
 | Prompt schema | `gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb` (+ migration) | `tamoz_comms_approval_prompts`, `PROMPT_COLUMNS` |
 

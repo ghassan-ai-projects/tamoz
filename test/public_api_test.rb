@@ -16,15 +16,15 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent.build" => {},
           "Tamoz::Agent::CLI.run" => {},
           "Tamoz::Agent::CheckReceipt" => {"deprecated" => true},
-          "Tamoz::Agent::Deliberation" => {},
-          "Tamoz::Agent::EffectDispatcher" => {},
-          "Tamoz::Agent::Error" => {},
-          "Tamoz::Agent::Event" => {},
+          "Tamoz::Agent::Deliberation" => {"deprecated" => true},
+          "Tamoz::Agent::EffectDispatcher" => {"deprecated" => true},
+          "Tamoz::Agent::Error" => {"deprecated" => true},
+          "Tamoz::Agent::Event" => {"deprecated" => true},
           "Tamoz::Agent::McpCapabilitySource" => {},
-          "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {},
-          "Tamoz::Agent::Plan" => {},
-          "Tamoz::Agent::PlanRejectedError" => {},
-          "Tamoz::Agent::ProtocolError" => {},
+          "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {"deprecated" => true},
+          "Tamoz::Agent::Plan" => {"deprecated" => true},
+          "Tamoz::Agent::PlanRejectedError" => {"deprecated" => true},
+          "Tamoz::Agent::ProtocolError" => { "deprecated" => true },
           "Tamoz::Agent::Result" => {},
           "Tamoz::Agent::RubyLLMModel" => {},
           "Tamoz::Agent::Runtime" => {},
@@ -32,14 +32,48 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::SessionOutcome" => {},
           "Tamoz::Agent::SessionRecords" => {},
           "Tamoz::Agent::SessionView" => {},
-          "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
+          "Tamoz::Agent::SkillSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Skills" => {"deprecated" => true},
-          "Tamoz::Agent::Step" => {},
+          "Tamoz::Agent::Step" => {"deprecated" => true},
           "Tamoz::Agent::ToolArgumentError" => {"deprecated" => true},
           "Tamoz::Agent::Toolbox" => {"deprecated" => true},
           "Tamoz::Agent::ToolError" => {"deprecated" => true},
           "Tamoz::Agent::ToolPolicyError" => {"deprecated" => true},
           "Tamoz::Agent::VERSION" => {}
+        },
+        "tamoz-agent-healing" => {
+          "Tamoz::Agent::Healing::Remediation" => {},
+          "Tamoz::Agent::Healing::VERSION" => {}
+        },
+        "tamoz-agent-profile" => {
+          "Tamoz::Agent::Profile" => {},
+          "Tamoz::Agent::Profile::VERSION" => {}
+        },
+        "tamoz-agent-improvement" => {
+          "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
+          "Tamoz::Agent::Improvement::VERSION" => {}
+        },
+        "tamoz-agent-cli" => {
+          "Tamoz::Agent::CLI" => {},
+          "Tamoz::Agent::CLI::VERSION" => {}
+        },
+        "tamoz-agent-kernel" => {
+          "Tamoz::Agent::Deliberation" => {},
+          "Tamoz::Agent::EffectDispatcher" => {},
+          "Tamoz::Agent::Error" => {},
+          "Tamoz::Agent::Event" => {},
+          "Tamoz::Agent::GraphVersions" => {},
+          "Tamoz::Agent::Kernel::VERSION" => {},
+          "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {},
+          "Tamoz::Agent::Plan" => {},
+          "Tamoz::Agent::PlanRejectedError" => {},
+          "Tamoz::Agent::Providers" => {},
+          "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
+          "Tamoz::Agent::Step" => {}
+        },
+        "tamoz-agent-memory" => {
+          "Tamoz::Agent::Memory::Engine" => {},
+          "Tamoz::Agent::Memory::VERSION" => {}
         },
         "tamoz-approval" => {
           "Tamoz::Approval::Answer.parse" => {},
@@ -62,6 +96,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::VERSION" => {}
         },
         "tamoz-comms" => {
+          "Tamoz::Comms::DeliveryDrainer" => {},
+          "Tamoz::Comms::Gateway" => {},
+          "Tamoz::Comms::OutboxDeliverySink" => {},
+
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
           "Tamoz::Comms::ApprovalPrompt" => {},
           "Tamoz::Comms::AuthenticationError" => {},
@@ -104,11 +142,17 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Context" => {},
           "Tamoz::Core::LEGACY_SKILL_EPOCH" => {},
           "Tamoz::Core::TOOL_ERROR_CLASS_NAMES" => {},
+          "Tamoz::Core::ProtocolError" => {},
+          "Tamoz::Core::RawHttp" => {},
           "Tamoz::Core::ToolArgumentError" => {},
           "Tamoz::Core::ToolError" => {},
           "Tamoz::Core::ToolPolicyError" => {},
           "Tamoz::Core::VERSION" => {},
           "Tamoz::Core.canonical" => {},
+          "Tamoz::Core.deep_freeze" => {},
+          "Tamoz::Core.parse_object" => {},
+          "Tamoz::Core.string" => {},
+          "Tamoz::Core.strings" => {},
           "Tamoz::DisclosableMessage" => {},
           "Tamoz::EffectUnknownError" => {},
           "Tamoz::Emitter::Null" => {},
@@ -344,6 +388,12 @@ class PublicAPITest < Minitest::Test
       Tamoz::Scheduler::VERSION,
       Tamoz::Stream::VERSION,
       Tamoz::Tools::VERSION,
+      Tamoz::Agent::Kernel::VERSION,
+      Tamoz::Agent::Memory::VERSION,
+      Tamoz::Agent::Healing::VERSION,
+      Tamoz::Agent::Profile::VERSION,
+      Tamoz::Agent::Improvement::VERSION,
+      Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
       Tamoz::Evals::VERSION,
@@ -367,7 +417,7 @@ class PublicAPITest < Minitest::Test
 
     assert_equal "Tamoz Agent", manifest.fetch("name")
     assert_equal "Tamoz::App", manifest.fetch("namespace")
-    assert_equal "tamoz-agent", manifest.fetch("runtime_package")
+    assert_equal "tamoz-agent-cli", manifest.fetch("runtime_package")
     assert_equal "bounded-repair-cli", manifest.fetch("status")
     assert_equal "working-slice-3", manifest.fetch("activation_milestone")
   end

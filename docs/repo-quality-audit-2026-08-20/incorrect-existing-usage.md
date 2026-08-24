@@ -345,10 +345,10 @@ caller of `Healing::Remediation.run` was found outside tests/evaluation harnesse
 
 Evidence:
 
-- `gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb:62-105` accepts an
+- `gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb:62-105` accepts an
   optional `circuit:` and defaults it at line 91 to
   `Seams::MemoryCircuitStore.new`.
-- `gems/tamoz-agent/lib/tamoz/agent/healing/seams.rb:11-17` describes that
+- `gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb:11-17` describes that
   in-memory object as a default while saying a durable implementation will “drop
   in”; its implementation is at lines 37-97.
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/circuit_store.rb:5-20` says SQLite is the
@@ -388,12 +388,12 @@ that alternate storage is an intended supported use case today.
 
 Evidence:
 
-- `gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb:6-10` says the agent owns
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb:6-10` says the agent owns
   memory semantics and depends on a structural `Tamoz::SQLite::MemoryStore`
   contract.
-- `gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb:55-72` directly constructs
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb:55-72` directly constructs
   `Tamoz::SQLite::MemoryStore` from `adapter.store` at line 65.
-- `gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb:102-124` directly constructs
+- `gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb:102-124` directly constructs
   the SQLite-owned `MemoryStore::IndexRow` at line 105.
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb:7-30` calls itself the
   SQLite-owned structural repository; lines 37-80 define the SQLite-owned value

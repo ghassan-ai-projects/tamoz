@@ -333,8 +333,8 @@ Changes:
 
 Files likely touched:
 
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb`
-- `gems/tamoz-agent/lib/tamoz/agent/cli_rendering.rb`
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb`
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb`
 - `gems/tamoz-agent/lib/tamoz/agent/outbox_delivery_sink.rb`
 - a small internal `TerminalMessage` value if one responsibility cannot stay clear

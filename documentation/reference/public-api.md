@@ -43,7 +43,13 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-telegram` | The Telegram Bot API adapter: `Client`, `Transport`, `Normalizer` |
 | `tamoz-observability` | The closed signal catalog: `SignalCatalog`, `Signal`, `Correlation`, `ContentPolicy`, the `Recorder` implementations, `Metrics`, `ModelCall`, `Cost`, `PricingTable`, `Trace`, and the schema-version/evolution errors |
 | `tamoz-otel` | The optional governed exporter: `HTTPExporter`, `AsyncExporter`, `EgressPolicy` |
-| `tamoz-agent` | The deliberative runtime and CLI: `Tamoz::Agent.build`, `Runtime`, `Session`, `Result`, `Plan`, `Step`, `Event`, `RubyLLMModel`, `CLI.run`, `McpCapabilitySource`, and the agent error taxonomy |
+| `tamoz-agent-kernel` | The deliberation substrate: `Deliberation`, `EffectDispatcher`, `Plan`, `Step`, `Event`, `Providers`, `Error`, `GraphVersions` |
+| `tamoz-agent-memory` | Durable memory: `Memory::Engine` and its sub-services, `MemoryRecord`, `VerifiedOutcomeReference` |
+| `tamoz-agent-healing` | Self-healing: `Healing::Remediation.run`, rules and registry, classification, preflight/oracle/promotion gate, seams |
+| `tamoz-agent-profile` | Trusted profiles: the `Profile` facade — preview/load/from_authority — validators, secure files, registries |
+| `tamoz-agent-improvement` | Self-improvement: `Improvement::CandidateLifecycle`, generator, heuristic, evaluation reports, promotion |
+| `tamoz-agent-cli` | The command line: `CLI.run` and every command group |
+| `tamoz-agent` | The runtime library: `Tamoz::Agent.build`, `Runtime`, `Session`, `SessionRecords`, `RubyLLMModel`, `McpCapabilitySource` |
 | `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, `Answer.parse`, `PolicyDocument`, the `Engine` with its `GrantStore`/`DecisionLog` ports and memory implementations, and `bundled_policy_path` for the shipped policy data |
 | `tamoz-mcp` | The governed MCP client/host: `Catalog`, `Entry`, `ServerConfig`, `Supervisor`, `Invocation`, `Elicitation`, and the MCP error taxonomy |
 | `tamoz-evals` | The evaluation harness surface: `Tamoz::Evals.verify`, `Case.load`, `Evidence.load`, `Result.load` — a development/release gem no production gemspec may depend on |

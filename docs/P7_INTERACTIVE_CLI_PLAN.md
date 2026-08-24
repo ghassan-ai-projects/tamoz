@@ -13,13 +13,13 @@ This plan is derived from:
 - `docs/design-v0.1/PERSISTENCE_DESIGN.md` sections on request inbox, lease/fence, checkpoint store.
 - `docs/design-v0.1/INVARIANTS.md` clauses 23, 25–27, 52–55.
 - Existing code:
-  - `gems/tamoz-agent/lib/tamoz/agent/cli.rb` (one-shot CLI)
+  - `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` (one-shot CLI)
   - `gems/tamoz-agent/lib/tamoz/agent/session.rb` (P6 durable session API)
   - `gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb` (`step_gate` interrupts)
   - `gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb` and `request_record.rb`
   - `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb` and `lease.rb`
   - `gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb`
-  - `bin/tamoz-eval`, `gems/tamoz-agent/exe/tamoz`
+  - `bin/tamoz-eval`, `gems/tamoz-agent-cli/exe/tamoz`
 
 ### 1.2 Scope
 

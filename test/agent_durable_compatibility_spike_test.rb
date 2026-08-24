@@ -4,8 +4,7 @@ require_relative 'test_helper'
 
 class AgentDurableCompatibilitySpikeTest < Minitest::Test
   def test_v1_graph_record_and_node_versions_are_explicitly_pinned
-    assert_equal '1', Tamoz::Agent::Session::GRAPH_VERSION
-    assert_equal '1', Tamoz::Agent::SessionNodes::GRAPH_VERSION
+    assert_equal '1', Tamoz::Agent::GraphVersions::GRAPH_VERSION
     assert_equal 2, Tamoz::Agent::SessionRecords::RECORD_VERSION
   end
 
@@ -16,7 +15,7 @@ class AgentDurableCompatibilitySpikeTest < Minitest::Test
       task: 'read the note',
       task_digest: 'a' * 64,
       root: '/tmp',
-      graph_version: Tamoz::Agent::Session::GRAPH_VERSION,
+      graph_version: Tamoz::Agent::GraphVersions::GRAPH_VERSION,
       behavior_version: 'tamoz.agent.session/1',
       tool_catalog_digest: "sha256:#{'b' * 64}",
       created_at_ms: 0
@@ -43,7 +42,7 @@ class AgentDurableCompatibilitySpikeTest < Minitest::Test
 
     loaded = Tamoz::Agent::SessionRecords.load!(record)
 
-    assert_equal '1', Tamoz::Agent::Session::GRAPH_VERSION
+    assert_equal '1', Tamoz::Agent::GraphVersions::GRAPH_VERSION
     assert_equal '5', loaded.fetch('graph_version')
   end
 

@@ -31,6 +31,8 @@ module Tamoz
     # P6: `route_kind` sends RECONSIDER to judge → compensate.
     class EpisodeGraph
       GRAPH_NAME = "tamoz.agent.episode"
+      # Version of THIS episode graph family only — unrelated to the durable
+      # session-graph versions in Tamoz::Agent::GraphVersions.
       GRAPH_VERSION = "4"
 
       def self.build(checkpointer:, nodes:)

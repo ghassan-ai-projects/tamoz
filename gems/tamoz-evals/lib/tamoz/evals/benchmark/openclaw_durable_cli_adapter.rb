@@ -395,7 +395,7 @@ module Tamoz
             'policy' => {
               'allow_changes' => true,
               'default_check_safety' => 'read_only',
-              'graph_version' => Tamoz::Agent::Session::GRAPH_VERSION,
+              'graph_version' => Tamoz::Agent::GraphVersions::GRAPH_VERSION,
               'behavior_version' => Tamoz::Agent::BEHAVIOR_VERSION,
               'tool_catalog_digest' => toolbox.catalog_digest
             }

@@ -152,7 +152,7 @@ module Tamoz
       end
 
       def compaction_state_supported?
-        @services.configuration.graph_version != SessionNodes::GRAPH_VERSION
+        @services.configuration.graph_version != GraphVersions::GRAPH_VERSION
       end
 
       def verification_update(state, configuration, call, terminal_reason)

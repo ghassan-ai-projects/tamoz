@@ -348,7 +348,7 @@ class CommsEvidenceGatedApprovalTest < Minitest::Test
     store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
     transport = ScriptedTransport.new
     transport.batch([])
-    gateway = Tamoz::Agent::CommsGateway.new(
+    gateway = Tamoz::Comms::Gateway.new(
       adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
     )
     [store, gateway]

@@ -105,7 +105,7 @@ every slice and whenever the phase table changes.
     caught by the drift probe — reek's context ratchet partially covers it, and Q2+
     slices remove the underlying debt.
 13. **Q2 CLI characterization (2026-08-06):** `cli.rb` (1,610 lines, 217 reek smells,
-    81% line coverage before). Callers: `gems/tamoz-agent/exe/tamoz` (production
+    81% line coverage before). Callers: `gems/tamoz-agent-cli/exe/tamoz` (production
     entrypoint), the evals smoke corpus (prepends a module to the CLI), loaded by
     `tamoz/agent.rb`. Authority seam (`resolve_session_authority`/`pinned_authority`)
     already covered by `test/agent_cli_profile_test.rb` (10 tests). Gaps found and

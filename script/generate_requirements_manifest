@@ -874,7 +874,7 @@ end
 
 def parse_cli_subcommands
   source = read_utf8(
-    File.join(ROOT, "gems", "tamoz-agent", "lib", "tamoz", "agent", "cli.rb")
+    File.join(ROOT, "gems", "tamoz-agent-cli", "lib", "tamoz", "agent", "cli.rb")
   )
   match = source.match(/SUBCOMMAND_HANDLERS\s*=\s*\{(.*?)\}/m)
   raise EvidenceError, "SUBCOMMAND_HANDLERS not found in cli.rb" unless match
@@ -1074,7 +1074,7 @@ end
 parse_cli_subcommands.each do |name|
   requirements << row(
     id: "CLI-#{name}",
-    source: "gems/tamoz-agent/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+    source: "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
     title: "tamoz #{name}",
     category: "cli_command",
     release_blocking: true

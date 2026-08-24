@@ -352,7 +352,7 @@ module Tamoz
 
           record[name] = value
         end
-        load!(Plan.deep_freeze(record), kind:)
+        load!(Tamoz::Core.deep_freeze(record), kind:)
       end
 
       # Validates one stored record. Rejection order is load-bearing: an unsupported
@@ -393,7 +393,7 @@ module Tamoz
                   "version #{RECORD_VERSION}"
           end
 
-          migrated = Plan.deep_freeze(migration.call(migrated))
+          migrated = Tamoz::Core.deep_freeze(migration.call(migrated))
         end
 
         # Pre-P8/P9 session records carry no profile or skill identity; they load
@@ -428,7 +428,7 @@ module Tamoz
           # injection, identical prefix digest). A session built post-P11 with
           # memory records a hash-shaped `memory_epoch`.
           defaults["memory_epoch"] = Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH unless migrated.key?("memory_epoch")
-          migrated = Plan.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
+          migrated = Tamoz::Core.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
         end
 
         validate_fields!(migrated, stored_kind)

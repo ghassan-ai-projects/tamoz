@@ -130,7 +130,7 @@ Every read site was inspected and classified.
 | `gems/tamoz-evals/lib/tamoz/evals/schema.rb:28`, `test/test_helper.rb:29`, `test/sqlite_raw_oracle_test.rb:375`, `test/documentation_test.rb:10`, `toolbox.rb:224, 287` | already correct. Explicit UTF-8. |
 | `gems/tamoz-evals/lib/tamoz/evals/verifier.rb:522-530`, `gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb:90` | already correct, and correctly *not* UTF-8 at read time. Both read bytes (`IO#read(length)`, `File.binread`) and gate on `valid_encoding?` afterwards. Forcing UTF-8 at the read would destroy the ability to reject a non-UTF-8 artifact. |
 | `gems/tamoz-agent/lib/tamoz/agent/toolbox.rb:363-412` `run_check` | already correct. Subprocess output is accumulated as bytes and finalized with `force_encoding(UTF_8).scrub`. Observed byte-identical under both locales. |
-| `gems/tamoz-agent/lib/tamoz/agent/cli.rb:147` `@input.gets` | no change. The answer is compared against `%w[y yes]` after `strip.downcase`. A non-ASCII answer is not equal to either token under any locale, and a non-answer is a denial. Changing the CLI input encoding is a P7 concern, not a correctness fix. |
+| `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:147` `@input.gets` | no change. The answer is compared against `%w[y yes]` after `strip.downcase`. A non-ASCII answer is not equal to either token under any locale, and a non-answer is a denial. Changing the CLI input encoding is a P7 concern, not a correctness fix. |
 | `.github/workflows/ci.yml` | no change. Pinning a locale in the workflow would hide the defect instead of fixing it, and would leave every container, cron job, and release rehearsal outside that workflow still broken. |
 
 ## Five Whys: the phase gate depended on an environment variable

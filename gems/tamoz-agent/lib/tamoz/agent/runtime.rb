@@ -6,7 +6,6 @@ require "securerandom"
 
 module Tamoz
   module Agent
-    Event = Data.define(:type, :data)
     Result = Data.define(:answer, :satisfied, :evidence, :plan, :review, :observations) do
       def responded?
         plan.nil? && review.nil? && observations.empty? && !satisfied
@@ -273,7 +272,7 @@ module Tamoz
 
         emit(:plan_accepted, "attempt" => 0, "phase" => "discovery", "source" => "route",
                              "plan" => plan.to_h) { |event| yield event }
-        [plan, review && Plan.deep_freeze(review)]
+        [plan, review && Tamoz::Core.deep_freeze(review)]
       rescue PlanRejectedError, ProtocolError
         route_plan_fallback { |event| yield event }
         nil
@@ -419,7 +418,7 @@ module Tamoz
         {
           plan:,
           review:,
-          observations: Plan.deep_freeze(all_observations),
+          observations: Tamoz::Core.deep_freeze(all_observations),
           check_passed:,
           terminal_reason:
         }.freeze
@@ -483,7 +482,7 @@ module Tamoz
             emit(:plan_accepted, event_context.merge("attempt" => attempt, "plan" => plan.to_h)) do |event|
               yield event
             end
-            return [plan, Plan.deep_freeze(review)]
+            return [plan, Tamoz::Core.deep_freeze(review)]
           end
 
           feedback = review.fetch("issues")
@@ -644,7 +643,7 @@ module Tamoz
             break if tool_result.failed?
           end
         end
-        [Plan.deep_freeze(observations), last_check_receipt, Plan.deep_freeze(tool_failure)].freeze
+        [Tamoz::Core.deep_freeze(observations), last_check_receipt, Tamoz::Core.deep_freeze(tool_failure)].freeze
       end
 
       # Pipeline B's single call site: the SAME engine the durable sessions use
@@ -892,7 +891,7 @@ module Tamoz
       end
 
       def emit(type, data)
-        yield Event.new(type:, data: Plan.deep_freeze(data))
+        yield Event.new(type:, data: Tamoz::Core.deep_freeze(data))
       end
 
       def result_to_h(result)

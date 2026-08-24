@@ -497,6 +497,8 @@ module Tamoz
           LOAD_PATHS = %w[
             tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
             tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms tamoz-mcp
+            tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile
+            tamoz-agent-improvement tamoz-agent-cli
             tamoz-agent
           ].flat_map do |gem|
             ["-I", File.join(REPO_ROOT, "gems", gem, "lib")]
@@ -507,6 +509,7 @@ module Tamoz
           CHILD = <<~'RUBY'
             require "json"
             require "tamoz/agent"
+            require "tamoz/agent_cli"
 
             class TamozScriptedCliModel
               def initialize
@@ -2946,6 +2949,11 @@ module Tamoz
           # keeps the terminal classification explicit if the alias ever drifts.
           rescue Tamoz::Agent::ToolError, Tamoz::Core::ToolError
             terminal = "tool_error"
+          # P0-D: ProtocolError re-parented from Agent::Error to a sibling of it
+          # (`Tamoz::Error`); name both spellings so a leaking parse failure still
+          # classifies as "agent_error" rather than "unexpected_error".
+          rescue Tamoz::Agent::ProtocolError, Tamoz::Core::ProtocolError
+            terminal = "agent_error"
           rescue Tamoz::Agent::Error
             terminal = "agent_error"
           rescue StandardError

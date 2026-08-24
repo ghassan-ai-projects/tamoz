@@ -3,6 +3,12 @@
   "generated_by": "script/generate_dependency_review",
   "reviewed_gems": [
     "tamoz-agent",
+    "tamoz-agent-cli",
+    "tamoz-agent-healing",
+    "tamoz-agent-improvement",
+    "tamoz-agent-kernel",
+    "tamoz-agent-memory",
+    "tamoz-agent-profile",
     "tamoz-approval",
     "tamoz-comms",
     "tamoz-core",
@@ -222,7 +228,7 @@
       "licenses": [
         "MIT"
       ],
-      "homepage": "https://github.com/flavorjones/mini_portile",
+      "homepage": null,
       "required_by": [],
       "direct": false,
       "exception": null

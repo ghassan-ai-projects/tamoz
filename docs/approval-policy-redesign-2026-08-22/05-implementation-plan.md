@@ -337,7 +337,7 @@ step is behavior-neutral.
   engine's on each pass and at session start; on difference, load from the persisted
   path and call `engine.reload` (ADR §1.5). Session start binds `policy_rev` for the
   session's lifetime.
-- `gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb` (or wherever operator
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb` (or wherever operator
   commands live) — `tamoz approve --reload <path>`: load + validate the document **in
   the CLI process first**; only on success write `(policy_path, policy_rev)` to
   `tamoz_approval_active_policy`. A document that fails validation never reaches the
@@ -393,7 +393,7 @@ engine replaces land in one commit so the tree never carries two policy owners.
   (`park`: prompt lapses, decision stays resolvable; `deny`: resolve to structured
   denial) (ADR §2.1 timeout semantics; the answer/timeout race is decided by
   `resolve` idempotence).
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — interactive path (`:207,277`) calls
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` — interactive path (`:207,277`) calls
   `engine.resolve` **in-process before `session.resume`**, with the §1.4 scope
   follow-up ("remember for this session? [y/N]") when the approved decision's
   `grant_offer` includes `:session`. `answer_for`/`map_answer` (`:467-503`) route
@@ -414,12 +414,12 @@ engine replaces land in one commit so the tree never carries two policy owners.
   union (`:864`) deleted (replaced by the `unattended` policy profile) **and its
   consumer** `narrowed_approval_required` (`:1086`, called at `:1072`); toolbox wiring
   no longer passes approval sets. (`07` §4 — rev-1 named only the `:864` definition.)
-- `gems/tamoz-agent/lib/tamoz/agent/profile.rb`,
+- `gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb`,
   `profile/fields.rb`, `profile/authority_validator.rb` — `tools.approval_required`
   and `unattended.*` keys and their validators deleted; profile files still carrying
   them fail validation loudly at load. `tools.allowed` stays (capability config, not
   approval policy, ADR §2.2).
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — `--all --i-understand-approve-all`
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` — `--all --i-understand-approve-all`
   deleted: **both** the audit/guard block (`:472`) **and the option registration**
   (`:678`) — rev-1 named only the former (`07` §4). The profile system is its
   replacement (ADR §3 weakness 5).
@@ -535,7 +535,7 @@ approval policy profile changes; agent roles/budgets/tools and graph nodes are u
   at a durable boundary and call `engine.rebind_session`; bind the switch as a
   checkpointed state field so restart applies it exactly once (semantic 1; the inbox's
   existing at-least-once + idempotent-apply property).
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — the interactive one-shot path swaps its
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` — the interactive one-shot path swaps its
   in-memory engine's active document directly (no durable message needed in-process).
 - `gems/tamoz-agent/lib/tamoz/approval/decision_log.rb` (port) +
   `gems/tamoz-sqlite/.../approval_decision_log.rb` — record a `mode_switch` entry
@@ -626,7 +626,7 @@ harness (ADR §5 step 7, §10 P7).
   through `Answer.parse` (the one-shot path inherits the full vocabulary, ADR §1.4);
   `:deny` returns the same structured tool result as Pipeline A. The
   callback-plus-exception contract is deleted.
-- `gems/tamoz-agent/lib/tamoz/agent/cli.rb` — `approve_one_shot` (`:853-858`)
+- `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb` — `approve_one_shot` (`:853-858`)
   re-pointed at `Answer.parse`.
 - `gems/tamoz-evals/.../harness/agent_smoke_corpus.rb` (`:1027-1043`) and
   `gems/tamoz-evals/suites/agent/smoke/07_denied_approval*.case.json` — updated for

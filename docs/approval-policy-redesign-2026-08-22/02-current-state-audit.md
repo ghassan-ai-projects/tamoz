@@ -97,14 +97,14 @@ Decided per plan step, at preparation time, before any effect runs.
 record (`tamoz_comms_decisions`, see §3):
 
 - **Interactive CLI (`tamoz run`):** the paused view is rendered, answers collected by
-  `answer_for` (`gems/tamoz-agent/lib/tamoz/agent/cli.rb:467-484`) →
+  `answer_for` (`gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:467-484`) →
   `PromptAdapter#approve_tool`; `map_answer` accepts `y/yes/a/approve` → true,
   `n/no/d/deny` → false (`cli.rb:494-503`). Then `session.resume(answers, …)` in-process.
   - `--all --i-understand-approve-all` answers `true` to every `approve_tool` interrupt
     and emits an `audit.approve_all` event (`cli.rb:472-480`).
   - `options[:non_interactive]` returns `nil` — no answer, fail-closed (`cli.rb:481`).
 - **Operator CLI (`tamoz approve REQUEST_ID [--deny]`):**
-  `gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb:392-410` (`record_approval`)
+  `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:392-410` (`record_approval`)
   builds a `DecisionRecord` with `actor_kind: 'os_user'`, `source: 'cli'`, and mints
   `AuthorityEvidence.filesystem_operator` itself — "set by this code, never taken from
   CLI arguments or any wire" (`cli_worker_commands.rb:402-405`) — then writes it via
@@ -276,7 +276,7 @@ record (`tamoz_comms_decisions`, see §3):
 | 12 | `gems/tamoz-agent/lib/tamoz/agent/worker.rb:258-270` | Worker: no matching unexpired decision → stay parked |
 | 13 | `gems/tamoz-agent/lib/tamoz/agent/worker.rb:398-425` | Worker: fenced claim; decision must match the exact interrupt digest |
 | 14 | `gems/tamoz-agent/lib/tamoz/agent/session_plan_outcomes.rb:115-127` | Repeated approval-required action signature → terminate `repeated_action` |
-| 15 | `gems/tamoz-agent/lib/tamoz/agent/cli.rb:472-481` | `--all`+`--i-understand-approve-all` blanket-approves; non-interactive → no answer (fail closed) |
+| 15 | `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:472-481` | `--all`+`--i-understand-approve-all` blanket-approves; non-interactive → no answer (fail closed) |
 
 ### 2.3 Responder-side checks (channel/CLI)
 
@@ -285,7 +285,7 @@ record (`tamoz_comms_decisions`, see §3):
 | 16 | `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb:214` | Prompt must exist and be `active` |
 | 17 | `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb:220,248-254` | Callback must bind exactly to the prompt row (surface, correspondent, conversation, message receipt) |
 | 18 | `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb:226-230,259-262` | Approve refused when presser evidence < pinned `required_evidence` |
-| 19 | `gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb:392-410` | CLI approval mints `filesystem_operator` evidence itself, never from arguments |
+| 19 | `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:392-410` | CLI approval mints `filesystem_operator` evidence itself, never from arguments |
 | 20 | `gems/tamoz-agent/lib/tamoz/agent/outbox_delivery_sink.rb:169-174` | Approve button offered only when `chat_bound >= required_evidence` (never in v1) |
 
 ### 2.4 Stream relay guards (Pipeline C)
@@ -300,7 +300,7 @@ record (`tamoz_comms_decisions`, see §3):
 
 ### 2.5 Adjacent approval-shaped gates (same concept, other subsystems)
 
-- **Self-improvement candidates:** `gems/tamoz-agent/lib/tamoz/agent/improvement/candidate_lifecycle.rb`
+- **Self-improvement candidates:** `gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/candidate_lifecycle.rb`
   — `approve!` requires a matching `approval_digest` and `human:<actor>` evidence
   (`:89-103`); creator cannot self-approve (`:160-162`); `apply!/activate!/rollback!`
   consult the recorded approval (`:105-132`). In-memory only. (Reported; see §9.)

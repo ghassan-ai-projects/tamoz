@@ -116,7 +116,7 @@ broad-directory exclusions, each slice removes entries, never add exclusions to 
 ### Q2 — Characterize critical hotspots
 Characterization tests around public+durable behavior before splitting. Priority =
 complexity × change frequency × blast radius × defect risk / refactoring effort. Likely
-first: `gems/tamoz-agent/lib/tamoz/agent/cli.rb`, `session_nodes.rb`, `profile.rb`,
+first: `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`, `session_nodes.rb`, `profile.rb`,
 `gems/tamoz-tools/lib/tamoz/tools/toolbox.rb`, `gems/tamoz-sqlite/lib/tamoz/sqlite/checkpoint_store.rb`,
 `gems/tamoz-graph/lib/tamoz/graph/compiled.rb`. Per candidate: map responsibilities and
 callers (Enola impact analysis), identify public methods + wire-format deps, add missing

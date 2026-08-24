@@ -51,12 +51,6 @@ module Tamoz
     # to claim crash durability or effect safety, so no ephemeral Session is offered.
     class Session
       GRAPH_NAME = "tamoz.agent.session"
-      GRAPH_VERSION = "1"
-      CURRENT_GRAPH_VERSION = "2"
-      ADAPTIVE_GRAPH_VERSION = SessionNodes::ADAPTIVE_GRAPH_VERSION
-      COMPACTION_GRAPH_VERSION = "4"
-      SUPPORTED_GRAPH_VERSIONS = [GRAPH_VERSION, CURRENT_GRAPH_VERSION, ADAPTIVE_GRAPH_VERSION,
-                                  COMPACTION_GRAPH_VERSION].freeze
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
 
@@ -120,9 +114,9 @@ module Tamoz
         @memory_owner = memory_owner
         @profile_narrowed = profile_narrowed == true
         @default_graph_version = case routing.to_sym
-                                 when :experimental then CURRENT_GRAPH_VERSION
-                                 when :adaptive then ADAPTIVE_GRAPH_VERSION
-                                 else COMPACTION_GRAPH_VERSION
+                                 when :experimental then GraphVersions::CURRENT_GRAPH_VERSION
+                                 when :adaptive then GraphVersions::ADAPTIVE_GRAPH_VERSION
+                                 else GraphVersions::COMPACTION_GRAPH_VERSION
                                  end
         verify_profile_binding!(profile)
         node_arguments = {
@@ -147,26 +141,26 @@ module Tamoz
         }
         @approval_engine = approval_engine
         @approval_session_id = approval_session_id
-        @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GRAPH_VERSION)
-        @nodes = SessionNodes.new(**node_arguments, graph_version: CURRENT_GRAPH_VERSION)
-        @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: ADAPTIVE_GRAPH_VERSION)
-        @nodes_compaction = SessionNodes.new(**node_arguments, graph_version: COMPACTION_GRAPH_VERSION)
+        @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GraphVersions::GRAPH_VERSION)
+        @nodes = SessionNodes.new(**node_arguments, graph_version: GraphVersions::CURRENT_GRAPH_VERSION)
+        @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: GraphVersions::ADAPTIVE_GRAPH_VERSION)
+        @nodes_compaction = SessionNodes.new(**node_arguments, graph_version: GraphVersions::COMPACTION_GRAPH_VERSION)
         @definitions = {
-          GRAPH_VERSION => Session.build_definition(
+          GraphVersions::GRAPH_VERSION => Session.build_definition(
             @nodes_v1,
-            version: GRAPH_VERSION
+            version: GraphVersions::GRAPH_VERSION
           ),
-          CURRENT_GRAPH_VERSION => Session.build_definition(
+          GraphVersions::CURRENT_GRAPH_VERSION => Session.build_definition(
             @nodes,
-            version: CURRENT_GRAPH_VERSION
+            version: GraphVersions::CURRENT_GRAPH_VERSION
           ),
-          ADAPTIVE_GRAPH_VERSION => Session.build_definition(
+          GraphVersions::ADAPTIVE_GRAPH_VERSION => Session.build_definition(
             @nodes_adaptive,
-            version: ADAPTIVE_GRAPH_VERSION
+            version: GraphVersions::ADAPTIVE_GRAPH_VERSION
           ),
-          COMPACTION_GRAPH_VERSION => Session.build_definition(
+          GraphVersions::COMPACTION_GRAPH_VERSION => Session.build_definition(
             @nodes_compaction,
-            version: COMPACTION_GRAPH_VERSION
+            version: GraphVersions::COMPACTION_GRAPH_VERSION
           )
         }.freeze
         @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
@@ -196,8 +190,8 @@ module Tamoz
 
       def nodes_for_default_graph
         case @default_graph_version
-        when ADAPTIVE_GRAPH_VERSION then @nodes_adaptive
-        when COMPACTION_GRAPH_VERSION then @nodes_compaction
+        when GraphVersions::ADAPTIVE_GRAPH_VERSION then @nodes_adaptive
+        when GraphVersions::COMPACTION_GRAPH_VERSION then @nodes_compaction
         else @nodes
         end
       end
@@ -313,11 +307,11 @@ module Tamoz
         return unless record
 
         stored = record.fetch("graph_version")
-        return if SUPPORTED_GRAPH_VERSIONS.include?(stored)
+        return if GraphVersions::SUPPORTED_GRAPH_VERSIONS.include?(stored)
 
         raise Tamoz::CheckpointVersionError,
               "session #{thread} uses graph version #{stored.inspect}; this runtime supports " \
-              "#{SUPPORTED_GRAPH_VERSIONS.join(", ")}. Start a new session or use a compatible runtime."
+              "#{GraphVersions::SUPPORTED_GRAPH_VERSIONS.join(", ")}. Start a new session or use a compatible runtime."
       end
       private :enforce_graph_binding!
 
@@ -410,9 +404,9 @@ module Tamoz
       end
       private :conversation_transcript
 
-      def self.build_definition(nodes, version: GRAPH_VERSION)
-        routed = String(version) == CURRENT_GRAPH_VERSION
-        adaptive = String(version) == ADAPTIVE_GRAPH_VERSION
+      def self.build_definition(nodes, version: GraphVersions::GRAPH_VERSION)
+        routed = String(version) == GraphVersions::CURRENT_GRAPH_VERSION
+        adaptive = String(version) == GraphVersions::ADAPTIVE_GRAPH_VERSION
         Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
           state :task, default: ""
           state :phase, default: ""
@@ -433,7 +427,7 @@ module Tamoz
           state :approvals, reduce: :append, default: []
           state :effect_intents, reduce: :append, default: []
           state :effect_receipts, reduce: :append, default: []
-          state :compactions, reduce: :append, default: [] unless String(version) == GRAPH_VERSION
+          state :compactions, reduce: :append, default: [] unless String(version) == GraphVersions::GRAPH_VERSION
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []
@@ -781,7 +775,7 @@ module Tamoz
         @apps.fetch(version) do
           raise Tamoz::CheckpointVersionError,
                 "session #{thread} uses graph version #{version.inspect}; this runtime supports " \
-                "#{SUPPORTED_GRAPH_VERSIONS.join(", ")}"
+                "#{GraphVersions::SUPPORTED_GRAPH_VERSIONS.join(", ")}"
         end
       end
       private :app_for_thread
