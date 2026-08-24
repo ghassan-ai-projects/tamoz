@@ -10,8 +10,6 @@ module Tamoz
     # metrics measure the storage vocabulary, not a choice to overload.
     # rubocop:disable Metrics/ModuleLength, Metrics/ParameterLists
     module CommsStoreRows
-      REQUEST_DOMAIN = 'tamoz.comms.request.v1'
-
       # SELECT column lists for the row-shaped reads; the connection returns
       # positional rows, so the zip order is the table's DDL order.
       SURFACE_COLUMNS = %w[
@@ -75,10 +73,12 @@ module Tamoz
       end
 
       def request_id_for(envelope_wire, bot_id)
-        ::Digest::SHA256.hexdigest(
-          "#{REQUEST_DOMAIN}\n" +
-          JSON.generate([envelope_wire.fetch('surface_id'), envelope_wire.fetch('surface_revision'),
-                         bot_id, envelope_wire.fetch('update_id'), envelope_wire.fetch('raw_payload_hash')])
+        Tamoz::Core::RequestIdentity.request_id(
+          surface_id: envelope_wire.fetch('surface_id'),
+          surface_revision: envelope_wire.fetch('surface_revision'),
+          bot_id:,
+          update_id: envelope_wire.fetch('update_id'),
+          raw_payload_hash: envelope_wire.fetch('raw_payload_hash')
         )
       end
 

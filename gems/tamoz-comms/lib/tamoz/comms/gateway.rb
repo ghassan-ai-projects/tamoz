@@ -30,6 +30,29 @@ module Tamoz
       TRANSIENT_BACKOFF_BASE_S = 1.0
       TRANSIENT_BACKOFF_MAX_S = 30.0
 
+      HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
+                   '/redirect r<reference> <new task>, /whoami. Commands never become task text.'.freeze
+      NO_WORK_REPLY = 'No work is admitted for this conversation.'.freeze
+      UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'.freeze
+      AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'.freeze
+      NEW_CONVERSATION_REPLY = 'New conversation started; earlier history stays in the audit record.'.freeze
+      NEW_CONVERSATION_UNBOUND_REPLY =
+        'No conversation is bound for this channel yet; send a message first.'.freeze
+      REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'.freeze
+      REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'.freeze
+      FINISHED_REQUEST_REPLY = 'That request has already finished.'.freeze
+
+      # Store-projection states the Lifecycle tables do not name resolve here
+      # first: the checkpoint inbox statuses and the admitted-but-unclaimed
+      # sentinel. The Lifecycle translation after this still fails closed.
+      TASK_WORD_PRETRANSLATIONS = {
+        'not_started' => 'admitted',
+        'claimed' => 'running',
+        'redirecting' => 'waiting'
+      }.freeze
+
+      REFERENCE_PATTERN = /\Ar[0-9a-f]{#{Lifecycle::REQUEST_REF_WIDTH}}\z/.freeze
+
       # Typed admission refusals (invariant 10): each records its durable
       # disposition and sends one bounded reply; none enqueues work.
       ADMISSION_REFUSALS = {
@@ -184,7 +207,7 @@ module Tamoz
 
         case decision.disposition
         when :request
-          admit_request(envelope, decision, now:)
+          admit_request(envelope, now:)
         when :decision
           resolve_callback(envelope, now:)
         when :rejected
@@ -290,9 +313,9 @@ module Tamoz
       # reverse order is forbidden. An allowlisted first contact also gets its
       # correspondent binding (bound_by records the operator config, so
       # `comms list` and `pair revoke` can see and revoke it).
-      def admit_request(envelope, decision, now:)
-        thread = decision.thread_id
+      def admit_request(envelope, now:)
         conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        thread = admission_thread(envelope, conversation)
         if conversation.nil?
           bind_thread_profile(thread)
           @store.bind_conversation(
@@ -304,6 +327,8 @@ module Tamoz
             now:
           )
           bind_allowlisted_correspondent(envelope, now:)
+        elsif conversation.fetch('thread_id') != thread
+          bind_thread_profile(thread)
         end
         history = @store.conversation_history(
           surface_id:, conversation_id: envelope.fetch('conversation_id')
@@ -327,48 +352,195 @@ module Tamoz
         append_control(reply, envelope, now:)
       end
 
-      # The one synchronous acknowledgement. When earlier admitted work is
-      # still open the message QUEUES behind it (the worker settles one
-      # occurrence before claiming the next), and the reply must say so —
-      # "Accepted" alone reads as "starting now".
+      # A bound conversation admits onto the thread its DURABLE GENERATION
+      # derives (plan 02 work item 4): /new rotates the identity without
+      # touching the write-once route row, and open work on a previous
+      # generation's thread keeps running there untouched.
+      def admission_thread(envelope, conversation)
+        conversation_id = envelope.fetch('conversation_id')
+        return Comms::Admission.thread_id(surface_id, conversation_id) unless conversation
+
+        Comms::Admission.thread_id(
+          surface_id, conversation_id,
+          generation: @store.conversation_generation(surface_id:, conversation_id:)
+        )
+      end
+
+      # The one synchronous acknowledgement. It names the request reference
+      # (plan 02 work item 2) derived LOCALLY from the envelope wire — the
+      # same identity the store anchored, so no round-trip is needed — and it
+      # says what will actually happen: while earlier admitted work is still
+      # open the message QUEUES behind it, so "Accepted" alone would read as
+      # "starting now". The reference authorizes nothing; it only ever
+      # resolves read-only status inside this conversation.
       def accepted_reply(envelope)
+        reference = Lifecycle::RequestRef.for(request_identity(envelope))
         status = @store.conversation_status(
           surface_id:, conversation_id: envelope.fetch('conversation_id')
         )
-        return 'Accepted. I will report committed progress.' unless status
-
-        if status.fetch('open_requests') > 1
-          'Queued behind earlier work; I will report committed progress when it runs.'
+        if status && status.fetch('open_requests') > 1
+          "Accepted #{reference}; queued behind earlier work; " \
+            'I will report committed progress when it runs.'
         else
-          'Accepted. I will report committed progress.'
+          "Accepted #{reference}. I will report committed progress."
         end
       end
 
+      def request_identity(envelope)
+        Tamoz::Core::RequestIdentity.request_id(
+          surface_id: envelope.fetch('surface_id'),
+          surface_revision: envelope.fetch('surface_revision'),
+          bot_id:, update_id: envelope.fetch('update_id'),
+          raw_payload_hash: envelope.fetch('raw_payload_hash')
+        )
+      end
+
+      # Command registry parity (invariant 8): every name in Commands::KNOWN
+      # has a branch here producing a distinct outcome — there is no
+      # fallthrough, because an unimplemented command must not parse as known.
       def handle_command(envelope, decision, now:)
-        case decision.command_intent.name
+        intent = decision.command_intent
+        case intent.name
         when 'help'
-          append_control('Commands: /help, /status, /cancel. Commands never become task text.', envelope, now:)
+          append_control(HELP_REPLY, envelope, now:)
         when 'status'
-          append_control(status_text(envelope), envelope, now:)
+          append_control(status_text(envelope, intent.arguments), envelope, now:)
+        when 'new'
+          append_control(new_conversation(envelope), envelope, now:)
         when 'cancel'
           append_control(cancel_request(envelope), envelope, now:)
-        else
-          append_control('That command is not available on this channel.', envelope, now:)
+        when 'redirect'
+          append_control(redirect_request(envelope, intent.arguments), envelope, now:)
+        when 'whoami'
+          append_control(whoami_text(envelope), envelope, now:)
         end
       end
 
-      def status_text(envelope)
-        status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
-        return 'No work is admitted for this conversation.' unless status
+      # `/status` with no argument renders the conversation aggregate from
+      # durable facts (invariant 12); with `r<ref>` it resolves ONE request
+      # scoped to the caller's own conversation — a foreign or malformed ref
+      # is one bounded reply that leaks nothing.
+      def status_text(envelope, arguments)
+        return request_status_text(envelope, arguments) if arguments
 
-        "Work status: task=#{status.fetch('task_state')}; " \
+        status = @store.conversation_status(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        return NO_WORK_REPLY unless status
+
+        "Work status: task=#{task_word(status)}; " \
           "phase=#{status.fetch('phase', 'unknown')}; " \
           "event=#{status.fetch('event_kind', 'unknown')}##{status.fetch('event_sequence', 'unknown')}; " \
           "effect=#{status.fetch('effect_state')}; " \
           "capability=#{status.fetch('capability_state')}; " \
-          "delivery=#{status.fetch('delivery_state')}; " \
+          "delivery=#{delivery_word(status)}; " \
           "next=#{status.fetch('next_action', 'inspect')}; " \
-          "open requests=#{status.fetch('open_requests')}."
+          "open requests=#{status.fetch('open_requests')}." \
+          "#{reference_sentence(status)}#{queue_sentence(status)}#{reason_sentence(status)}"
+      end
+
+      def request_status_text(envelope, reference)
+        resolved = @store.request_status(
+          surface_id:, conversation_id: envelope.fetch('conversation_id'), ref: String(reference)
+        )
+        return UNKNOWN_REF_REPLY if resolved == :unknown_ref
+        return AMBIGUOUS_REF_REPLY if resolved == :ambiguous_ref
+
+        "Request #{resolved.fetch('request_ref')}: task=#{task_word(resolved)}; " \
+          "delivery=#{delivery_word(resolved)}; " \
+          "phase=#{resolved.fetch('phase', 'unknown')}; " \
+          "event=#{resolved.fetch('event_kind', 'unknown')}##{resolved.fetch('event_sequence', 'unknown')}; " \
+          "effect=#{resolved.fetch('effect_state')}; " \
+          "capability=#{resolved.fetch('capability_state')}; " \
+          "next=#{resolved.fetch('next_action', 'inspect')}.#{queue_sentence(resolved)}#{reason_sentence(resolved)}"
+      end
+
+      # `/new` rotates the conversation generation durably (plan 02 work item
+      # 4); audit history stays, and later admissions derive the fresh thread
+      # from the bumped generation.
+      def new_conversation(envelope)
+        @store.bump_generation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        NEW_CONVERSATION_REPLY
+      rescue KeyError
+        NEW_CONVERSATION_UNBOUND_REPLY
+      end
+
+      # `/redirect r<ref> <task>` reuses the durable redirect path exactly the
+      # way cancel does; it changes TASK TEXT only — never profile, model,
+      # budget, or schedule.
+      def redirect_request(envelope, arguments)
+        parts = String(arguments).strip.split(/\s+/, 2)
+        reference = parts[0].to_s
+        task_text = parts[1].to_s.strip
+        return REDIRECT_USAGE_REPLY unless valid_reference?(reference) && !task_text.empty?
+
+        resolved = @store.request_status(
+          surface_id:, conversation_id: envelope.fetch('conversation_id'), ref: reference
+        )
+        return UNKNOWN_REF_REPLY if resolved == :unknown_ref
+        return AMBIGUOUS_REF_REPLY if resolved == :ambiguous_ref
+        return FINISHED_REQUEST_REPLY if finished_request?(resolved)
+
+        @checkpoints.enqueue_request(
+          thread_id: resolved.fetch('thread_id'),
+          request_id: Comms::Canonical.hexdigest(
+            'tamoz.comms.command.v1', [surface_id, envelope.fetch('update_id'), 'redirect']
+          ),
+          operation: :redirect,
+          payload: { 'task' => task_text },
+          delivery: :redirect
+        )
+        "Redirecting #{resolved.fetch('request_ref')}; the replacement task is queued."
+      rescue Tamoz::CheckpointConflictError
+        REDIRECT_UNQUEUED_REPLY
+      end
+
+      def whoami_text(envelope)
+        "You are #{envelope.fetch('correspondent_id')} in conversation " \
+          "#{envelope.fetch('conversation_id')} on surface #{surface_id}."
+      end
+
+      def valid_reference?(text) = text.match?(REFERENCE_PATTERN)
+
+      # The checkpoint inbox row outlives the comms projection by moments; a
+      # terminal inbox status means the turn ran to its end and cannot take a
+      # replacement task.
+      def finished_request?(resolved)
+        request = @checkpoints.fetch_request(
+          thread_id: resolved.fetch('thread_id'), request_id: resolved.fetch('request_id'), namespace: []
+        )
+        request && %i[completed failed].include?(request.status)
+      end
+
+      # Both lifecycle axes render EXTERNAL vocabulary only (invariant 3);
+      # `idle`/`none` are the spellings for an axis with nothing on it.
+      def task_word(projection)
+        internal = TASK_WORD_PRETRANSLATIONS.fetch(
+          projection.fetch('task_state'), projection.fetch('task_state')
+        )
+        Lifecycle.task_state_for(internal) || 'idle'
+      end
+
+      def delivery_word(projection)
+        internal = projection.fetch('delivery_state')
+        return 'none' if internal == 'none'
+
+        Lifecycle.delivery_state_for(internal)
+      end
+
+      def reference_sentence(projection)
+        reference = projection['request_ref']
+        reference ? " Reference #{reference}." : ''
+      end
+
+      def queue_sentence(projection)
+        return '' unless projection.key?('queue_position')
+
+        sentence = " Queue position #{projection.fetch('queue_position')}."
+        projection['queue_age_ms'] ? "#{sentence} Age #{projection.fetch('queue_age_ms')} ms." : sentence
+      end
+
+      def reason_sentence(projection)
+        reason = projection['terminal_reason']
+        reason ? " Reason: #{reason}." : ''
       end
 
       def cancel_request(envelope)

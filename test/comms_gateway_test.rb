@@ -173,9 +173,15 @@ class CommsGatewayTest < Minitest::Test
         fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
       ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
+      first_ref = Comms::Lifecycle::RequestRef.for(
+        Tamoz::Core::RequestIdentity.request_id(
+          surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
+          update_id: 101, raw_payload_hash: transport.digest_of(update(101, text: 'make it blue'))
+        )
+      )
 
-      assert_equal 'Accepted. I will report committed progress.', replies.first
-      assert_match(/Queued behind earlier work/, replies.last)
+      assert_equal "Accepted #{first_ref}. I will report committed progress.", replies.first
+      assert_match(/Accepted r\h{10}; queued behind earlier work/, replies.last)
     end
   end
 
@@ -626,6 +632,8 @@ class CommsGatewayTest < Minitest::Test
     def payload_digest(update)
       Digest::SHA256.hexdigest(JSON.generate(update))
     end
+
+    def digest_of(update) = payload_digest(update)
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
