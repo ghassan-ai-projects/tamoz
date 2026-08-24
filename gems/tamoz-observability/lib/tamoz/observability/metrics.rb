@@ -10,6 +10,11 @@ module Tamoz
       DEFAULT_MAX_SERIES = 4_096
       DEFAULT_MAX_HISTOGRAM_SAMPLES = 10_000
 
+      DURATION_METRICS = {
+        'tamoz.model.call' => { name: 'tamoz.model.call.duration_ms', label_keys: %w[provider model] },
+        'tamoz.tool.call' => { name: 'tamoz.tool.call.duration_ms', label_keys: %w[tool source] }
+      }.freeze
+
       attr_reader :violations
 
       def initialize(catalog: Catalog, max_series: DEFAULT_MAX_SERIES,
@@ -24,50 +29,29 @@ module Tamoz
       end
 
       def increment(name, value: 1, labels: {})
-        entry = definition(name)
-        validate_labels!(entry, labels)
-        value = Float(value)
-        raise ValidationError, 'metric value must be finite and non-negative' unless value.finite? && value >= 0
-
-        key = series_key(entry.name, labels)
-        register_series!(key, entry.name)
-        @counters[key] += value
-        value
+        record(name, labels:) { |key| @counters[key] += validate_non_negative!(value) }
       rescue StandardError
-        @violations[name.to_s] += 1
+        count_violation(name)
         :rejected
       end
 
       def observe(name, value, labels: {})
-        entry = definition(name)
-        validate_labels!(entry, labels)
-        value = Float(value)
-        raise ValidationError, 'histogram value must be finite and non-negative' unless value.finite? && value >= 0
+        record(name, labels:) do |key|
+          values = @histograms[key]
+          raise ValidationError, "#{name}: histogram sample limit reached" if values.length >= @max_histogram_samples
 
-        key = series_key(entry.name, labels)
-        register_series!(key, entry.name)
-        values = @histograms[key]
-        raise ValidationError, "#{entry.name}: histogram sample limit reached" if values.length >= @max_histogram_samples
-
-        values << value
+          values << validate_non_negative!(value)
+        end
         value
       rescue StandardError
-        @violations[name.to_s] += 1
+        count_violation(name)
         :rejected
       end
 
       def set(name, value, labels: {})
-        entry = definition(name)
-        validate_labels!(entry, labels)
-        value = Float(value)
-        raise ValidationError, 'gauge value must be finite' unless value.finite?
-
-        key = series_key(entry.name, labels)
-        register_series!(key, entry.name)
-        @gauges[key] = value
-        value
+        record(name, labels:) { |key| @gauges[key] = validate_finite!(value) }
       rescue StandardError
-        @violations[name.to_s] += 1
+        count_violation(name)
         :rejected
       end
 
@@ -75,33 +59,15 @@ module Tamoz
         return add_document(signal) if signal.is_a?(Hash)
         return :ignored unless signal.is_a?(Signal)
 
-        case signal.name
-        when 'tamoz.model.call'
-          duration = signal.attributes['duration_ms'] || signal.attributes[:duration_ms]
-          observe('tamoz.model.call.duration_ms', duration, labels: labels(signal, %i[provider model outcome])) if duration
-        when 'tamoz.tool.call'
-          duration = signal.attributes['duration_ms'] || signal.attributes[:duration_ms]
-          observe('tamoz.tool.call.duration_ms', duration, labels: labels(signal, %i[tool source outcome])) if duration
-        end
-        :recorded
+        add_document(document_from_signal(signal))
       rescue StandardError
         @violations[signal.name] += 1
         :rejected
       end
 
       def add_document(document)
-        name = document.fetch('name')
-        attributes = document.fetch('attributes', {})
-        case name
-        when 'tamoz.model.call'
-          duration = attributes['duration_ms']
-          observe('tamoz.model.call.duration_ms', duration,
-                  labels: attributes.slice('provider', 'model').merge('outcome' => document.fetch('outcome', 'ok'))) if duration
-        when 'tamoz.tool.call'
-          duration = attributes['duration_ms']
-          observe('tamoz.tool.call.duration_ms', duration,
-                  labels: attributes.slice('tool', 'source').merge('outcome' => document.fetch('outcome', 'ok'))) if duration
-        end
+        metric = duration_metric_for(document)
+        record_duration(document, metric) if metric
         :recorded
       rescue StandardError
         @violations[document.fetch('name', 'unknown')] += 1
@@ -124,23 +90,13 @@ module Tamoz
         {
           'counters' => serialize_series(@counters),
           'gauges' => serialize_series(@gauges),
-          'histograms' => @histograms.map do |(name, labels), values|
-            {'name' => name, 'labels' => labels, 'count' => values.length, 'sum' => values.sum,
-             'max' => values.max, 'p99' => percentile(values, 0.99)}
-          end,
+          'histograms' => serialize_histograms,
           'violations' => @violations.dup
         }
       end
 
       def prometheus
-        lines = []
-        @counters.each { |key, value| lines << render_series(key, value) }
-        @gauges.each { |key, value| lines << render_series(key, value) }
-        @histograms.each do |key, values|
-          lines << render_series(key, values.length, suffix: '_count')
-          lines << render_series(key, values.sum, suffix: '_sum')
-        end
-        lines.join("\n") + (lines.empty? ? '' : "\n")
+        terminate_lines(counter_lines + gauge_lines + histogram_lines)
       end
 
       def health
@@ -148,6 +104,14 @@ module Tamoz
       end
 
       private
+
+      def record(name, labels:)
+        entry = definition(name)
+        validate_labels!(entry, labels)
+        key = series_key(entry.name, labels)
+        register_series!(key, entry.name)
+        yield key
+      end
 
       def definition(name)
         entry = @catalog.fetch(name)
@@ -157,21 +121,78 @@ module Tamoz
       end
 
       def validate_labels!(entry, labels)
-        labels = labels.to_h.transform_keys(&:to_sym)
+        labels = normalize_labels(labels)
+        validate_label_set!(entry, labels)
+        labels.each { |key, value| validate_label_value!(key, value) }
+      end
+
+      def normalize_labels(labels)
+        labels.to_h.transform_keys(&:to_sym)
+      end
+
+      def validate_label_set!(entry, labels)
         expected = entry.optional.keys.map(&:to_sym)
         missing = expected - labels.keys
         extra = labels.keys - expected
-        raise ValidationError, "#{entry.name}: labels must be #{expected.inspect}" unless missing.empty? && extra.empty?
+        return if missing.empty? && extra.empty?
 
-        labels.each do |key, value|
-          raise ValidationError, "#{key}: correlation identifiers cannot be labels" if IDENTIFIER_LABELS.include?(key)
-          string = String(value)
-          raise ValidationError, "#{key}: value is not low cardinality" unless string.match?(LOW_CARDINALITY_RE)
-        end
+        raise ValidationError, "#{entry.name}: labels must be #{expected.inspect}"
       end
 
-      def labels(signal, keys)
-        keys.to_h { |key| [key, signal.attributes.fetch(key, signal.attributes.fetch(key.to_s, 'unknown'))] }
+      def validate_label_value!(key, value)
+        raise ValidationError, "#{key}: correlation identifiers cannot be labels" if IDENTIFIER_LABELS.include?(key)
+
+        string = String(value)
+        return if string.match?(LOW_CARDINALITY_RE)
+
+        raise ValidationError, "#{key}: value is not low cardinality"
+      end
+
+      def document_from_signal(signal)
+        document = signal.to_h
+        document['attributes'] = stringified_attributes(signal.attributes)
+        document['outcome'] ||= 'unknown'
+        document
+      end
+
+      def stringified_attributes(attributes)
+        attributes.to_h { |key, value| [key.to_s, value] }
+      end
+
+      def duration_metric_for(document)
+        DURATION_METRICS[document.fetch('name')]
+      end
+
+      def record_duration(document, metric)
+        duration = document.fetch('attributes', {})['duration_ms']
+        return unless duration
+
+        observe(metric[:name], duration, labels: duration_labels(document, metric[:label_keys]))
+      end
+
+      def duration_labels(document, label_keys)
+        attributes = document.fetch('attributes', {})
+        label_keys.to_h do |key|
+          [key, attributes.fetch(key, 'unknown')]
+        end.merge('outcome' => document.fetch('outcome', 'ok'))
+      end
+
+      def validate_non_negative!(value)
+        value = Float(value)
+        raise ValidationError, 'metric value must be finite and non-negative' unless value.finite? && value >= 0
+
+        value
+      end
+
+      def validate_finite!(value)
+        value = Float(value)
+        raise ValidationError, 'gauge value must be finite' unless value.finite?
+
+        value
+      end
+
+      def count_violation(name)
+        @violations[name.to_s] += 1
       end
 
       def series_key(name, labels)
@@ -196,6 +217,39 @@ module Tamoz
         series.map do |(name, labels), value|
           {'name' => name, 'labels' => labels, 'value' => value}
         end
+      end
+
+      def serialize_histograms
+        @histograms.map do |(name, labels), values|
+          histogram_summary(values).merge('name' => name, 'labels' => labels)
+        end
+      end
+
+      def histogram_summary(values)
+        {
+          'count' => values.length,
+          'sum' => values.sum,
+          'max' => values.max,
+          'p99' => percentile(values, 0.99)
+        }
+      end
+
+      def counter_lines
+        @counters.map { |key, value| render_series(key, value) }
+      end
+
+      def gauge_lines
+        @gauges.map { |key, value| render_series(key, value) }
+      end
+
+      def histogram_lines
+        @histograms.flat_map do |key, values|
+          [render_series(key, values.length, suffix: '_count'), render_series(key, values.sum, suffix: '_sum')]
+        end
+      end
+
+      def terminate_lines(lines)
+        lines.join("\n") + (lines.empty? ? '' : "\n")
       end
 
       def render_series(key, value, suffix: '')
