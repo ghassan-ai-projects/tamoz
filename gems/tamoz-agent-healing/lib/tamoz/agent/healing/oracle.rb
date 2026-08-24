@@ -66,51 +66,70 @@ module Tamoz
           oracle = rule.verification_oracle
           check_name = oracle.fetch("check_name")
           pinned = oracle.fetch("digest")
+          observed = observe_digest(toolbox, check_name)
 
-          observed = begin
-            digest_for(toolbox, check_name)
-          rescue HealingContractError
-            nil
-          end
-
-          if observed.nil?
-            return Result.new(
-              passed: false, oracle_digest: pinned, observed_digest: nil,
-              check_name:, outcome: nil, failure_signature: nil,
-              reason: "oracle_absent"
-            )
-          end
-          unless observed == pinned
-            # Design §10: "evaluator or rule artifact cannot be verified" is a
-            # circuit condition. Never a pass.
-            return Result.new(
-              passed: false, oracle_digest: pinned, observed_digest: observed,
-              check_name:, outcome: nil, failure_signature: nil,
-              reason: "oracle_digest_mismatch"
-            )
-          end
+          return absent_result(pinned, check_name) if observed.nil?
+          return mismatch_result(pinned, observed, check_name) unless observed == pinned
 
           receipt = toolbox.execute("run_check", {"name" => String(check_name)})
-          unless receipt.is_a?(Tamoz::Tools::CheckReceipt)
-            raise HealingContractError,
-                  "the configured check did not return a CheckReceipt"
-          end
+          assert_receipt!(receipt)
+          result_from_receipt(receipt, pinned, observed, check_name)
+        rescue Tamoz::Core::ToolError => error
+          unavailable_result(rule.verification_oracle, error)
+        end
 
+        def observe_digest(toolbox, check_name)
+          digest_for(toolbox, check_name)
+        rescue HealingContractError
+          nil
+        end
+        private_class_method :observe_digest
+
+        def assert_receipt!(receipt)
+          return if receipt.is_a?(Tamoz::Tools::CheckReceipt)
+
+          raise HealingContractError,
+                "the configured check did not return a CheckReceipt"
+        end
+        private_class_method :assert_receipt!
+
+        def absent_result(pinned, check_name)
+          Result.new(
+            passed: false, oracle_digest: pinned, observed_digest: nil,
+            check_name:, outcome: nil, failure_signature: nil,
+            reason: "oracle_absent"
+          )
+        end
+        private_class_method :absent_result
+
+        def mismatch_result(pinned, observed, check_name)
+          Result.new(
+            passed: false, oracle_digest: pinned, observed_digest: observed,
+            check_name:, outcome: nil, failure_signature: nil,
+            reason: "oracle_digest_mismatch"
+          )
+        end
+        private_class_method :mismatch_result
+
+        def result_from_receipt(receipt, pinned, observed, check_name)
           Result.new(
             passed: receipt.passed?, oracle_digest: pinned, observed_digest: observed,
             check_name:, outcome: receipt.outcome,
             failure_signature: receipt.failure_signature,
             reason: receipt.passed? ? "oracle_pass" : "oracle_fail"
           )
-        rescue Tamoz::Core::ToolError => error
-          # A check that cannot start is an unavailable oracle, not a pass.
+        end
+        private_class_method :result_from_receipt
+
+        def unavailable_result(oracle, error)
           Result.new(
-            passed: false, oracle_digest: rule.verification_oracle.fetch("digest"),
-            observed_digest: nil, check_name: rule.verification_oracle.fetch("check_name"),
+            passed: false, oracle_digest: oracle.fetch("digest"),
+            observed_digest: nil, check_name: oracle.fetch("check_name"),
             outcome: nil, failure_signature: nil,
             reason: "oracle_unavailable:#{Tamoz::Core.serialized_tool_error_name(error.class.name)}"
           )
         end
+        private_class_method :unavailable_result
       end
     end
   end
