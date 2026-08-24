@@ -44,16 +44,8 @@ module Tamoz
           verify_lifecycle_backing!(rule)
           @mutex.synchronize do
             history = @versions[rule.rule_id]
-            if history.any? { |existing| existing.version == rule.version }
-              raise HealingPolicyError,
-                    "rule #{rule.rule_id} version #{rule.version} is already registered; " \
-                    "a rule version is immutable"
-            end
-            if history.any? && rule.version <= history.last.version
-              raise HealingPolicyError,
-                    "rule #{rule.rule_id} version must increase monotonically " \
-                    "(have #{history.last.version}, got #{rule.version})"
-            end
+            assert_unique_version!(history, rule)
+            assert_monotonic_version!(history, rule)
 
             history << rule
             rule
@@ -151,6 +143,22 @@ module Tamoz
         end
 
         private
+
+        def assert_unique_version!(history, rule)
+          return unless history.any? { |existing| existing.version == rule.version }
+
+          raise HealingPolicyError,
+                "rule #{rule.rule_id} version #{rule.version} is already registered; " \
+                "a rule version is immutable"
+        end
+
+        def assert_monotonic_version!(history, rule)
+          return unless history.any? && rule.version <= history.last.version
+
+          raise HealingPolicyError,
+                "rule #{rule.rule_id} version must increase monotonically " \
+                "(have #{history.last.version}, got #{rule.version})"
+        end
 
         def changed_self_protected_fields(current, updates)
           updates.filter_map do |field, value|
