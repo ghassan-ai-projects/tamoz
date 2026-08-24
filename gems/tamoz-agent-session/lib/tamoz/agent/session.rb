@@ -50,6 +50,8 @@ module Tamoz
     # `Tamoz::Agent::Runtime`; PERSISTENCE_DESIGN §9 forbids using the in-memory adapter
     # to claim crash durability or effect safety, so no ephemeral Session is offered.
     class Session
+      include SessionContextControls
+
       GRAPH_NAME = "tamoz.agent.session"
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
@@ -142,6 +144,8 @@ module Tamoz
         }
         @approval_engine = approval_engine
         @approval_session_id = approval_session_id
+        @artifact_store = artifact_store
+        @artifact_tenant = artifact_tenant
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GraphVersions::GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: GraphVersions::CURRENT_GRAPH_VERSION)
         @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: GraphVersions::ADAPTIVE_GRAPH_VERSION)
@@ -399,9 +403,14 @@ module Tamoz
 
       # Reads the conversation transcript a channel turn carries in its
       # request payload, through the compiled app's BOUND checkpointer (what
-      # arrives at the constructor is the unbound adapter).
+      # arrives at the constructor is the unbound adapter). A /reset or
+      # /compact control on the thread truncates the model-visible prefix:
+      # fragments the control counted are dropped from every later frame.
       def conversation_transcript(thread_id:, request_id:)
-        SessionPlanningContext.transcript_from(@app.checkpointer, thread_id:, request_id:)
+        fragments = SessionPlanningContext.transcript_from(@app.checkpointer, thread_id:, request_id:)
+        state = stored_state(thread_id)
+        offset = SessionContextControls.visible_fragment_offset(Array(state[:context_controls])) if state
+        offset ? fragments.drop(offset) : fragments
       end
       private :conversation_transcript
 
@@ -429,6 +438,7 @@ module Tamoz
           state :effect_intents, reduce: :append, default: []
           state :effect_receipts, reduce: :append, default: []
           state :compactions, reduce: :append, default: [] unless String(version) == GraphVersions::GRAPH_VERSION
+          state :context_controls, reduce: :append, default: []
           state :observations, reduce: :append, default: []
           state :seen_action_signatures, reduce: :append, default: []
           state :seen_failure_signatures, reduce: :append, default: []

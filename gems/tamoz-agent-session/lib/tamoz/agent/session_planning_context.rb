@@ -316,6 +316,13 @@ module Tamoz
         Tamoz::Core::TurnContext.task(thread_id:, request_id:, text:, fragments:)
       end
 
+      # The durable prior-turn conversation for one thread, oldest first.
+      # Context controls (/reset, /compact) truncate what the frame shows;
+      # the durable request rows stay untouched either way.
+      def self.conversation_history(checkpointer, thread_id:)
+        prior_turn_fragments(checkpointer, thread_id:)
+      end
+
       # Builds the same durable input shape used by CommsStore for a CLI
       # follow-up. Prior request payloads are the source of truth; no live
       # conversation object is consulted.
@@ -357,6 +364,7 @@ module Tamoz
         add_conversation_context(prompt_context, conversation)
         add_behavior_snapshot(prompt_context, state)
         add_memory_context(prompt_context, state, phase)
+        add_control_context(prompt_context, state)
         result = @compactor.compact(
           context: prompt_context,
           observations:,
@@ -397,6 +405,10 @@ module Tamoz
 
       def memory_owner
         @configuration.memory_owner || 'session'
+      end
+
+      def authoritative_frame(state)
+        authoritative_context(state, :read_only)
       end
 
       private
@@ -503,6 +515,33 @@ module Tamoz
                     'the latest user message; use the earlier ones to interpret it.',
           'messages' => conversation
         }
+      end
+
+      # Per-generation context controls (/think, /verbose, /compact) enter
+      # the frame as bounded directives and pinned summaries — never as raw
+      # restored history.
+      def add_control_context(context, state)
+        controls = Array(state[:context_controls])
+        return if controls.empty?
+
+        directives = {}
+        SessionContextControls.last_preference(controls, 'think', 'reasoning_depth').then do |depth|
+          directives['reasoning_depth'] = depth if depth
+        end
+        SessionContextControls.last_preference(controls, 'verbose', 'answer_verbosity').then do |verbosity|
+          directives['answer_verbosity'] = verbosity if verbosity
+        end
+        context['directives'] = directives unless directives.empty?
+
+        compacted = controls.reverse.find { |record| record.fetch('control') == 'compact' }
+        return unless compacted&.key?('summary_digest')
+
+        (context['conversation'] ||= {}).merge!(
+          'earlier_summary' => {
+            'digest' => compacted.fetch('summary_digest'),
+            'text' => compacted.fetch('summary')
+          }
+        )
       end
 
       def add_behavior_snapshot(context, state)
