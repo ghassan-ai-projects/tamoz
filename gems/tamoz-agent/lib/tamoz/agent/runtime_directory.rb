@@ -306,20 +306,29 @@ module Tamoz
       private
 
       def load_config
-        unless File.directory?(path)
-          raise Error, "runtime directory #{path} does not exist; run 'tamoz init' first"
-        end
-
-        assert_private!(path, "runtime directory")
-        config_path = self.class.send(:config_path, path)
-        raise Error, "#{config_path} does not exist; run 'tamoz init' first" unless File.exist?(config_path)
-
-        assert_private!(config_path, "runtime configuration")
+        ensure_runtime_directory_available
+        config_path = private_config_path
         document = read_config_document(config_path)
         raise Error, "runtime configuration must be a mapping" unless document.is_a?(Hash)
 
         self.class.validate_document!(document)
         document.freeze
+      end
+
+      def ensure_runtime_directory_available
+        unless File.directory?(path)
+          raise Error, "runtime directory #{path} does not exist; run 'tamoz init' first"
+        end
+
+        assert_private!(path, "runtime directory")
+      end
+
+      def private_config_path
+        config_path = self.class.send(:config_path, path)
+        raise Error, "#{config_path} does not exist; run 'tamoz init' first" unless File.exist?(config_path)
+
+        assert_private!(config_path, "runtime configuration")
+        config_path
       end
 
       def read_config_document(config_path)
