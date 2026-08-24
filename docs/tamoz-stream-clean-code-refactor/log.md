@@ -72,3 +72,10 @@
 - Notes: idempotent redelivery now stores the unchanged row back instead of
   returning early — same observable state under the lock; error messages
   and evaluation order unchanged.
+
+### live_learning_handlers.rb
+- Bar: `reconcile_outcome` reads reconcile → admit-learnable-episode;
+  `request_approval` reads reserve → claim → deliver-if-claimed; the
+  admission ladder (learnable check → duplicate check → admit → result)
+  steps down one method per decision.
+- Status: done

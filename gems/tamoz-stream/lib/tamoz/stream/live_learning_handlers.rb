@@ -74,19 +74,35 @@ module Tamoz
           reconciliation_version: data.fetch("reconciliation_version"),
           source_authority: data.fetch("source_authority")
         )
+        admit_learnable_episode(data, event, intent_id)
+      end
+
+      def admit_learnable_episode(data, event, intent_id)
         row = @verification.fetch(tenant_id: @tenant, intent_id:)
         return log_unlearnable(intent_id) unless row.learnable?
         return log_duplicate(intent_id) if @durable.admitted?(intent_id)
 
+        admit_episode(row, data, event, intent_id)
+      end
+
+      def admit_episode(row, data, event, intent_id)
         result = @memory.admission.admit_episode(
-          episode: row.episode.transform_keys(&:to_sym).merge(
-            sensitivity: row.episode.fetch("sensitivity").to_sym,
-            observed_outcome: observed_outcome(data)
-          ),
+          episode: learnable_episode(row, data),
           owner: "stream",
           reconciled_outcome: @verification.reference(tenant_id: @tenant, intent_id:),
           verify_source_authority: ->(reference) { reference.fetch("source_authority") == event.source }
         )
+        handle_admission_result(result, intent_id)
+      end
+
+      def learnable_episode(row, data)
+        row.episode.transform_keys(&:to_sym).merge(
+          sensitivity: row.episode.fetch("sensitivity").to_sym,
+          observed_outcome: observed_outcome(data)
+        )
+      end
+
+      def handle_admission_result(result, intent_id)
         unless result.accepted?
           return handle_duplicate_admission(intent_id) if result.reason == "duplicate_identity"
 
@@ -112,18 +128,23 @@ module Tamoz
           ttl_s: @approval_ttl_s
         )
         claim = @approval_receipts.claim_delivery(approval_id:)
-        return unless claim == :claimed
+        deliver_claimed_approval(approval_id:, approval: data) if claim == :claimed
+      end
 
-        begin
-          receipt = @approval_relay.deliver(
-            approval: data,
-            conversation_id: @conversation_id.respond_to?(:call) ? @conversation_id.call(data) : @conversation_id
-          )
-          @approval_receipts.record_delivery(approval_id:, receipt:)
-        rescue StandardError
-          @approval_receipts.release_delivery(approval_id:)
-          raise
-        end
+      # A claimed delivery that fails releases the claim so a redelivered
+      # notification can retry it.
+      def deliver_claimed_approval(approval_id:, approval:)
+        receipt = @approval_relay.deliver(
+          approval:, conversation_id: resolved_conversation_id(approval)
+        )
+        @approval_receipts.record_delivery(approval_id:, receipt:)
+      rescue StandardError
+        @approval_receipts.release_delivery(approval_id:)
+        raise
+      end
+
+      def resolved_conversation_id(approval)
+        @conversation_id.respond_to?(:call) ? @conversation_id.call(approval) : @conversation_id
       end
 
       def withdraw_approval(event)
