@@ -90,19 +90,9 @@ module Tamoz
                                 klass: :preference, scopes:, sensitivity: :internal,
                                 epistemic_kind: :reported,
                                 contradiction_check: nil, now: nil)
-          negatives = []
-          negatives << "owner_request_cannot_label_observed" if epistemic_kind == :observed
-          negatives << "owner_request_cannot_create_wisdom" if layer == :wisdom
-          negatives << "owner_request_cannot_grant_capability" if klass == :constraint && statement.match?(/approv|allowed_tools|permission/i)
-          if Surface.secret_shaped?(statement)
-            negatives << "secret_contrary_to_policy"
-          end
-          if authority.to_s != "owner"
-            negatives << "authority_must_be_owner"
-          end
-          unless %i[reported prescribed].include?(epistemic_kind)
-            negatives << "owner_request_must_be_reported_or_prescribed"
-          end
+          negatives = owner_request_negatives(
+            statement:, authority:, layer:, klass:, epistemic_kind:
+          )
           unless negatives.empty?
             return AdmissionResult.new(
               rejected: true,
@@ -110,29 +100,9 @@ module Tamoz
             )
           end
 
-          record = MemoryRecord.new(
-            memory_id: MemoryRecordDigest.identity(statement),
-            record_version: 1,
-            layer:,
-            klass: klass == :constraint ? :constraint : :preference,
-            state: :active,
-            statement:,
-            epistemic_kind:,
-            source_refs: [{
-              "identity" => "owner-request",
-              "digest" => Digest::SHA256.hexdigest(statement),
-              "observed_at" => (now || Time.now).to_i
-            }],
-            owner:,
-            actor: owner,
-            scopes:,
-            sensitivity:,
-            disclosure_policy: "default",
-            valid_from: (now || Time.now).to_i,
-            created_by: {"surface" => "owner_fast_path"},
-            compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
-            transition: transition("owner", "owner fast path admission", evidence: {"authority" => authority.to_s}),
-            created_at_ms: @engine.now_ms
+          record = build_owner_request_record(
+            statement:, owner:, authority:, layer:, klass:,
+            scopes:, sensitivity:, epistemic_kind:, now:
           )
           conflict = contradiction_check && contradiction_check.call(record)
           if conflict
@@ -180,6 +150,52 @@ module Tamoz
 
         private
 
+        # The fast path's structural negatives, in refusal-string order: what
+        # an owner request may not do even when authorized. Empty means the
+        # request may proceed to admission.
+        def owner_request_negatives(statement:, authority:, layer:, klass:, epistemic_kind:)
+          negatives = []
+          negatives << "owner_request_cannot_label_observed" if epistemic_kind == :observed
+          negatives << "owner_request_cannot_create_wisdom" if layer == :wisdom
+          negatives << "owner_request_cannot_grant_capability" if klass == :constraint && statement.match?(/approv|allowed_tools|permission/i)
+          negatives << "secret_contrary_to_policy" if Surface.secret_shaped?(statement)
+          negatives << "authority_must_be_owner" if authority.to_s != "owner"
+          unless %i[reported prescribed].include?(epistemic_kind)
+            negatives << "owner_request_must_be_reported_or_prescribed"
+          end
+          negatives
+        end
+
+        # The Knowledge record an authorized owner request enters as: always
+        # :active, actor = owner, provenance keyed to the statement digest.
+        def build_owner_request_record(statement:, owner:, authority:, layer:, klass:,
+                                       scopes:, sensitivity:, epistemic_kind:, now:)
+          MemoryRecord.new(
+            memory_id: MemoryRecordDigest.identity(statement),
+            record_version: 1,
+            layer:,
+            klass: klass == :constraint ? :constraint : :preference,
+            state: :active,
+            statement:,
+            epistemic_kind:,
+            source_refs: [{
+              "identity" => "owner-request",
+              "digest" => Digest::SHA256.hexdigest(statement),
+              "observed_at" => (now || Time.now).to_i
+            }],
+            owner:,
+            actor: owner,
+            scopes:,
+            sensitivity:,
+            disclosure_policy: "default",
+            valid_from: (now || Time.now).to_i,
+            created_by: {"surface" => "owner_fast_path"},
+            compatibility: {"graph_version" => "1", "behavior_version" => BEHAVIOR_VERSION},
+            transition: transition("owner", "owner fast path admission", evidence: {"authority" => authority.to_s}),
+            created_at_ms: @engine.now_ms
+          )
+        end
+
         # An oversized candidate is durably rejected, never truncated silently:
         # the durable rejected record carries a bounded rejection notice keyed
         # to the candidate's content digest (rerun-idempotency preserved).
@@ -212,29 +228,15 @@ module Tamoz
           # Rerun-idempotency keys on candidate identity: a memory_id that
           # already exists is durably rejected, never duplicated.
           if @engine.repository.current_version(@engine.namespace, record.layer.to_s, record.memory_id)
-            rejected = record.with(
-              state: :rejected,
-              rejection_reason: "duplicate_identity",
-              transition: record.transition || transition(
-                record.actor || "admission",
-                "duplicate candidate identity",
-                evidence: {"gate" => gate.to_s, **evidence}
-              )
-            )
+            rejected = rejected_version(record, "duplicate_identity",
+              transition_message: "duplicate candidate identity", gate:, evidence:)
             return AdmissionResult.new(record: rejected, rejected: true, reason: "duplicate_identity")
           end
 
           reason = reject_reason(record, gate:)
           unless reason.nil?
-            rejected = record.with(
-              state: :rejected,
-              rejection_reason: reason,
-              transition: record.transition || transition(
-                record.actor || "admission",
-                "rejected at admission",
-                evidence: {"gate" => gate.to_s, **evidence}
-              )
-            )
+            rejected = rejected_version(record, reason,
+              transition_message: "rejected at admission", gate:, evidence:)
             store_rejected(rejected)
             return AdmissionResult.new(record: rejected, rejected: true, reason:)
           end
@@ -249,6 +251,21 @@ module Tamoz
           )
           append(activated)
           AdmissionResult.new(record: activated, accepted: true)
+        end
+
+        # The candidate carried forward as its rejected version: same identity,
+        # `state: :rejected`, the refusal recorded as `rejection_reason`, and
+        # the gate's admission transition installed when the candidate had none.
+        def rejected_version(record, reason, transition_message:, gate:, evidence:)
+          record.with(
+            state: :rejected,
+            rejection_reason: reason,
+            transition: record.transition || transition(
+              record.actor || "admission",
+              transition_message,
+              evidence: {"gate" => gate.to_s, **evidence}
+            )
+          )
         end
 
         def reject_reason(record, gate:)
@@ -287,59 +304,16 @@ module Tamoz
                                verify_source_authority: nil)
           plan_digest = episode.fetch(:plan_digest)
           task = episode.fetch(:task)
-          observed = episode.fetch(:observed_outcome)
-          unless observed.is_a?(Hash)
-            raise MemoryPolicyError, "observed_outcome must be an object"
-          end
-
-          # Canonicalize to string keys ONCE: production episodes are
-          # string-keyed (session_memory), workers and tests may use symbols.
-          # Every downstream read uses the string form, so a symbol-keyed
-          # outcome never loses its values to a symbol-only fetch.
-          observed = observed.transform_keys(&:to_s)
-          # T5.3: an episode is :observed ONLY with an authenticated
-          # reconciled-outcome reference. The independently_observed boolean
-          # has NO power — a bare truthy flag is a self-certified claim and
-          # admits as :reported (regression-pinned). A CLAIMED reference that
-          # does not authenticate is refused: the admission boundary never
-          # silently downgrades a forged claim to :reported.
-          reason = VerifiedOutcomeReference.reason(
+          observed = normalized_outcome(episode)
+          kind = episode_epistemic_kind(
             reconciled_outcome, episode:, verify_source_authority:
           )
-          if reason
-            unless reconciled_outcome.nil?
-              raise MemoryPolicyError, "admission refused: #{reason}"
-            end
-
-            kind = :reported
-          else
-            kind = :observed
-          end
           # An explicitly provided statement (key observations + decisions +
           # corrections) is the memory content; otherwise a bounded summary of
           # the episode's grounded parts is built. Never a transcript, never
           # recalled content.
-          statement = if episode[:statement]
-                        episode.fetch(:statement)
-                      else
-                        build_statement(task, observed, episode, kind)
-                      end
-          episode_ref = {
-            "identity" => "episode:#{episode.fetch(:session_id)}",
-            "digest" => plan_digest,
-            "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
-          }
-          %i[traceparent tracestate].each do |key|
-            value = episode[key]
-            episode_ref[key.to_s] = value if value
-          end
-          source_refs = [episode_ref]
-          # T5.3: the :observed record cites the Outcome id, command id,
-          # source authority, and reconciliation version, so provenance
-          # survives the gap between the episode and the Friday outcome.
-          if kind == :observed
-            source_refs << VerifiedOutcomeReference.provenance(reconciled_outcome)
-          end
+          statement = episode[:statement] ||
+                      build_statement(task, observed, episode, kind)
           MemoryRecord.new(
             memory_id: MemoryRecordDigest.identity(statement),
             record_version: 1,
@@ -348,7 +322,7 @@ module Tamoz
             state: :candidate,
             statement:,
             epistemic_kind: kind,
-            source_refs:,
+            source_refs: episode_source_refs(episode, plan_digest, kind:, reconciled_outcome:),
             owner:,
             actor: actor || owner,
             scopes: episode.fetch(:scopes),
@@ -363,6 +337,56 @@ module Tamoz
             transition: transition(actor || owner, "episode admission", evidence: {"session_id" => episode.fetch(:session_id)}),
             created_at_ms: @engine.now_ms
           )
+        end
+
+        # Canonicalize the outcome to string keys ONCE: production episodes are
+        # string-keyed (session_memory), workers and tests may use symbols.
+        # Every downstream read uses the string form, so a symbol-keyed
+        # outcome never loses its values to a symbol-only fetch.
+        def normalized_outcome(episode)
+          observed = episode.fetch(:observed_outcome)
+          raise MemoryPolicyError, "observed_outcome must be an object" unless observed.is_a?(Hash)
+
+          observed.transform_keys(&:to_s)
+        end
+
+        # T5.3: an episode is :observed ONLY with an authenticated
+        # reconciled-outcome reference. The independently_observed boolean
+        # has NO power — a bare truthy flag is a self-certified claim and
+        # admits as :reported (regression-pinned). A CLAIMED reference that
+        # does not authenticate is refused: the admission boundary never
+        # silently downgrades a forged claim to :reported.
+        def episode_epistemic_kind(reconciled_outcome, episode:, verify_source_authority:)
+          reason = VerifiedOutcomeReference.reason(
+            reconciled_outcome, episode:, verify_source_authority:
+          )
+          if reason
+            raise MemoryPolicyError, "admission refused: #{reason}" unless reconciled_outcome.nil?
+
+            :reported
+          else
+            :observed
+          end
+        end
+
+        # Provenance for the episode itself; a :observed record additionally
+        # cites the Outcome id, command id, source authority, and
+        # reconciliation version via VerifiedOutcomeReference.provenance, so
+        # provenance survives the gap between the episode and the Friday
+        # outcome.
+        def episode_source_refs(episode, plan_digest, kind:, reconciled_outcome:)
+          episode_ref = {
+            "identity" => "episode:#{episode.fetch(:session_id)}",
+            "digest" => plan_digest,
+            "observed_at" => episode.fetch(:completed_at, Time.now.to_i)
+          }
+          %i[traceparent tracestate].each do |key|
+            value = episode[key]
+            episode_ref[key.to_s] = value if value
+          end
+          refs = [episode_ref]
+          refs << VerifiedOutcomeReference.provenance(reconciled_outcome) if kind == :observed
+          refs
         end
 
         def build_statement(task, observed, episode, kind)

@@ -230,10 +230,9 @@ module Tamoz
         end
 
         def validate_id(value, name)
-          text = SafeText.normalize(
+          SafeText.normalize(
             value, name:, max_bytes: MAX_ID_BYTES, error_class: MemoryPolicyError
           )
-          text
         end
 
         def validate_version(value)
@@ -253,11 +252,10 @@ module Tamoz
         end
 
         def validate_statement(value)
-          text = SafeText.normalize(
+          SafeText.normalize(
             value, name: "memory statement", max_bytes: MemoryLimits.fetch(:max_statement_bytes),
             error_class: MemoryPolicyError
           )
-          text
         end
 
         def validate_source_refs(value)

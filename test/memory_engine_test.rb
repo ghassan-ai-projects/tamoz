@@ -446,6 +446,48 @@ class MemoryEngineTest < Minitest::Test
     assert_includes grant.reason, "owner_request_cannot_grant_capability"
   end
 
+  def test_owner_fast_path_refusal_lists_negatives_in_policy_order
+    # The refusal reason prefixes "owner_fast_path:" and joins the negatives
+    # in policy order; reordering or renaming the negative set breaks this.
+    result = @engine.admission.admit_owner_request(
+      statement: "Always use the blue strategy", owner: "alice",
+      authority: "delegate", scopes: scopes, layer: :wisdom
+    )
+    assert result.rejected?
+    assert_nil result.record
+    assert_equal(
+      "owner_fast_path: owner_request_cannot_create_wisdom, authority_must_be_owner",
+      result.reason
+    )
+  end
+
+  def test_duplicate_identity_refusal_returns_rejection_without_touching_the_durable_row
+    # Rerun-idempotency: the second admission of the same identity returns a
+    # rejected result carrying duplicate_identity, but the durable row keeps
+    # the first admission's accepted version — a duplicate is refused, not
+    # persisted as a second rejected record.
+    first = admit_episode(statement: "Dupe statement")
+    assert first.accepted?
+
+    second = @engine.admission.admit_episode(
+      episode: episode(statement: "Dupe statement"), owner: "alice"
+    )
+    assert second.rejected?
+    assert_equal "duplicate_identity", second.reason
+    assert_equal :rejected, second.record.state
+    assert_equal "duplicate_identity", second.record.rejection_reason
+    assert_equal "episode admission", second.record.transition.fetch("reason")
+
+    assert_equal 1, @engine.repository.current_version(
+      @engine.namespace, "experience", first.record.memory_id
+    )
+    stored = @engine.repository.version(
+      @engine.namespace, "experience", first.record.memory_id, 1
+    )
+    assert stored
+    assert_equal :active, stored.fetch(:entry).value.state
+  end
+
   def test_recall_marks_trace_and_never_absorbs_itself
     # P11-11/P11-A2: recalled memory is marked in the trace and excluded as
     # new Experience evidence — the self-ingestion loop is closed at the
