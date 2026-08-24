@@ -82,12 +82,8 @@ module Tamoz
           positive_finite!("request_timeout", request_timeout)
           positive_finite!("idle_timeout", idle_timeout)
           positive_finite!("max_lifetime", max_lifetime)
-          unless max_concurrent.is_a?(Integer) && max_concurrent >= 1
-            raise ValidationError, "budgets.max_concurrent must be an integer >= 1"
-          end
-          unless stderr_bytes.is_a?(Integer) && stderr_bytes.positive?
-            raise ValidationError, "budgets.stderr_bytes must be a positive integer"
-          end
+          positive_integer!("max_concurrent", max_concurrent)
+          positive_integer!("stderr_bytes", stderr_bytes)
 
           super
         end
@@ -103,6 +99,12 @@ module Tamoz
         def positive_finite!(name, value)
           unless value.is_a?(Numeric) && value.finite? && value.positive?
             raise ValidationError, "budgets.#{name} must be positive and finite"
+          end
+        end
+
+        def positive_integer!(name, value)
+          unless value.is_a?(Integer) && value.positive?
+            raise ValidationError, "budgets.#{name} must be a positive integer"
           end
         end
       end
@@ -215,6 +217,13 @@ module Tamoz
 
       def validate_endpoint!(value, transport, allow_insecure_http)
         return nil if transport == :stdio && value.nil?
+
+        uri = parse_endpoint_uri!(value, transport)
+        validate_endpoint_security!(uri, allow_insecure_http)
+        value.dup.freeze
+      end
+
+      def parse_endpoint_uri!(value, transport)
         unless transport == :http && value.is_a?(String) && !value.empty?
           raise ValidationError, "endpoint is required for :http and must be an absolute URL"
         end
@@ -223,14 +232,17 @@ module Tamoz
         unless %w[http https].include?(uri.scheme) && uri.host && uri.userinfo.nil? && uri.fragment.nil?
           raise ValidationError, "endpoint must be an absolute http(s) URL without userinfo or fragments"
         end
-        if uri.scheme == "http" && !loopback_host?(uri.host) &&
-           !(allow_insecure_http && private_ip_host?(uri.host))
-          raise ValidationError, "endpoint must use https unless it targets loopback"
-        end
 
-        value.dup.freeze
+        uri
       rescue URI::InvalidURIError
         raise ValidationError, "endpoint must be an absolute http(s) URL"
+      end
+
+      def validate_endpoint_security!(uri, allow_insecure_http)
+        return unless uri.scheme == "http" && !loopback_host?(uri.host) &&
+                      !(allow_insecure_http && private_ip_host?(uri.host))
+
+        raise ValidationError, "endpoint must use https unless it targets loopback"
       end
 
       def loopback_host?(host)
@@ -322,6 +334,13 @@ module Tamoz
       # operator-owned — absolute, executable, not a symlink, and never inside the
       # agent workspace.
       def validate_command!(value, workspace)
+        validate_command_path!(value)
+        validate_command_outside_workspace!(value, workspace) if workspace
+
+        value.dup.freeze
+      end
+
+      def validate_command_path!(value)
         unless value.is_a?(String) && Pathname.new(value).absolute?
           raise ValidationError, "command must be an absolute path, got #{value.inspect}"
         end
@@ -334,14 +353,13 @@ module Tamoz
         unless File.executable?(value)
           raise ValidationError, "command is not executable: #{value.inspect}"
         end
-        if workspace
-          real = File.realpath(value)
-          if real == workspace || real.start_with?("#{workspace}#{File::SEPARATOR}")
-            raise ValidationError, "command must not be inside the agent workspace: #{value.inspect}"
-          end
-        end
+      end
 
-        value.dup.freeze
+      def validate_command_outside_workspace!(value, workspace)
+        real = File.realpath(value)
+        return unless real == workspace || real.start_with?("#{workspace}#{File::SEPARATOR}")
+
+        raise ValidationError, "command must not be inside the agent workspace: #{value.inspect}"
       end
 
       def validate_arguments!(value)
@@ -349,26 +367,28 @@ module Tamoz
           raise ValidationError, "arguments must be an array of strings"
         end
 
-        value.map do |element|
-          unless element.is_a?(String)
-            raise ValidationError, "arguments elements must be strings, got #{element.class}"
-          end
-          if element.include?("\x00")
-            raise ValidationError, "arguments element contains a NUL byte"
-          end
-          if CONTROL_CHARACTER_PATTERN.match?(element)
-            raise ValidationError, "arguments element contains a control character"
-          end
-          if element.bytesize > MAX_ARGUMENT_BYTES
-            raise ValidationError, "arguments element exceeds #{MAX_ARGUMENT_BYTES} bytes"
-          end
-          if SHELL_METACHARACTER_PATTERN.match?(element)
-            raise ValidationError,
-                  "arguments element #{element.inspect} contains shell metacharacters"
-          end
+        value.map { |element| validate_argument_element!(element) }.freeze
+      end
 
-          element.dup.freeze
-        end.freeze
+      def validate_argument_element!(element)
+        unless element.is_a?(String)
+          raise ValidationError, "arguments elements must be strings, got #{element.class}"
+        end
+        if element.include?("\x00")
+          raise ValidationError, "arguments element contains a NUL byte"
+        end
+        if CONTROL_CHARACTER_PATTERN.match?(element)
+          raise ValidationError, "arguments element contains a control character"
+        end
+        if element.bytesize > MAX_ARGUMENT_BYTES
+          raise ValidationError, "arguments element exceeds #{MAX_ARGUMENT_BYTES} bytes"
+        end
+        if SHELL_METACHARACTER_PATTERN.match?(element)
+          raise ValidationError,
+                "arguments element #{element.inspect} contains shell metacharacters"
+        end
+
+        element.dup.freeze
       end
 
       # The allowlist names variables the child may inherit. A credential-shaped
