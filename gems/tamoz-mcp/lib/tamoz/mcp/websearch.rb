@@ -19,6 +19,14 @@ module Tamoz
     module Websearch
       DEFAULT_SERVER_ID = "websearch"
 
+      CREDENTIAL_NAME_SEGMENT = %r{
+        [A-Za-z0-9_.]*?(?:api_?keys?|access_?keys?|secret_?keys?|private_?keys?|
+        session_?keys?|tokens?|secrets?|passwords?|credentials?|passphrase)[A-Za-z0-9_.]*?
+      }ix
+      CREDENTIAL_ASSIGNMENT_PATTERN = /(?<![A-Za-z0-9_.])(#{CREDENTIAL_NAME_SEGMENT})[ \t]*[:=][ \t]*[^\s]+/x
+      # The one shared secret-token pattern set (Tamoz::Core::SECRET_VALUE_PATTERNS).
+      SECRET_TOKEN_PATTERN = Regexp.union(Tamoz::Core::SECRET_VALUE_PATTERNS)
+
       # P17-06 (correction 8) — ONE budget vocabulary, no drift: the egress
       # declaration's budgets map onto `ServerConfig::Budgets`, the single MCP
       # budget vocabulary. `connect_timeout_s` → `budgets.connect_timeout`;
@@ -26,10 +34,7 @@ module Tamoz
       # keeps the `Budgets` default, so a fixture run and a real run agree on
       # timeouts by construction.
       def self.egress_budgets(egress)
-        unless egress.is_a?(Hash) && egress["connect_timeout_s"].is_a?(Numeric) &&
-               egress["max_response_bytes"].is_a?(Integer)
-          raise ValidationError, "egress declaration must carry connect_timeout_s and max_response_bytes"
-        end
+        validate_egress_declaration!(egress)
 
         ServerConfig::Budgets.new(
           connect_timeout: egress.fetch("connect_timeout_s").to_f,
@@ -60,22 +65,33 @@ module Tamoz
       # spaces before the caller sees the text — a line-level scrub would
       # discard the legitimate answer alongside the leak.
       def self.sanitize_result(text)
-        body = String(text || "").dup.force_encoding(Encoding::UTF_8)
-        body = body.scrub("") unless body.valid_encoding?
-        body = body.gsub(CREDENTIAL_ASSIGNMENT_PATTERN) do
-          "[#{$1} stripped]"
-        end
-        body = body.gsub(SECRET_TOKEN_PATTERN, "[credential-shaped content stripped]")
-        body.freeze
+        utf8_body(text)
+          .then { |body| strip_credential_assignments(body) }
+          .then { |body| strip_secret_tokens(body) }
+          .freeze
       end
 
-      CREDENTIAL_NAME_SEGMENT = %r{
-        [A-Za-z0-9_.]*?(?:api_?keys?|access_?keys?|secret_?keys?|private_?keys?|
-        session_?keys?|tokens?|secrets?|passwords?|credentials?|passphrase)[A-Za-z0-9_.]*?
-      }ix
-      CREDENTIAL_ASSIGNMENT_PATTERN = /(?<![A-Za-z0-9_.])(#{CREDENTIAL_NAME_SEGMENT})[ \t]*[:=][ \t]*[^\s]+/x
-      # The one shared secret-token pattern set (Tamoz::Core::SECRET_VALUE_PATTERNS).
-      SECRET_TOKEN_PATTERN = Regexp.union(Tamoz::Core::SECRET_VALUE_PATTERNS)
+      private_class_method
+
+      def self.validate_egress_declaration!(egress)
+        unless egress.is_a?(Hash) && egress["connect_timeout_s"].is_a?(Numeric) &&
+               egress["max_response_bytes"].is_a?(Integer)
+          raise ValidationError, "egress declaration must carry connect_timeout_s and max_response_bytes"
+        end
+      end
+
+      def self.utf8_body(text)
+        body = String(text || "").dup.force_encoding(Encoding::UTF_8)
+        body.valid_encoding? ? body : body.scrub("")
+      end
+
+      def self.strip_credential_assignments(body)
+        body.gsub(CREDENTIAL_ASSIGNMENT_PATTERN) { "[#{$1} stripped]" }
+      end
+
+      def self.strip_secret_tokens(body)
+        body.gsub(SECRET_TOKEN_PATTERN, "[credential-shaped content stripped]")
+      end
     end
   end
 end
