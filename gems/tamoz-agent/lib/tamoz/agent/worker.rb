@@ -582,99 +582,109 @@ module Tamoz
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         settle_child_task(thread_id, view)
 
-        # A claim that was rejected as stale returns a terminal-failed request
-        # whose view is the thread's OLD latest checkpoint — never this
-        # occurrence's. Interpreting that view as THIS turn's pause would create
-        # an approval prompt for an occurrence that can never resume (the
-        # decision would dangle forever). Fail it closed instead. The
-        # correspondent still gets a terminal answer: the work_list precedence
-        # makes this a genuine race, not a message that merely arrived early,
-        # and the terminal projection also releases the admission reservation
-        # (design §12) so lost races cannot silently saturate the channel.
         if request && request.status == :failed && view.execution_id != request.execution_id
-          notify_sink(thread_id, "request.failed",
-                      'That message could not be started because earlier work in this conversation ' \
-                      'never settled. Please send it again.',
-                      request_id: occurrence_id)
-          @runtime.close_occurrence(thread_id)
-          unpark(thread_id)
-          emit("request.failed",
-               thread: thread_id, request_id: occurrence_id,
-               duration_ms:,
-               reason: failure_reason(request))
-          return PROGRESSED
+          return settle_stale_request(thread_id, occurrence_id, request, duration_ms)
         end
 
+        settle_view(view, thread_id, occurrence_id, duration_ms)
+      end
+
+      def settle_stale_request(thread_id, occurrence_id, request, duration_ms)
+        # A stale claim carries the thread's previous checkpoint, not this
+        # occurrence's. Fail it closed so an approval prompt cannot dangle.
+        notify_sink(thread_id, "request.failed",
+                    'That message could not be started because earlier work in this conversation ' \
+                    'never settled. Please send it again.',
+                    request_id: occurrence_id)
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.failed",
+             thread: thread_id, request_id: occurrence_id,
+             duration_ms:,
+             reason: failure_reason(request))
+        PROGRESSED
+      end
+
+      def settle_view(view, thread_id, occurrence_id, duration_ms)
         case view.status
-        when :completed
-          @monitor.synchronize { @processed += 1 }
-          notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
-          @runtime.close_occurrence(thread_id)
-          unpark(thread_id)
-          emit("request.completed",
-               thread: thread_id, request_id: occurrence_id, status: "completed",
-               duration_ms:,
-               status_projection: SessionStatusProjection.document(
-                 view, request_id: occurrence_id, delivery_state: 'pending'
-               ),
-               observability: {execution_id: view.execution_id})
-          PROGRESSED
-        when :failed
-          # A correspondent gets a generic phrase, never the failure's own text:
-          # the reason belongs in the worker's event stream, where an operator
-          # reads it, not in a chat a hostile plan could use to echo content
-          # back. The turn still owes the conversation a terminal message.
-          notify_sink(thread_id, "request.failed", failure_text(view),
-                      request_id: occurrence_id)
-          @runtime.close_occurrence(thread_id)
-          unpark(thread_id)
-          emit("request.failed",
-               thread: thread_id, request_id: occurrence_id,
-               duration_ms:,
-               reason: settled_failure_reason(view),
-               status_projection: SessionStatusProjection.document(
-                 view, request_id: occurrence_id, delivery_state: 'pending'
-               ),
-               observability: {execution_id: view.execution_id})
-          PROGRESSED
-        when :blocked
-          notify_sink(
-            thread_id,
-            "request.blocked",
-            blocked_text(view),
-            request_id: occurrence_id
-          )
-          @runtime.close_occurrence(thread_id)
-          unpark(thread_id)
-          emit("request.blocked",
-               thread: thread_id,
-               request_id: occurrence_id,
-               duration_ms:,
-               reason: "effect_unknown",
-               status_projection: SessionStatusProjection.document(
-                 view, request_id: occurrence_id, delivery_state: 'pending'
-               ),
-               observability: {execution_id: view.execution_id})
-          PROGRESSED
-        when :paused
-          if view.interrupts.empty?
-            emit("request.paused",
-                 thread: thread_id, request_id: occurrence_id, reason: "paused",
-                 duration_ms:,
-                 status_projection: SessionStatusProjection.document(
-                   view, request_id: occurrence_id, delivery_state: 'pending'
-                 ),
-                 observability: {execution_id: view.execution_id})
-          else
-            notify_sink(thread_id, "request.approval_request", "Approval requested.",
-                        request_id: occurrence_id, interrupts: interrupt_facts(view))
-            emit_approval_request(thread_id, occurrence_id, view)
-          end
-          park({thread_id:, head_request_id: occurrence_id}, view)
-          PARKED
-        else
-          PROGRESSED
+        when :completed then settle_completed_view(view, thread_id, occurrence_id, duration_ms)
+        when :failed then settle_failed_view(view, thread_id, occurrence_id, duration_ms)
+        when :blocked then settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
+        when :paused then settle_paused_view(view, thread_id, occurrence_id, duration_ms)
+        else PROGRESSED
         end
+      end
+
+      def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
+        @monitor.synchronize { @processed += 1 }
+        notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.completed",
+             thread: thread_id, request_id: occurrence_id, status: "completed",
+             duration_ms:,
+             status_projection: SessionStatusProjection.document(
+               view, request_id: occurrence_id, delivery_state: 'pending'
+             ),
+             observability: {execution_id: view.execution_id})
+        PROGRESSED
+      end
+
+      def settle_failed_view(view, thread_id, occurrence_id, duration_ms)
+        # Correspondents receive a generic phrase; the detailed reason remains
+        # in the worker event stream for operators.
+        notify_sink(thread_id, "request.failed", failure_text(view),
+                    request_id: occurrence_id)
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.failed",
+             thread: thread_id, request_id: occurrence_id,
+             duration_ms:,
+             reason: settled_failure_reason(view),
+             status_projection: SessionStatusProjection.document(
+               view, request_id: occurrence_id, delivery_state: 'pending'
+             ),
+             observability: {execution_id: view.execution_id})
+        PROGRESSED
+      end
+
+      def settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
+        notify_sink(
+          thread_id,
+          "request.blocked",
+          blocked_text(view),
+          request_id: occurrence_id
+        )
+        @runtime.close_occurrence(thread_id)
+        unpark(thread_id)
+        emit("request.blocked",
+             thread: thread_id,
+             request_id: occurrence_id,
+             duration_ms:,
+             reason: "effect_unknown",
+             status_projection: SessionStatusProjection.document(
+               view, request_id: occurrence_id, delivery_state: 'pending'
+             ),
+             observability: {execution_id: view.execution_id})
+        PROGRESSED
+      end
+
+      def settle_paused_view(view, thread_id, occurrence_id, duration_ms)
+        if view.interrupts.empty?
+          emit("request.paused",
+               thread: thread_id, request_id: occurrence_id, reason: "paused",
+               duration_ms:,
+               status_projection: SessionStatusProjection.document(
+                 view, request_id: occurrence_id, delivery_state: 'pending'
+               ),
+               observability: {execution_id: view.execution_id})
+        else
+          notify_sink(thread_id, "request.approval_request", "Approval requested.",
+                      request_id: occurrence_id, interrupts: interrupt_facts(view))
+          emit_approval_request(thread_id, occurrence_id, view)
+        end
+        park({thread_id:, head_request_id: occurrence_id}, view)
+        PARKED
       end
 
       def settle_child_task(thread_id, view)
