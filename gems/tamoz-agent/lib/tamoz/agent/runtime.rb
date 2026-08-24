@@ -263,21 +263,12 @@ module Tamoz
         discovery_plan, = routed_discovery_plan(task, decision) { |event| yield event }
         return unless discovery_plan
 
-        discovery_observations, = execute(
-          discovery_plan,
-          phase: :discovery,
-          metadata: {}
-        ) { |event| yield event }
+        discovery_observations = run_routed_discovery(discovery_plan) { |event| yield event }
         plan, review = routed_read_only_plan(task, discovery_observations) do |event|
           yield event
         end
         return unless plan
-        observations, = execute(
-          plan,
-          phase: :read_only,
-          metadata: {"discovery_pass" => 0},
-          initial_bytes: observation_bytes(discovery_observations)
-        ) do |event|
+        observations = execute_routed_read_only_plan(plan, discovery_observations) do |event|
           yield event
         end
         verify(
@@ -289,15 +280,28 @@ module Tamoz
         )
       end
 
+      def run_routed_discovery(discovery_plan)
+        observations, = execute(
+          discovery_plan,
+          phase: :discovery,
+          metadata: {}
+        ) { |event| yield event }
+        observations
+      end
+
+      def execute_routed_read_only_plan(plan, discovery_observations)
+        observations, = execute(
+          plan,
+          phase: :read_only,
+          metadata: {"discovery_pass" => 0},
+          initial_bytes: observation_bytes(discovery_observations)
+        ) { |event| yield event }
+        observations
+      end
+
       def routed_discovery_plan(task, decision)
         plan = decision.plan
-        issues = structural_issues(
-          plan,
-          phase: :discovery,
-          allowed_tools: toolbox.read_only_names
-        )
-        issues = issues.dup
-        issues << "discovery plan must gather evidence" unless plan.steps.any?(&:tool)
+        issues = routed_discovery_issues(plan)
         emit(:plan_drafted, "attempt" => 0, "phase" => "discovery", "source" => "route",
                             "plan" => plan.to_h) { |event| yield event }
         emit(:plan_reviewed, "attempt" => 0, "phase" => "discovery", "layer" => "structural",
@@ -306,9 +310,7 @@ module Tamoz
         end
         return route_plan_fallback { |event| yield event } if issues.any?
 
-        review = if decision.route == "managed_action"
-                   semantic_review(task, plan, phase: :discovery, evidence: [], planning_context: {})
-                 end
+        review = routed_discovery_semantic_review(task, decision, plan)
         if review
           emit(:plan_reviewed, review.merge("attempt" => 0, "phase" => "discovery", "layer" => "semantic")) do |event|
             yield event
@@ -322,6 +324,22 @@ module Tamoz
       rescue PlanRejectedError, ProtocolError
         route_plan_fallback { |event| yield event }
         nil
+      end
+
+      def routed_discovery_issues(plan)
+        issues = structural_issues(
+          plan,
+          phase: :discovery,
+          allowed_tools: toolbox.read_only_names
+        ).dup
+        issues << "discovery plan must gather evidence" unless plan.steps.any?(&:tool)
+        issues
+      end
+
+      def routed_discovery_semantic_review(task, decision, plan)
+        return unless decision.route == "managed_action"
+
+        semantic_review(task, plan, phase: :discovery, evidence: [], planning_context: {})
       end
 
       def routed_read_only_plan(task, discovery_observations)
