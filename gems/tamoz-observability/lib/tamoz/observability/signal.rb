@@ -37,22 +37,12 @@ module Tamoz
         validate_memberships(kind, timing, outcome)
         validate_timing(timing, started_at_ms, ended_at_ms)
         validate_outcome(outcome, error_class)
-        raise ValidationError, 'schema_version must be a positive integer' unless schema_version.is_a?(Integer) && schema_version.positive?
-        raise ValidationError, 'observed_at_ms must be an integer' unless observed_at_ms.is_a?(Integer)
-
-        @kind = kind
-        @name = String(name).freeze
-        @schema_version = Integer(schema_version)
-        @correlation = freeze_attributes(correlation, 'correlation')
-        @timing = timing
-        @started_at_ms = started_at_ms
-        @ended_at_ms = ended_at_ms
-        @observed_at_ms = Integer(observed_at_ms)
-        @attributes = freeze_attributes(attributes, 'attributes')
-        @content = content.nil? ? nil : freeze_content(content, 'content')
-        @policy_digest = policy_digest&.to_s&.freeze
-        @outcome = outcome
-        @error_class = error_class&.to_s&.freeze
+        validate_required_scalars(schema_version, observed_at_ms)
+        build_state(
+          kind:, name:, schema_version:, correlation:, timing:,
+          started_at_ms:, ended_at_ms:, observed_at_ms:,
+          attributes:, content:, policy_digest:, outcome:, error_class:
+        )
         freeze
       end
       # rubocop:enable Metrics/ParameterLists
@@ -115,13 +105,41 @@ module Tamoz
         raise ValidationError, 'error_class is required unless the outcome is :ok'
       end
 
-      def freeze_attributes(values, field)
-        raise ValidationError, "#{field} must be a Hash" unless values.is_a?(Hash)
-        raise ValidationError, "#{field} exceeds #{MAX_ATTRIBUTES} entries" unless values.length <= MAX_ATTRIBUTES
+      def validate_required_scalars(schema_version, observed_at_ms)
+        unless schema_version.is_a?(Integer) && schema_version.positive?
+          raise ValidationError, 'schema_version must be a positive integer'
+        end
+        raise ValidationError, 'observed_at_ms must be an integer' unless observed_at_ms.is_a?(Integer)
+      end
 
+      def build_state(kind:, name:, schema_version:, correlation:, timing:,
+                      started_at_ms:, ended_at_ms:, observed_at_ms:,
+                      attributes:, content:, policy_digest:, outcome:, error_class:)
+        @kind = kind
+        @name = String(name).freeze
+        @schema_version = Integer(schema_version)
+        @correlation = freeze_attributes(correlation, 'correlation')
+        @timing = timing
+        @started_at_ms = started_at_ms
+        @ended_at_ms = ended_at_ms
+        @observed_at_ms = Integer(observed_at_ms)
+        @attributes = freeze_attributes(attributes, 'attributes')
+        @content = content.nil? ? nil : freeze_content(content, 'content')
+        @policy_digest = policy_digest&.to_s&.freeze
+        @outcome = outcome
+        @error_class = error_class&.to_s&.freeze
+      end
+
+      def freeze_attributes(values, field)
+        validate_attribute_hash!(values, field)
         values.to_h do |key, value|
           [normalize_key(key, field), freeze_value(value, "#{field}.#{key}")]
         end.freeze
+      end
+
+      def validate_attribute_hash!(values, field)
+        raise ValidationError, "#{field} must be a Hash" unless values.is_a?(Hash)
+        raise ValidationError, "#{field} exceeds #{MAX_ATTRIBUTES} entries" unless values.length <= MAX_ATTRIBUTES
       end
 
       def normalize_key(key, field)
@@ -133,21 +151,25 @@ module Tamoz
 
       def freeze_value(value, path)
         case value
-        when String
-          if value.bytesize > MAX_ATTRIBUTE_STRING_BYTES
-            raise ValidationError, "#{path}: string exceeds #{MAX_ATTRIBUTE_STRING_BYTES} bytes"
-          end
-
-          value.dup.freeze
-        when Integer, Symbol, TrueClass, FalseClass, NilClass
-          value
-        when Float
-          raise ValidationError, "#{path}: non-finite floats are unsupported" unless value.finite?
-
-          value
-        else
-          raise ValidationError, "#{path}: unsupported attribute value #{value.class}"
+        when String then freeze_string_value(value, path)
+        when Float then validate_finite_float!(value, path)
+        when Integer, Symbol, TrueClass, FalseClass, NilClass then value
+        else raise ValidationError, "#{path}: unsupported attribute value #{value.class}"
         end
+      end
+
+      def freeze_string_value(value, path)
+        if value.bytesize > MAX_ATTRIBUTE_STRING_BYTES
+          raise ValidationError, "#{path}: string exceeds #{MAX_ATTRIBUTE_STRING_BYTES} bytes"
+        end
+
+        value.dup.freeze
+      end
+
+      def validate_finite_float!(value, path)
+        raise ValidationError, "#{path}: non-finite floats are unsupported" unless value.finite?
+
+        value
       end
 
       def stringify_keys(values)
@@ -155,35 +177,45 @@ module Tamoz
       end
 
       def freeze_content(value, path, depth: 0)
-        raise ValidationError, "#{path} nesting exceeds #{MAX_CONTENT_DEPTH} levels" if depth > MAX_CONTENT_DEPTH
-        raise ValidationError, "#{path}: Tamoz::Secret is not permitted" if value.is_a?(Tamoz::Secret)
+        validate_content_entry!(value, path, depth)
 
         case value
-        when Hash
-          raise ValidationError, "#{path} exceeds #{MAX_ATTRIBUTES} entries" if value.length > MAX_ATTRIBUTES
-
-          value.to_h do |key, entry|
-            [key.to_s.freeze, freeze_content(entry, "#{path}.#{key}", depth: depth + 1)]
-          end.freeze
-        when Array
-          raise ValidationError, "#{path} exceeds #{MAX_ATTRIBUTES} entries" if value.length > MAX_ATTRIBUTES
-
-          value.map.with_index do |entry, index|
-            freeze_content(entry, "#{path}[#{index}]", depth: depth + 1)
-          end.freeze
-        when String
-          raise ValidationError, "#{path}: string exceeds #{MAX_CONTENT_STRING_BYTES} bytes" if value.bytesize > MAX_CONTENT_STRING_BYTES
-
-          value.dup.freeze
-        when Integer, Symbol, TrueClass, FalseClass, NilClass
-          value
-        when Float
-          raise ValidationError, "#{path}: non-finite floats are unsupported" unless value.finite?
-
-          value
-        else
-          raise ValidationError, "#{path}: unsupported value #{value.class}"
+        when Hash then freeze_content_hash(value, path, depth)
+        when Array then freeze_content_array(value, path, depth)
+        when String then freeze_content_string(value, path)
+        when Float then validate_finite_float!(value, path)
+        when Integer, Symbol, TrueClass, FalseClass, NilClass then value
+        else raise ValidationError, "#{path}: unsupported value #{value.class}"
         end
+      end
+
+      def validate_content_entry!(value, path, depth)
+        raise ValidationError, "#{path} nesting exceeds #{MAX_CONTENT_DEPTH} levels" if depth > MAX_CONTENT_DEPTH
+        raise ValidationError, "#{path}: Tamoz::Secret is not permitted" if value.is_a?(Tamoz::Secret)
+      end
+
+      def freeze_content_hash(hash, path, depth)
+        raise ValidationError, "#{path} exceeds #{MAX_ATTRIBUTES} entries" if hash.length > MAX_ATTRIBUTES
+
+        hash.to_h do |key, entry|
+          [key.to_s.freeze, freeze_content(entry, "#{path}.#{key}", depth: depth + 1)]
+        end.freeze
+      end
+
+      def freeze_content_array(array, path, depth)
+        raise ValidationError, "#{path} exceeds #{MAX_ATTRIBUTES} entries" if array.length > MAX_ATTRIBUTES
+
+        array.map.with_index do |entry, index|
+          freeze_content(entry, "#{path}[#{index}]", depth: depth + 1)
+        end.freeze
+      end
+
+      def freeze_content_string(value, path)
+        if value.bytesize > MAX_CONTENT_STRING_BYTES
+          raise ValidationError, "#{path}: string exceeds #{MAX_CONTENT_STRING_BYTES} bytes"
+        end
+
+        value.dup.freeze
       end
     end
   end
