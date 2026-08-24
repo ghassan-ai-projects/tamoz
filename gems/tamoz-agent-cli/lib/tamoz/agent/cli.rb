@@ -10,8 +10,8 @@ module Tamoz
     class CLI
       USAGE_ERROR = 64
       EXIT_PAUSED = 3
-      EXIT_SIGINT = 130
-      EXIT_SIGTERM = 143
+      EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigint")
+      EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigterm")
 
       # The unattended surface (`init`, `queue`, `worker`, `status`) lives in its
       # own file; it is the same CLI object, split only so neither half becomes
@@ -637,12 +637,9 @@ module Tamoz
 
       def install_signal_handlers
         @cancellation = Tamoz::CancellationToken.new
-        old_int = Signal.trap("INT") { @cancellation.cancel!("sigint") }
-        old_term = Signal.trap("TERM") { @cancellation.cancel!("sigterm") }
-        yield
+        cancel = ->(reason) { @cancellation&.cancel!(reason) }
+        Cancellation::Trap.install(int: cancel, term: cancel) { yield }
       ensure
-        Signal.trap("INT", old_int) if old_int
-        Signal.trap("TERM", old_term) if old_term
         @cancellation = nil
       end
 

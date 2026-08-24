@@ -1072,13 +1072,11 @@ module Tamoz
       # unlikely to lose it; a worker idling for hours is not, and the process
       # dies far from the code that caused it.
       def sleep_until_due
-        deadline = Tamoz::Clock.monotonic.now + @poll_interval
-        while (remaining = deadline - Tamoz::Clock.monotonic.now).positive?
-          return :cancelled if stopping?
-
-          sleep([0.05, remaining].min)
+        if Tamoz::Cancellation.interruptible_sleep(@poll_interval, token: @cancellation)
+          :cancelled
+        else
+          :due
         end
-        :due
       end
 
       def owner_id = @owner_id ||= "worker:#{SecureRandom.uuid}"

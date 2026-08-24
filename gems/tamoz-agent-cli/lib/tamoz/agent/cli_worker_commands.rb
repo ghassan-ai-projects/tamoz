@@ -286,21 +286,14 @@ module Tamoz
             emitter: worker_emitter(options),
             once:, concurrency:, poll_interval:, recorder:
           )
-          # SIGINT/SIGTERM ask the worker to stop claiming and finish what it has.
-          # The previous handlers are restored on the way out so this is safe to
-          # call from a test in-process.
-          #
-          # The handler hands the request to a thread rather than doing it here:
-          # `stop!` takes a mutex, and `Mutex#synchronize` raises ThreadError in
-          # a trap context. Called directly, a supervisor's SIGTERM would kill
-          # the process with a backtrace WITHOUT cancelling the turn in hand.
-          old_int = Signal.trap("INT") { Thread.new { worker.stop!("sigint") } }
-          old_term = Signal.trap("TERM") { Thread.new { worker.stop!("sigterm") } }
-          begin
+          # SIGINT/SIGTERM ask the worker to stop claiming and finish what it
+          # has. Trap.install defers each request to a thread (`stop!` takes a
+          # mutex, illegal to touch directly in trap context), restores the
+          # previous handlers on the way out, and carries the exit codes.
+          stop = ->(reason) { worker.stop!(reason) }
+          Cancellation::Trap.install(int: stop, term: stop) do
             worker.run
           ensure
-            Signal.trap("INT", old_int) if old_int
-            Signal.trap("TERM", old_term) if old_term
             recorder.close if recorder.respond_to?(:close)
           end
           EXIT_WORKER_STOPPED
