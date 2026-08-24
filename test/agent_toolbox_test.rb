@@ -228,7 +228,7 @@ class AgentToolboxTest < Minitest::Test
       stdout, stderr, status = Open3.capture3(
         {"LC_ALL" => "C", "LANG" => "C"},
         RbConfig.ruby,
-        *GEM_ROOTS.values.map { |gem_root| "-I#{gem_root.join("lib")}" },
+        *SUBPROCESS_LIB_ARGS,
         "-e",
         script,
         root
