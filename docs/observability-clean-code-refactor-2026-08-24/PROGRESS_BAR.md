@@ -8,7 +8,7 @@ End-result checklist. One row per source file. Mark complete only when the file 
 | `lib/tamoz/observability/recorders.rb` | done | done | done | Journal class is the largest target |
 | `lib/tamoz/observability/model_call.rb` | - | - | - | small, clean |
 | `lib/tamoz/observability/usage.rb` | - | - | - | Data classes |
-| `lib/tamoz/observability/signal_catalog.rb` | - | - | - | validate_signal / register are long |
+| `lib/tamoz/observability/signal_catalog.rb` | done | done | done | validate_signal / register are long |
 | `lib/tamoz/observability/errors.rb` | - | - | - | exception classes, already minimal |
 | `lib/tamoz/observability/catalog.rb` | - | - | - | data seeding, may stay declarative |
 | `lib/tamoz/observability/version.rb` | - | - | - | constant only |
