@@ -41,37 +41,15 @@ module Tamoz
       end
 
       def self.from_signals(signals, thread_id: nil, execution_id: nil)
-        selected = signals.select do |signal|
-          correlation = signal.respond_to?(:correlation) ? signal.correlation : signal.fetch('correlation', {})
-          (!thread_id || correlation.fetch(:thread_id, correlation['thread_id']) == thread_id) &&
-            (!execution_id || correlation.fetch(:execution_id, correlation['execution_id']) == execution_id)
-        end
-        correlation = selected.lazy.map { |signal| signal.respond_to?(:correlation) ? signal.correlation : signal.fetch('correlation') }.find(&:any?) || {}
-        trace_id = if (correlation[:thread_id] || correlation['thread_id']) &&
-                     (correlation[:execution_id] || correlation['execution_id'])
-                     Correlation.trace_id(
-                       thread_id: correlation[:thread_id] || correlation['thread_id'],
-                       execution_id: correlation[:execution_id] || correlation['execution_id']
-                     )
-                   end
-        spans = selected.map { |signal| span_from(signal, trace_id:) }.compact
-        new(trace_id: trace_id, spans: spans, divergence: [])
+        selected = select_matching_signals(signals, thread_id:, execution_id:)
+        correlation = first_populated_correlation(selected)
+        build_trace(selected, trace_id_from(correlation))
       end
 
       def self.from_documents(documents, thread_id: nil, execution_id: nil)
-        selected = documents.select do |document|
-          correlation = document.fetch('correlation', {})
-          (!thread_id || correlation['thread_id'] == thread_id) &&
-            (!execution_id || correlation['execution_id'] == execution_id)
-        end
-        correlation = selected.map { |document| document.fetch('correlation', {}) }.find do |candidate|
-          candidate['thread_id'] && candidate['execution_id']
-        end || {}
-        trace_id = if correlation['thread_id'] && correlation['execution_id']
-                     Correlation.trace_id(thread_id: correlation['thread_id'], execution_id: correlation['execution_id'])
-                   end
-        spans = selected.map { |document| span_from(document, trace_id:) }.compact
-        new(trace_id: trace_id, spans: spans, divergence: [])
+        selected = select_matching_documents(documents, thread_id:, execution_id:)
+        correlation = first_complete_document_correlation(selected)
+        build_trace(selected, trace_id_from_document_correlation(correlation))
       end
 
       def to_h
@@ -85,14 +63,103 @@ module Tamoz
       class << self
         private
 
+        def select_matching_signals(signals, thread_id:, execution_id:)
+          signals.select do |signal|
+            correlation_matches?(signal_correlation(signal), thread_id:, execution_id:)
+          end
+        end
+
+        def select_matching_documents(documents, thread_id:, execution_id:)
+          documents.select do |document|
+            document_correlation_matches?(document_correlation(document), thread_id:, execution_id:)
+          end
+        end
+
+        def build_trace(selected, trace_id)
+          spans = selected.map { |item| span_from(item, trace_id:) }.compact
+          new(trace_id: trace_id, spans: spans, divergence: [])
+        end
+
+        def signal_correlation(signal)
+          signal.respond_to?(:correlation) ? signal.correlation : signal.fetch('correlation', {})
+        end
+
+        def document_correlation(document)
+          document.fetch('correlation', {})
+        end
+
+        def correlation_matches?(correlation, thread_id:, execution_id:)
+          thread_matches?(correlation, thread_id) && execution_matches?(correlation, execution_id)
+        end
+
+        def document_correlation_matches?(correlation, thread_id:, execution_id:)
+          (!thread_id || correlation['thread_id'] == thread_id) &&
+            (!execution_id || correlation['execution_id'] == execution_id)
+        end
+
+        def thread_matches?(correlation, thread_id)
+          return true unless thread_id
+
+          correlation.fetch(:thread_id, correlation['thread_id']) == thread_id
+        end
+
+        def execution_matches?(correlation, execution_id)
+          return true unless execution_id
+
+          correlation.fetch(:execution_id, correlation['execution_id']) == execution_id
+        end
+
+        def first_populated_correlation(signals)
+          signals.lazy
+                 .map { |signal| signal.respond_to?(:correlation) ? signal.correlation : signal.fetch('correlation') }
+                 .find(&:any?) || {}
+        end
+
+        def first_complete_document_correlation(documents)
+          documents.map { |document| document_correlation(document) }
+                   .find { |correlation| correlation['thread_id'] && correlation['execution_id'] } || {}
+        end
+
+        def trace_id_from(correlation)
+          thread_id = correlation[:thread_id] || correlation['thread_id']
+          execution_id = correlation[:execution_id] || correlation['execution_id']
+          return unless thread_id && execution_id
+
+          Correlation.trace_id(thread_id:, execution_id:)
+        end
+
+        def trace_id_from_document_correlation(correlation)
+          return unless correlation['thread_id'] && correlation['execution_id']
+
+          Correlation.trace_id(thread_id: correlation['thread_id'], execution_id: correlation['execution_id'])
+        end
+
         def span_from(signal, trace_id:)
-          document = signal.respond_to?(:to_h) ? signal.to_h : signal
+          document = document_from(signal)
           return unless trace_id
 
-          attributes = document.fetch('attributes', {})
-          anchor = attributes['span_anchor'] || document.dig('correlation', 'effect_key') || document['observed_at_ms']
+          attributes = span_attributes(document)
+          anchor = span_anchor(document, attributes)
           name = document.fetch('name')
           span_id = Correlation.span_id(trace_id:, kind: name, anchor:)
+          build_span(trace_id:, name:, document:, attributes:, span_id:)
+        end
+
+        def document_from(signal)
+          signal.respond_to?(:to_h) ? signal.to_h : signal
+        end
+
+        def span_attributes(document)
+          document.fetch('attributes', {})
+        end
+
+        def span_anchor(document, attributes)
+          attributes['span_anchor'] ||
+            document.dig('correlation', 'effect_key') ||
+            document['observed_at_ms']
+        end
+
+        def build_span(trace_id:, name:, document:, attributes:, span_id:)
           Span.new(
             span_id:,
             trace_id:,
