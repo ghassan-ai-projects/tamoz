@@ -48,47 +48,23 @@ module Tamoz
         new(toolbox:, mcp:, child_task_runtime:, profile:)
       end
 
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- construction binds the sealed local, skill, remote, and optional child sources in one order-preserving protocol.
       def initialize(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
         @toolbox = toolbox
         @mcp = mcp
         child = child_dispatcher(child_task_runtime, profile)
         local = BoundLocalDispatcher.new(toolbox, child:)
-        sources = []
-        dispatchers = {}
 
-        local_names, skill_names = toolbox.names.partition do |name|
-          !SKILL_TOOLS.include?(name)
-        end
-        local_names << ChildTaskDispatcher::TOOL_NAME if child
-        sources << build_toolbox_source("local", local_names, toolbox)
-        dispatchers["local"] = local
-        unless skill_names.empty?
-          skill_source_id = "skill:#{toolbox.skill_epoch}"
-          sources << build_toolbox_source(skill_source_id, skill_names, toolbox)
-          dispatchers[skill_source_id] = local
-        end
-
-        mcp_dispatcher = mcp && McpDispatcher.new(mcp)
-        grouped_mcp_descriptors.each do |source_id, descriptors|
-          sources << Capability::Source.new(source_id:, descriptors:)
-          dispatchers[source_id] = mcp_dispatcher
-        end
+        sources, dispatchers = build_toolbox_bindings(child, local, toolbox)
+        remote_sources, remote_dispatchers = build_remote_bindings(mcp)
+        sources.concat(remote_sources)
+        dispatchers.merge!(remote_dispatchers)
 
         @child_enabled = !child.nil?
-        @descriptions = toolbox.descriptions.dup
-        @descriptions[ChildTaskDispatcher::TOOL_NAME] = ChildTaskDispatcher::DESCRIPTION if child
-        @descriptions.freeze
-
-        @host = Tamoz::Tools::CapabilityHost.new(
-          sources:, admission_set: admission_set
-        )
-        dispatchers.each { |source_id, dispatcher| @host.bind_dispatcher(source_id, dispatcher) }
-        @ordered_names = (toolbox.names + (child ? [ChildTaskDispatcher::TOOL_NAME] : []) +
-                          (mcp ? mcp.names : [])).uniq.freeze
+        @descriptions = build_descriptions(toolbox, child)
+        @host = build_host(sources, dispatchers)
+        @ordered_names = build_ordered_names(toolbox, child, mcp)
         freeze
       end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       attr_reader :host, :toolbox, :mcp, :descriptions
 
@@ -193,30 +169,7 @@ module Tamoz
 
       def build_toolbox_source(source_id, names, toolbox)
         read_only = toolbox.read_only_names
-        descriptors = names.map do |name|
-          input_schema = {"type" => "object"}
-          output_schema = {"type" => "object"}
-          Capability::Descriptor.new(
-            id: name,
-            kind: SKILL_TOOLS.include?(name) ? :skill : :tool,
-            source_id:,
-            trust: SKILL_TOOLS.include?(name) ? :declared : :local,
-            effect_class: read_only.include?(name) ? :read_only : :bounded,
-            approval_policy: read_only.include?(name) ? :none : :required,
-            egress_policy_ref: "none",
-            egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
-            secret_handling: :reject_values,
-            request_budget: {"max_bytes" => 16 * 1024},
-            output_budget: {"max_bytes" => 64 * 1024},
-            retry_policy: read_only.include?(name) ? :read_only : :none,
-            reconciliation_policy: :none,
-            schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
-            source_digest: Capability::Descriptor.source_digest_for(source_id),
-            protocol_profile: {"transport" => "in_process"},
-            input_schema:,
-            output_schema:
-          )
-        end
+        descriptors = names.map { |name| build_toolbox_descriptor(name, source_id, read_only) }
         Capability::Source.new(source_id:, descriptors:)
       end
 
@@ -268,35 +221,29 @@ module Tamoz
       # schema/profile fields when the caller's descriptor carries them —
       # reading a field the contract does not promise would make the host
       # reject a conforming caller.
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def mcp_descriptor(descriptor)
-        websearch = descriptor.source_id == WEBSEARCH_SERVER_ID
-        profile = optional(descriptor, :protocol_profile)
-        remote_digest = descriptor.definition_digest
         effect_class = closed_effect_class(descriptor)
+        source_id = source_id_for(descriptor)
         input_schema = optional(descriptor, :input_schema)
         output_schema = optional(descriptor, :output_schema)
-        egress_policy_ref = websearch ? "websearch:#{descriptor.source_id}" : "mcp:#{descriptor.source_id}"
+
         Capability::Descriptor.new(
           id: descriptor.id,
-          kind: websearch ? :websearch : :mcp_tool,
-          source_id: source_id_for(descriptor),
-          source_digest: Capability::Descriptor.source_digest_for(source_id_for(descriptor)),
+          kind: mcp_kind(descriptor),
+          source_id:,
+          source_digest: Capability::Descriptor.source_digest_for(source_id),
           trust: :operator,
           effect_class:,
-          approval_policy: effect_class == :read_only ? :none : :required,
-          egress_policy_ref:,
-          egress_policy_digest: Capability::Descriptor.egress_digest_for(egress_policy_ref),
+          approval_policy: mcp_approval_policy(effect_class),
+          egress_policy_ref: mcp_egress_policy(descriptor),
+          egress_policy_digest: Capability::Descriptor.egress_digest_for(mcp_egress_policy(descriptor)),
           secret_handling: :reject_values,
           request_budget: {"max_bytes" => 16 * 1024},
           output_budget: {"max_bytes" => 64 * 1024},
-          retry_policy: effect_class == :read_only ? :read_only : :none,
-          reconciliation_policy: effect_class == :reconcilable ? :explicit : :none,
+          retry_policy: mcp_retry_policy(effect_class),
+          reconciliation_policy: mcp_reconciliation_policy(effect_class),
           schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
-          protocol_profile: {
-            "transport" => "mcp", "profile" => profile.nil? ? "" : profile.to_s,
-            "definition_digest" => remote_digest
-          },
+          protocol_profile: mcp_protocol_profile(descriptor),
           input_schema: schema_shape(input_schema),
           output_schema: schema_shape(output_schema)
         )
@@ -305,13 +252,125 @@ module Tamoz
       def optional(descriptor, field)
         descriptor.respond_to?(field) ? descriptor.public_send(field) : nil
       end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
       # The host records THAT a schema is pinned, never a copy of it: the
       # pinned schema stays in the caller's source, which is the only thing
       # allowed to validate against it (P10 §4).
       def schema_shape(schema)
         schema.nil? ? nil : Tamoz::Core.deep_freeze(Tamoz::Core.canonical(schema))
+      end
+
+      def build_toolbox_bindings(child, local, toolbox)
+        sources = []
+        dispatchers = {}
+        local_names, skill_names = partition_tool_names(toolbox)
+
+        local_names << ChildTaskDispatcher::TOOL_NAME if child
+        sources << build_toolbox_source("local", local_names, toolbox)
+        dispatchers["local"] = local
+
+        unless skill_names.empty?
+          skill_source_id = "skill:#{toolbox.skill_epoch}"
+          sources << build_toolbox_source(skill_source_id, skill_names, toolbox)
+          dispatchers[skill_source_id] = local
+        end
+
+        [sources, dispatchers]
+      end
+
+      def partition_tool_names(toolbox)
+        toolbox.names.partition { |name| !SKILL_TOOLS.include?(name) }
+      end
+
+      def build_remote_bindings(mcp)
+        return [[], {}] unless mcp
+
+        dispatcher = McpDispatcher.new(mcp)
+        sources = []
+        dispatchers = {}
+        grouped_mcp_descriptors.each do |source_id, descriptors|
+          sources << Capability::Source.new(source_id:, descriptors:)
+          dispatchers[source_id] = dispatcher
+        end
+        [sources, dispatchers]
+      end
+
+      def build_descriptions(toolbox, child)
+        descriptions = toolbox.descriptions.dup
+        descriptions[ChildTaskDispatcher::TOOL_NAME] = ChildTaskDispatcher::DESCRIPTION if child
+        descriptions.freeze
+      end
+
+      def build_host(sources, dispatchers)
+        host = Tamoz::Tools::CapabilityHost.new(sources:, admission_set: admission_set)
+        dispatchers.each { |source_id, dispatcher| host.bind_dispatcher(source_id, dispatcher) }
+        host
+      end
+
+      def build_ordered_names(toolbox, child, mcp)
+        (toolbox.names + (child ? [ChildTaskDispatcher::TOOL_NAME] : []) +
+          (mcp ? mcp.names : [])).uniq.freeze
+      end
+
+      def build_toolbox_descriptor(name, source_id, read_only_names)
+        input_schema = {"type" => "object"}
+        output_schema = {"type" => "object"}
+        skill = SKILL_TOOLS.include?(name)
+        read_only = read_only_names.include?(name)
+
+        Capability::Descriptor.new(
+          id: name,
+          kind: skill ? :skill : :tool,
+          source_id:,
+          trust: skill ? :declared : :local,
+          effect_class: read_only ? :read_only : :bounded,
+          approval_policy: read_only ? :none : :required,
+          egress_policy_ref: "none",
+          egress_policy_digest: Capability::Descriptor.egress_digest_for("none"),
+          secret_handling: :reject_values,
+          request_budget: {"max_bytes" => 16 * 1024},
+          output_budget: {"max_bytes" => 64 * 1024},
+          retry_policy: read_only ? :read_only : :none,
+          reconciliation_policy: :none,
+          schema_digest: Capability::Descriptor.schema_digest_for(input_schema, output_schema),
+          source_digest: Capability::Descriptor.source_digest_for(source_id),
+          protocol_profile: {"transport" => "in_process"},
+          input_schema:,
+          output_schema:
+        )
+      end
+
+      def websearch?(descriptor)
+        descriptor.source_id == WEBSEARCH_SERVER_ID
+      end
+
+      def mcp_kind(descriptor)
+        websearch?(descriptor) ? :websearch : :mcp_tool
+      end
+
+      def mcp_egress_policy(descriptor)
+        websearch?(descriptor) ? "websearch:#{descriptor.source_id}" : "mcp:#{descriptor.source_id}"
+      end
+
+      def mcp_protocol_profile(descriptor)
+        profile = optional(descriptor, :protocol_profile)
+        {
+          "transport" => "mcp",
+          "profile" => profile.nil? ? "" : profile.to_s,
+          "definition_digest" => descriptor.definition_digest
+        }
+      end
+
+      def mcp_approval_policy(effect_class)
+        effect_class == :read_only ? :none : :required
+      end
+
+      def mcp_retry_policy(effect_class)
+        effect_class == :read_only ? :read_only : :none
+      end
+
+      def mcp_reconciliation_policy(effect_class)
+        effect_class == :reconcilable ? :explicit : :none
       end
     end
 
@@ -325,34 +384,34 @@ module Tamoz
       end
 
       def validate(descriptor, arguments)
-        child?(descriptor) ? @child.validate(descriptor, arguments) : @local.validate(descriptor, arguments)
+        dispatcher_for(descriptor).validate(descriptor, arguments)
       end
 
       def execute(descriptor, arguments, context: nil)
-        return @child.execute(descriptor, arguments, context:) if child?(descriptor)
-
-        @local.execute(descriptor, arguments, context:)
+        dispatcher_for(descriptor).execute(descriptor, arguments, context:)
       end
 
       def preview(descriptor, arguments)
-        child?(descriptor) ? @child.preview(descriptor, arguments) : @local.preview(descriptor, arguments)
+        dispatcher_for(descriptor).preview(descriptor, arguments)
       end
 
       def effect_intent(descriptor, arguments)
-        child?(descriptor) ? @child.effect_intent(descriptor, arguments) : @local.effect_intent(descriptor, arguments)
+        dispatcher_for(descriptor).effect_intent(descriptor, arguments)
       end
 
       def maximum_effect_output_bytes(descriptor)
-        return @child.maximum_effect_output_bytes(descriptor) if child?(descriptor)
-
-        @local.maximum_effect_output_bytes(descriptor)
+        dispatcher_for(descriptor).maximum_effect_output_bytes(descriptor)
       end
 
       def safety(descriptor, arguments)
-        child?(descriptor) ? @child.safety(descriptor, arguments) : @local.safety(descriptor, arguments)
+        dispatcher_for(descriptor).safety(descriptor, arguments)
       end
 
       private
+
+      def dispatcher_for(descriptor)
+        child?(descriptor) ? @child : @local
+      end
 
       def child?(descriptor)
         descriptor.id == ChildTaskDispatcher::TOOL_NAME
@@ -372,7 +431,7 @@ module Tamoz
       attr_reader :source
 
       def validate(descriptor, arguments)
-        source.validate(descriptor.id, arguments)
+        forward_to_source(descriptor, :validate, arguments)
       end
 
       def execute(descriptor, arguments, context: nil)
@@ -380,22 +439,25 @@ module Tamoz
       end
 
       def preview(descriptor, arguments)
-        source.preview(descriptor.id, arguments)
+        forward_to_source(descriptor, :preview, arguments)
       end
 
       def effect_intent(descriptor, arguments)
-        source.effect_intent(descriptor.id, arguments)
+        forward_to_source(descriptor, :effect_intent, arguments)
       end
 
       def maximum_effect_output_bytes(descriptor)
         source.maximum_effect_output_bytes(descriptor.id)
       end
 
-      # P10 §5: an MCP capability is `:read_only` only when the caller declared
-      # it so; everything else is `:unsafe`, which means an ambiguous outcome
-      # stops rather than repeating a remote effect (invariant 21/37).
       def safety(descriptor, _arguments)
         source.read_only?(descriptor.id) ? :read_only : :unsafe
+      end
+
+      private
+
+      def forward_to_source(descriptor, method, *)
+        source.public_send(method, descriptor.id, *)
       end
     end
   end
