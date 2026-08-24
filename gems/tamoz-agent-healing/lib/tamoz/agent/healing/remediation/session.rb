@@ -124,16 +124,19 @@ module Tamoz
 
           def run_preflight_check(classification, plan, review)
             rejection = run_preflight(classification)
-            return nil unless rejection
+            if rejection
+              transition(
+                :preflighted,
+                evidence: { 'passed' => false, 'precondition' => rejection.precondition.to_s }
+              )
+              return terminate(
+                :escalated, classification:, plan:, review:,
+                            preflight_rejection: rejection, failure: rejection
+              )
+            end
 
-            transition(
-              :preflighted,
-              evidence: { 'passed' => false, 'precondition' => rejection.precondition.to_s }
-            )
-            terminate(
-              :escalated, classification:, plan:, review:,
-                          preflight_rejection: rejection, failure: rejection
-            )
+            transition(:preflighted, evidence: { 'passed' => true })
+            nil
           end
 
           def effect_identity(classification)
