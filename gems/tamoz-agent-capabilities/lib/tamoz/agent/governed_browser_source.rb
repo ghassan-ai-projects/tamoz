@@ -32,7 +32,7 @@ module Tamoz
       def name?(name) = @index.key?(String(name))
       def descriptor_for(name) = @index.fetch(String(name))
       def maximum_effect_output_bytes(_name) = MAX_OUTPUT_BYTES
-      def effect_intent(_name, arguments) = { 'arguments_digest' => Tamoz::Core.digest("tamoz.browser.arguments.v1\n", validate_arguments(arguments)) }
+      def effect_intent(_name, arguments) = { 'arguments_digest' => arguments_digest(arguments) }
 
       def validate(name, arguments)
         descriptor_for(name)
@@ -40,14 +40,13 @@ module Tamoz
       end
 
       def preview(name, arguments)
-        "Browser #{name}\narguments: #{JSON.generate(Tamoz::Core.canonical(validate_arguments(arguments)))}"
+        "Browser #{name}\narguments: #{JSON.generate(Tamoz::Core.canonical(validated_arguments(arguments)))}"
       end
 
       def execute(context, name, arguments)
         descriptor_for(name)
-        normalized = validate_arguments(arguments)
-        raise ToolError, 'browser adapter unavailable: configure an approved browser connector' unless
-          @adapter.respond_to?(:execute)
+        normalized = validated_arguments(arguments)
+        require_adapter!
 
         raw = @adapter.execute(context:, capability_id: String(name), arguments: normalized)
         status = adapter_status(raw)
@@ -56,17 +55,9 @@ module Tamoz
       end
 
       def build_outcome(raw, status)
-        text = raw.is_a?(Hash) ? raw.fetch('output', raw.fetch('text', '')) : raw.to_s
-        truncated = text.bytesize > MAX_OUTPUT_BYTES
-        observation = Observation.new(
-          text: text.byteslice(0, MAX_OUTPUT_BYTES), server_id: 'browser', truncated:
-        )
-        return Outcome.new(status:, observation:, interrupt: nil, denial: nil) if status == :succeeded
-        return Outcome.new(status:, observation:, interrupt: nil, denial: adapter_reason(raw)) if
-          %i[denied failed unknown].include?(status)
-        return Outcome.new(status:, observation:, interrupt: adapter_reason(raw), denial: nil) if status == :interrupt
-
-        raise ToolError, "browser adapter returned unsupported outcome #{status.inspect}"
+        observation = build_observation(raw)
+        interrupt, denial = outcome_fields_for(status, raw)
+        Outcome.new(status:, observation:, interrupt:, denial:)
       end
 
       def close = @adapter&.close
@@ -78,18 +69,12 @@ module Tamoz
         raise Tamoz::SensitiveValueError, 'browser arguments cannot contain credential-shaped values' if
           Tamoz::Core.secret_shaped?(arguments)
 
-        url = arguments['url']
-        return arguments unless url
-        raise ToolArgumentError, 'browser url must be a bounded string' unless
-          url.is_a?(String) && url.bytesize <= MAX_URL_BYTES
-
-        match = URL_PATTERN.match(url)
-        raise ToolPolicyError, 'browser permits HTTPS URLs only' unless match
-
-        host = match[1].downcase
-        raise ToolPolicyError, 'browser host is not allowlisted' unless @allowed_hosts.include?(host)
-
+        validate_url!(arguments['url']) if arguments['url']
         arguments
+      end
+
+      def validated_arguments(arguments)
+        validate_arguments(arguments)
       end
 
       def adapter_status(raw)
@@ -162,6 +147,45 @@ module Tamoz
           @allowed_hosts.include?(normalized)
 
         normalized
+      end
+
+      def arguments_digest(arguments)
+        Tamoz::Core.digest("tamoz.browser.arguments.v1\n", validate_arguments(arguments))
+      end
+
+      def validate_url!(url)
+        raise ToolArgumentError, 'browser url must be a bounded string' unless
+          url.is_a?(String) && url.bytesize <= MAX_URL_BYTES
+
+        match = URL_PATTERN.match(url)
+        raise ToolPolicyError, 'browser permits HTTPS URLs only' unless match
+
+        host = match[1].downcase
+        raise ToolPolicyError, 'browser host is not allowlisted' unless @allowed_hosts.include?(host)
+      end
+
+      def require_adapter!
+        return if @adapter.respond_to?(:execute)
+
+        raise ToolError, 'browser adapter unavailable: configure an approved browser connector'
+      end
+
+      def build_observation(raw)
+        text = raw.is_a?(Hash) ? raw.fetch('output', raw.fetch('text', '')) : raw.to_s
+        truncated = text.bytesize > MAX_OUTPUT_BYTES
+        Observation.new(
+          text: text.byteslice(0, MAX_OUTPUT_BYTES), server_id: 'browser', truncated:
+        )
+      end
+
+      def outcome_fields_for(status, raw)
+        case status
+        when :succeeded then [nil, nil]
+        when :interrupt then [adapter_reason(raw), nil]
+        when :denied, :failed, :unknown then [nil, adapter_reason(raw)]
+        else
+          raise ToolError, "browser adapter returned unsupported outcome #{status.inspect}"
+        end
       end
     end
   end
