@@ -40,10 +40,12 @@ module Tamoz
       # MIGRATION_17, which adds the durable approval-policy homes — session
       # grants, the append-only decision log with resolution columns, and the
       # single-row active-policy record the reload loop reads.
-      # Approval redesign 05 step 7B: 17 -> 18 through MIGRATION_18, which adds
-      # the mode-switch audit table and rebuilds tamoz_requests so its operation
-      # CHECK admits `mode_switch` — SQLite cannot alter a CHECK in place.
-      CURRENT_VERSION = 17
+      # Approval redesign 05 step 7B: 16 -> 17 through MIGRATION_17, which adds
+      # the mode-switch audit table and the durable approval-policy homes.
+      # OpenClaw Phase 0 identity: 17 -> 18 through MIGRATION_18, which
+      # rebuilds tamoz_comms_inbound so inbound identity extends with the raw
+      # payload digest (plan 01, work item 2).
+      CURRENT_VERSION = 18
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1205,6 +1207,45 @@ module Tamoz
         MIGRATION_17.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # OpenClaw Phase 0 identity (plan 01, work item 2): 17 -> 18 through
+      # MIGRATION_18, which rebuilds tamoz_comms_inbound so its identity
+      # extends with raw_payload_hash — a conflicting digest for the same
+      # (surface_id, bot_id, update_id) is recorded quarantined beside the
+      # original observation instead of being unsavable.
+      MIGRATION_18 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_inbound
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_inbound (
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            bot_id INTEGER NOT NULL CHECK (bot_id >= 0),
+            update_id INTEGER NOT NULL CHECK (update_id >= 0),
+            raw_payload_hash TEXT NOT NULL,
+            parser_version INTEGER NOT NULL CHECK (parser_version > 0),
+            kind TEXT NOT NULL CHECK (
+              kind IN ('text', 'command', 'callback', 'membership', 'unsupported')
+            ),
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            disposition TEXT NOT NULL CHECK (
+              disposition IN ('request', 'decision', 'ignored', 'rejected', 'quarantined')
+            ),
+            reason TEXT NOT NULL,
+            request_id TEXT,
+            decision_id TEXT,
+            observed_at_ms INTEGER NOT NULL,
+            ingested_at_ms INTEGER NOT NULL,
+            PRIMARY KEY (surface_id, bot_id, update_id, raw_payload_hash)
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_18_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_18.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1224,7 +1265,8 @@ module Tamoz
         14 => [MIGRATION_14, MIGRATION_14_CHECKSUM],
         15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
         16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
-        17 => [MIGRATION_17, MIGRATION_17_CHECKSUM]
+        17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
+        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1389,7 +1431,9 @@ module Tamoz
                        :MIGRATION_13, :MIGRATION_13_CHECKSUM,
                        :MIGRATION_14, :MIGRATION_14_CHECKSUM,
                        :MIGRATION_15, :MIGRATION_15_CHECKSUM,
-                       :MIGRATION_16, :MIGRATION_16_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_16, :MIGRATION_16_CHECKSUM,
+                       :MIGRATION_17, :MIGRATION_17_CHECKSUM,
+                       :MIGRATION_18, :MIGRATION_18_CHECKSUM, :MIGRATIONS
     end
   end
 end

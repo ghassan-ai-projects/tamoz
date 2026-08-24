@@ -101,11 +101,34 @@ module Tamoz
         SQL
       end
 
+      # The FIRST durable observation of this identity anchors dedup
+      # (invariant 1): the same digest is a replay; any other digest for the
+      # same (surface, bot, update_id) is a durable integrity conflict.
       def inbound_row(txn, envelope_wire, bot_id)
         txn.first('comms.admit.inbound.existing',
                   <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')])
+                    SELECT raw_payload_hash FROM tamoz_comms_inbound
+                    WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+                    ORDER BY ingested_at_ms ASC, raw_payload_hash ASC LIMIT 1
+                  SQL
+      end
+
+      def open_request_count(txn, surface_id)
+        txn.scalar('comms.admit.limit.open_requests', <<~SQL, [surface_id]).to_i
+          SELECT COUNT(*) FROM tamoz_comms_requests
+          WHERE surface_id = ? AND projection_state = 'admitted'
+        SQL
+      end
+
+      # A disposition re-record dedups only on the FULL identity (digest
+      # included), so a conflicting digest can still be recorded quarantined.
+      def identical_inbound_row?(txn, envelope_wire, bot_id)
+        hash = envelope_wire.fetch('raw_payload_hash')
+        txn.first('comms.admit.inbound.identical',
+                  <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id'), hash])
                     SELECT 1 FROM tamoz_comms_inbound
                     WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+                      AND raw_payload_hash = ?
                   SQL
       end
 

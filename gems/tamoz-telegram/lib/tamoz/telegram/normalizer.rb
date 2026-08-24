@@ -16,6 +16,7 @@ module Tamoz
     # :reek:UtilityFunction, :reek:DataClump, :reek:NilCheck
     class Normalizer
       PARSER_VERSION = 1
+      DIGEST_DOMAIN = 'tamoz.telegram.update.v2'
       TYPES = {
         'group' => 'telegram:group:',
         'supergroup' => 'telegram:supergroup:',
@@ -53,11 +54,13 @@ module Tamoz
       def message_envelope(update_id, message, observed)
         chat = message.fetch('chat')
         from = message.fetch('from')
-        kind = text_kind(message['text'])
         envelope(
-          update_id:, kind:, text: message['text'],
+          update_id:, kind: text_kind(message['text']),
+          digest_fields: message_digest_fields(update_id, message, chat, from),
+          text: message['text'],
           correspondent_id: "telegram:user:#{from.fetch('id')}",
           conversation_id: chat_id(chat),
+          message_id: message['message_id'],
           reply_to: message.dig('reply_to_message', 'message_id'),
           observed_at: observed
         )
@@ -65,12 +68,13 @@ module Tamoz
 
       def callback_envelope(update_id, callback, observed)
         message = callback.fetch('message')
-        chat = message.fetch('chat')
         envelope(
           update_id:, kind: 'callback',
+          digest_fields: [update_id, 'callback_query', callback['id'], callback['data'],
+                          callback.dig('message', 'message_id'), callback.dig('from', 'id')],
           text: callback['data'].to_s,
           correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
-          conversation_id: chat_id(chat),
+          conversation_id: chat_id(message.fetch('chat')),
           callback_message_id: message.fetch('message_id'),
           observed_at: observed
         )
@@ -80,7 +84,9 @@ module Tamoz
         chat = member.fetch('chat')
         from = member['from'] || {}
         envelope(
-          update_id:, kind: 'membership', text: nil,
+          update_id:, kind: 'membership',
+          digest_fields: [update_id, 'membership', chat.fetch('id'), from.fetch('id', 0)],
+          text: nil,
           correspondent_id: "telegram:user:#{from.fetch('id', 0)}",
           conversation_id: chat_id(chat),
           observed_at: observed
@@ -89,22 +95,30 @@ module Tamoz
 
       def unsupported_envelope(update_id, observed)
         envelope(
-          update_id:, kind: 'unsupported', text: nil,
+          update_id:, kind: 'unsupported', digest_fields: [update_id], text: nil,
           correspondent_id: 'telegram:user:0', conversation_id: 'telegram:chat:0',
           observed_at: observed
         )
       end
 
+      # Message and command updates hash the same meaningful shape; the kind
+      # split is admission's concern, not the payload digest's.
+      def message_digest_fields(update_id, message, chat, from)
+        [update_id, 'message', chat.fetch('id'), from.fetch('id'), message['message_id'],
+         message['date'], message['text'], message.dig('reply_to_message', 'message_id')]
+      end
+
       # :reek:LongParameterList -- the normalized envelope binds every fact
       #   design §6.2 makes durable.
       # rubocop:disable Metrics/ParameterLists
-      def envelope(update_id:, kind:, text:, correspondent_id:, conversation_id:,
-                   observed_at:, reply_to: nil, callback_message_id: nil)
+      def envelope(update_id:, kind:, digest_fields:, text:, correspondent_id:,
+                   conversation_id:, observed_at:, reply_to: nil,
+                   callback_message_id: nil, message_id: nil)
         Comms::InboundEnvelope.new(
           surface_id: @surface_id, surface_revision: @surface_revision, update_id:,
-          raw_payload_hash: digest(update_id), parser_version: PARSER_VERSION,
+          raw_payload_hash: digest(digest_fields), parser_version: PARSER_VERSION,
           kind:, correspondent_id:, conversation_id:, reply_to:, callback_message_id:,
-          text:, observed_time: observed_at
+          message_id:, text:, observed_time: observed_at
         )
       end
       # rubocop:enable Metrics/ParameterLists
@@ -121,9 +135,12 @@ module Tamoz
         "#{prefix}#{chat.fetch('id')}"
       end
 
-      # The store only retains the payload hash, never raw update JSON.
-      def digest(update_id)
-        ::Digest::SHA256.hexdigest("tamoz.telegram.update.v1\n#{update_id}")
+      # The store only retains the payload hash, never raw update JSON; the
+      # hash covers the MEANINGFUL normalized content, so identical bytes
+      # collide identically and any content change under one update_id is a
+      # detectable integrity conflict (invariant 1).
+      def digest(fields)
+        ::Digest::SHA256.hexdigest("#{DIGEST_DOMAIN}\n#{JSON.generate(fields)}")
       end
     end
   end

@@ -30,18 +30,19 @@ module Tamoz
 
       attr_reader :surface_id, :surface_revision, :update_id, :raw_payload_hash,
                   :parser_version, :kind, :correspondent_id, :conversation_id,
-                  :reply_to, :callback_message_id, :text, :command, :arguments,
+                  :message_id, :reply_to, :callback_message_id, :text, :command, :arguments,
                   :platform_time, :observed_time, :ingestion_time
 
       def initialize(
         surface_id:, surface_revision:, update_id:, raw_payload_hash:,
         parser_version:, kind:, correspondent_id:, conversation_id:,
-        reply_to: nil, callback_message_id: nil, text: nil, command: nil, arguments: nil,
+        message_id: nil, reply_to: nil, callback_message_id: nil,
+        text: nil, command: nil, arguments: nil,
         platform_time: nil, observed_time: nil, ingestion_time: nil
       )
         validate!(surface_id:, surface_revision:, update_id:, raw_payload_hash:,
                   parser_version:, kind:, correspondent_id:, conversation_id:,
-                  reply_to:, callback_message_id:, text:, command:, arguments:,
+                  message_id:, reply_to:, callback_message_id:, text:, command:, arguments:,
                   platform_time:, observed_time:, ingestion_time:)
         @surface_id = surface_id
         @surface_revision = surface_revision
@@ -51,6 +52,7 @@ module Tamoz
         @kind = kind
         @correspondent_id = correspondent_id
         @conversation_id = conversation_id
+        @message_id = message_id
         @reply_to = reply_to
         @callback_message_id = callback_message_id
         @text = text
@@ -74,6 +76,7 @@ module Tamoz
           'kind' => @kind,
           'correspondent_id' => @correspondent_id,
           'conversation_id' => @conversation_id,
+          'message_id' => @message_id,
           'reply_to' => @reply_to,
           'callback_message_id' => @callback_message_id,
           'text' => @text,
@@ -95,6 +98,7 @@ module Tamoz
           kind: wire.fetch('kind'),
           correspondent_id: wire.fetch('correspondent_id'),
           conversation_id: wire.fetch('conversation_id'),
+          message_id: wire['message_id'],
           reply_to: wire['reply_to'],
           callback_message_id: wire['callback_message_id'],
           text: wire['text'],
@@ -120,13 +124,13 @@ module Tamoz
       def validate!(
         surface_id:, surface_revision:, update_id:, raw_payload_hash:,
         parser_version:, kind:, correspondent_id:, conversation_id:,
-        reply_to:, callback_message_id:, text:, command:, arguments:,
+        message_id:, reply_to:, callback_message_id:, text:, command:, arguments:,
         platform_time:, observed_time:, ingestion_time:
       )
         validate_identity!(surface_id:, surface_revision:, update_id:,
                            raw_payload_hash:, parser_version:, kind:,
-                           correspondent_id:, conversation_id:, reply_to:,
-                           callback_message_id:, text:)
+                           correspondent_id:, conversation_id:, message_id:,
+                           reply_to:, callback_message_id:, text:)
         validate_command_fields!(command:, arguments:)
         validate_times!(platform_time:, observed_time:, ingestion_time:)
       end
@@ -134,7 +138,7 @@ module Tamoz
       def validate_identity!(
         surface_id:, surface_revision:, update_id:, raw_payload_hash:,
         parser_version:, kind:, correspondent_id:, conversation_id:,
-        reply_to:, callback_message_id:, text:
+        message_id:, reply_to:, callback_message_id:, text:
       )
         unless Shapes.bounded_string?(surface_id, max_bytes: MAX_ID_BYTES)
           raise ValidationError, 'surface_id must be a bounded string'
@@ -158,6 +162,9 @@ module Tamoz
                conversation_id.start_with?('telegram:chat:', 'telegram:group:',
                                            'telegram:supergroup:', 'telegram:channel:')
           raise ValidationError, 'conversation_id must be a bound telegram chat id'
+        end
+        if !message_id.nil? && !Shapes.bounded_integer?(message_id, max: 9_999_999_999_999_999)
+          raise ValidationError, 'message_id must be a bounded integer'
         end
         if !reply_to.nil? && !Shapes.bounded_integer?(reply_to, max: 9_999_999_999_999_999)
           raise ValidationError, 'reply_to must be a bounded integer'

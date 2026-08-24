@@ -200,7 +200,8 @@ class CommsCliOpsTest < Minitest::Test
         delivery_id = delivery_wire.fetch('delivery_id')
         store.claim_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
                              claim_expires_at: Time.now.utc + 60, now: Time.now.utc)
-        store.mark_delivery(delivery_id:, status: 'unknown', now: Time.now.utc)
+        store.mark_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
+                            status: 'unknown', now: Time.now.utc)
       end
 
       status, out, err = rt.cli(%w[comms delivery resolve], delivery_id: delivery_wire.fetch('delivery_id'),
@@ -250,7 +251,7 @@ class CommsCliOpsTest < Minitest::Test
 
   def message_update(id, text:, user_id: 111_111_11)
     { 'update_id' => id,
-      'message' => { 'message_id' => id, 'date' => 1_752_700_800,
+      'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
                      'chat' => { 'id' => 222_222_22, 'type' => 'private' },
                      'from' => { 'id' => user_id }, 'text' => text } }
   end

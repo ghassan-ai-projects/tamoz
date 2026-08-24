@@ -33,8 +33,15 @@ module Tamoz
       # (invariant 57) and `capacity` is the surface's outbox_capacity — intake
       # refuses while pending+claimed deliveries plus open reservations would
       # meet it, so the reserved terminal answer can always append (design §12,
-      # scorecard case 16). The derived request id dedups replays.
-      # @return [:enqueued, :duplicate, :capacity_refused]
+      # scorecard case 16). The first durable observation of
+      # (surface, bot, update_id) anchors dedup: an exact digest replay is
+      # :duplicate, and the SAME identity under a DIFFERENT payload digest is
+      # a durable integrity conflict — nothing inserted, nothing enqueued
+      # (invariant 1). Declared intake limits are enforced from the deployed
+      # surface row inside the same transaction: open requests at
+      # max_open_requests refuse :open_request_limit; text beyond
+      # max_inbound_bytes refuses :inbound_too_large.
+      # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
       def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
         raise NotImplementedError
       end
@@ -95,6 +102,15 @@ module Tamoz
       # Mark an attempt immediately before crossing the transport boundary.
       # An expired row with this marker is resolved to unknown, never retried.
       def mark_delivery_send_started(delivery_id:, owner:, fence:, now:)
+        raise NotImplementedError
+      end
+
+      # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
+      # the update must match the claim's owner AND fence, so a stale caller
+      # records nothing and takes no external action. `succeeded` carries the
+      # receipt; `unknown` is the honest ambiguity state.
+      # @return [:marked, :not_claimable]
+      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
         raise NotImplementedError
       end
 

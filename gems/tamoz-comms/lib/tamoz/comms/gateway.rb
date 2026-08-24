@@ -30,6 +30,17 @@ module Tamoz
       TRANSIENT_BACKOFF_BASE_S = 1.0
       TRANSIENT_BACKOFF_MAX_S = 30.0
 
+      # Typed admission refusals (invariant 10): each records its durable
+      # disposition and sends one bounded reply; none enqueues work.
+      ADMISSION_REFUSALS = {
+        integrity_conflict: ['quarantined',
+                             'This update conflicts with an earlier message carrying the same identity. ' \
+                             'An operator can review it.'],
+        open_request_limit: ['rejected', 'This channel has too much open work right now; try again later.'],
+        inbound_too_large: ['rejected', "That message exceeds this channel's size limit."],
+        capacity_refused: ['rejected', 'The channel is at capacity; try again later.']
+      }.freeze
+
       def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil)
         @adapter = adapter
         @checkpoints = checkpoints
@@ -108,7 +119,8 @@ module Tamoz
 
         batch[:updates].each { |envelope| admit(envelope, now:) }
         @store.persist_next_offset(surface_id:, bot_id:, next_offset: batch[:next_offset], now:)
-        drain_outbox(now:) if drain
+        return :auth_failed if drain && drain_outbox(now:) == :authentication_refused
+
         :served
       rescue Comms::PollerConflictError
         raise
@@ -311,11 +323,9 @@ module Tamoz
         # state changed between the original attempt and the replay.
         return if outcome == :duplicate
 
-        # Saturated (invariant 57): durable refusal, no turn, and a bounded
-        # busy reply that itself may be coalesced.
-        @store.disposition_only(envelope, surface_id:, bot_id:,
-                                          disposition: 'rejected', reason: 'capacity_refused', now:)
-        append_control('The channel is at capacity; try again later.', envelope, now:)
+        disposition, reply = ADMISSION_REFUSALS.fetch(outcome)
+        @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason: outcome.to_s, now:)
+        append_control(reply, envelope, now:)
       end
 
       # The one synchronous acknowledgement. When earlier admitted work is
@@ -408,12 +418,24 @@ module Tamoz
 
       def append_control(reply_text, envelope, now:, kind: 'control')
         delivery = Comms::Delivery.build(
-          conversation_id: envelope.fetch('conversation_id'), reply_to: envelope.fetch('update_id'), kind:,
+          conversation_id: envelope.fetch('conversation_id'), reply_to: reply_target(envelope), kind:,
           text: reply_text, part_index: 0, part_count: 1, journaled: false,
           render_version: Comms::Rendering::RENDER_VERSION,
           content_digest: Comms::Rendering.content_digest(reply_text)
         )
         @store.append_delivery(delivery.wire, surface_id:, capacity: control_capacity, now:)
+      end
+
+      # Invariant 2: a control reply targets the platform message id the
+      # update carries — message_id for message/command kinds,
+      # callback_message_id for callbacks; update_id is the last resort only
+      # when the update carries neither.
+      def reply_target(envelope)
+        if envelope.fetch('kind') == 'callback'
+          envelope['callback_message_id'] || envelope.fetch('update_id')
+        else
+          envelope['message_id'] || envelope.fetch('update_id')
+        end
       end
 
       def drain_outbox(now:)

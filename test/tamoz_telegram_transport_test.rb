@@ -13,9 +13,10 @@ require_relative 'support/telegram_fixture_server'
 class TamozTelegramTransportTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  def with_transport
+  def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES)
     server = TelegramFixtureServer.new
-    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0)
+    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0,
+                                                        max_response_bytes:)
     normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
     transport = Tamoz::Telegram::Transport.new(client:, normalizer:)
     begin
@@ -183,6 +184,37 @@ class TamozTelegramTransportTest < Minitest::Test
       )
 
       assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }
+    end
+  end
+
+  # The transport cap (plan 01, work item 4): a body beyond the configured
+  # max_response_bytes is abandoned mid-read with the typed error — never
+  # buffered unbounded.
+  def test_a_response_beyond_the_transport_cap_raises_response_too_large
+    with_transport(max_response_bytes: 1024) do |transport, server|
+      server.script('getUpdates', body: {
+        'ok' => true,
+        'result' => [update(101, text: 'x' * 4096)]
+      }, times: 1)
+
+      error = assert_raises(Tamoz::Telegram::ResponseTooLargeError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+
+      assert error.retryable? == false
+    end
+  end
+
+  def test_a_response_within_the_transport_cap_is_read_normally
+    with_transport(max_response_bytes: 8192) do |transport, server|
+      server.script('getUpdates', body: {
+        'ok' => true,
+        'result' => [update(101, text: 'hello')]
+      }, times: 1)
+
+      batch = transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+
+      assert_equal 1, batch[:updates].length
     end
   end
 

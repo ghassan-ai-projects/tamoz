@@ -38,7 +38,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def now = Time.utc(2026, 8, 10, 12, 0, 0)
 
-  def descriptor(**overrides)
+  def descriptor(limits: {}, **overrides)
     Comms::SurfaceDescriptor.build(
       surface_id: 'telegram-ops', revision: 1, transport: {
                                                  mode: 'long_poll',
@@ -53,7 +53,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       limits: { max_inbound_bytes: 8192, max_open_requests: 50,
                 max_denial_prompts_per_request: 4, outbox_capacity: 500,
                 control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 },
+                global_messages_per_s: 25.0 }.merge(limits),
       **overrides
     )
   end
@@ -61,10 +61,31 @@ class SQLiteCommsStoreTest < Minitest::Test
   def envelope(update_id: 12_345, text: 'hello', **overrides)
     Comms::InboundEnvelope.new(
       surface_id: 'telegram-ops', surface_revision: 1, update_id:,
-      raw_payload_hash: 'a' * 64, parser_version: 1, kind: 'text',
+      raw_payload_hash: format('%064x', update_id), parser_version: 1, kind: 'text',
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      text:, observed_time: now, **overrides
+      message_id: update_id + 10_000, text:, observed_time: now, **overrides
     ).wire
+  end
+
+  def inbound_dispositions(store, update_id)
+    store.__send__(:read, 'test.inbound.read') do |txn|
+      txn.rows('test.inbound.read', <<~SQL, [update_id])
+        SELECT disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?
+      SQL
+    end
+  end
+
+  def request_row_count(store)
+    store.__send__(:read, 'test.request.count') do |txn|
+      txn.scalar('test.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
+    end
+  end
+
+  def admit(store, wire, thread: 'tg.ops.abc', now: self.now)
+    store.admit_and_enqueue(
+      wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+            thread:, profile_id: 'ops', reservation: 1, capacity: 500, now:
+    )
   end
 
   def delivery(**overrides)
@@ -157,18 +178,11 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def test_admit_and_enqueue_is_one_transaction_and_dedups_replays
     with_engine do |store, _adapter, checkpoints|
-      result = store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now:
-      )
+      store.deploy_surface(descriptor.wire, now:)
+      result = admit(store, envelope)
 
       assert_equal :enqueued, result
-      assert_equal :duplicate, store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now: now + 1
-      )
+      assert_equal :duplicate, admit(store, envelope, now: now + 1)
 
       requests = checkpoints.request_history(thread_id: 'tg.ops.abc')
 
@@ -179,11 +193,115 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # Invariant 1: an exact replay maps to the ONE existing request — one
+  # inbound row, one enqueued turn, nothing new.
+  def test_an_exact_duplicate_maps_to_the_one_existing_request
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      admit(store, envelope(update_id: 7))
+      outcome = admit(store, envelope(update_id: 7))
+
+      assert_equal :duplicate, outcome
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, request_row_count(store)
+      assert_equal [%w[request accepted]], inbound_dispositions(store, 7)
+    end
+  end
+
+  # Invariant 1 / hard-zero list: the SAME (surface, bot, update_id) under a
+  # DIFFERENT payload digest is never silently deduplicated. Admission
+  # inserts and enqueues nothing; the conflicting bytes are recorded
+  # quarantined beside the original observation and stay refused on replay.
+  def test_same_update_id_with_a_different_digest_is_a_durable_integrity_conflict
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      assert_equal :enqueued, admit(store, envelope(update_id: 9))
+      conflicting = envelope(update_id: 9, raw_payload_hash: 'f' * 64)
+
+      assert_equal :integrity_conflict, admit(store, conflicting)
+      assert_equal 1, request_row_count(store), 'the conflict enqueues no second request'
+
+      assert_equal :recorded, store.disposition_only(
+        conflicting, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                     disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
+      )
+      assert_equal [%w[request accepted], %w[quarantined integrity_conflict]],
+                   inbound_dispositions(store, 9)
+      assert_equal :integrity_conflict, admit(store, conflicting, now: now + 2),
+                   'a replayed conflict stays a conflict, not a duplicate'
+      assert_equal :duplicate, store.disposition_only(
+        conflicting, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                     disposition: 'quarantined', reason: 'integrity_conflict', now: now + 3
+      ), 're-recording the identical quarantine dedups'
+    end
+  end
+
+  # Declared limits are enforced at the admission boundary from the DEPLOYED
+  # surface row (invariant 10): a breach refuses with its typed symbol and
+  # inserts nothing into requests, inbox, or inbound.
+  def test_the_open_request_limit_refuses_at_admission_without_enqueueing
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 11))
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 12))
+
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, request_row_count(store)
+      assert_empty inbound_dispositions(store, 12), 'the refusal inserts no inbound row'
+    end
+  end
+
+  def test_oversized_inbound_text_refuses_at_admission_without_enqueueing
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_inbound_bytes: 32 }).wire, now:)
+
+      assert_equal :inbound_too_large, admit(store, envelope(update_id: 13, text: 'x' * 33))
+
+      assert_empty checkpoints.request_history(thread_id: 'tg.ops.abc')
+      assert_empty inbound_dispositions(store, 13), 'the refusal inserts no inbound row'
+    end
+  end
+
+  # Invariant 4 fenced result recording: only the current claim's owner AND
+  # fence may mark an outcome; a losing caller records nothing.
+  def test_mark_delivery_is_fenced_to_the_current_claim_owner_and_fence
+    with_engine do |store|
+      store.append_delivery(delivery, surface_id: 'telegram-ops', capacity: 10, now:)
+      delivery_id = delivery.fetch('delivery_id')
+      store.claim_delivery(delivery_id:, owner: 'gateway:a', fence: 7,
+                           claim_expires_at: now + 30, now:)
+
+      assert_equal :not_claimable, store.mark_delivery(
+        delivery_id:, owner: 'gateway:b', fence: 7, status: 'succeeded',
+        receipt: { 'message_id' => 1 }, now: now + 1
+      )
+      assert_equal :not_claimable, store.mark_delivery(
+        delivery_id:, owner: 'gateway:a', fence: 8, status: 'succeeded',
+        receipt: { 'message_id' => 1 }, now: now + 2
+      )
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
+
+      assert_equal 'claimed', row.fetch('status'), 'a losing mark changes nothing'
+      assert_nil row.fetch('receipt')
+
+      assert_equal :marked, store.mark_delivery(
+        delivery_id:, owner: 'gateway:a', fence: 7, status: 'succeeded',
+        receipt: { 'message_id' => 42 }, now: now + 3
+      )
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[succeeded]).first
+
+      assert_equal 'succeeded', row.fetch('status')
+      assert_includes row.fetch('receipt'), '42'
+    end
+  end
+
   # The transcript a turn is planned with: admitted task texts interleaved
   # with the terminal replies the correspondent saw. Control deliveries
   # ('Accepted…') and non-admitted messages never enter it.
   def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
     with_engine do |store, _adapter, _checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
@@ -221,6 +339,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   # never sees the comms store — plans the turn with the thread's context.
   def test_admit_and_enqueue_carries_the_history_in_the_turn_payload
     with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
       history = [{ 'role' => 'user', 'text' => 'earlier' }]
       store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,

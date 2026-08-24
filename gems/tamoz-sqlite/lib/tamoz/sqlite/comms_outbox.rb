@@ -184,16 +184,19 @@ module Tamoz
         end
       end
 
-      # Record a transport outcome for a CLAIMED row: `succeeded` carries the
-      # receipt, `unknown` is the honest ambiguity state (design §10 — never a
-      # guess, never an automatic retry).
-      def mark_delivery(delivery_id:, status:, now:, receipt: nil)
+      # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
+      # the UPDATE must match the claim's owner AND fence, so a stale drainer
+      # records nothing. `succeeded` carries the receipt, `unknown` is the
+      # honest ambiguity state (design §10 — never a guess, never an
+      # automatic retry).
+      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
         transaction('comms.outbox.mark') do |txn|
           txn.execute('comms.outbox.mark',
-                      <<~SQL, [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id])
+                      <<~SQL, [status, receipt && JSON.generate(receipt), now_ms(now), delivery_id, owner, fence])
                         UPDATE tamoz_comms_outbox
                         SET status = ?, receipt = ?, updated_at_ms = ?
                         WHERE delivery_id = ? AND status = 'claimed'
+                          AND claim_owner = ? AND claim_fence = ?
                       SQL
           txn.changes == 1 ? :marked : :not_claimable
         end

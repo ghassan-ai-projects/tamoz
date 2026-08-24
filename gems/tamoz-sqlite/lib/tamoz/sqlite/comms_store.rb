@@ -81,12 +81,17 @@ module Tamoz
       # ===== admission =====
 
       # Admit ONE inbound update AND enqueue its turn in one transaction. The
-      # derived request id is the dedup key; a replayed update is :duplicate.
-      # `bot_id` is the authenticated surface identity the update arrived on.
-      # Intake is bounded by the surface's outbox capacity (design §12,
-      # invariant 57): pending+claimed deliveries plus the reservations of
-      # admitted-but-unfinished requests must stay under `capacity`, so the
-      # reserved terminal row can always append.
+      # first durable observation of (surface, bot, update_id) anchors dedup:
+      # the same payload digest is :duplicate; a DIFFERENT digest for that
+      # identity is a durable integrity conflict — nothing is inserted and
+      # nothing is enqueued (invariant 1). Declared intake limits are read
+      # from the DEPLOYED surface row inside this transaction: open requests
+      # at `max_open_requests` refuse :open_request_limit, text beyond
+      # `max_inbound_bytes` refuses :inbound_too_large — both before any
+      # insert. Intake is bounded by the surface's outbox capacity (design
+      # §12, invariant 57): pending+claimed deliveries plus the reservations
+      # of admitted-but-unfinished requests must stay under `capacity`, so
+      # the reserved terminal row can always append.
       # `history` is the conversation transcript so far (see
       # `conversation_history`); it rides inside the payload's `task` entry
       # (the same Hash shape a cancel payload uses, since payload keys map
@@ -97,7 +102,18 @@ module Tamoz
       def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:,
                             history: [])
         transaction('comms.admit.enqueue') do |txn|
-          next :duplicate if inbound_row(txn, envelope_wire, bot_id)
+          seen = inbound_row(txn, envelope_wire, bot_id)
+          if seen
+            next :duplicate if seen[0] == envelope_wire.fetch('raw_payload_hash')
+
+            next :integrity_conflict
+          end
+
+          limits = deployed_surface_limits(txn, surface_id)
+          next :open_request_limit if open_request_count(txn, surface_id) >= limits.fetch('max_open_requests')
+
+          text = envelope_wire['text']
+          next :inbound_too_large if text && text.bytesize > limits.fetch('max_inbound_bytes')
           next :capacity_refused if capacity_saturated?(txn, surface_id, reservation, capacity)
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'request', reason: 'accepted', now:)
@@ -130,13 +146,15 @@ module Tamoz
         end
       end
 
-      # Record a non-request disposition (ignored/rejected/quarantined) durably.
+      # Record a non-request disposition (ignored/rejected/quarantined)
+      # durably. Dedup keys on the full identity INCLUDING the payload
+      # digest, so a conflicting digest for an already-observed update_id can
+      # still be recorded (the integrity-conflict quarantine).
       # rubocop:disable Lint/UnusedMethodArgument -- `surface_id` keeps the §13
-      # contract signature; the inbound table derives the surface from the
-      # envelope wire.
+      # contract signature; the inbound row carries its own surface.
       def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
         transaction('comms.admit.disposition') do |txn|
-          next :duplicate if inbound_row(txn, envelope_wire, bot_id)
+          next :duplicate if identical_inbound_row?(txn, envelope_wire, bot_id)
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:)
           :recorded
@@ -453,8 +471,10 @@ module Tamoz
         @outbox.outbox_rows(surface_id:, statuses:, limit:)
       end
 
-      def mark_delivery(delivery_id:, status:, now:, receipt: nil)
-        @outbox.mark_delivery(delivery_id:, status:, receipt:, now:)
+      # Fenced result recording (invariant 4): only the current claim's
+      # owner/fence may mark an outcome.
+      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
+        @outbox.mark_delivery(delivery_id:, owner:, fence:, status:, receipt:, now:)
       end
 
       def resolve_delivery(delivery_id:, status:, now:)
@@ -708,6 +728,18 @@ module Tamoz
       end
 
       private
+
+      # Declared intake limits read from the DEPLOYED surface row inside the
+      # admit transaction — the caller's descriptor copy can drift from the
+      # durable deployment, and the row is the truth admission enforces.
+      def deployed_surface_limits(txn, surface_id)
+        row = txn.first('comms.admit.limits', <<~SQL, [surface_id])
+          SELECT descriptor_json FROM tamoz_comms_surfaces WHERE surface_id = ?
+        SQL
+        raise KeyError, "surface #{surface_id} is not deployed" unless row
+
+        JSON.parse(row.fetch(0)).fetch('limits')
+      end
 
       def recent_request_tasks(surface_id:, conversation_id:, limit:)
         rows = read('comms.history.requests') do |txn|
