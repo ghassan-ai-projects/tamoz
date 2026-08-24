@@ -9,6 +9,14 @@ class AgentCliMcpTest < Minitest::Test
   SERVER_SCRIPT = ROOT.join('script', 'mcp_test_server').to_s
   ENV_ALLOWLIST = %w[PATH HOME LANG LC_ALL TMPDIR GEM_HOME GEM_PATH RUBYLIB].freeze
 
+  # The interactive CLI pins the review profile, so a gated MCP effect asks;
+  # these cases prove wiring/repair/precedence, so the scripted operator
+  # approves each ask through the real prompt adapter and declines the
+  # remember-for-session follow-up.
+  def approved_operator_input
+    StringIO.new("y\nn\n" * 4)
+  end
+
   # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Minitest/MultipleAssertions
   def test_cli_ask_builds_and_executes_the_configured_mcp_source
     with_runtime do |rt|
@@ -29,7 +37,7 @@ class AgentCliMcpTest < Minitest::Test
       status = Tamoz::Agent::CLI.run(
         ['--runtime-dir', rt.dir, '--session-dir', session_dir, '--root', rt.workspace,
          '--session', 'cli-mcp', '--json', 'ask', 'query the MCP server'],
-        out:, err:, input: StringIO.new, env: {}, model_factory: factory
+        out:, err:, input: approved_operator_input, env: {}, model_factory: factory
       )
 
       assert_equal 0, status, err.string
@@ -57,7 +65,7 @@ class AgentCliMcpTest < Minitest::Test
       status = Tamoz::Agent::CLI.run(
         ['--runtime-dir', rt.dir, '--session-dir', File.join(rt.dir, 'sessions'),
          '--root', rt.workspace, '--session', 'invalid-mcp', 'ask', 'query'],
-        out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {},
+        out: StringIO.new, err: StringIO.new, input: approved_operator_input, env: {},
         model_factory: ->(_options) { model }
       )
 
@@ -98,20 +106,10 @@ class AgentCliMcpTest < Minitest::Test
     end
   end
 
-  def test_database_mcp_binding_rejects_write_queries_before_schema_validation
-    with_runtime do |rt|
-      configure_mcp(rt, database: true)
-      source = Tamoz::Agent::McpSourceBuilder.new(
-        Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
-      ).build
-
-      assert_raises(Tamoz::Agent::ToolPolicyError) do
-        source.validate('mcp:probe/echo_constant', { 'query' => 'DROP TABLE records' })
-      end
-    ensure
-      source&.close
-    end
-  end
+  # Write-query refusal before schema validation is owned at source level by
+  # test/agent_governed_database_source_test.rb
+  # (test_write_queries_and_other_servers_are_refused_before_dispatch); this
+  # file's remaining cases cover the CLI wiring path end to end.
   # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/BlockLength, Minitest/MultipleAssertions
 
   # rubocop:disable Metrics/AbcSize
@@ -130,7 +128,7 @@ class AgentCliMcpTest < Minitest::Test
       status = Tamoz::Agent::CLI.run(
         ['--runtime-dir', rt.dir, '--session-dir', session_dir, '--root', rt.workspace,
          '--session', 'flag-wins', 'ask', 'query the MCP server'],
-        out: StringIO.new, err: StringIO.new, input: StringIO.new,
+        out: StringIO.new, err: StringIO.new, input: approved_operator_input,
         env: { 'TAMOZ_RUNTIME_DIR' => File.join(rt.dir, 'missing') }, model_factory: factory
       )
 

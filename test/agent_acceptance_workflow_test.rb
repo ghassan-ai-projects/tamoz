@@ -318,9 +318,10 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
 
   def run_child(context, mode:, kill_after_publish: nil)
     load_paths = %w[
-      tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
-      tamoz-tools tamoz-observability tamoz-comms
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
+      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
+      tamoz-stream tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms
+      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
+      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
       tamoz-agent
     ].flat_map { |gem| ["-I", ROOT.join("gems", gem, "lib").to_s] }
     env = {

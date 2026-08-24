@@ -42,7 +42,7 @@ class WebsearchEgressTest < Minitest::Test
   def profile_document(egress_section)
     toolbox = Tamoz::Agent::Toolbox.new(
       root: @workspace, allow_changes: false, checks: {},
-      allowed_tools: %w[read_file], approval_required: []
+      allowed_tools: %w[read_file]
     )
     document = {
       "profile" => {
@@ -50,7 +50,7 @@ class WebsearchEgressTest < Minitest::Test
         "profile_version" => "1.0", "canonical_root" => @workspace
       },
       "roots" => {"workspace" => @workspace},
-      "tools" => {"allowed" => ["read_file"], "approval_required" => []},
+      "tools" => {"allowed" => ["read_file"]},
       "policy" => {
         "allow_changes" => false,
         "default_check_safety" => "read_only",
@@ -166,7 +166,7 @@ class WebsearchEgressTest < Minitest::Test
   def session_with(profile)
     toolbox = Tamoz::Agent::Toolbox.new(
       root: @workspace, allow_changes: false, checks: {},
-      allowed_tools: %w[read_file], approval_required: []
+      allowed_tools: %w[read_file]
     )
     model = ScriptedModel.new(
       [read_plan],
@@ -222,7 +222,7 @@ class WebsearchEgressTest < Minitest::Test
     other_profile = activate!(profile_document(changed))
     toolbox = Tamoz::Agent::Toolbox.new(
       root: @workspace, allow_changes: false, checks: {},
-      allowed_tools: %w[read_file], approval_required: []
+      allowed_tools: %w[read_file]
     )
     dummy = Object.new
     def dummy.generate(**) = "{}"
@@ -243,7 +243,7 @@ class WebsearchEgressTest < Minitest::Test
 
     toolbox = Tamoz::Agent::Toolbox.new(
       root: @workspace, allow_changes: false, checks: {},
-      allowed_tools: %w[read_file], approval_required: []
+      allowed_tools: %w[read_file]
     )
     dummy = Object.new
     def dummy.generate(**) = "{}"

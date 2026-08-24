@@ -502,7 +502,7 @@ reconstruction lie.**
 `plan`, `review`, `verify` and `step` are not tables. They are `SessionRecords` inside the
 checkpoint payload BLOB, and their schemas carry **no timestamps** — of the record types, only
 `session` (`created_at_ms`) and `accepted_plan` (`accepted_at_ms`) carry time at all
-([`session_records.rb`](../gems/tamoz-agent/lib/tamoz/agent/session_records.rb)). So spans
+([`session_records.rb`](../gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb)). So spans
 divide into three timing classes:
 
 | Span | Anchor (feeds `span_id`) | Timing | Interval source |
