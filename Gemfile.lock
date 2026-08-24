@@ -13,6 +13,7 @@ PATH
     tamoz-agent-cli (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-healing
@@ -53,6 +54,17 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-agent-session
+  specs:
+    tamoz-agent-session (0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-healing (= 0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-agent-memory (= 0.1.0.alpha.1)
+      tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent
   specs:
     tamoz-agent (0.1.0.alpha.1)
@@ -63,6 +75,7 @@ PATH
       tamoz-agent-kernel (= 0.1.0.alpha.1)
       tamoz-agent-memory (= 0.1.0.alpha.1)
       tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-approval (= 0.1.0.alpha.1)
       tamoz-comms (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
@@ -94,6 +107,7 @@ PATH
     tamoz-evals (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-mcp (= 0.1.0.alpha.1)
@@ -334,6 +348,7 @@ DEPENDENCIES
   tamoz-agent-kernel!
   tamoz-agent-memory!
   tamoz-agent-profile!
+  tamoz-agent-session!
   tamoz-approval!
   tamoz-comms!
   tamoz-core!
@@ -417,6 +432,7 @@ CHECKSUMS
   tamoz-agent-kernel (0.1.0.alpha.1)
   tamoz-agent-memory (0.1.0.alpha.1)
   tamoz-agent-profile (0.1.0.alpha.1)
+  tamoz-agent-session (0.1.0.alpha.1)
   tamoz-approval (0.1.0.alpha.1)
   tamoz-comms (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)

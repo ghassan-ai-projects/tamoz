@@ -78,4 +78,34 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
 
 ## Deviations log
 
-(appended as phases land)
+- **Q0 scoped down (honest):** `.rubocop_todo.yml` regenerated and committed;
+  the reek/code-quality baseline regeneration is BLOCKED on this machine
+  because `RUN_COVERAGE=1 rake test` fails on main for pre-existing,
+  coverage-timing/environment-bound reasons (23 failures across 11 classes,
+  e.g. WebsearchEgress ×8 network-sandbox-bound; a CLI resume thread dying on
+  CheckpointConflictError under instrumentation timing). The committed
+  `docs/code-quality-baseline.json` therefore remains stale repo-wide
+  (`quality:reek` red at HEAD before any of this branch's work). Per-phase smell
+  discipline is enforced by targeted per-file reek parity instead; the global
+  ratchet needs a machine where the coverage suite passes.
+- **PA file list:** child_task.rb + child_task_dispatcher.rb moved into
+  tamoz-agent-capabilities (capability_binding hard-requires and constructs
+  them); child_environments.rb stayed (driver-side only).
+- **PA gemspec deps:** core/mcp/kernel/tools — no profile dep (grep-proven);
+  tools added at review (CapabilityHost/LocalDispatcher constructed directly).
+- **PA Stage B resolution (no code change needed):** `CapabilityBinding.build`
+  is a real assembler (partitions toolbox names, builds sources, binds
+  dispatchers into Tamoz::Tools::CapabilityHost, freezes) — not a re-export
+  facade; README documents the responsibility. The private `deep_freeze`
+  variant in mcp_capability_source differs semantically from core's (does not
+  freeze containers, silently passes unsupported types) so folding would change
+  behavior; PLAN conditioned the fold on enola flagging it, and enola did not.
+- **Review findings fixed post-PA (commit 58896dc):** COR-1 umbrella tool-error
+  rebindings; COUP-1 requirements manifest+audit regeneration (a committed
+  SERIAL test was statically red at HEAD — packaging flips must regenerate
+  derived artifacts together, fcb3e93 precedent); ARCH-1 isolation guard test;
+  COUP-3 README deps. Recorded-not-actioned: COR-2, COUP-4, DUP-2, ARCH-2.
+- **Process rule learned:** while implementation agents share the tree, the
+  integrator commits with explicit pathspecs ONLY (a bare `git add -A` +
+  commit briefly swept the in-flight PB renames into a review-fix commit;
+  caught and separated via soft reset within the same minute).

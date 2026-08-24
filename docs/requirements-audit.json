@@ -1,7 +1,7 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-24T09:38:57Z",
+  "generated_at": "2026-08-24T09:53:42Z",
   "manifest_requirements": 490,
   "named_cases_run": 260,
   "counts": {
@@ -7703,7 +7703,7 @@
       "classification": "missing",
       "rationale": "Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release.",
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

@@ -12,7 +12,8 @@ TamozGemspec.build(
                'tamoz-agent runtime.',
   dependencies: [
     ['tamoz-agent', "= #{Tamoz::Agent::CLI::VERSION}"],
-    ['tamoz-agent-capabilities', "= #{Tamoz::Agent::CLI::VERSION}"]
+    ['tamoz-agent-capabilities', "= #{Tamoz::Agent::CLI::VERSION}"],
+    ['tamoz-agent-session', "= #{Tamoz::Agent::CLI::VERSION}"]
   ],
   executable: 'tamoz'
 )

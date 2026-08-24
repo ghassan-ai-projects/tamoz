@@ -14,13 +14,10 @@ require_relative "agent/request_route"
 require_relative "agent/ruby_llm_model"
 require_relative "agent/lane_config"
 require_relative "agent/runtime"
-require_relative "agent/session_records"
+require "tamoz/agent_session"
 require "tamoz/agent_memory"
 require "tamoz/agent_healing"
 require "tamoz/agent_improvement"
-require_relative "agent/session_nodes"
-require_relative "agent/session"
-require_relative "agent/session_status_projection"
 require_relative "agent/terminal_progress"
 require "tamoz/agent_profile"
 require_relative "agent/runtime_directory"
@@ -43,9 +40,8 @@ module Tamoz
     Toolbox = Tamoz::Tools::Toolbox
     CheckReceipt = Tamoz::Tools::CheckReceipt
     Skills = Tamoz::Tools::Skills
-    ToolError = Tamoz::Tools::ToolError
-    ToolArgumentError = Tamoz::Tools::ToolArgumentError
-    ToolPolicyError = Tamoz::Tools::ToolPolicyError
+    # ToolError/ToolArgumentError/ToolPolicyError are bound once, by the
+    # capabilities umbrella (required above); rebinding them here would warn.
 
     def self.build(
       model:,

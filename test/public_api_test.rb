@@ -27,10 +27,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Result" => {},
           "Tamoz::Agent::RubyLLMModel" => {},
           "Tamoz::Agent::Runtime" => {},
-          "Tamoz::Agent::Session" => {},
-          "Tamoz::Agent::SessionOutcome" => {},
-          "Tamoz::Agent::SessionRecords" => {},
-          "Tamoz::Agent::SessionView" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Skills" => {"deprecated" => true},
           "Tamoz::Agent::Step" => {"deprecated" => true},
@@ -61,6 +57,15 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::GovernedDatabaseSource" => {},
           "Tamoz::Agent::McpCapabilitySource" => {},
           "Tamoz::Agent::McpSourceBuilder" => {}
+        },
+        "tamoz-agent-session" => {
+          "Tamoz::Agent::Session" => {},
+          "Tamoz::Agent::SessionGem::VERSION" => {},
+          "Tamoz::Agent::SessionOutcome" => {},
+          "Tamoz::Agent::SessionPlanningContext" => {},
+          "Tamoz::Agent::SessionRecords" => {},
+          "Tamoz::Agent::SessionStatusProjection" => {},
+          "Tamoz::Agent::SessionView" => {}
         },
         "tamoz-agent-cli" => {
           "Tamoz::Agent::CLI" => {},
@@ -402,6 +407,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::Profile::VERSION,
       Tamoz::Agent::Capabilities::VERSION,
+      Tamoz::Agent::SessionGem::VERSION,
       Tamoz::Agent::Improvement::VERSION,
       Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,

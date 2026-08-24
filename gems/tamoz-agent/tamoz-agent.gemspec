@@ -14,6 +14,7 @@ TamozGemspec.build(
     ["tamoz-agent-memory", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-healing", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-profile", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-agent-session", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-agent-improvement", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Agent::VERSION}"],
