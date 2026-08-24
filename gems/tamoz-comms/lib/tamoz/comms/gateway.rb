@@ -50,6 +50,7 @@ module Tamoz
       PAIRING_CODE_TTL_S = 86_400.0
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'.freeze
       FINISHED_REQUEST_REPLY = 'That request has already finished.'.freeze
+      CANCEL_NO_WORK_REPLY = 'No running request to cancel on this conversation.'.freeze
 
       # Store-projection states the Lifecycle tables do not name resolve here
       # first: the checkpoint inbox statuses and the admitted-but-unclaimed
@@ -483,7 +484,7 @@ module Tamoz
       end
 
       def pending_pairing_rows(envelope, now)
-        @store.pairing_challenges(status: 'pending').select do |row|
+        @store.pairing_challenges(status: 'pending', now:).select do |row|
           row.fetch('surface_id') == surface_id &&
             row.fetch('correspondent_id') == envelope.fetch('correspondent_id') &&
             row.fetch('expires_at_ms') > pairing_ms(now)
@@ -493,6 +494,7 @@ module Tamoz
       # Reuses this conversation's live pending row when its plaintext is
       # still known here; otherwise issues one new hashed challenge.
       def ensure_pairing_code(envelope, now:)
+        prune_issued_pairing_codes(now)
         reused = pending_pairing_rows(envelope, now).find do |row|
           row.fetch('conversation_id') == envelope.fetch('conversation_id') &&
             @issued_pairing_codes.key?(row.fetch('challenge_digest'))
@@ -500,6 +502,15 @@ module Tamoz
         return @issued_pairing_codes.fetch(reused.fetch('challenge_digest')) if reused
 
         issue_pairing_code(envelope, now:)
+      end
+
+      # The plaintext memo never outlives its durable rows: digests whose
+      # challenges are no longer live-pending (consumed or expired) are
+      # forgotten, so the memo stays bounded by the store's pending set.
+      def prune_issued_pairing_codes(now)
+        live = @store.pairing_challenges(status: 'pending', now:)
+                     .map { |row| row.fetch('challenge_digest') }
+        @issued_pairing_codes.delete_if { |digest, _code| !live.include?(digest) }
       end
 
       def issue_pairing_code(envelope, now:)
@@ -680,17 +691,28 @@ module Tamoz
       # `/cancel` stamps the durable `requested` point and enqueues the cancel
       # operation in ONE store transaction (plan 03, work item 4): a rollback
       # — a replayed cancel id, a tombstoned thread — leaves neither the stamp
-      # nor the queued operation behind.
+      # nor the queued operation behind. The target thread is the CURRENT
+      # generation's, exactly what admission derives: open work on an earlier
+      # generation's thread keeps running there untouched.
       def cancel_request(envelope, now:)
-        route = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
-        return 'No active work was found.' unless route
+        conversation_id = envelope.fetch('conversation_id')
+        return CANCEL_NO_WORK_REPLY unless @store.conversation(surface_id:, conversation_id:)
+
+        thread_id = Comms::Admission.thread_id(
+          surface_id, conversation_id,
+          generation: @store.conversation_generation(surface_id:, conversation_id:)
+        )
+        status = @store.conversation_status(surface_id:, conversation_id:)
+        return CANCEL_NO_WORK_REPLY unless status &&
+                                           status.fetch('thread_id') == thread_id &&
+                                           status.fetch('open_requests').positive?
 
         request_id = Comms::Canonical.hexdigest(
           'tamoz.comms.command.v1',
           [surface_id, envelope.fetch('update_id'), 'cancel']
         )
         @store.request_cancellation(
-          thread_id: route.fetch('thread_id'),
+          thread_id:,
           request_id:,
           payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } },
           now:

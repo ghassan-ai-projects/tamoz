@@ -312,30 +312,43 @@ class ProgressProjectionTest < Minitest::Test
     end
   end
 
-  # Bound: past 32 milestone rows for one request reference, further
-  # milestones REPLACE the newest row — count never grows past the bound,
-  # even when a drainer keeps freeing slots between milestones.
-  def test_a_hundred_milestones_never_exceed_the_per_request_bound
+  # Bound (R1 contract): milestone rows for one request reference never grow
+  # past MILESTONE_BOUND, and a row that has been DELIVERED is immutable —
+  # past the bound, with no pending row left to coalesce into, further
+  # milestones are dropped rather than rewritten onto delivered history.
+  def test_a_hundred_milestones_stay_bounded_and_delivered_rows_stay_immutable
     with_engine do |sink, adapter, _checkpoints|
       store = adapter.bind_comms_store(_checkpoints)
       bind_thread_to_conversation(store)
 
+      delivered = {}
       100.times do |index|
         sink.push(milestone_event('request.phase', sequence: index + 1, phase: "p#{index}"))
         live = milestone_rows(store).find { |row| row.fetch('status') == 'pending' }
         drain_row(store, live.fetch('delivery_id')) if live
+
+        current = delivered_facts(store)
+        current.each { |delivery_id, facts| delivered[delivery_id] ||= facts }
+
+        assert_equal delivered, current,
+                     'a delivered milestone row is never rewritten by a later push'
       end
 
       rows = milestone_rows(store)
 
       assert_operator rows.length, :<=, milestone_bound, 'the bound holds under the 100-milestone stress'
       rows.each do |row|
+        assert_equal 'succeeded', row.fetch('status'), 'every surviving row was delivered whole'
         assert_equal 0, row.fetch('journaled')
       end
       sequences = rows.map { |row| JSON.parse(row.fetch('markup')).fetch('sequence') }
+      assert_equal sequences.max, sequences.length, 'the first 32 milestones landed one row each'
+    end
+  end
 
-      assert_includes sequences, 100, 'the last fact landed on the live row'
-      assert_equal sequences.max, 100
+  def delivered_facts(store)
+    milestone_rows(store).to_h do |row|
+      [row.fetch('delivery_id'), [row.fetch('text'), row.fetch('content_digest')]]
     end
   end
 

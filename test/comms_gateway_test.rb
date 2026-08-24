@@ -338,6 +338,104 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # After /new rotates the generation, /cancel targets the CURRENT
+  # generation's thread — the same derivation admission uses — so the live
+  # request there is cancelled and work on the pre-rotation thread is never
+  # touched.
+  def test_cancel_after_a_rotation_affects_only_the_current_generation
+    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      seed_binding(store)
+      old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+      new_thread = Comms::Admission.thread_id(
+        'telegram-ops', 'telegram:chat:22222222',
+        generation: store.conversation_generation(surface_id: 'telegram-ops',
+                                                  conversation_id: 'telegram:chat:22222222')
+      )
+
+      refute_equal old_thread, new_thread, 'the rotation must derive a fresh thread'
+      transport.batch([update(3, text: 'more work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/cancel')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal 'Cancellation requested.', appended.last.fetch('text')
+      assert_equal 1, cancellation_stamped_count(store, new_thread),
+                   'the live request on the CURRENT generation is stamped'
+      assert_equal 0, cancellation_stamped_count(store, old_thread),
+                   'the pre-rotation request keeps running untouched'
+      assert_empty checkpoints.request_history(thread_id: old_thread)
+                      .select { |request| request.operation == :redirect },
+                   'no cancel operation lands on the old thread'
+      assert_equal %i[turn redirect], checkpoints.request_history(thread_id: new_thread).map(&:operation)
+    end
+  end
+
+  # Nothing admitted on the current generation means /cancel refuses
+  # honestly instead of queueing an operation against a stale thread.
+  def test_cancel_with_no_running_work_on_the_current_generation_refuses_bounded
+    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      seed_binding(store)
+      old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new'), update(3, text: '/cancel')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::CANCEL_NO_WORK_REPLY, appended.last.fetch('text')
+      assert_equal 0, cancellation_stamped_count(store, old_thread),
+                   'the pre-rotation request is neither stamped nor redirected'
+      assert_equal [:turn], checkpoints.request_history(thread_id: old_thread).map(&:operation)
+    end
+  end
+
+  # Aggregate /status projects the active request on the thread it was
+  # ADMITTED to, so after a rotation it reports the real task state instead
+  # of a not_started mismatch (phase-1 blind spot).
+  def test_aggregate_status_reports_the_current_generation_after_a_rotation
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new'), update(3, text: 'more work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/status')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      status_reply = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                          .map { |row| row.fetch('text') }
+                          .reverse.find { |text| text.start_with?('Work status:') }
+
+      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+
+      warn({ status_reply:, rows: store.outbox_rows(surface_id: 'telegram-ops',
+                                                     statuses: %w[pending claimed succeeded failed unknown])
+        .map { |r| "#{r['kind']}:#{r['status']}:#{r['text'][0, 45].inspect}" } }.inspect)
+      stx = store.conversation_status(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+      warn("agg=#{stx['task_state']} open=#{stx['open_requests']}")
+
+      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      refute_match(/task=accepted/, status_reply)
+    end
+  end
+
+  def cancellation_stamped_count(store, thread_id)
+    store.__send__(:read, 'test.gateway.cancel.stamp.count') do |txn|
+      txn.scalar('test.gateway.cancel.stamp.count', <<~SQL, [thread_id]).to_i
+        SELECT COUNT(*) FROM tamoz_comms_requests
+        WHERE thread_id = ? AND cancellation_requested_at_ms IS NOT NULL
+      SQL
+    end
+  end
+
   def test_an_unbound_sender_is_ignored
     with_gateway do |gateway, transport, _store|
       transport.batch([update(1, text: 'hello', user_id: 999_999_99)])

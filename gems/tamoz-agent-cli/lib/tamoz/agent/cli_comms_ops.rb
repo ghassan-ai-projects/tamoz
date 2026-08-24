@@ -114,10 +114,6 @@ module Tamoz
             @err.puts 'tamoz: no pending pairing code matches'
             return 1
           end
-          if candidate.fetch('expires_at_ms') <= (Time.now.utc.to_r * 1000).to_i
-            @err.puts 'tamoz: pairing code expired'
-            return 1
-          end
 
           surface = store.surface(surface_id: candidate.fetch('surface_id'))
           unless surface
@@ -175,9 +171,7 @@ module Tamoz
           threads = affected.flat_map do |surface_id|
             store.bindings(surface_id:).select { |b| b.fetch('correspondent_id') == correspondent_id }
                                        .filter_map do |binding|
-              route = store.conversation(surface_id:,
-                                         conversation_id: binding.fetch('conversation_id'))
-              route&.fetch('thread_id')
+              current_generation_thread(store, surface_id, binding.fetch('conversation_id'))
             end
           end.uniq
           if options[:json]
@@ -278,6 +272,16 @@ module Tamoz
       end
 
       private
+
+      # The thread the conversation admits onto NOW (its durable generation
+      # derives it, the same derivation admission and /cancel use); an unbound
+      # conversation admits nothing.
+      def current_generation_thread(store, surface_id, conversation_id)
+        generation = store.conversation_generation(surface_id:, conversation_id:)
+        Tamoz::Comms::Admission.thread_id(surface_id, conversation_id, generation:)
+      rescue KeyError
+        nil
+      end
 
       def render_request_view(row)
         @out.puts "request #{row.fetch('request_ref')} on #{row.fetch('surface_id')}/" \

@@ -90,14 +90,14 @@ class CommsCliOpsTest < Minitest::Test
       challenge = Tamoz::Comms::PairingChallenge.build(
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600,
-        now: Time.utc(2026, 8, 10, 12, 0, 0)
+        now: Time.now.utc
       )
       with_store(rt) do |store|
         store.insert_pairing_challenge(
           digest: challenge.digest, surface_id: 'telegram-ops',
           correspondent_id: 'telegram:user:11111111',
           conversation_id: 'telegram:chat:22222222',
-          expires_at: Time.utc(2026, 8, 10, 12, 5, 0), now: Time.utc(2026, 8, 10, 12, 0, 0)
+          expires_at: Time.now.utc + 300, now: Time.now.utc
         )
       end
 
@@ -130,9 +130,13 @@ class CommsCliOpsTest < Minitest::Test
       status, _out, err = rt.cli(%w[comms pair approve], code: challenge.challenge)
 
       assert_equal 1, status
-      assert_match(/pairing code expired/, err)
+      assert_match(/no pending pairing code matches/, err,
+                   'an expired code is not approvable: it never scans as pending')
       with_store(rt) do |store|
-        assert_equal 1, store.pairing_challenges(status: 'pending').length
+        assert_empty store.pairing_challenges(status: 'pending'),
+                     'the expired challenge is excluded from pending scans'
+        assert_equal 1, store.pairing_challenges.length,
+                     'the expired row stays in the table for the audit trail'
       end
     end
   end

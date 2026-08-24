@@ -31,7 +31,7 @@ class CommsPairingFirstContactTest < Minitest::Test
 
       assert_equal [%w[ignored pairing_pending]], inbound_dispositions(store, 1),
                    'the durable record stays an ignored observation'
-      pending = store.pairing_challenges(status: 'pending')
+      pending = store.pairing_challenges(status: 'pending', now: NOW)
 
       assert_equal 1, pending.length, 'exactly one challenge row exists'
       code = code_of(last_reply)
@@ -55,7 +55,7 @@ class CommsPairingFirstContactTest < Minitest::Test
       second_code = contact(gateway, transport, 2, text: 'any update?', now: NOW + 5)
 
       assert_equal first_code, second_code, 'the same code is repeated while the challenge lives'
-      assert_equal 1, store.pairing_challenges(status: 'pending').length,
+      assert_equal 1, store.pairing_challenges(status: 'pending', now: NOW + 5).length,
                    'the same row is reused, not duplicated'
     end
   end
@@ -86,7 +86,7 @@ class CommsPairingFirstContactTest < Minitest::Test
       assert_equal NO_MATCH_REPLY, drive_command(gateway, transport, '/start CONSUMED', id: 4),
                    'a consumed code no longer matches'
 
-      expired = store.pairing_challenges(status: 'pending').first
+      expired = store.pairing_challenges(status: 'pending', now: NOW).first
       transport.batch([update(5, text: "/start #{code}")])
       later = NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60
 
@@ -104,9 +104,11 @@ class CommsPairingFirstContactTest < Minitest::Test
       second_code = contact(gateway, transport, 2, now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60)
 
       refute_equal first_code, second_code, 'an expired challenge is replaced, not reused'
-      rows = store.pairing_challenges(status: 'pending')
+      rows = store.pairing_challenges
 
       assert_equal 2, rows.length, 'the expired row stays for the operator audit trail'
+      assert_equal 1, store.pairing_challenges(status: 'pending', now: NOW + Comms::Gateway::PAIRING_CODE_TTL_S + 60).length,
+                   'pending scans exclude the expired row'
       assert_match CODE_PATTERN, last_reply
     end
   end
@@ -114,7 +116,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   def test_operator_approval_admits_the_next_message_through_the_real_gateway
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       code = contact(gateway, transport, 1, now: NOW)
-      digest = store.pairing_challenges(status: 'pending').first.fetch('challenge_digest')
+      digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
 
       outcome = store.approve_pairing(
         challenge_digest: digest, binding_wire: operator_binding_wire, now: NOW + 10
@@ -131,7 +133,7 @@ class CommsPairingFirstContactTest < Minitest::Test
       assert_equal 1, checkpoints.request_history(thread_id: thread).length,
                    'the next message enqueues a real turn'
       assert_match(/\AAccepted r[0-9a-f]{10}\./, last_reply)
-      assert_empty store.pairing_challenges(status: 'pending'),
+      assert_empty store.pairing_challenges(status: 'pending', now: NOW + 20),
                    'approval consumed the challenge; nothing pends afterwards'
     end
   end
@@ -139,7 +141,7 @@ class CommsPairingFirstContactTest < Minitest::Test
   def test_after_pairing_start_reports_already_paired_without_new_challenges
     with_gateway do |gateway, transport, store|
       contact(gateway, transport, 1, now: NOW)
-      digest = store.pairing_challenges(status: 'pending').first.fetch('challenge_digest')
+      digest = store.pairing_challenges(status: 'pending', now: NOW).first.fetch('challenge_digest')
       assert_equal :approved,
                    store.approve_pairing(challenge_digest: digest, binding_wire: operator_binding_wire,
                                          now: NOW + 10)

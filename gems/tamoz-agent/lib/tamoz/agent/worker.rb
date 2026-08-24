@@ -320,7 +320,7 @@ module Tamoz
         occurrence_id = entry.fetch(:head_request_id)
         terminal_request = entry.fetch(:head_status) == :queued
         settle_child_error(thread_id, error) if terminal_request
-        close_failed_occurrence(thread_id) if terminal_request
+        close_failed_occurrence(thread_id, occurrence_id) if terminal_request
         emit("request.failed",
              thread: thread_id,
              request_id: occurrence_id,
@@ -340,10 +340,17 @@ module Tamoz
         PARKED
       end
 
-      def close_failed_occurrence(thread_id)
-        @runtime.close_occurrence(thread_id)
+      def close_failed_occurrence(thread_id, occurrence_id)
+        close_occurrence(thread_id, occurrence_id)
       rescue StandardError => error
         emit('worker.error', reason: "failed occurrence cleanup: #{error.message}")
+      end
+
+      # Closing an occurrence ends its milestone sequence: the map entry is
+      # dropped so per-request sequence state never accumulates across turns.
+      def close_occurrence(thread_id, request_id)
+        @monitor.synchronize { @milestone_sequences.delete(request_id) }
+        @runtime.close_occurrence(thread_id)
       end
 
       # Which budget, if any, this thread has spent. Returns nil when the profile
@@ -388,7 +395,7 @@ module Tamoz
         # the operator would collect one stop event per poll forever. Raising the
         # ceiling and re-queueing is the deliberate way to continue, which is the
         # right amount of friction for work that already spent its budget.
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.stopped",
              thread: thread_id,
@@ -628,7 +635,7 @@ module Tamoz
                     'That message could not be started because earlier work in this conversation ' \
                     'never settled. Please send it again.',
                     request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
@@ -659,7 +666,7 @@ module Tamoz
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
         @monitor.synchronize { @processed += 1 }
         notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
@@ -676,7 +683,7 @@ module Tamoz
         # in the worker event stream for operators.
         notify_sink(thread_id, "request.failed", failure_text(view),
                     request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
@@ -696,7 +703,7 @@ module Tamoz
           blocked_text(view),
           request_id: occurrence_id
         )
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.blocked",
              thread: thread_id,
