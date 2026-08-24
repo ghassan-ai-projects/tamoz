@@ -1,0 +1,1233 @@
+{
+  "measured_at": "2026-08-24",
+  "machine_cpus": 10,
+  "file_count": 234,
+  "total_serial_seconds": 505.0,
+  "mean_seconds_per_file": 2.16,
+  "startup_tax_measured_seconds": 0.78,
+  "failures": [
+    "test/agent_acceptance_workflow_test.rb",
+    "test/agent_approval_boot_test.rb",
+    "test/agent_cli_mcp_test.rb",
+    "test/agent_mcp_adversarial_test.rb",
+    "test/agent_session_kill_matrix_test.rb",
+    "test/agent_skills_toolbox_test.rb",
+    "test/agent_tool_error_recovery_test.rb",
+    "test/approval_resolve_test.rb",
+    "test/benchmark_holdout_test.rb",
+    "test/benchmark_protocol_test.rb",
+    "test/capability_host_test.rb",
+    "test/comms_adr049_consistency_test.rb",
+    "test/dependency_review_test.rb",
+    "test/documentation_surface_test.rb",
+    "test/documentation_test.rb",
+    "test/p16_tools_gem_test.rb",
+    "test/packaging_test.rb",
+    "test/sqlite_convergence_probe_test.rb",
+    "test/sqlite_raw_oracle_test.rb",
+    "test/sqlite_scenario_driver_test.rb",
+    "test/stream_worker_server_test.rb",
+    "test/websearch_egress_test.rb",
+    "test/websearch_invocation_test.rb"
+  ],
+  "buckets": {
+    "slow_tests_sum_seconds": 60.5,
+    "slow_tests": [
+      "test/sqlite_raw_oracle_test.rb",
+      "test/mcp_invocation_test.rb",
+      "test/agent_session_kill_matrix_test.rb",
+      "test/sqlite_convergence_probe_test.rb",
+      "test/mcp_supervisor_test.rb",
+      "test/sqlite_scenario_driver_test.rb",
+      "test/m2_evidence_test.rb"
+    ],
+    "serial_tests_sum_seconds": 113.0,
+    "serial_tests": [
+      "test/agent_mcp_adversarial_test.rb",
+      "test/packaging_test.rb",
+      "test/dependency_isolation_test.rb",
+      "test/graph_surface_audit_test.rb",
+      "test/requirements_manifest_test.rb",
+      "test/release_rehearsal_evidence_test.rb",
+      "test/stream_episode_worker_test.rb",
+      "test/stream_episode_end_to_end_test.rb",
+      "test/stream_evidence_client_test.rb",
+      "test/stream_worker_server_test.rb"
+    ],
+    "autonomy_seconds": 16.9,
+    "ci_set_files": 216,
+    "ci_set_serial_seconds": 314.6
+  },
+  "timings": [
+    {
+      "path": "test/graph_surface_audit_test.rb",
+      "seconds": 53.5,
+      "ok": true
+    },
+    {
+      "path": "test/agent_scorecard_test.rb",
+      "seconds": 49.8,
+      "ok": true
+    },
+    {
+      "path": "test/packaging_test.rb",
+      "seconds": 27.7,
+      "ok": false
+    },
+    {
+      "path": "test/mcp_invocation_test.rb",
+      "seconds": 22.4,
+      "ok": true
+    },
+    {
+      "path": "test/stream_worker_server_test.rb",
+      "seconds": 21.0,
+      "ok": false
+    },
+    {
+      "path": "test/autonomy_scorecard_test.rb",
+      "seconds": 16.9,
+      "ok": true
+    },
+    {
+      "path": "test/memory_treatment_profile_test.rb",
+      "seconds": 15.7,
+      "ok": true
+    },
+    {
+      "path": "test/mcp_supervisor_test.rb",
+      "seconds": 12.6,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_raw_oracle_test.rb",
+      "seconds": 10.3,
+      "ok": false
+    },
+    {
+      "path": "test/m2_evidence_test.rb",
+      "seconds": 9.2,
+      "ok": true
+    },
+    {
+      "path": "test/tamoz_telegram_transport_test.rb",
+      "seconds": 4.8,
+      "ok": true
+    },
+    {
+      "path": "test/m1_evidence_test.rb",
+      "seconds": 4.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_operations_test.rb",
+      "seconds": 4.2,
+      "ok": true
+    },
+    {
+      "path": "test/agent_unattended_policy_test.rb",
+      "seconds": 3.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_mcp_capability_source_test.rb",
+      "seconds": 3.9,
+      "ok": true
+    },
+    {
+      "path": "test/evals_verifier_test.rb",
+      "seconds": 3.9,
+      "ok": true
+    },
+    {
+      "path": "test/websearch_invocation_test.rb",
+      "seconds": 3.9,
+      "ok": false
+    },
+    {
+      "path": "test/agent_worker_test.rb",
+      "seconds": 3.7,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_holdout_test.rb",
+      "seconds": 3.5,
+      "ok": false
+    },
+    {
+      "path": "test/agent_cli_test.rb",
+      "seconds": 3.4,
+      "ok": true
+    },
+    {
+      "path": "test/mcp_catalog_test.rb",
+      "seconds": 3.4,
+      "ok": true
+    },
+    {
+      "path": "test/agent_mcp_adversarial_test.rb",
+      "seconds": 3.4,
+      "ok": false
+    },
+    {
+      "path": "test/agent_profile_machinery_test.rb",
+      "seconds": 3.3,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_crash_recovery_test.rb",
+      "seconds": 2.9,
+      "ok": true
+    },
+    {
+      "path": "test/p8_rollout_test.rb",
+      "seconds": 2.9,
+      "ok": true
+    },
+    {
+      "path": "test/dependency_isolation_test.rb",
+      "seconds": 2.9,
+      "ok": true
+    },
+    {
+      "path": "test/graph_execution_test.rb",
+      "seconds": 2.7,
+      "ok": true
+    },
+    {
+      "path": "test/subprocess_runner_test.rb",
+      "seconds": 2.6,
+      "ok": true
+    },
+    {
+      "path": "test/agent_repair_evaluation_test.rb",
+      "seconds": 2.6,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_scenario_driver_test.rb",
+      "seconds": 2.4,
+      "ok": false
+    },
+    {
+      "path": "test/graph_determinism_property_test.rb",
+      "seconds": 2.4,
+      "ok": true
+    },
+    {
+      "path": "test/agent_decision_flow_test.rb",
+      "seconds": 2.2,
+      "ok": true
+    },
+    {
+      "path": "test/agent_cli_mcp_test.rb",
+      "seconds": 2.2,
+      "ok": false
+    },
+    {
+      "path": "test/agent_mode_switch_test.rb",
+      "seconds": 2.1,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_selector_control_test.rb",
+      "seconds": 2.0,
+      "ok": true
+    },
+    {
+      "path": "test/agent_latency_smoke_test.rb",
+      "seconds": 2.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_convergence_probe_test.rb",
+      "seconds": 2.0,
+      "ok": false
+    },
+    {
+      "path": "test/agent_tool_error_recovery_test.rb",
+      "seconds": 1.9,
+      "ok": false
+    },
+    {
+      "path": "test/agent_cli_profile_test.rb",
+      "seconds": 1.9,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_skills_memory_test.rb",
+      "seconds": 1.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_test.rb",
+      "seconds": 1.9,
+      "ok": true
+    },
+    {
+      "path": "test/mcp_elicitation_test.rb",
+      "seconds": 1.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_worker_mcp_test.rb",
+      "seconds": 1.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_digest_resolution_test.rb",
+      "seconds": 1.7,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_witness_test.rb",
+      "seconds": 1.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_toolbox_test.rb",
+      "seconds": 1.6,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_kill_matrix_test.rb",
+      "seconds": 1.6,
+      "ok": false
+    },
+    {
+      "path": "test/agent_schedule_test.rb",
+      "seconds": 1.6,
+      "ok": true
+    },
+    {
+      "path": "test/memory_repository_adapter_test.rb",
+      "seconds": 1.5,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_adaptive_test.rb",
+      "seconds": 1.5,
+      "ok": true
+    },
+    {
+      "path": "test/agent_mode_switch_kill_matrix_test.rb",
+      "seconds": 1.5,
+      "ok": true
+    },
+    {
+      "path": "test/agent_budget_test.rb",
+      "seconds": 1.5,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_loop_test.rb",
+      "seconds": 1.5,
+      "ok": true
+    },
+    {
+      "path": "test/websearch_circuit_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/stream_situation_request_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/comms_gateway_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_stale_request_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_reconsider_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/agent_non_ascii_session_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_effect_test.rb",
+      "seconds": 1.4,
+      "ok": true
+    },
+    {
+      "path": "test/core_pool_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_fixed_graph_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/agent_ruby_llm_model_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_benchmark_readiness_cli_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/scheduler_consumer_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_controls_test.rb",
+      "seconds": 1.3,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_stream_test.rb",
+      "seconds": 1.2,
+      "ok": true
+    },
+    {
+      "path": "test/dependency_review_test.rb",
+      "seconds": 1.2,
+      "ok": false
+    },
+    {
+      "path": "test/memory_session_integration_test.rb",
+      "seconds": 1.2,
+      "ok": true
+    },
+    {
+      "path": "test/memory_store_test.rb",
+      "seconds": 1.2,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_harness_test.rb",
+      "seconds": 1.2,
+      "ok": true
+    },
+    {
+      "path": "test/healing_remediation_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_intent_authority_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_kernel_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_replay_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/memory_engine_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_circuit_store_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_crash_matrix_test.rb",
+      "seconds": 1.1,
+      "ok": true
+    },
+    {
+      "path": "test/agent_skills_toolbox_test.rb",
+      "seconds": 1.1,
+      "ok": false
+    },
+    {
+      "path": "test/sqlite_schedule_store_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/agent_child_task_runtime_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/stream_learning_loop_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/stream_decision_builder_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_effect_journal_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_end_to_end_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/agent_change_evaluation_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_store_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_protocol_test.rb",
+      "seconds": 1.0,
+      "ok": false
+    },
+    {
+      "path": "test/agent_outbox_delivery_sink_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_comms_store_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/requirements_manifest_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/observability_correlation_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_checkpoint_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/p16_tools_gem_test.rb",
+      "seconds": 1.0,
+      "ok": false
+    },
+    {
+      "path": "test/agent_durable_routing_test.rb",
+      "seconds": 1.0,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_request_inbox_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/documentation_test.rb",
+      "seconds": 0.9,
+      "ok": false
+    },
+    {
+      "path": "test/improvement_candidate_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/mcp_http_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/stream_invariants_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/stream_artifact_manifest_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/stream_evidence_client_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/stream_token_custody_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_checkpoint_seams_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/secret_sweep_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_approval_stores_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_acceptance_workflow_test.rb",
+      "seconds": 0.9,
+      "ok": false
+    },
+    {
+      "path": "test/agent_approval_boot_test.rb",
+      "seconds": 0.9,
+      "ok": false
+    },
+    {
+      "path": "test/agent_capability_binding_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_worker_fail_closed_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/comms_cli_ops_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_skills_adversarial_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/comms_evidence_gated_approval_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_request_routing_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/comms_cli_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/agent_phase3_context_lifecycle_test.rb",
+      "seconds": 0.9,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_boundary_source_audit_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/approval_resolve_test.rb",
+      "seconds": 0.8,
+      "ok": false
+    },
+    {
+      "path": "test/approval_reload_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/approval_policy_document_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/approval_mode_switch_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_deletion_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/approval_engine_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/toolbox_staging_reaper_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_boundary_registry_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_backup_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/schema_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/scheduler_values_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/scheduler_due_occurrences_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/scheduler_contract_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/runtime_directory_config_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/release_rehearsal_evidence_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/release_evaluation_manifest_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/otel_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_scenario_corpus_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_mission_runner_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/delivery_drainer_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_child_task_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/stream_situation_snapshot_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_governed_database_source_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/stream_notification_contract_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_improvement_lifecycle_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_intent_catalog_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_model_receipt_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_worker_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_phase4_capability_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_profile_adoption_seams_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_profile_schema_seams_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_profile_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_real_model_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_profile_transition_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_reasoning_document_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_runtime_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_records_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/stream_episode_capability_host_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_skill_set_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_trace_recorder_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_skills_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_toolbox_invariant17_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/agent_worker_failure_reason_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/evidence_artifact_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/healing_failure_contract_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/healing_matrix_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/legacy_session_resume_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/comms_decision_store_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/observability_catalog_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/observability_cli_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/observability_runtime_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_durable_cli_adapter_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_benchmark_readiness_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/openclaw_benchmark_environment_loader_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/observability_signal_test.rb",
+      "seconds": 0.8,
+      "ok": true
+    },
+    {
+      "path": "test/public_api_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_session_status_projection_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_stream_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_reducer_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_interrupt_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_immutable_recall_channels_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_identity_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_history_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/core_context_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_durable_runner_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_durable_request_executor_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/core_instrumentation_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_definition_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_checkpoint_codec_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/capability_closed_world_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/core_jcs_vectors_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/effect_identity_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/stream_situation_recall_contract_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/duplicate_key_detector_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/documentation_tree_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/stream_sse_transport_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_durable_compatibility_spike_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_diagnosis_catalog_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/core_state_codec_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/documentation_surface_test.rb",
+      "seconds": 0.7,
+      "ok": false
+    },
+    {
+      "path": "test/core_stream_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/websearch_adapter_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/core_turn_context_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/websearch_connector_contract_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/websearch_egress_test.rb",
+      "seconds": 0.7,
+      "ok": false
+    },
+    {
+      "path": "test/capability_descriptor_contract_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/ci_configuration_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/circuit_record_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_families_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_admission_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_adr049_consistency_test.rb",
+      "seconds": 0.7,
+      "ok": false
+    },
+    {
+      "path": "test/comms_authority_evidence_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/approval_values_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/mcp_server_config_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_decision_record_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/capability_host_test.rb",
+      "seconds": 0.7,
+      "ok": false
+    },
+    {
+      "path": "test/comms_deny_callback_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/approval_grant_key_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_rendering_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_subgraph_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/stream_approval_relay_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/concurrency_drain_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/capability_registry_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/child_environments_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/agent_terminal_progress_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_values_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_schedule_determinism_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/sqlite_scenario_registry_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/comms_seams_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/lane_config_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/approval_answer_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/capability_inventory_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/approval_flow_test.rb",
+      "seconds": 0.7,
+      "ok": true
+    },
+    {
+      "path": "test/graph_resume_answers_test.rb",
+      "seconds": 0.6,
+      "ok": true
+    },
+    {
+      "path": "test/benchmark_report_test.rb",
+      "seconds": 0.6,
+      "ok": true
+    },
+    {
+      "path": "test/graph_state_manager_test.rb",
+      "seconds": 0.6,
+      "ok": true
+    },
+    {
+      "path": "test/canonical_json_test.rb",
+      "seconds": 0.6,
+      "ok": true
+    }
+  ]
+}

@@ -258,7 +258,10 @@ class SQLiteConvergenceProbeTest < Minitest::Test
   end
 
   def raw_probe(scenario_id, classification, path, ledger)
-    load_paths = %w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-evals tamoz-sqlite].flat_map do |name|
+    load_paths = %w[
+      tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler
+      tamoz-stream tamoz-evals tamoz-sqlite
+    ].flat_map do |name|
       ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
     end
     script = <<~'RUBY'

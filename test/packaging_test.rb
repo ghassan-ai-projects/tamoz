@@ -71,7 +71,7 @@ class PackagingTest < Minitest::Test
   # same pattern as `with_isolated_install`/the scorecard test below — rather
   # than asking `gem install` to resolve them from a registry.
   def test_packaged_evals_executable_runs_without_repository_load_paths
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
                tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
     with_isolated_install(names, "evals") do |environment|
       install_root = environment.fetch("GEM_HOME")
@@ -124,7 +124,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -184,13 +184,18 @@ class PackagingTest < Minitest::Test
   end
 
   def test_packaged_core_runs_all_m1_primitives_without_repository_load_paths
-    root = GEM_ROOTS.fetch("tamoz-core")
+    roots = %w[tamoz-cancellation tamoz-concurrency tamoz-core].to_h { |name|
+      [name, GEM_ROOTS.fetch(name)]
+    }
 
     Dir.mktmpdir("tamoz-installed-core") do |directory|
-      package = File.join(directory, "tamoz-core.gem")
       install_root = File.join(directory, "install")
-      spec = Gem::Specification.load(root.join("tamoz-core.gemspec").to_s)
-      Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
+      packages = roots.map do |name, root|
+        package = File.join(directory, "#{name}.gem")
+        spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+        Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
+        package
+      end
       clean_environment = ENV.each_key
                              .grep(/\A(?:BUNDLE|BUNDLER)/)
                              .to_h { |key| [key, nil] }
@@ -200,23 +205,26 @@ class PackagingTest < Minitest::Test
                                "RUBYLIB" => nil,
                                "RUBYOPT" => nil
                              )
-      _stdout, stderr, status = Open3.capture3(
-        clean_environment,
-        RbConfig.ruby,
-        "-S",
-        "gem",
-        "install",
-        "--no-document",
-        "--ignore-dependencies",
-        "--install-dir",
-        install_root,
-        package
-      )
-      assert status.success?, stderr
+      packages.each do |package|
+        _stdout, stderr, status = Open3.capture3(
+          clean_environment,
+          RbConfig.ruby,
+          "-S",
+          "gem",
+          "install",
+          "--no-document",
+          "--ignore-dependencies",
+          "--install-dir",
+          install_root,
+          package
+        )
+        assert status.success?, stderr
+      end
 
       script = <<~'RUBY'
         require "json"
         require "tamoz/core"
+        require "tamoz/concurrency"
         state = Tamoz::StateCodec.new.normalize("steps" => [{"id" => "inspect"}])
         context = Tamoz::Context.new(
           run_id: "run.1",
@@ -262,17 +270,16 @@ class PackagingTest < Minitest::Test
   # create_file mutation, and a compiled skills catalog. The `$LOADED_FEATURES`
   # scan proves no tamoz-agent feature was pulled in at runtime.
   def test_packaged_tools_runs_clean_with_only_core_installed
-    core_root = GEM_ROOTS.fetch("tamoz-core")
-    tools_root = GEM_ROOTS.fetch("tamoz-tools")
+    roots = %w[tamoz-cancellation tamoz-core tamoz-tools].to_h { |name| [name, GEM_ROOTS.fetch(name)] }
 
     Dir.mktmpdir("tamoz-installed-tools") do |directory|
       install_root = File.join(directory, "install")
-      core_package = File.join(directory, "tamoz-core.gem")
-      tools_package = File.join(directory, "tamoz-tools.gem")
-      core_spec = Gem::Specification.load(core_root.join("tamoz-core.gemspec").to_s)
-      tools_spec = Gem::Specification.load(tools_root.join("tamoz-tools.gemspec").to_s)
-      Dir.chdir(core_root) { Gem::Package.build(core_spec, false, true, core_package) }
-      Dir.chdir(tools_root) { Gem::Package.build(tools_spec, false, true, tools_package) }
+      packages = roots.map do |name, root|
+        package = File.join(directory, "#{name}.gem")
+        spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+        Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
+        package
+      end
       clean_environment = ENV.each_key
                              .grep(/\A(?:BUNDLE|BUNDLER)/)
                              .to_h { |key| [key, nil] }
@@ -282,7 +289,7 @@ class PackagingTest < Minitest::Test
                                "RUBYLIB" => nil,
                                "RUBYOPT" => nil
                              )
-      [core_package, tools_package].each do |package|
+      packages.each do |package|
         _stdout, stderr, status = Open3.capture3(
           clean_environment,
           RbConfig.ruby,
@@ -471,7 +478,7 @@ class PackagingTest < Minitest::Test
   end
 
   def test_packaged_observability_runs_with_only_core_installed
-    with_isolated_install(%w[tamoz-core tamoz-observability], "observability") do |environment|
+    with_isolated_install(%w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-observability], "observability") do |environment|
       script = <<~'RUBY'
         require "json"
         require "tamoz/observability"
@@ -508,17 +515,18 @@ class PackagingTest < Minitest::Test
   end
 
   def test_packaged_graph_runs_m2_without_repository_load_paths
-    core_root = GEM_ROOTS.fetch("tamoz-core")
-    graph_root = GEM_ROOTS.fetch("tamoz-graph")
+    roots = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph].to_h { |name|
+      [name, GEM_ROOTS.fetch(name)]
+    }
 
     Dir.mktmpdir("tamoz-installed-graph") do |directory|
       install_root = File.join(directory, "install")
-      core_package = File.join(directory, "tamoz-core.gem")
-      graph_package = File.join(directory, "tamoz-graph.gem")
-      core_spec = Gem::Specification.load(core_root.join("tamoz-core.gemspec").to_s)
-      graph_spec = Gem::Specification.load(graph_root.join("tamoz-graph.gemspec").to_s)
-      Dir.chdir(core_root) { Gem::Package.build(core_spec, false, true, core_package) }
-      Dir.chdir(graph_root) { Gem::Package.build(graph_spec, false, true, graph_package) }
+      packages = roots.map do |name, root|
+        package = File.join(directory, "#{name}.gem")
+        spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+        Dir.chdir(root) { Gem::Package.build(spec, false, true, package) }
+        package
+      end
       clean_environment = ENV.each_key
                              .grep(/\A(?:BUNDLE|BUNDLER)/)
                              .to_h { |key| [key, nil] }
@@ -528,7 +536,7 @@ class PackagingTest < Minitest::Test
                                "RUBYLIB" => nil,
                                "RUBYOPT" => nil
                              )
-      [core_package, graph_package].each do |package|
+      packages.each do |package|
         _stdout, stderr, status = Open3.capture3(
           clean_environment,
           RbConfig.ruby,

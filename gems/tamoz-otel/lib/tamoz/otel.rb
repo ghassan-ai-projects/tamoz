@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'tamoz/observability'
+require 'tamoz/concurrency'
 require_relative 'otel/version'
 require_relative 'otel/egress_policy'
 require_relative 'otel/http_exporter'

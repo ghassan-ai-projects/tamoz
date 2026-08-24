@@ -47,7 +47,7 @@ class DependencyIsolationTest < Minitest::Test
   # three gems' own trees (derived from their roots); any loaded feature
   # outside the union is an upward or sideways edge.
   def test_kernel_loads_core_and_tools_only
-    allowed = %w[tamoz-core tamoz-tools tamoz-agent-kernel].flat_map { |name|
+    allowed = %w[tamoz-core tamoz-cancellation tamoz-tools tamoz-agent-kernel].flat_map { |name|
       library = GEM_ROOTS.fetch(name).join("lib")
       Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
     }.uniq.sort
@@ -63,7 +63,7 @@ class DependencyIsolationTest < Minitest::Test
   # PA: the capabilities gem loads core + tools + kernel only, and keeps the
   # MCP surface lazy — requiring the umbrella must not pull tamoz/mcp.
   def test_capabilities_loads_core_tools_kernel_only_and_keeps_mcp_lazy
-    allowed = %w[tamoz-core tamoz-tools tamoz-agent-kernel tamoz-agent-capabilities].flat_map { |name|
+    allowed = %w[tamoz-core tamoz-cancellation tamoz-tools tamoz-agent-kernel tamoz-agent-capabilities].flat_map { |name|
       library = GEM_ROOTS.fetch(name).join("lib")
       Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
     }.uniq.sort
@@ -73,6 +73,37 @@ class DependencyIsolationTest < Minitest::Test
     unexpected = features.reject { |path| allowed.include?(path) }
     assert_empty unexpected, unexpected.inspect
     refute_includes features, "tamoz/mcp.rb"
+  end
+
+  # C1: tamoz-cancellation is the lowest substrate above core. It loads core
+  # and nothing else — and never tamoz/concurrency, whose one-way edge points
+  # DOWN into this gem.
+  def test_cancellation_loads_core_only_and_keeps_concurrency_above_it
+    allowed = %w[tamoz-core tamoz-cancellation].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/cancellation")
+
+    assert_includes features, "tamoz/cancellation.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+    refute_includes features, "tamoz/concurrency.rb"
+  end
+
+  # C2: concurrency consumes cancellation + core (Clock, errors, token); no
+  # upward or sideways edge may ride along with the umbrella require.
+  def test_concurrency_loads_core_and_cancellation_only
+    allowed = %w[tamoz-core tamoz-cancellation tamoz-concurrency].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/concurrency")
+
+    assert_includes features, "tamoz/concurrency.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+    refute_includes features, "tamoz/graph.rb"
   end
 
   def test_agent_defers_provider_loading_and_does_not_load_evals_or_sqlite

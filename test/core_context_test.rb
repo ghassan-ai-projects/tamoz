@@ -67,7 +67,10 @@ class CoreContextTest < Minitest::Test
     assert_equal parent.request_id, child.request_id
     assert_equal ["graph", "node.answer"], child.namespace
     assert_equal "task.child", child.task_id
-    assert_same parent.cancellation, child.cancellation
+    # The default cancellation moved to tamoz-cancellation and bare contexts
+    # now carry nil, which Minitest 6 refuses inside assert_same/assert_equal;
+    # Object#equal? pins the same inheritance directly.
+    assert parent.cancellation.equal?(child.cancellation)
     assert_same store, child.store
   end
 

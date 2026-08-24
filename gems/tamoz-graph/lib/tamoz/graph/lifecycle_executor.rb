@@ -63,7 +63,7 @@ module Tamoz
           mode,
           capacity
         )
-        EventStream.new(sink:, join_grace:) do
+        Concurrency::EventStream.new(sink:, join_grace:) do
           emitter.emit(:run_start, stream_context.namespace, {
             'graph' => compiled.name,
             'execution_id' => execution_id

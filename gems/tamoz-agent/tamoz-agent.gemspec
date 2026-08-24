@@ -21,6 +21,8 @@ TamozGemspec.build(
     ["tamoz-sqlite", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-comms", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-approval", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-cancellation", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-concurrency", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-observability", "= #{Tamoz::Agent::VERSION}"],
     ["ruby_llm", "~> 1.16.0"]
   ]

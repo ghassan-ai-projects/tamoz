@@ -4,6 +4,7 @@ require "pathname"
 
 require "mcp"
 require "tamoz/core"
+require "tamoz/cancellation"
 
 require_relative "mcp/version"
 require_relative "mcp/errors"

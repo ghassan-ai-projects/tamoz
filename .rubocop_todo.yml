@@ -13,7 +13,7 @@ Bundler/OrderedGems:
   Exclude:
     - 'Gemfile'
 
-# Offense count: 22
+# Offense count: 24
 Gemspec/RequiredRubyVersion:
   Exclude:
     - 'gems/tamoz-agent-capabilities/tamoz-agent-capabilities.gemspec'
@@ -26,7 +26,9 @@ Gemspec/RequiredRubyVersion:
     - 'gems/tamoz-agent-session/tamoz-agent-session.gemspec'
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
     - 'gems/tamoz-approval/tamoz-approval.gemspec'
+    - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
     - 'gems/tamoz-comms/tamoz-comms.gemspec'
+    - 'gems/tamoz-concurrency/tamoz-concurrency.gemspec'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
     - 'gems/tamoz-graph/tamoz-graph.gemspec'
@@ -80,7 +82,7 @@ Layout/ElseAlignment:
   Exclude:
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
 
-# Offense count: 327
+# Offense count: 322
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLineAfterGuardClause:
   Exclude:
@@ -103,16 +105,17 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-core/lib/tamoz/core/situation_recall.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
@@ -133,7 +136,6 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiled.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -361,7 +363,7 @@ Layout/LineEndStringConcatenationIndentation:
     - 'script/release_rehearsal'
     - 'script/websearch_adapter'
 
-# Offense count: 255
+# Offense count: 258
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: Max, AllowHeredoc, AllowURI, AllowQualifiedName, URISchemes, AllowRBSInlineAnnotation, AllowCopDirectives, AllowedPatterns, SplitStrings.
 # URISchemes: http, https
@@ -391,7 +393,6 @@ Layout/LineLength:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-scheduler/tamoz-scheduler.gemspec'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
@@ -420,15 +421,18 @@ Layout/LineLength:
     - 'test/agent_toolbox_invariant17_test.rb'
     - 'test/agent_toolbox_test.rb'
     - 'test/agent_unattended_policy_test.rb'
+    - 'test/agent_worker_test.rb'
     - 'test/approval_engine_test.rb'
     - 'test/approval_grant_key_test.rb'
     - 'test/approval_reload_test.rb'
     - 'test/approval_resolve_test.rb'
     - 'test/benchmark_harness_test.rb'
     - 'test/capability_closed_world_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_pool_test.rb'
     - 'test/core_stream_test.rb'
     - 'test/delivery_drainer_test.rb'
+    - 'test/dependency_isolation_test.rb'
     - 'test/mcp_elicitation_test.rb'
     - 'test/memory_engine_test.rb'
     - 'test/memory_repository_adapter_test.rb'
@@ -849,16 +853,15 @@ Lint/AmbiguousBlockAssociation:
     - 'test/websearch_adapter_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 19
+# Offense count: 18
 # This cop supports safe autocorrection (--autocorrect).
 Lint/AmbiguousOperatorPrecedence:
   Exclude:
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'script/websearch_adapter'
@@ -920,7 +923,7 @@ Lint/FloatComparison:
 # Offense count: 1
 Lint/HashCompareByIdentity:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -966,7 +969,7 @@ Lint/MissingSuper:
 # Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 4
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -997,7 +1000,7 @@ Lint/RedundantDirGlobSort:
     - 'test/agent_non_ascii_session_test.rb'
     - 'test/documentation_tree_test.rb'
 
-# Offense count: 8
+# Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 Lint/RedundantRequireStatement:
   Exclude:
@@ -1006,7 +1009,6 @@ Lint/RedundantRequireStatement:
     - 'gems/tamoz-evals/lib/tamoz/evals/duplicate_key_detector.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'script/generate_requirements_manifest'
 
@@ -1274,6 +1276,9 @@ Metrics/AbcSize:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1282,11 +1287,9 @@ Metrics/AbcSize:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
@@ -1338,7 +1341,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
@@ -1433,6 +1435,7 @@ Metrics/AbcSize:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_pool_test.rb'
@@ -1738,7 +1741,7 @@ Metrics/ClassLength:
     - 'test/subprocess_runner_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 283
+# Offense count: 282
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/CyclomaticComplexity:
   Exclude:
@@ -1778,6 +1781,9 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/evaluator.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1786,11 +1792,9 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/cli.rb'
@@ -1831,7 +1835,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
@@ -1928,7 +1931,10 @@ Metrics/MethodLength:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1937,10 +1943,8 @@ Metrics/MethodLength:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb'
@@ -2253,16 +2257,16 @@ Metrics/ParameterLists:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/decision_log.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
@@ -2333,7 +2337,7 @@ Metrics/ParameterLists:
     - 'test/stream_evidence_client_test.rb'
     - 'test/support/episode_composition.rb'
 
-# Offense count: 272
+# Offense count: 271
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/PerceivedComplexity:
   Exclude:
@@ -2372,6 +2376,9 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -2380,11 +2387,9 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/cli.rb'
@@ -2426,7 +2431,6 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
@@ -2532,7 +2536,7 @@ Minitest/AssertPathExists:
   Exclude:
     - 'test/agent_profile_machinery_test.rb'
 
-# Offense count: 311
+# Offense count: 312
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/AssertPredicate:
   Exclude:
@@ -2560,6 +2564,7 @@ Minitest/AssertPredicate:
     - 'test/benchmark_protocol_test.rb'
     - 'test/capability_host_test.rb'
     - 'test/capability_registry_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_pool_test.rb'
@@ -2631,13 +2636,14 @@ Minitest/AssertRespondTo:
   Exclude:
     - 'test/healing_failure_contract_test.rb'
 
-# Offense count: 1
+# Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/AssertSame:
   Exclude:
+    - 'test/core_context_test.rb'
     - 'test/p16_tools_gem_test.rb'
 
-# Offense count: 68
+# Offense count: 76
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/AssertTruthy:
   Exclude:
@@ -2645,6 +2651,7 @@ Minitest/AssertTruthy:
     - 'test/agent_scorecard_test.rb'
     - 'test/approval_flow_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/healing_remediation_test.rb'
     - 'test/memory_engine_test.rb'
     - 'test/memory_repository_adapter_test.rb'
@@ -2672,7 +2679,7 @@ Minitest/AssertWithExpectedArgument:
     - 'test/p16_tools_gem_test.rb'
     - 'test/packaging_test.rb'
 
-# Offense count: 1479
+# Offense count: 1487
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/EmptyLineBeforeAssertionMethods:
   Exclude:
@@ -2732,6 +2739,7 @@ Minitest/EmptyLineBeforeAssertionMethods:
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
     - 'test/comms_gateway_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -2848,7 +2856,7 @@ Minitest/LiteralAsActualArgument:
   Exclude:
     - 'test/stream_approval_relay_test.rb'
 
-# Offense count: 759
+# Offense count: 763
 # Configuration parameters: Max.
 Minitest/MultipleAssertions:
   Exclude:
@@ -2910,6 +2918,7 @@ Minitest/MultipleAssertions:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -3025,7 +3034,7 @@ Minitest/RefuteEqual:
   Exclude:
     - 'test/stream_episode_skills_memory_test.rb'
 
-# Offense count: 46
+# Offense count: 49
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/RefuteFalse:
   Exclude:
@@ -3033,6 +3042,7 @@ Minitest/RefuteFalse:
     - 'test/approval_flow_test.rb'
     - 'test/capability_closed_world_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/graph_interrupt_test.rb'
     - 'test/healing_failure_contract_test.rb'
     - 'test/healing_remediation_test.rb'
@@ -3074,7 +3084,7 @@ Minitest/RefutePathExists:
     - 'test/sqlite_scenario_driver_test.rb'
     - 'test/sqlite_selector_control_test.rb'
 
-# Offense count: 69
+# Offense count: 71
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/RefutePredicate:
   Exclude:
@@ -3088,6 +3098,7 @@ Minitest/RefutePredicate:
     - 'test/agent_skills_adversarial_test.rb'
     - 'test/agent_skills_toolbox_test.rb'
     - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_state_codec_test.rb'
     - 'test/core_stream_test.rb'
@@ -3149,7 +3160,7 @@ Naming/FileName:
 # SupportedStylesForLeadingUnderscores: disallowed, required, optional
 Naming/MemoizedInstanceVariableName:
   Exclude:
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
 
 # Offense count: 41
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
@@ -3171,7 +3182,7 @@ Naming/MethodParameterName:
     - 'test/autonomy_scorecard_test.rb'
     - 'test/stream_invariants_test.rb'
 
-# Offense count: 53
+# Offense count: 54
 # Configuration parameters: Mode, AllowedMethods, AllowedPatterns, AllowBangMethods, WaywardPredicates.
 # AllowedMethods: call
 # WaywardPredicates: infinite?, nonzero?
@@ -3181,7 +3192,9 @@ Naming/PredicateMethod:
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
@@ -3191,7 +3204,6 @@ Naming/PredicateMethod:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/schema.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/stream_emitter.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_registry.rb'
@@ -3207,7 +3219,7 @@ Naming/PredicateMethod:
     - 'test/stream_approval_relay_test.rb'
     - 'test/stream_invariants_test.rb'
 
-# Offense count: 210
+# Offense count: 212
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: PreferredName.
 Naming/RescuedExceptionsVariableName:
@@ -3234,10 +3246,12 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/core.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
@@ -3259,7 +3273,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-graph/lib/tamoz/graph/channel.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/route_planner.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/state_manager.rb'
@@ -3390,7 +3403,7 @@ Performance/RedundantBlockCall:
   Exclude:
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/scope.rb'
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb'
     - 'test/core_instrumentation_test.rb'
@@ -3441,7 +3454,7 @@ Performance/StringReplacement:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/TimesMap:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'test/agent_profile_machinery_test.rb'
     - 'test/benchmark_controls_test.rb'
@@ -3504,7 +3517,7 @@ Style/BitwisePredicate:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
     - 'script/tamoz_sqlite_oracle'
 
-# Offense count: 10
+# Offense count: 13
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ProceduralMethods, FunctionalMethods, AllowedMethods, AllowedPatterns, AllowBracesOnProceduralOneLiners, BracesRequiredMethods.
 # SupportedStyles: line_count_based, semantic, braces_for_chaining, always_braces
@@ -3517,6 +3530,7 @@ Style/BlockDelimiters:
     - 'test/agent_digest_resolution_test.rb'
     - 'test/benchmark_harness_test.rb'
     - 'test/dependency_isolation_test.rb'
+    - 'test/packaging_test.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -3591,7 +3605,7 @@ Style/DataInheritance:
     - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
 
-# Offense count: 149
+# Offense count: 150
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
   Exclude:
@@ -3607,7 +3621,13 @@ Style/Documentation:
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/answer.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/sleep.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/clock.rb'
     - 'gems/tamoz-core/lib/tamoz/configuration.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -3618,11 +3638,9 @@ Style/Documentation:
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-core/lib/tamoz/notifier.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/secret.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/task_result.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/artifact.rb'
@@ -3659,7 +3677,6 @@ Style/Documentation:
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/definition.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -3685,7 +3702,6 @@ Style/Documentation:
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/usage.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
@@ -3750,13 +3766,15 @@ Style/EmptyStringInsideInterpolation:
   Exclude:
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
 
-# Offense count: 58
+# Offense count: 60
 # This cop supports safe autocorrection (--autocorrect).
 Style/ExplicitBlockArgument:
   Exclude:
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
     - 'script/agent_latency_smoke'
@@ -3926,7 +3944,7 @@ Style/IdenticalConditionalBranches:
     - 'gems/tamoz-stream/lib/tamoz/stream/decision_builder.rb'
     - 'script/clean_rubocop_todo'
 
-# Offense count: 465
+# Offense count: 464
 # This cop supports safe autocorrection (--autocorrect).
 Style/IfUnlessModifier:
   Exclude:
@@ -3969,6 +3987,9 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
@@ -3979,10 +4000,8 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb'
@@ -4004,7 +4023,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-graph/lib/tamoz/graph/channel.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -4023,7 +4041,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb'
@@ -4070,6 +4087,7 @@ Style/IfUnlessModifier:
     - 'script/websearch_adapter'
     - 'test/agent_worker_test.rb'
     - 'test/capability_host_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_pool_test.rb'
     - 'test/core_stream_test.rb'
     - 'test/sqlite_scenario_driver_test.rb'
@@ -4282,7 +4300,7 @@ Style/MutableConstant:
     - 'test/stream_artifact_manifest_test.rb'
     - 'test/stream_situation_recall_contract_test.rb'
 
-# Offense count: 7
+# Offense count: 8
 # This cop supports safe autocorrection (--autocorrect).
 Style/NestedTernaryOperator:
   Exclude:
@@ -4291,6 +4309,7 @@ Style/NestedTernaryOperator:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
@@ -4424,7 +4443,7 @@ Style/RedundantAssignment:
 Style/RedundantBegin:
   Exclude:
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
@@ -4480,8 +4499,8 @@ Style/RedundantFreeze:
     - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
@@ -4571,6 +4590,12 @@ Style/RegexpLiteral:
     - 'test/mcp_invocation_test.rb'
     - 'test/sqlite_raw_oracle_test.rb'
     - 'test/sqlite_stale_request_test.rb'
+
+# Offense count: 4
+# This cop supports safe autocorrection (--autocorrect).
+Style/RescueModifier:
+  Exclude:
+    - 'test/concurrency_drain_test.rb'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
@@ -4677,7 +4702,7 @@ Style/StringConcatenation:
     - 'test/duplicate_key_detector_test.rb'
     - 'test/sqlite_approval_stores_test.rb'
 
-# Offense count: 36482
+# Offense count: 36549
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ConsistentQuotesInMultiline.
 # SupportedStyles: single_quotes, double_quotes
@@ -4778,8 +4803,20 @@ Style/StringLiterals:
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/process_group.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/trap.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/version.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
     - 'gems/tamoz-comms/lib/tamoz/comms/errors.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/version.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
+    - 'gems/tamoz-concurrency/tamoz-concurrency.gemspec'
     - 'gems/tamoz-core/lib/tamoz/circuit.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
@@ -4799,12 +4836,10 @@ Style/StringLiterals:
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/secret.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/task_result.rb'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/exe/tamoz-eval'
@@ -4862,7 +4897,6 @@ Style/StringLiterals:
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/definition.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -5041,6 +5075,7 @@ Style/StringLiterals:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -5318,15 +5353,16 @@ Style/StringLiteralsInInterpolation:
     - 'test/support/domain_loader.rb'
     - 'test/websearch_circuit_test.rb'
 
-# Offense count: 3
+# Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
 Style/SuperArguments:
   Exclude:
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
     - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'script/tamoz_sqlite_oracle'
+    - 'test/concurrency_drain_test.rb'
 
-# Offense count: 11
+# Offense count: 12
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, MinSize.
 # SupportedStyles: percent, brackets
@@ -5335,6 +5371,7 @@ Style/SymbolArray:
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'test/approval_values_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/healing_failure_contract_test.rb'
     - 'test/sqlite_approval_stores_test.rb'
 
@@ -5387,12 +5424,13 @@ Style/TrivialAccessors:
     - 'test/support/autonomy_case.rb'
     - 'test/support/domain_loader.rb'
 
-# Offense count: 2
+# Offense count: 3
 # This cop supports safe autocorrection (--autocorrect).
 Style/WhileUntilModifier:
   Exclude:
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/process_group.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
 
 # Offense count: 112
 # This cop supports safe autocorrection (--autocorrect).

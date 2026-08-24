@@ -109,6 +109,13 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::UnknownDecisionError" => {},
           "Tamoz::Approval::VERSION" => {}
         },
+        "tamoz-cancellation" => {
+          "Tamoz::Cancellation::ProcessGroup" => {},
+          "Tamoz::Cancellation::Trap" => {},
+          "Tamoz::Cancellation::VERSION" => {},
+          "Tamoz::CancellationToken" => {},
+          "Tamoz::Cancellation.interruptible_sleep" => {}
+        },
         "tamoz-comms" => {
           "Tamoz::Comms::DeliveryDrainer" => {},
           "Tamoz::Comms::Gateway" => {},
@@ -138,13 +145,19 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::ValidationError" => {},
           "Tamoz::Comms::VERSION" => {}
         },
+        "tamoz-concurrency" => {
+          "Tamoz::Concurrency::EventStream" => {},
+          "Tamoz::Concurrency::VERSION" => {},
+          "Tamoz::Concurrency.join_all" => {},
+          "Tamoz::Pool.for" => {},
+          "Tamoz::StreamSink" => {}
+        },
         "tamoz-core" => {
           "Tamoz.configuration" => {},
           "Tamoz.configure" => {},
           "Tamoz.configuration_finalized?" => {},
           "Tamoz.finalize_configuration!" => {},
           "Tamoz.instrument" => {},
-          "Tamoz::CancellationToken" => {},
           "Tamoz::CancelledError" => {},
           "Tamoz::CheckpointConflictError" => {},
           "Tamoz::CheckpointCorruptionError" => {},
@@ -176,7 +189,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::LeaseLostError" => {},
           "Tamoz::NodeError" => {},
           "Tamoz::Notifier::Null" => {},
-          "Tamoz::Pool.for" => {},
           "Tamoz::PoolCircuitOpenError" => {},
           "Tamoz::PoolWorkerError" => {},
           "Tamoz::RecursionLimitError" => {},
@@ -189,7 +201,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::StoreError" => {},
           "Tamoz::StreamClosedError" => {},
           "Tamoz::StreamPart" => {},
-          "Tamoz::StreamSink" => {},
           "Tamoz::TaskResult::Cancelled" => {},
           "Tamoz::TaskResult::Failed" => {},
           "Tamoz::TaskResult::Interrupted" => {},
@@ -412,6 +423,8 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
+      Tamoz::Cancellation::VERSION,
+      Tamoz::Concurrency::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
       Tamoz::Comms::VERSION,

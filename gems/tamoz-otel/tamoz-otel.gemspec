@@ -8,5 +8,8 @@ TamozGemspec.build(
   version: Tamoz::OTel::VERSION,
   summary: 'Bounded OTLP/HTTP export for Tamoz observability',
   description: 'A dependency-light, governed OTLP/HTTP exporter for Tamoz signals.',
-  dependencies: [['tamoz-observability', "= #{Tamoz::OTel::VERSION}"]]
+  dependencies: [
+    ['tamoz-concurrency', "= #{Tamoz::OTel::VERSION}"],
+    ['tamoz-observability', "= #{Tamoz::OTel::VERSION}"]
+  ]
 )

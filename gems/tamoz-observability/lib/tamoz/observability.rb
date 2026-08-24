@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'tamoz/core'
+require 'tamoz/concurrency'
 require_relative 'observability/version'
 require_relative 'observability/errors'
 require_relative 'observability/signal_catalog'

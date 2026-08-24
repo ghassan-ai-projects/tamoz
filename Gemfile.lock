@@ -14,6 +14,8 @@ PATH
       tamoz-agent (= 0.1.0.alpha.1)
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-session (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-healing
@@ -77,7 +79,9 @@ PATH
       tamoz-agent-profile (= 0.1.0.alpha.1)
       tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-approval (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-comms (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
@@ -90,9 +94,22 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-cancellation
+  specs:
+    tamoz-cancellation (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-comms
   specs:
     tamoz-comms (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-concurrency
+  specs:
+    tamoz-concurrency (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
@@ -118,6 +135,8 @@ PATH
   remote: gems/tamoz-graph
   specs:
     tamoz-graph (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       zeitwerk (~> 2.6)
 
@@ -126,18 +145,21 @@ PATH
   specs:
     tamoz-mcp (0.1.0.alpha.1)
       mcp (~> 1.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-observability
   specs:
     tamoz-observability (0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-otel
   specs:
     tamoz-otel (0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
 
 PATH
@@ -174,6 +196,7 @@ PATH
   remote: gems/tamoz-tools
   specs:
     tamoz-tools (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 GEM
@@ -350,7 +373,9 @@ DEPENDENCIES
   tamoz-agent-profile!
   tamoz-agent-session!
   tamoz-approval!
+  tamoz-cancellation!
   tamoz-comms!
+  tamoz-concurrency!
   tamoz-core!
   tamoz-evals!
   tamoz-graph!
@@ -434,7 +459,9 @@ CHECKSUMS
   tamoz-agent-profile (0.1.0.alpha.1)
   tamoz-agent-session (0.1.0.alpha.1)
   tamoz-approval (0.1.0.alpha.1)
+  tamoz-cancellation (0.1.0.alpha.1)
   tamoz-comms (0.1.0.alpha.1)
+  tamoz-concurrency (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tamoz/cancellation"
+require "tamoz/concurrency"
 require "tamoz/graph"
 require "tamoz/tools"
 require "tamoz/observability"

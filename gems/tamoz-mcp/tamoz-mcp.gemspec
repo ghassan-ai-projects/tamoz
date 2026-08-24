@@ -10,6 +10,7 @@ TamozGemspec.build(
   summary: "Governed MCP client/host for Tamoz",
   description: "Immutable server admission, catalog, invocation, and supervision over the official MCP SDK.",
   dependencies: [
+    ["tamoz-cancellation", "= #{Tamoz::Core::VERSION}"],
     ["tamoz-core", "= #{Tamoz::Core::VERSION}"],
     ["mcp", "~> 1.1"]
   ]

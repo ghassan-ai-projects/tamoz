@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tamoz/core"
+require "tamoz/cancellation"
 require_relative "tools/version"
 require_relative "tools/skills"
 require_relative "tools/toolbox"

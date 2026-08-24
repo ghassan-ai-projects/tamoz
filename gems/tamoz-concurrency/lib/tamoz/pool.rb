@@ -217,7 +217,7 @@ module Tamoz
         if completed_normally
           workers.each(&:join)
         else
-          join_workers(workers, timeout: cancellation_grace)
+          Concurrency.join_all(workers, deadline: cancellation_grace)
         end
         raise fatal if fatal
 
@@ -348,16 +348,6 @@ module Tamoz
         @state_mutex.synchronize do
           @stuck_workers += count
           @circuit_open = true if @stuck_workers >= stuck_worker_limit
-        end
-      end
-
-      def join_workers(workers, timeout:)
-        deadline = Clock.monotonic.now + timeout
-        workers.each do |worker|
-          remaining = deadline - Clock.monotonic.now
-          break unless remaining.positive?
-
-          worker.join(remaining)
         end
       end
 
