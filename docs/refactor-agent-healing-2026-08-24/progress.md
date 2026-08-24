@@ -23,15 +23,15 @@
 | `lib/tamoz/agent/healing/errors.rb` | reviewed (no change) | — |
 | `lib/tamoz/agent/healing/rule_registry.rb` | refactored | 1fd0ff1 |
 | `lib/tamoz/agent/healing/seams.rb` | reviewed (no change) | — |
-| `lib/tamoz/agent/healing/preflight.rb` | pending | |
-| `lib/tamoz/agent/healing/classification.rb` | pending | |
-| `lib/tamoz/agent/healing/remediation/session.rb` | pending | |
-| `lib/tamoz/agent/healing/failure_record.rb` | pending | |
-| `lib/tamoz/agent/healing/rule.rb` | pending | |
+| `lib/tamoz/agent/healing/preflight.rb` | refactored | bd71d80 |
+| `lib/tamoz/agent/healing/classification.rb` | refactored | 8c2e943 |
+| `lib/tamoz/agent/healing/remediation/session.rb` | refactored | 964011f |
+| `lib/tamoz/agent/healing/failure_record.rb` | refactored | 9bb460e |
+| `lib/tamoz/agent/healing/rule.rb` | refactored | ce803c4 |
 
 ## End-state checks
 
-- [ ] All files reviewed/refactored.
+- [x] All files reviewed/refactored.
 - [ ] `rubocop` passes on the gem.
 - [ ] Test suite passes.
 - [ ] `enola check` reports no regression.
