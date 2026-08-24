@@ -184,12 +184,6 @@ class SQLiteCrashRecoveryTest < Minitest::Test
   private
 
   def run_killed_child(path, point, operation: "checkpoint.commit", marker: nil)
-    load_paths = %w[
-      tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-sqlite
-    ].flat_map do |gem|
-      ["-I", ROOT.join("gems", gem, "lib").to_s]
-    end
     pid = Process.spawn(
       {
         "TAMOZ_DB_PATH" => path,
@@ -199,7 +193,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
         "RUBYOPT" => nil
       },
       RbConfig.ruby,
-      *load_paths,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       CHILD,
       out: File::NULL,
@@ -241,12 +235,6 @@ class SQLiteCrashRecoveryTest < Minitest::Test
   def spawn_lease_child(path, owner)
     input_reader, input_writer = IO.pipe
     output_reader, output_writer = IO.pipe
-    load_paths = %w[
-      tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-sqlite
-    ].flat_map do |gem|
-      ["-I", ROOT.join("gems", gem, "lib").to_s]
-    end
     pid = Process.spawn(
       {
         "TAMOZ_DB_PATH" => path,
@@ -254,7 +242,7 @@ class SQLiteCrashRecoveryTest < Minitest::Test
         "RUBYOPT" => nil
       },
       RbConfig.ruby,
-      *load_paths,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       LEASE_CHILD,
       in: input_reader,

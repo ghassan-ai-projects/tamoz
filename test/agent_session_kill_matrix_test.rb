@@ -758,24 +758,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
   end
 
   def run_child(context, mode:, seam:, environment: {})
-    # P16: the child loads tamoz/agent, which now requires tamoz/tools.
-    # P15: the list is the child's REAL load path. Bundler 4 exports
-    # `BUNDLER_SETUP`, which a child honours even with `RUBYOPT` cleared, so
-    # this list used to be decorative — every gem in the workspace was on the
-    # path regardless, and a missing runtime dependency could not surface here.
-    # Clearing both makes the constraint real: `tamoz/sqlite` requires
-    # `tamoz/scheduler` and `tamoz/stream`, and this is where that shows.
-    # The list mirrors the gems' real require edges: tamoz/sqlite and
-    # tamoz/agent both require tamoz/approval (ADR-049 stores + engine).
-    load_paths = %w[
-      tamoz-comms tamoz-core tamoz-graph tamoz-scheduler tamoz-stream
-      tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-cancellation tamoz-concurrency tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent
-    ].flat_map do |gem|
-      ["-I", ROOT.join("gems", gem, "lib").to_s]
-    end
     env = {
       "TAMOZ_MODE" => mode,
       "TAMOZ_DB" => context.fetch(:database),
@@ -795,7 +777,7 @@ class AgentSessionKillMatrixTest < Minitest::Test
     pid = Process.spawn(
       env,
       RbConfig.ruby,
-      *load_paths,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       CHILD,
       out: ENV["TAMOZ_KILL_DEBUG"] ? $stdout : File::NULL,
