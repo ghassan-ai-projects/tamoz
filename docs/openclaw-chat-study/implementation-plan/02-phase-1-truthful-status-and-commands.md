@@ -1,6 +1,9 @@
 # Phase 1 — truthful status and command parity
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented — store truth `ca82d20`, CLI JSON identity `676d977`,
+command parity `f322345`, plus owner-directed pairing first contact
+`0fff1f8`; evidence in `evidence/phase-1/implementation-review.md`. All claims
+are fixture/scripted-transport plumbing evidence.
 Requires: Phase 0 (delivery fence and Telegram identity must already be fixed).
 
 Study reference: Stage 1 (`../04-tamoz-target-architecture.md`), P1
