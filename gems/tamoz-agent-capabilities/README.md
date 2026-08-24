@@ -27,7 +27,9 @@ monorepo (`0.1.0.alpha.1` literal per gem, hand-synced like every sibling).
 
 ## Dependencies
 
-`tamoz-core`, `tamoz-mcp`, `tamoz-agent-kernel`. Nothing here reaches up into
-session, worker, or CLI code: consumers (the runtime/worker wiring in
-`tamoz-agent`, the CLI, the evals harness) point down only. The MCP gem loads
-lazily — its constants are touched when an MCP source is actually built.
+`tamoz-core`, `tamoz-mcp`, `tamoz-agent-kernel`, `tamoz-tools`
+(CapabilityBinding constructs the tools gem's CapabilityHost/LocalDispatcher
+directly). Nothing here reaches up into session, worker, or CLI code: consumers
+(the runtime/worker wiring in `tamoz-agent`, the CLI, the evals harness) point
+down only. The MCP gem loads lazily — its constants are touched when an MCP
+source is actually built.

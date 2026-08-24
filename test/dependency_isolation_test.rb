@@ -60,6 +60,21 @@ class DependencyIsolationTest < Minitest::Test
     assert_empty unexpected, unexpected.inspect
   end
 
+  # PA: the capabilities gem loads core + tools + kernel only, and keeps the
+  # MCP surface lazy — requiring the umbrella must not pull tamoz/mcp.
+  def test_capabilities_loads_core_tools_kernel_only_and_keeps_mcp_lazy
+    allowed = %w[tamoz-core tamoz-tools tamoz-agent-kernel tamoz-agent-capabilities].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/agent_capabilities")
+
+    assert_includes features, "tamoz/agent_capabilities.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+    refute_includes features, "tamoz/mcp.rb"
+  end
+
   def test_agent_defers_provider_loading_and_does_not_load_evals_or_sqlite
     features = loaded_features_after("tamoz/agent")
 

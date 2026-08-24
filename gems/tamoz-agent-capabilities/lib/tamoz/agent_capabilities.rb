@@ -18,6 +18,13 @@ require_relative "agent/mcp_source_builder"
 
 module Tamoz
   module Agent
+    # The moved files raise these bare spellings under module nesting; bind the
+    # same objects here so the gem is sound without tamoz-agent loaded.
+    # agent.rb's later rebinding of the same objects is idempotent.
+    ToolError = Tamoz::Tools::ToolError
+    ToolArgumentError = Tamoz::Tools::ToolArgumentError
+    ToolPolicyError = Tamoz::Tools::ToolPolicyError
+
     module Capabilities
     end
   end
