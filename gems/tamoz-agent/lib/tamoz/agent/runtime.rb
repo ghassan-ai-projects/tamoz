@@ -61,6 +61,12 @@ module Tamoz
         task = normalize_task(task)
         start_turn
         emit(:task_started, "task" => task) { |event| yield event if block_given? }
+        dispatch_task(task) { |event| yield event if block_given? }
+      end
+
+      private
+
+      def dispatch_task(task)
         if routing == :shadow
           return run_shadow(task) { |event| yield event if block_given? }
         end
@@ -74,8 +80,6 @@ module Tamoz
           yield event if block_given?
         end
       end
-
-      private
 
       def normalize_task(raw)
         task = String(raw).strip
@@ -101,30 +105,51 @@ module Tamoz
       end
 
       def run_legacy(task)
-        if toolbox.action_capable?
-          action = run_action_mode(task) { |event| yield event if block_given? }
-          plan = action.fetch(:plan)
-          review = action.fetch(:review)
-          observations = action.fetch(:observations)
-          verification_context = {
-            "configured_check_passed" => action.fetch(:check_passed),
-            "terminal_reason" => action.fetch(:terminal_reason)
-          }
-        else
-          plan, review = accepted_plan(
-            task,
-            phase: :read_only,
-            allowed_tools: toolbox.names,
-            evidence: [],
-            metadata: {},
-            planning_context: {}
-          ) { |event| yield event if block_given? }
-          observations, = execute(plan, phase: :read_only, metadata: {}) do |event|
-            yield event if block_given?
-          end
-          verification_context = {}
+        work = if toolbox.action_capable?
+                 run_action_work(task) { |event| yield event if block_given? }
+               else
+                 run_read_only_work(task) { |event| yield event if block_given? }
+               end
+        result = verify(
+          task,
+          work.fetch(:plan),
+          work.fetch(:review),
+          work.fetch(:observations),
+          verification_context: work.fetch(:verification_context)
+        )
+        [result, work.fetch(:verification_context)]
+      end
+
+      def run_action_work(task)
+        action = run_action_mode(task) { |event| yield event if block_given? }
+        {
+          plan: action.fetch(:plan),
+          review: action.fetch(:review),
+          observations: action.fetch(:observations),
+          verification_context: action_verification_context(action)
+        }
+      end
+
+      def run_read_only_work(task)
+        plan, review = accepted_plan(
+          task,
+          phase: :read_only,
+          allowed_tools: toolbox.names,
+          evidence: [],
+          metadata: {},
+          planning_context: {}
+        ) { |event| yield event if block_given? }
+        observations, = execute(plan, phase: :read_only, metadata: {}) do |event|
+          yield event if block_given?
         end
-        [verify(task, plan, review, observations, verification_context:), verification_context]
+        {plan:, review:, observations:, verification_context: {}}
+      end
+
+      def action_verification_context(action)
+        {
+          "configured_check_passed" => action.fetch(:check_passed),
+          "terminal_reason" => action.fetch(:terminal_reason)
+        }
       end
 
       def finish(result, verification_context: {})
@@ -228,10 +253,7 @@ module Tamoz
           action.fetch(:plan),
           action.fetch(:review),
           action.fetch(:observations),
-          verification_context: {
-            "configured_check_passed" => action.fetch(:check_passed),
-            "terminal_reason" => action.fetch(:terminal_reason)
-          }
+          verification_context: action_verification_context(action)
         )
       end
 
@@ -320,7 +342,16 @@ module Tamoz
       end
 
       def run_action_mode(task, discovery: nil)
-        discovery_plan, _discovery_review = discovery || accepted_plan(
+        discovery_observations = discover_action_observations(task, discovery:) do |event|
+          yield event
+        end
+        state = action_state(discovery_observations)
+        run_action_repair_loop(task, state) { |event| yield event }
+        action_result(state)
+      end
+
+      def discover_action_observations(task, discovery:)
+        discovery_plan, = discovery || accepted_plan(
           task,
           phase: :discovery,
           allowed_tools: toolbox.read_only_names,
@@ -328,121 +359,175 @@ module Tamoz
           metadata: {},
           planning_context: {}
         ) { |event| yield event }
-        discovery_observations, = execute(
+        observations, = execute(
           discovery_plan,
           phase: :discovery,
           metadata: {}
         ) { |event| yield event }
+        observations
+      end
 
-        all_observations = discovery_observations.dup
-        prior_plans = []
-        prior_reviews = []
-        seen_actions = {}
-        seen_failures = {}
-        repair_attempt = 0
-        plan = nil
-        review = nil
-        check_passed = false
-        terminal_reason = "no_check"
+      def action_state(discovery_observations)
+        {
+          all_observations: discovery_observations.dup,
+          prior_plans: [],
+          prior_reviews: [],
+          seen_actions: {},
+          seen_failures: {},
+          repair_attempt: 0,
+          plan: nil,
+          review: nil,
+          check_passed: false,
+          terminal_reason: "no_check"
+        }
+      end
 
+      def run_action_repair_loop(task, state)
         loop do
-          phase = repair_attempt.zero? ? :action : :repair
-          metadata = {"repair_attempt" => repair_attempt}
-          planning_context = {
-            "prior_action_plans" => prior_plans.map(&:to_h),
-            "prior_action_reviews" => prior_reviews,
-            "prior_action_signatures" => seen_actions.keys.sort,
-            "prior_failure_signatures" => seen_failures.keys.sort
+          context = action_iteration_context(state)
+          emit_repair_started(state, context) { |event| yield event }
+          candidate_plan, candidate_review = draft_action_plan(task, state, context) do |event|
+            yield event
+          end
+          break unless candidate_plan
+          recorded = record_action_plan(state, candidate_plan, candidate_review, context) do |event|
+            yield event
+          end
+          break unless recorded
+
+          execute_action_plan(state, context) { |event| yield event }
+          break unless resolve_action_outcome(state, context) { |event| yield event }
+        end
+      end
+
+      def action_iteration_context(state)
+        {
+          phase: state.fetch(:repair_attempt).zero? ? :action : :repair,
+          metadata: {"repair_attempt" => state.fetch(:repair_attempt)},
+          planning_context: {
+            "prior_action_plans" => state.fetch(:prior_plans).map(&:to_h),
+            "prior_action_reviews" => state.fetch(:prior_reviews),
+            "prior_action_signatures" => state.fetch(:seen_actions).keys.sort,
+            "prior_failure_signatures" => state.fetch(:seen_failures).keys.sort
           }
-          if repair_attempt.positive?
-            emit(
-              :repair_started,
-              metadata.merge("observations" => all_observations.length)
-            ) { |event| yield event }
-          end
+        }
+      end
 
-          begin
-            candidate_plan, candidate_review = accepted_plan(
-              task,
-              phase:,
-              allowed_tools: toolbox.names,
-              evidence: all_observations,
-              metadata:,
-              planning_context:
-            ) { |event| yield event }
-          rescue PlanRejectedError
-            raise if repair_attempt.zero?
+      def emit_repair_started(state, context)
+        return unless state.fetch(:repair_attempt).positive?
 
-            terminal_reason = "repair_plan_rejected"
-            emit(:repair_stopped, metadata.merge("reason" => terminal_reason)) { |event| yield event }
-            break
-          end
+        emit(
+          :repair_started,
+          context.fetch(:metadata).merge("observations" => state.fetch(:all_observations).length)
+        ) { |event| yield event }
+      end
 
-          signature = action_signature(candidate_plan)
-          if seen_actions.key?(signature)
-            terminal_reason = "repeated_action"
-            emit(
-              :repair_stopped,
-              metadata.merge("reason" => terminal_reason, "action_signature" => signature)
-            ) { |event| yield event }
-            break
-          end
-          seen_actions[signature] = true
-          plan = candidate_plan
-          review = candidate_review
-          prior_plans << plan
-          prior_reviews << review
+      def draft_action_plan(task, state, context)
+        accepted_plan(
+          task,
+          phase: context.fetch(:phase),
+          allowed_tools: toolbox.names,
+          evidence: state.fetch(:all_observations),
+          metadata: context.fetch(:metadata),
+          planning_context: context.fetch(:planning_context)
+        ) { |event| yield event }
+      rescue PlanRejectedError
+        raise if state.fetch(:repair_attempt).zero?
 
-          action_observations, check_receipt, tool_failure = execute(
-            plan,
-            phase:,
-            metadata:,
-            initial_bytes: observation_bytes(all_observations)
-          ) { |event| yield event }
-          all_observations.concat(action_observations)
+        state[:terminal_reason] = "repair_plan_rejected"
+        emit(:repair_stopped, context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason))) do |event|
+          yield event
+        end
+        nil
+      end
 
-          # A repairable tool rejection short-circuits the plan and enters the same
-          # bounded repair loop a failed configured check uses: one shared
-          # `repair_attempt` counter, one shared failure-signature set.
-          if tool_failure
-            failure_signature = tool_failure.fetch("failure_signature")
-            repeated_reason = "repeated_tool_failure"
-          elsif check_receipt.nil?
-            terminal_reason = "completed_without_check"
-            break
-          elsif check_receipt.passed?
-            check_passed = true
-            terminal_reason = "check_passed"
-            break
-          else
-            failure_signature = check_receipt.failure_signature
-            repeated_reason = "repeated_failure"
-          end
-
-          if seen_failures.key?(failure_signature)
-            terminal_reason = repeated_reason
-            emit(
-              :repair_stopped,
-              metadata.merge("reason" => terminal_reason, "failure_signature" => failure_signature)
-            ) { |event| yield event }
-            break
-          end
-          seen_failures[failure_signature] = true
-
-          if repair_attempt >= SessionNodes::MAX_REPAIR_ATTEMPTS
-            terminal_reason = "repair_attempts_exhausted"
-            emit(:repair_stopped, metadata.merge("reason" => terminal_reason)) { |event| yield event }
-            break
-          end
-          repair_attempt += 1
+      def record_action_plan(state, plan, review, context)
+        signature = action_signature(plan)
+        unless state.fetch(:seen_actions).key?(signature)
+          state.fetch(:seen_actions)[signature] = true
+          state[:plan] = plan
+          state[:review] = review
+          state.fetch(:prior_plans) << plan
+          state.fetch(:prior_reviews) << review
+          return true
         end
 
+        state[:terminal_reason] = "repeated_action"
+        emit(
+          :repair_stopped,
+          context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason), "action_signature" => signature)
+        ) { |event| yield event }
+        false
+      end
+
+      def execute_action_plan(state, context)
+        observations, check_receipt, tool_failure = execute(
+          state.fetch(:plan),
+          phase: context.fetch(:phase),
+          metadata: context.fetch(:metadata),
+          initial_bytes: observation_bytes(state.fetch(:all_observations))
+        ) { |event| yield event }
+        state.fetch(:all_observations).concat(observations)
+        state[:check_receipt] = check_receipt
+        state[:tool_failure] = tool_failure
+      end
+
+      def resolve_action_outcome(state, context)
+        # A repairable tool rejection short-circuits the plan and enters the same
+        # bounded repair loop a failed configured check uses: one shared
+        # `repair_attempt` counter, one shared failure-signature set.
+        if state[:tool_failure]
+          failure_signature = state.fetch(:tool_failure).fetch("failure_signature")
+          repeated_reason = "repeated_tool_failure"
+        elsif state[:check_receipt].nil?
+          state[:terminal_reason] = "completed_without_check"
+          return false
+        elsif state.fetch(:check_receipt).passed?
+          state[:check_passed] = true
+          state[:terminal_reason] = "check_passed"
+          return false
+        else
+          failure_signature = state.fetch(:check_receipt).failure_signature
+          repeated_reason = "repeated_failure"
+        end
+
+        continue_repair?(state, failure_signature:, repeated_reason:, context:) do |event|
+          yield event
+        end
+      end
+
+      def continue_repair?(state, failure_signature:, repeated_reason:, context:)
+        if state.fetch(:seen_failures).key?(failure_signature)
+          state[:terminal_reason] = repeated_reason
+          emit(
+            :repair_stopped,
+            context.fetch(:metadata).merge(
+              "reason" => state.fetch(:terminal_reason),
+              "failure_signature" => failure_signature
+            )
+          ) { |event| yield event }
+          return false
+        end
+        state.fetch(:seen_failures)[failure_signature] = true
+
+        if state.fetch(:repair_attempt) >= SessionNodes::MAX_REPAIR_ATTEMPTS
+          state[:terminal_reason] = "repair_attempts_exhausted"
+          emit(:repair_stopped, context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason))) do |event|
+            yield event
+          end
+          return false
+        end
+        state[:repair_attempt] += 1
+        true
+      end
+
+      def action_result(state)
         {
-          plan:,
-          review:,
-          observations: Tamoz::Core.deep_freeze(all_observations),
-          check_passed:,
-          terminal_reason:
+          plan: state.fetch(:plan),
+          review: state.fetch(:review),
+          observations: Tamoz::Core.deep_freeze(state.fetch(:all_observations)),
+          check_passed: state.fetch(:check_passed),
+          terminal_reason: state.fetch(:terminal_reason)
         }.freeze
       end
 
