@@ -91,3 +91,9 @@
   relations; the flat constraint validators were already single-purpose
   checklists at one level (left alone).
 - Status: done
+
+### capability_host.rb
+- Bar: `initialize` reads as the trust-boundary contract (map, cap, exact
+  surface, callable bindings); `context_view` reads resolve-source →
+  allowlist projection.
+- Status: done
