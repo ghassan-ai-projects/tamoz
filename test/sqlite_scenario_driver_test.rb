@@ -595,7 +595,13 @@ class SQLiteScenarioDriverTest < Minitest::Test
     selector:,
     database_path:
   )
-    load_paths = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-evals tamoz-sqlite].flat_map do |name|
+    load_paths = %w[
+      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
+      tamoz-stream tamoz-approval tamoz-comms tamoz-tools tamoz-observability tamoz-mcp
+      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
+      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
+      tamoz-sqlite tamoz-agent tamoz-evals
+    ].flat_map do |name|
       ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
     end
     descriptor = layout.descriptor

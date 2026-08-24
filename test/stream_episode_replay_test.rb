@@ -123,14 +123,6 @@ class StreamEpisodeReplayTest < Minitest::Test
     # Step 3: the full delivery — call 1 (tool turn) is a fresh journaled
     # call; call 2 hits the seeded 'running' attempt → typed unknown.
     _request, events = deliver("ambiguous", fence: 2)
-    warn "SEEDED=#{logical_key_for(tool_results: [tool_result_projection]).to_key.inspect[0,120]}"
-    begin
-      r = @composition.fetch(:app).durable_runner.fetch(thread: "episode.replay-ambiguous", request_id: "episode.replay-ambiguous.at-1.2", namespace: ["acme"])
-      st = @composition.fetch(:app).state(thread: "episode.replay-ambiguous", namespace: ["acme"], checkpoint_id: r.checkpoint_id).state.to_h
-      warn "CALLS=#{st[:model_receipts].map { |m| m["request_digest"] }.inspect}"
-    rescue => ex
-      warn "STATE-ERR #{ex.message}"
-    end
     terminal = events.map(&:terminal).compact.last
     assert_equal :TERMINAL_STATUS_FAILED, terminal.status,
                  "an ambiguous in-flight attempt terminates typed, never a blind retry"

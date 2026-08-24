@@ -48,7 +48,10 @@ class ApprovalResolveTest < Minitest::Test
     assert_equal first.scope, second.scope
     assert_equal first.session_id, second.session_id
     assert_equal first.policy_rev, second.policy_rev
-    assert_equal 1, eng.grant_store.size
+    # A once grant lives on the decision row, not in the grant store; the
+    # replay must return exactly that journaled grant.
+    assert_equal eng.decision_log.lookup_resolution(decision.id).fetch(:grant), second
+    assert_equal 0, eng.grant_store.size
   end
 
   def test_failed_resolution_leaves_no_grant_row

@@ -788,12 +788,15 @@ module Tamoz
         return unless pointer
         return if pointer.fetch(:rev) == @approval_engine.policy.policy_rev
 
-        reloaded = @approval_engine.reload(pointer.fetch(:path))
-        # The pointer carries the rev the CLI validated; adopting a document
-        # whose file drifted past that rev would bypass validate-before-activate.
-        return nil if reloaded.policy_rev != pointer.fetch(:rev)
+        # Engine#reload adopts whatever loads, so validate against the rev the
+        # CLI recorded first: a file drifted past that rev must not activate.
+        candidate = Tamoz::Approval::PolicyDocument.load(
+          pointer.fetch(:path),
+          evidence_symbols: Tamoz::Comms::AuthorityEvidence.members
+        )
+        return nil unless candidate.policy_rev == pointer.fetch(:rev)
 
-        reloaded
+        @approval_engine.reload(candidate)
       rescue Tamoz::Approval::InvalidPolicyError
         nil
       end

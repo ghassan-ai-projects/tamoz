@@ -625,9 +625,11 @@ class SQLiteRawOracleTest < Minitest::Test
     # observability, and mcp. A missing runtime dependency surfaces here as an
     # instant child LoadError, which reads as "never authorized".
     load_paths = %w[
-      tamoz-core tamoz-comms tamoz-graph tamoz-scheduler tamoz-stream
-      tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability tamoz-mcp
-      tamoz-agent tamoz-evals
+      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
+      tamoz-stream tamoz-approval tamoz-comms tamoz-tools tamoz-observability tamoz-mcp
+      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
+      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
+      tamoz-sqlite tamoz-agent tamoz-evals
     ].flat_map do |name|
       ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
     end

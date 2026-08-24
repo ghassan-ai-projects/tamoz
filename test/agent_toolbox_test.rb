@@ -1274,4 +1274,97 @@ class AgentToolboxTest < Minitest::Test
       assert_equal base.catalog_digest, same.catalog_digest
     end
   end
+
+  # D-8 Fix A (probe 10): an ABSENT digest is accepted by validate for both mutation
+  # tools — the structural review must never reject a plan whose read step has not
+  # run yet — while every other reject row above still leaves the workspace
+  # byte-identical.
+  def test_absent_digest_is_accepted_at_validate_for_mutation_tools
+    Dir.mktmpdir("tamoz-invariant17-absent") do |root|
+      File.write(File.join(root, "values.rb"), "ONE = 1\n", encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      accepted = toolbox.validate("apply_patch", {
+        "path" => "values.rb",
+        "before" => "ONE = 1",
+        "after" => "ONE = 2"
+      })
+      refute accepted.key?("expected_sha256"), "validate must not invent a digest"
+
+      accepted = toolbox.validate("create_file", {
+        "path" => "new.txt",
+        "content" => "hello\n"
+      })
+      assert_equal Digest::SHA256.hexdigest("hello\n"), accepted.fetch("expected_sha256"),
+                   "create_file resolves its content digest at validate (no observation)"
+
+      assert_equal "ONE = 1\n", File.read(File.join(root, "values.rb"))
+      refute_path_exists File.join(root, "new.txt")
+    end
+  end
+
+  def test_compound_patch_rejects_hostile_text_inside_replacement_elements_and_leaves_the_file_unchanged
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      path = File.join(root, "values.rb")
+      original = "ONE = 1\nTWO = 2\nSAME = 3\nSAME = 3\n"
+      File.write(path, original, encoding: Encoding::UTF_8)
+      digest = Digest::SHA256.hexdigest(original)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+
+      [
+        ["invalid UTF-8 replacement argument", "\xFF"],
+        ["null byte replacement argument", "a\0b"],
+        ["non-UTF-8 encoded replacement argument", "abc".b]
+      ].each do |label, hostile|
+        arguments = {
+          "path" => "values.rb",
+          "expected_sha256" => digest,
+          "replacements" => [{"before" => hostile, "after" => "x"}]
+        }
+
+        error = assert_raises(Tamoz::Agent::ToolError, label) do
+          toolbox.validate("apply_patch", arguments)
+        end
+        assert_kind_of Tamoz::Agent::ToolError, error, label
+        assert_equal original.b, File.binread(path), label
+      end
+    end
+  end
+
+  def test_create_file_rejects_a_parent_that_is_not_a_directory_and_leaves_workspace_byte_identical
+    Dir.mktmpdir("tamoz-toolbox") do |root|
+      File.write(File.join(root, "existing.txt"), "existing\n", encoding: Encoding::UTF_8)
+      toolbox = Tamoz::Agent::Toolbox.new(root:, allow_changes: true)
+      original_manifest = workspace_manifest(root)
+
+      error = assert_raises(Tamoz::Agent::ToolError) do
+        toolbox.validate("create_file", {
+          "path" => "existing.txt/new.txt",
+          "content" => "hello\n",
+          "expected_sha256" => Digest::SHA256.hexdigest("hello\n")
+        })
+      end
+      assert_kind_of Tamoz::Agent::ToolError, error
+      assert_equal original_manifest, workspace_manifest(root)
+    end
+  end
+
+  private
+
+  def workspace_manifest(root)
+    entries = Dir.glob(File.join(root, "**", "*"), File::FNM_DOTMATCH).sort
+    skip_entries = [".", ".."]
+    entries.each_with_object({}) do |entry, manifest|
+      next if entry == root || skip_entries.include?(File.basename(entry))
+
+      relative = entry.sub("#{root}/", "")
+      manifest[relative] = if File.directory?(entry)
+                             "directory"
+                           elsif File.symlink?(entry)
+                             "symlink:#{File.readlink(entry)}"
+                           else
+                             Digest::SHA256.hexdigest(File.binread(entry))
+                           end
+    end
+  end
 end
