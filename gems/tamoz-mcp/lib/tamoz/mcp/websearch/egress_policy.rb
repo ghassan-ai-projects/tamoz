@@ -211,9 +211,9 @@ module Tamoz
           if host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/)
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be a bare hostname"
           end
-          unless host == host.downcase
-            raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be lowercase"
-          end
+          return if host == host.downcase
+
+          raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be lowercase"
         end
 
         def reject_ip_literal_host!(host)

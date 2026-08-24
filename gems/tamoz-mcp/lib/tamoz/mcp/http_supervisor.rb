@@ -7,6 +7,7 @@ module Tamoz
     # Supervises one remote Streamable HTTP MCP session. It presents the same
     # small lifecycle and circuit interface as Supervisor so cataloging and
     # invocation keep the same policy gates for local and remote servers.
+    # rubocop:disable Metrics/ParameterLists
     class HttpSupervisor
       include CircuitSupervision
 
@@ -123,5 +124,6 @@ module Tamoz
         [header, value]
       end
     end
+    # rubocop:enable Metrics/ParameterLists
   end
 end
