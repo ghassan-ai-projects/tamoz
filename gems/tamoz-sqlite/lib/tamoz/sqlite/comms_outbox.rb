@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'time'
+require 'json'
 
 require_relative 'comms_store_rows'
 
@@ -18,6 +19,10 @@ module Tamoz
     class CommsOutbox
       include CommsStoreRows
 
+      # Per-request ceiling on milestone rows (plan 03, work item 2): past it,
+      # further milestones replace the newest live row instead of growing.
+      MILESTONE_BOUND = 32
+
       def initialize(adapter:)
         @adapter = adapter
       end
@@ -28,8 +33,18 @@ module Tamoz
       # reservation, so only the OTHER admitted requests' reservations count —
       # the reserved terminal answer can always append. A control row has no
       # reservation and refuses when total slots are at capacity.
+      # A journaled=0 progress milestone (markup naming a request_ref) is
+      # COALESCED instead: while the request's live pending milestone row
+      # exists it is updated in place, and once MILESTONE_BOUND milestone rows
+      # exist for the reference further ones replace that newest row — count
+      # never grows past the bound.
       def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
         transaction('comms.outbox.append') do |txn|
+          if (request_ref = milestone_request_ref(delivery_wire))
+            next :coalesced if coalesce_milestone!(txn, delivery_wire, surface_id, request_ref, now)
+            next :coalesced if replace_milestone_at_bound!(txn, delivery_wire, surface_id, request_ref, now)
+          end
+
           existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
             SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
           SQL
@@ -218,6 +233,68 @@ module Tamoz
       end
 
       private
+
+      # The request reference a progress milestone row projects, or nil for
+      # every other delivery shape. Milestones are exactly the journaled=0
+      # control rows whose markup names a milestone and a request_ref.
+      def milestone_request_ref(delivery_wire)
+        markup = delivery_wire['markup']
+        return nil unless delivery_wire.fetch('kind') == 'control' &&
+                          delivery_wire.fetch('journaled') == false && markup.is_a?(String)
+
+        facts = JSON.parse(markup)
+        facts['request_ref'] if facts.is_a?(Hash) && facts['request_ref'].is_a?(String) &&
+                                facts['milestone'].is_a?(String)
+      rescue JSON::ParserError
+        nil
+      end
+
+      def coalesce_milestone!(txn, delivery_wire, surface_id, request_ref, now)
+        live = milestone_rows(txn, surface_id, delivery_wire.fetch('conversation_id'), request_ref,
+                              "AND status = 'pending'").first
+        return false unless live
+
+        rewrite_milestone!(txn, delivery_wire, live.fetch(:delivery_id), now)
+        true
+      end
+
+      def replace_milestone_at_bound!(txn, delivery_wire, surface_id, request_ref, now)
+        rows = milestone_rows(txn, surface_id, delivery_wire.fetch('conversation_id'), request_ref, '')
+        return false if rows.length < MILESTONE_BOUND
+
+        rewrite_milestone!(txn, delivery_wire, rows.first.fetch(:delivery_id), now)
+        true
+      end
+
+      # Newest first, so `first` is always the live row a coalesce/bound
+      # update replaces.
+      def milestone_rows(txn, surface_id, conversation_id, request_ref, status_clause)
+        rows = txn.rows('comms.outbox.milestones', <<~SQL, [surface_id, conversation_id])
+          SELECT delivery_id, markup FROM tamoz_comms_outbox
+          WHERE surface_id = ? AND conversation_id = ? AND kind = 'control'
+            AND journaled = 0 AND markup IS NOT NULL #{status_clause}
+          ORDER BY created_at_ms DESC, updated_at_ms DESC, delivery_id DESC LIMIT 500
+        SQL
+        rows.filter_map do |delivery_id, markup|
+          facts = JSON.parse(markup)
+          next unless facts.is_a?(Hash) && facts['milestone'].is_a?(String) &&
+                      facts['request_ref'] == request_ref
+
+          { delivery_id:, request_ref: facts.fetch('request_ref') }
+        rescue JSON::ParserError
+          next
+        end
+      end
+
+      # The milestone text/markup move to the new fact in place; journaled
+      # stays 0 and the row keeps its status, id, and effect binding.
+      def rewrite_milestone!(txn, delivery_wire, delivery_id, now)
+        txn.execute('comms.outbox.milestone.rewrite', <<~SQL, [delivery_wire.fetch('text'), delivery_wire['markup'], delivery_wire.fetch('content_digest'), now_ms(now), delivery_id])
+          UPDATE tamoz_comms_outbox
+          SET text = ?, markup = ?, content_digest = ?, updated_at_ms = ?
+          WHERE delivery_id = ?
+        SQL
+      end
 
       def validate_rate!(value, name)
         return if value.is_a?(Numeric) && value.positive?

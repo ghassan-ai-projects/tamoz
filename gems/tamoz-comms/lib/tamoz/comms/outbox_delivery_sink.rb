@@ -3,6 +3,7 @@
 require 'time'
 require 'json'
 
+require_relative 'lifecycle'
 
 module Tamoz
   module Comms
@@ -32,12 +33,25 @@ module Tamoz
         'request.failed' => 'failed',
         'request.stopped' => 'stopped',
         'request.blocked' => 'blocked',
-        'request.approval_request' => 'approval_request'
+        'request.approval_request' => 'approval_request',
+        'request.claimed' => 'running',
+        'request.running' => 'running',
+        'request.waiting' => 'waiting',
+        'request.recovered' => 'progress',
+        'request.phase' => 'progress'
       }.freeze
 
       # Kinds whose rows the admission reservation covers (design §12): the
       # request is finished once they are durable, so the reservation releases.
       TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
+
+      # Non-terminal milestone kinds (plan 03, work items 1-2): each projects
+      # one committed worker fact onto ONE coalesced control row whose markup
+      # carries the request reference. They never reserve, never terminate,
+      # and never journal into conversation history.
+      MILESTONE_KINDS = %w[running waiting progress].freeze
+      MILESTONE_TASK_STATES = { 'running' => 'running', 'waiting' => 'waiting', 'progress' => 'running' }.freeze
+      MILESTONE_TEXT_CHARACTERS = 200
 
       def initialize(adapter:, checkpoints:, rendering: Comms::Rendering)
         @store = adapter.bind_comms_store(checkpoints)
@@ -58,6 +72,8 @@ module Tamoz
 
         surface = @store.surface(surface_id: route.fetch('surface_id'))
         return nil unless surface
+
+        return push_milestone(event, kind, route, surface) if MILESTONE_KINDS.include?(kind)
 
         if kind == 'approval_request'
           unless surface.fetch('approvals').fetch('mode') == 'deny_only'
@@ -101,6 +117,40 @@ module Tamoz
       end
 
       private
+
+      # One committed worker fact -> ONE bounded control row whose markup is
+      # the milestone projection (plan 03, behavior model 1/5). The row is
+      # journaled = 0 (invariant 11), reserves nothing (TERMINAL_KINDS are
+      # untouched), and the store coalesces it into the request's live pending
+      # row instead of streaming new messages.
+      def push_milestone(event, kind, route, surface)
+        request_id = event[:request_id]
+        return nil unless request_id
+
+        reference = Lifecycle::RequestRef.for(request_id)
+        phase = event[:phase] ? event[:phase].to_s : kind
+        text = "#{reference}: #{phase}".byteslice(0, MILESTONE_TEXT_CHARACTERS)
+        markup = JSON.generate(
+          'request_ref' => reference,
+          'milestone' => kind,
+          'phase' => phase,
+          'sequence' => Integer(event.fetch(:sequence)),
+          'task_state' => Lifecycle.task_state_for(MILESTONE_TASK_STATES.fetch(kind)),
+          'delivery_state' => Lifecycle.delivery_state_for('pending')
+        )
+        @store.append_delivery(
+          Comms::Delivery.build(
+            conversation_id: route.fetch('conversation_id'), kind: 'control',
+            text:, part_index: 0, part_count: 1, journaled: false,
+            render_version: @rendering::RENDER_VERSION,
+            content_digest: @rendering.content_digest(text),
+            identity_key: request_id.to_s, markup:
+          ).wire,
+          surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
+          now: Time.now.utc
+        )
+        :accepted
+      end
 
       # A fresh single-use prompt is stored inactive, and the control
       # delivery's markup carries the plaintext reference so the gateway can

@@ -69,6 +69,7 @@ module Tamoz
         @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
         @model_effect_keys = Set.new
         @model_effect_monitor = Mutex.new
+        @milestone_sequences = {}
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -474,6 +475,7 @@ module Tamoz
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
+        notify_milestone(thread_id, "request.claimed", occurrence_id, phase: "claimed")
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
@@ -495,6 +497,7 @@ module Tamoz
         request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
+        notify_milestone(thread_id, "request.recovered", occurrence_id, phase: "recovered")
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
       end
@@ -611,8 +614,17 @@ module Tamoz
         when :failed then settle_failed_view(view, thread_id, occurrence_id, duration_ms)
         when :blocked then settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
         when :paused then settle_paused_view(view, thread_id, occurrence_id, duration_ms)
-        else PROGRESSED
+        else
+          notify_milestone(thread_id, "request.running", occurrence_id,
+                           phase: committed_phase(view) || "running")
+          PROGRESSED
         end
+      end
+
+      # The latest engine lifecycle phase in the committed checkpoint state —
+      # a durable fact, never a guess about work still ahead.
+      def committed_phase(view)
+        Array(view.lifecycle_events).last&.fetch("phase", nil)
       end
 
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
@@ -679,6 +691,7 @@ module Tamoz
                ),
                observability: {execution_id: view.execution_id})
         else
+          notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
           notify_sink(thread_id, "request.approval_request", "Approval requested.",
                       request_id: occurrence_id, interrupts: interrupt_facts(view))
           emit_approval_request(thread_id, occurrence_id, view)
@@ -728,8 +741,24 @@ module Tamoz
       # answer. Nil-safe — an unconfigured worker delivers nothing. An
       # approval pause carries the occurrence and its exact interrupt set so
       # the rendered prompt answers THAT question (ADR-043).
-      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
-        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
+      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil, sequence: nil, phase: nil)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:,
+                                     sequence:, phase:)
+      end
+
+      # One lifecycle milestone (plan 03, work item 1): projected from a fact
+      # that has ALREADY committed, with the request's short reference and a
+      # sequence monotonic within the request. A projection failure is
+      # dropped, never fatal to the turn that produced the fact.
+      def notify_milestone(thread_id, kind, request_id, phase:)
+        return unless request_id
+
+        sequence = @monitor.synchronize do
+          @milestone_sequences[request_id] = (@milestone_sequences[request_id] || 0) + 1
+        end
+        notify_sink(thread_id, kind, nil, request_id:, sequence:, phase:)
+      rescue StandardError
+        nil
       end
 
       # What a correspondent receives when a turn completes: the VERIFIED
