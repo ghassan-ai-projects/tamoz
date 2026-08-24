@@ -274,8 +274,6 @@ module Tamoz
         raise ToolError, "tool observations exceed #{SessionNodes::MAX_OBSERVATION_BYTES} bytes"
       end
 
-      # rubocop:disable Metrics/AbcSize -- this maps the complete observation wire
-      # contract at one persistence boundary.
       def successful_observation(state, step, intent, outcome)
         value = outcome.value
         output = String(value.fetch('output'))
@@ -296,7 +294,6 @@ module Tamoz
         fields[:check] = outcome.value.fetch('check') if outcome.value.key?('check')
         SessionRecords.build('observation', **fields)
       end
-      # rubocop:enable Metrics/AbcSize
 
       def successful_receipt(step, intent, outcome)
         SessionRecords.build(
