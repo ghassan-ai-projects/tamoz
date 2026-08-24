@@ -323,5 +323,32 @@ class TamozTelegramTransportTest < Minitest::Test
     assert_equal 'callback', wire.fetch('kind')
     assert_equal 2001, wire.fetch('callback_message_id')
   end
+
+  # Plan 03 work item 6: the press carries its callback query id so the
+  # gateway can answerCallbackQuery immediately after admission.
+  def test_normalizer_extracts_the_callback_query_id
+    callback = { 'update_id' => 4,
+                 'callback_query' => { 'id' => 'q-4', 'from' => { 'id' => 111_111_11 },
+                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                      'message_id' => 2002 },
+                                       'data' => 'approve:abc' } }
+    wire = Tamoz::Telegram::Normalizer.new(surface_id: 's', surface_revision: 1).normalize(callback).wire
+
+    assert_equal 'q-4', wire.fetch('callback_query_id')
+  end
+
+  def test_envelope_round_trip_carries_the_callback_query_id
+    envelope = Comms::InboundEnvelope.new(
+      surface_id: 's', surface_revision: 1, update_id: 5, raw_payload_hash: 'a' * 64,
+      parser_version: 1, kind: 'callback', correspondent_id: 'telegram:user:11111111',
+      conversation_id: 'telegram:chat:22222222', callback_message_id: 2003,
+      callback_query_id: 'q-5', text: 'approve:abc', observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
+    )
+
+    round_tripped = Comms::InboundEnvelope.from_wire(envelope.wire)
+
+    assert_equal 'q-5', round_tripped.callback_query_id
+    assert_equal envelope.wire, round_tripped.wire
+  end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

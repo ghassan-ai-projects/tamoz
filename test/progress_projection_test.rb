@@ -122,11 +122,81 @@ class ProgressProjectionTest < Minitest::Test
     assert_equal :marked, store.mark_delivery_send_started(delivery_id:, owner: 'drainer', fence: 7, now:)
     assert_equal :marked, store.mark_delivery(
       delivery_id:, owner: 'drainer', fence: 7, status: 'succeeded',
-      receipt: { 'message_id' => 42 }, now:
+      receipt: { 'message_id' => CARD_MESSAGE_ID }, now:
     )
   end
 
+  def drain_row_without_receipt(store, delivery_id, now: Time.utc(2026, 8, 10, 12, 1, 0))
+    assert_equal :claimed, store.claim_delivery(
+      delivery_id:, owner: 'drainer', fence: 7, claim_expires_at: now + 30, now:
+    )
+    assert_equal :marked, store.mark_delivery_send_started(delivery_id:, owner: 'drainer', fence: 7, now:)
+    assert_equal :marked, store.mark_delivery(
+      delivery_id:, owner: 'drainer', fence: 7, status: 'failed', receipt: nil, now:
+    )
+  end
+
+  # Plan 03 behavior model 1: the FIRST milestone for a request_ref renders
+  # as an ordinary sendMessage card; while it is still pending the next
+  # milestone coalesces into that one row (no second send); once its receipt
+  # has bound a platform message id, every successor milestone is built as
+  # edit_message targeting THAT id, read store-side from the receipt.
+  def test_first_milestone_sends_a_card_and_receipt_bound_successors_edit_it
+    with_engine do |sink, adapter, _checkpoints|
+      store = adapter.bind_comms_store(_checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
+      first = milestone_rows(store).first
+
+      assert_equal 'send_message', first.fetch('operation')
+      assert_nil first.fetch('reply_to'), 'the first card is a normal send'
+
+      assert_equal :accepted, sink.push(milestone_event('request.waiting', sequence: 2, phase: 'waiting'))
+      pending = milestone_rows(store)
+
+      assert_equal 1, pending.length, 'no second send exists while the first card is pending'
+      assert_equal 'send_message', pending.first.fetch('operation')
+
+      drain_row(store, first.fetch('delivery_id'))
+
+      assert_equal :accepted, sink.push(milestone_event('request.recovered', sequence: 3, phase: 'recovered'))
+      successor = milestone_rows(store).find { |row| row.fetch('status') == 'pending' }
+
+      assert_equal 'edit_message', successor.fetch('operation')
+      assert_equal CARD_MESSAGE_ID, successor.fetch('reply_to'),
+                   'the successor edits the receipt-bound live card'
+
+      assert_equal :accepted, sink.push(milestone_event('request.running', sequence: 4, phase: 'action'))
+      coalesced = milestone_rows(store).find { |row| row.fetch('status') == 'pending' }
+
+      assert_equal successor.fetch('delivery_id'), coalesced.fetch('delivery_id'),
+                   'successors still coalesce into the one live edit row'
+      assert_equal CARD_MESSAGE_ID, coalesced.fetch('reply_to')
+      assert_equal 4, JSON.parse(coalesced.fetch('markup')).fetch('sequence')
+    end
+  end
+
+  # A request whose first card never got a delivery receipt keeps ordinary
+  # sends: without a bound message there is nothing honest to edit.
+  def test_successors_stay_sends_while_no_card_receipt_exists
+    with_engine do |sink, adapter, _checkpoints|
+      store = adapter.bind_comms_store(_checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(milestone_event('request.claimed', sequence: 1, phase: 'claimed'))
+      drain_row_without_receipt(store, milestone_rows(store).first.fetch('delivery_id'))
+      assert_equal :accepted, sink.push(milestone_event('request.waiting', sequence: 2, phase: 'waiting'))
+
+      live = milestone_rows(store).find { |row| row.fetch('status') == 'pending' }
+
+      assert_equal 'send_message', live.fetch('operation')
+      assert_nil live.fetch('reply_to')
+    end
+  end
+
   REQUEST_REF = 'roccurrence'
+  CARD_MESSAGE_ID = 42
 
   # ---------------------------------------------------------------- the seam
 

@@ -76,6 +76,7 @@ module Tamoz
           correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
           conversation_id: chat_id(message.fetch('chat')),
           callback_message_id: message.fetch('message_id'),
+          callback_query_id: callback['id'].to_s,
           observed_at: observed
         )
       end
@@ -113,11 +114,12 @@ module Tamoz
       # rubocop:disable Metrics/ParameterLists
       def envelope(update_id:, kind:, digest_fields:, text:, correspondent_id:,
                    conversation_id:, observed_at:, reply_to: nil,
-                   callback_message_id: nil, message_id: nil)
+                   callback_message_id: nil, callback_query_id: nil, message_id: nil)
         Comms::InboundEnvelope.new(
           surface_id: @surface_id, surface_revision: @surface_revision, update_id:,
           raw_payload_hash: digest(digest_fields), parser_version: PARSER_VERSION,
           kind:, correspondent_id:, conversation_id:, reply_to:, callback_message_id:,
+          callback_query_id:,
           message_id:, text:, observed_time: observed_at
         )
       end

@@ -222,6 +222,7 @@ module Tamoz
           admit_request(envelope, now:)
         when :decision
           resolve_callback(envelope, now:)
+          acknowledge_callback(envelope)
         when :rejected
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'rejected',
                                             reason: decision.reason.to_s, now:)
@@ -242,6 +243,20 @@ module Tamoz
       end
 
       private
+
+      # answerCallbackQuery semantics (plan 03, work item 6): the press is
+      # acknowledged as soon as its admission disposition is durable and
+      # before any turn processing, so everything after the ack — worker
+      # resume, redelivery, a crash — can never un-see it. The signal is
+      # ephemeral and best-effort by transport contract; a failed ack never
+      # fails the durable decision it followed.
+      def acknowledge_callback(envelope)
+        return unless envelope['callback_query_id']
+
+        @transport.signal(:ack, callback_query_id: envelope.fetch('callback_query_id'))
+      rescue Comms::Error, NotImplementedError
+        nil
+      end
 
       # ADR-049 (INV-A/B/D, contract §7.1): an approve is refused unless the
       # presser's evidence meets the prompt's pinned requirement — the value

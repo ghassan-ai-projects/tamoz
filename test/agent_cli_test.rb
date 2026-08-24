@@ -917,7 +917,62 @@ class AgentCLITest < Minitest::Test
     assert_raises(ArgumentError) { cli.send(:map_answer, "resolve_effect", "maybe") }
   end
 
+  # --- Phase 2 work item 3 (plan 03): per-surface milestone rendering ---
+  # Human mode keeps ONE updating progress line: carriage-return style on a
+  # TTY, a plain single line otherwise; JSON mode rides emit_event_envelope
+  # with both lifecycle axes populated from the milestone markup at data top
+  # level. The markup is the exact wave-A row document, so presentation
+  # differs while meaning does not.
+
+  def test_milestone_progress_renders_a_single_updating_line
+    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+
+    tty_err = StringIO.new
+    cli.instance_variable_set(:@err, tty_err)
+    cli.send(:render_milestone, milestone_markup, json: false, tty: true)
+
+    assert_equal "\r#{milestone_line}", tty_err.string, "a TTY rewrites one line in place"
+
+    plain_err = StringIO.new
+    cli.instance_variable_set(:@err, plain_err)
+    cli.send(:render_milestone, milestone_markup, json: false, tty: false)
+
+    assert_equal "#{milestone_line}\n", plain_err.string, "a non-TTY prints the plain line"
+  end
+
+  def test_milestone_json_envelope_carries_the_markup_state_axes
+    cli = Tamoz::Agent::CLI.new(out: StringIO.new, err: StringIO.new, input: StringIO.new, env: {})
+    out = StringIO.new
+    cli.instance_variable_set(:@out, out)
+
+    cli.send(:render_milestone, milestone_markup, json: true)
+
+    event = JSON.parse(out.string)
+    assert_equal Tamoz::Agent::CLI::ENVELOPE_SCHEMA, event.fetch("schema")
+    assert_equal "progress", event.fetch("type")
+    assert_equal "r0123456789", event["data"].fetch("request_ref")
+    assert_equal "waiting", event.fetch("task_state"), "the axis is sourced from the markup"
+    assert_equal "pending", event.fetch("delivery_state")
+    assert_equal event.dig("data", "task_state"), event.fetch("task_state")
+    assert_equal event.dig("data", "delivery_state"), event.fetch("delivery_state")
+  end
+
   private
+
+  def milestone_markup
+    {
+      "request_ref" => "r0123456789",
+      "milestone" => "waiting",
+      "phase" => "approval",
+      "sequence" => 3,
+      "task_state" => "waiting",
+      "delivery_state" => "pending"
+    }
+  end
+
+  def milestone_line
+    "r0123456789: approval (step 3, waiting/pending)"
+  end
 
   def with_cli_workspace
     Dir.mktmpdir("tamoz-cli") do |directory|

@@ -49,6 +49,47 @@ module Tamoz
     module CLIRendering
       private
 
+      # Phase 2 work item 3 (plan 03): the CLI surface's projection of one
+      # committed milestone fact — the same bounded markup document the
+      # Telegram card renders, so presentation differs while meaning does
+      # not. Human mode keeps ONE updating progress line (carriage-return on
+      # a TTY, a plain line otherwise); JSON mode rides the shared event
+      # envelope with both lifecycle axes populated from the markup.
+      def render_milestone(markup, json:, tty: @err.tty?)
+        if json
+          emit_cli_event('progress', milestone_document(markup))
+          return
+        end
+
+        render_progress_line(milestone_line(markup), tty:)
+      end
+
+      def milestone_document(markup)
+        {
+          'request_ref' => markup.fetch('request_ref'),
+          'milestone' => markup.fetch('milestone'),
+          'phase' => markup.fetch('phase'),
+          'sequence' => markup.fetch('sequence'),
+          'task_state' => markup.fetch('task_state'),
+          'delivery_state' => markup.fetch('delivery_state')
+        }
+      end
+
+      def milestone_line(markup)
+        "#{markup.fetch('request_ref')}: #{markup.fetch('phase')} " \
+          "(step #{markup.fetch('sequence')}, #{markup.fetch('task_state')}/" \
+          "#{markup.fetch('delivery_state')})"
+      end
+
+      def render_progress_line(text, tty:)
+        if tty
+          @err.print "\r#{text}"
+          @err.flush
+        else
+          @err.puts text
+        end
+      end
+
       def render_final_view(view, options:)
         if options[:json]
           emit_cli_event('cli.session', {
