@@ -71,8 +71,6 @@ module Tamoz
           .freeze
       end
 
-      private_class_method
-
       def self.validate_egress_declaration!(egress)
         unless egress.is_a?(Hash) && egress["connect_timeout_s"].is_a?(Numeric) &&
                egress["max_response_bytes"].is_a?(Integer)
@@ -92,6 +90,9 @@ module Tamoz
       def self.strip_secret_tokens(body)
         body.gsub(SECRET_TOKEN_PATTERN, "[credential-shaped content stripped]")
       end
+
+      private_class_method :validate_egress_declaration!, :utf8_body,
+                           :strip_credential_assignments, :strip_secret_tokens
     end
   end
 end

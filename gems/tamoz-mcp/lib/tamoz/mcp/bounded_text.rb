@@ -9,31 +9,30 @@ module Tamoz
     # both bound server-supplied text before it can reach a prompt or a
     # durable record, differing only in which budget applies.
     module BoundedText
-      module_function
-
-      def bound(value, max_bytes)
+      def self.bound(value, max_bytes)
         normalize_to_utf8(value)
           .then { |text| sanitize_controls(text) }
           .then { |text| truncate_to_byte_budget(text, max_bytes) }
           .freeze
       end
 
-      private
-
-      def normalize_to_utf8(value)
+      def self.normalize_to_utf8(value)
         text = String(value || "").dup.force_encoding(Encoding::UTF_8)
         text.valid_encoding? ? text : text.scrub("")
       end
+      private_class_method :normalize_to_utf8
 
-      def sanitize_controls(text)
+      def self.sanitize_controls(text)
         text.gsub(CONTROL_CHARACTER_PATTERN, " ").strip
       end
+      private_class_method :sanitize_controls
 
-      def truncate_to_byte_budget(text, max_bytes)
+      def self.truncate_to_byte_budget(text, max_bytes)
         return text if text.bytesize <= max_bytes
 
         text.byteslice(0, max_bytes).scrub("").rstrip
       end
+      private_class_method :truncate_to_byte_budget
     end
   end
 end
