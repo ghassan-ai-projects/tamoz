@@ -7,7 +7,6 @@ module Tamoz
     # Supervises one remote Streamable HTTP MCP session. It presents the same
     # small lifecycle and circuit interface as Supervisor so cataloging and
     # invocation keep the same policy gates for local and remote servers.
-    # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
     class HttpSupervisor
       include CircuitSupervision
 
@@ -28,9 +27,7 @@ module Tamoz
         random: Random.new,
         circuit_store: nil
       )
-        unless config.is_a?(ServerConfig) && config.transport == :http
-          raise ValidationError, 'HttpSupervisor requires an HTTP ServerConfig'
-        end
+        validate_config!(config)
         CircuitSupervision.validate_parameters!(circuit_threshold:, retry_budget:, base_backoff:, max_backoff:)
 
         @config = config
@@ -40,7 +37,7 @@ module Tamoz
         @base_backoff = base_backoff.to_f
         @max_backoff = max_backoff.to_f
         @random = random
-        @circuit_store = circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
+        @circuit_store = build_circuit_store(circuit_threshold, circuit_store)
         @transport = nil
         @started = false
         @retired = false
@@ -52,11 +49,7 @@ module Tamoz
       def start
         raise ProtocolError, 'MCP HTTP supervisor already started' if @started
 
-        @transport = MCP::Client::HTTP.new(
-          url: @config.endpoint,
-          headers: resolved_headers,
-          max_message_bytes: @config.budgets.max_output_bytes
-        )
+        @transport = build_transport
         @started = true
         @retired = false
         nil
@@ -99,17 +92,36 @@ module Tamoz
 
       private
 
-      def resolved_headers
-        @config.headers.merge(
-          @config.credential_headers.to_h do |header, ref|
-            value = @environ[ref]
-            raise ValidationError, "credential ref #{ref} is not set in the operator environment" if value.nil?
+      def validate_config!(config)
+        return if config.is_a?(ServerConfig) && config.transport == :http
 
-            [header, value]
-          end
+        raise ValidationError, 'HttpSupervisor requires an HTTP ServerConfig'
+      end
+
+      def build_circuit_store(circuit_threshold, circuit_store)
+        circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
+      end
+
+      def build_transport
+        MCP::Client::HTTP.new(
+          url: @config.endpoint,
+          headers: resolved_headers,
+          max_message_bytes: @config.budgets.max_output_bytes
         )
       end
+
+      def resolved_headers
+        @config.headers.merge(
+          @config.credential_headers.to_h { |header, ref| resolve_credential(header, ref) }
+        )
+      end
+
+      def resolve_credential(header, ref)
+        value = @environ[ref]
+        raise ValidationError, "credential ref #{ref} is not set in the operator environment" if value.nil?
+
+        [header, value]
+      end
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/ParameterLists, Metrics/PerceivedComplexity
   end
 end
