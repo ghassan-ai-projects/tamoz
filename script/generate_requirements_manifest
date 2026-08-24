@@ -748,6 +748,11 @@ EVIDENCE = {
                supporting: ["test/effect_identity_test.rb#test_logical_identity_is_stable_for_same_checkpointed_operation"]},
   "MIG-17" => {test: "test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies",
                supporting: ["test/sqlite_approval_stores_test.rb#test_grant_lookup_matches_rev_scope_and_session_exactly"]},
+  "MIG-18" => {test: "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
+               supporting: ["test/comms_gateway_test.rb#test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn"]},
+  "MIG-19" => {test: "test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise",
+               supporting: ["test/sqlite_comms_store_test.rb#test_reply_to_round_trips_from_append_to_transport_wire"]},
+  "MIG-20" => {test: "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters"},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",

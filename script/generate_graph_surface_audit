@@ -58,10 +58,8 @@ PRODUCT_TESTS = %w[
   test/agent_unattended_policy_test.rb
 ].freeze
 
-LIB_PATHS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent
-               tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream].map do |name|
-  "-I#{File.join(ROOT, "gems", name, "lib")}"
-end.join(":")
+LIB_PATHS = Dir[File.join(ROOT, "gems", "*", "lib")].sort
+                   .map { |path| "-I#{path}" }.join(":")
 
 # --- run the product tests with the coverage hook ---------------------------
 

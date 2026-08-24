@@ -1,6 +1,9 @@
 # Phase 0 — correctness at the boundaries
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented — boundary correctness landed in `da8853a`, three-lens
+review findings repaired in `189b38a`; evidence in
+`evidence/phase-0/implementation-review.md`. All claims are
+fixture/scripted-transport plumbing evidence.
 
 Study reference: Stage 0 (`../04-tamoz-target-architecture.md`), P0
 (`../05-comparison-and-priorities.md`), root causes #5 and #8
