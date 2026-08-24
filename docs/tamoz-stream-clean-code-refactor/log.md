@@ -45,3 +45,12 @@
 - Status: done
 - Notes: all gates keep their original evaluation order and messages;
   rescue precedence (EvidenceError re-raise before wrap) unchanged.
+
+### outcome_subscriber.rb
+- Bar: `dispatch` reads validate → state → refuse-conflict → acknowledge-
+  duplicates → unhandled-or-deliver; `parse_cloud_event` reads utf8 → parse
+  → shape → construct.
+- Status: done
+- Notes: the unsupported-version refusal stays inside the nil-handler branch
+  (after dedupe) exactly as before — hoisting it would change which events
+  raise. Digest domain literal unified into notification_digest.
