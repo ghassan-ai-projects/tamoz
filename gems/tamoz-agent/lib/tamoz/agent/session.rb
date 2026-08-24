@@ -66,7 +66,7 @@ module Tamoz
         toolbox:,
         checkpointer:,
         max_plan_attempts: 3,
-        max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
+        max_repair_attempts: SessionNodes::MAX_REPAIR_ATTEMPTS,
         approval_engine: nil,
         approval_session_id: nil,
         model_call_safety: :idempotent,

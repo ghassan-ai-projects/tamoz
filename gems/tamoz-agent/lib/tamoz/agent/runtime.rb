@@ -24,10 +24,6 @@ module Tamoz
     end
 
     class Runtime
-      MAX_TASK_BYTES = 16 * 1024
-      MAX_OBSERVATION_BYTES = 160 * 1024
-      MAX_REPAIR_ATTEMPTS = 2
-
       PLAN_SYSTEM = Deliberation::PLAN_SYSTEM
       REVIEW_SYSTEM = Deliberation::REVIEW_SYSTEM
       VERIFY_SYSTEM = Deliberation::VERIFY_SYSTEM
@@ -58,7 +54,7 @@ module Tamoz
       def run(task)
         task = String(task).strip
         raise ArgumentError, "task must not be empty" if task.empty?
-        raise ArgumentError, "task exceeds #{MAX_TASK_BYTES} bytes" if task.bytesize > MAX_TASK_BYTES
+        raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes" if task.bytesize > SessionNodes::MAX_TASK_BYTES
 
         turn_id = SecureRandom.uuid
         @correlation = {
@@ -407,7 +403,7 @@ module Tamoz
           end
           seen_failures[failure_signature] = true
 
-          if repair_attempt >= MAX_REPAIR_ATTEMPTS
+          if repair_attempt >= SessionNodes::MAX_REPAIR_ATTEMPTS
             terminal_reason = "repair_attempts_exhausted"
             emit(:repair_stopped, metadata.merge("reason" => terminal_reason)) { |event| yield event }
             break
@@ -580,7 +576,7 @@ module Tamoz
           # execution metadata binding execution to the approved state.
           effect_arguments = resolved_effect_arguments(step)
           begin
-            if total_bytes + toolbox.maximum_effect_output_bytes(step.tool) > MAX_OBSERVATION_BYTES
+            if total_bytes + toolbox.maximum_effect_output_bytes(step.tool) > SessionNodes::MAX_OBSERVATION_BYTES
               raise ToolError, "insufficient observation budget for #{step.tool}"
             end
             denial = gate_step(step, effect_arguments, event_context) { |event| yield event }
@@ -619,8 +615,8 @@ module Tamoz
 
           output = String(tool_result)
           total_bytes += output.bytesize
-          if total_bytes > MAX_OBSERVATION_BYTES
-            raise ToolError, "tool observations exceed #{MAX_OBSERVATION_BYTES} bytes"
+          if total_bytes > SessionNodes::MAX_OBSERVATION_BYTES
+            raise ToolError, "tool observations exceed #{SessionNodes::MAX_OBSERVATION_BYTES} bytes"
           end
           observation = {
             **event_context,

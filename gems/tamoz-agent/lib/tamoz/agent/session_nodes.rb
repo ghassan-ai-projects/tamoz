@@ -21,8 +21,9 @@ module Tamoz
     # The frozen graph-node façade for a durable agent session. Public node names and
     # helper visibility stay stable while each phase is owned by one collaborator.
     class SessionNodes
-      MAX_OBSERVATION_BYTES = Runtime::MAX_OBSERVATION_BYTES
-      MAX_TASK_BYTES = Runtime::MAX_TASK_BYTES
+      MAX_OBSERVATION_BYTES = 160 * 1024
+      MAX_TASK_BYTES = 16 * 1024
+      MAX_REPAIR_ATTEMPTS = 2
       # Rebinding, not a second definition: durable records keep this spelling while
       # the value is owned by `Tamoz::Agent` for the memory layer.
       BEHAVIOR_VERSION = Tamoz::Agent::BEHAVIOR_VERSION
