@@ -13,6 +13,15 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
   `agent_latency_smoke_test` (2). These are environment/pin drift, not
   decomposition regressions; they are the parity set — identical red is
   acceptable, any NEW red is not.
+  **Corrected at phase Z** (the full 234-file sequential audit under
+  `docs/audits/test-suite-audit-2026-08-24/` measured more): also
+  `websearch_egress_test` / `websearch_invocation_test` (`approval_required`
+  kwarg drift against Toolbox — verified red identically on main),
+  `p16_tools_gem_test` runtime-failure-payload case (stale `approval:` kwarg),
+  `agent_approval_boot_test` reload case (`policy_rev` NoMethodError —
+  verified red identically on main), plus kill-scenario cases that cannot
+  inject real SIGKILLs under this sandbox. Final `rake ci` failure set at HEAD
+  is exactly this union; nothing new.
 - **Quality baselines were stale on merged main:** `.rubocop_todo.yml` had zero
   entries for the post-decomposition gem paths (kernel/memory/profile/… moved
   without regenerating), and `docs/code-quality-baseline.json` had no reek
@@ -78,6 +87,26 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
 6. Docs reconciled: README component map, `documentation/architecture/gems.md`,
    this directory's outcome notes, QUALITY_PROGRAM_STATE resume point.
 7. Everything committed; history reads as one commit per stage.
+
+## Outcome (phase Z, 2026-08-24)
+
+All phases landed on `decomposition/session-capabilities-concurrency`:
+Q0 → K1 (c870f10) → PA (4f5b731 + 58896dc) → PB (8d949b3 + eec1286 +
+bdce18e PB-fixes) → C (3c98431 + a648c44 + bdce18e C-fixes). Four gems
+extracted (`tamoz-agent-capabilities`, `tamoz-agent-session`,
+`tamoz-cancellation`, `tamoz-concurrency`); the monorepo is seventeen
+gems; every lens-pair review finding is either fixed or recorded above.
+The bar: wiring complete for all four (packaging 9/449 with isolated
+installs), gates green (rubocop 828 clean, enola PASS acyclic, reek
+parity per touched file), CI parity holds against the corrected
+baseline, standalone-soundness proven for the session gem. enola
+baseline re-pinned at HEAD (bdce18e) after the structural change.
+
+Remaining known debt (deliberate, recorded): global reek ratchet still
+needs a machine where the coverage suite passes; requirements-audit full
+regen needs an unsandboxed run for kill-scenario evidence; the stale
+`approval_required`/`approval:`/`policy_rev` test drifts and MCP-handshake
+sandbox reds predate this branch and are tracked in the audit doc.
 
 ## Deviations log
 
@@ -148,6 +177,13 @@ Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-ass
 - **Audit regen environment note:** the requirements-audit generator must run
   unsandboxed — kill-matrix/raw-oracle evidence cases cannot inject real
   SIGKILLs here and regenerating under this sandbox would falsely flip
-  release-blocking rows to missing/failing. The manifest (public-api-derived)
-  was regenerated; audit files left at their committed state for phase Z on a
-  full run.
+  release-blocking rows to missing/failing. That is not hypothetical: the
+  mid-branch regen committed in 3c98431 flipped INV-21, OBJ-2, OBJ-7 and
+  PHASE-P6 to failing purely because their direct evidence cases are kill/
+  rehearsal scenarios; every runnable supporting suite passes at HEAD. Phase Z
+  restored those four rows' evidence to main's state, mirrored main's summary
+  (+17 new passing API rows from the four gems), and left this caveat instead
+  of a false LIMITATIONS disclosure. Final CI parity was verified by running
+  every failing suite on both main and HEAD; two stale test-local load-path
+  lists surfaced by the new gems were repaired (agent_ruby_llm_model_test,
+  agent_profile_machinery_test — the latter also had a duplicated line).

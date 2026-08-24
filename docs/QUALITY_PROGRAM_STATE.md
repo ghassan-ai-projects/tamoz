@@ -8,6 +8,32 @@ every slice and whenever the phase table changes.
 
 ## Checkpoint
 
+- **Date:** 2026-08-24
+- **HEAD:** `bdce18e` (branch `decomposition/session-capabilities-concurrency`) —
+  "Review fixes: PB lens pair + C lens pair"
+- **Tree:** clean after the Z commit of this branch
+- **Branch:** `decomposition/session-capabilities-concurrency`, ready to merge to
+  main. Never push/tag/release/rewrite.
+- **What this branch did:** four gem extractions per
+  `docs/gem-splits-2026-08-24/EXECUTION.md` (capabilities, session,
+  cancellation, concurrency — the monorepo is seventeen gems), each with full
+  shipped-convention wiring, lens-pair reviews, and review-fix commits. The
+  outcome section of EXECUTION.md is the authoritative summary; the corrected
+  pre-existing-red parity list lives in its ground-truth section.
+- **Resume point for the quality program:**
+  1. The global reek ratchet is still red repo-wide (stale baseline; regen
+     blocked where `RUN_COVERAGE=1 rake test` fails) — per-file reek parity was
+     enforced on every touched file this branch instead.
+  2. The requirements-audit needs one unsandboxed regeneration (kill-scenario
+     evidence cases cannot run here); manifest + audit rows are otherwise
+     consistent at HEAD.
+  3. enola baseline re-pinned at `bdce18e`; next structural change grades
+     against it.
+  4. The stale test drifts recorded in the audit doc (`approval_required` /
+     `approval:` / `policy_rev`) are good small first slices back.
+
+### Previous checkpoint
+
 - **Date:** 2026-08-07
 - **HEAD:** `25011d3` (main) — "Q3 tier-3 slice 2: extract Skills::Catalog"
 - **Tree:** clean

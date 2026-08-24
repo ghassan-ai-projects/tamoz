@@ -1,6 +1,6 @@
 # Gem map
 
-Tamoz is a monorepo of thirteen independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
+Tamoz is a monorepo of seventeen independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
 
 ## The dependency chain
 
@@ -8,8 +8,10 @@ Dependencies run one way, bottom-up: everything eventually rests on `tamoz-core`
 
 ```mermaid
 flowchart BT
-    CORE["tamoz-core<br/>values · context · secrets · JCS · pool · DR-2 circuit"]
+    CORE["tamoz-core<br/>values · context · secrets · JCS · DR-2 circuit"]
 
+    CAN["tamoz-cancellation<br/>token · trap · process group"]
+    CON["tamoz-concurrency<br/>pool · stream sink · event stream · drain"]
     G["tamoz-graph<br/>BSP engine · interrupts · replay"]
     SCH["tamoz-scheduler<br/>schedule values + store contract"]
     STR["tamoz-stream<br/>EpisodeWorker (gRPC)"]
@@ -22,6 +24,9 @@ flowchart BT
     OTEL["tamoz-otel<br/>OTLP/HTTP exporter"]
     TG["tamoz-telegram<br/>Telegram transport"]
 
+    AK["tamoz-agent-kernel<br/>deliberation substrate"]
+    ACAP["tamoz-agent-capabilities<br/>sealed capability catalog"]
+    ASESS["tamoz-agent-session<br/>the durable deliberation session"]
     AGENT["tamoz-agent<br/>agent runtime + tamoz CLI"]
 
     EVALS["tamoz-evals<br/>evaluation · release evidence"]
@@ -29,22 +34,35 @@ flowchart BT
     G --> CORE
     SCH --> CORE
     STR --> CORE
+    STR --> CAN
     T --> CORE
     M --> CORE
+    M --> CAN
     C --> CORE
     O --> CORE
+
+    CAN --> CORE
+    CON --> CAN
 
     SQL --> G
     SQL --> SCH
     SQL --> STR
     OTEL --> O
+    OTEL --> CON
     TG --> C
 
-    AGENT --> T
+    AK --> T
+    ACAP --> AK
+    ASESS --> AK
+    ASESS --> ACAP
+    AGENT --> AK
+    AGENT --> ACAP
+    AGENT --> ASESS
     AGENT --> G
     AGENT --> SQL
     AGENT --> C
     AGENT --> O
+    AGENT --> CON
 
     EVALS -. none .- AGENT
 ```

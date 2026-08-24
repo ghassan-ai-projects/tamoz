@@ -108,9 +108,9 @@ class AgentRubyLLMModelTest < Minitest::Test
     RUBY
     load_paths = %w[
       tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
-      tamoz-tools tamoz-observability tamoz-comms
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
+      tamoz-tools tamoz-observability tamoz-comms tamoz-cancellation tamoz-concurrency
+      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-capabilities tamoz-agent-session
+      tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
       tamoz-agent
     ].map do |name|
       "-I#{GEM_ROOTS.fetch(name).join('lib')}"

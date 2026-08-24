@@ -432,7 +432,7 @@ class PackagingTest < Minitest::Test
   end
 
   def test_packaged_stream_runs_with_only_core_installed
-    with_isolated_install(%w[tamoz-core tamoz-stream], "stream") do |environment|
+    with_isolated_install(%w[tamoz-core tamoz-cancellation tamoz-stream], "stream") do |environment|
       script = <<~'RUBY'
         require "json"
         require "tamoz/stream"
