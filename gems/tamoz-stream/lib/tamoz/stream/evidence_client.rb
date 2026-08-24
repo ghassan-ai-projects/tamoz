@@ -48,25 +48,16 @@ module Tamoz
                      entity_id:, max_rows: nil, max_bytes: nil,
                      time_from: nil, time_until: nil,
                      traceparent: nil, tracestate: nil)
-        if endpoint.nil? || endpoint.empty?
-          raise EvidenceError, "evidence channel requires an endpoint"
-        end
-        if capability_token.nil? || capability_token.empty?
-          raise EvidenceError, "evidence channel requires a capability token"
-        end
+        require_channel!(endpoint, capability_token)
         @endpoint = endpoint
         @capability_token = capability_token
         @episode_id = identity!(episode_id, "episode_id")
         @attempt_id = identity!(attempt_id, "attempt_id")
-        unless fence.is_a?(Integer) && fence >= 1
-          raise EvidenceError, "evidence fence must be a positive integer"
-        end
+        require_positive_fence!(fence)
         @fence = fence
         @tenant_id = identity!(tenant_id, "tenant_id")
         @situation_id = identity!(situation_id, "situation_id")
-        unless situation_version.is_a?(Integer)
-          raise EvidenceError, "evidence situation_version must be an integer"
-        end
+        require_integer_version!(situation_version)
         @situation_version = situation_version
         @entity_id = identity!(entity_id, "entity_id")
         @max_rows = max_rows
@@ -75,15 +66,7 @@ module Tamoz
         @time_until = time_until
         @traceparent = traceparent
         @tracestate = tracestate
-        # :this_channel_is_insecure — the deployment socket is the trust
-        # boundary (UDS + mTLS in production); the client never calls connect
-        # explicitly (GRPC::Core::Channel#connect segfaults on this platform).
-        # The receive cap is set explicitly: the client alone must never
-        # accept an unbounded result even when it is reached outside the host.
-        @stub = Agenticstream::Runtime::V1::EvidenceTools::Stub.new(
-          endpoint, :this_channel_is_insecure,
-          channel_args: {"grpc.max_receive_message_length" => MAX_RESULT_RECEIVE_BYTES}
-        )
+        @stub = build_stub(endpoint)
         freeze
       end
 
@@ -92,18 +75,82 @@ module Tamoz
       # hash with the parsed document under "json" and the host/truncation
       # facts alongside, so the capability host can bound it.
       def call(tool_name:, arguments:, call_id: SecureRandom.uuid, deadline: nil)
-        tool_name = String(tool_name)
-        if tool_name.empty? || tool_name.bytesize > MAX_ID_BYTES
-          raise EvidenceError, "evidence tool name must be bounded and non-empty"
-        end
+        tool_name = bounded_tool_name!(tool_name)
         call_id = identity!(call_id, "call_id")
+        document = canonical_arguments!(arguments)
+        request = build_request(call_id:, tool_name:, document:, deadline:)
+        result = call_with_deadline(request, deadline)
+        raise_on_host_refusal!(result)
+
+        parsed = verify!(result, call_id:)
+        result_hash(result, parsed)
+      rescue EvidenceError
+        raise
+      rescue StandardError => error
+        # A transport failure (unreachable host, deadline, proto error) is a
+        # typed evidence failure, never a bare GRPC class leaking into the
+        # episode surface.
+        raise EvidenceError,
+              "evidence call failed: #{error.class}"
+      end
+
+      def close = nil
+
+      private
+
+      def require_channel!(endpoint, capability_token)
+        if endpoint.nil? || endpoint.empty?
+          raise EvidenceError, "evidence channel requires an endpoint"
+        end
+        if capability_token.nil? || capability_token.empty?
+          raise EvidenceError, "evidence channel requires a capability token"
+        end
+      end
+
+      def require_positive_fence!(fence)
+        return if fence.is_a?(Integer) && fence >= 1
+
+        raise EvidenceError, "evidence fence must be a positive integer"
+      end
+
+      def require_integer_version!(version)
+        return if version.is_a?(Integer)
+
+        raise EvidenceError, "evidence situation_version must be an integer"
+      end
+
+      # :this_channel_is_insecure — the deployment socket is the trust
+      # boundary (UDS + mTLS in production); the client never calls connect
+      # explicitly (GRPC::Core::Channel#connect segfaults on this platform).
+      # The receive cap is set explicitly: the client alone must never
+      # accept an unbounded result even when it is reached outside the host.
+      def build_stub(endpoint)
+        Agenticstream::Runtime::V1::EvidenceTools::Stub.new(
+          endpoint, :this_channel_is_insecure,
+          channel_args: {"grpc.max_receive_message_length" => MAX_RESULT_RECEIVE_BYTES}
+        )
+      end
+
+      def bounded_tool_name!(tool_name)
+        name = String(tool_name)
+        raise EvidenceError, "evidence tool name must be bounded and non-empty" if name.empty? || name.bytesize > MAX_ID_BYTES
+
+        name
+      end
+
+      # The size gate measures the CANONICAL document, not the raw input.
+      def canonical_arguments!(arguments)
         document = Tamoz::Core.jcs(arguments)
         if document.bytesize > MAX_ARGUMENTS_BYTES
           raise EvidenceError,
                 "evidence arguments exceed #{MAX_ARGUMENTS_BYTES} bytes"
         end
 
-        request = Agenticstream::Runtime::V1::EvidenceToolCall.new(
+        document
+      end
+
+      def build_request(call_id:, tool_name:, document:, deadline:)
+        Agenticstream::Runtime::V1::EvidenceToolCall.new(
           protocol_version: PROTOCOL_VERSION,
           episode_id: @episode_id,
           call_id:,
@@ -124,29 +171,16 @@ module Tamoz
           time_until: @time_until,
           situation_version: @situation_version
         )
-        result = call_with_deadline(request, deadline)
-        if result.is_error
-          code = result.error_code.to_s.byteslice(0, 256)
-          code = code.gsub(/[\x00-\x1F\x7F]/, " ").strip
-          raise EvidenceError,
-                "evidence tool refused: #{code.empty? ? "error" : code}"
-        end
-
-        parsed = verify!(result, call_id:)
-        result_hash(result, parsed)
-      rescue EvidenceError
-        raise
-      rescue StandardError => error
-        # A transport failure (unreachable host, deadline, proto error) is a
-        # typed evidence failure, never a bare GRPC class leaking into the
-        # episode surface.
-        raise EvidenceError,
-              "evidence call failed: #{error.class}"
       end
 
-      def close = nil
+      def raise_on_host_refusal!(result)
+        return unless result.is_error
 
-      private
+        code = result.error_code.to_s.byteslice(0, 256)
+        code = code.gsub(/[\x00-\x1F\x7F]/, " ").strip
+        raise EvidenceError,
+              "evidence tool refused: #{code.empty? ? "error" : code}"
+      end
 
       def call_with_deadline(request, deadline)
         if deadline.nil?
@@ -164,32 +198,54 @@ module Tamoz
       # (a result that omits its own attempt/fence is refused, not tolerated —
       # the identity guarantee is not weaker than the header claims).
       def verify!(result, call_id:)
-        unless result.episode_id == @episode_id && result.call_id == call_id
-          raise EvidenceError, "evidence result identity does not match the call"
-        end
-        return if result.is_error
+        ensure_result_identity!(result, call_id)
+        return nil if result.is_error
 
-        unless result.attempt_id == @attempt_id && result.fence == @fence
-          raise EvidenceError, "evidence result identity does not match the call"
-        end
+        ensure_attempt_echo!(result)
+        verified_document(result)
+      end
 
-        if result.result_json.nil? || result.result_json.empty?
-          raise EvidenceError, "evidence result carries no document"
-        end
-        document = result.result_json.to_s.dup.force_encoding(Encoding::UTF_8)
-        unless document.valid_encoding?
-          raise EvidenceError, "evidence result is not valid UTF-8"
-        end
-        expected = Tamoz::Core.normalize_digest(result.result_sha256).to_s
-        if expected.empty?
-          raise EvidenceError, "evidence result carries no digest"
-        end
+      def ensure_result_identity!(result, call_id)
+        return if result.episode_id == @episode_id && result.call_id == call_id
+
+        raise EvidenceError, "evidence result identity does not match the call"
+      end
+
+      def ensure_attempt_echo!(result)
+        return if result.attempt_id == @attempt_id && result.fence == @fence
+
+        raise EvidenceError, "evidence result identity does not match the call"
+      end
+
+      def verified_document(result)
+        document = utf8_document!(result)
+        expected = required_digest!(result)
         parsed = Tamoz::Core.parse_json_strict(document)
         unless Tamoz::Core.verify_digest(RESULT_DIGEST_DOMAIN, parsed, expected)
           raise EvidenceError, "evidence result digest mismatch"
         end
 
         parsed
+      end
+
+      def utf8_document!(result)
+        if result.result_json.nil? || result.result_json.empty?
+          raise EvidenceError, "evidence result carries no document"
+        end
+
+        document = result.result_json.to_s.dup.force_encoding(Encoding::UTF_8)
+        unless document.valid_encoding?
+          raise EvidenceError, "evidence result is not valid UTF-8"
+        end
+
+        document
+      end
+
+      def required_digest!(result)
+        expected = Tamoz::Core.normalize_digest(result.result_sha256).to_s
+        raise EvidenceError, "evidence result carries no digest" if expected.empty?
+
+        expected
       end
 
       def result_hash(result, parsed)

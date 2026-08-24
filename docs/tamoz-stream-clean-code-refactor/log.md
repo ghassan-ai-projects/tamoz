@@ -36,3 +36,12 @@
   `emit_stream_part` now dispatches one level down instead of inlining the
   receipt→wire plumbing.
 - Status: done
+
+### evidence_client.rb
+- Bar: `call` reads validate → canonicalize → request → dial → refuse-or-
+  verify → project; `initialize` reads as a list of channel + identity
+  contracts plus stub construction; `verify!` is a three-step verification
+  ladder.
+- Status: done
+- Notes: all gates keep their original evaluation order and messages;
+  rescue precedence (EvidenceError re-raise before wrap) unchanged.
