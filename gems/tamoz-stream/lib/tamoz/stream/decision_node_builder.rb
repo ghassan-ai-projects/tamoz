@@ -15,21 +15,11 @@ module Tamoz
     # only translates that state to the wire.
     class DecisionNodeBuilder
       def call(document:, episode:, snapshot:, snapshot_digest:, allowlist:, catalog:)
-        outcome = {
-          primary_hypothesis: String(document.fetch("primary_hypothesis", "")),
-          confidence: document.fetch("raw_confidence", 0.0),
-          summary: "selected #{document.fetch("selected_code", "unknown")} " \
-                   "at confidence #{document.fetch("raw_confidence", 0.0)}",
-          facts_used: Array(document.fetch("evidence_refs")).map { |ref| {"evidence" => ref} },
-          alternatives: [],
-          recommended_intents: Array(document.fetch("recommended_intents", [])),
-          evidence_ids: Array(document.fetch("evidence_refs"))
-        }
         DecisionBuilder.build(
           envelope: EnvelopeView.new(episode:, allowlist:),
           snapshot:,
           snapshot_digest:,
-          outcome:,
+          outcome: outcome_projection(document),
           catalog:
         )
       end
@@ -46,6 +36,21 @@ module Tamoz
           summary:,
           now:
         )
+      end
+
+      private
+
+      def outcome_projection(document)
+        {
+          primary_hypothesis: String(document.fetch("primary_hypothesis", "")),
+          confidence: document.fetch("raw_confidence", 0.0),
+          summary: "selected #{document.fetch("selected_code", "unknown")} " \
+                   "at confidence #{document.fetch("raw_confidence", 0.0)}",
+          facts_used: Array(document.fetch("evidence_refs")).map { |ref| {"evidence" => ref} },
+          alternatives: [],
+          recommended_intents: Array(document.fetch("recommended_intents", [])),
+          evidence_ids: Array(document.fetch("evidence_refs"))
+        }
       end
 
       # The minimal envelope view the DecisionBuilder reads — the episode
