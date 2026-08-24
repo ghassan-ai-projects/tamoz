@@ -42,19 +42,11 @@ module Tamoz
 
         def record(signal)
           validate!(signal)
-          @mutex.synchronize do
-            if @signals.length >= @max_size
-              @drops[[signal.name, 'queue_full', 'bulk']] += 1
-              return :dropped
-            end
-
-            @signals << signal
-            :recorded
-          end
+          store(signal)
         rescue StandardError
           raise if @strict
 
-          @mutex.synchronize { @drops[['invalid', 'validation', 'bulk']] += 1 }
+          count_invalid_drop
           :dropped
         end
 
@@ -82,8 +74,34 @@ module Tamoz
           @catalog.validate_signal(signal)
         end
 
+        def store(signal)
+          @mutex.synchronize do
+            return drop_queue_full(signal) if queue_full?
+
+            @signals << signal
+            :recorded
+          end
+        end
+
+        def queue_full?
+          @signals.length >= @max_size
+        end
+
+        def drop_queue_full(signal)
+          @drops[drop_key(signal.name, 'queue_full', 'bulk')] += 1
+          :dropped
+        end
+
+        def count_invalid_drop
+          @mutex.synchronize { @drops[drop_key('invalid', 'validation', 'bulk')] += 1 }
+        end
+
+        def drop_key(name, reason, lane)
+          "#{name}:#{reason}:#{lane}"
+        end
+
         def drops_hash
-          @drops.to_h { |(name, reason, lane), count| ["#{name}:#{reason}:#{lane}", count] }
+          @drops.to_h { |(name, reason, lane), count| [drop_key(name, reason, lane), count] }
         end
       end
 
@@ -138,48 +156,16 @@ module Tamoz
         end
 
         def self.read_entries(directory, role: nil, since_ms: nil, thread_id: nil, kind: nil)
-          files = Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
-                       .reject { |file| file.end_with?('.health.json') }
-          files.sort.flat_map do |file|
-            begin
-              identity = begin
-                stat = File.stat(file)
-                "#{stat.dev}:#{stat.ino}"
-              end
-              File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
-                next if line.strip.empty?
-
-                document = JSON.parse(line)
-                next if since_ms && document.fetch('observed_at_ms', 0) < since_ms
-                next if thread_id && document.dig('correlation', 'thread_id') != thread_id
-                next if kind && document.fetch('kind') != kind.to_s
-
-                [document, "#{identity}:#{index}"]
-              rescue JSON::ParserError
-                nil
-              end
-            rescue Errno::ENOENT
-              []
-            end
-          end.sort_by { |document, _identity| document.fetch('observed_at_ms', 0) }
+          matching_files(directory, role)
+            .flat_map { |file| read_file_entries(file, since_ms:, thread_id:, kind:) }
+            .sort_by { |document, _identity| document.fetch('observed_at_ms', 0) }
         end
 
         def self.inventory(directory)
-          files = Dir.glob(File.join(File.expand_path(directory), '*.ndjson*')).reject { |file| file.end_with?('.health.json') }
-          health_files = Dir.glob(File.join(File.expand_path(directory), '*.health.json'))
-          drops = health_files.sum do |file|
-            JSON.parse(File.read(file)).fetch('drops', {}).values.sum
-          rescue JSON::ParserError, SystemCallError
-            0
-          end
-          {
-            'files' => files.length,
-            'bytes' => files.sum { |file| File.size(file) },
-            'drops' => drops,
-            'paths' => files.sort
-          }
+          ndjson_files, health_files = inventory_files(directory)
+          build_inventory(ndjson_files, health_files)
         rescue Errno::ENOENT
-          {'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => []}
+          empty_inventory
         end
 
         def initialize(directory:, role:, pid: Process.pid, catalog: Catalog, policy: ContentPolicy::NONE,
@@ -187,7 +173,7 @@ module Tamoz
                        max_file_bytes: DEFAULT_MAX_FILE_BYTES, max_files: DEFAULT_MAX_FILES,
                        flush_interval_ms: 200, strict: false)
           @directory = File.expand_path(directory)
-          @role = String(role).gsub(/[^a-zA-Z0-9_.-]/, '_')
+          @role = sanitize_role(role)
           @path = File.join(@directory, "#{@role}-#{Integer(pid)}.ndjson")
           @health_path = "#{@path}.health.json"
           @catalog = catalog
@@ -201,8 +187,7 @@ module Tamoz
           @drops = Hash.new(0)
           @io = nil
           @io_bytes = 0
-          FileUtils.mkdir_p(@directory, mode: 0o700)
-          File.chmod(0o700, @directory)
+          prepare_directory(@directory)
           super(lanes: { reserved: @reserved_size, bulk: @queue_size },
                 batch_size: @queue_size + @reserved_size,
                 interval: @flush_interval)
@@ -210,30 +195,11 @@ module Tamoz
 
         def record(signal)
           validate!(signal)
-          reserved = @catalog.safety_bearing?(signal.name)
-          synchronize do
-            if drain_closed? || drain_disabled?
-              @drops[[signal.name, drain_closed? ? 'closed' : 'disabled', reserved ? 'reserved' : 'bulk']] += 1
-              persist_health
-              next :dropped
-            end
-
-            if accept(reserved ? :reserved : :bulk, signal)
-              :recorded
-            elsif reserved
-              # Safety-bearing evidence is never dropped. The fallback is a
-              # single bounded local write; it never contacts a collector.
-              write_now(signal) ? :recorded : :dropped
-            else
-              @drops[[signal.name, 'queue_full', 'bulk']] += 1
-              persist_health
-              :dropped
-            end
-          end
+          route(signal)
         rescue StandardError
           raise if @strict
 
-          synchronize { @drops[['invalid', 'validation', 'bulk']] += 1 }
+          count_invalid_drop
           :dropped
         end
 
@@ -253,6 +219,71 @@ module Tamoz
 
         private
 
+        def self.matching_files(directory, role)
+          Dir.glob(File.join(File.expand_path(directory), "#{role || '*'}-*.ndjson*"))
+             .reject { |file| file.end_with?('.health.json') }
+             .sort
+        end
+
+        def self.read_file_entries(file, since_ms:, thread_id:, kind:)
+          identity = file_identity(file)
+          File.foreach(file, encoding: Encoding::UTF_8).with_index.filter_map do |line, index|
+            parse_entry(line, identity, index, since_ms:, thread_id:, kind:)
+          end
+        rescue Errno::ENOENT
+          []
+        end
+
+        def self.file_identity(file)
+          stat = File.stat(file)
+          "#{stat.dev}:#{stat.ino}"
+        end
+
+        def self.parse_entry(line, file_identity, index, since_ms:, thread_id:, kind:)
+          return nil if line.strip.empty?
+
+          document = JSON.parse(line)
+          return nil unless matches_filters?(document, since_ms:, thread_id:, kind:)
+
+          [document, "#{file_identity}:#{index}"]
+        rescue JSON::ParserError
+          nil
+        end
+
+        def self.matches_filters?(document, since_ms:, thread_id:, kind:)
+          return false if since_ms && document.fetch('observed_at_ms', 0) < since_ms
+          return false if thread_id && document.dig('correlation', 'thread_id') != thread_id
+          return false if kind && document.fetch('kind') != kind.to_s
+
+          true
+        end
+
+        def self.inventory_files(directory)
+          expanded = File.expand_path(directory)
+          ndjson_files = Dir.glob(File.join(expanded, '*.ndjson*')).reject { |file| file.end_with?('.health.json') }
+          health_files = Dir.glob(File.join(expanded, '*.health.json'))
+          [ndjson_files, health_files]
+        end
+
+        def self.build_inventory(ndjson_files, health_files)
+          {
+            'files' => ndjson_files.length,
+            'bytes' => ndjson_files.sum { |file| File.size(file) },
+            'drops' => health_files.sum { |file| drops_from_health_file(file) },
+            'paths' => ndjson_files.sort
+          }
+        end
+
+        def self.drops_from_health_file(file)
+          JSON.parse(File.read(file)).fetch('drops', {}).values.sum
+        rescue JSON::ParserError, SystemCallError
+          0
+        end
+
+        def self.empty_inventory
+          {'files' => 0, 'bytes' => 0, 'drops' => 0, 'paths' => []}
+        end
+
         def positive_integer(value, name)
           return value if value.is_a?(Integer) && value.positive?
 
@@ -263,6 +294,53 @@ module Tamoz
           raise ValidationError, 'record expects a Signal' unless signal.is_a?(Signal)
 
           @catalog.validate_signal(signal)
+        end
+
+        def route(signal)
+          lane = reserved?(signal) ? :reserved : :bulk
+          synchronize { accept_or_drop(signal, lane) }
+        end
+
+        def reserved?(signal)
+          @catalog.safety_bearing?(signal.name)
+        end
+
+        def accept_or_drop(signal, lane)
+          return drop_drain_closed(signal, lane) if drain_closed?
+          return drop_drain_disabled(signal, lane) if drain_disabled?
+          return :recorded if accept(lane, signal)
+          return write_reserved_now(signal) if lane == :reserved
+
+          drop_queue_full(signal)
+        end
+
+        def drop_drain_closed(signal, lane)
+          drop_signal(signal.name, 'closed', lane)
+        end
+
+        def drop_drain_disabled(signal, lane)
+          drop_signal(signal.name, 'disabled', lane)
+        end
+
+        def drop_queue_full(signal)
+          drop_signal(signal.name, 'queue_full', 'bulk')
+        end
+
+        def drop_signal(name, reason, lane)
+          @drops[drop_key(name, reason, lane)] += 1
+          persist_health
+          :dropped
+        end
+
+        def count_invalid_drop
+          synchronize { @drops[drop_key('invalid', 'validation', 'bulk')] += 1 }
+        end
+
+        def write_reserved_now(signal)
+          write_signal(signal) ? :recorded : :dropped
+        rescue StandardError
+          disable!('disk_error')
+          :dropped
         end
 
         def compose_batch
@@ -281,17 +359,17 @@ module Tamoz
           synchronize { close_io }
         end
 
-        def write_now(signal)
-          write_signal(signal)
-        rescue StandardError
-          disable!('disk_error')
-          false
-        end
-
         def write_signal(signal)
           return false if @disabled
 
-          line = JSON.generate(signal.to_h.merge('policy_digest' => signal.policy_digest || @policy_digest))
+          append_line(format_line(signal))
+        end
+
+        def format_line(signal)
+          JSON.generate(signal.to_h.merge('policy_digest' => signal.policy_digest || @policy_digest))
+        end
+
+        def append_line(line)
           rotate_if_needed(line.bytesize + 1)
           open_io
           @io.write("#{line}\n")
@@ -304,21 +382,40 @@ module Tamoz
         end
 
         def rotate_if_needed(incoming_bytes)
-          current_bytes = @io ? @io_bytes : (File.file?(path) ? File.size(path) : 0)
-          return unless current_bytes.positive? && current_bytes + incoming_bytes > @max_file_bytes
+          return unless rotation_needed?(incoming_bytes)
 
           close_io
-          if @max_files == 1
-            File.delete(path) if File.exist?(path)
-          else
-            (@max_files - 1).downto(1) do |index|
-              source = index == 1 ? path : "#{path}.#{index - 1}"
-              target = "#{path}.#{index}"
-              File.delete(target) if File.exist?(target)
-              File.rename(source, target) if File.exist?(source)
-            end
-          end
+          rotate_files
           @io_bytes = 0
+        end
+
+        def rotation_needed?(incoming_bytes)
+          current_file_bytes.positive? && current_file_bytes + incoming_bytes > @max_file_bytes
+        end
+
+        def current_file_bytes
+          @io ? @io_bytes : (File.file?(path) ? File.size(path) : 0)
+        end
+
+        def rotate_files
+          if @max_files == 1
+            delete_current_file
+          else
+            shift_numbered_backups
+          end
+        end
+
+        def delete_current_file
+          File.delete(path) if File.exist?(path)
+        end
+
+        def shift_numbered_backups
+          (@max_files - 1).downto(1) do |index|
+            source = index == 1 ? path : "#{path}.#{index - 1}"
+            target = "#{path}.#{index}"
+            File.delete(target) if File.exist?(target)
+            File.rename(source, target) if File.exist?(source)
+          end
         end
 
         def open_io
@@ -337,7 +434,7 @@ module Tamoz
 
         def disable!(reason)
           @disabled = true
-          @drops[['journal', reason, 'bulk']] += 1
+          @drops[drop_key('journal', reason, 'bulk')] += 1
           persist_health
           close_io
         end
@@ -348,8 +445,21 @@ module Tamoz
           nil
         end
 
+        def sanitize_role(role)
+          String(role).gsub(/[^a-zA-Z0-9_.-]/, '_')
+        end
+
+        def prepare_directory(directory)
+          FileUtils.mkdir_p(directory, mode: 0o700)
+          File.chmod(0o700, directory)
+        end
+
+        def drop_key(name, reason, lane)
+          "#{name}:#{reason}:#{lane}"
+        end
+
         def drops_hash
-          @drops.to_h { |(name, reason, lane), count| ["#{name}:#{reason}:#{lane}", count] }
+          @drops.to_h { |(name, reason, lane), count| [drop_key(name, reason, lane), count] }
         end
       end
     end
