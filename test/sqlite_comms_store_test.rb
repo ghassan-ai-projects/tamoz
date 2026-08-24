@@ -732,6 +732,173 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # Plan 03 work item 4: the cancellation timeline is durable. The
+  # `requested` stamp commits in the SAME transaction as the cancel enqueue,
+  # so an enqueue failure (here: a tombstoned thread) leaves neither behind.
+  def test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 91))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-91',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+
+      stamps = cancellation_stamps(store, request_id)
+
+      assert_equal epoch_ms(now + 2), stamps.fetch('requested_at_ms')
+      history = checkpoints.request_history(thread_id: 'tg.ops.abc')
+
+      assert_equal :redirect, history.last.operation
+      assert_equal 'redirect', history.last.delivery_mode.to_s
+      assert history.last.payload.fetch('task').fetch('cancel')
+
+      tombstone_thread!(store, 'tg.ops.abc')
+      assert_raises(Tamoz::CheckpointConflictError) do
+        store.request_cancellation(
+          thread_id: 'tg.ops.abc', request_id: 'cancel-92',
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 4
+        )
+      end
+
+      assert_equal epoch_ms(now + 2), cancellation_stamps(store, request_id).fetch('requested_at_ms'),
+                   'a failed enqueue must not leave a later requested stamp behind'
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc')
+                                .count { |request| request.operation == :redirect }
+    end
+  end
+
+  def test_cancellation_observed_stamp_lands_once_and_requires_a_request
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 93))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 1)
+      assert_nil cancellation_stamps(store, request_id).fetch('observed_at_ms'),
+                'an unrequested thread gains no observed stamp'
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-93',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 5)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 9)
+
+      assert_equal epoch_ms(now + 5), cancellation_stamps(store, request_id).fetch('observed_at_ms'),
+                   'first write wins; a replay never moves the stamp'
+    end
+  end
+
+  # The three timeline states render from durable rows alone: requested
+  # (stamped, unseen), terminal stopped (seen, work still open), and the
+  # aggregate conversation status carries the newest live timeline too.
+  def test_cancellation_timeline_states_derive_from_durable_rows
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 94))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      ref = "r#{request_id[0, 10]}"
+
+      bare = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 1
+      )
+
+      refute bare.key?('cancellation'), 'no cancellation key exists until a cancel was handled'
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-94',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      requested = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 3
+      ).fetch('cancellation')
+
+      assert_equal 'requested', requested.fetch('state')
+      assert_equal epoch_ms(now + 2), requested.fetch('requested_at_ms')
+      assert_equal 1_000, requested.fetch('requested_age_ms')
+      assert_nil requested.fetch('terminal')
+
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+      stopped = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
+      ).fetch('cancellation')
+
+      assert_equal 'terminal', stopped.fetch('state')
+      assert_equal 'stopped', stopped.fetch('terminal')
+      assert_equal epoch_ms(now + 6), stopped.fetch('observed_at_ms')
+
+      aggregate = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now: now + 8
+      )
+
+      assert_equal 'stopped', aggregate.dig('cancellation', 'terminal'),
+                   'the newest live timeline is exposed on the aggregate'
+    end
+  end
+
+  # A turn that settled completed keeps terminal=completed even when the
+  # runner later observed the cancellation: the status says the completion
+  # won the race, never that issued external work was stopped (invariant 9).
+  def test_a_raced_completion_stays_completed_before_effect
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 95))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      ref = "r#{request_id[0, 10]}"
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-95',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      assert_equal :released, store.complete_request(thread_id: 'tg.ops.abc', request_id:)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+
+      facts = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
+      ).fetch('cancellation')
+
+      assert_equal 'terminal', facts.fetch('state')
+      assert_equal 'completed_before_effect', facts.fetch('terminal')
+      refute_nil facts.fetch('observed_at_ms')
+
+      assert_empty(store.requests_by_reference(ref).reject do |_, _, found|
+        found == request_id
+      end, 'the operator scan resolves the same reference')
+      assert_empty store.requests_by_reference('r0000000000'), 'an unknown ref matches nothing'
+      assert_empty store.requests_by_reference('half-a-ref'), 'a malformed ref matches nothing'
+    end
+  end
+
+  def cancellation_stamps(store, request_id)
+    row = store.__send__(:read, 'test.cancellation.stamps') do |txn|
+      txn.first('test.cancellation.stamps', <<~SQL, [request_id])
+        SELECT projection_state, cancellation_requested_at_ms, cancellation_observed_at_ms
+        FROM tamoz_comms_requests WHERE request_id = ?
+      SQL
+    end
+
+    { 'projection_state' => row&.fetch(0), 'requested_at_ms' => row&.fetch(1),
+      'observed_at_ms' => row&.fetch(2) }
+  end
+
+  def tombstone_thread!(store, thread_id)
+    store.__send__(:transaction, 'test.thread.tombstone') do |tx|
+      tx.execute('test.thread.tombstone', 'UPDATE tamoz_threads SET tombstone_id = ? WHERE thread_id = ?',
+                 ["t-#{thread_id}", thread_id])
+    end
+  end
+
+  def epoch_ms(value)
+    (value.to_r * 1000).to_i
+  end
+
   # Invariant 11 (plan 02 work item 5): history inclusion requires confirmed
   # delivery — a journaled terminal answer enters only when its SAME row is
   # `succeeded`; pending and unknown stay out of every later model prompt.

@@ -436,7 +436,7 @@ module Tamoz
         when 'new'
           append_control(new_conversation(envelope), envelope, now:)
         when 'cancel'
-          append_control(cancel_request(envelope), envelope, now:)
+          append_control(cancel_request(envelope, now:), envelope, now:)
         when 'redirect'
           append_control(redirect_request(envelope, intent.arguments), envelope, now:)
         when 'whoami'
@@ -539,7 +539,8 @@ module Tamoz
           "delivery=#{delivery_word(status)}; " \
           "next=#{status.fetch('next_action', 'inspect')}; " \
           "open requests=#{status.fetch('open_requests')}." \
-          "#{reference_sentence(status)}#{queue_sentence(status)}#{reason_sentence(status)}"
+          "#{reference_sentence(status)}#{queue_sentence(status)}" \
+          "#{cancellation_sentence(status)}#{reason_sentence(status)}"
       end
 
       def request_status_text(envelope, reference)
@@ -555,7 +556,8 @@ module Tamoz
           "event=#{resolved.fetch('event_kind', 'unknown')}##{resolved.fetch('event_sequence', 'unknown')}; " \
           "effect=#{resolved.fetch('effect_state')}; " \
           "capability=#{resolved.fetch('capability_state')}; " \
-          "next=#{resolved.fetch('next_action', 'inspect')}.#{queue_sentence(resolved)}#{reason_sentence(resolved)}"
+          "next=#{resolved.fetch('next_action', 'inspect')}." \
+          "#{queue_sentence(resolved)}#{cancellation_sentence(resolved)}#{reason_sentence(resolved)}"
       end
 
       # `/new` rotates the conversation generation durably (plan 02 work item
@@ -648,7 +650,38 @@ module Tamoz
         reason ? " Reason: #{reason}." : ''
       end
 
-      def cancel_request(envelope)
+      # The cancellation timeline in external words (invariant 9): the three
+      # points render distinctly, and a raced completion says exactly that —
+      # it never claims an already-issued external call stopped.
+      def cancellation_sentence(projection)
+        facts = projection['cancellation']
+        return '' unless facts
+
+        sentence = " Cancellation requested#{age_phrase(facts['requested_age_ms'])}."
+        sentence << " Observed by the runner#{age_phrase(facts['observed_age_ms'])}." if facts['observed_at_ms']
+        case facts['terminal']
+        when 'stopped'
+          "#{sentence} Terminal: stopped at the cancellation boundary."
+        when 'completed_before_effect'
+          "#{sentence} Terminal: completed before the cancellation took effect."
+        else
+          sentence
+        end
+      end
+
+      def age_phrase(age_ms)
+        return '' if age_ms.nil?
+
+        seconds = [age_ms.to_i / 1000, 0].max
+        age = seconds < 60 ? "#{seconds}s" : (seconds < 3600 ? "#{seconds / 60}m" : "#{seconds / 3600}h")
+        " #{age} ago"
+      end
+
+      # `/cancel` stamps the durable `requested` point and enqueues the cancel
+      # operation in ONE store transaction (plan 03, work item 4): a rollback
+      # — a replayed cancel id, a tombstoned thread — leaves neither the stamp
+      # nor the queued operation behind.
+      def cancel_request(envelope, now:)
         route = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
         return 'No active work was found.' unless route
 
@@ -656,12 +689,11 @@ module Tamoz
           'tamoz.comms.command.v1',
           [surface_id, envelope.fetch('update_id'), 'cancel']
         )
-        @checkpoints.enqueue_request(
+        @store.request_cancellation(
           thread_id: route.fetch('thread_id'),
           request_id:,
-          operation: :redirect,
           payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } },
-          delivery: :redirect
+          now:
         )
         'Cancellation requested.'
       rescue Tamoz::CheckpointConflictError

@@ -28,8 +28,9 @@ module Tamoz
         when 'doctor' then comms_doctor(options, argv)
         when 'pair' then comms_pair(options, argv)
         when 'delivery' then comms_delivery(options, argv)
+        when 'request' then comms_request(options, argv)
         else
-          raise OptionParser::InvalidArgument, 'usage: tamoz comms serve|list|pair|delivery|doctor'
+          raise OptionParser::InvalidArgument, 'usage: tamoz comms serve|list|pair|delivery|request|doctor'
         end
       end
 

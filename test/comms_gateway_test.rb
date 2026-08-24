@@ -326,6 +326,15 @@ class CommsGatewayTest < Minitest::Test
       assert_equal %i[turn redirect], history.map(&:operation)
       assert history.last.payload.fetch('task').fetch('cancel')
       refute_match(%r{/cancel}, history.last.payload.inspect)
+
+      turn_request_id = history.first.request_id
+      row = store.__send__(:read, 'test.gateway.cancel.stamp') do |txn|
+        txn.first('test.gateway.cancel.stamp', <<~SQL, [turn_request_id])
+          SELECT cancellation_requested_at_ms FROM tamoz_comms_requests WHERE request_id = ?
+        SQL
+      end
+
+      refute_nil row&.first, '/cancel handling must stamp the requested point in the same commit'
     end
   end
 

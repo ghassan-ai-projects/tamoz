@@ -477,6 +477,7 @@ module Tamoz
         @runtime.open_occurrence(thread_id, occurrence_id)
         notify_milestone(thread_id, "request.claimed", occurrence_id, phase: "claimed")
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
       end
@@ -498,8 +499,36 @@ module Tamoz
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
         notify_milestone(thread_id, "request.recovered", occurrence_id, phase: "recovered")
+        observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      # The durable `observed` point of the cancellation timeline (plan 03,
+      # work item 4): the runner has consumed the cancel operation, so the
+      # stamp lands before settlement. First-write-wins in the store; a
+      # projection failure never becomes fatal to the turn that produced it.
+      def observe_cancellation(request, thread_id:)
+        return unless cancellation_redirect?(request)
+
+        comms_store&.mark_cancellation_observed(thread_id:, now: Time.now.utc)
+      rescue StandardError
+        nil
+      end
+
+      def cancellation_redirect?(request)
+        return false unless request.respond_to?(:operation) && request.operation == :redirect
+
+        task = request.respond_to?(:payload) ? request.payload : nil
+        task.is_a?(Hash) && task['task'].is_a?(Hash) && task['task']['cancel'] == true
+      end
+
+      def comms_store
+        return @comms_store if defined?(@comms_store)
+        return unless @runtime.respond_to?(:adapter) && @runtime.respond_to?(:checkpoints) &&
+                      @runtime.adapter.respond_to?(:bind_comms_store)
+
+        @comms_store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
       end
 
       def settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
