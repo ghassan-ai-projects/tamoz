@@ -21,3 +21,12 @@
 - Status: done
 - Notes: see behavior-notes.md (comma-joined port error text; rejected
   require_field! simplification).
+
+### decision_builder.rb
+- Bar: `build`/`build_decision` are pure decision-v1 schema literals;
+  `diagnose_intents` is a guard chain (fallback → admission → abstention →
+  action); `build_parameters` reads preset → episode bindings → model values.
+- Status: done
+- Notes: wire surface frozen — hash insertion order, truncation limits
+  (now named MAX_HYPOTHESIS_BYTES/MAX_SUMMARY_BYTES), exception order and
+  messages unchanged.
