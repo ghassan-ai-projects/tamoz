@@ -21,7 +21,7 @@ End-result checklist. One row per source file. Mark complete only when the file 
 | `lib/tamoz/observability/metrics.rb` | done | done | done | add_signal/add_document duplication |
 | `lib/tamoz/observability/exporter.rb` | - | - | - | contract only |
 | `lib/tamoz/observability/correlation.rb` | - | - | - | small, already clean |
-| `lib/tamoz/observability/content_policy.rb` | - | - | - | canonicalize is complex |
+| `lib/tamoz/observability/content_policy.rb` | done | done | done | canonicalize is complex |
 
 ## Behavior-change log
 
