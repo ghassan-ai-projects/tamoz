@@ -108,16 +108,7 @@ module Tamoz
           promotion_evidence: nil,
           created_at_ms: 0
         )
-          unless format_version == FORMAT_VERSION
-            raise HealingPolicyError,
-                  "HealingRule format_version #{format_version.inspect} is not supported"
-          end
-          unless version.is_a?(Integer) && version.positive?
-            raise HealingPolicyError, "rule version must be a positive integer"
-          end
-          unless minimum_confidence.is_a?(Numeric) && minimum_confidence.between?(0.0, 1.0)
-            raise HealingPolicyError, "minimum_confidence must be between 0.0 and 1.0"
-          end
+          validate_header!(format_version, version, minimum_confidence)
 
           super(
             format_version:,
@@ -298,6 +289,31 @@ module Tamoz
           raise CheckpointCorruptionError, "HealingRule is incomplete: #{error.message}"
         end
 
+        def validate_header!(format_version, version, minimum_confidence)
+          assert_format_version!(format_version)
+          assert_rule_version!(version)
+          assert_minimum_confidence!(minimum_confidence)
+        end
+
+        def assert_format_version!(format_version)
+          return if format_version == FORMAT_VERSION
+
+          raise HealingPolicyError,
+                "HealingRule format_version #{format_version.inspect} is not supported"
+        end
+
+        def assert_rule_version!(version)
+          return if version.is_a?(Integer) && version.positive?
+
+          raise HealingPolicyError, "rule version must be a positive integer"
+        end
+
+        def assert_minimum_confidence!(minimum_confidence)
+          return if minimum_confidence.is_a?(Numeric) && minimum_confidence.between?(0.0, 1.0)
+
+          raise HealingPolicyError, "minimum_confidence must be between 0.0 and 1.0"
+        end
+
         private
 
         def validate_id(value, name)
@@ -322,49 +338,77 @@ module Tamoz
           value
         end
 
-        def validate_trigger(value)
-          unless value.is_a?(Hash) && value["categories"].is_a?(Array) && !value["categories"].empty?
-            raise HealingPolicyError, "trigger must carry a non-empty categories array"
+        def validate_hash!(value, name)
+          unless value.is_a?(Hash)
+            raise HealingPolicyError, "#{name} must be an object"
           end
 
-          unknown = value.keys.map(&:to_s) - %w[categories operations tools effect_states]
-          unless unknown.empty?
-            raise HealingPolicyError, "trigger does not accept #{unknown.sort.inspect}"
-          end
-          value.fetch("categories").each do |name|
-            unless FailureRecord::CATEGORIES.include?(String(name).to_sym)
-              raise HealingPolicyError, "trigger names unknown category #{name.inspect}"
-            end
-            # P12 §3 (C10): a rule cannot even DECLARE a never-mutate class as a
-            # trigger it will remediate. The classifier short-circuits those
-            # anyway; refusing at construction makes the intent unrepresentable.
-            if FailureRecord::NEVER_MUTATE_CATEGORIES.include?(String(name).to_sym)
-              raise HealingPolicyError,
-                    "trigger names never-mutate category #{name.inspect}; the five " \
-                    "never-mutate classes are escalated, never remediated"
-            end
-          end
           value
         end
 
-        def validate_plan_review(value)
-          unless value.is_a?(Hash)
-            raise HealingPolicyError, "plan_review_policy must be an object"
+        def validate_array!(value, name)
+          unless value.is_a?(Array)
+            raise HealingPolicyError, "#{name} must be an array"
           end
 
-          missing = REQUIRED_PLAN_REVIEW_KEYS - value.keys.map(&:to_s)
-          unless missing.empty?
-            raise HealingPolicyError,
-                  "plan_review_policy is missing #{missing.sort.inspect}"
-          end
-          # Invariants 25–26: a remediation is an internally generated task, so a
-          # plan and a semantic critic review are not optional.
-          unless value["plan_required"] == true && value["semantic_critic_required"] == true
-            raise HealingPolicyError,
-                  "a remediation rule must require a plan and a semantic critic review " \
-                  "(invariants 25-26)"
-          end
           value
+        end
+
+        def validate_trigger(value)
+          assert_trigger_shape!(value)
+          assert_trigger_keys!(value)
+          validate_trigger_categories(value.fetch("categories"))
+          value
+        end
+
+        def assert_trigger_shape!(value)
+          return if value.is_a?(Hash) && value["categories"].is_a?(Array) && !value["categories"].empty?
+
+          raise HealingPolicyError, "trigger must carry a non-empty categories array"
+        end
+
+        def assert_trigger_keys!(value)
+          unknown = value.keys.map(&:to_s) - %w[categories operations tools effect_states]
+          return if unknown.empty?
+
+          raise HealingPolicyError, "trigger does not accept #{unknown.sort.inspect}"
+        end
+
+        def validate_trigger_categories(categories)
+          categories.each do |name|
+            category = String(name).to_sym
+            unless FailureRecord::CATEGORIES.include?(category)
+              raise HealingPolicyError, "trigger names unknown category #{name.inspect}"
+            end
+            next unless FailureRecord::NEVER_MUTATE_CATEGORIES.include?(category)
+
+            raise HealingPolicyError,
+                  "trigger names never-mutate category #{name.inspect}; the five " \
+                  "never-mutate classes are escalated, never remediated"
+          end
+        end
+
+        def validate_plan_review(value)
+          validate_hash!(value, "plan_review_policy")
+          assert_plan_review_keys!(value)
+          assert_plan_and_critic_required!(value)
+          value
+        end
+
+        def assert_plan_review_keys!(value)
+          missing = REQUIRED_PLAN_REVIEW_KEYS - value.keys.map(&:to_s)
+          return if missing.empty?
+
+          raise HealingPolicyError,
+                "plan_review_policy is missing #{missing.sort.inspect}"
+        end
+
+        def assert_plan_and_critic_required!(value)
+          return if value["plan_required"] == true && value["semantic_critic_required"] == true
+
+          raise HealingPolicyError,
+                "a remediation rule must require a plan and a semantic critic review " \
+                "(invariants 25-26)"
         end
 
         def validate_preconditions(value)
@@ -381,40 +425,40 @@ module Tamoz
         end
 
         def validate_steps(value)
-          unless value.is_a?(Array)
-            raise HealingPolicyError, "remediation_steps must be an array"
-          end
-          if value.length > 1
-            # Design §5/§6: ONE permitted remediation form per attempt. A rule
-            # offering a menu is a catch-all healer by another name.
-            raise HealingPolicyError,
-                  "a rule declares at most ONE remediation form (design §6)"
-          end
-
-          value.each do |step|
-            unless step.is_a?(Hash) && step.key?("form")
-              raise HealingPolicyError, "each remediation step must name a form"
-            end
-
-            form = String(step.fetch("form")).to_sym
-            unless Classification::PERMITTED_FORMS.key?(form)
-              raise HealingPolicyError,
-                    "remediation form #{form.inspect} is not one of the design §6 " \
-                    "permitted forms #{Classification::PERMITTED_FORMS.keys.inspect}"
-            end
-            unless step.key?("safety") &&
-                   FailureRecord::EFFECT_SAFETIES.include?(String(step.fetch("safety")))
-              raise HealingPolicyError,
-                    "remediation step must declare an effect safety from " \
-                    "#{FailureRecord::EFFECT_SAFETIES.inspect}"
-            end
-            # §7: unsafe effects never retry automatically.
-            if String(step.fetch("safety")) == "unsafe" && form == :bounded_retry
-              raise HealingPolicyError,
-                    "an unsafe effect may never declare bounded_retry (design §7)"
-            end
-          end
+          validate_array!(value, "remediation_steps")
+          assert_single_step!(value)
+          value.each { |step| validate_remediation_step(step) }
           value
+        end
+
+        def assert_single_step!(value)
+          return if value.length <= 1
+
+          raise HealingPolicyError,
+                "a rule declares at most ONE remediation form (design §6)"
+        end
+
+        def validate_remediation_step(step)
+          unless step.is_a?(Hash) && step.key?("form")
+            raise HealingPolicyError, "each remediation step must name a form"
+          end
+
+          form = String(step.fetch("form")).to_sym
+          unless Classification::PERMITTED_FORMS.key?(form)
+            raise HealingPolicyError,
+                  "remediation form #{form.inspect} is not one of the design §6 " \
+                  "permitted forms #{Classification::PERMITTED_FORMS.keys.inspect}"
+          end
+          unless step.key?("safety") &&
+                 FailureRecord::EFFECT_SAFETIES.include?(String(step.fetch("safety")))
+            raise HealingPolicyError,
+                  "remediation step must declare an effect safety from " \
+                  "#{FailureRecord::EFFECT_SAFETIES.inspect}"
+          end
+          return unless String(step.fetch("safety")) == "unsafe" && form == :bounded_retry
+
+          raise HealingPolicyError,
+                "an unsafe effect may never declare bounded_retry (design §7)"
         end
 
         def validate_effect_identity(value)
@@ -426,54 +470,78 @@ module Tamoz
         end
 
         def validate_budgets(value)
-          unless value.is_a?(Hash)
-            raise HealingPolicyError, "budgets must be an object"
-          end
+          validate_hash!(value, "budgets")
+          assert_budget_keys!(value)
+          validate_budget_entries!(value)
+          validate_attempt_budget!(value)
+          value
+        end
 
+        def assert_budget_keys!(value)
           missing = REQUIRED_BUDGET_KEYS - value.keys.map(&:to_s)
-          unless missing.empty?
-            raise HealingPolicyError, "budgets are missing #{missing.sort.inspect}"
-          end
+          return if missing.empty?
+
+          raise HealingPolicyError, "budgets are missing #{missing.sort.inspect}"
+        end
+
+        def validate_budget_entries!(value)
           REQUIRED_BUDGET_KEYS.each do |key|
             entry = value.fetch(key)
-            unless entry.is_a?(Numeric) && entry.finite? && entry.positive?
-              raise HealingPolicyError, "budget #{key} must be a positive finite number"
-            end
+            next if entry.is_a?(Numeric) && entry.finite? && entry.positive?
+
+            raise HealingPolicyError, "budget #{key} must be a positive finite number"
           end
-          unless value.fetch("max_attempts").is_a?(Integer)
+        end
+
+        def validate_attempt_budget!(value)
+          max_attempts = value.fetch("max_attempts")
+          unless max_attempts.is_a?(Integer)
             raise HealingPolicyError, "budget max_attempts must be an integer"
           end
-          if value.fetch("max_attempts") > EffectDispatcher::MAX_ATTEMPTS
-            raise HealingPolicyError,
-                  "budget max_attempts may not exceed the effect journal's " \
-                  "MAX_ATTEMPTS (#{EffectDispatcher::MAX_ATTEMPTS})"
-          end
-          value
+          return unless max_attempts > EffectDispatcher::MAX_ATTEMPTS
+
+          raise HealingPolicyError,
+                "budget max_attempts may not exceed the effect journal's " \
+                "MAX_ATTEMPTS (#{EffectDispatcher::MAX_ATTEMPTS})"
         end
 
         # Invariant 33 / C2. The oracle is a CONFIGURED CHECK, pinned by digest.
         def validate_oracle(value)
-          unless value.is_a?(Hash)
-            raise HealingPolicyError, "verification_oracle must be an object"
-          end
+          validate_hash!(value, "verification_oracle")
+          assert_oracle_keys!(value)
+          validate_oracle_kind!(value)
+          validate_oracle_digest!(value)
+          validate_oracle_check_name!(value)
+          value
+        end
 
+        def assert_oracle_keys!(value)
           missing = REQUIRED_ORACLE_KEYS - value.keys.map(&:to_s)
-          unless missing.empty?
-            raise HealingPolicyError, "verification_oracle is missing #{missing.sort.inspect}"
-          end
-          unless ORACLE_KINDS.include?(String(value.fetch("kind")))
-            raise HealingPolicyError,
-                  "verification_oracle kind must be one of #{ORACLE_KINDS.inspect}; " \
-                  "a model explanation is never an oracle (invariant 33)"
-          end
-          unless value.fetch("digest").is_a?(String) && value.fetch("digest").start_with?("sha256:")
-            raise HealingPolicyError, "verification_oracle digest must be a sha256: digest"
-          end
+          return if missing.empty?
+
+          raise HealingPolicyError, "verification_oracle is missing #{missing.sort.inspect}"
+        end
+
+        def validate_oracle_kind!(value)
+          return if ORACLE_KINDS.include?(String(value.fetch("kind")))
+
+          raise HealingPolicyError,
+                "verification_oracle kind must be one of #{ORACLE_KINDS.inspect}; " \
+                "a model explanation is never an oracle (invariant 33)"
+        end
+
+        def validate_oracle_digest!(value)
+          digest = value.fetch("digest")
+          return if digest.is_a?(String) && digest.start_with?("sha256:")
+
+          raise HealingPolicyError, "verification_oracle digest must be a sha256: digest"
+        end
+
+        def validate_oracle_check_name!(value)
           SafeText.normalize(
             value.fetch("check_name"), name: "verification_oracle check_name",
             max_bytes: MAX_ID_BYTES, error_class: HealingPolicyError
           )
-          value
         end
 
         def validate_compensation(value)
