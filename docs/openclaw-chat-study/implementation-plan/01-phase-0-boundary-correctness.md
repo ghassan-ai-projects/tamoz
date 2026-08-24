@@ -36,10 +36,12 @@ status projection until the fence and identity tests are green.
 
 1. **Fence the send boundary.** Ensure `DeliveryDrainer#send_row` cannot cross
    the external send boundary after its owner/fence/attempt transition fails.
-   Carry owner/fence/attempt identity into `mark_delivery` so a stale caller
-   cannot record a result for another owner's row. The current owner is the only
-   writer of a send result; a losing owner records nothing and takes no external
-   action.
+   Today `mark_delivery_send_started` returns `:not_claimable` when the fence is
+   lost and the drainer ignores that result before sending: `send_row` must
+   honor the failed fence transition by aborting before `transport.deliver`,
+   and `mark_delivery` must carry owner/fence/attempt so a stale caller cannot
+   record another owner's result. The current owner is the only writer of a send
+   result; a losing owner records nothing and takes no external action.
 2. **Complete Telegram inbound identity.** Make `Telegram::Normalizer#digest`
    hash the meaningful normalized/raw payload content, not just `update_id`, and
    have the store compare that digest on admission. Same `(surface, bot,

@@ -27,7 +27,7 @@ is what is missing; almost everything it drives already exists:
 | Scoreboard / baselines / metrics | `.../benchmark/scoreboard.rb`, `baselines.rb`, `metrics.rb`, `openclaw_publisher.rb`, `environment_loader.rb`. |
 | Scenario driver + fault gate | `.../harness/sqlite_scenario_driver.rb`, `sqlite_scenario_fault_gate.rb`. The existing oracles in `benchmark/scenario_driver.rb` (`T3M1M2Oracle`, `T3M3M4Oracle`) are change-file scenarios, not comms — they are patterns to follow, not reuse. |
 | Adapter/evidence tests | `gems/tamoz-evals` has its own suite: `openclaw_durable_cli_adapter_test.rb`, `durable_session_evidence_reader_test.rb`, `scoreboard_test.rb`, `scenario_driver_test.rb`, `comparison_executor_test.rb`. |
-| Production comms/telegram seams under test | `gems/tamoz-comms` (`admission`, `commands`, `comms_store` — the contract module; the SQLite implementation is in `gems/tamoz-sqlite` — `delivery`, `delivery_sink`, `rendering`), `gems/tamoz-telegram` (`normalizer`, `transport`, `client`), `Agent::Worker`, `DeliveryDrainer`, `CommsOutbox`. |
+| Production comms/telegram seams under test | `gems/tamoz-comms` (`admission`, `commands`, `comms_store` — the contract module; the SQLite implementation is in `gems/tamoz-sqlite` — `delivery`, `delivery_sink`, `rendering`), `gems/tamoz-telegram` (`normalizer`, `transport`, `client`), `Tamoz::Agent::Worker` (gems/tamoz-agent), `Tamoz::Comms::DeliveryDrainer` (gems/tamoz-comms), `Tamoz::SQLite::CommsOutbox` (gems/tamoz-sqlite). |
 
 What is genuinely **new**: comms-specific scenario oracles, and a Telegram surface
 executor/parity harness (the durable CLI adapter currently records Telegram as
@@ -60,7 +60,7 @@ and score deterministically. No provider, no transport, no claim.
 - **Seam:** extend `OpenclawMissionRunner` to drive a comms scenario, using
   `SQLiteScenarioRuntime` for the durable-session + fault injection, the
   `ScriptedTransport` pattern (against `Comms::Transport`) for the fake transport,
-  a deterministic provider, and the real `CommsGateway` / `Agent::Worker` /
+  a deterministic provider, and the real `Comms::Gateway` / `Agent::Worker` /
   `DeliveryDrainer` / `Agent::Session` seams. Existing tests
   (`test/comms_gateway_test.rb`, `test/comms_admission_test.rb`,
   `test/delivery_drainer_test.rb`, `test/agent_outbox_delivery_sink_test.rb`,

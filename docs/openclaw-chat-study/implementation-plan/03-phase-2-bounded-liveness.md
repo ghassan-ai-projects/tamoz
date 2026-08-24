@@ -26,9 +26,10 @@ backed by a committed durable fact.
 
 ## Design constraints (from the study, binding)
 
-- Extend `Worker#notify_sink` and `OutboxDeliverySink::EVENT_KINDS` to carry
-  claimed/running/recovered/waiting/phase milestones. Do not add a Telegram-only
-  worker loop or a second event bus (`../04` seam map).
+- Extend `Worker#notify_sink` and `OutboxDeliverySink::EVENT_KINDS`
+  (gems/tamoz-comms) to carry claimed/running/recovered/waiting/phase
+  milestones. Do not add a Telegram-only worker loop or a second event bus
+  (`../04` seam map).
 - Every projected progress event is a durable outbox effect; a Telegram edit is
   still a durable send behind `DeliveryDrainer`. Progress is bounded and coalesced
   per request and surface, and kept out of normal conversation history
