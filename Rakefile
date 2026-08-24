@@ -33,6 +33,10 @@ AUTONOMY_TESTS = ["test/autonomy_scorecard_test.rb"].freeze
 # Run `ci_full` before committing anything that touches durability, MCP,
 # packaging or the committed evidence artifacts. `ci` alone does not cover them,
 # and it says so when it finishes.
+#
+# agent_scorecard / memory_treatment_profile are scorecard/data-profile GATES,
+# not behaviour probes (49.8s / 15.7s measured); parked here so they cannot set
+# the floor of the everyday lane (docs/audits/test-suite-audit-2026-08-24 §6).
 SLOW_TESTS = %w[
   test/sqlite_raw_oracle_test.rb
   test/mcp_invocation_test.rb
@@ -41,6 +45,8 @@ SLOW_TESTS = %w[
   test/mcp_supervisor_test.rb
   test/sqlite_scenario_driver_test.rb
   test/m2_evidence_test.rb
+  test/agent_scorecard_test.rb
+  test/memory_treatment_profile_test.rb
 ].freeze
 
 # Tests that must NOT share a process pool with anything else. They build gems
@@ -98,26 +104,36 @@ LIB_FLAGS = %w[
 # Anything absent uses DEFAULT_WEIGHT — being wrong about a fast file costs
 # almost nothing, whereas being wrong about a slow one costs the whole run, so
 # only the slow tail needs to be accurate.
+#
+# Numbers re-measured 2026-08-24 (docs/audits/test-suite-audit-2026-08-24);
+# files that died early during that audit carry their healthy-run estimate.
 DEFAULT_WEIGHT = 0.7
 TEST_WEIGHTS = {
-  "test/sqlite_raw_oracle_test.rb" => 23.4,
-  "test/mcp_invocation_test.rb" => 21.1,
-  "test/agent_session_kill_matrix_test.rb" => 20.9,
+  "test/agent_scorecard_test.rb" => 49.8,
+  "test/mcp_invocation_test.rb" => 22.4,
+  "test/memory_treatment_profile_test.rb" => 15.7,
   "test/sqlite_convergence_probe_test.rb" => 16.2,
-  "test/mcp_supervisor_test.rb" => 12.1,
+  "test/agent_session_kill_matrix_test.rb" => 20.9,
+  "test/sqlite_raw_oracle_test.rb" => 23.4,
+  "test/mcp_supervisor_test.rb" => 12.6,
+  "test/m2_evidence_test.rb" => 9.2,
   "test/sqlite_scenario_driver_test.rb" => 7.3,
-  "test/m2_evidence_test.rb" => 6.4,
-  "test/websearch_invocation_test.rb" => 4.4,
-  "test/agent_scorecard_test.rb" => 3.7,
-  "test/memory_treatment_profile_test.rb" => 3.2,
-  "test/m1_evidence_test.rb" => 3.0,
-  "test/agent_mcp_capability_source_test.rb" => 2.5,
-  "test/mcp_catalog_test.rb" => 2.4,
-  "test/graph_execution_test.rb" => 2.4,
-  "test/subprocess_runner_test.rb" => 2.1,
-  "test/agent_worker_mcp_test.rb" => 1.5,
-  "test/agent_session_test.rb" => 1.5,
-  "test/agent_cli_test.rb" => 1.4
+  "test/tamoz_telegram_transport_test.rb" => 4.8,
+  "test/agent_session_operations_test.rb" => 4.2,
+  "test/websearch_invocation_test.rb" => 3.9,
+  "test/evals_verifier_test.rb" => 3.9,
+  "test/agent_unattended_policy_test.rb" => 3.9,
+  "test/agent_mcp_capability_source_test.rb" => 3.9,
+  "test/agent_worker_test.rb" => 3.7,
+  "test/benchmark_holdout_test.rb" => 3.5,
+  "test/mcp_catalog_test.rb" => 3.4,
+  "test/agent_cli_test.rb" => 3.4,
+  "test/agent_profile_machinery_test.rb" => 3.3,
+  "test/sqlite_crash_recovery_test.rb" => 2.9,
+  "test/p8_rollout_test.rb" => 2.9,
+  "test/graph_execution_test.rb" => 2.7,
+  "test/subprocess_runner_test.rb" => 2.6,
+  "test/graph_determinism_property_test.rb" => 2.4
 }.freeze
 
 # `test_fast` skips the serial tail — gem builds, artifact regeneration, the
@@ -383,14 +399,37 @@ end
 desc 'The full quality gate: architecture'
 task quality: ['quality:architecture']
 
-desc "The everyday gate — fast, and honest about what it skips"
-task ci: ['design:validate', :syntax, :test_fast, 'stream:proto:check',
+# The everyday gate has a hard wall-clock budget (docs/audits/
+# test-suite-audit-2026-08-24): if it creeps past this, the run FAILS rather
+# than quietly getting slower again. Weights rot silently; this does not.
+module CiBudget
+  BUDGET_SECONDS = 60.0
+
+  class << self
+    attr_accessor :started_at
+  end
+end
+
+desc "Record the ci start time (first prerequisite of :ci)"
+task :ci_budget_start do
+  CiBudget.started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+end
+
+desc 'The everyday gate — fast, and honest about what it skips'
+task ci: [:ci_budget_start, 'design:validate', :syntax, :test_fast, 'stream:proto:check',
           'quality:architecture'] do
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - CiBudget.started_at
   skipped = (SLOW_TESTS + SERIAL_TESTS).length
   warn ""
   warn "ci: #{skipped} slow files were NOT run (subprocess, crash-matrix, packaging,"
-  warn "    evidence). Run `rake ci_full` before committing anything touching"
-  warn "    durability, MCP, packaging or the committed evidence artifacts."
+  warn "    evidence, scorecard gates). Run `rake ci_full` before committing anything"
+  warn "    touching durability, MCP, packaging or the committed evidence artifacts."
+  puts format("ci wall clock: %.1fs (budget %.0fs)", elapsed, CiBudget::BUDGET_SECONDS)
+  unless elapsed <= CiBudget::BUDGET_SECONDS
+    abort(format("ci BUDGET EXCEEDED: %.1fs > %.0fs — the everyday gate got slow again. " \
+                 "Run `rake test_profile`, refresh TEST_WEIGHTS and re-lane the tail.",
+                 elapsed, CiBudget::BUDGET_SECONDS))
+  end
 end
 
 # The complete gate. Stays SERIAL for the test phase: a parallel run is one
