@@ -55,21 +55,23 @@ Focused suites at their landing commits (one file per command):
 9/31 · `test/agent_session_operations_test.rb` 6/36 — all green, with the
 unmodified-suite requirement held for drainer/seams across waves.
 
-Fast lane `rake ci` green after each committed wave except during one window
-where a pre-existing slow-lane flake
-(`StreamEpisodeSkillsMemoryTest#test_gate1`, timing-sensitive decision-digest
-equality under parallel load, passes solo consistently) surfaced in sharded
-runs; root-cause repair in flight and tracked separately — not caused by, nor
-touching, chat-study surfaces.
+Fast lane `rake ci` green after each committed wave. One flaky equality
+assertion elsewhere in the tree (`StreamEpisodeSkillsMemoryTest#test_gate1`,
+wall-clock stamps inside the whole-document decision digest; reproduced 1/8
+solo, 3/10 under load) was root-caused and corrected — validity stamps now
+compare apart with digest self-verification added, strictly stronger than the
+old assertion; not caused by, nor touching, chat-study surfaces.
 
-Slow-lane receipts: `ci_full` under both locales to be recorded here at
-closure once the flake fix lands; earlier full-gate attempts additionally
-exposed pre-existing branch-carried debt (stale script load paths, schema-
-oracle pin at 17, missing manifest rows MIG-18..20) — all repaired in the
-slow-lane gate repair commit with regenerated machine-produced artifacts.
+Slow-lane receipts: `LC_ALL=C rake ci_full` → exit 0 and
+`LC_ALL=en_US.UTF-8 rake ci_full` → exit 0 at branch revision `c052258`
+(fast and slow lanes green in both locales). Earlier full-gate attempts
+exposed pre-existing branch-carried debt (stale script load paths, schema
+oracle pinned at 17, missing manifest rows MIG-18..20) — repaired with
+machine-regenerated artifacts before these receipts were taken.
 
 Enola: baseline pinned before implementation (snapshot sha256 e017dfa…);
-structural check scheduled with closure receipts.
+`enola check` at the receipt revision reports no structural regression — only
+ordinary added call edges inside the corrected test file.
 
 ## Bar status
 

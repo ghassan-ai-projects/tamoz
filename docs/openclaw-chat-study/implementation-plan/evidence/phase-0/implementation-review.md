@@ -62,14 +62,20 @@ Focused suites (one file per command, exact counts at their landing commits):
 stderr and exits non-zero) · NEW real-normalizer composition test inside
 `comms_gateway_test.rb`.
 
-Slow-lane receipts: see `ci_full` note in Provenance — first full-gate passes
-are recorded at the Phase 1 closure revision rather than here (the branch's
-slow lane carried pre-existing breakage from before this work: stale script
-load paths and manifest drift; repairs land before closure receipts are taken).
+Slow-lane receipts: after the repair commits and a root-caused fix to a
+pre-existing flaky equality assertion (wall-clock stamps inside the
+whole-document decision digest), the full gate passes clean under both locales
+at branch revision `c052258`: `LC_ALL=C rake ci_full` → exit 0 and
+`LC_ALL=en_US.UTF-8 rake ci_full` → exit 0 (fast lane and slow lane both
+green in each). Earlier full-gate attempts had exposed pre-existing
+branch-carried debt — stale script load paths, a schema oracle pinned at
+version 17 against migrator 20, missing requirements-manifest rows — all
+repaired with machine-regenerated artifacts before these receipts were taken.
 
 Enola: baseline pinned before implementation work
-(`enola baseline pin`, snapshot sha256 e017dfa…); `enola check` after the Phase
-0 commit reported no structural regression (ordinary call edges only).
+(`enola baseline pin`, snapshot sha256 e017dfa…); `enola check` at the
+receipt revision reports no structural regression — only ordinary added
+call edges inside the corrected test file.
 
 ## Bar status
 
