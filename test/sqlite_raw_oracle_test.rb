@@ -620,19 +620,6 @@ class SQLiteRawOracleTest < Minitest::Test
     selector:,
     database_path:
   )
-    # The child requires tamoz/evals, whose real dependency edge reaches
-    # tamoz/agent and tamoz/sqlite — and through them comms, approval, tools,
-    # observability, and mcp. A missing runtime dependency surfaces here as an
-    # instant child LoadError, which reads as "never authorized".
-    load_paths = %w[
-      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-comms tamoz-tools tamoz-observability tamoz-mcp
-      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-sqlite tamoz-agent tamoz-evals
-    ].flat_map do |name|
-      ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
-    end
     descriptor = layout.descriptor
     script = <<~RUBY
       require "tamoz/evals"
@@ -663,6 +650,6 @@ class SQLiteRawOracleTest < Minitest::Test
       )
       abort "SQLite oracle selector returned"
     RUBY
-    [RbConfig.ruby, *load_paths, "-e", script]
+    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", script]
   end
 end

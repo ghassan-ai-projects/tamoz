@@ -7,9 +7,6 @@ require_relative "test_helper"
 # pre-move code at P16 start, except the digest matrix, which is deliberately
 # re-pinned when the catalog begins binding configured check argv values.
 class P16ToolsGemTest < Minitest::Test
-  CLEAN_LIB_PATHS = %w[tamoz-cancellation tamoz-core tamoz-tools].flat_map do |name|
-    ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
-  end.freeze
 
   # ---- P16-start reference pins (captured from the pre-move code) -----------
 
@@ -43,9 +40,9 @@ class P16ToolsGemTest < Minitest::Test
   end
 
   # ---------------------------------------------------------------------------
-  # T2: clean-env runtime harness — construct AND CALL the whole toolbox surface
-  # with only tamoz/tools + tamoz/core on the load path. A load-only extraction
-  # that left a runtime `Tamoz::Agent::*` reference would NameError here.
+  # T2: clean-env runtime harness — construct AND CALL the whole toolbox surface.
+  # Loading only tamoz/tools must not define Tamoz::Agent or load any of its
+  # files, even with every gem lib on the load path.
   # ---------------------------------------------------------------------------
 
   def test_t2_clean_env_runs_the_full_toolbox_surface_without_agent
@@ -170,7 +167,7 @@ class P16ToolsGemTest < Minitest::Test
     stdout, stderr, status = Open3.capture3(
       clean_environment,
       RbConfig.ruby,
-      *CLEAN_LIB_PATHS,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       script
     )
@@ -223,7 +220,7 @@ class P16ToolsGemTest < Minitest::Test
     stdout, stderr, status = Open3.capture3(
       clean_environment,
       RbConfig.ruby,
-      *CLEAN_LIB_PATHS,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       script
     )

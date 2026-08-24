@@ -258,15 +258,6 @@ class SQLiteConvergenceProbeTest < Minitest::Test
   end
 
   def raw_probe(scenario_id, classification, path, ledger)
-    load_paths = %w[
-      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-comms tamoz-tools tamoz-observability tamoz-mcp
-      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-sqlite tamoz-agent tamoz-evals
-    ].flat_map do |name|
-      ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
-    end
     script = <<~'RUBY'
       require "json"
       require "tamoz/evals"
@@ -293,7 +284,7 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     Open3.capture3(
       environment,
       RbConfig.ruby,
-      *load_paths,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       script
     )
