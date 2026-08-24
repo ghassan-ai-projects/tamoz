@@ -30,24 +30,24 @@ module Tamoz
       # Admit ONE inbound update AND enqueue its turn in one transaction.
       # `bot_id` is the authenticated surface identity the update arrived on;
       # `reservation` is the terminal capacity reserved at admission
-      # (invariant 57) and `capacity` is the surface's outbox_capacity — intake
-      # refuses while pending+claimed deliveries plus open reservations would
-      # meet it, so the reserved terminal answer can always append (design §12,
-      # scorecard case 16). The first durable observation of
+      # (invariant 57). Intake limits — max_open_requests, max_inbound_bytes,
+      # and outbox_capacity — are enforced from the DEPLOYED surface row:
+      # pending+claimed deliveries plus open reservations must stay under
+      # outbox_capacity, so the reserved terminal answer can always append
+      # (design §12, scorecard case 16). The first durable observation of
       # (surface, bot, update_id) anchors dedup: an exact digest replay is
       # :duplicate, and the SAME identity under a DIFFERENT payload digest is
-      # a durable integrity conflict — nothing inserted, nothing enqueued
-      # (invariant 1). Declared intake limits are enforced from the deployed
-      # surface row inside the same transaction: open requests at
-      # max_open_requests refuse :open_request_limit; text beyond
-      # max_inbound_bytes refuses :inbound_too_large.
+      # a durable integrity conflict recorded on the ONE anchor row — its
+      # conflict counter advances, nothing is enqueued (invariant 1).
       # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
         raise NotImplementedError
       end
 
-      # Record a non-request disposition durably.
-      # @return [:recorded, :duplicate]
+      # Record a non-request disposition durably. A conflicting digest for a
+      # KNOWN update identity updates that identity's single anchor row and
+      # returns :conflict_recorded.
+      # @return [:recorded, :conflict_recorded, :duplicate]
       def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
         raise NotImplementedError
       end

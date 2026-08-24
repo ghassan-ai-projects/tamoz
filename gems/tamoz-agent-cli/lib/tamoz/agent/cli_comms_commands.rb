@@ -156,6 +156,14 @@ module Tamoz
           failures.each do |failure|
             @err.puts "tamoz: comms delivery stopped on #{failure.class}: #{failure.message}"
           end
+          if outcomes.include?(:auth_failed)
+            @err.puts 'tamoz: comms gateway stopped on Comms::AuthenticationError: ' \
+                      'the channel credential was refused'
+          end
+          if outcomes.include?(:authentication_refused)
+            @err.puts 'tamoz: comms delivery stopped on Comms::AuthenticationError: ' \
+                      'the channel credential was refused'
+          end
 
           return 1 if failures.any? ||
                       outcomes.include?(:auth_failed) ||

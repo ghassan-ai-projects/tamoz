@@ -49,7 +49,10 @@ module Tamoz
       # rebuilds tamoz_comms_conversations with the /new generation counter
       # and tamoz_comms_outbox with the reply_to platform message id
       # (plan 02, work items 4 and 5).
-      CURRENT_VERSION = 19
+      # Bounded conflict amplification: 19 -> 20 through MIGRATION_20, which
+      # rebuilds tamoz_comms_inbound with the conflict counter and last
+      # conflicting digest — one durable row per update_id forever.
+      CURRENT_VERSION = 20
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1317,6 +1320,46 @@ module Tamoz
         MIGRATION_19.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # Bounded conflict amplification: 19 -> 20 through MIGRATION_20. A
+      # conflicting digest for an already-anchored update_id UPDATES the one
+      # anchor row (counter + last conflicting digest) instead of inserting
+      # another per-digest row — storage per identity is bounded forever.
+      MIGRATION_20 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_inbound
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_inbound (
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            bot_id INTEGER NOT NULL CHECK (bot_id >= 0),
+            update_id INTEGER NOT NULL CHECK (update_id >= 0),
+            raw_payload_hash TEXT NOT NULL,
+            parser_version INTEGER NOT NULL CHECK (parser_version > 0),
+            kind TEXT NOT NULL CHECK (
+              kind IN ('text', 'command', 'callback', 'membership', 'unsupported')
+            ),
+            correspondent_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            disposition TEXT NOT NULL CHECK (
+              disposition IN ('request', 'decision', 'ignored', 'rejected', 'quarantined')
+            ),
+            reason TEXT NOT NULL,
+            request_id TEXT,
+            decision_id TEXT,
+            observed_at_ms INTEGER NOT NULL,
+            ingested_at_ms INTEGER NOT NULL,
+            conflict_count INTEGER NOT NULL DEFAULT 0,
+            last_conflict_digest TEXT,
+            PRIMARY KEY (surface_id, bot_id, update_id, raw_payload_hash)
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_20_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_20.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1338,7 +1381,8 @@ module Tamoz
         16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
         17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
         18 => [MIGRATION_18, MIGRATION_18_CHECKSUM],
-        19 => [MIGRATION_19, MIGRATION_19_CHECKSUM]
+        19 => [MIGRATION_19, MIGRATION_19_CHECKSUM],
+        20 => [MIGRATION_20, MIGRATION_20_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1506,7 +1550,8 @@ module Tamoz
                        :MIGRATION_16, :MIGRATION_16_CHECKSUM,
                        :MIGRATION_17, :MIGRATION_17_CHECKSUM,
                        :MIGRATION_18, :MIGRATION_18_CHECKSUM,
-                       :MIGRATION_19, :MIGRATION_19_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_19, :MIGRATION_19_CHECKSUM,
+                       :MIGRATION_20, :MIGRATION_20_CHECKSUM, :MIGRATIONS
     end
   end
 end

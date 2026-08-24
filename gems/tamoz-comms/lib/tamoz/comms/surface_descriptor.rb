@@ -181,9 +181,10 @@ module Tamoz
           transport.fetch(:poll_timeout_s), max: 600
         )
         raise ValidationError, 'batch must be between 1 and 100' unless (1..100).cover?(transport.fetch(:batch))
-        raise ValidationError, 'max_response_bytes must be positive' unless Shapes.bounded_integer?(
-          transport.fetch(:max_response_bytes), max: 10_000_000
-        )
+        cap = transport.fetch(:max_response_bytes)
+        unless cap.nil? || Shapes.bounded_integer?(cap, max: 10_000_000)
+          raise ValidationError, 'max_response_bytes must be positive'
+        end
       end
 
       def validate_identity!(identity)

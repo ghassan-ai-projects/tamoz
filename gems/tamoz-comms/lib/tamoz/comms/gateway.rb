@@ -310,8 +310,7 @@ module Tamoz
         )
         outcome = @store.admit_and_enqueue(
           envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
-                    reservation: reservation_slots, capacity: outbox_capacity, now:,
-                    history:
+                    reservation: reservation_slots, now:, history:
         )
         if outcome == :enqueued
           append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
@@ -465,8 +464,6 @@ module Tamoz
       def poller_ttl_s = [POLLER_TTL_S, poll_timeout_s.to_f + 30.0].max
 
       def control_capacity = @descriptor.limits.fetch(:control_capacity)
-
-      def outbox_capacity = @descriptor.limits.fetch(:outbox_capacity)
 
       # Terminal slots reserved at admission (design §12, invariant 57): the
       # rendered parts plus the denial prompts a turn may need.

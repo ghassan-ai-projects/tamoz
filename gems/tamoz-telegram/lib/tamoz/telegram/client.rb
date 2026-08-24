@@ -24,7 +24,7 @@ module Tamoz
       DEFAULT_READ_TIMEOUT = 65.0
       DEFAULT_MAX_RESPONSE_BYTES = 10_000_000
 
-      attr_reader :token, :origin
+      attr_reader :token, :origin, :max_response_bytes
 
       def initialize(token, origin: DEFAULT_ORIGIN, open_timeout: DEFAULT_OPEN_TIMEOUT,
                      read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES)
@@ -32,7 +32,9 @@ module Tamoz
         @origin = origin
         @open_timeout = open_timeout
         @read_timeout = read_timeout
-        @max_response_bytes = max_response_bytes
+        # An undeclared cap IS the declared default: the client's own limit is
+        # the one source of truth for it.
+        @max_response_bytes = max_response_bytes || DEFAULT_MAX_RESPONSE_BYTES
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one HTTP boundary with timeout and
@@ -59,9 +61,15 @@ module Tamoz
         case response
         when Net::HTTPSuccess
           payload = JSON.parse(body, create_additions: false)
-          raise Comms::AuthenticationError, 'bot token refused' unless payload.fetch('ok')
+          raise Comms::ValidationError, "#{method} response carries no ok field" unless payload.key?('ok')
 
-          payload.fetch('result')
+          if payload.fetch('ok')
+            payload.fetch('result')
+          elsif payload['error_code'] == 401
+            raise Comms::AuthenticationError, 'bot token refused'
+          else
+            raise transport_failure(method, idempotent, "telegram api error #{payload['error_code']}")
+          end
         when Net::HTTPTooManyRequests
           raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(body))
         when Net::HTTPUnauthorized

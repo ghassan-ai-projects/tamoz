@@ -75,6 +75,19 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  def inbound_anchor_rows(store, update_id)
+    rows = store.__send__(:read, 'test.inbound.anchor') do |txn|
+      txn.rows('test.inbound.anchor', <<~SQL, [update_id])
+        SELECT raw_payload_hash, conflict_count, last_conflict_digest,
+               disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?
+      SQL
+    end
+    rows.map do |hash, count, last, disposition, reason|
+      { 'raw_payload_hash' => hash, 'conflict_count' => count,
+        'last_conflict_digest' => last, 'disposition' => disposition, 'reason' => reason }
+    end
+  end
+
   def request_row_count(store)
     store.__send__(:read, 'test.request.count') do |txn|
       txn.scalar('test.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
@@ -111,7 +124,7 @@ class SQLiteCommsStoreTest < Minitest::Test
   def admit(store, wire, thread: 'tg.ops.abc', now: self.now)
     store.admit_and_enqueue(
       wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-            thread:, profile_id: 'ops', reservation: 1, capacity: 500, now:
+            thread:, profile_id: 'ops', reservation: 1, now:
     )
   end
 
@@ -236,29 +249,48 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   # Invariant 1 / hard-zero list: the SAME (surface, bot, update_id) under a
-  # DIFFERENT payload digest is never silently deduplicated. Admission
-  # inserts and enqueues nothing; the conflicting bytes are recorded
-  # quarantined beside the original observation and stay refused on replay.
-  def test_same_update_id_with_a_different_digest_is_a_durable_integrity_conflict
-    with_engine do |store|
+  # DIFFERENT payload digest is never silently deduplicated — and it never
+  # grows storage either: every conflicting digest lands on the ONE anchor
+  # row as a counter plus the last conflicting digest, enqueuing nothing.
+  def test_three_conflicting_digests_share_one_anchor_row_with_counters
+    with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
-      assert_equal :enqueued, admit(store, envelope(update_id: 9))
-      conflicting = envelope(update_id: 9, raw_payload_hash: 'f' * 64)
+      first = envelope(update_id: 9, raw_payload_hash: 'a' * 64)
+      second = envelope(update_id: 9, raw_payload_hash: 'b' * 64)
+      third = envelope(update_id: 9, raw_payload_hash: 'c' * 64)
 
-      assert_equal :integrity_conflict, admit(store, conflicting)
-      assert_equal 1, request_row_count(store), 'the conflict enqueues no second request'
-
-      assert_equal :recorded, store.disposition_only(
-        conflicting, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                     disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
+      assert_equal :enqueued, admit(store, first)
+      assert_equal :integrity_conflict, admit(store, second)
+      assert_equal :conflict_recorded, store.disposition_only(
+        second, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
       )
-      assert_equal [%w[request accepted], %w[quarantined integrity_conflict]],
-                   inbound_dispositions(store, 9)
-      assert_equal :integrity_conflict, admit(store, conflicting, now: now + 2),
-                   'a replayed conflict stays a conflict, not a duplicate'
+      assert_equal :integrity_conflict, admit(store, third)
+
+      rows = inbound_anchor_rows(store, 9)
+
+      assert_equal 1, rows.length, 'conflicts are counters on the anchor row, never more rows'
+      anchor = rows.first
+
+      assert_equal('a' * 64, anchor.fetch('raw_payload_hash'))
+      assert_equal 2, anchor.fetch('conflict_count')
+      assert_equal('c' * 64, anchor.fetch('last_conflict_digest'))
+      assert_equal(%w[quarantined integrity_conflict],
+                   [anchor.fetch('disposition'), anchor.fetch('reason')])
+      assert_equal 1, request_row_count(store), 'the original request row is untouched'
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length,
+                   'no conflicting digest ever becomes a turn'
+
+      assert_equal :integrity_conflict, admit(store, third, now: now + 2),
+                   'a replayed conflict stays a conflict'
+      assert_equal 2, inbound_anchor_rows(store, 9).first.fetch('conflict_count'),
+                   'the same conflicting bytes count once'
+
+      assert_equal :duplicate, admit(store, first, now: now + 3),
+                   'the original digest still replays as a duplicate'
       assert_equal :duplicate, store.disposition_only(
-        conflicting, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                     disposition: 'quarantined', reason: 'integrity_conflict', now: now + 3
+        third, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+               disposition: 'quarantined', reason: 'integrity_conflict', now: now + 4
       ), 're-recording the identical quarantine dedups'
     end
   end
@@ -287,6 +319,40 @@ class SQLiteCommsStoreTest < Minitest::Test
 
       assert_empty checkpoints.request_history(thread_id: 'tg.ops.abc')
       assert_empty inbound_dispositions(store, 13), 'the refusal inserts no inbound row'
+    end
+  end
+
+  # Declared intake limits are inclusive bounds: text AT max_inbound_bytes
+  # admits, and the request AT open-request capacity fills the last slot —
+  # only the NEXT one refuses.
+  def test_exact_boundary_limits_admit_at_the_line_and_refuse_the_next
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_inbound_bytes: 32, max_open_requests: 2 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 71, text: 'x' * 32)),
+                   'text exactly at max_inbound_bytes is within the bound'
+      assert_equal :enqueued, admit(store, envelope(update_id: 72)), 'the second slot fills'
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 73)),
+                   'the request past max_open_requests refuses'
+      assert_equal 2, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+    end
+  end
+
+  # A terminal projection releases its reservation (design §12): once the
+  # request completes, its slot returns and the previously-refused admission
+  # goes through.
+  def test_a_completed_request_releases_its_slot_for_the_next_admission
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 81))
+      request_id = checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 82))
+
+      assert_equal :released, store.complete_request(thread_id: 'tg.ops.abc', request_id: request_id)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 82)),
+                   'the freed slot lets the next admission through'
     end
   end
 
@@ -333,7 +399,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
-                                                      reservation: 1, capacity: 500, now:
+                                                      reservation: 1, now:
       )
       answer = delivery(text: 'done, it is blue')
       store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
@@ -346,7 +412,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
                                                        bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
-                                                       reservation: 1, capacity: 500, now: now + 2
+                                                       reservation: 1, now: now + 2
       )
 
       history = store.conversation_history(
@@ -373,7 +439,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
                   thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now:, history:
+                  now:, history:
       )
 
       payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload

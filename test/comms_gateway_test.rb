@@ -102,6 +102,19 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def stored_hashes(store, update_id)
+    store.__send__(:read, 'test.gateway.hash.read') do |txn|
+      txn.rows('test.gateway.hash.read', 'SELECT raw_payload_hash FROM tamoz_comms_inbound WHERE update_id = ?',
+               [update_id]).map(&:first)
+    end
+  end
+
+  def membership_update(id, chat_id:)
+    { 'update_id' => id,
+      'my_chat_member' => { 'chat' => { 'id' => chat_id, 'type' => 'private' },
+                            'from' => { 'id' => 111_111_11 } } }
+  end
+
   def request_row_count(store)
     store.__send__(:read, 'test.gateway.request.count') do |txn|
       txn.scalar('test.gateway.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
@@ -382,7 +395,9 @@ class CommsGatewayTest < Minitest::Test
 
   # Invariant 1 / hard-zero list: the same (surface, bot, update_id) under
   # different payload bytes is a durable quarantine with one bounded reply —
-  # never a silent duplicate, never a second turn.
+  # never a silent duplicate, never a second turn. The conflict lands on the
+  # ONE anchor row (counter + last conflicting digest), so the identity reads
+  # as quarantined, not as two rows.
   def test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
@@ -394,8 +409,7 @@ class CommsGatewayTest < Minitest::Test
 
       thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
 
-      assert_equal [%w[request accepted], %w[quarantined integrity_conflict]],
-                   inbound_dispositions(store, 300)
+      assert_equal [%w[quarantined integrity_conflict]], inbound_dispositions(store, 300)
       assert_equal 1, request_row_count(store), 'the conflict enqueues no second request'
       assert_equal 1, checkpoints.request_history(thread_id: thread).length,
                    'the conflicting update never becomes a turn'
@@ -405,6 +419,44 @@ class CommsGatewayTest < Minitest::Test
       assert_equal 1, replies.length
       assert_equal 'This update conflicts with an earlier message carrying the same identity. ' \
                    'An operator can review it.', replies.first.fetch('text')
+    end
+  end
+
+  # The digest admission dedups on is the PRODUCTION normalizer's digest of
+  # the raw Bot-API update — proven end to end: the stored raw_payload_hash
+  # equals Normalizer.normalize(update)'s own, and mutating any meaningful
+  # field under the same update_id (text here, chat id for membership) is a
+  # detectable integrity conflict.
+  def test_admission_binds_the_real_normalizer_digest_and_detects_mutations_end_to_end
+    with_gateway do |_gateway, _transport, store|
+      seed_binding(store)
+      normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      admit = lambda do |wire|
+        store.admit_and_enqueue(
+          wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                thread:, profile_id: 'ops', reservation: 9, now: Time.utc(2026, 8, 10, 12, 0, 0)
+        )
+      end
+
+      original = normalizer.normalize(update(600, text: 'original bytes')).wire
+
+      assert_equal :enqueued, admit.call(original)
+      assert_equal [original.fetch('raw_payload_hash')], stored_hashes(store, 600),
+                   'the stored digest is the production normalizer\'s'
+
+      mutated = normalizer.normalize(update(600, text: 'conflicting bytes')).wire
+
+      refute_equal original.fetch('raw_payload_hash'), mutated.fetch('raw_payload_hash')
+
+      assert_equal :integrity_conflict, admit.call(mutated)
+
+      membership_first = normalizer.normalize(membership_update(601, chat_id: 111_111)).wire
+      membership_second = normalizer.normalize(membership_update(601, chat_id: 222_222)).wire
+
+      refute_equal membership_first.fetch('raw_payload_hash'),
+                   membership_second.fetch('raw_payload_hash'),
+                   'membership digests are sensitive to the chat id under one update_id'
     end
   end
 

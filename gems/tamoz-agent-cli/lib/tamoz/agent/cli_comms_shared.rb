@@ -77,7 +77,7 @@ module Tamoz
             credential_ref: entry.fetch('credential_ref'),
             poll_timeout_s: entry.dig('transport', 'poll_timeout_s') || 30,
             batch: entry.dig('transport', 'batch') || 50,
-            max_response_bytes: entry.dig('transport', 'max_response_bytes') || 262_144
+            max_response_bytes: entry.dig('transport', 'max_response_bytes')
           }),
           identity: symbolize({ expected_bot_id: entry.fetch('expected_bot_id'),
                                 bot_username: entry['bot_username'] }.compact),
@@ -118,7 +118,7 @@ module Tamoz
       # transport is optional). A missing adapter is a typed error, never a
       # boot failure.
       def build_transport(descriptor, token)
-        client = comms_client_factory.call(token)
+        client = comms_client_factory(descriptor).call(token)
         require 'tamoz/telegram'
         normalizer = Tamoz::Telegram::Normalizer.new(
           surface_id: descriptor.surface_id,
@@ -128,14 +128,17 @@ module Tamoz
         Tamoz::Telegram::Transport.new(client:, normalizer:)
       end
 
-      # The client seam: production builds the real Telegram client; tests
-      # inject a fixture client (the design's "inject a fixture client rather
-      # than weakening this production origin rule"). A missing adapter
-      # surfaces as MissingAdapterError, never a boot failure.
-      def comms_client_factory
+      # The client seam: production builds the real Telegram client carrying
+      # the surface's DECLARED response cap (nil means the client's own
+      # default — one source of truth); tests inject a fixture client (the
+      # design's "inject a fixture client rather than weakening this
+      # production origin rule"). A missing adapter surfaces as
+      # MissingAdapterError, never a boot failure.
+      def comms_client_factory(descriptor = nil)
         @comms_client_factory || lambda do |token|
           require 'tamoz/telegram'
-          Tamoz::Telegram::Client.new(token)
+          cap = descriptor && descriptor.transport[:max_response_bytes]
+          Tamoz::Telegram::Client.new(token, max_response_bytes: cap)
         rescue LoadError
           raise MissingAdapterError,
                 'the Telegram adapter (tamoz-telegram) is not installed; install it to run comms commands'

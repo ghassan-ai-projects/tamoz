@@ -143,7 +143,9 @@ module Tamoz
         delivery = Comms::Delivery.from_wire(wire)
         receipt = @transport.deliver(delivery)
         { status: 'succeeded', receipt: }
-      rescue Comms::AmbiguousDeliveryError
+      rescue Comms::AmbiguousDeliveryError, Tamoz::Telegram::ResponseTooLargeError
+        # An abandoned response may have transmitted the request — the same
+        # honest ambiguity as a timeout (errors.rb's stated mapping).
         { status: 'unknown', receipt: nil }
       end
 

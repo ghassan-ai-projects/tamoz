@@ -120,15 +120,16 @@ module Tamoz
         SQL
       end
 
-      # The FIRST durable observation of this identity anchors dedup
-      # (invariant 1): the same digest is a replay; any other digest for the
-      # same (surface, bot, update_id) is a durable integrity conflict.
-      def inbound_row(txn, envelope_wire, bot_id)
-        txn.first('comms.admit.inbound.existing',
+      # The ONE durable anchor row for an update identity (invariant 1): its
+      # original payload digest plus the last conflicting digest seen and the
+      # disposition those bytes currently carry.
+      def inbound_anchor(txn, envelope_wire, bot_id)
+        txn.first('comms.admit.inbound.anchor',
                   <<~SQL, [envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')])
-                    SELECT raw_payload_hash FROM tamoz_comms_inbound
+                    SELECT raw_payload_hash, last_conflict_digest, disposition, reason
+                    FROM tamoz_comms_inbound
                     WHERE surface_id = ? AND bot_id = ? AND update_id = ?
-                    ORDER BY ingested_at_ms ASC, raw_payload_hash ASC LIMIT 1
+                    LIMIT 1
                   SQL
       end
 
@@ -161,6 +162,24 @@ module Tamoz
                         observed_at_ms, ingested_at_ms
                       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     SQL
+      end
+
+      # A conflicting observation never becomes a row of its own: it moves the
+      # anchor's last_conflict_digest and counts once per DISTINCT conflicting
+      # digest — redelivered identical conflicting bytes count exactly once.
+      def record_inbound_conflict!(txn, envelope_wire, bot_id, disposition: nil, reason: nil)
+        hash = envelope_wire.fetch('raw_payload_hash')
+        binds = [hash, hash, disposition, reason,
+                 envelope_wire.fetch('surface_id'), bot_id, envelope_wire.fetch('update_id')]
+        txn.execute('comms.admit.inbound.conflict', <<~SQL, binds)
+          UPDATE tamoz_comms_inbound
+          SET conflict_count = conflict_count + CASE WHEN last_conflict_digest = ?
+                THEN 0 ELSE 1 END,
+              last_conflict_digest = ?,
+              disposition = COALESCE(?, disposition),
+              reason = COALESCE(?, reason)
+          WHERE surface_id = ? AND bot_id = ? AND update_id = ?
+        SQL
       end
 
       def inbound_binds(envelope_wire, bot_id, disposition, reason, now)

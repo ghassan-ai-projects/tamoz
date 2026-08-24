@@ -235,6 +235,26 @@ class DeliveryDrainerTest < Minitest::Test
     end
   end
 
+  # A response abandoned past the declared byte cap may still have carried
+  # the request to Telegram — the honest outcome is unknown, never a retry
+  # and never a claimed success.
+  def test_a_send_whose_response_exceeds_the_cap_is_unknown_not_retried
+    with_runtime do |_main_adapter, first_adapter, main_store, *_rest|
+      main_store.append_delivery(delivery('large'), surface_id: 'telegram-ops', capacity: 10, now:)
+      transport = ScriptedTransport.new
+      transport.raise_too_large = true
+      drainer = build_drainer(first_adapter, transport, 'drainer:too-large')
+
+      assert_equal :drained, drainer.drain_once(now:)
+
+      assert_equal ['large'], transport.attempts.map(&:text)
+      rows = main_store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[unknown])
+
+      assert_equal 1, rows.length, 'the unread response leaves the outcome honestly unknown'
+      assert_nil rows.first.fetch('receipt')
+    end
+  end
+
   private
 
   def with_runtime
@@ -307,12 +327,13 @@ class DeliveryDrainerTest < Minitest::Test
 
   class ScriptedTransport
     attr_reader :deliveries, :attempts
-    attr_accessor :raise_auth
+    attr_accessor :raise_auth, :raise_too_large
 
     def initialize
       @deliveries = []
       @attempts = []
       @raise_auth = false
+      @raise_too_large = false
     end
 
     def poll(next_offset:, limit:, timeout_s:)
@@ -322,6 +343,7 @@ class DeliveryDrainerTest < Minitest::Test
     def deliver(delivery)
       @attempts << delivery
       raise Comms::AuthenticationError, 'bot credential refused' if @raise_auth
+      raise Tamoz::Telegram::ResponseTooLargeError, 'response beyond the declared cap' if @raise_too_large
 
       @deliveries << delivery
       { 'message_id' => @deliveries.length, 'date' => 1 }

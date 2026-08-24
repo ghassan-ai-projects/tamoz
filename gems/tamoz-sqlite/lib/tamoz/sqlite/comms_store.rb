@@ -83,15 +83,17 @@ module Tamoz
       # Admit ONE inbound update AND enqueue its turn in one transaction. The
       # first durable observation of (surface, bot, update_id) anchors dedup:
       # the same payload digest is :duplicate; a DIFFERENT digest for that
-      # identity is a durable integrity conflict — nothing is inserted and
-      # nothing is enqueued (invariant 1). Declared intake limits are read
-      # from the DEPLOYED surface row inside this transaction: open requests
-      # at `max_open_requests` refuse :open_request_limit, text beyond
-      # `max_inbound_bytes` refuses :inbound_too_large — both before any
-      # insert. Intake is bounded by the surface's outbox capacity (design
-      # §12, invariant 57): pending+claimed deliveries plus the reservations
-      # of admitted-but-unfinished requests must stay under `capacity`, so
-      # the reserved terminal row can always append.
+      # identity is a durable integrity conflict — it UPDATES the one anchor
+      # row's conflict counter and last conflicting digest, enqueues nothing
+      # (invariant 1), so storage per update_id stays bounded forever.
+      # Declared intake limits are read from the DEPLOYED surface row inside
+      # this transaction: open requests at `max_open_requests` refuse
+      # :open_request_limit, text beyond `max_inbound_bytes` refuses
+      # :inbound_too_large — both before any insert. Intake is bounded by the
+      # surface's deployed `outbox_capacity` (design §12, invariant 57):
+      # pending+claimed deliveries plus the reservations of
+      # admitted-but-unfinished requests must stay under it, so the reserved
+      # terminal row can always append.
       # `history` is the conversation transcript so far (see
       # `conversation_history`); it rides inside the payload's `task` entry
       # (the same Hash shape a cancel payload uses, since payload keys map
@@ -99,13 +101,14 @@ module Tamoz
       # thread's context, not with one message alone.
       # :reek:LongParameterList -- the admission binds every fact design §6
       #   makes durable in one transaction.
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:,
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:,
                             history: [])
         transaction('comms.admit.enqueue') do |txn|
-          seen = inbound_row(txn, envelope_wire, bot_id)
-          if seen
-            next :duplicate if seen[0] == envelope_wire.fetch('raw_payload_hash')
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          if anchor
+            next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
 
+            record_inbound_conflict!(txn, envelope_wire, bot_id)
             next :integrity_conflict
           end
 
@@ -114,7 +117,8 @@ module Tamoz
 
           text = envelope_wire['text']
           next :inbound_too_large if text && text.bytesize > limits.fetch('max_inbound_bytes')
-          next :capacity_refused if capacity_saturated?(txn, surface_id, reservation, capacity)
+          next :capacity_refused if capacity_saturated?(txn, surface_id, reservation,
+                                                        limits.fetch('outbox_capacity'))
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'request', reason: 'accepted', now:)
           request_id = request_id_for(envelope_wire, bot_id)
@@ -147,14 +151,24 @@ module Tamoz
       end
 
       # Record a non-request disposition (ignored/rejected/quarantined)
-      # durably. Dedup keys on the full identity INCLUDING the payload
-      # digest, so a conflicting digest for an already-observed update_id can
-      # still be recorded (the integrity-conflict quarantine).
+      # durably. The first observation for an identity INSERTs its anchor
+      # row; a conflicting digest for a KNOWN identity UPDATES that anchor
+      # (counter + last conflicting digest + the recorded disposition) and
+      # returns :conflict_recorded — one row per update_id forever.
       # rubocop:disable Lint/UnusedMethodArgument -- `surface_id` keeps the §13
       # contract signature; the inbound row carries its own surface.
       def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
         transaction('comms.admit.disposition') do |txn|
           next :duplicate if identical_inbound_row?(txn, envelope_wire, bot_id)
+
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          if anchor
+            next :duplicate if anchor[1] == envelope_wire.fetch('raw_payload_hash') &&
+                               anchor[2] == disposition && anchor[3] == reason
+
+            record_inbound_conflict!(txn, envelope_wire, bot_id, disposition:, reason:)
+            next :conflict_recorded
+          end
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:)
           :recorded

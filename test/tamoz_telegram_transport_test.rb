@@ -30,7 +30,7 @@ class TamozTelegramTransportTest < Minitest::Test
     {
       'update_id' => id,
       'message' => {
-        'message_id' => id,
+        'message_id' => id + 10_000,
         'date' => 1_752_700_800,
         'chat' => { 'id' => chat_id, 'type' => chat_type },
         'from' => { 'id' => user_id },
@@ -113,6 +113,40 @@ class TamozTelegramTransportTest < Minitest::Test
       server.script('getUpdates', status: 500, body: { 'ok' => false }, times: 1)
 
       assert_raises(Comms::TransientTransportError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+    end
+  end
+
+  # Honest auth classification: a 200 body WITHOUT the ok field is malformed,
+  # not refused — ValidationError, never KeyError. And among ok:false bodies
+  # only error_code 401 is an authentication refusal; any other code follows
+  # the ordinary transport-failure mapping.
+  def test_an_ok_missing_body_is_a_validation_error_not_a_key_error
+    with_transport do |transport, server|
+      server.script('getUpdates', body: { 'result' => [] }, times: 1)
+
+      assert_raises(Comms::ValidationError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+    end
+  end
+
+  def test_ok_false_with_a_non_401_error_code_is_not_an_authentication_failure
+    with_transport do |transport, server|
+      server.script('getUpdates', body: { 'ok' => false, 'error_code' => 500,
+                                          'description' => 'Internal Server Error' }, times: 1)
+
+      error = assert_raises(Comms::TransientTransportError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+
+      refute_kind_of Comms::AuthenticationError, error
+
+      server.script('getUpdates', body: { 'ok' => false, 'error_code' => 401,
+                                          'description' => 'Unauthorized' }, times: 1)
+
+      assert_raises(Comms::AuthenticationError) do
         transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
       end
     end
