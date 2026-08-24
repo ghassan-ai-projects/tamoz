@@ -12,7 +12,7 @@ End-result checklist. One row per source file. Mark complete only when the file 
 | `lib/tamoz/observability/errors.rb` | - | - | - | exception classes, already minimal |
 | `lib/tamoz/observability/catalog.rb` | - | - | - | data seeding, may stay declarative |
 | `lib/tamoz/observability/version.rb` | - | - | - | constant only |
-| `lib/tamoz/observability/trace.rb` | - | - | - | from_signals/from_documents duplication |
+| `lib/tamoz/observability/trace.rb` | done | done | done | from_signals/from_documents duplication |
 | `lib/tamoz/observability/telemetry_reader.rb` | - | - | - | contract only |
 | `lib/tamoz/observability/signal.rb` | - | - | - | freeze_content is deep and nested |
 | `lib/tamoz/observability/recorder.rb` | - | - | - | contract only |
