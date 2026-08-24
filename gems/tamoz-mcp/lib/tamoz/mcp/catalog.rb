@@ -34,9 +34,9 @@ module Tamoz
             raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
           end
 
-          supervisor = config.transport == :http ? HttpSupervisor.new(config) : Supervisor.new(config)
+          supervisor = build_supervisor(config)
           begin
-            client = (client_factory || ->(sup) { MCP::Client.new(transport: sup) }).call(supervisor)
+            client = build_client(supervisor, client_factory)
             protocol_version = handshake(client, config)
             entries = collect_entries(client, config)
             enforce_entry_budget!(entries, config)
@@ -55,27 +55,43 @@ module Tamoz
 
         private
 
+        def build_supervisor(config)
+          config.transport == :http ? HttpSupervisor.new(config) : Supervisor.new(config)
+        end
+
+        def build_client(supervisor, client_factory)
+          factory = client_factory || ->(sup) { MCP::Client.new(transport: sup) }
+          factory.call(supervisor)
+        end
+
         def handshake(client, config)
           min, max = config.protocol_range
           result = ::Timeout.timeout(config.budgets.connect_timeout) do
             client.connect(client_info: CLIENT_INFO, protocol_version: max)
           end
           negotiated = result.is_a?(Hash) ? result["protocolVersion"] : nil
-          unless negotiated.is_a?(String) &&
-                 PROTOCOL_VERSION_PATTERN.match?(negotiated)
-            raise ProtocolError, "The MCP server returned an invalid protocol version."
-          end
-          if negotiated < min || negotiated > max
-            raise ProtocolError,
-                  "The MCP server negotiated protocol version #{negotiated}, " \
-                  "outside the configured range #{min}..#{max}."
-          end
+          assert_protocol_version_shape!(negotiated)
+          assert_protocol_version_in_range!(negotiated, min, max)
 
           negotiated.freeze
         rescue ::Timeout::Error
           raise Tamoz::TimeoutError, "The MCP server handshake timed out."
         rescue MCP::Client::RequestHandlerError, MCP::Client::ServerError, MCP::Client::ValidationError
           raise ProtocolError, "The MCP server handshake failed."
+        end
+
+        def assert_protocol_version_shape!(negotiated)
+          return if negotiated.is_a?(String) && PROTOCOL_VERSION_PATTERN.match?(negotiated)
+
+          raise ProtocolError, "The MCP server returned an invalid protocol version."
+        end
+
+        def assert_protocol_version_in_range!(negotiated, min, max)
+          return unless negotiated < min || negotiated > max
+
+          raise ProtocolError,
+                "The MCP server negotiated protocol version #{negotiated}, " \
+                "outside the configured range #{min}..#{max}."
         end
 
         def collect_entries(client, config)
@@ -109,13 +125,13 @@ module Tamoz
             seen[name] = true
 
             description = bounded_description(tool.description, config)
-            schema = validated_schema(name, tool.input_schema)
+            schema = validate_and_canonicalize_schema(name, tool.input_schema)
             annotations = canonicalize_annotations(tool.annotations)
             build_entry(name, :tool, description, schema, annotations)
           end
         end
 
-        def validated_schema(name, schema)
+        def validate_and_canonicalize_schema(name, schema)
           candidate = schema.nil? ? {} : schema
           unless candidate.is_a?(Hash)
             raise ValidationError,
