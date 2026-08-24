@@ -87,17 +87,19 @@ module Tamoz
             never = FailureRecord::NEVER_MUTATE_CATEGORIES.map(&:to_s)
 
             never_denominator = sum_field(per_category, never, 'denominator')
-            # A never-mutate class is handled CORRECTLY when it never reaches a
-            # mutating family — abstention is one acceptable form of that.
-            never_correct = never.sum do |name|
-              bucket = per_category.fetch(name)
-              bucket['denominator'] - bucket['mutating']
-            end
+            never_correct = correct_abstentions(per_category, never)
             handled_denominator = sum_field(per_category, handled, 'denominator')
             over_abstained = sum_field(per_category, handled, 'abstained')
 
             quality(rate(never_correct, never_denominator), never_denominator,
                     rate(over_abstained, handled_denominator), handled_denominator)
+          end
+
+          def correct_abstentions(per_category, never_categories)
+            never_categories.sum do |name|
+              bucket = per_category.fetch(name)
+              bucket['denominator'] - bucket['mutating']
+            end
           end
 
           def sum_field(per_category, names, field)
