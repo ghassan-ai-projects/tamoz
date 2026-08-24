@@ -178,3 +178,26 @@ live in `gems/tamoz-comms`; `SessionEffects` in `gems/tamoz-agent-session`;
 `EffectDispatcher` in `gems/tamoz-agent-kernel`. Follow the corrected paths in
 `03-tamoz-current-state.md` and `07-evidence-index.md`, not the paths as written
 at review time.
+
+## Implementation round 2026-08-24 (branch `feature/openclaw-chat-study-refresh`)
+
+The plan began executing. Phase 0 (boundary correctness) and Phase 1 (truthful
+status, command parity, CLI JSON identity) are implemented and reviewed; the
+evidence lives in `implementation-plan/evidence/phase-0` and `phase-1`. The
+review loop for Phase 0 ran three independent read-only lenses —
+correctness/invariants, security/trust boundaries, test quality/evidence — over
+the committed revision. Verdicts: NEEDS FIXES (correctness: declared response
+cap never wired to the production client), NEEDS FIXES (security: unbounded
+quarantine amplification plus two remote-reachable intake freezes), GAPS NOTED
+(tests: storage-failure supervision unproven, digest guarded only by a
+test-local parallel). Every finding was repaired in a single follow-up commit
+and re-gated; the phase evidence records the full loop.
+
+Owner-directed additions beyond the study list: pairing first contact (a new
+sender on a pairing-mode surface receives a relayable code instead of silence;
+approval stays operator-only) and a benchmark-track start (B0 composition
+harness scoring the nine scenarios deterministically on fake transports).
+
+Honest limits unchanged: all phase evidence is fixture/scripted-transport
+plumbing evidence; no live Telegram conversation or real-provider run is
+claimed, and usefulness remains the benchmark's claim to make later.

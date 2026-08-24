@@ -52,7 +52,11 @@ module Tamoz
       # Bounded conflict amplification: 19 -> 20 through MIGRATION_20, which
       # rebuilds tamoz_comms_inbound with the conflict counter and last
       # conflicting digest — one durable row per update_id forever.
-      CURRENT_VERSION = 20
+      # OpenClaw Phase 2 visible cancellation: 20 -> 21 through MIGRATION_21,
+      # which rebuilds tamoz_comms_requests with the durable cancellation
+      # timeline stamps (requested at the /cancel enqueue, observed where the
+      # runner consumes it); terminal time stays the existing settle facts.
+      CURRENT_VERSION = 21
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1360,6 +1364,37 @@ module Tamoz
         MIGRATION_20.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # OpenClaw Phase 2 visible cancellation (plan 03, work item 4): 20 -> 21
+      # through MIGRATION_21. tamoz_comms_requests gains the nullable
+      # requested/observed stamps of the cancellation timeline; the terminal
+      # point stays the existing settle facts (projection_state and the inbox
+      # status), so a raced completion is never relabelled as a stop.
+      MIGRATION_21 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_requests
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_requests (
+            request_id TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            conversation_id TEXT NOT NULL,
+            thread_id TEXT NOT NULL,
+            profile_id TEXT NOT NULL,
+            reservation INTEGER NOT NULL CHECK (reservation > 0),
+            projection_state TEXT NOT NULL,
+            cancellation_requested_at_ms INTEGER,
+            cancellation_observed_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_21_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_21.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1382,7 +1417,8 @@ module Tamoz
         17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
         18 => [MIGRATION_18, MIGRATION_18_CHECKSUM],
         19 => [MIGRATION_19, MIGRATION_19_CHECKSUM],
-        20 => [MIGRATION_20, MIGRATION_20_CHECKSUM]
+        20 => [MIGRATION_20, MIGRATION_20_CHECKSUM],
+        21 => [MIGRATION_21, MIGRATION_21_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector

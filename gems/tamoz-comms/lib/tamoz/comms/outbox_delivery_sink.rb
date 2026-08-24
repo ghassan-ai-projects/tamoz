@@ -138,9 +138,16 @@ module Tamoz
           'task_state' => Lifecycle.task_state_for(MILESTONE_TASK_STATES.fetch(kind)),
           'delivery_state' => Lifecycle.delivery_state_for('pending')
         )
+        # Once the request's first card carries a delivery receipt, every
+        # successor milestone UPDATES that same platform message (plan 03,
+        # behavior model 1) instead of sending a new one. While no receipt
+        # exists — first card still pending or lost — the row stays an
+        # ordinary send and coalescing keeps it one live row.
+        card = delivered_card_message_id(route, reference)
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'control',
+            operation: card ? 'edit_message' : 'send_message', reply_to: card,
             text:, part_index: 0, part_count: 1, journaled: false,
             render_version: @rendering::RENDER_VERSION,
             content_digest: @rendering.content_digest(text),
@@ -150,6 +157,28 @@ module Tamoz
           now: Time.now.utc
         )
         :accepted
+      end
+
+      # The platform message id the request's live card is bound to: the
+      # receipt of the NEWEST delivered milestone row for the reference.
+      # Rows come back oldest-first, so the scan runs newest-first.
+      def delivered_card_message_id(route, request_ref)
+        @store.outbox_rows(surface_id: route.fetch('surface_id'), statuses: %w[succeeded])
+              .reverse_each
+              .filter_map { |row| card_message_id(row, request_ref) }
+              .first
+      end
+
+      def card_message_id(row, request_ref)
+        return nil unless row.fetch('kind') == 'control' && row['markup'] && row['receipt']
+
+        facts = JSON.parse(row.fetch('markup'))
+        return nil unless facts.is_a?(Hash) && facts['request_ref'] == request_ref &&
+                          facts['milestone'].is_a?(String)
+
+        JSON.parse(row.fetch('receipt')).fetch('message_id')
+      rescue JSON::ParserError
+        nil
       end
 
       # A fresh single-use prompt is stored inactive, and the control
