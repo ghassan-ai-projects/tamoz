@@ -43,11 +43,9 @@ module Tamoz
       BASES = %i[measured estimated].freeze
 
       def initialize(value:, currency:, basis:, pricing_source:, pricing_version:)
-        value = Float(value)
-        raise ValidationError, 'cost value must be finite and non-negative' unless value.finite? && value >= 0
-        raise ValidationError, 'cost basis must be measured or estimated' unless BASES.include?(basis.to_sym)
+        value, basis = validate_cost!(value, basis)
 
-        super(value:, currency: String(currency).freeze, basis: basis.to_sym,
+        super(value:, currency: String(currency).freeze, basis:,
               pricing_source: String(pricing_source).freeze, pricing_version: String(pricing_version).freeze)
       end
 
@@ -60,6 +58,16 @@ module Tamoz
           'pricing_version' => pricing_version
         }
       end
+
+      private
+
+      def validate_cost!(value, basis)
+        value = Float(value)
+        raise ValidationError, 'cost value must be finite and non-negative' unless value.finite? && value >= 0
+        raise ValidationError, 'cost basis must be measured or estimated' unless BASES.include?(basis.to_sym)
+
+        [value, basis.to_sym]
+      end
     end
 
     class PricingTable
@@ -70,8 +78,7 @@ module Tamoz
       def initialize(source:, version:, input_per_million:, output_per_million:)
         @source = String(source).freeze
         @version = String(version).freeze
-        raise ValidationError, 'pricing source must not be empty' if @source.empty?
-        raise ValidationError, 'pricing version must not be empty' if @version.empty?
+        validate_identity!(@source, @version)
         @input = non_negative(input_per_million, :input_per_million)
         @output = non_negative(output_per_million, :output_per_million)
         @digest = Tamoz::Core.digest(DIGEST_DOMAIN, to_h)
@@ -79,8 +86,7 @@ module Tamoz
       end
 
       def cost(usage, currency: 'USD')
-        return nil unless usage.is_a?(Usage)
-        return nil unless usage.input_tokens && usage.output_tokens
+        return nil unless costable?(usage)
 
         Cost.new(
           value: ((usage.input_tokens * @input) + (usage.output_tokens * @output)) / 1_000_000.0,
@@ -98,6 +104,15 @@ module Tamoz
       end
 
       private
+
+      def validate_identity!(source, version)
+        raise ValidationError, 'pricing source must not be empty' if source.empty?
+        raise ValidationError, 'pricing version must not be empty' if version.empty?
+      end
+
+      def costable?(usage)
+        usage.is_a?(Usage) && usage.input_tokens && usage.output_tokens
+      end
 
       def non_negative(value, name)
         value = Float(value)
