@@ -34,9 +34,7 @@
 
 # The operator-side adapter is a repo script (like script/mcp_test_server), so
 # it resolves the gem libs itself instead of relying on the caller's load path.
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-cancellation/lib", __dir__))
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-mcp/lib", __dir__))
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 
 require "json"
 require "mcp"

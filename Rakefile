@@ -91,11 +91,8 @@ Rake::TestTask.new(:test_slow) do |task|
 end
 
 
-LIB_FLAGS = %w[
-  tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent
-  tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram
-  tamoz-observability tamoz-otel
-].map { |name| "-Igems/#{name}/lib" }.join(" ").freeze
+LIB_FLAGS = Dir[File.join(__dir__, "gems", "*", "lib")]
+            .map { |path| "-I#{path}" }.sort.join(" ").freeze
 
 # Measured wall-clock seconds per file (`rake test_profile` regenerates these).
 # Used to BIN-PACK the shards: round-robin left one worker trailing a 23-second

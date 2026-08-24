@@ -4,7 +4,9 @@
 require "fileutils"
 require "json"
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+Dir[File.expand_path("../gems/*/lib", __dir__)].sort.each do |path|
+  $LOAD_PATH.unshift(path)
+end
 require "tamoz/evals"
 
 root = ENV.fetch(
