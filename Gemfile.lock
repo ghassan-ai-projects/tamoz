@@ -1,8 +1,18 @@
 PATH
+  remote: gems/tamoz-agent-capabilities
+  specs:
+    tamoz-agent-capabilities (0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-mcp (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent-cli
   specs:
     tamoz-agent-cli (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-healing
@@ -47,6 +57,7 @@ PATH
   specs:
     tamoz-agent (0.1.0.alpha.1)
       ruby_llm (~> 1.16.0)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-healing (= 0.1.0.alpha.1)
       tamoz-agent-improvement (= 0.1.0.alpha.1)
       tamoz-agent-kernel (= 0.1.0.alpha.1)
@@ -82,6 +93,7 @@ PATH
   specs:
     tamoz-evals (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-mcp (= 0.1.0.alpha.1)
@@ -315,6 +327,7 @@ DEPENDENCIES
   rubocop-performance (~> 1.25)
   simplecov (~> 0.22)
   tamoz-agent!
+  tamoz-agent-capabilities!
   tamoz-agent-cli!
   tamoz-agent-healing!
   tamoz-agent-improvement!
@@ -397,6 +410,7 @@ CHECKSUMS
   sqlite3 (2.9.5) sha256=04572973a3f943ad50a8adfffc8dd752a5f06e4c3db2026f71838fed8a982606
   sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
+  tamoz-agent-capabilities (0.1.0.alpha.1)
   tamoz-agent-cli (0.1.0.alpha.1)
   tamoz-agent-healing (0.1.0.alpha.1)
   tamoz-agent-improvement (0.1.0.alpha.1)

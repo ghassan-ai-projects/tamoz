@@ -54,7 +54,9 @@ module Tamoz
       def run(task)
         task = String(task).strip
         raise ArgumentError, "task must not be empty" if task.empty?
-        raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes" if task.bytesize > SessionNodes::MAX_TASK_BYTES
+        if task.bytesize > SessionNodes::MAX_TASK_BYTES
+          raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes"
+        end
 
         turn_id = SecureRandom.uuid
         @correlation = {

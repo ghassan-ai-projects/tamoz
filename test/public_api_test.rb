@@ -20,7 +20,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::EffectDispatcher" => {"deprecated" => true},
           "Tamoz::Agent::Error" => {"deprecated" => true},
           "Tamoz::Agent::Event" => {"deprecated" => true},
-          "Tamoz::Agent::McpCapabilitySource" => {},
           "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Plan" => {"deprecated" => true},
           "Tamoz::Agent::PlanRejectedError" => {"deprecated" => true},
@@ -52,6 +51,16 @@ class PublicAPITest < Minitest::Test
         "tamoz-agent-improvement" => {
           "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
           "Tamoz::Agent::Improvement::VERSION" => {}
+        },
+        "tamoz-agent-capabilities" => {
+          "Tamoz::Agent::Capabilities::VERSION" => {},
+          "Tamoz::Agent::CapabilityBinding" => {},
+          "Tamoz::Agent::ChildTask" => {},
+          "Tamoz::Agent::ChildTaskDispatcher" => {},
+          "Tamoz::Agent::GovernedBrowserSource" => {},
+          "Tamoz::Agent::GovernedDatabaseSource" => {},
+          "Tamoz::Agent::McpCapabilitySource" => {},
+          "Tamoz::Agent::McpSourceBuilder" => {}
         },
         "tamoz-agent-cli" => {
           "Tamoz::Agent::CLI" => {},
@@ -392,6 +401,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Memory::VERSION,
       Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::Profile::VERSION,
+      Tamoz::Agent::Capabilities::VERSION,
       Tamoz::Agent::Improvement::VERSION,
       Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,

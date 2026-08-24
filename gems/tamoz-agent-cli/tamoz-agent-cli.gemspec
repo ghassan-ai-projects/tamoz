@@ -11,7 +11,8 @@ TamozGemspec.build(
                'worker/schedule/profile/session/comms command groups over the ' \
                'tamoz-agent runtime.',
   dependencies: [
-    ['tamoz-agent', "= #{Tamoz::Agent::CLI::VERSION}"]
+    ['tamoz-agent', "= #{Tamoz::Agent::CLI::VERSION}"],
+    ['tamoz-agent-capabilities', "= #{Tamoz::Agent::CLI::VERSION}"]
   ],
   executable: 'tamoz'
 )
