@@ -23,6 +23,8 @@ TamozGemspec.build(
   dependencies: [
     ["tamoz-core", "= #{Tamoz::Core::VERSION}"],
     ["tamoz-agent", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-agent-capabilities", "= #{Tamoz::Agent::VERSION}"],
+    ["tamoz-agent-session", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::SQLite::VERSION}"],
     ["tamoz-mcp", "= #{Tamoz::Mcp::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Graph::VERSION}"],

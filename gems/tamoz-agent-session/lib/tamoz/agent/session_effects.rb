@@ -157,7 +157,7 @@ module Tamoz
       end
 
       def result_payload(result)
-        return check_payload(result) if result.is_a?(CheckReceipt)
+        return check_payload(result) if result.is_a?(Tamoz::Tools::CheckReceipt)
         return mcp_payload(result) if mcp_outcome?(result)
 
         { 'output' => String(result) }

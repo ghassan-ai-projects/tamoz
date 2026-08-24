@@ -6,19 +6,29 @@
 # Note that changes in the inspected code, or installation of new
 # versions of RuboCop, may require this file to be generated again.
 
-# Offense count: 4
+# Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: TreatCommentsAsGroupSeparators, ConsiderPunctuation.
 Bundler/OrderedGems:
   Exclude:
     - 'Gemfile'
 
-# Offense count: 14
+# Offense count: 24
 Gemspec/RequiredRubyVersion:
   Exclude:
+    - 'gems/tamoz-agent-capabilities/tamoz-agent-capabilities.gemspec'
+    - 'gems/tamoz-agent-cli/tamoz-agent-cli.gemspec'
+    - 'gems/tamoz-agent-healing/tamoz-agent-healing.gemspec'
+    - 'gems/tamoz-agent-improvement/tamoz-agent-improvement.gemspec'
+    - 'gems/tamoz-agent-kernel/tamoz-agent-kernel.gemspec'
+    - 'gems/tamoz-agent-memory/tamoz-agent-memory.gemspec'
+    - 'gems/tamoz-agent-profile/tamoz-agent-profile.gemspec'
+    - 'gems/tamoz-agent-session/tamoz-agent-session.gemspec'
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
     - 'gems/tamoz-approval/tamoz-approval.gemspec'
+    - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
     - 'gems/tamoz-comms/tamoz-comms.gemspec'
+    - 'gems/tamoz-concurrency/tamoz-concurrency.gemspec'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
     - 'gems/tamoz-graph/tamoz-graph.gemspec'
@@ -37,7 +47,7 @@ Gemspec/RequiredRubyVersion:
 # SupportedStyles: with_first_argument, with_fixed_indentation
 Layout/ArgumentAlignment:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/producer.rb'
     - 'test/agent_runtime_test.rb'
     - 'test/benchmark_harness_test.rb'
@@ -63,7 +73,7 @@ Layout/ClosingParenthesisIndentation:
 # Configuration parameters: AllowForAlignment, IndentationWidth.
 Layout/CommentIndentation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/preflight.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/preflight.rb'
     - 'script/generate_legacy_session_fixture'
 
 # Offense count: 1
@@ -72,39 +82,40 @@ Layout/ElseAlignment:
   Exclude:
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
 
-# Offense count: 327
+# Offense count: 322
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLineAfterGuardClause:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-core/lib/tamoz/core/situation_recall.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
@@ -125,7 +136,6 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiled.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -186,19 +196,21 @@ Layout/EmptyLineAfterMagicComment:
 # Configuration parameters: EmptyLineBetweenMethodDefs, EmptyLineBetweenClassDefs, EmptyLineBetweenModuleDefs, DefLikeMacros, AllowAdjacentOneLineDefs, NumberOfEmptyLines.
 Layout/EmptyLineBetweenDefs:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/errors.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/gen/runtime-v1_services_pb.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'test/agent_mode_switch_kill_matrix_test.rb'
     - 'test/memory_store_test.rb'
 
-# Offense count: 5
+# Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 Layout/EmptyLines:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb'
+    - 'gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/gen/runtime-v1_pb.rb'
     - 'test/agent_mode_switch_kill_matrix_test.rb'
     - 'test/memory_store_test.rb'
@@ -273,9 +285,9 @@ Layout/FirstArrayElementIndentation:
 # SupportedStyles: special_inside_parentheses, consistent, align_braces
 Layout/FirstHashElementIndentation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_comms_shared.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_rendering.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_shared.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-evals/test/openclaw_durable_cli_adapter_test.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/lifecycle_executor.rb'
@@ -299,12 +311,12 @@ Layout/FirstHashElementIndentation:
 # SupportedLastArgumentHashStyles: always_inspect, always_ignore, ignore_implicit, ignore_explicit
 Layout/HashAlignment:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/producer.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
@@ -351,22 +363,22 @@ Layout/LineEndStringConcatenationIndentation:
     - 'script/release_rehearsal'
     - 'script/websearch_adapter'
 
-# Offense count: 252
+# Offense count: 258
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: Max, AllowHeredoc, AllowURI, AllowQualifiedName, URISchemes, AllowRBSInlineAnnotation, AllowCopDirectives, AllowedPatterns, SplitStrings.
 # URISchemes: http, https
 Layout/LineLength:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile/document_validator.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile/document_validator.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
@@ -381,7 +393,6 @@ Layout/LineLength:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-scheduler/tamoz-scheduler.gemspec'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
@@ -410,15 +421,18 @@ Layout/LineLength:
     - 'test/agent_toolbox_invariant17_test.rb'
     - 'test/agent_toolbox_test.rb'
     - 'test/agent_unattended_policy_test.rb'
+    - 'test/agent_worker_test.rb'
     - 'test/approval_engine_test.rb'
     - 'test/approval_grant_key_test.rb'
     - 'test/approval_reload_test.rb'
     - 'test/approval_resolve_test.rb'
     - 'test/benchmark_harness_test.rb'
     - 'test/capability_closed_world_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_pool_test.rb'
     - 'test/core_stream_test.rb'
     - 'test/delivery_drainer_test.rb'
+    - 'test/dependency_isolation_test.rb'
     - 'test/mcp_elicitation_test.rb'
     - 'test/memory_engine_test.rb'
     - 'test/memory_repository_adapter_test.rb'
@@ -457,8 +471,8 @@ Layout/MultilineMethodCallBraceLayout:
 # SupportedStyles: aligned, indented, indented_relative_to_receiver
 Layout/MultilineMethodCallIndentation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -484,8 +498,8 @@ Layout/MultilineMethodCallIndentation:
 # SupportedStyles: aligned, indented
 Layout/MultilineOperationIndentation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
@@ -529,7 +543,7 @@ Layout/SpaceInsideBlockBraces:
   Exclude:
     - 'test/agent_skills_adversarial_test.rb'
 
-# Offense count: 4523
+# Offense count: 4541
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, EnforcedStyleForEmptyBraces.
 # SupportedStyles: space, no_space, compact
@@ -538,34 +552,34 @@ Layout/SpaceInsideHashLiteralBraces:
   Exclude:
     - 'bin/tamoz-stream-subscriber'
     - 'bin/tamoz-stream-worker'
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/seams.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
@@ -839,16 +853,15 @@ Lint/AmbiguousBlockAssociation:
     - 'test/websearch_adapter_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 19
+# Offense count: 18
 # This cop supports safe autocorrection (--autocorrect).
 Lint/AmbiguousOperatorPrecedence:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'script/websearch_adapter'
@@ -870,8 +883,8 @@ Lint/AmbiguousRange:
 Lint/ConstantDefinitionInBlock:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/request_route.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/request_route.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/request_record.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/catalog.rb'
@@ -881,13 +894,14 @@ Lint/ConstantDefinitionInBlock:
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/limits.rb'
 
-# Offense count: 12
+# Offense count: 14
 # Configuration parameters: IgnoreLiteralBranches, IgnoreConstantBranches, IgnoreDuplicateElseBranch.
 Lint/DuplicateBranch:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_scorecard.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_repository_adapter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
@@ -909,7 +923,7 @@ Lint/FloatComparison:
 # Offense count: 1
 Lint/HashCompareByIdentity:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -955,7 +969,7 @@ Lint/MissingSuper:
 # Offense count: 2
 Lint/NoReturnInBeginEndBlocks:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
 
 # Offense count: 4
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -967,7 +981,7 @@ Lint/NonAtomicFileOperation:
 # This cop supports safe autocorrection (--autocorrect).
 Lint/RedundantCopDisableDirective:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/approval_prompt.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/http_supervisor.rb'
     - 'gems/tamoz-tools/lib/tamoz/tools/tool_catalog.rb'
@@ -986,7 +1000,7 @@ Lint/RedundantDirGlobSort:
     - 'test/agent_non_ascii_session_test.rb'
     - 'test/documentation_tree_test.rb'
 
-# Offense count: 8
+# Offense count: 7
 # This cop supports safe autocorrection (--autocorrect).
 Lint/RedundantRequireStatement:
   Exclude:
@@ -995,7 +1009,6 @@ Lint/RedundantRequireStatement:
     - 'gems/tamoz-evals/lib/tamoz/evals/duplicate_key_detector.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'script/generate_requirements_manifest'
 
@@ -1006,8 +1019,8 @@ Lint/RedundantRequireStatement:
 # AdditionalNilMethods: present?, blank?, try, try!
 Lint/RedundantSafeNavigation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiled.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -1094,12 +1107,12 @@ Lint/UnusedBlockArgument:
 # NotImplementedExceptions: NotImplementedError
 Lint/UnusedMethodArgument:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-core/lib/tamoz/emitter.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
@@ -1158,8 +1171,8 @@ Lint/UselessAccessModifier:
 # This cop supports safe autocorrection (--autocorrect).
 Lint/UselessAssignment:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/memory_store.rb'
@@ -1182,9 +1195,9 @@ Lint/UselessAssignment:
 # Offense count: 23
 Lint/UselessConstantScoping:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
@@ -1199,70 +1212,73 @@ Lint/UselessConstantScoping:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Lint/UselessMethodDefinition:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
 
-# Offense count: 1147
+# Offense count: 1151
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes, Max.
 Metrics/AbcSize:
   Exclude:
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/monitor.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/monitor.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/receipt_budget_controller.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_steps.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1271,11 +1287,9 @@ Metrics/AbcSize:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
@@ -1327,7 +1341,6 @@ Metrics/AbcSize:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
@@ -1422,6 +1435,7 @@ Metrics/AbcSize:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_pool_test.rb'
@@ -1521,20 +1535,19 @@ Metrics/AbcSize:
     - 'test/websearch_circuit_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 272
+# Offense count: 273
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
 # AllowedMethods: refine
 Metrics/BlockLength:
   Exclude:
     - 'Rakefile'
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
@@ -1623,16 +1636,16 @@ Metrics/BlockLength:
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ClassLength:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
@@ -1732,42 +1745,45 @@ Metrics/ClassLength:
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/CyclomaticComplexity:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/evaluator.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1776,11 +1792,9 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/cli.rb'
@@ -1821,7 +1835,6 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
@@ -1868,57 +1881,60 @@ Metrics/CyclomaticComplexity:
 Metrics/MethodLength:
   Exclude:
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/monitor.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/monitor.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_steps.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -1927,10 +1943,8 @@ Metrics/MethodLength:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb'
@@ -2174,16 +2188,16 @@ Metrics/MethodLength:
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ModuleLength:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/preflight.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/preflight.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
@@ -2206,53 +2220,53 @@ Metrics/ModuleLength:
     - 'test/support/autonomy_case.rb'
     - 'test/support/episode_composition.rb'
 
-# Offense count: 190
+# Offense count: 192
 # Configuration parameters: Max, CountKeywordArgs, MaxOptionalParameters.
 Metrics/ParameterLists:
   Exclude:
     - 'gems/gemspec_helper.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/effect_identity.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/effect_identity.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_steps.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/decision_log.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
@@ -2327,41 +2341,44 @@ Metrics/ParameterLists:
 # Configuration parameters: AllowedMethods, AllowedPatterns, Max.
 Metrics/PerceivedComplexity:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -2370,11 +2387,9 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/cli.rb'
@@ -2416,7 +2431,6 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/occurrence.rb'
@@ -2522,7 +2536,7 @@ Minitest/AssertPathExists:
   Exclude:
     - 'test/agent_profile_machinery_test.rb'
 
-# Offense count: 311
+# Offense count: 312
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/AssertPredicate:
   Exclude:
@@ -2550,6 +2564,7 @@ Minitest/AssertPredicate:
     - 'test/benchmark_protocol_test.rb'
     - 'test/capability_host_test.rb'
     - 'test/capability_registry_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_pool_test.rb'
@@ -2621,13 +2636,14 @@ Minitest/AssertRespondTo:
   Exclude:
     - 'test/healing_failure_contract_test.rb'
 
-# Offense count: 1
+# Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/AssertSame:
   Exclude:
+    - 'test/core_context_test.rb'
     - 'test/p16_tools_gem_test.rb'
 
-# Offense count: 68
+# Offense count: 76
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/AssertTruthy:
   Exclude:
@@ -2635,6 +2651,7 @@ Minitest/AssertTruthy:
     - 'test/agent_scorecard_test.rb'
     - 'test/approval_flow_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/healing_remediation_test.rb'
     - 'test/memory_engine_test.rb'
     - 'test/memory_repository_adapter_test.rb'
@@ -2662,7 +2679,7 @@ Minitest/AssertWithExpectedArgument:
     - 'test/p16_tools_gem_test.rb'
     - 'test/packaging_test.rb'
 
-# Offense count: 1477
+# Offense count: 1487
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/EmptyLineBeforeAssertionMethods:
   Exclude:
@@ -2722,6 +2739,7 @@ Minitest/EmptyLineBeforeAssertionMethods:
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
     - 'test/comms_gateway_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -2838,7 +2856,7 @@ Minitest/LiteralAsActualArgument:
   Exclude:
     - 'test/stream_approval_relay_test.rb'
 
-# Offense count: 758
+# Offense count: 763
 # Configuration parameters: Max.
 Minitest/MultipleAssertions:
   Exclude:
@@ -2900,6 +2918,7 @@ Minitest/MultipleAssertions:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -3015,7 +3034,7 @@ Minitest/RefuteEqual:
   Exclude:
     - 'test/stream_episode_skills_memory_test.rb'
 
-# Offense count: 46
+# Offense count: 49
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/RefuteFalse:
   Exclude:
@@ -3023,6 +3042,7 @@ Minitest/RefuteFalse:
     - 'test/approval_flow_test.rb'
     - 'test/capability_closed_world_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/graph_interrupt_test.rb'
     - 'test/healing_failure_contract_test.rb'
     - 'test/healing_remediation_test.rb'
@@ -3064,7 +3084,7 @@ Minitest/RefutePathExists:
     - 'test/sqlite_scenario_driver_test.rb'
     - 'test/sqlite_selector_control_test.rb'
 
-# Offense count: 69
+# Offense count: 71
 # This cop supports safe autocorrection (--autocorrect).
 Minitest/RefutePredicate:
   Exclude:
@@ -3078,6 +3098,7 @@ Minitest/RefutePredicate:
     - 'test/agent_skills_adversarial_test.rb'
     - 'test/agent_skills_toolbox_test.rb'
     - 'test/agent_tool_error_recovery_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_state_codec_test.rb'
     - 'test/core_stream_test.rb'
@@ -3122,7 +3143,7 @@ Naming/BlockForwarding:
 # Offense count: 1
 Naming/ConstantName:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/limits.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/limits.rb'
 
 # Offense count: 2
 # Configuration parameters: ExpectMatchingDefinition, CheckDefinitionPathHierarchy, CheckDefinitionPathHierarchyRoots, Regex, IgnoreExecutableScripts, AllowedAcronyms.
@@ -3139,7 +3160,7 @@ Naming/FileName:
 # SupportedStylesForLeadingUnderscores: disallowed, required, optional
 Naming/MemoizedInstanceVariableName:
   Exclude:
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
 
 # Offense count: 41
 # Configuration parameters: MinNameLength, AllowNamesEndingInNumbers, AllowedNames, ForbiddenNames.
@@ -3161,17 +3182,19 @@ Naming/MethodParameterName:
     - 'test/autonomy_scorecard_test.rb'
     - 'test/stream_invariants_test.rb'
 
-# Offense count: 53
+# Offense count: 54
 # Configuration parameters: Mode, AllowedMethods, AllowedPatterns, AllowBangMethods, WaywardPredicates.
 # AllowedMethods: call
 # WaywardPredicates: infinite?, nonzero?
 Naming/PredicateMethod:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_prompt_adapter.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_prompt_adapter.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
@@ -3181,7 +3204,6 @@ Naming/PredicateMethod:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/schema.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/stream_emitter.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_registry.rb'
@@ -3197,36 +3219,39 @@ Naming/PredicateMethod:
     - 'test/stream_approval_relay_test.rb'
     - 'test/stream_invariants_test.rb'
 
-# Offense count: 209
+# Offense count: 212
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: PreferredName.
 Naming/RescuedExceptionsVariableName:
   Exclude:
     - 'bin/tamoz-stream-subscriber'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-core/lib/tamoz/core.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
@@ -3248,7 +3273,6 @@ Naming/RescuedExceptionsVariableName:
     - 'gems/tamoz-graph/lib/tamoz/graph/channel.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/route_planner.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/state_manager.rb'
@@ -3302,14 +3326,14 @@ Naming/VariableNumber:
 # Configuration parameters: MinSize.
 Performance/CollectionLiteralInLoop:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/duplicate_key_detector.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/schedule.rb'
@@ -3377,9 +3401,9 @@ Performance/MapCompact:
 # This cop supports safe autocorrection (--autocorrect).
 Performance/RedundantBlockCall:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/scope.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/scope.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb'
     - 'test/core_instrumentation_test.rb'
@@ -3416,7 +3440,7 @@ Performance/RegexpMatch:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/StringInclude:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'test/dependency_isolation_test.rb'
 
 # Offense count: 2
@@ -3430,7 +3454,7 @@ Performance/StringReplacement:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Performance/TimesMap:
   Exclude:
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb'
     - 'test/agent_profile_machinery_test.rb'
     - 'test/benchmark_controls_test.rb'
@@ -3487,13 +3511,13 @@ Style/ArgumentsForwarding:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/BitwisePredicate:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb'
     - 'script/tamoz_sqlite_oracle'
 
-# Offense count: 8
+# Offense count: 13
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ProceduralMethods, FunctionalMethods, AllowedMethods, AllowedPatterns, AllowBracesOnProceduralOneLiners, BracesRequiredMethods.
 # SupportedStyles: line_count_based, semantic, braces_for_chaining, always_braces
@@ -3502,16 +3526,18 @@ Style/BitwisePredicate:
 # AllowedMethods: lambda, proc, it
 Style/BlockDelimiters:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
     - 'test/agent_digest_resolution_test.rb'
     - 'test/benchmark_harness_test.rb'
+    - 'test/dependency_isolation_test.rb'
+    - 'test/packaging_test.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: MinBranchesCount.
 Style/CaseLikeIf:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
 
 # Offense count: 1
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -3536,7 +3562,7 @@ Style/ClassEqualityComparison:
 # Configuration parameters: AllowedReceivers.
 Style/CollectionCompact:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/sealed_build.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/sealed_build.rb'
     - 'test/p16_tools_gem_test.rb'
 
 # Offense count: 2
@@ -3550,7 +3576,7 @@ Style/CombinableLoops:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/ComparableBetween:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
 
 # Offense count: 1
@@ -3573,27 +3599,35 @@ Style/ConditionalAssignment:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/DataInheritance:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
 
-# Offense count: 147
+# Offense count: 150
 # Configuration parameters: AllowedConstants.
 Style/Documentation:
   Exclude:
     - 'gems/gemspec_helper.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent_capabilities.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/errors.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent_improvement.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent_memory.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent_session.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/errors.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/answer.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/sleep.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/clock.rb'
     - 'gems/tamoz-core/lib/tamoz/configuration.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
@@ -3604,11 +3638,9 @@ Style/Documentation:
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
     - 'gems/tamoz-core/lib/tamoz/notifier.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/secret.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/task_result.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/artifact.rb'
@@ -3645,7 +3677,6 @@ Style/Documentation:
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/definition.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -3671,7 +3702,6 @@ Style/Documentation:
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/usage.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
@@ -3714,7 +3744,7 @@ Style/DoubleNegation:
 # SupportedStyles: class_keyword, class_new, class_definition
 Style/EmptyClassDefinition:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
@@ -3736,13 +3766,15 @@ Style/EmptyStringInsideInterpolation:
   Exclude:
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
 
-# Offense count: 58
+# Offense count: 60
 # This cop supports safe autocorrection (--autocorrect).
 Style/ExplicitBlockArgument:
   Exclude:
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/memory_checkpointer.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
     - 'script/agent_latency_smoke'
@@ -3778,8 +3810,8 @@ Style/FileNull:
 # SupportedStyles: format, sprintf, percent
 Style/FormatString:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'script/run_m1_conformance'
 
 # Offense count: 41
@@ -3789,8 +3821,8 @@ Style/FormatString:
 Style/FormatStringToken:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'script/benchmark_holdout'
     - 'script/generate_agent_memory_fixtures'
     - 'script/generate_agent_memory_repository_fixtures'
@@ -3820,14 +3852,14 @@ Style/GlobalStdStream:
 # Configuration parameters: MinBodyLength, AllowConsecutiveConditionals.
 Style/GuardClause:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/receipt_budget_controller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-core/lib/tamoz/core/situation_recall.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
@@ -3863,13 +3895,13 @@ Style/HashEachMethods:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashExcept:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_manifest_verifier.rb'
@@ -3899,7 +3931,7 @@ Style/HashLikeCase:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/HashSlice:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
     - 'script/generate_legacy_session_fixture'
     - 'test/scheduler_contract_test.rb'
     - 'test/sqlite_store_test.rb'
@@ -3912,49 +3944,52 @@ Style/IdenticalConditionalBranches:
     - 'gems/tamoz-stream/lib/tamoz/stream/decision_builder.rb'
     - 'script/clean_rubocop_todo'
 
-# Offense count: 465
+# Offense count: 464
 # This cop supports safe autocorrection (--autocorrect).
 Style/IfUnlessModifier:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile/document_validator.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile/document_validator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/receipt_budget_controller.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
@@ -3965,10 +4000,8 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/safe_text.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb'
@@ -3990,7 +4023,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-graph/lib/tamoz/graph/channel.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/identifier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -4009,7 +4041,6 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
-    - 'gems/tamoz-otel/lib/tamoz/otel/async_exporter.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler/grant_intersector.rb'
@@ -4056,6 +4087,7 @@ Style/IfUnlessModifier:
     - 'script/websearch_adapter'
     - 'test/agent_worker_test.rb'
     - 'test/capability_host_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_pool_test.rb'
     - 'test/core_stream_test.rb'
     - 'test/sqlite_scenario_driver_test.rb'
@@ -4078,7 +4110,7 @@ Style/IfWithBooleanLiteralBranches:
 # Configuration parameters: InverseMethods, InverseBlocks.
 Style/InverseMethods:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'test/stream_approval_relay_test.rb'
@@ -4091,8 +4123,8 @@ Style/InverseMethods:
 # This cop supports safe autocorrection (--autocorrect).
 Style/KeywordArgumentsMerging:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
     - 'gems/tamoz-core/lib/tamoz/context.rb'
     - 'test/agent_mcp_adversarial_test.rb'
     - 'test/agent_mcp_capability_source_test.rb'
@@ -4103,17 +4135,18 @@ Style/KeywordArgumentsMerging:
     - 'test/mcp_supervisor_test.rb'
     - 'test/stream_evidence_client_test.rb'
 
-# Offense count: 91
+# Offense count: 93
 # This cop supports safe autocorrection (--autocorrect).
 Style/KeywordParametersOrder:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
     - 'gems/tamoz-comms/lib/tamoz/comms/approval_prompt.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
@@ -4186,7 +4219,7 @@ Style/MethodCallWithoutArgsParentheses:
 # Offense count: 8
 Style/MultilineBlockChain:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/sealed_build.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/sealed_build.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_envelope.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'test/capability_host_test.rb'
@@ -4210,10 +4243,10 @@ Style/MultilineIfModifier:
 # This cop supports safe autocorrection (--autocorrect).
 Style/MultilineTernaryOperator:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-graph/lib/tamoz/command.rb'
@@ -4231,10 +4264,10 @@ Style/MultilineTernaryOperator:
 # Configuration parameters: AllowMethodComparison, ComparisonsThreshold.
 Style/MultipleComparison:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/decision_log.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
@@ -4267,15 +4300,16 @@ Style/MutableConstant:
     - 'test/stream_artifact_manifest_test.rb'
     - 'test/stream_situation_recall_contract_test.rb'
 
-# Offense count: 7
+# Offense count: 8
 # This cop supports safe autocorrection (--autocorrect).
 Style/NestedTernaryOperator:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/schedule_store.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
@@ -4285,10 +4319,10 @@ Style/NestedTernaryOperator:
 # SupportedStyles: skip_modifier_ifs, always
 Style/Next:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile/document_validator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile/document_validator.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/verifier.rb'
@@ -4327,7 +4361,7 @@ Style/NumericLiterals:
 # SupportedStyles: predicate, comparison
 Style/NumericPredicate:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/subprocess_runner.rb'
@@ -4399,17 +4433,17 @@ Style/RedundantArgument:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantAssignment:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/decision_log.rb'
 
 # Offense count: 12
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantBegin:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/database_kernel.rb'
@@ -4461,12 +4495,12 @@ Style/RedundantDoubleSplatHashBraces:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantFreeze:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/approval_decision_log.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb'
@@ -4522,22 +4556,15 @@ Style/RedundantRegexpArgument:
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantRegexpEscape:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'test/agent_skills_adversarial_test.rb'
-
-# Offense count: 4
-# This cop supports safe autocorrection (--autocorrect).
-# Configuration parameters: AllowMultipleReturnValues.
-Style/RedundantReturn:
-  Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
 
 # Offense count: 2
 # This cop supports safe autocorrection (--autocorrect).
 Style/RedundantSelfAssignmentBranch:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'test/healing_matrix_test.rb'
 
 # Offense count: 5
@@ -4553,8 +4580,8 @@ Style/RedundantStringEscape:
 # SupportedStyles: slashes, percent_r, mixed
 Style/RegexpLiteral:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch.rb'
     - 'test/agent_mcp_capability_source_test.rb'
     - 'test/agent_skills_test.rb'
@@ -4564,6 +4591,12 @@ Style/RegexpLiteral:
     - 'test/sqlite_raw_oracle_test.rb'
     - 'test/sqlite_stale_request_test.rb'
 
+# Offense count: 4
+# This cop supports safe autocorrection (--autocorrect).
+Style/RescueModifier:
+  Exclude:
+    - 'test/concurrency_drain_test.rb'
+
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle.
@@ -4572,20 +4605,19 @@ Style/RescueStandardError:
   Exclude:
     - 'test/stream_episode_replay_test.rb'
 
-# Offense count: 17
+# Offense count: 16
 # This cop supports unsafe autocorrection (--autocorrect-all).
 # Configuration parameters: ConvertCodeThatCanStartToReturnNil, AllowedMethods, MaxChainLength.
 # AllowedMethods: present?, blank?, presence, try, try!
 Style/SafeNavigation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/receipt_budget_controller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_lifecycle.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/decision_log.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
@@ -4602,7 +4634,7 @@ Style/SafeNavigationChainLength:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Style/SelectByKind:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
 
 # Offense count: 1
 # This cop supports safe autocorrection (--autocorrect).
@@ -4615,7 +4647,7 @@ Style/SelfAssignment:
 # Configuration parameters: AllowAsExpressionSeparator.
 Style/Semicolon:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/deep_freeze.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_source_audit.rb'
     - 'test/agent_profile_test.rb'
@@ -4632,9 +4664,9 @@ Style/SingleArgumentDig:
 # Configuration parameters: AllowModifier.
 Style/SoleNestedConditional:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/situation_request.rb'
     - 'script/tamoz_sqlite_oracle'
@@ -4660,7 +4692,7 @@ Style/StderrPuts:
 # Configuration parameters: Mode.
 Style/StringConcatenation:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
     - 'test/agent_profile_test.rb'
     - 'test/agent_skills_adversarial_test.rb'
@@ -4670,7 +4702,7 @@ Style/StringConcatenation:
     - 'test/duplicate_key_detector_test.rb'
     - 'test/sqlite_approval_stores_test.rb'
 
-# Offense count: 36316
+# Offense count: 36549
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, ConsistentQuotesInMultiline.
 # SupportedStyles: single_quotes, double_quotes
@@ -4683,80 +4715,108 @@ Style/StringLiterals:
     - 'bin/tamoz-stream-worker'
     - 'docs/design-v0.1/validate_design.rb'
     - 'gems/gemspec_helper.rb'
-    - 'gems/tamoz-agent/exe/tamoz'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capabilities/version.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent_capabilities.rb'
+    - 'gems/tamoz-agent-cli/exe/tamoz'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli/version.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent_cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/classification.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/effect_identity.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/oracle.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/preflight.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/promotion_gate.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/remediation.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/scope.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/seams.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/version.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent_healing.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/generator.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/monitor.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/version.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent_improvement.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/graph_versions.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/intent_catalog.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/kernel/version.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/model_receipt.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/plan.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/providers.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/receipt_budget_controller.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/sealed_build.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/skill_set.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_verifier.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent_kernel.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/lifecycle.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/limits.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/version.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/wisdom.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent_memory.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile/version.rb'
+    - 'gems/tamoz-agent-profile/lib/tamoz/agent_profile.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_gem/version.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_nodes.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent_session.rb'
+    - 'gems/tamoz-agent-session/tamoz-agent-session.gemspec'
     - 'gems/tamoz-agent/lib/tamoz/agent.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/capability_binding.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/deliberation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/diagnosis_catalog.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/effect_dispatcher.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/episode_graph.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_model_transport.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_tool_call.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/effect_identity.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/oracle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/preflight.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/promotion_gate.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/remediation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/scope.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/seams.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/generator.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/monitor.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/intent_catalog.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/lifecycle.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/limits.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/wisdom.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/model_receipt.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/plan.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/profile.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/raw_http.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/receipt_budget_controller.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/sealed_build.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/skill_set.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/version.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_gateway.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/witness_verifier.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-agent/tamoz-agent.gemspec'
     - 'gems/tamoz-approval/lib/tamoz/approval/engine.rb'
     - 'gems/tamoz-approval/lib/tamoz/approval/policy_document.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/process_group.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/trap.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/version.rb'
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
     - 'gems/tamoz-comms/lib/tamoz/comms/errors.rb'
-    - 'gems/tamoz-core/lib/tamoz/cancellation_token.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/event_stream.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/version.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/pool.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/stream_sink.rb'
+    - 'gems/tamoz-concurrency/tamoz-concurrency.gemspec'
     - 'gems/tamoz-core/lib/tamoz/circuit.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/evidence.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
@@ -4770,17 +4830,16 @@ Style/StringLiterals:
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
+    - 'gems/tamoz-core/lib/tamoz/core/raw_http.rb'
     - 'gems/tamoz-core/lib/tamoz/core/situation_recall.rb'
     - 'gems/tamoz-core/lib/tamoz/core/version.rb'
     - 'gems/tamoz-core/lib/tamoz/error.rb'
     - 'gems/tamoz-core/lib/tamoz/immutable.rb'
     - 'gems/tamoz-core/lib/tamoz/instrumentation.rb'
-    - 'gems/tamoz-core/lib/tamoz/pool.rb'
     - 'gems/tamoz-core/lib/tamoz/secret.rb'
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-core/lib/tamoz/store_entry.rb'
     - 'gems/tamoz-core/lib/tamoz/stream_part.rb'
-    - 'gems/tamoz-core/lib/tamoz/stream_sink.rb'
     - 'gems/tamoz-core/lib/tamoz/task_result.rb'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/exe/tamoz-eval'
@@ -4838,7 +4897,6 @@ Style/StringLiterals:
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/definition.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb'
-    - 'gems/tamoz-graph/lib/tamoz/graph/event_stream.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/executor.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/frontier.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/interrupt.rb'
@@ -5017,6 +5075,7 @@ Style/StringLiterals:
     - 'test/capability_inventory_test.rb'
     - 'test/capability_registry_test.rb'
     - 'test/ci_configuration_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/core_context_test.rb'
     - 'test/core_instrumentation_test.rb'
     - 'test/core_jcs_vectors_test.rb'
@@ -5135,41 +5194,41 @@ Style/StringLiterals:
     - 'test/websearch_egress_test.rb'
     - 'test/websearch_invocation_test.rb'
 
-# Offense count: 535
+# Offense count: 547
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle.
 # SupportedStyles: single_quotes, double_quotes
 Style/StringLiteralsInInterpolation:
   Exclude:
     - 'Rakefile'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_schedule_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli_worker_commands.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_frame_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/episode_nodes.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/rule_registry.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/evaluation_report.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/heuristic.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/monitor.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/promotion.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
+    - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_source_builder.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_schedule_commands.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule_registry.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/evaluation_report.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/heuristic.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/monitor.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/promotion.rb'
+    - 'gems/tamoz-agent-improvement/lib/tamoz/agent/improvement/provenance.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb'
+    - 'gems/tamoz-agent-kernel/lib/tamoz/agent/reasoning_document.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/record.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/retrieval.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/situation_recaller.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/verified_outcome_reference.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session.rb'
+    - 'gems/tamoz-agent-session/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/lane_config.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_capability_source.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/mcp_source_builder.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/record.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/retrieval.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/situation_recaller.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/verified_outcome_reference.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/reasoning_document.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/runtime_directory.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/session_records.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/record.rb'
     - 'gems/tamoz-core/lib/tamoz/circuit/registry.rb'
@@ -5294,23 +5353,25 @@ Style/StringLiteralsInInterpolation:
     - 'test/support/domain_loader.rb'
     - 'test/websearch_circuit_test.rb'
 
-# Offense count: 3
+# Offense count: 4
 # This cop supports safe autocorrection (--autocorrect).
 Style/SuperArguments:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/admission.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/behavior_transition.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/admission.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/behavior_transition.rb'
     - 'script/tamoz_sqlite_oracle'
+    - 'test/concurrency_drain_test.rb'
 
-# Offense count: 11
+# Offense count: 12
 # This cop supports safe autocorrection (--autocorrect).
 # Configuration parameters: EnforcedStyle, MinSize.
 # SupportedStyles: percent, brackets
 Style/SymbolArray:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/cli.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/healing/failure_record.rb'
+    - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
+    - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'test/approval_values_test.rb'
+    - 'test/concurrency_drain_test.rb'
     - 'test/healing_failure_contract_test.rb'
     - 'test/sqlite_approval_stores_test.rb'
 
@@ -5320,8 +5381,8 @@ Style/SymbolArray:
 # AllowedMethods: define_method
 Style/SymbolProc:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/consolidation.rb'
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/consolidation.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
     - 'gems/tamoz-agent/lib/tamoz/agent/worker_runtime.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/route_planner.rb'
@@ -5354,7 +5415,7 @@ Style/TrailingCommaInArrayLiteral:
 # AllowedMethods: to_ary, to_a, to_c, to_enum, to_h, to_hash, to_i, to_int, to_io, to_open, to_path, to_proc, to_r, to_regexp, to_str, to_s, to_sym
 Style/TrivialAccessors:
   Exclude:
-    - 'gems/tamoz-agent/lib/tamoz/agent/memory/surface.rb'
+    - 'gems/tamoz-agent-memory/lib/tamoz/agent/memory/surface.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiled.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/episode_stream.rb'
@@ -5363,12 +5424,13 @@ Style/TrivialAccessors:
     - 'test/support/autonomy_case.rb'
     - 'test/support/domain_loader.rb'
 
-# Offense count: 2
+# Offense count: 3
 # This cop supports safe autocorrection (--autocorrect).
 Style/WhileUntilModifier:
   Exclude:
+    - 'gems/tamoz-cancellation/lib/tamoz/cancellation/process_group.rb'
+    - 'gems/tamoz-concurrency/lib/tamoz/concurrency/drain.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
 
 # Offense count: 112
 # This cop supports safe autocorrection (--autocorrect).

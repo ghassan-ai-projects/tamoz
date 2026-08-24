@@ -66,7 +66,7 @@ module Tamoz
         toolbox:,
         checkpointer:,
         max_plan_attempts: 3,
-        max_repair_attempts: Runtime::MAX_REPAIR_ATTEMPTS,
+        max_repair_attempts: SessionNodes::MAX_REPAIR_ATTEMPTS,
         approval_engine: nil,
         approval_session_id: nil,
         model_call_safety: :idempotent,
@@ -102,9 +102,10 @@ module Tamoz
 
         verify_mcp_source!(mcp)
         # Pipeline A: every durable session has exactly one policy owner. A
-        # caller that supplies none gets the bundled implement profile over
-        # memory stores — gating is never skipped, only defaulted.
-        approval_engine ||= Tamoz::Agent.build_approval_engine(profile_name: 'implement')
+        # caller that supplies none gets the driver's bundled default (the
+        # implement profile over memory stores) — gating is never skipped,
+        # only defaulted; a bare consumer of this gem fails loudly instead.
+        approval_engine ||= SessionApprovalWiring.default_engine
         @toolbox = toolbox
         @model = model
         @mcp = mcp

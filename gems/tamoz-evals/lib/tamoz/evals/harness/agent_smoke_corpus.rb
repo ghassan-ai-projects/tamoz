@@ -495,9 +495,10 @@ module Tamoz
         class CliSubprocessHarness
           REPO_ROOT = File.expand_path("../../../../../..", __dir__).freeze
           LOAD_PATHS = %w[
-            tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
-            tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms tamoz-mcp
-            tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile
+            tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler
+            tamoz-stream tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability
+            tamoz-comms tamoz-mcp tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing
+            tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session
             tamoz-agent-improvement tamoz-agent-cli
             tamoz-agent
           ].flat_map do |gem|

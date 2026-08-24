@@ -95,9 +95,9 @@ module Tamoz
       end
 
       def terminate_group(pid, wait_thread)
-        Process.kill('TERM', -pid)
+        Cancellation::ProcessGroup.signal(pid, 'TERM')
         wait_thread.join(1)
-        Process.kill('KILL', -pid)
+        Cancellation::ProcessGroup.signal(pid, 'KILL')
         wait_thread.join
       rescue Errno::ESRCH
         wait_thread.join

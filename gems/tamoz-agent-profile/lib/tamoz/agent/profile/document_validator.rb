@@ -136,11 +136,12 @@ module Tamoz
             raise ValidationError, "#{@path}: profile.profile_id must match #{PROFILE_ID_PATTERN.inspect}"
           end
           # DR-5 RC3: "legacy" is the session-record sentinel for sessions that
-          # predate trusted profiles (SessionRecords::LEGACY_PROFILE_ID). A real
-          # profile named "legacy" would be misclassified by the shipped cli.rb
-          # sentinel guard and silently destroy the sentinel semantics, so the id
-          # is reserved and refused here, at load.
-          return unless id == SessionRecords::LEGACY_PROFILE_ID
+          # predate trusted profiles (Tamoz::Core::LEGACY_PROFILE_ID, homed in
+          # core so this check needs no session edge). A real profile named
+          # "legacy" would be misclassified by the shipped cli.rb sentinel guard
+          # and silently destroy the sentinel semantics, so the id is reserved
+          # and refused here, at load.
+          return unless id == Tamoz::Core::LEGACY_PROFILE_ID
 
           raise ValidationError,
                 "#{@path}: profile.profile_id \"legacy\" is reserved for sessions that " \

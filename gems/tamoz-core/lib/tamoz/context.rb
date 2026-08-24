@@ -28,7 +28,7 @@ module Tamoz
       tags: [],
       metadata: {},
       deadline: nil,
-      cancellation: CancellationToken.new,
+      cancellation: nil,
       clock: Clock.monotonic,
       notifier: Tamoz.configuration.notifier,
       emitter: Emitter::Null::INSTANCE,
@@ -56,7 +56,8 @@ module Tamoz
       raise ConfigurationError, "metadata must be a Hash" unless @metadata.is_a?(Hash)
 
       @deadline = normalize_deadline(deadline)
-      unless cancellation.respond_to?(:cancelled?) && cancellation.respond_to?(:reason)
+      unless cancellation.nil? ||
+             (cancellation.respond_to?(:cancelled?) && cancellation.respond_to?(:reason))
         raise ConfigurationError, "cancellation must implement cancelled? and reason"
       end
       raise ConfigurationError, "clock must respond to now" unless clock.respond_to?(:now)
@@ -127,7 +128,7 @@ module Tamoz
     end
 
     def cancelled?
-      !!@cancellation.cancelled?
+      !!@cancellation&.cancelled?
     end
 
     def check!

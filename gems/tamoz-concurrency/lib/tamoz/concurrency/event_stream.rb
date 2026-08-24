@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Tamoz
-  module Graph
+  module Concurrency
     class EventStream
       include Enumerable
 
@@ -73,7 +73,7 @@ module Tamoz
           return if @coordinator
 
           @coordinator = Thread.new do
-            Thread.current.name = "tamoz-graph-stream" if Thread.current.respond_to?(:name=)
+            Thread.current.name = "tamoz-concurrency-event-stream" if Thread.current.respond_to?(:name=)
             begin
               @result = @runner.call
             rescue StandardError => error
@@ -89,7 +89,7 @@ module Tamoz
         coordinator = @mutex.synchronize { @coordinator }
         return unless coordinator
 
-        coordinator.join(@join_grace)
+        Concurrency.join_all([coordinator], deadline: @join_grace)
         return unless coordinator.alive?
 
         @error ||= PoolWorkerError.new(
@@ -99,7 +99,5 @@ module Tamoz
 
       private_constant :MAX_JOIN_GRACE
     end
-
-    private_constant :EventStream
   end
 end

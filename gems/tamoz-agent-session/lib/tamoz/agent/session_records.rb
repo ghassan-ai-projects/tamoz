@@ -19,7 +19,9 @@ module Tamoz
       # compatibility policy.
       RECORD_VERSION = 2
       DIGEST_DOMAIN = "tamoz.agent.session_record.v1"
-      LEGACY_PROFILE_ID = "legacy"
+      # Homed in tamoz-core (`Tamoz::Core::LEGACY_PROFILE_ID`) so the profile
+      # validator can reserve the id without a session dependency edge.
+      LEGACY_PROFILE_ID = Tamoz::Core::LEGACY_PROFILE_ID
       LEGACY_PROFILE_DIGEST = "legacy:none"
       # P16: `LEGACY_SKILL_EPOCH` moved to tamoz-core (`Tamoz::Core::LEGACY_SKILL_EPOCH`),
       # shared with the moved toolbox's empty-snapshot `skill_epoch`.
@@ -383,53 +385,8 @@ module Tamoz
                 "version #{RECORD_VERSION}"
         end
 
-        migrated = value
-        while migrated.fetch("record_version") < RECORD_VERSION
-          from = migrated.fetch("record_version")
-          migration = MIGRATIONS[[stored_kind, from]]
-          unless migration
-            raise CheckpointVersionError,
-                  "no migration from session record #{stored_kind} version #{from} to " \
-                  "version #{RECORD_VERSION}"
-          end
-
-          migrated = Tamoz::Core.deep_freeze(migration.call(migrated))
-        end
-
-        # Pre-P8/P9 session records carry no profile or skill identity; they load
-        # with the legacy sentinels so resume can distinguish them from profiled or
-        # skill-bearing sessions. RECORD_VERSION stays 1: defaults are filled at
-        # load time, so no migration is needed and old sessions still resume.
-        if stored_kind == "session"
-          defaults = {}
-          defaults["profile_id"] = LEGACY_PROFILE_ID unless migrated.key?("profile_id")
-          defaults["profile_digest"] = LEGACY_PROFILE_DIGEST unless migrated.key?("profile_digest")
-          defaults["skill_epoch"] = Tamoz::Core::LEGACY_SKILL_EPOCH unless migrated.key?("skill_epoch")
-          unless migrated.key?("prompt_surface_digest")
-            defaults["prompt_surface_digest"] = LEGACY_PROMPT_SURFACE_DIGEST
-          end
-          # DR-5 D1: no profile resolution is one state, however it arose — a
-          # pre-P8 session and a P8 profiled session with zero roles both carry
-          # {} as `profile_roles`, disambiguated by `profile_id` ("legacy"
-          # sentinel vs a real id). Budgets likewise default to {}.
-          defaults["profile_roles"] = {} unless migrated.key?("profile_roles")
-          defaults["profile_budgets"] = {} unless migrated.key?("profile_budgets")
-          # P10 §5: no MCP catalogs is one state, however it arose — a pre-P10
-          # session and a P10 session built without an MCP source both resume
-          # against "no catalogs". "{}" is the legacy sentinel.
-          defaults["mcp_catalogs"] = {} unless migrated.key?("mcp_catalogs")
-          defaults["mcp_source_digests"] = {} unless migrated.key?("mcp_source_digests")
-          # P17: no egress pin is one state, however it arose — a pre-P17 session
-          # and a P17 session whose profile carried no `egress:` section both
-          # resume against "no egress declaration". "{}" is the legacy sentinel.
-          defaults["egress_pin"] = {} unless migrated.key?("egress_pin")
-          # P11 (C4): pre-P11 sessions carry no memory snapshot; they load with
-          # the "none" sentinel so resume is byte-identical (zero memory
-          # injection, identical prefix digest). A session built post-P11 with
-          # memory records a hash-shaped `memory_epoch`.
-          defaults["memory_epoch"] = Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH unless migrated.key?("memory_epoch")
-          migrated = Tamoz::Core.deep_freeze(migrated.merge(defaults)) unless defaults.empty?
-        end
+        migrated = migrate_to_current!(value, stored_kind)
+        migrated = apply_legacy_session_defaults!(migrated) if stored_kind == "session"
 
         validate_fields!(migrated, stored_kind)
         reject_sensitive!(migrated)
@@ -455,6 +412,54 @@ module Tamoz
           raise error.class, "session channel #{key.inspect}: #{error.message}"
         end
         state
+      end
+
+      def migrate_to_current!(value, stored_kind)
+        migrated = value
+        while (version = migrated.fetch("record_version")) < RECORD_VERSION
+          migration = MIGRATIONS.fetch([stored_kind, version]) do
+            raise CheckpointVersionError,
+                  "no migration from session record #{stored_kind} version #{version} to " \
+                  "version #{RECORD_VERSION}"
+          end
+
+          migrated = Tamoz::Core.deep_freeze(migration.call(migrated))
+        end
+        migrated
+      end
+
+      # Pre-P8/P9 session records carry no profile or skill identity; they load
+      # with the legacy sentinels so resume can distinguish them from profiled or
+      # skill-bearing sessions. RECORD_VERSION stays 1: defaults are filled at
+      # load time, so no migration is needed and old sessions still resume.
+      #
+      # DR-5 D1: no profile resolution is one state, however it arose — a pre-P8
+      # session and a P8 profiled session with zero roles both carry {} as
+      # `profile_roles`, disambiguated by `profile_id` ("legacy" sentinel vs a
+      # real id). Budgets likewise default to {}. P10 §5: no MCP catalogs is one
+      # state ("{}" sentinel). P17: no egress pin is one state ("{}" sentinel).
+      LEGACY_SESSION_DEFAULT_FIELDS = [
+        ["profile_id", LEGACY_PROFILE_ID],
+        ["profile_digest", LEGACY_PROFILE_DIGEST],
+        ["skill_epoch", Tamoz::Core::LEGACY_SKILL_EPOCH],
+        ["prompt_surface_digest", LEGACY_PROMPT_SURFACE_DIGEST],
+        ["profile_roles", {}],
+        ["profile_budgets", {}],
+        ["mcp_catalogs", {}],
+        ["mcp_source_digests", {}],
+        ["egress_pin", {}]
+      ].freeze
+
+      # P11 (C4): pre-P11 sessions carry no memory snapshot; they load with
+      # the "none" sentinel so resume is byte-identical (zero memory
+      # injection, identical prefix digest). A session built post-P11 with
+      # memory records a hash-shaped `memory_epoch`.
+      def apply_legacy_session_defaults!(migrated)
+        defaults = LEGACY_SESSION_DEFAULT_FIELDS.reject { |field, _| migrated.key?(field) }.to_h
+        defaults["memory_epoch"] = Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH unless migrated.key?("memory_epoch")
+        return migrated if defaults.empty?
+
+        Tamoz::Core.deep_freeze(migrated.merge(defaults))
       end
 
       def reject_sensitive!(value)

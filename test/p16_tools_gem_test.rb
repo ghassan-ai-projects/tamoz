@@ -7,7 +7,7 @@ require_relative "test_helper"
 # pre-move code at P16 start, except the digest matrix, which is deliberately
 # re-pinned when the catalog begins binding configured check argv values.
 class P16ToolsGemTest < Minitest::Test
-  CLEAN_LIB_PATHS = %w[tamoz-core tamoz-tools].flat_map do |name|
+  CLEAN_LIB_PATHS = %w[tamoz-cancellation tamoz-core tamoz-tools].flat_map do |name|
     ["-I", GEM_ROOTS.fetch(name).join("lib").to_s]
   end.freeze
 

@@ -1,36 +1,28 @@
 # frozen_string_literal: true
 
+require "tamoz/cancellation"
+require "tamoz/concurrency"
 require "tamoz/graph"
 require "tamoz/tools"
 require "tamoz/observability"
 require "tamoz/comms"
 require "tamoz/approval"
-require_relative "agent/request_projection"
 require_relative "agent/version"
 require "tamoz/agent_kernel"
+require "tamoz/agent_capabilities"
 require_relative "agent/episode_graph"
-require_relative "agent/request_route"
-require_relative "agent/mcp_capability_source"
-require_relative "agent/capability_binding"
 require_relative "agent/ruby_llm_model"
 require_relative "agent/lane_config"
 require_relative "agent/runtime"
-require_relative "agent/session_records"
+require "tamoz/agent_session"
 require "tamoz/agent_memory"
 require "tamoz/agent_healing"
 require "tamoz/agent_improvement"
-require_relative "agent/session_nodes"
-require_relative "agent/session"
-require_relative "agent/session_status_projection"
 require_relative "agent/terminal_progress"
 require "tamoz/agent_profile"
 require_relative "agent/runtime_directory"
-require_relative "agent/mcp_source_builder"
-require_relative "agent/governed_database_source"
-require_relative "agent/governed_browser_source"
 require_relative "agent/worker_runtime"
 require_relative "agent/child_environments"
-require_relative "agent/child_task"
 require_relative "agent/durable_recorder"
 require_relative "agent/worker"
 
@@ -48,9 +40,8 @@ module Tamoz
     Toolbox = Tamoz::Tools::Toolbox
     CheckReceipt = Tamoz::Tools::CheckReceipt
     Skills = Tamoz::Tools::Skills
-    ToolError = Tamoz::Tools::ToolError
-    ToolArgumentError = Tamoz::Tools::ToolArgumentError
-    ToolPolicyError = Tamoz::Tools::ToolPolicyError
+    # ToolError/ToolArgumentError/ToolPolicyError are bound once, by the
+    # capabilities umbrella (required above); rebinding them here would warn.
 
     def self.build(
       model:,
@@ -89,6 +80,14 @@ module Tamoz
         clock: -> { Time.now },
         evidence_symbols: evidence_symbols
       )
+    end
+
+    module SessionApprovalWiring
+      class << self
+        def default_engine
+          Tamoz::Agent.build_approval_engine(profile_name: "implement")
+        end
+      end
     end
   end
 end

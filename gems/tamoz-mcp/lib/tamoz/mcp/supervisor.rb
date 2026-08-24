@@ -385,17 +385,14 @@ module Tamoz
       def process_group_alive?
         return false unless @pid
 
-        Process.kill(0, -@pid)
-        true
-      rescue Errno::ESRCH, Errno::ECHILD
-        false
-      rescue Errno::EPERM
-        true
+        Cancellation::ProcessGroup.alive?(@pid)
       end
 
+      # This supervisor treats a denied group kill as "already handled"; the
+      # check runner's fallback to a direct-pid kill is deliberately NOT shared.
       def signal_process_group(signal)
-        Process.kill(signal, -@pid)
-      rescue Errno::ESRCH, Errno::EPERM, Errno::ECHILD
+        Cancellation::ProcessGroup.signal(@pid, signal)
+      rescue Errno::EPERM
         nil
       end
 

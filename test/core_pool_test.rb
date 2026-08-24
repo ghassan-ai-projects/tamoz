@@ -168,7 +168,7 @@ class CorePoolTest < Minitest::Test
   end
 
   def test_pool_implementation_contains_no_asynchronous_thread_termination
-    source = ROOT.join("gems", "tamoz-core", "lib", "tamoz", "pool.rb").read(encoding: Encoding::UTF_8)
+    source = ROOT.join("gems", "tamoz-concurrency", "lib", "tamoz", "pool.rb").read(encoding: Encoding::UTF_8)
 
     refute_match(/Thread\s*#?\s*(?:kill|raise)|\.kill\b|\.raise\b|Timeout\.timeout/, source)
   end

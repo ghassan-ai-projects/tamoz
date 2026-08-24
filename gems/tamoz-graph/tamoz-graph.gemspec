@@ -9,6 +9,8 @@ TamozGemspec.build(
   summary: "Deterministic checkpointed graph runtime for Tamoz",
   description: "Bulk-synchronous in-memory graph execution with explicit interrupts and streaming.",
   dependencies: [
+    ["tamoz-cancellation", "= #{Tamoz::Graph::VERSION}"],
+    ["tamoz-concurrency", "= #{Tamoz::Graph::VERSION}"],
     ["tamoz-core", "= #{Tamoz::Graph::VERSION}"],
     ["zeitwerk", "~> 2.6"]
   ]

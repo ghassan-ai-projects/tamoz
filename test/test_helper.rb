@@ -12,7 +12,7 @@ require "stringio"
 require "tmpdir"
 
 ROOT = Pathname.new(File.expand_path("..", __dir__)).freeze
-GEM_ROOTS = %w[tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-approval tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram tamoz-observability tamoz-otel].to_h do |name|
+GEM_ROOTS = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-approval tamoz-evals tamoz-mcp tamoz-scheduler tamoz-stream tamoz-comms tamoz-telegram tamoz-observability tamoz-otel].to_h do |name|
   [name, ROOT.join("gems", name)]
 end.freeze
 
@@ -20,6 +20,8 @@ GEM_ROOTS.each_value do |root|
   $LOAD_PATH.unshift(root.join("lib").to_s)
 end
 
+require "tamoz/cancellation"
+require "tamoz/concurrency"
 require "tamoz/core"
 require "tamoz/graph"
 require "tamoz/sqlite"

@@ -2,6 +2,8 @@
 
 require "zeitwerk"
 require "tamoz/core"
+require "tamoz/cancellation"
+require "tamoz/concurrency"
 require_relative "graph/version"
 
 module Tamoz

@@ -1,8 +1,21 @@
 PATH
+  remote: gems/tamoz-agent-capabilities
+  specs:
+    tamoz-agent-capabilities (0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-mcp (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent-cli
   specs:
     tamoz-agent-cli (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-agent-healing
@@ -43,17 +56,34 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-agent-session
+  specs:
+    tamoz-agent-session (0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-healing (= 0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-agent-memory (= 0.1.0.alpha.1)
+      tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-agent
   specs:
     tamoz-agent (0.1.0.alpha.1)
       ruby_llm (~> 1.16.0)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-healing (= 0.1.0.alpha.1)
       tamoz-agent-improvement (= 0.1.0.alpha.1)
       tamoz-agent-kernel (= 0.1.0.alpha.1)
       tamoz-agent-memory (= 0.1.0.alpha.1)
       tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-approval (= 0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-comms (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
@@ -66,9 +96,22 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-cancellation
+  specs:
+    tamoz-cancellation (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-comms
   specs:
     tamoz-comms (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-concurrency
+  specs:
+    tamoz-concurrency (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
@@ -82,6 +125,8 @@ PATH
   specs:
     tamoz-evals (0.1.0.alpha.1)
       tamoz-agent (= 0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-mcp (= 0.1.0.alpha.1)
@@ -92,6 +137,8 @@ PATH
   remote: gems/tamoz-graph
   specs:
     tamoz-graph (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       zeitwerk (~> 2.6)
 
@@ -100,18 +147,21 @@ PATH
   specs:
     tamoz-mcp (0.1.0.alpha.1)
       mcp (~> 1.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-observability
   specs:
     tamoz-observability (0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-otel
   specs:
     tamoz-otel (0.1.0.alpha.1)
+      tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-observability (= 0.1.0.alpha.1)
 
 PATH
@@ -136,6 +186,7 @@ PATH
     tamoz-stream (0.1.0.alpha.1)
       google-protobuf (~> 4.35)
       grpc (~> 1.83)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
@@ -148,6 +199,7 @@ PATH
   remote: gems/tamoz-tools
   specs:
     tamoz-tools (0.1.0.alpha.1)
+      tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 GEM
@@ -315,14 +367,18 @@ DEPENDENCIES
   rubocop-performance (~> 1.25)
   simplecov (~> 0.22)
   tamoz-agent!
+  tamoz-agent-capabilities!
   tamoz-agent-cli!
   tamoz-agent-healing!
   tamoz-agent-improvement!
   tamoz-agent-kernel!
   tamoz-agent-memory!
   tamoz-agent-profile!
+  tamoz-agent-session!
   tamoz-approval!
+  tamoz-cancellation!
   tamoz-comms!
+  tamoz-concurrency!
   tamoz-core!
   tamoz-evals!
   tamoz-graph!
@@ -397,14 +453,18 @@ CHECKSUMS
   sqlite3 (2.9.5) sha256=04572973a3f943ad50a8adfffc8dd752a5f06e4c3db2026f71838fed8a982606
   sqlite3 (2.9.5-arm64-darwin) sha256=d0cf444a70fc9395d513cfbcc1e6719e224aa645314e3824cb0474c721425aa2
   tamoz-agent (0.1.0.alpha.1)
+  tamoz-agent-capabilities (0.1.0.alpha.1)
   tamoz-agent-cli (0.1.0.alpha.1)
   tamoz-agent-healing (0.1.0.alpha.1)
   tamoz-agent-improvement (0.1.0.alpha.1)
   tamoz-agent-kernel (0.1.0.alpha.1)
   tamoz-agent-memory (0.1.0.alpha.1)
   tamoz-agent-profile (0.1.0.alpha.1)
+  tamoz-agent-session (0.1.0.alpha.1)
   tamoz-approval (0.1.0.alpha.1)
+  tamoz-cancellation (0.1.0.alpha.1)
   tamoz-comms (0.1.0.alpha.1)
+  tamoz-concurrency (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)

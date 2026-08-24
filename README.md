@@ -13,11 +13,13 @@ an approval you granted.
 [`documentation/limitations.md`](documentation/limitations.md) before building
 on it — it lists, with evidence, what Tamoz does not do.
 
-## The thirteen gems
+## The gems
 
 | Package | Responsibility | Runtime dependencies |
 |---|---|---|
-| `tamoz-core` | Shared values, context, secrets, canonical digests, worker pool, the durable-circuit engine | stdlib, Zeitwerk |
+| `tamoz-core` | Shared values, context, secrets, canonical digests, the durable-circuit engine, legacy sentinels | stdlib, Zeitwerk |
+| `tamoz-cancellation` | The cancellation token plus OS-signal traps, process-group primitives, interruptible sleep | `tamoz-core` |
+| `tamoz-concurrency` | Bounded pools, stream sink, event stream, the shared-budget drain base class | `tamoz-cancellation`, `tamoz-core` |
 | `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-core` |
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
@@ -29,13 +31,15 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
 | `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
-| `tamoz-agent-kernel` | The deliberation substrate: episode records and receipts, the plan/review/execute/verify engine, the effect seam, catalogs, error taxonomy | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-kernel` | The deliberation substrate: episode records and receipts, the plan/review/execute/verify engine, the effect seam, catalogs, error taxonomy, request routes and projections | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-capabilities` | The sealed capability catalog: bindings over toolbox/skills/MCP/browser/database sources, child-task dispatch | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` — admission, retrieval, lifecycle with deletion receipts, consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification with abstention, immutable rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
-| `tamoz-agent` | The deliberative agent runtime (library): session state machine over the graph, worker and durable execution, capability/model wiring | `tamoz-agent-kernel`, the four verticals above, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
 
 Each gem installs and runs with only its declared dependencies, proven per gem

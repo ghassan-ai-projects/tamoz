@@ -20,7 +20,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::EffectDispatcher" => {"deprecated" => true},
           "Tamoz::Agent::Error" => {"deprecated" => true},
           "Tamoz::Agent::Event" => {"deprecated" => true},
-          "Tamoz::Agent::McpCapabilitySource" => {},
           "Tamoz::Agent::McpCatalogSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Plan" => {"deprecated" => true},
           "Tamoz::Agent::PlanRejectedError" => {"deprecated" => true},
@@ -28,10 +27,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Result" => {},
           "Tamoz::Agent::RubyLLMModel" => {},
           "Tamoz::Agent::Runtime" => {},
-          "Tamoz::Agent::Session" => {},
-          "Tamoz::Agent::SessionOutcome" => {},
-          "Tamoz::Agent::SessionRecords" => {},
-          "Tamoz::Agent::SessionView" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Skills" => {"deprecated" => true},
           "Tamoz::Agent::Step" => {"deprecated" => true},
@@ -53,6 +48,26 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Improvement::CandidateLifecycle" => {},
           "Tamoz::Agent::Improvement::VERSION" => {}
         },
+        "tamoz-agent-capabilities" => {
+          "Tamoz::Agent::Capabilities::VERSION" => {},
+          "Tamoz::Agent::CapabilityBinding" => {},
+          "Tamoz::Agent::ChildTask" => {},
+          "Tamoz::Agent::ChildTaskDispatcher" => {},
+          "Tamoz::Agent::GovernedBrowserSource" => {},
+          "Tamoz::Agent::GovernedDatabaseSource" => {},
+          "Tamoz::Agent::McpCapabilitySource" => {},
+          "Tamoz::Agent::McpSourceBuilder" => {}
+        },
+        "tamoz-agent-session" => {
+          "Tamoz::Agent::Session" => {},
+          "Tamoz::Agent::SessionGem::VERSION" => {},
+          "Tamoz::Agent::SessionNodes" => {},
+          "Tamoz::Agent::SessionOutcome" => {},
+          "Tamoz::Agent::SessionPlanningContext" => {},
+          "Tamoz::Agent::SessionRecords" => {},
+          "Tamoz::Agent::SessionStatusProjection" => {},
+          "Tamoz::Agent::SessionView" => {}
+        },
         "tamoz-agent-cli" => {
           "Tamoz::Agent::CLI" => {},
           "Tamoz::Agent::CLI::VERSION" => {}
@@ -68,6 +83,8 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::Plan" => {},
           "Tamoz::Agent::PlanRejectedError" => {},
           "Tamoz::Agent::Providers" => {},
+          "Tamoz::Agent::RequestProjection" => {},
+          "Tamoz::Agent::RequestRoute" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {},
           "Tamoz::Agent::Step" => {}
         },
@@ -94,6 +111,13 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Approval::Request" => {},
           "Tamoz::Approval::UnknownDecisionError" => {},
           "Tamoz::Approval::VERSION" => {}
+        },
+        "tamoz-cancellation" => {
+          "Tamoz::Cancellation::ProcessGroup" => {},
+          "Tamoz::Cancellation::Trap" => {},
+          "Tamoz::Cancellation::VERSION" => {},
+          "Tamoz::CancellationToken" => {},
+          "Tamoz::Cancellation.interruptible_sleep" => {}
         },
         "tamoz-comms" => {
           "Tamoz::Comms::DeliveryDrainer" => {},
@@ -124,13 +148,20 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::ValidationError" => {},
           "Tamoz::Comms::VERSION" => {}
         },
+        "tamoz-concurrency" => {
+          "Tamoz::Concurrency::Drain" => {},
+          "Tamoz::Concurrency::EventStream" => {},
+          "Tamoz::Concurrency::VERSION" => {},
+          "Tamoz::Concurrency.join_all" => {},
+          "Tamoz::Pool.for" => {},
+          "Tamoz::StreamSink" => {}
+        },
         "tamoz-core" => {
           "Tamoz.configuration" => {},
           "Tamoz.configure" => {},
           "Tamoz.configuration_finalized?" => {},
           "Tamoz.finalize_configuration!" => {},
           "Tamoz.instrument" => {},
-          "Tamoz::CancellationToken" => {},
           "Tamoz::CancelledError" => {},
           "Tamoz::CheckpointConflictError" => {},
           "Tamoz::CheckpointCorruptionError" => {},
@@ -140,6 +171,7 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Configuration" => {},
           "Tamoz::ConfigurationError" => {},
           "Tamoz::Context" => {},
+          "Tamoz::Core::LEGACY_PROFILE_ID" => {},
           "Tamoz::Core::LEGACY_SKILL_EPOCH" => {},
           "Tamoz::Core::TOOL_ERROR_CLASS_NAMES" => {},
           "Tamoz::Core::ProtocolError" => {},
@@ -162,7 +194,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::LeaseLostError" => {},
           "Tamoz::NodeError" => {},
           "Tamoz::Notifier::Null" => {},
-          "Tamoz::Pool.for" => {},
           "Tamoz::PoolCircuitOpenError" => {},
           "Tamoz::PoolWorkerError" => {},
           "Tamoz::RecursionLimitError" => {},
@@ -175,7 +206,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::StoreError" => {},
           "Tamoz::StreamClosedError" => {},
           "Tamoz::StreamPart" => {},
-          "Tamoz::StreamSink" => {},
           "Tamoz::TaskResult::Cancelled" => {},
           "Tamoz::TaskResult::Failed" => {},
           "Tamoz::TaskResult::Interrupted" => {},
@@ -392,10 +422,14 @@ class PublicAPITest < Minitest::Test
       Tamoz::Agent::Memory::VERSION,
       Tamoz::Agent::Healing::VERSION,
       Tamoz::Agent::Profile::VERSION,
+      Tamoz::Agent::Capabilities::VERSION,
+      Tamoz::Agent::SessionGem::VERSION,
       Tamoz::Agent::Improvement::VERSION,
       Tamoz::Agent::CLI::VERSION,
       Tamoz::Agent::VERSION,
       Tamoz::Approval::VERSION,
+      Tamoz::Cancellation::VERSION,
+      Tamoz::Concurrency::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
       Tamoz::Comms::VERSION,

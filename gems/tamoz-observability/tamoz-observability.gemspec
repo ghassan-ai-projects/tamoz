@@ -14,6 +14,7 @@ TamozGemspec.build(
                'identity, immutable signals, bounded recorders, local journal, ' \
                'content policy, metrics and trace projection.',
   dependencies: [
+    ['tamoz-concurrency', "= #{Tamoz::Observability::VERSION}"],
     ['tamoz-core', "= #{Tamoz::Observability::VERSION}"]
   ]
 )

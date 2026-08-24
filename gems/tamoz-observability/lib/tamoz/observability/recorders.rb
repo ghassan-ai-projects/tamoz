@@ -121,7 +121,11 @@ module Tamoz
         end
       end
 
-      class Journal
+      # The disk journal over the shared Concurrency::Drain skeleton. What
+      # stays here is this recorder's own policy: the reserved lane never
+      # drops (a full reserved queue falls back to a single bounded local
+      # write inside #record), rotation and strict mode, and the drop ledger.
+      class Journal < Concurrency::Drain
         DEFAULT_QUEUE_SIZE = 1_024
         DEFAULT_RESERVED_SIZE = 64
         DEFAULT_MAX_FILE_BYTES = 32 * 1_024 * 1_024
@@ -194,40 +198,29 @@ module Tamoz
           @max_files = positive_integer(max_files, :max_files)
           @flush_interval = Float(flush_interval_ms) / 1_000
           @strict = strict
-          @reserved = []
-          @bulk = []
           @drops = Hash.new(0)
-          @mutex = Mutex.new
-          @condition = ConditionVariable.new
-          @closed = false
-          @disabled = false
-          @in_flight = 0
           @io = nil
           @io_bytes = 0
           FileUtils.mkdir_p(@directory, mode: 0o700)
           File.chmod(0o700, @directory)
-          @thread = Thread.new { drain }
+          super(lanes: { reserved: @reserved_size, bulk: @queue_size },
+                batch_size: @queue_size + @reserved_size,
+                interval: @flush_interval)
         end
 
         def record(signal)
           validate!(signal)
           reserved = @catalog.safety_bearing?(signal.name)
-          @mutex.synchronize do
-            if @closed || @disabled
-              @drops[[signal.name, @closed ? 'closed' : 'disabled', reserved ? 'reserved' : 'bulk']] += 1
+          synchronize do
+            if drain_closed? || drain_disabled?
+              @drops[[signal.name, drain_closed? ? 'closed' : 'disabled', reserved ? 'reserved' : 'bulk']] += 1
               persist_health
-              return :dropped
+              next :dropped
             end
 
-            queue = reserved ? @reserved : @bulk
-            limit = reserved ? @reserved_size : @queue_size
-            if queue.length < limit
-              queue << signal
-              @condition.signal
-              return :recorded
-            end
-
-            if reserved
+            if accept(reserved ? :reserved : :bulk, signal)
+              :recorded
+            elsif reserved
               # Safety-bearing evidence is never dropped. The fallback is a
               # single bounded local write; it never contacts a collector.
               write_now(signal) ? :recorded : :dropped
@@ -240,46 +233,22 @@ module Tamoz
         rescue StandardError
           raise if @strict
 
-          @mutex.synchronize { @drops[['invalid', 'validation', 'bulk']] += 1 }
+          synchronize { @drops[['invalid', 'validation', 'bulk']] += 1 }
           :dropped
         end
 
         def health
-          @mutex.synchronize do
+          synchronize do
             {
               'enabled' => true,
-              'reserved_depth' => @reserved.length,
-              'bulk_depth' => @bulk.length,
+              'reserved_depth' => lane_depths.fetch(:reserved),
+              'bulk_depth' => lane_depths.fetch(:bulk),
               'drops' => drops_hash,
-              'journal_disabled' => @disabled,
+              'journal_disabled' => drain_disabled?,
               'path' => path,
               'policy_digest' => @policy_digest
             }
           end
-        end
-
-        def flush(deadline_ms:)
-          deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + Float(deadline_ms) / 1_000
-          @mutex.synchronize do
-            while @reserved.any? || @bulk.any? || @in_flight.positive?
-              remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
-              break if remaining <= 0
-
-              @condition.wait(@mutex, remaining)
-            end
-            @reserved.length + @bulk.length + @in_flight
-          end
-        end
-
-        def close
-          @mutex.synchronize do
-            return if @closed
-
-            @closed = true
-            @condition.broadcast
-          end
-          @thread.join(1.0)
-          nil
         end
 
         private
@@ -296,34 +265,20 @@ module Tamoz
           @catalog.validate_signal(signal)
         end
 
-        def drain
-          loop do
-            batch = @mutex.synchronize do
-              while @reserved.empty? && @bulk.empty? && !@closed
-                @condition.wait(@mutex, @flush_interval)
-              end
-              next if @closed && @reserved.empty? && @bulk.empty?
-
-              values = @reserved.shift(@reserved_size) + @bulk.shift(@queue_size)
-              @in_flight += values.length
-              values
-            end
-            break unless batch
-            write_batch(batch)
-          end
-        rescue StandardError
-          @mutex.synchronize { disable!('writer_failure') }
-        ensure
-          @mutex.synchronize { close_io }
+        def compose_batch
+          shift_lane(:reserved, @reserved_size) + shift_lane(:bulk, @queue_size)
         end
 
-        def write_batch(batch)
+        def deliver_batch(batch)
           batch.each { |signal| write_signal(signal) }
-        ensure
-          @mutex.synchronize do
-            @in_flight -= batch.length if batch
-            @condition.broadcast
-          end
+        end
+
+        def handle_loop_error(_error)
+          synchronize { disable!('writer_failure') }
+        end
+
+        def on_thread_exit
+          synchronize { close_io }
         end
 
         def write_now(signal)

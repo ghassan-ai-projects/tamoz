@@ -10,5 +10,8 @@ TamozGemspec.build(
   description: "The Toolbox and the skills descriptor surface: approval and preview, " \
                "atomic IO, UTF-8 policy, path/root/symlink validation, compound " \
                "replacements, and the inert skills compiler. Depends on tamoz-core only.",
-  dependencies: [["tamoz-core", "= #{Tamoz::Tools::VERSION}"]]
+  dependencies: [
+    ["tamoz-cancellation", "= #{Tamoz::Tools::VERSION}"],
+    ["tamoz-core", "= #{Tamoz::Tools::VERSION}"]
+  ]
 )

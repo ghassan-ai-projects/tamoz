@@ -119,13 +119,12 @@ module Tamoz
       # INT/TERM ask every loop to stop, and the previous handlers are
       # restored so an in-process test never leaks traps.
       def run_gateway_loops(gateways, drainers)
-        # Handed to a thread, not run here: `stop` releases the poller lease
-        # with a database write, and the connection pool's mutex raises
+        # Trap.install hands each stop request to a thread for us: `stop`
+        # releases the poller lease with a database write, whose mutex raises
         # ThreadError in a trap context. Doing it inline turns a supervisor's
         # SIGTERM into a backtrace instead of a released lease.
-        old_int = Signal.trap('INT') { Thread.new { stop_loops(gateways, drainers) } }
-        old_term = Signal.trap('TERM') { Thread.new { stop_loops(gateways, drainers) } }
-        begin
+        stop = ->(_reason) { stop_loops(gateways, drainers) }
+        Cancellation::Trap.install(int: stop, term: stop) do
           threads = gateways.map do |gateway|
             Thread.new do
               outcome = gateway.serve_loop(drain: false)
@@ -144,8 +143,6 @@ module Tamoz
           0
         ensure
           stop_loops(gateways, drainers)
-          Signal.trap('INT', old_int) if old_int
-          Signal.trap('TERM', old_term) if old_term
         end
       end
 

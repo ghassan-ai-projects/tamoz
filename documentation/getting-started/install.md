@@ -53,25 +53,29 @@ named example task in a clean subprocess.
 
 | Gem | What it is | Depends on |
 |---|---|---|
-| `tamoz-core` | Shared values, context, secrets, codec, pool | stdlib, Zeitwerk |
-| `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core` |
+| `tamoz-core` | Shared values, context, secrets, codec | stdlib, Zeitwerk |
+| `tamoz-cancellation` | Cancellation token, signal trap, process-group primitives, interruptible sleep | `tamoz-core` |
+| `tamoz-concurrency` | Bounded pools, stream sink, event stream, drain base class | `tamoz-cancellation`, `tamoz-core` |
+| `tamoz-graph` | Deterministic graph execution and durability contracts | `tamoz-core`, `tamoz-cancellation`, `tamoz-concurrency` |
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
-| `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core`, gRPC, protobuf |
+| `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core`, `tamoz-cancellation`, gRPC, protobuf |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
 | `tamoz-approval` | Approval/permission policy owner: decisions, grants, policy-as-data | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
-| `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core` |
-| `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability` |
+| `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core`, `tamoz-concurrency` |
+| `tamoz-otel` | Optional governed OTLP/HTTP exporter | `tamoz-observability`, `tamoz-concurrency` |
 | `tamoz-sqlite` | The durable adapter: checkpoints, inbox, effects, leases | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
-| `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core` |
-| `tamoz-agent-kernel` | The deliberation substrate: records, receipts, plan/review/execute/verify engine, effect seam | `tamoz-core`, `tamoz-tools` |
+| `tamoz-tools` | The workspace toolbox and the skills compiler | `tamoz-core`, `tamoz-cancellation` |
+| `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
+| `tamoz-agent-kernel` | The deliberation substrate: records, receipts, plan/review/execute/verify engine, effect seam, request routes and projections | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-capabilities` | The sealed capability catalog: bindings over toolbox/skills/MCP/browser/database sources, child-task dispatch | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
 | `tamoz-agent-memory` | The durable memory vertical: `Memory::Engine`, admission/retrieval/consolidation/lifecycle, wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification, rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-tools`, `tamoz-core` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
-| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-improvement`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, RubyLLM |
-| `tamoz-mcp` | Governed MCP client/host and websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Conformance, artifact verification, release evidence | core, agent, sqlite, mcp, graph, scheduler (development/release only) |
 
 `tamoz-evals` is a development/release gem: it depends on the runtime gems it
