@@ -79,3 +79,9 @@
   admission ladder (learnable check → duplicate check → admit → result)
   steps down one method per decision.
 - Status: done
+
+### episode_worker.rb
+- Bar: `execute` is a three-line DSL; request validation is a flat gate
+  list with the P8 fixture policy as its own named refusal; the stream
+  validator steps sequence/size/terminal checks one level down.
+- Status: done
