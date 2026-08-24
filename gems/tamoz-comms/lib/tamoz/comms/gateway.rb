@@ -31,7 +31,8 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
 
       HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
-                   '/redirect r<reference> <new task>, /whoami. Commands never become task text.'.freeze
+                   '/redirect r<reference> <new task>, /whoami, /start <pairing code>. ' \
+                   'Commands never become task text.'.freeze
       NO_WORK_REPLY = 'No work is admitted for this conversation.'.freeze
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'.freeze
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'.freeze
@@ -39,6 +40,14 @@ module Tamoz
       NEW_CONVERSATION_UNBOUND_REPLY =
         'No conversation is bound for this channel yet; send a message first.'.freeze
       REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'.freeze
+      START_USAGE_REPLY = 'Usage: /start <pairing code>'.freeze
+      START_WAITING_REPLY =
+        'That code matches a pending pairing request. Waiting for operator approval.'.freeze
+      START_NO_MATCH_REPLY = "That code doesn't match a pending pairing request.".freeze
+      START_PAIRED_REPLY = 'This chat is already paired.'.freeze
+      PAIRING_PENDING_REPLY =
+        "This chat isn't paired yet. Read this code to your operator for approval: ".freeze
+      PAIRING_CODE_TTL_S = 86_400.0
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'.freeze
       FINISHED_REQUEST_REPLY = 'That request has already finished.'.freeze
 
@@ -74,6 +83,9 @@ module Tamoz
         @batch_size = batch_size
         @fence = 0
         @stopping = false
+        # The store keeps only challenge digests; the plaintext codes live
+        # here so a repeat contact can name the same code again.
+        @issued_pairing_codes = {}
         @drainer = drainer || DeliveryDrainer.new(
           store: @store,
           transport:,
@@ -225,6 +237,7 @@ module Tamoz
         else
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
                                             now:)
+          handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
         end
       end
 
@@ -413,7 +426,84 @@ module Tamoz
           append_control(redirect_request(envelope, intent.arguments), envelope, now:)
         when 'whoami'
           append_control(whoami_text(envelope), envelope, now:)
+        when 'start'
+          append_control(start_text(intent.arguments), envelope, now:)
         end
+      end
+
+      # `/start` is feedback only (design §7): matching a pending challenge
+      # reports the wait; binding activation stays exclusively with the
+      # operator's approve_pairing — no chat path ever mutates a binding.
+      def start_text(arguments)
+        return START_USAGE_REPLY unless arguments
+
+        START_PAIRED_REPLY
+      end
+
+      # Pairing first contact: an unbound sender on a pairing surface is
+      # never left in silence. The durable record stays an ignored
+      # :pairing_pending observation; the reply names one live challenge's
+      # code, and `/start <code>` answers whether that code is pending.
+      def handle_pairing_contact(envelope, now:)
+        parsed = Comms::Commands.parse(envelope.fetch('text').to_s, bot_username:)
+        if parsed&.command == 'start'
+          append_control(pairing_start_reply(parsed.arguments, envelope, now:), envelope, now:)
+          return
+        end
+
+        append_control("#{PAIRING_PENDING_REPLY}#{ensure_pairing_code(envelope, now:)}", envelope, now:)
+      end
+
+      def pairing_start_reply(code, envelope, now:)
+        return START_USAGE_REPLY unless code
+
+        matched = pending_pairing_rows(envelope, now).any? do |row|
+          Comms::PairingChallenge.verify?(
+            challenge: code, digest: row.fetch('challenge_digest'),
+            surface_id: row.fetch('surface_id'), correspondent_id: row.fetch('correspondent_id'),
+            conversation_id: row.fetch('conversation_id')
+          )
+        end
+        matched ? START_WAITING_REPLY : START_NO_MATCH_REPLY
+      end
+
+      def pending_pairing_rows(envelope, now)
+        @store.pairing_challenges(status: 'pending').select do |row|
+          row.fetch('surface_id') == surface_id &&
+            row.fetch('correspondent_id') == envelope.fetch('correspondent_id') &&
+            row.fetch('expires_at_ms') > pairing_ms(now)
+        end
+      end
+
+      # Reuses this conversation's live pending row when its plaintext is
+      # still known here; otherwise issues one new hashed challenge.
+      def ensure_pairing_code(envelope, now:)
+        reused = pending_pairing_rows(envelope, now).find do |row|
+          row.fetch('conversation_id') == envelope.fetch('conversation_id') &&
+            @issued_pairing_codes.key?(row.fetch('challenge_digest'))
+        end
+        return @issued_pairing_codes.fetch(reused.fetch('challenge_digest')) if reused
+
+        issue_pairing_code(envelope, now:)
+      end
+
+      def issue_pairing_code(envelope, now:)
+        code = Comms::PairingChallenge.generate_code
+        correspondent_id = envelope.fetch('correspondent_id')
+        challenge = Comms::PairingChallenge.build(
+          surface_id:, correspondent_id:, conversation_id: envelope.fetch('conversation_id'),
+          ttl_s: PAIRING_CODE_TTL_S, now:, code:
+        )
+        @store.insert_pairing_challenge(
+          digest: challenge.digest, surface_id:, correspondent_id:,
+          conversation_id: envelope.fetch('conversation_id'), expires_at: challenge.expires_at, now:
+        )
+        @issued_pairing_codes[challenge.digest] = code
+        code
+      end
+
+      def pairing_ms(now)
+        (now.utc.to_r * 1000).to_i
       end
 
       # `/status` with no argument renders the conversation aggregate from

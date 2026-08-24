@@ -22,7 +22,7 @@ class CommsCommandParityTest < Minitest::Test
   AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
 
   def test_known_is_exactly_the_handled_command_set
-    assert_equal %w[help status new cancel redirect whoami], Comms::Commands::KNOWN
+    assert_equal %w[help status new cancel redirect whoami start], Comms::Commands::KNOWN
 
     with_gateway do |gateway, transport, _store, _adapter, checkpoints|
       admit_turn(gateway, transport, 101)
