@@ -1,6 +1,6 @@
 # Refactoring result
 
-Branch: `codex/refactoring-agent-20260824`  
+Branch: `codex/refactoring-agent-20260824`
 Base: `4c82bef`
 
 ## Per-file commits
