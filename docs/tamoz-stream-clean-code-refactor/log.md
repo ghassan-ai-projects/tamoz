@@ -54,3 +54,12 @@
 - Notes: the unsupported-version refusal stays inside the nil-handler branch
   (after dedupe) exactly as before — hoisting it would change which events
   raise. Digest domain literal unified into notification_digest.
+
+### sse_transport.rb
+- Bar: `open` reads validate → enumerate (stop / stream-or-reconnect);
+  `stream_once` reads dial → request → validate → feed; the SSE Parser was
+  already at bar (left alone).
+- Status: done
+- Notes: reconnect loop rewritten around a boolean-returning helper — a
+  literal `break` extraction would LocalJumpError outside the block; EOF vs
+  error paths and stop semantics preserved.

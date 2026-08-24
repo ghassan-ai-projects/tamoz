@@ -25,9 +25,7 @@ module Tamoz
 
       def initialize(endpoint:, **configuration)
         @uri = URI.parse(endpoint)
-        unless %w[http https].include?(@uri.scheme) && @uri.host
-          raise TransportError, 'SSE endpoint must be an HTTP or HTTPS URL'
-        end
+        require_http_url!
 
         @logger = configuration.fetch(:logger, nil)
         @open_timeout = configuration.fetch(:open_timeout, 5)
@@ -50,20 +48,25 @@ module Tamoz
           state = { cursor:, delay: @reconnect_delay }
           loop do
             break if @stopped
-
-            begin
-              connect(yielder, state, credential)
-              break unless @reconnect_on_eof
-
-              reconnect(state)
-            rescue *RETRYABLE_ERRORS => e
-              raise if @stopped
-
-              log(:warn, "SSE reconnect error=#{e.class}")
-              reconnect(state)
-            end
+            break unless stream_and_maybe_reconnect(yielder, state, credential)
           end
         end
+      end
+
+      # Streams one connection; returns true to continue the open loop,
+      # false to stop after a clean EOF when reconnection is disabled.
+      def stream_and_maybe_reconnect(yielder, state, credential)
+        connect(yielder, state, credential)
+        return false unless @reconnect_on_eof
+
+        reconnect(state)
+        true
+      rescue *RETRYABLE_ERRORS => e
+        raise if @stopped
+
+        log(:warn, "SSE reconnect error=#{e.class}")
+        reconnect(state)
+        true
       end
 
       def resnapshot(cursor:, credential:)
@@ -109,15 +112,9 @@ module Tamoz
       end
 
       def stream_once(cursor:, credential:, &block)
-        request = Net::HTTP::Get.new(request_path)
-        request['Accept'] = 'text/event-stream'
-        request['Cache-Control'] = 'no-cache'
-        request['Authorization'] = "Bearer #{credential}"
-        request['Last-Event-ID'] = cursor.to_s if cursor
-
         http = build_http
         @http = http
-        http.request(request) do |response|
+        http.request(build_request(credential, cursor)) do |response|
           validate_response!(response)
           log(:info, "connected endpoint=#{@uri}")
           parser = Parser.new(&block)
@@ -126,6 +123,15 @@ module Tamoz
         end
       ensure
         @http = nil if @http.equal?(http)
+      end
+
+      def build_request(credential, cursor)
+        request = Net::HTTP::Get.new(request_path)
+        request['Accept'] = 'text/event-stream'
+        request['Cache-Control'] = 'no-cache'
+        request['Authorization'] = "Bearer #{credential}"
+        request['Last-Event-ID'] = cursor.to_s if cursor
+        request
       end
 
       def build_http
@@ -150,6 +156,12 @@ module Tamoz
         raise EOFError, "SSE endpoint returned HTTP #{response.code}" if response.code.to_i >= 500
 
         raise TransportError, "SSE endpoint returned HTTP #{response.code}"
+      end
+
+      def require_http_url!
+        return if %w[http https].include?(@uri.scheme) && @uri.host
+
+        raise TransportError, 'SSE endpoint must be an HTTP or HTTPS URL'
       end
 
       def validate_credential!(credential)
