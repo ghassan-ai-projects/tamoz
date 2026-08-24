@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":1047,"end_pos":1062},"message":"Style/RedundantFreeze: Do not freeze immutable objects, as freezing them has no effect.","cop_name":"Style/RedundantFreeze","status":"uncorrected"}]

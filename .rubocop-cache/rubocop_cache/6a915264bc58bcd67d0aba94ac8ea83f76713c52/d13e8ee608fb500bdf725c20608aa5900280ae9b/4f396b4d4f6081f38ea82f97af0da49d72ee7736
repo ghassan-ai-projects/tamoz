@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":18711,"end_pos":18760},"message":"Style/RegexpLiteral: Use `%r` around regular expression.","cop_name":"Style/RegexpLiteral","status":"uncorrected"}]

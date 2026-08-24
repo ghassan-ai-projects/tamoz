@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":224,"end_pos":235},"message":"Style/Documentation: Missing top-level documentation comment for `module Tamoz::OTel`.","cop_name":"Style/Documentation","status":"unsupported"}]

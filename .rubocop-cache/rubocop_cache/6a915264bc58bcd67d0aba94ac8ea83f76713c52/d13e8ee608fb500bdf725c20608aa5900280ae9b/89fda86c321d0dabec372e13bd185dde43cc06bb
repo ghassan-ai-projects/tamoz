@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":506,"end_pos":19235},"message":"Metrics/ClassLength: Class has too many lines. [277/250]","cop_name":"Metrics/ClassLength","status":"unsupported"}]

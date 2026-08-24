@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":5471,"end_pos":5474},"message":"Layout/EmptyLineAfterGuardClause: Add empty line after guard clause.","cop_name":"Layout/EmptyLineAfterGuardClause","status":"uncorrected"}]

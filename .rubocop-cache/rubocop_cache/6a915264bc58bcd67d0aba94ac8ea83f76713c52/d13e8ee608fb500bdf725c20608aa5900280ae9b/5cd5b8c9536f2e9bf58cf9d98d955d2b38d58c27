@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":18924,"end_pos":18953},"message":"Style/NestedTernaryOperator: Ternary operators must not be nested. Prefer `if` or `else` constructs instead.","cop_name":"Style/NestedTernaryOperator","status":"uncorrected"}]

@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":6303,"end_pos":6393},"message":"Minitest/EmptyLineBeforeAssertionMethods: Add empty line before assertion.","cop_name":"Minitest/EmptyLineBeforeAssertionMethods","status":"uncorrected"}]

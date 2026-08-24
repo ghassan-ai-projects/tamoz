@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":65,"end_pos":86},"message":"Style/Documentation: Missing top-level documentation comment for `module Tamoz::Managed::RemainingSteps`.","cop_name":"Style/Documentation","status":"unsupported"}]

@@ -1,1 +1,0 @@
-[{"severity":"convention","location":{"begin_pos":63,"end_pos":75},"message":"Style/Documentation: Missing top-level documentation comment for `class Tamoz::Graph::Limits`.","cop_name":"Style/Documentation","status":"unsupported"}]

@@ -85,3 +85,7 @@ documentation/benchmark/holdout-pin/leak-scan.json
 
 # benchmark scenario driver runtime fixture
 scenario/
+
+# rubocop parallel-work cache
+.rubocache/
+.rubocop-cache/

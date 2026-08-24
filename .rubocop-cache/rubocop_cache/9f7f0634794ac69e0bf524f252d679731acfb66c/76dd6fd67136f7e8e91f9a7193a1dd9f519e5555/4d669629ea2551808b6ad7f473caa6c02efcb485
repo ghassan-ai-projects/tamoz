@@ -1,1 +1,0 @@
-[{"severity":"warning","location":{"begin_pos":0,"end_pos":0},"message":"Gemspec/RequiredRubyVersion: `required_ruby_version` should be specified.","cop_name":"Gemspec/RequiredRubyVersion","status":"unsupported"}]

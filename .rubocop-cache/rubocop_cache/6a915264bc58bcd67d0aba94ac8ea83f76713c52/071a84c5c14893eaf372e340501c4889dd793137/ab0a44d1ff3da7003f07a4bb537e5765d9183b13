@@ -1,1 +1,0 @@
-[{"severity":"warning","location":{"begin_pos":404,"end_pos":426},"message":"Lint/RedundantCopDisableDirective: Unnecessary disabling of `Metrics/ParameterLists`.","cop_name":"Lint/RedundantCopDisableDirective","status":"uncorrected"}]
