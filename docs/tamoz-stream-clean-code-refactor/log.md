@@ -63,3 +63,12 @@
 - Notes: reconnect loop rewritten around a boolean-returning helper — a
   literal `break` extraction would LocalJumpError outside the block; EOF vs
   error paths and stop semantics preserved.
+
+### verification_store.rb
+- Bar: open/record_outcome/reconcile read as validate → locked transition;
+  awaiting_row / observed_row / reconciled_row carry the state machine one
+  level down.
+- Status: done
+- Notes: idempotent redelivery now stores the unchanged row back instead of
+  returning early — same observable state under the lock; error messages
+  and evaluation order unchanged.
