@@ -81,6 +81,33 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  def request_ids(checkpoints, thread)
+    checkpoints.request_history(thread_id: thread).map(&:request_id)
+  end
+
+  def bind_route!(store, thread: 'tg.ops.abc', conversation_id: 'telegram:chat:22222222')
+    store.bind_conversation(
+      Comms::Conversation.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        conversation_id:, thread_id: thread,
+        profile_id: 'ops', bound_at: now
+      ).wire, now:
+    )
+  end
+
+  def insert_request!(store, request_id:, conversation_id:, created_at_ms:, thread: 'tg.ops.abc')
+    store.__send__(:transaction, 'test.request.insert') do |tx|
+      binds = [request_id, 'telegram-ops', 1, conversation_id, thread, 'ops', 1, 'admitted', created_at_ms, created_at_ms]
+      tx.execute('test.request.insert', <<~SQL, binds)
+        INSERT INTO tamoz_comms_requests (
+          request_id, surface_id, surface_revision, conversation_id,
+          thread_id, profile_id, reservation, projection_state,
+          created_at_ms, updated_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SQL
+    end
+  end
+
   def admit(store, wire, thread: 'tg.ops.abc', now: self.now)
     store.admit_and_enqueue(
       wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
@@ -297,8 +324,9 @@ class SQLiteCommsStoreTest < Minitest::Test
   end
 
   # The transcript a turn is planned with: admitted task texts interleaved
-  # with the terminal replies the correspondent saw. Control deliveries
-  # ('Accepted…') and non-admitted messages never enter it.
+  # with the terminal replies the correspondent confirmably saw (invariant
+  # 11 — the answer enters only once its delivery is `succeeded`). Control
+  # deliveries ('Accepted…') and non-admitted messages never enter it.
   def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
     with_engine do |store, _adapter, _checkpoints|
       store.deploy_surface(descriptor.wire, now:)
@@ -307,8 +335,9 @@ class SQLiteCommsStoreTest < Minitest::Test
                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
                                                       reservation: 1, capacity: 500, now:
       )
-      store.append_delivery(delivery(text: 'done, it is blue'),
-                            surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      answer = delivery(text: 'done, it is blue')
+      store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      claim_and_mark!(store, answer.fetch('delivery_id'), 'succeeded')
       store.append_delivery(
         delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
                  journaled: false, content_digest: 'c' * 64),
@@ -532,6 +561,202 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 'tg.ops.abc', store.conversation(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
       ).fetch('thread_id')
+    end
+  end
+
+  # Plan 02 work item 3: the status projection is reference-addressed and
+  # queue-aware from durable rows alone — the active request's short
+  # reference, its queue position, and the age of the oldest admitted
+  # request — and none of those keys exist when nothing is admitted.
+  def test_conversation_status_is_reference_addressed_and_queue_aware
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+
+      idle = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      )
+
+      assert_equal 'idle', idle.fetch('state')
+      refute idle.key?('request_ref')
+      refute idle.key?('queue_position')
+      refute idle.key?('queue_age_ms')
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 41), now:)
+      assert_equal :enqueued, admit(store, envelope(update_id: 42), now: now + 1)
+
+      active = request_ids(checkpoints, 'tg.ops.abc').last
+      status = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now: now + 5
+      )
+
+      assert_equal 'accepted', status.fetch('state')
+      assert_equal 2, status.fetch('open_requests')
+      assert_equal active, status.fetch('request_id')
+      assert_equal "r#{active[0, 10]}", status.fetch('request_ref')
+      assert_equal 1, status.fetch('queue_position'), 'one admitted request is older than the active one'
+      assert_equal 5_000, status.fetch('queue_age_ms')
+    end
+  end
+
+  def test_a_unique_reference_resolves_to_its_full_status_and_unknown_fails_typed
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 51))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      found = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{request_id[0, 10]}", now:
+      )
+
+      assert_kind_of Hash, found
+      assert_equal request_id, found.fetch('request_id')
+      assert_equal "r#{request_id[0, 10]}", found.fetch('request_ref')
+      assert_equal 'tg.ops.abc', found.fetch('thread_id')
+      assert_equal 0, found.fetch('queue_position')
+      assert found.key?('terminal_reason')
+
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: 'r0000000000', now:
+      )
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: 'half-a-ref', now:
+      ), 'a malformed reference resolves to nothing'
+    end
+  end
+
+  def test_a_reference_never_resolves_across_conversations
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      bind_route!(store, thread: 'tg.ops.other', conversation_id: 'telegram:chat:33333333')
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 61))
+      foreign_ref = "r#{request_ids(checkpoints, 'tg.ops.abc').first[0, 10]}"
+
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:33333333',
+        ref: foreign_ref, now:
+      ), 'the caller-bound scope never leaks another conversation\'s request'
+
+      assert_kind_of Hash, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: foreign_ref, now:
+      )
+    end
+  end
+
+  def test_an_ambiguous_reference_is_typed_not_guessed
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      insert_request!(store, request_id: 'a' * 63 + '1',
+                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+      insert_request!(store, request_id: 'a' * 63 + '2',
+                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+
+      assert_equal :ambiguous_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{'a' * 10}", now:
+      )
+    end
+  end
+
+  # Invariant 11 (plan 02 work item 5): history inclusion requires confirmed
+  # delivery — a journaled terminal answer enters only when its SAME row is
+  # `succeeded`; pending and unknown stay out of every later model prompt.
+  def test_history_includes_only_confirmed_successful_terminal_deliveries
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      draft = delivery(text: 'draft answer', content_digest: 'b' * 63 + '1')
+      lost = delivery(text: 'lost reply', content_digest: 'b' * 63 + '2')
+      store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:)
+      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      assistant_texts = lambda {
+        store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+             .select { |entry| entry.fetch('role') == 'assistant' }.map { |entry| entry.fetch('text') }
+      }
+
+      assert_empty(assistant_texts.call, 'pending terminal output never enters history')
+
+      claim_and_mark!(store, draft.fetch('delivery_id'), 'succeeded')
+      claim_and_mark!(store, lost.fetch('delivery_id'), 'unknown')
+
+      assert_includes assistant_texts.call, 'draft answer', 'the same row flipped to succeeded IS included'
+      refute_includes assistant_texts.call, 'lost reply', 'an unknown outcome stays out of history'
+    end
+  end
+
+  def claim_and_mark!(store, delivery_id, status)
+    assert_equal :claimed, store.claim_delivery(
+      delivery_id:, owner: 'gateway:a', fence: 7, claim_expires_at: now + 30, now:
+    )
+    assert_equal :marked, store.mark_delivery(
+      delivery_id:, owner: 'gateway:a', fence: 7, status:, now: now + 1
+    )
+  end
+
+  # Plan 02 work item 4: `/new` bumps a durable per-conversation generation;
+  # an absent conversation row raises before anything mutates.
+  def test_generation_bumps_are_durable_and_absent_rows_raise
+    Dir.mktmpdir('tamoz-comms-generation') do |directory|
+      path = File.join(directory, 'runtime.sqlite3')
+      first = Tamoz::SQLite::Adapter.new(path:)
+      begin
+        store = first.bind_comms_store
+        bind_route!(store)
+
+        assert_equal 0, store.conversation_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+        assert_equal 1, store.bump_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+        assert_equal 2, store.bump_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+
+        error = assert_raises(KeyError) do
+          store.bump_generation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:99999999')
+        end
+
+        assert_match(/not bound/, error.message)
+      ensure
+        first&.close
+      end
+
+      reopened = Tamoz::SQLite::Adapter.new(path:)
+      begin
+        store = reopened.bind_comms_store
+
+        assert_equal 2, store.conversation_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        ), 'the bump is durable across a reopen'
+      ensure
+        reopened&.close
+      end
+    end
+  end
+
+  # Plan 02 work item 5: reply_to survives append -> outbox row -> the
+  # drainer's Delivery rebuild, so it reaches the transport untouched.
+  def test_reply_to_round_trips_from_append_to_transport_wire
+    with_engine do |store|
+      store.append_delivery(delivery(reply_to: 4242), surface_id: 'telegram-ops', capacity: 10, now:)
+      store.append_delivery(
+        delivery(content_digest: 'c' * 64), surface_id: 'telegram-ops', capacity: 10, now: now + 1
+      )
+
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+      rebuilt = Comms::Delivery.from_wire(rows.first.merge('journaled' => rows.first.fetch('journaled') == 1))
+
+      assert_equal 4242, rows.first.fetch('reply_to')
+      assert_equal 4242, rebuilt.reply_to, 'the drainer rebuild carries reply_to to the transport'
+      assert_nil rows.last.fetch('reply_to'), 'rows without a target round-trip nil'
     end
   end
 

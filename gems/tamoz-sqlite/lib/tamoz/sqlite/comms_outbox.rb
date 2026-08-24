@@ -46,9 +46,10 @@ module Tamoz
           txn.execute('comms.outbox.append', <<~SQL, outbox_binds(delivery_wire, surface_id, now))
             INSERT INTO tamoz_comms_outbox (
               delivery_id, surface_id, conversation_id, kind, operation, text,
-              part_index, part_count, markup, journaled, content_digest,
-              render_version, expires_at_ms, status, created_at_ms, updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+              part_index, part_count, markup, reply_to, journaled,
+              content_digest, render_version, expires_at_ms, status,
+              created_at_ms, updated_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
           SQL
           :appended
         end

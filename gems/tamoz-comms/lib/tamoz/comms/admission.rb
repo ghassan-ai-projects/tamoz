@@ -48,14 +48,17 @@ module Tamoz
       end
 
       # The deterministic per-conversation thread id (design §5):
-      # `tg.<surface_id>.<sha256(conversation_id)[0,16]>` — bounded and safe
-      # for the CLI's per-thread naming.
-      def thread_id(surface_id, conversation_id)
-        digest = ::Digest::SHA256.hexdigest("#{thread_domain}\n#{conversation_id}")[0, 16]
+      # `tg.<surface_id>.<sha256(conversation_id, generation)[0,16]>` —
+      # bounded and safe for the CLI's per-thread naming. The generation
+      # folds into the digest so `/new` rotates to a fresh thread without
+      # deleting audit history (plan 02, work item 4); the domain is v2
+      # because the digest input changed.
+      def thread_id(surface_id, conversation_id, generation: 0)
+        digest = ::Digest::SHA256.hexdigest("#{thread_domain}\n#{conversation_id}\n#{generation}")[0, 16]
         "tg.#{surface_id}.#{digest}"
       end
 
-      def thread_domain = 'tamoz.comms.thread.v1'
+      def thread_domain = 'tamoz.comms.thread.v2'
 
       def group_chat?(conversation_id)
         conversation_id.start_with?('telegram:supergroup:', 'telegram:channel:', 'telegram:group:')

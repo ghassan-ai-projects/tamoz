@@ -291,25 +291,115 @@ module Tamoz
         @outbox.defer_delivery(surface_id:, conversation_id:, not_before:, now:)
       end
 
-      def conversation_status(surface_id:, conversation_id:)
-        route_status = read('comms.conversation.status') do |txn|
+      # Read-only channel status derived from durable admission/projection
+      # rows. Reference-addressed and queue-aware (plan 02, work item 3):
+      # when anything is admitted the projection carries the active request's
+      # short reference (`request_ref`) and its queue facts (`queue_age_ms`,
+      # `queue_position`); with nothing admitted those keys are absent.
+      # `now:` binds the reader's clock for age arithmetic; without it the
+      # connection's backend time answers.
+      def conversation_status(surface_id:, conversation_id:, now: nil)
+        read('comms.conversation.status') do |txn|
           route = txn.first('comms.conversation.status.route', <<~SQL, [surface_id, conversation_id])
             SELECT thread_id FROM tamoz_comms_conversations
             WHERE surface_id = ? AND conversation_id = ?
           SQL
           next nil unless route
 
-          open_requests = open_requests_for(txn, surface_id, conversation_id)
-          {
-            'thread_id' => route.fetch(0),
-            'state' => open_requests.positive? ? 'accepted' : 'idle',
-            'open_requests' => open_requests,
-            'request_id' => active_request_id(txn, surface_id, conversation_id)
-          }
+          active = active_request_row(txn, surface_id, conversation_id)
+          status_projection(txn, surface_id, conversation_id, route.fetch(0),
+                            active && active.fetch(0), now:)
         end
-        return nil unless route_status
+      end
 
-        route_status.merge(conversation_runtime_status(route_status, surface_id, conversation_id))
+      # Resolve ONE request by its short reference inside ONE conversation —
+      # caller-bound, never cross-conversation. The reference authorizes
+      # nothing: a foreign ref is :unknown_ref here even though it resolves
+      # elsewhere.
+      # @return [Hash] the full status projection plus `terminal_reason`
+      # @return [:unknown_ref] no request in this conversation matches
+      # @return [:ambiguous_ref] several requests share the ref prefix
+      def request_status(surface_id:, conversation_id:, ref:, now: nil)
+        read('comms.request.status') do |txn|
+          resolved = resolve_request_ref(txn, surface_id, conversation_id, ref)
+          next resolved unless resolved.is_a?(Array)
+
+          request_id, thread_id = resolved
+          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+            .merge('terminal_reason' => terminal_reason_for(thread_id, request_id))
+        end
+      end
+
+      def resolve_request_ref(txn, surface_id, conversation_id, ref)
+        return :unknown_ref unless ref.is_a?(String) && ref.match?(REQUEST_REF_PATTERN)
+
+        matches = txn.rows(
+          'comms.request.status.resolve',
+          <<~SQL, [surface_id, conversation_id, ref[1, REQUEST_REF_WIDTH]]
+            SELECT request_id, thread_id FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ?
+              AND substr(request_id, 1, #{REQUEST_REF_WIDTH}) = ?
+            ORDER BY created_at_ms ASC
+          SQL
+        )
+        return :unknown_ref if matches.empty?
+        return :ambiguous_ref if matches.length > 1
+
+        matches.first
+      end
+
+      def status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+        open_requests = open_requests_for(txn, surface_id, conversation_id)
+        base = {
+          'thread_id' => thread_id,
+          'state' => open_requests.positive? ? 'accepted' : 'idle',
+          'open_requests' => open_requests,
+          'request_id' => request_id
+        }
+        base.merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
+            .merge(conversation_runtime_status(base, surface_id, conversation_id))
+      end
+
+      # Queue facts are durable-row arithmetic (invariant 12): the addressed
+      # request's short reference, its position among the conversation's
+      # admitted requests, and — when any admitted request exists — the age
+      # of the oldest one.
+      def queue_facts(txn, surface_id, conversation_id, request_id, now)
+        return {} unless request_id
+
+        oldest = oldest_open_created_at_ms(txn, surface_id, conversation_id)
+        {
+          'request_ref' => request_ref(request_id),
+          'queue_position' => queue_position(txn, surface_id, conversation_id, request_id),
+          'queue_age_ms' => oldest && backend_now_ms(txn, now) - oldest
+        }.compact
+      end
+
+      def queue_position(txn, surface_id, conversation_id, request_id)
+        row = txn.first('comms.conversation.status.queue_peer', <<~SQL, [request_id])
+          SELECT created_at_ms FROM tamoz_comms_requests WHERE request_id = ?
+        SQL
+        return 0 unless row
+
+        peer_at = row.fetch(0)
+        txn.scalar('comms.conversation.status.queue_position', <<~SQL, [surface_id, conversation_id, peer_at, peer_at, request_id]).to_i
+          SELECT COUNT(*) FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+            AND (created_at_ms < ? OR (created_at_ms = ? AND request_id < ?))
+        SQL
+      end
+
+      def oldest_open_created_at_ms(txn, surface_id, conversation_id)
+        txn.scalar('comms.conversation.status.oldest_open', <<~SQL, [surface_id, conversation_id])
+          SELECT MIN(created_at_ms) FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+        SQL
+      end
+
+      def backend_now_ms(txn, now)
+        return now_ms(now) if now
+
+        txn.scalar('comms.conversation.status.backend_time', BACKEND_TIME_SQL)
       end
 
       def conversation_runtime_status(route_status, surface_id, conversation_id)
@@ -332,8 +422,8 @@ module Tamoz
       # The recent transcript of one conversation, oldest first, for the
       # turn's planning context: user lines are the admitted requests' task
       # payloads (the inbound table stores hashes, never text), assistant
-      # lines are the journaled terminal deliveries the correspondent
-      # actually saw. Bounded twice — `limit` entries, each truncated —
+      # lines are only the CONFIRMED successful terminal deliveries
+      # (invariant 11). Bounded twice — `limit` entries, each truncated —
       # because the transcript rides the request payload into a model prompt.
       def conversation_history(surface_id:, conversation_id:, limit: HISTORY_LIMIT)
         entries = recent_request_tasks(surface_id:, conversation_id:, limit:) +
@@ -343,6 +433,41 @@ module Tamoz
         end
       end
 
+      # The durable /new generation of one bound conversation (plan 02,
+      # work item 4): monotonic, part of the thread identity
+      # `Admission.thread_id` folds into its digest.
+      # @return [Integer]
+      def conversation_generation(surface_id:, conversation_id:)
+        read('comms.conversation.generation') do |txn|
+          generation_row!(txn, surface_id, conversation_id)
+        end
+      end
+
+      # One durable +1 per `/new`; returns the new value. An absent
+      # conversation raises before anything mutates.
+      # @return [Integer]
+      def bump_generation(surface_id:, conversation_id:)
+        transaction('comms.conversation.bump_generation') do |txn|
+          txn.execute('comms.conversation.bump_generation.update', <<~SQL, [surface_id, conversation_id])
+            UPDATE tamoz_comms_conversations SET generation = generation + 1
+            WHERE surface_id = ? AND conversation_id = ?
+          SQL
+          raise KeyError, "conversation #{conversation_id} is not bound on surface #{surface_id}" unless txn.changes == 1
+
+          generation_row!(txn, surface_id, conversation_id)
+        end
+      end
+
+      def generation_row!(txn, surface_id, conversation_id)
+        row = txn.first('comms.conversation.generation.read', <<~SQL, [surface_id, conversation_id])
+          SELECT generation FROM tamoz_comms_conversations
+          WHERE surface_id = ? AND conversation_id = ?
+        SQL
+        raise KeyError, "conversation #{conversation_id} is not bound on surface #{surface_id}" unless row
+
+        row.fetch(0)
+      end
+
       def open_requests_for(txn, surface_id, conversation_id)
         txn.scalar('comms.conversation.status.requests', <<~SQL, [surface_id, conversation_id]).to_i
           SELECT COUNT(*) FROM tamoz_comms_requests
@@ -350,9 +475,9 @@ module Tamoz
         SQL
       end
 
-      def active_request_id(txn, surface_id, conversation_id)
-        txn.scalar('comms.conversation.status.active_request', <<~SQL, [surface_id, conversation_id])
-          SELECT request_id FROM tamoz_comms_requests
+      def active_request_row(txn, surface_id, conversation_id)
+        txn.first('comms.conversation.status.active_request', <<~SQL, [surface_id, conversation_id])
+          SELECT request_id, created_at_ms FROM tamoz_comms_requests
           WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
           ORDER BY created_at_ms DESC, request_id DESC LIMIT 1
         SQL
@@ -410,6 +535,11 @@ module Tamoz
         return 'bound' if capability_bound?(session)
 
         'not_inspected'
+      end
+
+      def terminal_reason_for(thread_id, request_id)
+        checkpoint = @checkpoints&.latest(thread_id:, namespace: [], validate_identity: false)
+        lifecycle_events_for(checkpoint, request_id).last&.fetch('terminal_reason', nil)
       end
 
       def lifecycle_status_for(thread_id, request_id)
@@ -769,11 +899,16 @@ module Tamoz
         task.is_a?(String) ? task : nil
       end
 
+      # Assistant transcript lines are the journaled terminal deliveries the
+      # correspondent CONFIRMABLY saw (invariant 11, plan 02 work item 5):
+      # only `succeeded` rows qualify. Pending, claimed, unknown and failed
+      # rows never enter a later model prompt.
       def recent_terminal_deliveries(surface_id:, conversation_id:, limit:)
         rows = read('comms.history.deliveries') do |txn|
           txn.rows('comms.history.deliveries', <<~SQL, [surface_id, conversation_id, limit])
             SELECT text, created_at_ms FROM tamoz_comms_outbox
             WHERE surface_id = ? AND conversation_id = ? AND journaled = 1
+              AND status = 'succeeded'
               AND kind IN ('answer', 'failed', 'stopped', 'blocked') AND part_index = 0
             ORDER BY created_at_ms DESC LIMIT ?
           SQL

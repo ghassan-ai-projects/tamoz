@@ -124,8 +124,35 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Read-only channel status derived from durable admission/projection rows.
-      def conversation_status(surface_id:, conversation_id:)
+      # Read-only channel status derived from durable admission/projection
+      # rows. Reference-addressed and queue-aware: when anything is admitted,
+      # the projection carries the active request's short reference
+      # (`request_ref`) and its queue facts (`queue_age_ms`, `queue_position`);
+      # with nothing admitted those keys are absent. `now:` binds the reader's
+      # clock for age arithmetic; without it the store's backend time answers.
+      def conversation_status(surface_id:, conversation_id:, now: nil)
+        raise NotImplementedError
+      end
+
+      # Resolve ONE request by its short reference inside ONE conversation —
+      # caller-bound, never cross-conversation.
+      # @return [Hash] the full status projection plus `terminal_reason`
+      # @return [:unknown_ref] no request in this conversation matches
+      # @return [:ambiguous_ref] several requests share the ref prefix
+      def request_status(surface_id:, conversation_id:, ref:, now: nil)
+        raise NotImplementedError
+      end
+
+      # The bound conversation's durable /new generation.
+      # @return [Integer]
+      def conversation_generation(surface_id:, conversation_id:)
+        raise NotImplementedError
+      end
+
+      # Durably advance the generation by one and return the new value;
+      # raises when the conversation row is absent, mutating nothing.
+      # @return [Integer]
+      def bump_generation(surface_id:, conversation_id:)
         raise NotImplementedError
       end
 

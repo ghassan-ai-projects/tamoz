@@ -45,7 +45,11 @@ module Tamoz
       # OpenClaw Phase 0 identity: 17 -> 18 through MIGRATION_18, which
       # rebuilds tamoz_comms_inbound so inbound identity extends with the raw
       # payload digest (plan 01, work item 2).
-      CURRENT_VERSION = 18
+      # OpenClaw Phase 1 truthful status: 18 -> 19 through MIGRATION_19, which
+      # rebuilds tamoz_comms_conversations with the /new generation counter
+      # and tamoz_comms_outbox with the reply_to platform message id
+      # (plan 02, work items 4 and 5).
+      CURRENT_VERSION = 19
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1246,6 +1250,73 @@ module Tamoz
         MIGRATION_18.join("\n-- tamoz migration boundary --\n")
       ).freeze
 
+      # OpenClaw Phase 1 truthful status (plan 02, work items 4 and 5):
+      # 18 -> 19 through MIGRATION_19. tamoz_comms_conversations gains the
+      # durable /new generation counter (a fresh schema rebuild, per the
+      # no-backwards-compat rule), and tamoz_comms_outbox gains the nullable
+      # reply_to platform message id the Delivery value already carries —
+      # folded into one rebuild with the receipt and send-started columns
+      # from MIGRATION_7/MIGRATION_8.
+      MIGRATION_19 = [
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_conversations
+        SQL
+        <<~SQL.freeze,
+          CREATE TABLE tamoz_comms_conversations (
+            surface_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            surface_revision INTEGER NOT NULL CHECK (surface_revision > 0),
+            thread_id TEXT NOT NULL,
+            profile_id TEXT NOT NULL,
+            threading TEXT NOT NULL CHECK (threading IN ('conversation', 'per_message')),
+            bound_at_ms INTEGER NOT NULL,
+            version INTEGER NOT NULL CHECK (version > 0),
+            generation INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (surface_id, conversation_id)
+          ) STRICT
+        SQL
+        <<~SQL.freeze,
+          DROP TABLE tamoz_comms_outbox
+        SQL
+        <<~SQL.freeze
+          CREATE TABLE tamoz_comms_outbox (
+            delivery_id TEXT NOT NULL PRIMARY KEY,
+            surface_id TEXT NOT NULL,
+            conversation_id TEXT NOT NULL,
+            kind TEXT NOT NULL CHECK (
+              kind IN ('accepted', 'answer', 'approval_request', 'failed',
+                       'stopped', 'blocked', 'control')
+            ),
+            operation TEXT NOT NULL CHECK (operation IN ('send_message', 'edit_message')),
+            text TEXT NOT NULL,
+            part_index INTEGER NOT NULL CHECK (part_index >= 0),
+            part_count INTEGER NOT NULL CHECK (part_count > 0),
+            markup TEXT,
+            reply_to INTEGER,
+            journaled INTEGER NOT NULL CHECK (journaled IN (0, 1)),
+            content_digest TEXT NOT NULL,
+            render_version INTEGER NOT NULL CHECK (render_version > 0),
+            expires_at_ms INTEGER,
+            status TEXT NOT NULL CHECK (
+              status IN ('pending', 'claimed', 'succeeded', 'failed', 'unknown')
+            ),
+            claim_owner TEXT,
+            claim_fence INTEGER CHECK (claim_fence IS NULL OR claim_fence > 0),
+            claim_expires_at_ms INTEGER,
+            effect_key TEXT,
+            effect_execution_id TEXT,
+            receipt TEXT,
+            send_started_at_ms INTEGER,
+            created_at_ms INTEGER NOT NULL,
+            updated_at_ms INTEGER NOT NULL
+          ) STRICT
+        SQL
+      ].freeze
+
+      MIGRATION_19_CHECKSUM = Digest::SHA256.hexdigest(
+        MIGRATION_19.join("\n-- tamoz migration boundary --\n")
+      ).freeze
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1266,7 +1337,8 @@ module Tamoz
         15 => [MIGRATION_15, MIGRATION_15_CHECKSUM],
         16 => [MIGRATION_16, MIGRATION_16_CHECKSUM],
         17 => [MIGRATION_17, MIGRATION_17_CHECKSUM],
-        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM]
+        18 => [MIGRATION_18, MIGRATION_18_CHECKSUM],
+        19 => [MIGRATION_19, MIGRATION_19_CHECKSUM]
       }.freeze
 
       attr_reader :path, :limits, :fault_injector
@@ -1433,7 +1505,8 @@ module Tamoz
                        :MIGRATION_15, :MIGRATION_15_CHECKSUM,
                        :MIGRATION_16, :MIGRATION_16_CHECKSUM,
                        :MIGRATION_17, :MIGRATION_17_CHECKSUM,
-                       :MIGRATION_18, :MIGRATION_18_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_18, :MIGRATION_18_CHECKSUM,
+                       :MIGRATION_19, :MIGRATION_19_CHECKSUM, :MIGRATIONS
     end
   end
 end

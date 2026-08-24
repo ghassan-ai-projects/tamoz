@@ -42,12 +42,23 @@ module Tamoz
       ].freeze
       OUTBOX_COLUMNS = %w[
         delivery_id surface_id conversation_id kind operation text part_index
-        part_count markup journaled content_digest render_version expires_at_ms
-        status claim_owner claim_fence claim_expires_at_ms effect_key
-        effect_execution_id receipt created_at_ms updated_at_ms
+        part_count markup reply_to journaled content_digest render_version
+        expires_at_ms status claim_owner claim_fence claim_expires_at_ms
+        effect_key effect_execution_id receipt created_at_ms updated_at_ms
         send_started_at_ms
       ].freeze
       PACING_GLOBAL_SCOPE = '__global__'
+      REQUEST_REF_WIDTH = 10
+      REQUEST_REF_PATTERN = /\Ar[0-9a-f]{#{REQUEST_REF_WIDTH}}\z/.freeze
+
+      # The connection's backend clock, for read projections whose age
+      # arithmetic has no caller-bound `now:`; never Ruby wall-clock.
+      BACKEND_TIME_SQL = <<~SQL.lines.map(&:strip).join(' ').freeze
+        SELECT (
+          CAST(strftime('%s', 'now') AS INTEGER) * 1000 +
+          CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER)
+        )
+      SQL
 
       def transaction(operation, &)
         @adapter.__send__(:transaction, operation:, &)
@@ -69,6 +80,14 @@ module Tamoz
           JSON.generate([envelope_wire.fetch('surface_id'), envelope_wire.fetch('surface_revision'),
                          bot_id, envelope_wire.fetch('update_id'), envelope_wire.fetch('raw_payload_hash')])
         )
+      end
+
+      # The short non-authorizing display reference for one request (plan 02,
+      # work item 2): `r` plus the first ten hex characters of the durable
+      # request id. Uniqueness is the store's prefix resolution, never the
+      # string's.
+      def request_ref(request_id)
+        "r#{request_id[0, REQUEST_REF_WIDTH]}"
       end
 
       # Invariant 57 capacity accounting (design §12): pending+claimed
@@ -208,6 +227,7 @@ module Tamoz
           delivery_wire.fetch('delivery_id'), surface_id, delivery_wire.fetch('conversation_id'),
           delivery_wire.fetch('kind'), delivery_wire.fetch('operation'), delivery_wire.fetch('text'),
           delivery_wire.fetch('part_index'), delivery_wire.fetch('part_count'), delivery_wire['markup'],
+          delivery_wire['reply_to'],
           delivery_wire.fetch('journaled') ? 1 : 0, delivery_wire.fetch('content_digest'),
           delivery_wire.fetch('render_version'),
           delivery_wire['expires_at'] && now_ms(Time.parse(delivery_wire['expires_at'])),

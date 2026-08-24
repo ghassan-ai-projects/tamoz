@@ -3,6 +3,7 @@
 require 'tamoz/core'
 require_relative 'comms/version'
 require_relative 'comms/errors'
+require_relative 'comms/lifecycle'
 require_relative 'comms/canonical'
 require_relative 'comms/shapes'
 require_relative 'comms/interrupt_digest'
