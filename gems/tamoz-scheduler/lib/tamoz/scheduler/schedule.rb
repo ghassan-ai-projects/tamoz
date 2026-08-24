@@ -67,27 +67,7 @@ module Tamoz
           budgets:, created_by:, created_at:
         )
         @digest = definition_digest || compute_digest(@validated)
-        super(
-          id: @validated.fetch(:id), revision: @validated.fetch(:revision),
-          owner: @validated.fetch(:owner), enabled: @validated.fetch(:enabled),
-          kind: @validated.fetch(:kind), expression: @validated.fetch(:expression),
-          start_at: @validated.fetch(:start_at), end_at: @validated.fetch(:end_at),
-          misfire_policy: @validated.fetch(:misfire_policy),
-          misfire_limit: @validated.fetch(:misfire_limit),
-          overlap_policy: @validated.fetch(:overlap_policy),
-          max_concurrency: @validated.fetch(:max_concurrency),
-          jitter_window: @validated.fetch(:jitter_window),
-          payload_ref: @validated.fetch(:payload_ref),
-          thread_policy: @validated.fetch(:thread_policy),
-          capability_grant: @validated.fetch(:capability_grant),
-          behavior_version: @validated.fetch(:behavior_version),
-          approval_profile: @validated.fetch(:approval_profile),
-          delivery_policy: @validated.fetch(:delivery_policy),
-          budgets: @validated.fetch(:budgets),
-          created_by: @validated.fetch(:created_by),
-          created_at: @validated.fetch(:created_at),
-          definition_digest: @digest
-        )
+        super(**@validated, definition_digest: @digest)
       end
 
       # The digest over the canonical DEFINITION. `revision`, `enabled`, and
@@ -107,36 +87,13 @@ module Tamoz
       # The next nominal fire instant at/after `now` (UTC epoch seconds).
       # Returns nil when the schedule is done (end_at passed, one-shot fired).
       def next_fire_at(now)
-        return nil unless enabled
-        return nil if end_at && now > end_at
+        return nil unless available_at?(now)
 
         case kind
         when :at
-          instant = self.class.at_instant(expression)
-          return nil if instant <= now
-          return nil if start_at && instant < start_at
-          return nil if end_at && instant > end_at
-
-          instant
+          next_at_fire(now)
         when :interval
-          duration = expression.to_i
-          anchor = start_at || created_at
-          if end_at && anchor > end_at
-            # The anchor is past the horizon: nothing can fire.
-            return nil
-          end
-
-          if now < anchor
-            # Before the anchor: the first occurrence is at the anchor.
-            return nil if end_at && anchor > end_at
-
-            anchor
-          else
-            elapsed = now - anchor
-            ordinal = (elapsed / duration).floor
-            candidate = anchor + (ordinal * duration)
-            candidate > now ? candidate : candidate + duration
-          end
+          next_interval_fire(now)
         end
       end
 
@@ -147,25 +104,13 @@ module Tamoz
       # catch-up after a pause or a crash. Misfire policy decides how many
       # missed occurrences materialize (see plan §4/B).
       def due_occurrences(now:, anchor: nil, limit: 10)
-        return [] unless enabled
-        return [] if end_at && now > end_at
+        return [] unless available_at?(now)
 
         case kind
         when :at
-          instant = self.class.at_instant(expression)
-          return [] if instant > now
-          return [] if start_at && instant < start_at
-          return [] if end_at && instant > end_at
-
-          [instant]
+          due_at_occurrences(now)
         when :interval
-          duration = expression.to_i
-          start = anchor || start_at || created_at
-          return [] if end_at && start > end_at
-          return [] if start > now
-
-          count = ((now - start) / duration) + 1
-          (0...[count, limit].min).map { |ordinal| start + (ordinal * duration) }
+          due_interval_occurrences(now:, start: anchor || start_at || created_at, limit:)
         end
       end
 
@@ -280,6 +225,48 @@ module Tamoz
       end
 
       private
+
+      def available_at?(now)
+        enabled && (!end_at || now <= end_at)
+      end
+
+      def next_at_fire(now)
+        instant = self.class.at_instant(expression)
+        return nil if instant <= now
+        return nil unless within_bounds?(instant)
+
+        instant
+      end
+
+      def next_interval_fire(now)
+        duration = expression.to_i
+        anchor = start_at || created_at
+        return nil if end_at && anchor > end_at
+        return anchor if now < anchor
+
+        anchor + ((((now - anchor) / duration).floor + 1) * duration)
+      end
+
+      def due_at_occurrences(now)
+        instant = self.class.at_instant(expression)
+        return [] if instant > now
+        return [] unless within_bounds?(instant)
+
+        [instant]
+      end
+
+      def due_interval_occurrences(now:, start:, limit:)
+        duration = expression.to_i
+        return [] if end_at && start > end_at
+        return [] if start > now
+
+        (0...[((now - start) / duration) + 1, limit].min)
+          .map { |ordinal| start + (ordinal * duration) }
+      end
+
+      def within_bounds?(instant)
+        (!start_at || instant >= start_at) && (!end_at || instant <= end_at)
+      end
 
       def validate!(
         id:, revision:, owner:, enabled:, kind:, expression:,
