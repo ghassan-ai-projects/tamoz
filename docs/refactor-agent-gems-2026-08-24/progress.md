@@ -14,7 +14,7 @@
 
 ## End-state checks
 
-- [ ] All files reviewed/refactored.
-- [ ] `rubocop` passes on the gem.
-- [ ] Test suite passes.
-- [ ] `enola check` reports no regression.
+- [x] All files reviewed/refactored.
+- [x] `rubocop` passes on the gem.
+- [x] Test suite passes.
+- [x] `enola check` reports no regression.
