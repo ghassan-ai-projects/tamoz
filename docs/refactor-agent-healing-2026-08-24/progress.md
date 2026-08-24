@@ -32,6 +32,6 @@
 ## End-state checks
 
 - [x] All files reviewed/refactored.
-- [ ] `rubocop` passes on the gem.
-- [ ] Test suite passes.
-- [ ] `enola check` reports no regression.
+- [x] `rubocop` passes on the gem.
+- [x] Test suite passes (`2157 runs, 23171 assertions, 0 failures, 0 errors, 1 skips`).
+- [x] `enola check` reports no structural regression.
