@@ -85,7 +85,9 @@ module Tamoz
         task = String(raw).strip
         raise ArgumentError, "task must not be empty" if task.empty?
 
-        raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes" if task.bytesize > SessionNodes::MAX_TASK_BYTES
+        if task.bytesize > SessionNodes::MAX_TASK_BYTES
+          raise ArgumentError, "task exceeds #{SessionNodes::MAX_TASK_BYTES} bytes"
+        end
 
         task
       end
@@ -390,7 +392,7 @@ module Tamoz
             yield event
           end
           break unless candidate_plan
-          recorded = record_action_plan(state, candidate_plan, candidate_review, context) do |event|
+          recorded = action_plan_recorded?(state, candidate_plan, candidate_review, context) do |event|
             yield event
           end
           break unless recorded
@@ -441,7 +443,7 @@ module Tamoz
         nil
       end
 
-      def record_action_plan(state, plan, review, context)
+      def action_plan_recorded?(state, plan, review, context)
         signature = action_signature(plan)
         unless state.fetch(:seen_actions).key?(signature)
           state.fetch(:seen_actions)[signature] = true

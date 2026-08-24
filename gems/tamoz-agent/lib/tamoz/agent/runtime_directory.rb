@@ -79,6 +79,7 @@ module Tamoz
         document = read_config_document(config_path)
         version = document.dig("runtime", "schema_version")
         return [:already_current, directory] if version == SCHEMA_VERSION
+
         ensure_legacy_schema!(version)
 
         migrated = migrated_document(document)

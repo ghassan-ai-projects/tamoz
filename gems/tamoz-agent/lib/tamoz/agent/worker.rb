@@ -263,8 +263,7 @@ module Tamoz
         session = @session_builder.call(thread_id)
         return IDLE unless session
 
-        return advance_entry(entry, session, thread_id:, occurrence_id:)
-
+        advance_entry(entry, session, thread_id:, occurrence_id:)
       rescue Tamoz::RecursionLimitError => error
         # The graph refused to take another super-step because the profile's
         # `steps` budget is spent. This is a STOP, not a failure: the work was
@@ -272,7 +271,7 @@ module Tamoz
         # typed event and recorded durably for `tamoz status`.
         budget_exhausted(entry, budget: "steps", detail: error.message, session:)
       rescue StandardError => error
-        return handle_thread_failure(entry, error)
+        handle_thread_failure(entry, error)
       end
 
       def advance_entry(entry, session, thread_id:, occurrence_id:)
