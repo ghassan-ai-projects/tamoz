@@ -292,13 +292,8 @@ module Tamoz
       def wire_usage(usage)
         return nil if usage.nil?
 
-        Agenticstream::Runtime::V1::Usage.new(
-          input_tokens: Integer(usage.fetch("input_tokens", 0)),
-          output_tokens: Integer(usage.fetch("output_tokens", 0)),
-          cached_input_tokens: Integer(usage.fetch("cached_input_tokens", 0)),
-          reasoning_tokens: Integer(usage.fetch("reasoning_tokens", 0)),
-          cost_microunits: Integer(usage.fetch("cost_microunits", 0))
-        )
+        fields = USAGE_FIELDS.to_h { |field| [field, Integer(usage.fetch(field.to_s, 0))] }
+        Agenticstream::Runtime::V1::Usage.new(**fields)
       end
     end
   end
