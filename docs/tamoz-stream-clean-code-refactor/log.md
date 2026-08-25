@@ -97,3 +97,48 @@
   surface, callable bindings); `context_view` reads resolve-source →
   allowlist projection.
 - Status: done
+
+### artifact_store.rb
+- Bar: `retain` reads digest-gate → document-gate → unchanged-or-new;
+  `within_bounds!` names the eviction-boundary refusal; the collision
+  policy (never keep-first) lives in `unchanged_artifact`.
+- Status: done
+
+### decision_node_builder.rb
+- Bar: `call` reads as one projection step (document → outcome → build);
+  the decision-v1 outcome literal moved to `outcome_projection`;
+  EnvelopeView stays a private_constant view.
+- Status: done
+- Notes: `build_decision` (the P6 compensate entry, called from
+  tamoz-agent-kernel episode_nodes) kept public above `private`.
+
+### situation_snapshot.rb
+- Bar: `verify` reads payload → strict parse → digest → object → identity;
+  each gate raises its typed error one level down.
+- Status: done
+- Notes: gate evaluation order preserved exactly (short-circuit
+  observability); identity collection still gathers ALL missing fields,
+  entity appended last, before the joined-message raise.
+
+### reconsideration.rb
+- Bar: already at bar — intent-named steps, no decomposition adds value.
+- Status: left alone
+
+### worker_server.rb
+- Bar: lifecycle verbs read as the serving DSL (start = bind + thread,
+  run = lazy bind + serve, stop = guarded teardown).
+- Status: left alone
+- Notes: pre-existing `stop`/`@started` guard quirk (no-op before start)
+  left as-is deliberately.
+
+### situation_memory.rb
+- Bar: already at bar.
+- Status: left alone
+
+### errors.rb
+- Bar: typed-error catalog; nothing to decompose.
+- Status: left alone
+
+### stream.rb
+- Bar: gem entry manifest (requires + module doc).
+- Status: left alone
