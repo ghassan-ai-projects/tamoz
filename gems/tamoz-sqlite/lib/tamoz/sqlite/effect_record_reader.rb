@@ -91,16 +91,12 @@ module Tamoz
 
       # :reek:FeatureEnvy -- the attempt row is a positional durable wire value.
       def materialize_attempt(attempt)
-        result = decode_receipt(
-          attempt.fetch(6),
-          attempt.fetch(7),
-          'tamoz.sqlite.effect_result'
-        )
-        error = decode_receipt(
-          attempt.fetch(9),
-          attempt.fetch(10),
-          'tamoz.sqlite.effect_error'
-        )
+        result_bytes = attempt.fetch(6)
+        result_digest = attempt.fetch(7)
+        error_bytes = attempt.fetch(9)
+        error_digest = attempt.fetch(10)
+        result = decode_receipt(result_bytes, result_digest, 'tamoz.sqlite.effect_result')
+        error = decode_receipt(error_bytes, error_digest, 'tamoz.sqlite.effect_error')
         materialize_attempt_record(attempt, result:, error:)
       end
 
