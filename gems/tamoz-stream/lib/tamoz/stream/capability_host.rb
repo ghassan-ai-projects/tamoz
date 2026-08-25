@@ -126,19 +126,19 @@ module Tamoz
                 "episode capability host requires implementations for: #{missing.join(", ")}"
         end
         unknown = implementations.keys - PERMITTED
-        unless unknown.empty?
-          raise Tamoz::ConfigurationError,
-                "episode capability host rejects implementations for: #{unknown.join(", ")}"
-        end
+        return if unknown.empty?
+
+        raise Tamoz::ConfigurationError,
+              "episode capability host rejects implementations for: #{unknown.join(", ")}"
       end
 
       def build_surface(implementations)
         PERMITTED.to_h do |id|
-          [id, callable_implementation(id, implementations.fetch(id))]
+          [id, require_callable!(id, implementations.fetch(id))]
         end
       end
 
-      def callable_implementation(id, implementation)
+      def require_callable!(id, implementation)
         return implementation if implementation.respond_to?(:call)
 
         raise Tamoz::ConfigurationError,
