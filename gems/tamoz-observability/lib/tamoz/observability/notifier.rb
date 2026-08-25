@@ -7,22 +7,38 @@ module Tamoz
         @producer = Producer.new(recorder:, policy:)
       end
 
-      def instrument(name, payload = {})
-        return yield if !Catalog.registered?(name) && block_given?
-        return false unless Catalog.registered?(name)
+      def instrument(name, payload = {}, &)
+        return handle_unregistered(&) unless Catalog.registered?(name)
 
+        correlation, attributes = decompose(payload)
+        dispatch(name, correlation, attributes, &)
+      rescue StandardError
+        raise if block_given?
+
+        false
+      end
+
+      private
+
+      def handle_unregistered(&)
+        return yield if block_given?
+
+        false
+      end
+
+      def decompose(payload)
         payload = payload.to_h
         correlation = payload[:correlation] || payload['correlation'] || {}
         attributes = payload.reject { |key, _| key.to_sym == :correlation }
+        [correlation, attributes]
+      end
+
+      def dispatch(name, correlation, attributes, &)
         if block_given?
           @producer.around(name, correlation:, attributes:) { yield }
         else
           @producer.emit(name, correlation:, attributes:)
         end
-      rescue StandardError
-        raise if block_given?
-
-        false
       end
     end
   end
