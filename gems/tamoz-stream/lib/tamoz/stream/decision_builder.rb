@@ -38,7 +38,7 @@ module Tamoz
       # the compensating intents the compensate node produced. One builder,
       # one decision shape (the Go validator enforces the same schema).
       def self.build_decision(intents:, episode:, snapshot:, snapshot_digest:, summary:, now: Time.now)
-        decision = {
+        with_digest(
           "decision_id" => episode_decision_id(episode),
           "episode_id" => episode.fetch("episode_id"),
           "attempt_id" => episode.fetch("attempt_id"),
@@ -53,13 +53,16 @@ module Tamoz
           "alternatives" => [],
           "intents" => intents,
           "valid_until" => (now + VALIDITY_WINDOW_SECONDS).utc.iso8601
-        }
-        [decision, Tamoz::Core.digest(:decision, decision)]
+        )
       end
 
       def self.episode_decision_id(episode)
         "decision.#{episode.fetch("episode_id")}." \
           "#{episode.fetch("attempt_id")}.#{episode.fetch("fence")}"
+      end
+
+      def self.with_digest(decision)
+        [decision, Tamoz::Core.digest(:decision, decision)]
       end
 
       def initialize(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
@@ -74,7 +77,7 @@ module Tamoz
       # Returns [decision_hash, decision_digest]. The digest covers the whole
       # decision document (CONTRACTS §3.2, decision domain).
       def build
-        decision = {
+        self.class.with_digest(
           "decision_id" => decision_id,
           "episode_id" => @envelope.episode_id,
           "attempt_id" => @envelope.attempt_id,
@@ -89,8 +92,7 @@ module Tamoz
           "alternatives" => bounded_outcome_entries(:alternatives, MAX_ALTERNATIVES),
           "intents" => intents,
           "valid_until" => valid_until
-        }
-        [decision, Tamoz::Core.digest(:decision, decision)]
+        )
       end
 
       private
@@ -165,7 +167,7 @@ module Tamoz
         build_intent(
           type: entry.type, risk_class: entry.risk_class,
           parameters: build_parameters(entry, proposal),
-          evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
+          evidence_ids: evidence_ids
         )
       end
 
@@ -192,6 +194,18 @@ module Tamoz
 
       def watch_allowlisted?
         allowed_intent_types.include?(Tamoz::Core::INTENT_WATCH_TYPE)
+      end
+
+      def ensure_watch_allowlisted!
+        return if watch_allowlisted?
+
+        raise StreamError,
+              "no allowed intent for this outcome " \
+              "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
+      end
+
+      def evidence_ids
+        Array(@outcome.fetch(:evidence_ids, []))
       end
 
       def risk_within_ceiling?(declared_risk)
@@ -294,6 +308,10 @@ module Tamoz
           "evidence_ids" => evidence_ids,
           "expires_at" => valid_until
         }
+        intent_with_digest(intent)
+      end
+
+      def intent_with_digest(intent)
         # The intent digest covers the intent WITHOUT its own digest.
         intent.merge("intent_digest" => Tamoz::Core.digest(
           :intent, intent.reject { |key, _| key == "intent_digest" }
@@ -308,19 +326,14 @@ module Tamoz
       # so an episode whose allowlist leaves NO valid intent for the outcome
       # fails closed here, typed, instead of producing an invalid decision.
       def watch_condition_intent
-        unless watch_allowlisted?
-          raise StreamError,
-                "no allowed intent for this outcome " \
-                "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
-        end
-
+        ensure_watch_allowlisted!
         entry = @catalog.entry(Tamoz::Core::INTENT_WATCH_TYPE)
         parameters = build_parameters(entry, EmptyProposal.new)
         build_intent(
           type: Tamoz::Core::INTENT_WATCH_TYPE,
           risk_class: entry.risk_class,
           parameters:,
-          evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
+          evidence_ids: evidence_ids
         )
       end
 
