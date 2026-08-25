@@ -243,30 +243,14 @@ module Tamoz
         ceiling = String(episode.fetch("risk_ceiling", "")).upcase
         now = Time.now.utc
         judgements = Array(state.fetch(:judgements)).select { |j| j.fetch("decision") != "let_stand" }
-        compensations = judgements.first(MAX_INTENTS).filter_map do |judgement|
-          action = judgement.fetch("decision")
-          target_type = catalog.compensation_for(judgement.fetch("intent_type"), action)
-          if target_type.nil?
-            raise EpisodeFrameError,
-                  "episode_reconsider/unknown_compensation_mapping: " \
-                  "#{judgement.fetch("intent_type")}.#{action}"
-          end
-          target = catalog.entry(target_type)
-          next if risk_above_ceiling?(target.risk_class, ceiling)
-
-          build_compensating_intent(
-            type: target_type, risk_class: target.risk_class,
-            episode:, snapshot:, compensates: judgement.fetch("command_id"),
-            reason: judgement.fetch("reason"), now:
-          )
-        end
+        compensations = compensating_intents(
+          catalog, judgements, episode:, snapshot:, ceiling:, now:
+        )
         intents = compensations.empty? ? [watch_intent(catalog, episode, snapshot, now)] : compensations
         decision, digest = @decision_builder.build_decision(
           intents:, episode:, snapshot:,
           snapshot_digest: episode.fetch("snapshot_sha256", ""),
-          summary: intents == compensations ?
-            "reconsideration: #{judgements.length} compensation(s) proposed" :
-            "reconsideration: no compensation within the ceiling",
+          summary: compensation_summary(intents, compensations, judgements),
           now:
         )
         {"decision" => decision, "decision_digest" => digest}
@@ -426,26 +410,12 @@ module Tamoz
       # malformed-after-success → repair (exactly once) or typed terminal;
       # valid → decide. Never a second model.
       def validate(state, _context)
-        frame = frame_from(state.fetch(:frame))
-        raw = state.fetch(:raw_response)
-        if raw.nil? || raw.empty?
-          raise ProtocolError, "episode has no model response to validate"
-        end
-
-        catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
-        document = ReasoningDocument.parse(raw, catalog:)
-        ground_evidence!(document, frame)
-        intent_catalog = IntentCatalog.verify_wire(
-          state.fetch(:wire).fetch("intent_catalog_json"),
-          state.fetch(:wire).fetch("intent_catalog_sha256")
-        )
-        validate_recommended_intent_types!(document, state, intent_catalog)
-
-        if document.tool_requests && !document.tool_requests.empty?
-          return {"document" => document_projection(document), "next_node" => "execute_tool"}
-        end
-
-        {"document" => document_projection(document), "next_node" => "decide"}
+        document = validated_document(state)
+        next_node = next_node_for_document(document)
+        {
+          "document" => document_projection(document),
+          "next_node" => next_node
+        }
       rescue ProtocolError => error
         # A succeeded-but-malformed response is repaired exactly once; a
         # second malformed response terminates typed.
@@ -559,6 +529,56 @@ module Tamoz
       end
 
       private
+
+      def validated_document(state)
+        frame = frame_from(state.fetch(:frame))
+        raw = state.fetch(:raw_response)
+        if raw.nil? || raw.empty?
+          raise ProtocolError, "episode has no model response to validate"
+        end
+
+        catalog = DiagnosisCatalog.from_list(frame.fetch("catalog"))
+        document = ReasoningDocument.parse(raw, catalog:)
+        ground_evidence!(document, frame)
+        intent_catalog = IntentCatalog.verify_wire(
+          state.fetch(:wire).fetch("intent_catalog_json"),
+          state.fetch(:wire).fetch("intent_catalog_sha256")
+        )
+        validate_recommended_intent_types!(document, state, intent_catalog)
+        document
+      end
+
+      def next_node_for_document(document)
+        return "execute_tool" if document.tool_requests && !document.tool_requests.empty?
+
+        "decide"
+      end
+
+      def compensating_intents(catalog, judgements, episode:, snapshot:, ceiling:, now:)
+        judgements.first(MAX_INTENTS).filter_map do |judgement|
+          action = judgement.fetch("decision")
+          target_type = catalog.compensation_for(judgement.fetch("intent_type"), action)
+          if target_type.nil?
+            raise EpisodeFrameError,
+                  "episode_reconsider/unknown_compensation_mapping: " \
+                  "#{judgement.fetch("intent_type")}.#{action}"
+          end
+          target = catalog.entry(target_type)
+          next if risk_above_ceiling?(target.risk_class, ceiling)
+
+          build_compensating_intent(
+            type: target_type, risk_class: target.risk_class,
+            episode:, snapshot:, compensates: judgement.fetch("command_id"),
+            reason: judgement.fetch("reason"), now:
+          )
+        end
+      end
+
+      def compensation_summary(intents, compensations, judgements)
+        return "reconsideration: #{judgements.length} compensation(s) proposed" if intents == compensations
+
+        "reconsideration: no compensation within the ceiling"
+      end
 
       # The pure budget controller for this episode, derived from the wire's
       # budget envelope (Agentic Stream's EpisodeBudget).

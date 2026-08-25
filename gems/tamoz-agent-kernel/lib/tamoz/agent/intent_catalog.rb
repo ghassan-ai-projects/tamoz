@@ -73,6 +73,25 @@ module Tamoz
       end
 
       def self.build_entry(raw)
+        type, risk_class = validated_entry_identity(raw)
+        schema, schema_digest = validated_parameter_schema(raw, type)
+        presets, model_writable = validated_entry_parameters(raw, type, schema)
+        description, rate_limit = validated_entry_metadata(raw, type)
+
+        Entry.new(
+          type:, risk_class:,
+          parameter_schema: schema.freeze,
+          parameter_schema_digest: schema_digest ? Tamoz::Core.normalize_digest(schema_digest.to_s) : nil,
+          presets: Tamoz::Core.deep_freeze(presets),
+          model_writable_fields: model_writable.map(&:to_s).freeze,
+          description: description.freeze,
+          policy: (raw[:policy] || raw["policy"] || {}).freeze,
+          rate_limit: rate_limit.freeze,
+          compensation: (raw[:compensation] || raw["compensation"] || {}).freeze
+        )
+      end
+
+      def self.validated_entry_identity(raw)
         raise IntentCatalogError, "intent_catalog/entry_not_object" unless raw.is_a?(Hash)
 
         type = String(raw[:type] || raw["type"])
@@ -84,6 +103,10 @@ module Tamoz
           raise IntentCatalogError, "intent_catalog/bad_risk: #{risk_class.inspect}"
         end
 
+        [type, risk_class]
+      end
+
+      def self.validated_parameter_schema(raw, type)
         schema = raw[:parameter_schema] || raw["parameter_schema"]
         schema_digest = raw[:parameter_schema_digest] || raw["parameter_schema_digest"]
         schema_bytes = Tamoz::Core.jcs(schema) if schema
@@ -99,6 +122,10 @@ module Tamoz
           raise IntentCatalogError, "intent_catalog/schema_digest_mismatch: #{type}"
         end
 
+        [schema, schema_digest]
+      end
+
+      def self.validated_entry_parameters(raw, type, schema)
         presets = raw[:presets] || raw["presets"] || {}
         model_writable = Array(raw[:model_writable_fields] || raw["model_writable_fields"])
         property_names = schema.fetch("properties", {}).keys
@@ -108,6 +135,10 @@ module Tamoz
         end
         validate_presets!(type, schema, presets)
 
+        [presets, model_writable]
+      end
+
+      def self.validated_entry_metadata(raw, type)
         description = String(raw[:description] || raw["description"] || "")
         if description.bytesize > MAX_DESCRIPTION_BYTES
           raise IntentCatalogError, "intent_catalog/description_too_large: #{type}"
@@ -122,19 +153,12 @@ module Tamoz
           end
         end
 
-        Entry.new(
-          type:, risk_class:,
-          parameter_schema: schema.freeze,
-          parameter_schema_digest: schema_digest ? Tamoz::Core.normalize_digest(schema_digest.to_s) : nil,
-          presets: Tamoz::Core.deep_freeze(presets),
-          model_writable_fields: model_writable.map(&:to_s).freeze,
-          description: description.freeze,
-          policy: (raw[:policy] || raw["policy"] || {}).freeze,
-          rate_limit: rate_limit.freeze,
-          compensation: (raw[:compensation] || raw["compensation"] || {}).freeze
-        )
+        [description, rate_limit]
       end
-      private_class_method :build_entry
+
+      private_class_method :build_entry, :validated_entry_identity,
+                           :validated_parameter_schema, :validated_entry_parameters,
+                           :validated_entry_metadata
 
       def self.validate_presets!(type, schema, presets)
         raise IntentCatalogError, "intent_catalog/presets_not_object: #{type}" unless presets.is_a?(Hash)

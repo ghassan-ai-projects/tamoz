@@ -86,27 +86,17 @@ module Tamoz
           return call_via_gateway(request_bytes, logical_call_id:, frame_digest:)
         end
 
-        uri = URI.parse("#{@endpoint}#{OPENAI_COMPLETIONS_PATH}")
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.read_timeout = @timeout_seconds
-        http.open_timeout = @timeout_seconds
-        http.use_ssl = uri.scheme == "https"
-
         headers = {"Content-Type" => "application/json"}
         headers["Authorization"] = "Bearer #{@api_key}" unless @api_key.to_s.empty?
 
-        response = http.request(Net::HTTP::Post.new(uri, headers), request_bytes)
+        response = post_completion_request(request_bytes, headers:)
         envelope_bytes = response.body.to_s
         unless response.is_a?(Net::HTTPSuccess)
           raise ProtocolError,
                 "episode model endpoint returned #{response.code}: #{envelope_bytes.byteslice(0, 512)}"
         end
 
-        Response.new(
-          content: extract_content(envelope_bytes),
-          response_digest: "sha256:#{Digest::SHA256.hexdigest(envelope_bytes)}",
-          usage: usage_from(extract_usage_hash(envelope_bytes))
-        )
+        build_model_response(envelope_bytes)
       end
 
       private
@@ -123,13 +113,8 @@ module Tamoz
           "settings_digest" => settings_digest,
           "request_bytes" => request_bytes
         )
-        uri = URI.parse("#{@endpoint}#{OPENAI_COMPLETIONS_PATH}")
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = uri.scheme == "https"
-        http.read_timeout = @timeout_seconds
-        http.open_timeout = @timeout_seconds
-        response = http.request(
-          Net::HTTP::Post.new(uri, "Content-Type" => "application/json"), envelope
+        response = post_completion_request(
+          envelope, headers: {"Content-Type" => "application/json"}
         )
         envelope_bytes = response.body.to_s
         unless response.is_a?(Net::HTTPSuccess)
@@ -137,6 +122,19 @@ module Tamoz
                 "witness gateway returned #{response.code}: #{envelope_bytes.byteslice(0, 512)}"
         end
 
+        build_model_response(envelope_bytes)
+      end
+
+      def post_completion_request(body, headers:)
+        uri = URI.parse("#{@endpoint}#{OPENAI_COMPLETIONS_PATH}")
+        http = Net::HTTP.new(uri.host, uri.port)
+        http.read_timeout = @timeout_seconds
+        http.open_timeout = @timeout_seconds
+        http.use_ssl = uri.scheme == "https"
+        http.request(Net::HTTP::Post.new(uri, headers), body)
+      end
+
+      def build_model_response(envelope_bytes)
         Response.new(
           content: extract_content(envelope_bytes),
           response_digest: "sha256:#{Digest::SHA256.hexdigest(envelope_bytes)}",

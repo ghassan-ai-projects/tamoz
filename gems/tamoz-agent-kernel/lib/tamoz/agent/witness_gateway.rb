@@ -126,6 +126,24 @@ module Tamoz
         request_bytes = Tamoz::Core::RawHttp.read_request(client)
         return if request_bytes.nil?
 
+        status, response_body = witness_request(request_bytes)
+        Tamoz::Core::RawHttp.write_response(client, response_body, status:)
+      rescue ProtocolError => error
+        # A bad envelope is the client's fault (400); an upstream failure
+        # keeps its typed code but is a gateway-side 502.
+        status = error.message.start_with?("witness_gateway/upstream_failed") ? 502 : 400
+        write_error(client, error, status:)
+      rescue StandardError => error
+        write_error(client, error, status: 502)
+      ensure
+        begin
+          client&.close
+        rescue StandardError
+          nil
+        end
+      end
+
+      def witness_request(request_bytes)
         envelope = parse_envelope(request_bytes)
         logical_call_id = envelope.fetch("logical_call_id")
         frame_digest = envelope.fetch("frame_digest")
@@ -150,20 +168,7 @@ module Tamoz
           @records.shift if @records.length > MAX_RECORDS
         end
         append_log(signed) if @log_path
-        Tamoz::Core::RawHttp.write_response(client, response_body, status:)
-      rescue ProtocolError => error
-        # A bad envelope is the client's fault (400); an upstream failure
-        # keeps its typed code but is a gateway-side 502.
-        status = error.message.start_with?("witness_gateway/upstream_failed") ? 502 : 400
-        write_error(client, error, status:)
-      rescue StandardError => error
-        write_error(client, error, status: 502)
-      ensure
-        begin
-          client&.close
-        rescue StandardError
-          nil
-        end
+        [status, response_body]
       end
 
       def parse_envelope(bytes)
