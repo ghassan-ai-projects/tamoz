@@ -82,7 +82,7 @@ module Tamoz
 
           unless changed.empty?
             Scope.refuse_in_band!(
-              "amending rule #{rule_id} field(s) #{changed.map(&:to_s).sort.inspect}"
+              "amending rule #{rule_id} field(s) #{self_protected_field_list(changed)}"
             )
             assert_reviewed_diff!(current, changed, approval:, reviewed_diff:)
           end
@@ -102,20 +102,7 @@ module Tamoz
             "lifecycle write to rule #{rule_id}", error_class: SelfPromotionError
           )
           current = fetch(rule_id)
-          unless promotion.is_a?(Hash)
-            raise SelfPromotionError,
-                  "a lifecycle transition requires a promotion record from tamoz-evals"
-          end
-          unless promotion["contract_digest"] == current.contract_digest
-            raise SelfPromotionError,
-                  "the promotion record is not digest-bound to rule #{rule_id} " \
-                  "version #{current.version}"
-          end
-          unless promotion["mode"].to_s == mode.to_s
-            raise SelfPromotionError,
-                  "the promotion record authorizes #{promotion["mode"].inspect}, " \
-                  "not #{mode.inspect}"
-          end
+          assert_promotion_authorizes!(rule_id:, current:, mode:, promotion:)
 
           promoted = HealingRule.new(
             **current.to_init_hash.merge(
@@ -170,11 +157,15 @@ module Tamoz
           end
         end
 
+        def self_protected_field_list(changed)
+          changed.map(&:to_s).sort.inspect
+        end
+
         def assert_reviewed_diff!(current, changed, approval:, reviewed_diff:)
           unless reviewed_diff.is_a?(Array) &&
                  reviewed_diff.map(&:to_sym).sort == changed.sort
             raise SelfModificationError,
-                  "a change to #{changed.map(&:to_s).sort.inspect} requires a reviewed " \
+                  "a change to #{self_protected_field_list(changed)} requires a reviewed " \
                   "diff naming exactly those fields"
           end
           return unless current.mutation_capable?
@@ -182,7 +173,24 @@ module Tamoz
           unless approval.is_a?(String) && approval.start_with?("human:")
             raise SelfModificationError,
                   "a mutation-capable rule requires human approval to change " \
-                  "#{changed.map(&:to_s).sort.inspect} (C7/P1)"
+                  "#{self_protected_field_list(changed)} (C7/P1)"
+          end
+        end
+
+        def assert_promotion_authorizes!(rule_id:, current:, mode:, promotion:)
+          unless promotion.is_a?(Hash)
+            raise SelfPromotionError,
+                  "a lifecycle transition requires a promotion record from tamoz-evals"
+          end
+          unless promotion["contract_digest"] == current.contract_digest
+            raise SelfPromotionError,
+                  "the promotion record is not digest-bound to rule #{rule_id} " \
+                  "version #{current.version}"
+          end
+          unless promotion["mode"].to_s == mode.to_s
+            raise SelfPromotionError,
+                  "the promotion record authorizes #{promotion["mode"].inspect}, " \
+                  "not #{mode.inspect}"
           end
         end
       end
