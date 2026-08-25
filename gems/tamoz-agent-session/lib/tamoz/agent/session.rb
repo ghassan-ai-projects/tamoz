@@ -55,6 +55,11 @@ module Tamoz
       GRAPH_NAME = "tamoz.agent.session"
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
+      GRAPH_VERSION_BY_ROUTING = {
+        legacy: GraphVersions::COMPACTION_GRAPH_VERSION,
+        experimental: GraphVersions::CURRENT_GRAPH_VERSION,
+        adaptive: GraphVersions::ADAPTIVE_GRAPH_VERSION
+      }.freeze
 
       attr_reader :app, :definition, :toolbox, :model
 
@@ -84,25 +89,20 @@ module Tamoz
         child_task_runtime: nil,
         routing: :legacy
       )
-        raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
-        unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
-          raise ArgumentError, "max_plan_attempts must be between 1 and 10"
-        end
-        unless max_repair_attempts.is_a?(Integer) && max_repair_attempts.between?(0, 10)
-          raise ArgumentError, "max_repair_attempts must be between 0 and 10"
-        end
-        unless MODEL_CALL_SAFETIES.include?(model_call_safety)
-          raise ArgumentError,
-                "model_call_safety must be one of #{MODEL_CALL_SAFETIES.join(", ")}"
-        end
-        raise ArgumentError, "routing must be one of #{ROUTINGS.join(", ")}" unless ROUTINGS.include?(routing.to_sym)
+        validate_session_options!(
+          model:,
+          max_plan_attempts:,
+          max_repair_attempts:,
+          model_call_safety:,
+          routing:
+        )
         unless checkpointer.respond_to?(:durable?) && checkpointer.durable?
           raise ConfigurationError,
                 "Tamoz::Agent::Session requires a durable checkpointer; use " \
                 "Tamoz::Agent::Runtime for ephemeral work"
         end
 
-        verify_mcp_source!(mcp)
+        validate_mcp_source!(mcp)
         # Pipeline A: every durable session has exactly one policy owner. A
         # caller that supplies none gets the driver's bundled default (the
         # implement profile over memory stores) — gating is never skipped,
@@ -116,11 +116,7 @@ module Tamoz
         @memory = memory
         @memory_owner = memory_owner
         @profile_narrowed = profile_narrowed == true
-        @default_graph_version = case routing.to_sym
-                                 when :experimental then GraphVersions::CURRENT_GRAPH_VERSION
-                                 when :adaptive then GraphVersions::ADAPTIVE_GRAPH_VERSION
-                                 else GraphVersions::COMPACTION_GRAPH_VERSION
-                                 end
+        @default_graph_version = GRAPH_VERSION_BY_ROUTING.fetch(routing.to_sym)
         verify_profile_binding!(profile)
         node_arguments = {
           model:,
@@ -146,11 +142,36 @@ module Tamoz
         @approval_session_id = approval_session_id
         @artifact_store = artifact_store
         @artifact_tenant = artifact_tenant
+        @definitions = build_definitions(node_arguments)
+        @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
+        @definition = @definitions.fetch(@default_graph_version)
+        @app = @apps.fetch(@default_graph_version)
+        @runner = @app.durable_runner
+        freeze
+      end
+
+      def validate_session_options!(model:, max_plan_attempts:, max_repair_attempts:, model_call_safety:, routing:)
+        raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
+        unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
+          raise ArgumentError, "max_plan_attempts must be between 1 and 10"
+        end
+        unless max_repair_attempts.is_a?(Integer) && max_repair_attempts.between?(0, 10)
+          raise ArgumentError, "max_repair_attempts must be between 0 and 10"
+        end
+        unless MODEL_CALL_SAFETIES.include?(model_call_safety)
+          raise ArgumentError,
+                "model_call_safety must be one of #{MODEL_CALL_SAFETIES.join(", ")}"
+        end
+        raise ArgumentError, "routing must be one of #{ROUTINGS.join(", ")}" unless ROUTINGS.include?(routing.to_sym)
+      end
+      private :validate_session_options!
+
+      def build_definitions(node_arguments)
         @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GraphVersions::GRAPH_VERSION)
         @nodes = SessionNodes.new(**node_arguments, graph_version: GraphVersions::CURRENT_GRAPH_VERSION)
         @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: GraphVersions::ADAPTIVE_GRAPH_VERSION)
         @nodes_compaction = SessionNodes.new(**node_arguments, graph_version: GraphVersions::COMPACTION_GRAPH_VERSION)
-        @definitions = {
+        {
           GraphVersions::GRAPH_VERSION => Session.build_definition(
             @nodes_v1,
             version: GraphVersions::GRAPH_VERSION
@@ -168,16 +189,12 @@ module Tamoz
             version: GraphVersions::COMPACTION_GRAPH_VERSION
           )
         }.freeze
-        @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
-        @definition = @definitions.fetch(@default_graph_version)
-        @app = @apps.fetch(@default_graph_version)
-        @runner = @app.durable_runner
-        freeze
       end
+      private :build_definitions
 
       # P10 §3 boundary: the agent never depends on tamoz-mcp; the caller-supplied
       # source is duck-typed, and every MCP-specific behaviour is its own method.
-      def verify_mcp_source!(mcp)
+      def validate_mcp_source!(mcp)
         return unless mcp
 
         required = %i[
@@ -191,7 +208,7 @@ module Tamoz
                 "mcp source must respond to #{missing.join(", ")}"
         end
       end
-      private :verify_mcp_source!
+      private :validate_mcp_source!
 
       def nodes_for_default_graph
         case @default_graph_version
@@ -575,43 +592,17 @@ module Tamoz
       end
 
       def start(task, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
-        run_context = build_run_context(context:, emitter:)
-        runner_for(thread).deliver(
-          {"task" => String(task)},
-          thread:,
-          request_id:,
-          owner_id: owner_id || SecureRandom.uuid,
-          context: run_context
-        )
-        outcome(thread:, request_id:)
+        deliver_turn({"task" => String(task)}, thread:, request_id:, owner_id:, emitter:, context:)
       end
 
       def resume(answers, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
-        run_context = build_run_context(context:, emitter:)
-        runner_for(thread).deliver(
-          answers,
-          thread:,
-          request_id:,
-          operation: :resume,
-          owner_id: owner_id || SecureRandom.uuid,
-          context: run_context
-        )
-        outcome(thread:, request_id:)
+        deliver_turn(answers, thread:, request_id:, operation: :resume, owner_id:, emitter:, context:)
       end
 
       def continue(thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         guard_state!(thread)
-        run_context = build_run_context(context:, emitter:)
-        runner_for(thread).deliver(
-          {},
-          thread:,
-          request_id:,
-          operation: :continue,
-          owner_id: owner_id || SecureRandom.uuid,
-          context: run_context
-        )
-        outcome(thread:, request_id:)
+        deliver_turn({}, thread:, request_id:, operation: :continue, owner_id:, emitter:, context:)
       end
 
       def recover(thread:, request_id:, owner_id: nil)
@@ -636,7 +627,7 @@ module Tamoz
         snapshot = app.state(thread:)
         state = SessionRecords.load_state!(snapshot.state)
         enforce_graph_binding!(thread, state)
-        status = state[:blocked] ? :blocked : snapshot.status
+        status = lifecycle_status(snapshot.status, blocked: state[:blocked])
         SessionView.new(
           thread_id: snapshot.thread_id,
           checkpoint_id: snapshot.checkpoint_id,
@@ -659,34 +650,13 @@ module Tamoz
       # Human resolution of an effect the framework refused to guess about. This is the
       # only way a `:unknown` effect leaves that state; nothing automatic can.
       def resolve_effect(thread:, effect_key:, status:, actor:, evidence: {}, namespace: [], owner_id: nil)
-        store = app_for_thread(thread).checkpointer
-        record = nil
-        store.open_writer(
-          thread_id: thread,
-          namespace:,
-          owner_id: owner_id || SecureRandom.uuid,
-          ttl: store.writer_ttl
-        ) do |writer|
-          record = writer.effects.resolve(
-            key: effect_key,
-            status:,
-            actor:,
-            evidence:
-          )
+        with_effect_writer(thread, namespace:, owner_id:) do |effects|
+          effects.resolve(key: effect_key, status:, actor:, evidence:)
         end
-        record
       end
 
       def effect(thread:, effect_key:, namespace: [], owner_id: nil)
-        store = app_for_thread(thread).checkpointer
-        record = nil
-        store.open_writer(
-          thread_id: thread,
-          namespace:,
-          owner_id: owner_id || SecureRandom.uuid,
-          ttl: store.writer_ttl
-        ) { |writer| record = writer.effects.fetch(effect_key) }
-        record
+        with_effect_writer(thread, namespace:, owner_id:) { |effects| effects.fetch(effect_key) }
       end
 
       private
@@ -714,6 +684,31 @@ module Tamoz
         )
       end
 
+      def deliver_turn(payload, thread:, request_id:, owner_id:, emitter:, context:, operation: :turn)
+        run_context = build_run_context(context:, emitter:)
+        runner_for(thread).deliver(
+          payload,
+          thread:,
+          request_id:,
+          operation:,
+          owner_id: owner_id || SecureRandom.uuid,
+          context: run_context
+        )
+        outcome(thread:, request_id:)
+      end
+
+      def with_effect_writer(thread, namespace:, owner_id:)
+        store = app_for_thread(thread).checkpointer
+        record = nil
+        store.open_writer(
+          thread_id: thread,
+          namespace:,
+          owner_id: owner_id || SecureRandom.uuid,
+          ttl: store.writer_ttl
+        ) { |writer| record = yield(writer.effects) }
+        record
+      end
+
       # Invariant 18: an unsupported newer record version must fail before any node
       # runs. This is the boundary where that happens for a resumed session.
       # Every durable continuation funnels through here, so the P9 exact-digest
@@ -738,31 +733,9 @@ module Tamoz
         snapshot = app.state(thread:)
         state = SessionRecords.load_state!(snapshot.state)
         enforce_graph_binding!(thread, state)
-        verification = state[:verification]
-        result =
-          if verification
-            Result.new(
-              answer: verification.fetch("answer"),
-              satisfied: verification.fetch("satisfied"),
-              evidence: verification.fetch("evidence"),
-              plan: state[:accepted_plan] && Plan.parse(state.fetch(:accepted_plan).fetch("plan")),
-              review: nil,
-              observations: state.fetch(:observations)
-            )
-          end
         blocked = state[:blocked]
-        status =
-          if blocked
-            :blocked
-          elsif snapshot.status == :paused
-            :paused
-          elsif snapshot.status == :completed
-            :completed
-          elsif snapshot.status == :failed
-            :failed
-          else
-            snapshot.status
-          end
+        result = verification_result(state)
+        status = lifecycle_status(snapshot.status, blocked:)
 
         SessionOutcome.new(
           status:,
@@ -776,6 +749,24 @@ module Tamoz
           provider_ambiguity: state.fetch(:provider_ambiguity),
           state:
         )
+      end
+
+      def verification_result(state)
+        verification = state[:verification]
+        return nil unless verification
+
+        Result.new(
+          answer: verification.fetch("answer"),
+          satisfied: verification.fetch("satisfied"),
+          evidence: verification.fetch("evidence"),
+          plan: state[:accepted_plan] && Plan.parse(state.fetch(:accepted_plan).fetch("plan")),
+          review: nil,
+          observations: state.fetch(:observations)
+        )
+      end
+
+      def lifecycle_status(snapshot_status, blocked:)
+        blocked ? :blocked : snapshot_status
       end
 
       def app_for_thread(thread)
