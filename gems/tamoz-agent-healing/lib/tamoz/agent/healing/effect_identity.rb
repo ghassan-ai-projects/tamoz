@@ -39,15 +39,20 @@ module Tamoz
             Integer(rule_version),
             String(remediation_step)
           ]
-          components.each_with_index do |value, index|
-            if value.is_a?(String) && value.empty?
-              raise HealingContractError,
-                    "effect identity component #{index} must not be empty"
-            end
-          end
+          validate_components!(components)
 
           "healing.#{Tamoz::Core.digest("#{domain}\n", components).delete_prefix('sha256:')}"
         end
+
+        def validate_components!(components)
+          components.each_with_index do |value, index|
+            next unless value.is_a?(String) && value.empty?
+
+            raise HealingContractError,
+                  "effect identity component #{index} must not be empty"
+          end
+        end
+        private_class_method :validate_components!
 
         # The full, inspectable identity — what the transition log records so an
         # auditor can recompute the key without the source that produced it.

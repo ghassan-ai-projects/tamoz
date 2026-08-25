@@ -17,6 +17,13 @@ module Tamoz
         'remaining_depth' => 0,
         'remaining_concurrency' => 0
       }.freeze
+      ALLOWED_TRANSITIONS = {
+        'pending' => %w[running failed unknown],
+        'running' => %w[completed failed unknown],
+        'completed' => [],
+        'failed' => [],
+        'unknown' => []
+      }.freeze
 
       attr_reader :child_id, :parent_thread_id, :parent_request_id, :task,
                   :capability_profile, :depth, :concurrency, :status,
@@ -71,11 +78,7 @@ module Tamoz
         @child_id = require_text(attributes.fetch(:child_id), 'child_id')
         @parent_thread_id = require_text(attributes.fetch(:parent_thread_id), 'parent_thread_id')
         @parent_request_id = require_text(attributes.fetch(:parent_request_id), 'parent_request_id')
-        @task = require_text(attributes.fetch(:task), 'task')
-        raise ArgumentError, "child task exceeds #{MAX_TASK_BYTES} bytes" if @task.bytesize > MAX_TASK_BYTES
-        return unless Tamoz::Core.secret_shaped?(attributes.fetch(:task))
-
-        raise Tamoz::SensitiveValueError, 'child task cannot contain credential-shaped values'
+        @task = validate_task!(attributes.fetch(:task))
       end
 
       def assign_policy(attributes)
@@ -116,33 +119,17 @@ module Tamoz
         transition('running')
       end
 
-      def complete(receipt:)
-        receipt_text = require_text(receipt, 'receipt')
-        transition('completed', completion_digest: "sha256:#{Digest::SHA256.hexdigest(receipt_text)}")
-      end
-
-      def fail(receipt:)
-        receipt_text = require_text(receipt, 'receipt')
-        transition('failed', completion_digest: "sha256:#{Digest::SHA256.hexdigest(receipt_text)}")
-      end
-
-      def unknown(receipt:)
-        receipt_text = require_text(receipt, 'receipt')
-        transition('unknown', completion_digest: "sha256:#{Digest::SHA256.hexdigest(receipt_text)}")
-      end
+      def complete(receipt:) = transition_with_receipt('completed', receipt)
+      def fail(receipt:) = transition_with_receipt('failed', receipt)
+      def unknown(receipt:) = transition_with_receipt('unknown', receipt)
 
       def adoptable?
         %w[completed failed unknown].include?(status)
       end
 
       def assert_narrowed_to!(parent_profile)
-        validate_parent_profile!(parent_profile)
-        validate_parent_capabilities!(parent_profile)
-        validate_parent_revision!(parent_profile)
-        enforce_parent_limit!(parent_profile, 'max_child_depth', depth)
-        enforce_parent_limit!(parent_profile, 'max_child_concurrency', concurrency)
-        enforce_policy_limit!(parent_profile, 'max_child_depth', depth, 'remaining_depth')
-        enforce_policy_limit!(parent_profile, 'max_child_concurrency', concurrency, 'remaining_concurrency')
+        validate_parent_identity!(parent_profile)
+        enforce_parent_bounds!(parent_profile)
         self
       end
 
@@ -178,12 +165,7 @@ module Tamoz
       end
 
       def transition(next_status, completion_digest: self.completion_digest)
-        allowed = {
-          'pending' => %w[running failed unknown],
-          'running' => %w[completed failed unknown],
-          'completed' => [], 'failed' => [], 'unknown' => []
-        }
-        unless allowed.fetch(status).include?(next_status)
+        unless ALLOWED_TRANSITIONS.fetch(status).include?(next_status)
           raise ArgumentError, "child task cannot transition #{status} -> #{next_status}"
         end
 
@@ -228,7 +210,7 @@ module Tamoz
         end
 
         normalized = DELEGATION_POLICY_KEYS.to_h do |key|
-          [key, validate_integer(policy.fetch(key), key, key == 'remaining_concurrency' ? 0..16 : 0..8)]
+          [key, validate_integer(policy.fetch(key), key, delegation_range_for(key))]
         end
         normalized.freeze
       end
@@ -265,6 +247,38 @@ module Tamoz
 
         message = "child #{remaining_key.delete_prefix('remaining_')} exceeds parent allowance"
         raise Tamoz::Agent::ToolPolicyError, message
+      end
+
+      def transition_with_receipt(next_status, receipt)
+        receipt_text = require_text(receipt, 'receipt')
+        transition(next_status, completion_digest: "sha256:#{Digest::SHA256.hexdigest(receipt_text)}")
+      end
+
+      def validate_task!(task)
+        text = require_text(task, 'task')
+        raise ArgumentError, "child task exceeds #{MAX_TASK_BYTES} bytes" if text.bytesize > MAX_TASK_BYTES
+        if Tamoz::Core.secret_shaped?(task)
+          raise Tamoz::SensitiveValueError, 'child task cannot contain credential-shaped values'
+        end
+
+        text
+      end
+
+      def validate_parent_identity!(parent_profile)
+        validate_parent_profile!(parent_profile)
+        validate_parent_capabilities!(parent_profile)
+        validate_parent_revision!(parent_profile)
+      end
+
+      def enforce_parent_bounds!(parent_profile)
+        enforce_parent_limit!(parent_profile, 'max_child_depth', depth)
+        enforce_parent_limit!(parent_profile, 'max_child_concurrency', concurrency)
+        enforce_policy_limit!(parent_profile, 'max_child_depth', depth, 'remaining_depth')
+        enforce_policy_limit!(parent_profile, 'max_child_concurrency', concurrency, 'remaining_concurrency')
+      end
+
+      def delegation_range_for(key)
+        key == 'remaining_concurrency' ? 0..16 : 0..8
       end
     end
   end

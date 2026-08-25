@@ -59,42 +59,44 @@ module Tamoz
 
         # The protocol's inputs are the design's inputs; collapsing them into an
         # options hash would hide the contract this method exists to enforce.
-        def run(
-          record:,
-          rule:,
-          toolbox:,
-          critic:,
-          original_invariant:,
-          minimal_change:,
-          stop_conditions:,
-          context: nil,
-          call_index: 0,
-          attempt: 1,
-          preflight_context: {},
-          perform: nil,
-          reconcile: nil,
-          circuit: nil,
-          escalation_sink: nil,
-          compensation: nil,
-          original_trace_id: nil,
-          original_effect_id: nil,
-          actor: ACTOR,
-          clock: nil
-        )
+        def run(record:, rule:, toolbox:, critic:, original_invariant:, minimal_change:,
+                stop_conditions:, context: nil, call_index: 0, attempt: 1,
+                preflight_context: {}, perform: nil, reconcile: nil, circuit: nil,
+                escalation_sink: nil, compensation: nil, original_trace_id: nil,
+                original_effect_id: nil, actor: ACTOR, clock: nil)
+          validate_records!(record, rule)
+
+          session = build_session(
+            record:, rule:, toolbox:, critic:, original_invariant:, minimal_change:,
+            stop_conditions:, context:, call_index:, attempt:, preflight_context:,
+            perform:, reconcile:, circuit:, escalation_sink:, compensation:,
+            original_trace_id:, original_effect_id:, actor:, clock:
+          )
+          Scope.in_band { session.call }
+        end
+
+        def validate_records!(record, rule)
           unless record.is_a?(FailureRecord)
             raise HealingContractError, "remediation requires a FailureRecord"
           end
-          unless rule.is_a?(HealingRule)
-            raise HealingContractError, "remediation requires a HealingRule"
-          end
+          return if rule.is_a?(HealingRule)
 
+          raise HealingContractError, "remediation requires a HealingRule"
+        end
+        private_class_method :validate_records!
+
+        def build_session(record:, rule:, toolbox:, critic:, original_invariant:,
+                          minimal_change:, stop_conditions:, context:, call_index:,
+                          attempt:, preflight_context:, perform:, reconcile:, circuit:,
+                          escalation_sink:, compensation:, original_trace_id:,
+                          original_effect_id:, actor:, clock:)
           circuit ||= Seams::MemoryCircuitStore.new(scope: "rule:#{rule.rule_id}")
           escalation_sink ||= Seams::NullEscalationSink.new
           compensation ||= Seams::ContainOnlyCompensation.new
           ticks = 0
           clock ||= -> { ticks += 1 }
 
-          session = Session.new(
+          Session.new(
             record:, rule:, toolbox:, critic:, original_invariant:, minimal_change:,
             stop_conditions:, context:, call_index:, attempt:, preflight_context:,
             perform:, reconcile:, circuit:, escalation_sink:, compensation:,
@@ -102,8 +104,8 @@ module Tamoz
             original_effect_id: original_effect_id || record.operation,
             actor:, clock:
           )
-          Scope.in_band { session.call }
         end
+        private_class_method :build_session
       end
     end
   end

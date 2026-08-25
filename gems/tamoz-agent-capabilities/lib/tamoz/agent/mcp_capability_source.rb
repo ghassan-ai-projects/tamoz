@@ -58,19 +58,7 @@ module Tamoz
         maximum_effect_output_bytes: DEFAULT_MAX_OUTPUT_BYTES,
         source_digests: {}
       )
-        unless catalogs.is_a?(Hash)
-          raise ArgumentError, "catalogs must be a Hash of server_id => snapshot"
-        end
-        unless descriptors.is_a?(Array)
-          raise ArgumentError, "descriptors must be an Array"
-        end
-        unless executor.respond_to?(:call)
-          raise ArgumentError, "executor must respond to call(context, descriptor, arguments)"
-        end
-        unless maximum_effect_output_bytes.is_a?(Integer) &&
-               maximum_effect_output_bytes.positive?
-          raise ArgumentError, "maximum_effect_output_bytes must be a positive Integer"
-        end
+        validate_constructor_args!(catalogs, descriptors, executor, maximum_effect_output_bytes)
 
         @catalogs = deep_freeze(catalogs.transform_values { |snapshot| validate_snapshot!(snapshot) })
         @descriptors = validate_descriptors!(descriptors, @catalogs)
@@ -80,15 +68,9 @@ module Tamoz
         @effect_intent_builder = effect_intent_builder
         @closer = closer
         @maximum_effect_output_bytes = maximum_effect_output_bytes
-        @mcp_catalogs = @catalogs
-                        .sort
-                        .to_h { |server_id, snapshot| [server_id, snapshot.snapshot_digest] }
-                        .freeze
+        @mcp_catalogs = build_catalog_digests(@catalogs)
         @mcp_source_digests = source_digests.transform_keys(&:to_s).transform_values(&:to_s).freeze
-        @names = @descriptors.map(&:id).freeze
-        @read_only_names = @descriptors.select { |entry| read_only_descriptor?(entry) }
-                                        .map(&:id).freeze
-        @name_index = @descriptors.to_h { |entry| [entry.id, entry] }.freeze
+        @names, @read_only_names, @name_index = build_descriptor_indexes(@descriptors)
         freeze
       end
 
@@ -125,11 +107,7 @@ module Tamoz
 
       def validate(name, arguments)
         descriptor = descriptor_for!(name)
-        arguments = {} if arguments.nil?
-        unless arguments.is_a?(Hash)
-          raise ToolArgumentError,
-                "the arguments for #{descriptor.id} must be a JSON object"
-        end
+        arguments = normalize_arguments!(descriptor, arguments)
         assert_depth!(descriptor, arguments, 0)
         @validator.call(descriptor, arguments) if @validator
         arguments
@@ -182,42 +160,10 @@ module Tamoz
       def validate_descriptors!(descriptors, catalogs)
         seen = {}
         descriptors.map do |descriptor|
-          required = %i[id name source_id definition_digest effect_class]
-          missing = required.reject { |method| descriptor.respond_to?(method) }
-          if missing.any?
-            raise ArgumentError,
-                  "each MCP descriptor must respond to #{missing.join(", ")}"
-          end
-          if seen.key?(descriptor.id)
-            raise ArgumentError, "duplicate MCP capability name #{descriptor.id.inspect}"
-          end
-          seen[descriptor.id] = true
-
-          # Source-qualified identity (P10 §10.2 malicious-tool-name row): an MCP
-          # capability is addressed by its full "mcp:server/name" id in the agent
-          # surface, so it can never shadow or collide with a local tool.
-          expected = "mcp:#{descriptor.source_id}/#{descriptor.name}"
-          unless descriptor.id == expected
-            raise ArgumentError,
-                  "MCP descriptor id #{descriptor.id.inspect} must be " \
-                  "#{expected.inspect} (source-qualified)"
-          end
-          snapshot = catalogs[descriptor.source_id]
-          unless snapshot
-            raise ArgumentError,
-                  "MCP descriptor #{descriptor.id.inspect} names server " \
-                  "#{descriptor.source_id.inspect} which has no pinned catalog"
-          end
-
-          # The pinning is the whole point: the descriptor the session executes
-          # must be the exact entry the catalog snapshot recorded, or the epoch
-          # guard would be comparing digests to a lie.
-          entry = snapshot.entries.find { |candidate| candidate.name == descriptor.name }
-          unless entry && entry.definition_digest == descriptor.definition_digest
-            raise ArgumentError,
-                  "MCP descriptor #{descriptor.id.inspect} definition digest does not " \
-                  "match the pinned catalog snapshot"
-          end
+          assert_descriptor_interface!(descriptor)
+          record_unique_descriptor!(descriptor, seen)
+          assert_descriptor_identity!(descriptor)
+          assert_descriptor_pinning!(descriptor, catalogs)
 
           descriptor.freeze
         end.freeze
@@ -257,6 +203,89 @@ module Tamoz
           value.freeze
         end
         value.freeze
+      end
+
+      def validate_constructor_args!(catalogs, descriptors, executor, maximum_effect_output_bytes)
+        unless catalogs.is_a?(Hash)
+          raise ArgumentError, "catalogs must be a Hash of server_id => snapshot"
+        end
+        unless descriptors.is_a?(Array)
+          raise ArgumentError, "descriptors must be an Array"
+        end
+        unless executor.respond_to?(:call)
+          raise ArgumentError, "executor must respond to call(context, descriptor, arguments)"
+        end
+        unless maximum_effect_output_bytes.is_a?(Integer) &&
+               maximum_effect_output_bytes.positive?
+          raise ArgumentError, "maximum_effect_output_bytes must be a positive Integer"
+        end
+      end
+
+      def build_catalog_digests(catalogs)
+        catalogs
+          .sort
+          .to_h { |server_id, snapshot| [server_id, snapshot.snapshot_digest] }
+          .freeze
+      end
+
+      def build_descriptor_indexes(descriptors)
+        names = descriptors.map(&:id).freeze
+        read_only_names = descriptors.select { |entry| read_only_descriptor?(entry) }
+                                     .map(&:id).freeze
+        name_index = descriptors.to_h { |entry| [entry.id, entry] }.freeze
+        [names, read_only_names, name_index]
+      end
+
+      def assert_descriptor_interface!(descriptor)
+        required = %i[id name source_id definition_digest effect_class]
+        missing = required.reject { |method| descriptor.respond_to?(method) }
+        return if missing.empty?
+
+        raise ArgumentError,
+              "each MCP descriptor must respond to #{missing.join(", ")}"
+      end
+
+      def record_unique_descriptor!(descriptor, seen)
+        if seen.key?(descriptor.id)
+          raise ArgumentError, "duplicate MCP capability name #{descriptor.id.inspect}"
+        end
+
+        seen[descriptor.id] = true
+      end
+
+      def assert_descriptor_identity!(descriptor)
+        expected = "mcp:#{descriptor.source_id}/#{descriptor.name}"
+        return if descriptor.id == expected
+
+        raise ArgumentError,
+              "MCP descriptor id #{descriptor.id.inspect} must be " \
+              "#{expected.inspect} (source-qualified)"
+      end
+
+      def assert_descriptor_pinning!(descriptor, catalogs)
+        snapshot = catalogs[descriptor.source_id]
+        unless snapshot
+          raise ArgumentError,
+                "MCP descriptor #{descriptor.id.inspect} names server " \
+                "#{descriptor.source_id.inspect} which has no pinned catalog"
+        end
+
+        entry = snapshot.entries.find { |candidate| candidate.name == descriptor.name }
+        return if entry && entry.definition_digest == descriptor.definition_digest
+
+        raise ArgumentError,
+              "MCP descriptor #{descriptor.id.inspect} definition digest does not " \
+              "match the pinned catalog snapshot"
+      end
+
+      def normalize_arguments!(descriptor, arguments)
+        arguments = {} if arguments.nil?
+        unless arguments.is_a?(Hash)
+          raise ToolArgumentError,
+                "the arguments for #{descriptor.id} must be a JSON object"
+        end
+
+        arguments
       end
     end
   end

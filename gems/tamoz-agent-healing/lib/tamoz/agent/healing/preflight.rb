@@ -191,7 +191,7 @@ module Tamoz
         # failed check in CHECK_IDS order.
         def run(context)
           CHECK_IDS.each do |id|
-            next if CHECKS.fetch(id).call(context)
+            next if passes?(id, context)
 
             return PreflightRejection.new(
               "preflight rejected: #{DETAILS.fetch(id)}",
@@ -205,8 +205,13 @@ module Tamoz
         # to decide execution — `run` short-circuits, so the decision stays
         # deterministic.
         def failures(context)
-          CHECK_IDS.reject { |id| CHECKS.fetch(id).call(context) }
+          CHECK_IDS.reject { |id| passes?(id, context) }
         end
+
+        def passes?(id, context)
+          CHECKS.fetch(id).call(context)
+        end
+        private_class_method :passes?
       end
     end
   end

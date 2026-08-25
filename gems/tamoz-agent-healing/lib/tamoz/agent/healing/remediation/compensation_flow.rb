@@ -21,21 +21,27 @@ module Tamoz
             receipt = @compensation.compensate(
               rule: @rule, record: @record, classification:, effect_identity:
             )
-            unless receipt.is_a?(Hash) && receipt.key?('status')
-              raise HealingContractError, 'a compensation must return a status'
-            end
-
+            assert_status!(receipt)
             return failed(receipt) if receipt.fetch('status') == 'failed'
 
-            failure = VerificationFailure.new(
+            Result.new(state: :escalated, receipt:, failure: escalation_failure(verification))
+          end
+
+          private
+
+          def assert_status!(receipt)
+            return if receipt.is_a?(Hash) && receipt.key?('status')
+
+            raise HealingContractError, 'a compensation must return a status'
+          end
+
+          def escalation_failure(verification)
+            VerificationFailure.new(
               'verification did not pass; the attempt is escalated, not recovered',
               oracle: @rule.verification_oracle.fetch('check_name'),
               receipt_outcome: verification.outcome, reason: verification.reason
             )
-            Result.new(state: :escalated, receipt:, failure:)
           end
-
-          private
 
           def failed(receipt)
             # Design §9: "Failure to compensate opens the circuit."

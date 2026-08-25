@@ -38,61 +38,28 @@ module Tamoz
 
       attr_reader :parent_profile
 
-      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- validation keeps the complete bounded delegation contract at one gate.
       def validate(descriptor, arguments)
         assert_descriptor!(descriptor)
-        raise ToolPolicyError, 'child delegation budget is exhausted' if @current_policy&.values&.any?(&:zero?)
-        raise ToolArgumentError, "#{TOOL_NAME} arguments must be an object" unless arguments.is_a?(Hash)
+        assert_budget_available!
+        assert_arguments_shape!(arguments)
 
-        unknown = arguments.keys.map(&:to_s) - %w[task capabilities]
-        raise ToolArgumentError, "#{TOOL_NAME} has unknown arguments: #{unknown.join(', ')}" unless unknown.empty?
-
-        task = arguments.fetch('task')
-        unless task.is_a?(String) && !task.empty? && task.bytesize <= MAX_TASK_BYTES
-          raise ToolArgumentError, "child task must be a non-empty string of at most #{MAX_TASK_BYTES} bytes"
-        end
-
-        capabilities = arguments.fetch('capabilities')
-        unless capabilities.is_a?(Array) && capabilities.length.between?(1, MAX_CAPABILITIES) &&
-               capabilities.all? { |name| name.is_a?(String) && name.match?(/\Alocal:[A-Za-z0-9_\-.]+\z/) }
-          raise ToolArgumentError, 'child capabilities must be bounded local capability names'
-        end
-        if Tamoz::Core.secret_shaped?(task) || Tamoz::Core.secret_shaped?(capabilities)
-          raise Tamoz::SensitiveValueError, 'child delegation arguments cannot contain credential-shaped values'
-        end
-
-        capabilities = capabilities.map(&:to_s).uniq
-        parent_capabilities = @parent_profile.fetch('capabilities')
-        unless (capabilities - parent_capabilities).empty?
-          raise ToolPolicyError, 'child capabilities exceed parent authority'
-        end
+        task = extract_task(arguments)
+        capabilities = extract_capabilities(arguments)
+        assert_no_secrets!(task, arguments.fetch('capabilities'))
+        assert_capabilities_within_authority!(capabilities)
 
         { 'task' => task, 'capabilities' => capabilities.freeze }.freeze
       rescue KeyError => e
         raise ToolArgumentError, "#{TOOL_NAME} requires #{e.key}"
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
       def execute(descriptor, arguments, context:)
         normalized = validate(descriptor, arguments)
         thread_id = context&.thread_id
         request_id = context&.request_id
-        if thread_id.to_s.empty? || request_id.to_s.empty?
-          raise ToolPolicyError, 'child delegation requires a durable thread and request identity'
-        end
+        assert_durable_identity!(thread_id, request_id)
 
-        child = ChildTask.build(
-          parent_thread_id: thread_id,
-          parent_request_id: request_id,
-          task: normalized.fetch('task'),
-          capability_profile: {
-            'capabilities' => normalized.fetch('capabilities'),
-            'authority_revision' => @parent_profile.fetch('authority_revision'),
-            'delegation_policy' => delegation_policy
-          },
-          depth: @current_depth + 1,
-          concurrency: DEFAULT_CONCURRENCY
-        )
+        child = build_child_task(normalized, thread_id, request_id)
         stored = @runtime.enqueue_child_task(child, parent_profile: @parent_profile)
         "Enqueued durable child #{stored.child_id}"
       end
@@ -149,6 +116,74 @@ module Tamoz
           'remaining_depth' => @parent_profile.fetch('max_child_depth') - (@current_depth + 1),
           'remaining_concurrency' => @parent_profile.fetch('max_child_concurrency') - DEFAULT_CONCURRENCY
         }
+      end
+
+      def assert_budget_available!
+        return unless @current_policy&.values&.any?(&:zero?)
+
+        raise ToolPolicyError, 'child delegation budget is exhausted'
+      end
+
+      def assert_arguments_shape!(arguments)
+        raise ToolArgumentError, "#{TOOL_NAME} arguments must be an object" unless arguments.is_a?(Hash)
+
+        unknown = arguments.keys.map(&:to_s) - %w[task capabilities]
+        return if unknown.empty?
+
+        raise ToolArgumentError, "#{TOOL_NAME} has unknown arguments: #{unknown.join(', ')}"
+      end
+
+      def extract_task(arguments)
+        task = arguments.fetch('task')
+        unless task.is_a?(String) && !task.empty? && task.bytesize <= MAX_TASK_BYTES
+          raise ToolArgumentError, "child task must be a non-empty string of at most #{MAX_TASK_BYTES} bytes"
+        end
+
+        task
+      end
+
+      def extract_capabilities(arguments)
+        capabilities = arguments.fetch('capabilities')
+        unless capabilities.is_a?(Array) && capabilities.length.between?(1, MAX_CAPABILITIES) &&
+               capabilities.all? { |name| name.is_a?(String) && name.match?(/\Alocal:[A-Za-z0-9_\-.]+\z/) }
+          raise ToolArgumentError, 'child capabilities must be bounded local capability names'
+        end
+
+        capabilities.map(&:to_s).uniq
+      end
+
+      def assert_no_secrets!(task, capabilities)
+        return unless Tamoz::Core.secret_shaped?(task) || Tamoz::Core.secret_shaped?(capabilities)
+
+        raise Tamoz::SensitiveValueError, 'child delegation arguments cannot contain credential-shaped values'
+      end
+
+      def assert_capabilities_within_authority!(capabilities)
+        parent_capabilities = @parent_profile.fetch('capabilities')
+        return if (capabilities - parent_capabilities).empty?
+
+        raise ToolPolicyError, 'child capabilities exceed parent authority'
+      end
+
+      def assert_durable_identity!(thread_id, request_id)
+        return unless thread_id.to_s.empty? || request_id.to_s.empty?
+
+        raise ToolPolicyError, 'child delegation requires a durable thread and request identity'
+      end
+
+      def build_child_task(normalized, thread_id, request_id)
+        ChildTask.build(
+          parent_thread_id: thread_id,
+          parent_request_id: request_id,
+          task: normalized.fetch('task'),
+          capability_profile: {
+            'capabilities' => normalized.fetch('capabilities'),
+            'authority_revision' => @parent_profile.fetch('authority_revision'),
+            'delegation_policy' => delegation_policy
+          },
+          depth: @current_depth + 1,
+          concurrency: DEFAULT_CONCURRENCY
+        )
       end
     end
   end

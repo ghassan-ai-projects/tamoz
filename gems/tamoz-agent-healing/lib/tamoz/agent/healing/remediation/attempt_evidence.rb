@@ -25,7 +25,15 @@ module Tamoz
           end
 
           def record(state, plan_digest:, review_digest:, evidence:)
-            @transitions << {
+            @transitions << transition_for(
+              state, plan_digest:, review_digest:, evidence:
+            ).freeze
+          end
+
+          private
+
+          def transition_for(state, plan_digest:, review_digest:, evidence:)
+            {
               'state' => state.to_s,
               'failure_format_version' => @record.format_version,
               'failure_fingerprint' => @record.fingerprint,
@@ -41,10 +49,8 @@ module Tamoz
               'at' => @clock.call,
               'evidence' => evidence,
               'budgets' => @rule.budgets
-            }.freeze
+            }
           end
-
-          private
 
           def fence
             @context.respond_to?(:execution_id) ? @context.execution_id : nil

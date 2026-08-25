@@ -47,19 +47,20 @@ module Tamoz
           # declares. All three refusals fire before any state is assigned, in
           # the order an operator would check them.
           def validate_precision!(adapter_id, measured_precision, precision_gate)
-            unless measured_precision.is_a?(Numeric) && measured_precision.between?(0.0, 1.0)
-              raise HealingPolicyError,
-                    'a legacy text adapter requires a measured precision in 0.0..1.0'
-            end
-            unless precision_gate.is_a?(Numeric) && precision_gate.between?(0.0, 1.0)
-              raise HealingPolicyError,
-                    'a legacy text adapter requires a numeric precision gate in 0.0..1.0'
-            end
+            assert_precision_range!(measured_precision, 'measured precision')
+            assert_precision_range!(precision_gate, 'precision gate')
             return unless measured_precision < precision_gate
 
             raise HealingPolicyError,
                   "legacy text adapter #{adapter_id.inspect} measured precision " \
                   "#{measured_precision} is below its gate #{precision_gate}"
+          end
+
+          def assert_precision_range!(value, name)
+            return if value.is_a?(Numeric) && value.between?(0.0, 1.0)
+
+            raise HealingPolicyError,
+                  "a legacy text adapter requires a #{name} in 0.0..1.0"
           end
 
           def validate_patterns!(patterns)

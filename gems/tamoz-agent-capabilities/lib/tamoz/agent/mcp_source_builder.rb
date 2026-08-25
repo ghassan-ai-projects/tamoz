@@ -30,6 +30,10 @@ module Tamoz
 
       WEBSEARCH_SERVER_ID = "websearch"
 
+      SOURCE_DIGEST_PREFIX = "tamoz.agent.mcp.source.v1\n"
+      PEEK_DIGEST_PREFIX = "tamoz.agent.mcp.peek.v1\n"
+      PEEK_REVISION_PREFIX = "tamoz.agent.mcp.peek.revision.v1\n"
+
       # An MCP server is a subprocess. That is a bigger step than enabling a
       # local capability, so the configuration is explicit about every part of it
       # and nothing is inferred from the environment.
@@ -57,21 +61,7 @@ module Tamoz
             build_server(config, settings, state)
           end
 
-          McpCapabilitySource.new(
-            catalogs: state.fetch(:catalogs),
-            descriptors: state.fetch(:descriptors),
-            source_digests: state.fetch(:source_digests),
-            validator: lambda do |descriptor, arguments|
-              with_mcp_error_mapping do
-                state.fetch(:database_policies).fetch(descriptor.source_id, nil)&.validate(arguments)
-                Tamoz::Mcp::Invocation.validate_arguments(descriptor, arguments)
-              end
-            end,
-            executor: build_executor(
-              state.fetch(:catalogs), state.fetch(:supervisors), state.fetch(:database_policies)
-            ),
-            closer: -> { state.fetch(:supervisors).each_value(&:close) }
-          )
+          compose_source(state)
         rescue StandardError
           state.fetch(:supervisors).each_value(&:close)
           raise
@@ -79,19 +69,12 @@ module Tamoz
       end
 
       def build_server(config, settings, state)
-        catalogs = state.fetch(:catalogs)
-        descriptors = state.fetch(:descriptors)
-        supervisors = state.fetch(:supervisors)
-        source_digests = state.fetch(:source_digests)
-        source_digests[config.server_id] = Tamoz::Core.digest(
-          "tamoz.agent.mcp.source.v1\n", config.describe
-        )
+        record_source_digest!(config, state)
         snapshot = Tamoz::Mcp::Catalog.compile(config)
-        catalogs[snapshot.server_id] = snapshot
-        supervisors[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
-        policy = database_policy(config.server_id, settings)
-        state.fetch(:database_policies)[config.server_id] = policy if policy
-        append_descriptors(descriptors, snapshot, settings)
+        state.fetch(:catalogs)[snapshot.server_id] = snapshot
+        state.fetch(:supervisors)[snapshot.server_id] = Tamoz::Mcp::Supervisor.build(config)
+        record_database_policy!(config.server_id, settings, state)
+        append_descriptors(state.fetch(:descriptors), snapshot, settings)
       end
 
       def append_descriptors(descriptors, snapshot, settings)
@@ -100,11 +83,7 @@ module Tamoz
           descriptors << Tamoz::Mcp::Invocation.descriptor_for(
             entry,
             snapshot:,
-            # Fail closed: only an operator-declared tool is read-only. Any
-            # other tool carries `:unknown_effects`, which the capability
-            # binding admits as `:bounded` — unsafe and approval-required —
-            # so an unannotated remote effect is governed, never auto-run.
-            effect_class: read_only.include?(entry.name) ? :read_only : :unknown_effects
+            effect_class: effect_class_for(entry, read_only)
           )
         end
       end
@@ -114,30 +93,9 @@ module Tamoz
       def peek
         require "tamoz/mcp"
 
-        rows = server_configs.map do |config, settings|
-          {
-            "source_id" => if config.server_id == WEBSEARCH_SERVER_ID
-                             "websearch:#{config.server_id}"
-                           else
-                             "mcp:#{config.server_id}"
-                           end,
-            "server_id" => config.server_id,
-            "transport" => config.transport.to_s,
-            "configured" => true,
-            "catalogued" => false,
-            "materialized" => false,
-            "reachable" => false,
-            "verified" => false,
-            "effective" => false,
-            "reason" => "unmaterialized",
-            "read_only_tools" => Array(settings["read_only_tools"]).map(&:to_s).sort.freeze,
-            "config_digest" => Tamoz::Core.digest(
-              "tamoz.agent.mcp.peek.v1\n", config.describe
-            )
-          }.freeze
-        end.freeze
+        rows = server_configs.map { |config, settings| peek_row(config, settings) }.freeze
         {
-          "revision" => Tamoz::Core.digest("tamoz.agent.mcp.peek.revision.v1\n", rows),
+          "revision" => Tamoz::Core.digest(PEEK_REVISION_PREFIX, rows),
           "sources" => rows
         }.freeze
       end
@@ -204,6 +162,93 @@ module Tamoz
         end
       end
 
+      def compose_source(state)
+        McpCapabilitySource.new(
+          catalogs: state.fetch(:catalogs),
+          descriptors: state.fetch(:descriptors),
+          source_digests: state.fetch(:source_digests),
+          validator: build_validator(state.fetch(:database_policies)),
+          executor: build_executor(
+            state.fetch(:catalogs), state.fetch(:supervisors), state.fetch(:database_policies)
+          ),
+          closer: -> { state.fetch(:supervisors).each_value(&:close) }
+        )
+      end
+
+      def build_validator(database_policies)
+        lambda do |descriptor, arguments|
+          with_mcp_error_mapping do
+            database_policies.fetch(descriptor.source_id, nil)&.validate(arguments)
+            Tamoz::Mcp::Invocation.validate_arguments(descriptor, arguments)
+          end
+        end
+      end
+
+      def record_source_digest!(config, state)
+        state.fetch(:source_digests)[config.server_id] = Tamoz::Core.digest(
+          SOURCE_DIGEST_PREFIX, config.describe
+        )
+      end
+
+      def record_database_policy!(server_id, settings, state)
+        policy = database_policy(server_id, settings)
+        state.fetch(:database_policies)[server_id] = policy if policy
+      end
+
+      def effect_class_for(entry, read_only_tools)
+        read_only_tools.include?(entry.name) ? :read_only : :unknown_effects
+      end
+
+      def peek_row(config, settings)
+        {
+          "source_id" => peek_source_id(config),
+          "server_id" => config.server_id,
+          "transport" => config.transport.to_s,
+          "configured" => true,
+          "catalogued" => false,
+          "materialized" => false,
+          "reachable" => false,
+          "verified" => false,
+          "effective" => false,
+          "reason" => "unmaterialized",
+          "read_only_tools" => Array(settings["read_only_tools"]).map(&:to_s).sort.freeze,
+          "config_digest" => Tamoz::Core.digest(PEEK_DIGEST_PREFIX, config.describe)
+        }.freeze
+      end
+
+      def peek_source_id(config)
+        if config.server_id == WEBSEARCH_SERVER_ID
+          "websearch:#{config.server_id}"
+        else
+          "mcp:#{config.server_id}"
+        end
+      end
+
+      def validate_server_settings!(server_id, settings, transport)
+        required = transport == :http ? %w[endpoint] : REQUIRED_KEYS
+        missing = required.reject { |key| settings[key].is_a?(String) && !settings[key].empty? }
+        return if missing.empty?
+
+        raise Error, "MCP server #{server_id.inspect} is missing #{missing.join(", ")}"
+      end
+
+      def config_arguments_for(server_id, settings, transport)
+        {
+          server_id:,
+          transport:,
+          command: settings["command"],
+          arguments: Array(settings["arguments"]),
+          env_allowlist: Array(settings["env_allowlist"]),
+          credential_refs: Array(settings["credential_refs"]),
+          endpoint: settings["endpoint"],
+          allow_insecure_http: settings.fetch("allow_insecure_http", false),
+          headers: settings["headers"] || {},
+          credential_headers: settings["credential_headers"] || {},
+          working_directory: transport == :stdio ? (settings["working_directory"] || @directory.path) : nil,
+          workspace_root: @directory.workspace_root
+        }
+      end
+
       # [[ServerConfig, settings], ...] for every server the operator enabled.
       def server_configs
         entries = []
@@ -237,40 +282,14 @@ module Tamoz
         [config_for(WEBSEARCH_SERVER_ID, settings), settings]
       end
 
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def config_for(server_id, settings)
         transport = (settings["transport"] || "stdio").to_sym
-        required = transport == :http ? %w[endpoint] : REQUIRED_KEYS
-        missing = required.reject { |key| settings[key].is_a?(String) && !settings[key].empty? }
-        unless missing.empty?
-          raise Error, "MCP server #{server_id.inspect} is missing #{missing.join(", ")}"
-        end
+        validate_server_settings!(server_id, settings, transport)
 
-        Tamoz::Mcp::ServerConfig.new(
-          server_id:,
-          transport:,
-          command: settings["command"],
-          arguments: Array(settings["arguments"]),
-          # The subprocess sees only what the operator listed. An empty allowlist
-          # means an empty environment, which is the right default for something
-          # that will be handed a network capability.
-          env_allowlist: Array(settings["env_allowlist"]),
-          credential_refs: Array(settings["credential_refs"]),
-          endpoint: settings["endpoint"],
-          allow_insecure_http: settings.fetch("allow_insecure_http", false),
-          headers: settings["headers"] || {},
-          credential_headers: settings["credential_headers"] || {},
-          # Two different directories, and the MCP gem refuses to let them be the
-          # same one. `workspace_root` is the tree the AGENT edits; the server
-          # runs somewhere else — the runtime directory by default — so a server
-          # process never has the tree under repair as its cwd.
-          working_directory: transport == :stdio ? (settings["working_directory"] || @directory.path) : nil,
-          workspace_root: @directory.workspace_root
-        )
+        Tamoz::Mcp::ServerConfig.new(**config_arguments_for(server_id, settings, transport))
       rescue Tamoz::Mcp::ValidationError => error
         raise Error, "MCP server #{server_id.inspect} is misconfigured: #{error.message}"
       end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     end
   end
 end

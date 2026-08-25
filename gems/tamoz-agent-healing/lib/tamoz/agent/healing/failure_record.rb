@@ -106,30 +106,23 @@ module Tamoz
           untrusted_message_ref: nil,
           observed_at_ms: 0
         )
-          unless format_version == FORMAT_VERSION
-            raise HealingPolicyError,
-                  "FailureRecord format_version #{format_version.inspect} is not supported"
-          end
-          unless capability_absent == true || capability_absent == false
-            raise HealingPolicyError, "capability_absent must be true or false"
-          end
-          unless observed_at_ms.is_a?(Integer) && !observed_at_ms.negative?
-            raise HealingPolicyError, "observed_at_ms must be a non-negative integer"
-          end
+          validate_format_version!(format_version)
+          validate_boolean!(capability_absent, "capability_absent")
+          validate_non_negative_integer!(observed_at_ms, "observed_at_ms")
 
           super(
             format_version:,
             failure_code: validate_id(failure_code, "failure_code"),
             category: validate_member(category, CATEGORIES, "category"),
             operation: validate_id(operation, "operation"),
-            tool: tool.nil? ? nil : validate_id(tool, "tool"),
-            target_resource: target_resource.nil? ? nil : validate_id(target_resource, "target_resource"),
+            tool: validate_optional_id(tool, "tool"),
+            target_resource: validate_optional_id(target_resource, "target_resource"),
             expected_digest: validate_optional_digest(expected_digest, "expected_digest"),
             observed_digest: validate_optional_digest(observed_digest, "observed_digest"),
             effect_state: validate_member(effect_state, EFFECT_STATES, "effect_state"),
-            graph_id: graph_id.nil? ? nil : validate_id(graph_id, "graph_id"),
-            task_id: task_id.nil? ? nil : validate_id(task_id, "task_id"),
-            execution_id: execution_id.nil? ? nil : validate_id(execution_id, "execution_id"),
+            graph_id: validate_optional_id(graph_id, "graph_id"),
+            task_id: validate_optional_id(task_id, "task_id"),
+            execution_id: validate_optional_id(execution_id, "execution_id"),
             policy_version: validate_id(policy_version, "policy_version"),
             behavior_version: validate_id(behavior_version, "behavior_version"),
             retryability: Tamoz::Core.deep_freeze(validate_retryability(retryability)),
@@ -281,6 +274,107 @@ module Tamoz
           }
         end
 
+        def validate_format_version!(format_version)
+          return if format_version == FORMAT_VERSION
+
+          raise HealingPolicyError,
+                "FailureRecord format_version #{format_version.inspect} is not supported"
+        end
+
+        def validate_boolean!(value, name)
+          return if value == true || value == false
+
+          raise HealingPolicyError, "#{name} must be true or false"
+        end
+
+        def validate_non_negative_integer!(value, name)
+          return if value.is_a?(Integer) && !value.negative?
+
+          raise HealingPolicyError, "#{name} must be a non-negative integer"
+        end
+
+        def validate_optional_id(value, name)
+          value.nil? ? nil : validate_id(value, name)
+        end
+
+        def validate_hash!(value, name)
+          return if value.is_a?(Hash)
+
+          raise HealingPolicyError, "#{name} must be an object"
+        end
+
+        def validate_allowed_keys!(value, allowed, name)
+          unknown = value.keys.map(&:to_s) - allowed
+          return if unknown.empty?
+
+          raise HealingPolicyError,
+                "#{name} does not accept #{unknown.sort.inspect}"
+        end
+
+        def validate_retryability_pre_dispatch!(value)
+          return unless value.key?("pre_dispatch")
+
+          validate_boolean!(value.fetch("pre_dispatch"), "retryability pre_dispatch")
+        end
+
+        def validate_retryability_effect_safety!(value)
+          return unless value.key?("effect_safety")
+
+          safety = value.fetch("effect_safety").to_s
+          return if EFFECT_SAFETIES.include?(safety)
+
+          raise HealingPolicyError,
+                "retryability effect_safety must be one of #{EFFECT_SAFETIES.inspect}"
+        end
+
+        def validate_context_size!(value)
+          return if value.length <= MAX_CONTEXT_KEYS
+
+          raise HealingPolicyError,
+                "trusted_context exceeds #{MAX_CONTEXT_KEYS} keys"
+        end
+
+        def validate_context_entry!(key, entry)
+          SafeText.normalize(
+            key, name: "trusted_context key", max_bytes: MAX_ID_BYTES,
+            error_class: HealingPolicyError
+          )
+          case entry
+          when String then validate_context_string!(key, entry)
+          when Numeric, true, false, nil then nil
+          else
+            raise HealingPolicyError,
+                  "trusted_context #{key} must be a bounded scalar"
+          end
+        end
+
+        def validate_context_string!(key, entry)
+          SafeText.normalize(
+            entry, name: "trusted_context #{key}", max_bytes: MAX_ID_BYTES,
+            error_class: HealingPolicyError
+          )
+        end
+
+        def validate_reference_keys!(value)
+          return if value.is_a?(Hash) && value.key?("digest") && value.key?("source")
+
+          raise HealingPolicyError,
+                "untrusted_message_ref must carry digest and source"
+        end
+
+        def forbid_raw_text!(value)
+          return unless value.key?("text") || value.key?("message") || value.key?("body")
+
+          raise HealingPolicyError,
+                "untrusted_message_ref is a REFERENCE; it must not carry the raw text"
+        end
+
+        def validate_non_empty_string!(value, name)
+          return if value.is_a?(String) && !value.empty?
+
+          raise HealingPolicyError, "#{name} must be a non-empty string"
+        end
+
         private
 
         def validate_id(value, name)
@@ -309,25 +403,10 @@ module Tamoz
         end
 
         def validate_retryability(value)
-          unless value.is_a?(Hash)
-            raise HealingPolicyError, "retryability evidence must be an object"
-          end
-
-          unknown = value.keys.map(&:to_s) - RETRYABILITY_KEYS
-          unless unknown.empty?
-            raise HealingPolicyError,
-                  "retryability evidence does not accept #{unknown.sort.inspect}"
-          end
-          if value.key?("pre_dispatch") &&
-             !(value["pre_dispatch"] == true || value["pre_dispatch"] == false)
-            raise HealingPolicyError, "retryability pre_dispatch must be true or false"
-          end
-          if value.key?("effect_safety") &&
-             !EFFECT_SAFETIES.include?(value["effect_safety"].to_s)
-            raise HealingPolicyError,
-                  "retryability effect_safety must be one of #{EFFECT_SAFETIES.inspect}"
-          end
-
+          validate_hash!(value, "retryability")
+          validate_allowed_keys!(value, RETRYABILITY_KEYS, "retryability")
+          validate_retryability_pre_dispatch!(value)
+          validate_retryability_effect_safety!(value)
           value
         end
 
@@ -335,47 +414,16 @@ module Tamoz
         # rejects nested free text beyond an id-sized budget, so it cannot become a
         # smuggling channel for the provider message the record deliberately omits.
         def validate_trusted_context(value)
-          unless value.is_a?(Hash)
-            raise HealingPolicyError, "trusted_context must be an object"
-          end
-          if value.length > MAX_CONTEXT_KEYS
-            raise HealingPolicyError,
-                  "trusted_context exceeds #{MAX_CONTEXT_KEYS} keys"
-          end
-          value.each do |key, entry|
-            SafeText.normalize(
-              key, name: "trusted_context key", max_bytes: MAX_ID_BYTES,
-              error_class: HealingPolicyError
-            )
-            case entry
-            when String
-              SafeText.normalize(
-                entry, name: "trusted_context #{key}", max_bytes: MAX_ID_BYTES,
-                error_class: HealingPolicyError
-              )
-            when Numeric, true, false, nil
-              nil
-            else
-              raise HealingPolicyError,
-                    "trusted_context #{key} must be a bounded scalar"
-            end
-          end
+          validate_hash!(value, "trusted_context")
+          validate_context_size!(value)
+          value.each { |key, entry| validate_context_entry!(key, entry) }
           value
         end
 
         def validate_message_ref(value)
-          unless value.is_a?(Hash) && value.key?("digest") && value.key?("source")
-            raise HealingPolicyError,
-                  "untrusted_message_ref must carry digest and source"
-          end
-          if value.key?("text") || value.key?("message") || value.key?("body")
-            raise HealingPolicyError,
-                  "untrusted_message_ref is a REFERENCE; it must not carry the raw text"
-          end
-          unless value.fetch("digest").is_a?(String) && !value.fetch("digest").empty?
-            raise HealingPolicyError, "untrusted_message_ref digest must be a non-empty string"
-          end
-
+          validate_reference_keys!(value)
+          forbid_raw_text!(value)
+          validate_non_empty_string!(value.fetch("digest"), "untrusted_message_ref digest")
           value
         end
       end

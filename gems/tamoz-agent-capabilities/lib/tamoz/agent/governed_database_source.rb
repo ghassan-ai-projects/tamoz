@@ -19,23 +19,13 @@ module Tamoz
       end
 
       def self.policy(server_id:, max_rows: MAX_ROWS)
-        normalized_server_id = String(server_id)
-        normalized_max_rows = Integer(max_rows)
-        raise ArgumentError, 'database server_id must not be empty' if normalized_server_id.empty?
-        unless normalized_max_rows.between?(1, MAX_ROWS)
-          raise ArgumentError, "database max_rows must be between 1 and #{MAX_ROWS}"
-        end
-
-        Policy.new(server_id: normalized_server_id, max_rows: normalized_max_rows)
+        Policy.new(server_id: normalize_server_id(server_id), max_rows: normalize_max_rows(max_rows))
       end
 
       def initialize(source:, server_id:, max_rows: MAX_ROWS)
         @source = source
-        @server_id = String(server_id)
-        @max_rows = Integer(max_rows)
-        raise ArgumentError, 'database server_id must not be empty' if @server_id.empty?
-        raise ArgumentError, "database max_rows must be between 1 and #{MAX_ROWS}" unless @max_rows.between?(1,
-                                                                                                             MAX_ROWS)
+        @server_id = self.class.normalize_server_id(server_id)
+        @max_rows = self.class.normalize_max_rows(max_rows)
 
         super(source)
       end
@@ -83,6 +73,23 @@ module Tamoz
         [rows, maximum].min
       end
       private_class_method :validate_max_rows
+
+      def self.normalize_server_id(server_id)
+        normalized = String(server_id)
+        raise ArgumentError, 'database server_id must not be empty' if normalized.empty?
+
+        normalized
+      end
+
+      def self.normalize_max_rows(max_rows)
+        normalized = Integer(max_rows)
+        unless normalized.between?(1, MAX_ROWS)
+          raise ArgumentError, "database max_rows must be between 1 and #{MAX_ROWS}"
+        end
+
+        normalized
+      end
+
       def execute(context, capability_id, arguments)
         name = String(capability_id)
         unless names.include?(name)
