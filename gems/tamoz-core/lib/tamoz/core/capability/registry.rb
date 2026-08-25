@@ -20,33 +20,8 @@ module Tamoz
       # with the admission set, immutable mid-turn.
       Registry = Data.define(:sources, :surface, :names, :declared) do
         def self.build(sources:, admission_set:)
-          unless sources.is_a?(Array) && sources.all? { |s| s.is_a?(Source) }
-            raise Tamoz::ConfigurationError, "sources must be Capability::Source values"
-          end
-          # Closed world (C4/DC-6): every source_id must start with one of the
-          # four built-in prefixes — a fifth/forged source fails at
-          # construction, never at dispatch.
-          sources.each do |source|
-            unless built_in_prefix?(source.source_id)
-              raise DescriptorConflictError,
-                    "source #{source.source_id.inspect} is not a built-in " \
-                    "capability source (#{BUILT_IN_SOURCES.inspect})"
-            end
-          end
-          # C3/C6: a source may only carry descriptors that belong to it —
-          # descriptor.source_id must match the containing source. This closes
-          # the smuggling path (a "local" source cannot surface an
-          # "mcp:" descriptor under a built-in prefix).
-          sources.each do |source|
-            source.descriptors.each do |descriptor|
-              unless descriptor.source_id == source.source_id
-                raise DescriptorConflictError,
-                      "descriptor #{descriptor.id.inspect} (source " \
-                      "#{descriptor.source_id.inspect}) does not belong to " \
-                      "source #{source.source_id.inspect}"
-              end
-            end
-          end
+          enforce_built_in_sources!(sources)
+          enforce_descriptor_ownership!(sources)
 
           registry = build_registry(sources)
           surface = compute_surface(registry, admission_set)
@@ -91,6 +66,39 @@ module Tamoz
         class << self
           private
 
+          # Closed world (C4/DC-6): every source_id must start with one of the
+          # four built-in prefixes — a fifth/forged source fails at
+          # construction, never at dispatch.
+          def enforce_built_in_sources!(sources)
+            unless sources.is_a?(Array) && sources.all? { |source| source.is_a?(Source) }
+              raise Tamoz::ConfigurationError, "sources must be Capability::Source values"
+            end
+            sources.each do |source|
+              unless built_in_prefix?(source.source_id)
+                raise DescriptorConflictError,
+                      "source #{source.source_id.inspect} is not a built-in " \
+                      "capability source (#{BUILT_IN_SOURCES.inspect})"
+              end
+            end
+          end
+
+          # C3/C6: a source may only carry descriptors that belong to it —
+          # descriptor.source_id must match the containing source. This closes
+          # the smuggling path (a "local" source cannot surface an
+          # "mcp:" descriptor under a built-in prefix).
+          def enforce_descriptor_ownership!(sources)
+            sources.each do |source|
+              source.descriptors.each do |descriptor|
+                unless descriptor.source_id == source.source_id
+                  raise DescriptorConflictError,
+                        "descriptor #{descriptor.id.inspect} (source " \
+                        "#{descriptor.source_id.inspect}) does not belong to " \
+                        "source #{source.source_id.inspect}"
+                end
+              end
+            end
+          end
+
           def build_registry(sources)
             sources.each_with_object({}) do |source, registry|
               source.descriptors.each do |descriptor|
@@ -129,11 +137,11 @@ module Tamoz
           # websearch:) must carry a non-empty suffix — "skill:" with an empty
           # name is not a valid built-in source id.
           def built_in_prefix?(source_id)
-            source_id == "local" ||
-              source_id == "websearch" ||
-              (source_id.start_with?("skill:") && source_id.length > "skill:".length) ||
-              (source_id.start_with?("mcp:") && source_id.length > "mcp:".length) ||
-              (source_id.start_with?("websearch:") && source_id.length > "websearch:".length)
+            return true if %w[local websearch].include?(source_id)
+
+            %w[skill: mcp: websearch:].any? do |prefix|
+              source_id.start_with?(prefix) && source_id != prefix
+            end
           end
         end
       end
