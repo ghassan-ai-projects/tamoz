@@ -110,7 +110,7 @@ module Tamoz
         when :at
           due_at_occurrences(now)
         when :interval
-          due_interval_occurrences(now:, start: anchor || start_at || created_at, limit:)
+          due_interval_occurrences(now:, anchor: anchor || interval_anchor, limit:)
         end
       end
 
@@ -131,19 +131,15 @@ module Tamoz
         return {materialize: [], skipped: []} if due_instants.empty?
 
         case misfire_policy
-        when :skip
-          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
-        when :latest
-          # Coalesce the covered range: every older due instant is recorded
-          # with a durable reason (design §6: "every due occurrence has
-          # exactly one durable reason"), the latest carries the work.
+        when :skip, :latest, :fire_once
+          # The three policies coincide today by construction: the latest
+          # instant carries the work, older dues get their durable skip
+          # reason (design §6).
           {materialize: [due_instants.last], skipped: due_instants[0...-1]}
         when :replay
           limit = [misfire_limit, 1].max
           # Oldest-first up to the limit; later ones are skipped.
           {materialize: due_instants.first(limit), skipped: due_instants[limit..] || []}
-        when :fire_once
-          {materialize: [due_instants.last], skipped: due_instants[0...-1]}
         end
       end
 
@@ -240,7 +236,7 @@ module Tamoz
 
       def next_interval_fire(now)
         duration = expression.to_i
-        anchor = start_at || created_at
+        anchor = interval_anchor
         return nil if end_at && anchor > end_at
         return anchor if now < anchor
 
@@ -255,58 +251,66 @@ module Tamoz
         [instant]
       end
 
-      def due_interval_occurrences(now:, start:, limit:)
-        duration = expression.to_i
-        return [] if end_at && start > end_at
-        return [] if start > now
+      def interval_anchor
+        start_at || created_at
+      end
 
-        (0...[((now - start) / duration) + 1, limit].min)
-          .map { |ordinal| start + (ordinal * duration) }
+      def due_interval_occurrences(now:, anchor:, limit:)
+        duration = expression.to_i
+        return [] if end_at && anchor > end_at
+        return [] if anchor > now
+
+        (0...[((now - anchor) / duration) + 1, limit].min)
+          .map { |ordinal| anchor + (ordinal * duration) }
       end
 
       def within_bounds?(instant)
         (!start_at || instant >= start_at) && (!end_at || instant <= end_at)
       end
 
-      def validate!(
-        id:, revision:, owner:, enabled:, kind:, expression:,
-        start_at:, end_at:, misfire_policy:, misfire_limit:,
-        overlap_policy:, max_concurrency:, jitter_window:,
-        payload_ref:, thread_policy:, capability_grant:,
-        behavior_version:, approval_profile:, delivery_policy:,
-        budgets:, created_by:, created_at:
-      )
+      def validate!(**fields)
         # An omitted profile is the default one, not an error, so a schedule
         # that says nothing runs under the same policy as ordinary work.
-        approval_profile = DEFAULT_APPROVAL_PROFILE if approval_profile.nil?
-        validate_id!(id)
-        validate_revision!(revision)
-        validate_string!(owner, "owner")
-        validate_kind!(kind, expression)
-        validate_times!(kind, expression, start_at, end_at)
-        validate_enum!(misfire_policy, MISFIRE_POLICIES, "misfire_policy")
-        validate_limit!(misfire_limit, "misfire_limit")
-        validate_enum!(overlap_policy, OVERLAP_POLICIES, "overlap_policy")
-        validate_limit!(max_concurrency, "max_concurrency")
-        validate_limit!(jitter_window, "jitter_window")
-        validate_digest!(payload_ref, "payload_ref")
-        validate_string!(thread_policy, "thread_policy")
-        validate_hash!(capability_grant, "capability_grant")
-        validate_string!(behavior_version, "behavior_version")
-        validate_string!(approval_profile, "approval_profile")
-        validate_hash!(delivery_policy, "delivery_policy")
-        validate_budgets!(budgets)
-        validate_string!(created_by, "created_by")
-        validate_time!(created_at, "created_at")
+        fields[:approval_profile] = DEFAULT_APPROVAL_PROFILE if fields[:approval_profile].nil?
 
-        {
-          id:, revision:, owner:, enabled:, kind:, expression:,
-          start_at:, end_at:, misfire_policy:, misfire_limit:,
-          overlap_policy:, max_concurrency:, jitter_window:,
-          payload_ref:, thread_policy:, capability_grant:,
-          behavior_version:, approval_profile:, delivery_policy:,
-          budgets:, created_by:, created_at:
-        }.freeze
+        validate_identity!(fields)
+        validate_kind!(fields)
+        validate_times!(fields)
+        validate_expression!(fields[:kind], fields[:expression])
+        validate_policies!(fields)
+        validate_artifacts!(fields)
+        validate_lifecycle!(fields)
+
+        fields.freeze
+      end
+
+      def validate_identity!(fields)
+        validate_id!(fields[:id])
+        validate_revision!(fields[:revision])
+        validate_string!(fields[:owner], "owner")
+      end
+
+      def validate_policies!(fields)
+        validate_enum!(fields[:misfire_policy], MISFIRE_POLICIES, "misfire_policy")
+        validate_limit!(fields[:misfire_limit], "misfire_limit")
+        validate_enum!(fields[:overlap_policy], OVERLAP_POLICIES, "overlap_policy")
+        validate_limit!(fields[:max_concurrency], "max_concurrency")
+        validate_limit!(fields[:jitter_window], "jitter_window")
+      end
+
+      def validate_artifacts!(fields)
+        validate_digest!(fields[:payload_ref], "payload_ref")
+        validate_string!(fields[:thread_policy], "thread_policy")
+        validate_hash!(fields[:capability_grant], "capability_grant")
+        validate_string!(fields[:behavior_version], "behavior_version")
+        validate_string!(fields[:approval_profile], "approval_profile")
+        validate_hash!(fields[:delivery_policy], "delivery_policy")
+        validate_budgets!(fields[:budgets])
+      end
+
+      def validate_lifecycle!(fields)
+        validate_string!(fields[:created_by], "created_by")
+        validate_time!(fields[:created_at], "created_at")
       end
 
       def validate_id!(value)
@@ -324,25 +328,25 @@ module Tamoz
         value
       end
 
-      def validate_kind!(kind, expression)
-        unless KINDS.include?(kind)
+      def validate_kind!(fields)
+        unless KINDS.include?(fields[:kind])
           raise Tamoz::ConfigurationError,
                 "schedule kind must be one of #{KINDS.inspect} (cron is a recorded deferral)"
         end
-        unless expression.is_a?(String) && !expression.empty?
-          raise Tamoz::ConfigurationError, "schedule expression must be a non-empty string"
-        end
-        kind
+        expression = fields[:expression]
+        return if expression.is_a?(String) && !expression.empty?
+
+        raise Tamoz::ConfigurationError, "schedule expression must be a non-empty string"
       end
 
-      def validate_times!(kind, expression, start_at, end_at)
+      def validate_times!(fields)
+        start_at = fields[:start_at]
+        end_at = fields[:end_at]
         validate_time!(start_at, "start_at") unless start_at.nil?
         validate_time!(end_at, "end_at") unless end_at.nil?
-        if start_at && end_at && start_at > end_at
-          raise Tamoz::ConfigurationError, "start_at must not exceed end_at"
-        end
+        return unless start_at && end_at && start_at > end_at
 
-        validate_expression!(kind, expression)
+        raise Tamoz::ConfigurationError, "start_at must not exceed end_at"
       end
 
       def validate_expression!(kind, expression)
@@ -400,9 +404,7 @@ module Tamoz
       end
 
       def validate_budgets!(value)
-        unless value.is_a?(Hash) && !value.empty?
-          raise Tamoz::ConfigurationError, "budgets must be a non-empty hash"
-        end
+        validate_hash!(value, "budgets")
         %w[max_steps max_wall_seconds max_cost_tokens].each do |key|
           next unless value.key?(key)
           next if value[key].is_a?(Integer) && value[key].positive?
@@ -410,7 +412,6 @@ module Tamoz
           raise Tamoz::ConfigurationError,
                 "budgets.#{key} must be a positive integer"
         end
-        Tamoz::Core.deep_freeze(value)
       end
 
       def validate_time!(value, name)
