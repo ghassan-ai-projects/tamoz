@@ -8,11 +8,11 @@ review/fix → commit → bar check. Do not run tests until the final checklist 
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/behavior_version.rb`
 - [x] `gems/tamoz-agent-kernel/lib/tamoz/agent/deliberation.rb` — slice PASS; commit pending
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/diagnosis_catalog.rb`
-- [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb`
-- [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb`
+- [x] `gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb` — slice PASS; committed as `7f1953d`
+- [x] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_frame_builder.rb` — slice PASS; committed as `52fed89`
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_call.rb`
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb`
-- [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb`
+- [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_nodes.rb` — candidate complete; implementation queued
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/episode_tool_call.rb`
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/errors.rb`
 - [ ] `gems/tamoz-agent-kernel/lib/tamoz/agent/event.rb`
