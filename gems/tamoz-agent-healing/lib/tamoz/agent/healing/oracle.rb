@@ -48,14 +48,15 @@ module Tamoz
         # Computed from the toolbox's configured checks — operator authority — and
         # never from model or rule text.
         def digest_for(toolbox, check_name)
-          argv = toolbox.checks[String(check_name)]
+          name = String(check_name)
+          argv = toolbox.checks[name]
           if argv.nil?
             raise HealingContractError,
                   "no configured check named #{check_name.inspect}; the oracle must " \
                   "be a configured check (invariant 33)"
           end
 
-          Tamoz::Core.digest("#{DIGEST_DOMAIN}\n", [String(check_name), argv])
+          Tamoz::Core.digest("#{DIGEST_DOMAIN}\n", [name, argv])
         end
 
         # Runs the rule's pinned oracle. Returns a `Result`; NEVER raises for a
@@ -75,7 +76,7 @@ module Tamoz
           assert_receipt!(receipt)
           result_from_receipt(receipt, pinned, observed, check_name)
         rescue Tamoz::Core::ToolError => error
-          unavailable_result(rule.verification_oracle, error)
+          unavailable_result(oracle, error)
         end
 
         def observe_digest(toolbox, check_name)
