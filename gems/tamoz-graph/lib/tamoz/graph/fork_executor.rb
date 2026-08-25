@@ -25,7 +25,7 @@ module Tamoz
         state = fork_state(source, update)
         frontier = reset_frontier(source)
         terminal = frontier.empty?
-        checkpoint = append_checkpoint(execution, source, state, frontier, terminal)
+        checkpoint = append_checkpoint(execution, source, state, frontier)
         return compiled.snapshot(checkpoint) if terminal
 
         run_checkpoint(execution, checkpoint)
@@ -97,9 +97,9 @@ module Tamoz
         source.frontier.map { |entry| entry.with(activation_checkpoint_id: nil) }.freeze
       end
 
-      def append_checkpoint(execution, source, state, frontier, terminal)
-        status = terminal ? :completed : :running
-        compiled.append_checkpoint(**checkpoint_attributes(
+      def append_checkpoint(execution, source, state, frontier)
+        status = frontier.empty? ? :completed : :running
+        compiled.append_checkpoint(**build_checkpoint_attributes(
           execution,
           source,
           state,
@@ -118,7 +118,7 @@ module Tamoz
         )
       end
 
-      def checkpoint_attributes(execution, source, state, frontier, status)
+      def build_checkpoint_attributes(execution, source, state, frontier, status)
         request = execution.request
         {
           writer: execution.writer,
@@ -146,13 +146,13 @@ module Tamoz
         Executor.new(compiled).run(
           checkpoint,
           writer: execution.writer,
-          context: execution_context(execution),
+          context: build_execution_context(execution),
           concurrency: execution.concurrency,
           durable_request_id: request.request_id
         )
       end
 
-      def execution_context(execution)
+      def build_execution_context(execution)
         request = execution.request
         context = compiled.__send__(
           :build_context,
