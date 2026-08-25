@@ -49,23 +49,12 @@ module Tamoz
           episode: canonical_episode(episode)
         }
         @lock.synchronize do
-          existing = @rows[[values.fetch(:tenant_id), values.fetch(:intent_id)]]
-          if existing
-            return self if equivalent_open?(existing, values)
+          key = [values.fetch(:tenant_id), values.fetch(:intent_id)]
+          existing = @rows[key]
+          return self if existing && equivalent_open?(existing, values)
+          raise VerificationError, "conflicting duplicate verification #{intent_id}" if existing
 
-            raise VerificationError, "conflicting duplicate verification #{intent_id}"
-          end
-
-          @rows[[values.fetch(:tenant_id), values.fetch(:intent_id)]] = Row.new(
-            tenant_id: values.fetch(:tenant_id), intent_id: values.fetch(:intent_id),
-            command_id: values[:command_id],
-            decision_id: values.fetch(:decision_id), episode_id: values.fetch(:episode_id),
-            attempt_id: values.fetch(:attempt_id), decision_digest: values.fetch(:decision_digest),
-            episode: values.fetch(:episode), state: :awaiting,
-            outcome_id: nil, outcome_digest: nil, verdict: nil,
-            reconciliation_version: nil, source_authority: nil,
-            opened_at: now.to_i, reconciled_at: nil, learnable: false
-          )
+          @rows[key] = awaiting_row(values)
         end
         self
       end
@@ -78,19 +67,8 @@ module Tamoz
         command_id = text!(command_id, "command_id")
         @lock.synchronize do
           row = fetch_locked(tenant_id, intent_id)
-          if %i[observed reconciled].include?(row.state)
-            return self if row.outcome_id == outcome_id &&
-              row.outcome_digest == outcome_digest && row.command_id == command_id
-
-            raise VerificationError, "conflicting duplicate outcome for #{intent_id}"
-          end
-          unless row.state == :awaiting
-            raise VerificationError, "cannot record an outcome for a #{row.state} verification"
-          end
-
-          @rows[[tenant_id, intent_id]] = row.with(
-            state: :observed, outcome_id:, outcome_digest:, command_id:
-          )
+          @rows[[tenant_id, intent_id]] =
+            observed_row(row, outcome_id:, outcome_digest:, command_id:)
         end
         self
       end
@@ -103,34 +81,14 @@ module Tamoz
         outcome_id = text!(outcome_id, "outcome_id")
         outcome_digest = digest!(outcome_digest, "outcome_digest")
         verdict = verdict.to_s
-        unless VERDICTS.include?(verdict)
-          raise VerificationError, "unknown verdict #{verdict.inspect}"
-        end
-        unless reconciliation_version.is_a?(Integer) && reconciliation_version.positive?
-          raise VerificationError, "reconciliation_version must be a positive integer"
-        end
+        require_known_verdict!(verdict)
+        require_positive_version!(reconciliation_version)
         source_authority = text!(source_authority, "source_authority")
         @lock.synchronize do
           row = fetch_locked(tenant_id, intent_id)
-          unless row.command_id == command_id && row.outcome_id == outcome_id &&
-                 row.outcome_digest == outcome_digest
-            raise VerificationError, "reconciliation outcome identity conflicts for #{intent_id}"
-          end
-          if row.state == :reconciled
-            return self if row.verdict == verdict &&
-              row.reconciliation_version == reconciliation_version &&
-              row.source_authority == source_authority
-
-            raise VerificationError, "conflicting duplicate reconciliation for #{intent_id}"
-          end
-          unless row.state == :observed
-            raise VerificationError, "cannot reconcile a #{row.state} verification"
-          end
-
-          @rows[[tenant_id, intent_id]] = row.with(
-            state: :reconciled, verdict:, reconciliation_version:, source_authority:,
-            reconciled_at: now.to_i,
-            learnable: LEARNABLE_VERDICTS.include?(verdict) && !row.outcome_id.nil?
+          @rows[[tenant_id, intent_id]] = reconciled_row(
+            row, command_id:, outcome_id:, outcome_digest:, verdict:,
+            reconciliation_version:, source_authority:
           )
         end
         self
@@ -140,17 +98,7 @@ module Tamoz
         row = fetch(tenant_id:, intent_id:)
         return nil unless row.learnable?
 
-        {
-          "outcome_id" => row.outcome_id,
-          "outcome_digest" => row.outcome_digest,
-          "command_id" => row.command_id,
-          "decision_id" => row.decision_id,
-          "source_authority" => row.source_authority,
-          "reconciliation_version" => row.reconciliation_version,
-          "observation_status" => row.verdict,
-          "episode_id" => row.episode_id,
-          "attempt_id" => row.attempt_id
-        }.freeze
+        reference_hash(row)
       end
 
       def fetch(tenant_id:, intent_id:)
@@ -164,6 +112,86 @@ module Tamoz
       end
 
       private
+
+      def awaiting_row(values)
+        Row.new(
+          tenant_id: values.fetch(:tenant_id), intent_id: values.fetch(:intent_id),
+          command_id: values[:command_id],
+          decision_id: values.fetch(:decision_id), episode_id: values.fetch(:episode_id),
+          attempt_id: values.fetch(:attempt_id), decision_digest: values.fetch(:decision_digest),
+          episode: values.fetch(:episode), state: :awaiting,
+          outcome_id: nil, outcome_digest: nil, verdict: nil,
+          reconciliation_version: nil, source_authority: nil,
+          opened_at: now.to_i, reconciled_at: nil, learnable: false
+        )
+      end
+
+      # Idempotent on an identical redelivery (the row is stored back
+      # unchanged); conflicting on a different payload; refused for anything
+      # but an awaiting verification.
+      def observed_row(row, outcome_id:, outcome_digest:, command_id:)
+        if %i[observed reconciled].include?(row.state)
+          return row if row.outcome_id == outcome_id &&
+                        row.outcome_digest == outcome_digest && row.command_id == command_id
+
+          raise VerificationError, "conflicting duplicate outcome for #{row.intent_id}"
+        end
+        unless row.state == :awaiting
+          raise VerificationError, "cannot record an outcome for a #{row.state} verification"
+        end
+
+        row.with(state: :observed, outcome_id:, outcome_digest:, command_id:)
+      end
+
+      def reconciled_row(row, command_id:, outcome_id:, outcome_digest:, verdict:,
+                         reconciliation_version:, source_authority:)
+        unless row.command_id == command_id && row.outcome_id == outcome_id &&
+               row.outcome_digest == outcome_digest
+          raise VerificationError, "reconciliation outcome identity conflicts for #{row.intent_id}"
+        end
+        if row.state == :reconciled
+          return row if row.verdict == verdict &&
+                        row.reconciliation_version == reconciliation_version &&
+                        row.source_authority == source_authority
+
+          raise VerificationError, "conflicting duplicate reconciliation for #{row.intent_id}"
+        end
+        unless row.state == :observed
+          raise VerificationError, "cannot reconcile a #{row.state} verification"
+        end
+
+        row.with(
+          state: :reconciled, verdict:, reconciliation_version:, source_authority:,
+          reconciled_at: now.to_i,
+          learnable: LEARNABLE_VERDICTS.include?(verdict) && !row.outcome_id.nil?
+        )
+      end
+
+      def require_known_verdict!(verdict)
+        return if VERDICTS.include?(verdict)
+
+        raise VerificationError, "unknown verdict #{verdict.inspect}"
+      end
+
+      def require_positive_version!(reconciliation_version)
+        return if reconciliation_version.is_a?(Integer) && reconciliation_version.positive?
+
+        raise VerificationError, "reconciliation_version must be a positive integer"
+      end
+
+      def reference_hash(row)
+        {
+          "outcome_id" => row.outcome_id,
+          "outcome_digest" => row.outcome_digest,
+          "command_id" => row.command_id,
+          "decision_id" => row.decision_id,
+          "source_authority" => row.source_authority,
+          "reconciliation_version" => row.reconciliation_version,
+          "observation_status" => row.verdict,
+          "episode_id" => row.episode_id,
+          "attempt_id" => row.attempt_id
+        }.freeze
+      end
 
       def fetch_locked(tenant_id, intent_id)
         row = @rows[[tenant_id, intent_id]]

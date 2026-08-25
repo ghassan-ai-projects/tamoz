@@ -47,12 +47,8 @@ module Tamoz
       MAX_AUDIT_ENTRIES = 256
 
       def initialize(cursor_store:, handlers:, credential:, max_poison_retries: 3)
-        unless cursor_store.respond_to?(:read) && cursor_store.respond_to?(:write)
-          raise SubscriptionError, "cursor store must implement read and write"
-        end
-        unless handlers.is_a?(Hash) && handlers.values.all? { |h| h.respond_to?(:call) }
-          raise SubscriptionError, "handlers must map event types to callables"
-        end
+        require_cursor_store!(cursor_store)
+        require_handlers!(handlers)
         @cursor_store = cursor_store
         @handlers = handlers
         @credential = credential
@@ -92,6 +88,18 @@ module Tamoz
 
       private
 
+      def require_cursor_store!(store)
+        return if store.respond_to?(:read) && store.respond_to?(:write)
+
+        raise SubscriptionError, "cursor store must implement read and write"
+      end
+
+      def require_handlers!(handlers)
+        return if handlers.is_a?(Hash) && handlers.values.all? { |h| h.respond_to?(:call) }
+
+        raise SubscriptionError, "handlers must map event types to callables"
+      end
+
       def handle_control(frame, transport)
         case frame.control
         when "cursor_expired"
@@ -118,58 +126,87 @@ module Tamoz
       # Returns false to end the pass (poison retry), true to continue.
       def handle_event(frame)
         key = ["frame", frame.cursor]
-        begin
-          raise SubscriptionError, "frame exceeds #{MAX_FRAME_BYTES} bytes" if
-            frame.data.to_s.bytesize > MAX_FRAME_BYTES
+        bounded_frame_data!(frame)
+        dispatch(parse_cloud_event(frame), frame)
+      rescue StreamError => error
+        handle_poison(frame, key:, reason: error.message)
+      end
 
-          dispatch(parse_cloud_event(frame), frame)
-        rescue StreamError => error
-          handle_poison(frame, key:, reason: error.message)
-        end
+      def bounded_frame_data!(frame)
+        data = frame.data.to_s
+        raise SubscriptionError, "frame exceeds #{MAX_FRAME_BYTES} bytes" if data.bytesize > MAX_FRAME_BYTES
+
+        data
       end
 
       def dispatch(event, frame)
         key = [event.source, event.id]
-        NotificationContract.validate!(event) if NotificationContract.known_family?(event.type)
+        validate_notification!(event)
         delivery_state = durable_event_state(event)
-        if delivery_state == :conflict
-          raise SubscriptionError, "notification id was redelivered with a different payload"
-        end
-        if @dedupe.key?(key)
-          # A redelivered (source, id) is acknowledged — it was already
-          # processed — and the cursor advances past it.
-          @cursor_store.write(frame.cursor)
-          return true
-        end
-        if delivery_state == :same
-          remember(key)
-          @cursor_store.write(frame.cursor)
-          return true
-        end
+        refuse_payload_conflict!(delivery_state)
+        return true if acknowledge_in_memory_duplicate!(frame, key)
+        return true if acknowledge_durable_duplicate!(delivery_state, frame, key)
 
         handler = @handlers[event.type]
-        if handler.nil?
-          if NotificationContract.known_family?(event.type) &&
-             !NotificationContract.supported_type?(event.type)
-            raise SubscriptionError, "unsupported version for known notification #{event.type}"
-          end
-          # An unhandled type is acknowledged cleanly (the subscriber scope
-          # has an event-type allowlist); it is never a poison event.
-          remember(key)
-          @cursor_store.write(frame.cursor)
-          return true
-        end
+        return acknowledge_unhandled_type!(event, frame, key) if handler.nil?
 
-        begin
-          handler.call(event)
-          mark_durable_event(event)
-          remember(key)
-          @cursor_store.write(frame.cursor)
-          @poison.delete(key)
-          true
-        rescue StandardError => error
-          handle_poison(frame, key:, reason: "handler_error: #{error.class}")
-        end
+        deliver_to_handler(handler, event, frame, key)
+      end
+
+      def validate_notification!(event)
+        NotificationContract.validate!(event) if NotificationContract.known_family?(event.type)
+      end
+
+      def refuse_payload_conflict!(delivery_state)
+        return unless delivery_state == :conflict
+
+        raise SubscriptionError, "notification id was redelivered with a different payload"
+      end
+
+      # A redelivered (source, id) is acknowledged — it was already
+      # processed — and the cursor advances past it.
+      def acknowledge_in_memory_duplicate!(frame, key)
+        return false unless @dedupe.key?(key)
+
+        @cursor_store.write(frame.cursor)
+        true
+      end
+
+      def acknowledge_durable_duplicate!(delivery_state, frame, key)
+        return false unless delivery_state == :same
+
+        remember(key)
+        @cursor_store.write(frame.cursor)
+        true
+      end
+
+      # An unhandled type is acknowledged cleanly (the subscriber scope
+      # has an event-type allowlist); it is never a poison event. But a
+      # known family with an unsupported version is protocol drift —
+      # refused, not ignored.
+      def acknowledge_unhandled_type!(event, frame, key)
+        refuse_unsupported_version!(event)
+        remember(key)
+        @cursor_store.write(frame.cursor)
+        true
+      end
+
+      def refuse_unsupported_version!(event)
+        return unless NotificationContract.known_family?(event.type) &&
+                      !NotificationContract.supported_type?(event.type)
+
+        raise SubscriptionError, "unsupported version for known notification #{event.type}"
+      end
+
+      def deliver_to_handler(handler, event, frame, key)
+        handler.call(event)
+        mark_durable_event(event)
+        remember(key)
+        @cursor_store.write(frame.cursor)
+        @poison.delete(key)
+        true
+      rescue StandardError => error
+        handle_poison(frame, key:, reason: "handler_error: #{error.class}")
       end
 
       def durable_event_state(event)
@@ -178,7 +215,7 @@ module Tamoz
         @cursor_store.event_state(
           source: event.source,
           event_id: event.id,
-          payload_digest: Tamoz::Core.digest("tamoz/stream/notification/v1\n", event.envelope)
+          payload_digest: notification_digest(event)
         )
       end
 
@@ -188,10 +225,14 @@ module Tamoz
         @cursor_store.mark_event(
           source: event.source,
           event_id: event.id,
-          payload_digest: Tamoz::Core.digest("tamoz/stream/notification/v1\n", event.envelope),
+          payload_digest: notification_digest(event),
           traceparent: event.traceparent,
           tracestate: event.tracestate
         )
+      end
+
+      def notification_digest(event)
+        Tamoz::Core.digest("tamoz/stream/notification/v1\n", event.envelope)
       end
 
       def handle_poison(frame, key:, reason:)
@@ -225,18 +266,9 @@ module Tamoz
       end
 
       def parse_cloud_event(frame)
-        document = frame.data.to_s.dup.force_encoding(Encoding::UTF_8)
-        unless document.valid_encoding?
-          raise SubscriptionError, "Channel B frame is not valid UTF-8"
-        end
-
+        document = utf8_frame_document(frame)
         value = Tamoz::Core.parse_json_strict(document)
-        unless value.is_a?(Hash) &&
-               value["id"].is_a?(String) && !value["id"].empty? &&
-               value["source"].is_a?(String) && !value["source"].empty? &&
-               value["type"].is_a?(String) && !value["type"].empty?
-          raise SubscriptionError, "Channel B frame is not a well-formed CloudEvent"
-        end
+        ensure_cloud_envelope_shape!(value)
 
         CloudEvent.new(
           id: value.fetch("id"),
@@ -248,6 +280,25 @@ module Tamoz
           tracestate: value["tracestate"],
           envelope: value.freeze
         )
+      end
+
+      def utf8_frame_document(frame)
+        document = frame.data.to_s.dup.force_encoding(Encoding::UTF_8)
+        unless document.valid_encoding?
+          raise SubscriptionError, "Channel B frame is not valid UTF-8"
+        end
+
+        document
+      end
+
+      def ensure_cloud_envelope_shape!(value)
+        well_formed = value.is_a?(Hash) &&
+                      value["id"].is_a?(String) && !value["id"].empty? &&
+                      value["source"].is_a?(String) && !value["source"].empty? &&
+                      value["type"].is_a?(String) && !value["type"].empty?
+        return if well_formed
+
+        raise SubscriptionError, "Channel B frame is not a well-formed CloudEvent"
       end
     end
   end

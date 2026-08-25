@@ -26,6 +26,8 @@ module Tamoz
       MAX_FACTS = 64
       MAX_ALTERNATIVES = 16
       MAX_ACTIONABLE_INTENTS = 1
+      MAX_HYPOTHESIS_BYTES = 1_024
+      MAX_SUMMARY_BYTES = 4_096
       VALIDITY_WINDOW_SECONDS = 86_400
 
       def self.build(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
@@ -36,9 +38,8 @@ module Tamoz
       # the compensating intents the compensate node produced. One builder,
       # one decision shape (the Go validator enforces the same schema).
       def self.build_decision(intents:, episode:, snapshot:, snapshot_digest:, summary:, now: Time.now)
-        decision = {
-          "decision_id" => "decision.#{episode.fetch("episode_id")}." \
-                           "#{episode.fetch("attempt_id")}.#{episode.fetch("fence")}",
+        with_digest(
+          "decision_id" => episode_decision_id(episode),
           "episode_id" => episode.fetch("episode_id"),
           "attempt_id" => episode.fetch("attempt_id"),
           "fence" => episode.fetch("fence"),
@@ -47,14 +48,21 @@ module Tamoz
           "situation_version" => snapshot.fetch("situation_version"),
           "primary_hypothesis" => "",
           "confidence" => 1.0,
-          "summary" => String(summary).byteslice(0, 4096),
+          "summary" => String(summary).byteslice(0, MAX_SUMMARY_BYTES),
           "facts_used" => [],
           "alternatives" => [],
           "intents" => intents,
           "valid_until" => (now + VALIDITY_WINDOW_SECONDS).utc.iso8601
-        }
-        digest = Tamoz::Core.digest(:decision, decision)
-        [decision, digest]
+        )
+      end
+
+      def self.episode_decision_id(episode)
+        "decision.#{episode.fetch("episode_id")}." \
+          "#{episode.fetch("attempt_id")}.#{episode.fetch("fence")}"
+      end
+
+      def self.with_digest(decision)
+        [decision, Tamoz::Core.digest(:decision, decision)]
       end
 
       def initialize(envelope:, snapshot:, snapshot_digest:, outcome:, catalog:, now: Time.now)
@@ -69,7 +77,7 @@ module Tamoz
       # Returns [decision_hash, decision_digest]. The digest covers the whole
       # decision document (CONTRACTS §3.2, decision domain).
       def build
-        decision = {
+        self.class.with_digest(
           "decision_id" => decision_id,
           "episode_id" => @envelope.episode_id,
           "attempt_id" => @envelope.attempt_id,
@@ -77,22 +85,28 @@ module Tamoz
           "snapshot_digest" => @snapshot_digest,
           "situation_id" => @snapshot.fetch("situation_id"),
           "situation_version" => @snapshot.fetch("situation_version"),
-          "primary_hypothesis" => String(@outcome.fetch(:primary_hypothesis, "")).byteslice(0, 1024),
+          "primary_hypothesis" => bounded_outcome_text(:primary_hypothesis, MAX_HYPOTHESIS_BYTES),
           "confidence" => confidence,
-          "summary" => String(@outcome.fetch(:summary, "")).byteslice(0, 4096),
-          "facts_used" => Array(@outcome.fetch(:facts_used, [])).first(MAX_FACTS),
-          "alternatives" => Array(@outcome.fetch(:alternatives, [])).first(MAX_ALTERNATIVES),
+          "summary" => bounded_outcome_text(:summary, MAX_SUMMARY_BYTES),
+          "facts_used" => bounded_outcome_entries(:facts_used, MAX_FACTS),
+          "alternatives" => bounded_outcome_entries(:alternatives, MAX_ALTERNATIVES),
           "intents" => intents,
           "valid_until" => valid_until
-        }
-        digest = Tamoz::Core.digest(:decision, decision)
-        [decision, digest]
+        )
       end
 
       private
 
       def decision_id
         "decision.#{@envelope.episode_id}.#{@envelope.attempt_id}.#{@envelope.fence}"
+      end
+
+      def bounded_outcome_text(key, limit)
+        String(@outcome.fetch(key, "")).byteslice(0, limit)
+      end
+
+      def bounded_outcome_entries(key, limit)
+        Array(@outcome.fetch(key, [])).first(limit)
       end
 
       def valid_until
@@ -120,29 +134,41 @@ module Tamoz
 
       def diagnose_intents
         proposal = recommended_proposal
-        return [watch_condition_intent] if proposal.nil? || proposal_type(proposal) == Tamoz::Core::INTENT_WATCH_TYPE
+        return [watch_condition_intent] if watch_fallback?(proposal)
 
-        type = proposal_type(proposal)
-        unless @catalog.include?(type) && allowed_intent_types.include?(type)
-          return [watch_condition_intent]
-        end
-
-        entry = @catalog.entry(type)
-        unless risk_within_ceiling?(entry.risk_class)
-          return [watch_condition_intent]
-        end
+        entry = admissible_entry(proposal)
+        return [watch_condition_intent] unless entry
 
         # Confidence may cause abstention (watch); it never unlocks an action
         # the catalog or the operator's floor would refuse.
         return [watch_condition_intent] if watch_preferred?
 
-        parameters = build_parameters(entry, proposal)
-        [
-          build_intent(
-            type: entry.type, risk_class: entry.risk_class, parameters:,
-            evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
-          )
-        ]
+        [actionable_intent(entry, proposal)]
+      end
+
+      def watch_fallback?(proposal)
+        proposal.nil? || proposal_type(proposal) == Tamoz::Core::INTENT_WATCH_TYPE
+      end
+
+      # Catalog-admissible: known to the catalog, on the operator's allowlist,
+      # and within the episode's risk ceiling — anything else demotes to the
+      # watch observation.
+      def admissible_entry(proposal)
+        type = proposal_type(proposal)
+        return unless @catalog.include?(type) && allowed_intent_types.include?(type)
+
+        entry = @catalog.entry(type)
+        return unless risk_within_ceiling?(entry.risk_class)
+
+        entry
+      end
+
+      def actionable_intent(entry, proposal)
+        build_intent(
+          type: entry.type, risk_class: entry.risk_class,
+          parameters: build_parameters(entry, proposal),
+          evidence_ids: evidence_ids
+        )
       end
 
       # The model's actionable proposal: at most ONE. Two+ actionable intents
@@ -170,6 +196,18 @@ module Tamoz
         allowed_intent_types.include?(Tamoz::Core::INTENT_WATCH_TYPE)
       end
 
+      def ensure_watch_allowlisted!
+        return if watch_allowlisted?
+
+        raise StreamError,
+              "no allowed intent for this outcome " \
+              "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
+      end
+
+      def evidence_ids
+        Array(@outcome.fetch(:evidence_ids, []))
+      end
+
       def risk_within_ceiling?(declared_risk)
         RISK_RANK.fetch(declared_risk) <= RISK_RANK.fetch(@envelope.risk_ceiling.to_s.upcase)
       end
@@ -180,40 +218,46 @@ module Tamoz
       # model-writable fields. A model value for any other field is a typed
       # refusal — never silently clamped or dropped.
       def build_parameters(entry, proposal)
-        base = preset_for(entry, proposal)
-        base["entity_id"] = @snapshot.fetch("entity").fetch("id")
-        base["situation_id"] = @snapshot.fetch("situation_id")
-        base["situation_version"] = @snapshot.fetch("situation_version")
-        if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
-          # The watch condition's target IS the entity — per-episode bound,
-          # never operator- or model-authored.
-          base["target"] = @snapshot.fetch("entity").fetch("id")
-          base["expires_at"] = valid_until
-        end
+        parameters = preset_for(entry, proposal)
+        apply_episode_bindings!(entry, parameters)
+        apply_model_values!(entry, proposal, parameters)
+        parameters
+      end
 
+      def apply_episode_bindings!(entry, parameters)
+        parameters["entity_id"] = @snapshot.fetch("entity").fetch("id")
+        parameters["situation_id"] = @snapshot.fetch("situation_id")
+        parameters["situation_version"] = @snapshot.fetch("situation_version")
+        return unless entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+
+        # The watch condition's target IS the entity — per-episode bound,
+        # never operator- or model-authored.
+        parameters["target"] = @snapshot.fetch("entity").fetch("id")
+        parameters["expires_at"] = valid_until
+      end
+
+      def apply_model_values!(entry, proposal, parameters)
         writable = entry.model_writable_fields
         Array(proposal_parameters(proposal)).each do |key, value|
           field = String(key)
-          unless writable.include?(field)
-            raise StreamError,
-                  "intent parameter #{field} is not model-writable for #{entry.type}"
-          end
-          base[field] = value
+          raise StreamError, "intent parameter #{field} is not model-writable for #{entry.type}" unless writable.include?(field)
+
+          parameters[field] = value
         end
-        base
       end
 
       def preset_for(entry, proposal)
-        if proposal_preset(proposal)
-          unless proposal_preset(proposal) == "default"
-            raise StreamError,
-                  "only the catalog's default preset is selectable in v1 " \
-                  "(#{proposal_preset(proposal)} requested for #{entry.type})"
-          end
-          deep_dup(entry.presets.fetch("default", {}))
-        else
-          deep_dup(entry.presets.fetch("default", {}))
-        end
+        requested_preset = proposal_preset(proposal)
+        ensure_default_preset!(entry, requested_preset) if requested_preset
+        deep_dup(entry.presets.fetch("default", {}))
+      end
+
+      def ensure_default_preset!(entry, requested)
+        return if requested == "default"
+
+        raise StreamError,
+              "only the catalog's default preset is selectable in v1 " \
+              "(#{requested} requested for #{entry.type})"
       end
 
       # The proposal arrives as the document projection (plain hashes) or, in
@@ -264,6 +308,10 @@ module Tamoz
           "evidence_ids" => evidence_ids,
           "expires_at" => valid_until
         }
+        intent_with_digest(intent)
+      end
+
+      def intent_with_digest(intent)
         # The intent digest covers the intent WITHOUT its own digest.
         intent.merge("intent_digest" => Tamoz::Core.digest(
           :intent, intent.reject { |key, _| key == "intent_digest" }
@@ -278,19 +326,14 @@ module Tamoz
       # so an episode whose allowlist leaves NO valid intent for the outcome
       # fails closed here, typed, instead of producing an invalid decision.
       def watch_condition_intent
-        unless watch_allowlisted?
-          raise StreamError,
-                "no allowed intent for this outcome " \
-                "(#{Tamoz::Core::INTENT_WATCH_TYPE} is not in allowed_intent_types)"
-        end
-
+        ensure_watch_allowlisted!
         entry = @catalog.entry(Tamoz::Core::INTENT_WATCH_TYPE)
         parameters = build_parameters(entry, EmptyProposal.new)
         build_intent(
           type: Tamoz::Core::INTENT_WATCH_TYPE,
           risk_class: entry.risk_class,
           parameters:,
-          evidence_ids: Array(@outcome.fetch(:evidence_ids, []))
+          evidence_ids: evidence_ids
         )
       end
 

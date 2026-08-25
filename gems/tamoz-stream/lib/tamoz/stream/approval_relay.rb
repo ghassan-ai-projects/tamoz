@@ -62,21 +62,11 @@ module Tamoz
       #             dependency.
       def initialize(delivery:, submission:, nonce_store:, signer:, relay_id:,
                      approval_state: nil, clock: -> { Time.now })
-        unless delivery.respond_to?(:deliver) && delivery.respond_to?(:edit_in_place)
-          raise ApprovalRelayError, "approval delivery must implement deliver and edit_in_place"
-        end
-        unless submission.respond_to?(:submit)
-          raise ApprovalRelayError, "approval submission must implement submit"
-        end
-        unless nonce_store.respond_to?(:claim)
-          raise ApprovalRelayError, "approval nonce store must implement claim"
-        end
-        unless signer.respond_to?(:sign) && signer.respond_to?(:key_id)
-          raise ApprovalRelayError, "approval signer must implement sign and key_id"
-        end
-        unless approval_state.nil? || approval_state.respond_to?(:fetch)
-          raise ApprovalRelayError, "approval state must implement fetch"
-        end
+        validate_port!(delivery, %i[deliver edit_in_place], "approval delivery")
+        validate_port!(submission, %i[submit], "approval submission")
+        validate_port!(nonce_store, %i[claim], "approval nonce store")
+        validate_port!(signer, %i[sign key_id], "approval signer")
+        validate_optional_port!(approval_state, %i[fetch], "approval state")
         @delivery = delivery
         @submission = submission
         @nonce_store = nonce_store
@@ -99,9 +89,7 @@ module Tamoz
         approval = stringify(approval)
         require_field!(approval, "approval_id")
         require_field!(approval, "situation_id")
-        %w[summary delta hypothesis action decline_consequence].each do |field|
-          require_field!(approval, field)
-        end
+        require_prompt_fields!(approval)
         require_evidence!(approval)
         @delivery.deliver(
           conversation_id:,
@@ -130,55 +118,14 @@ module Tamoz
       def submit_decision(approval:, approver_id:, decision:, reason: nil)
         approval = stringify(approval)
         approval_id = require_field!(approval, "approval_id")
-        if @approval_state
-          row = @approval_state.fetch(approval_id)
-          unless row&.fetch("state") == "requested"
-            raise ApprovalRelayError, "approval is no longer actionable"
-          end
-        end
-        unless DECISIONS.include?(decision.to_s)
-          raise ApprovalRelayError, "approval decision must be approve or deny"
-        end
+        assert_actionable!(approval_id)
+        assert_valid_decision!(decision)
         approver_id = bounded!(approver_id, "approver_id")
-        if approver_id == @relay_id
-          raise ApprovalRelayError,
-                "the relaying service may never be the asserted approver"
-        end
-        # Fail closed on an expired approval: the stream revalidates too, but
-        # a signed answer for an approval that already lapsed must not leave
-        # the relay at all.
-        expires_at = require_field!(approval, "expires_at")
-        if @clock.call.to_i > expiry_epoch(expires_at)
-          raise ApprovalRelayError, "approval #{approval_id} has expired"
-        end
-
-        nonce = SecureRandom.uuid
-        unless @nonce_store.claim(nonce)
-          raise ApprovalRelayError, "approval nonce replay refused"
-        end
-
-        assertion = {
-          "approver_id" => approver_id,
-          "tenant_id" => require_field!(approval, "tenant_id"),
-          "approval_id" => approval_id,
-          "intent_digest" => require_digest!(approval, "intent_digest"),
-          "snapshot_digest" => require_digest!(approval, "snapshot_digest"),
-          "decision" => decision.to_s,
-          "expires_at" => expires_at,
-          "nonce" => nonce,
-          "audience" => require_field!(approval, "audience"),
-          "relay_id" => @relay_id,
-          "key_id" => @signer.key_id
-        }
-        signed = @signer.sign(ASSERTION_DOMAIN + Tamoz::Core.jcs(assertion))
-
-        @submission.submit(
-          approval_id: assertion.fetch("approval_id"),
-          decision: assertion.fetch("decision"),
-          reason: reason.to_s.byteslice(0, 1024),
-          idempotency_key: idempotency_key(assertion, reason),
-          assertion: assertion.merge("signature" => signed)
-        )
+        assert_approver_not_relay!(approver_id)
+        assert_not_expired!(approval, approval_id)
+        nonce = claim_nonce!
+        assertion = build_assertion(approval, approver_id, decision, nonce)
+        submit_assertion(assertion, reason)
       end
 
       # PROTOCOL §5.4: escalation belongs to Tamoz — who to ask next, after
@@ -187,15 +134,113 @@ module Tamoz
       # or the first entry when the current approver is not in the roster, or
       # nil when the roster is spent (the stream owns the deadline).
       def escalate(roster:, current_approver: nil)
-        entries = roster.map do |entry|
+        entries = normalize_roster_entries(roster)
+        candidate = next_candidate(entries, current_approver)
+        return nil unless candidate
+
+        escalation_payload(candidate)
+      end
+
+      private
+
+      def validate_port!(port, methods, role)
+        missing = methods.reject { |method| port.respond_to?(method) }
+        return if missing.empty?
+
+        raise ApprovalRelayError,
+              "#{role} must implement #{missing.join(", ")}"
+      end
+
+      def validate_optional_port!(port, methods, role)
+        return if port.nil?
+
+        validate_port!(port, methods, role)
+      end
+
+      def assert_actionable!(approval_id)
+        return unless @approval_state
+
+        row = @approval_state.fetch(approval_id)
+        return if row&.fetch("state") == "requested"
+
+        raise ApprovalRelayError, "approval is no longer actionable"
+      end
+
+      def assert_valid_decision!(decision)
+        return if DECISIONS.include?(decision.to_s)
+
+        raise ApprovalRelayError, "approval decision must be approve or deny"
+      end
+
+      def assert_approver_not_relay!(approver_id)
+        return unless approver_id == @relay_id
+
+        raise ApprovalRelayError,
+              "the relaying service may never be the asserted approver"
+      end
+
+      def assert_not_expired!(approval, approval_id)
+        # Fail closed on an expired approval: the stream revalidates too, but
+        # a signed answer for an approval that already lapsed must not leave
+        # the relay at all.
+        expires_at = require_field!(approval, "expires_at")
+        return unless @clock.call.to_i > expiry_epoch(expires_at)
+
+        raise ApprovalRelayError, "approval #{approval_id} has expired"
+      end
+
+      def claim_nonce!
+        nonce = SecureRandom.uuid
+        return nonce if @nonce_store.claim(nonce)
+
+        raise ApprovalRelayError, "approval nonce replay refused"
+      end
+
+      def build_assertion(approval, approver_id, decision, nonce)
+        {
+          "approver_id" => approver_id,
+          "tenant_id" => require_field!(approval, "tenant_id"),
+          "approval_id" => require_field!(approval, "approval_id"),
+          "intent_digest" => require_digest!(approval, "intent_digest"),
+          "snapshot_digest" => require_digest!(approval, "snapshot_digest"),
+          "decision" => decision.to_s,
+          "expires_at" => require_field!(approval, "expires_at"),
+          "nonce" => nonce,
+          "audience" => require_field!(approval, "audience"),
+          "relay_id" => @relay_id,
+          "key_id" => @signer.key_id
+        }
+      end
+
+      def submit_assertion(assertion, reason)
+        signed = @signer.sign(ASSERTION_DOMAIN + Tamoz::Core.jcs(assertion))
+        @submission.submit(
+          approval_id: assertion.fetch("approval_id"),
+          decision: assertion.fetch("decision"),
+          reason: truncate_reason(reason),
+          idempotency_key: idempotency_key(assertion, reason),
+          assertion: assertion.merge("signature" => signed)
+        )
+      end
+
+      def truncate_reason(reason)
+        reason.to_s.byteslice(0, 1024)
+      end
+
+      def normalize_roster_entries(roster)
+        roster.map do |entry|
           raise ApprovalRelayError, "escalation roster entries must be objects" unless entry.is_a?(Hash)
 
           entry.transform_keys(&:to_s)
         end
-        index = entries.index { |entry| entry.fetch("approver_id") == current_approver }
-        candidate = index ? entries[index + 1] : entries.first
-        return nil unless candidate
+      end
 
+      def next_candidate(entries, current_approver)
+        index = entries.index { |entry| entry.fetch("approver_id") == current_approver }
+        index ? entries[index + 1] : entries.first
+      end
+
+      def escalation_payload(candidate)
         {
           "approver_id" => candidate.fetch("approver_id"),
           "channel" => candidate.fetch("channel", "telegram"),
@@ -203,8 +248,6 @@ module Tamoz
           "approval_id" => candidate["approval_id"]
         }.compact
       end
-
-      private
 
       def render_prompt(approval)
         [
@@ -231,6 +274,12 @@ module Tamoz
         end
 
         value.to_s
+      end
+
+      def require_prompt_fields!(approval)
+        %w[summary delta hypothesis action decline_consequence].each do |field|
+          require_field!(approval, field)
+        end
       end
 
       def require_evidence!(approval)

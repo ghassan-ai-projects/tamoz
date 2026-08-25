@@ -33,35 +33,47 @@ module Tamoz
       attr_reader :total_bytes
 
       def retain(digest:, bytes:, media_type: "application/json")
-        digest = String(Tamoz::Core.normalize_digest(digest))
-        unless Tamoz::Core.valid_digest?(digest)
-          raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
-        end
+        digest = require_artifact_digest!(digest)
         unless bytes.is_a?(String)
           raise ArtifactStoreError, "artifact retention requires a String document"
         end
-        # Idempotent per digest, but never keep-first on a collision: the same
-        # digest with DIFFERENT bytes is a lying or corrupted peer, and
-        # keeping the first silently poisons every later shadow comparison.
-        if @artifacts.key?(digest)
-          stored = @artifacts.fetch(digest)
-          unless stored.fetch("bytes") == bytes
-            raise ArtifactStoreError,
-                  "artifact digest collision: #{digest} resolves to different bytes"
-          end
-          return stored
-        end
 
+        stored = @artifacts[digest]
+        return unchanged_artifact(stored, bytes) if stored
+
+        retain_new_artifact(digest, bytes, media_type)
+      end
+
+      def resolve(digest)
+        @artifacts[String(Tamoz::Core.normalize_digest(digest))]
+      end
+
+      def size = @artifacts.length
+
+      private
+
+      def require_artifact_digest!(digest)
+        normalized = String(Tamoz::Core.normalize_digest(digest))
+        return normalized if Tamoz::Core.valid_digest?(normalized)
+
+        raise ArtifactStoreError, "artifact retention requires a sha256: hex digest"
+      end
+
+      # Idempotent per digest, but never keep-first on a collision: the same
+      # digest with DIFFERENT bytes is a lying or corrupted peer, and
+      # keeping the first silently poisons every later shadow comparison.
+      def unchanged_artifact(stored, bytes)
+        return stored if stored.fetch("bytes") == bytes
+
+        raise ArtifactStoreError,
+              "artifact digest collision: #{stored.fetch("digest")} resolves to different bytes"
+      end
+
+      def retain_new_artifact(digest, bytes, media_type)
         size = bytes.bytesize
-        if size.zero?
-          raise ArtifactStoreError, "artifact retention requires bytes"
-        end
-        if @artifacts.length >= @max_artifacts ||
-           @total_bytes + size > @max_total_bytes
-          raise ArtifactStoreError,
-                "artifact retention bounds exceeded " \
-                "(#{@artifacts.length} artifacts / #{@total_bytes} bytes)"
-        end
+        raise ArtifactStoreError, "artifact retention requires bytes" if size.zero?
+
+        within_bounds!(size)
 
         @artifacts[digest] = {
           "digest" => digest,
@@ -73,11 +85,13 @@ module Tamoz
         @artifacts.fetch(digest)
       end
 
-      def resolve(digest)
-        @artifacts[String(Tamoz::Core.normalize_digest(digest))]
-      end
+      def within_bounds!(size)
+        return if @artifacts.length < @max_artifacts && @total_bytes + size <= @max_total_bytes
 
-      def size = @artifacts.length
+        raise ArtifactStoreError,
+              "artifact retention bounds exceeded " \
+              "(#{@artifacts.length} artifacts / #{@total_bytes} bytes)"
+      end
     end
   end
 end

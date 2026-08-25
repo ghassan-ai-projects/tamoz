@@ -142,14 +142,18 @@ module Tamoz
         # P8 (no hidden fallback): a FIXTURE provider can never serve a
         # tamoz-mode (or active) request — a production route gets a real
         # model answer or a hard failure, never a canned decision.
-        if @provider_mode == :fixture &&
-           (request.executor_name == "tamoz" ||
-            request.dispatch_policy == :DISPATCH_POLICY_ACTIVE)
-          raise GRPC::FailedPrecondition,
-                "fixture provider cannot serve a tamoz/active request (no hidden fallback)"
-        end
+        refuse_fixture_fallback!(request)
 
         true
+      end
+
+      def refuse_fixture_fallback!(request)
+        return unless @provider_mode == :fixture &&
+                      (request.executor_name == "tamoz" ||
+                       request.dispatch_policy == :DISPATCH_POLICY_ACTIVE)
+
+        raise GRPC::FailedPrecondition,
+              "fixture provider cannot serve a tamoz/active request (no hidden fallback)"
       end
 
       # The worker owns the stream contract (Go streamValidator parity): the
@@ -158,29 +162,34 @@ module Tamoz
       # is forced when the runner forgets it.
       def validate_stream(enumerator)
         Enumerator.new do |yielder|
-          expected = 1
-          terminal_seen = false
+          state = { expected_sequence: 1, terminal_seen: false }
           enumerator.each do |event|
-            unless event.sequence == expected
-              raise GRPC::Internal,
-                    "episode event sequence mismatch: got #{event.sequence}, expected #{expected}"
-            end
-            expected += 1
-            if event.to_proto.bytesize > MAX_EVENT_BYTES
-              raise GRPC::ResourceExhausted,
-                    "episode event exceeds #{MAX_EVENT_BYTES} bytes"
-            end
-            if terminal_seen
-              raise GRPC::Internal, "episode emitted an event after its terminal"
-            end
-
-            terminal_seen = true if event.terminal != nil
+            validate_stream_event(event, state)
             yielder << event
           end
-          unless terminal_seen
-            raise GRPC::Internal, "episode stream ended without a terminal"
-          end
+          ensure_terminal(state)
         end
+      end
+
+      def validate_stream_event(event, state)
+        unless event.sequence == state[:expected_sequence]
+          raise GRPC::Internal,
+                "episode event sequence mismatch: got #{event.sequence}, expected #{state[:expected_sequence]}"
+        end
+        state[:expected_sequence] += 1
+        if event.to_proto.bytesize > MAX_EVENT_BYTES
+          raise GRPC::ResourceExhausted,
+                "episode event exceeds #{MAX_EVENT_BYTES} bytes"
+        end
+        raise GRPC::Internal, "episode emitted an event after its terminal" if state[:terminal_seen]
+
+        state[:terminal_seen] = true if event.terminal != nil
+      end
+
+      def ensure_terminal(state)
+        return if state[:terminal_seen]
+
+        raise GRPC::Internal, "episode stream ended without a terminal"
       end
     end
   end

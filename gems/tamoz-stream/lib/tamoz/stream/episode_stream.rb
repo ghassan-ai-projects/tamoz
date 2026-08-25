@@ -207,21 +207,8 @@ module Tamoz
       # state (not journal receipts), so the runner emits them directly.
       def emit_stream_part(part)
         case part.type
-        when :model_started
-          @stream.model_started(
-            ordinal: Integer(part.data.fetch("ordinal")),
-            provider: String(part.data.fetch("provider")),
-            model_id: String(part.data.fetch("model_id")),
-            request_sha256: part.data["request_sha256"]
-          )
-        when :model_completed
-          @stream.model_completed(
-            ordinal: Integer(part.data.fetch("ordinal")),
-            usage: wire_usage(part.data["usage"]),
-            response_sha256: part.data["response_sha256"]
-          )
-        else
-          nil
+        when :model_started then model_started_part(part.data)
+        when :model_completed then model_completed_part(part.data)
         end
       end
 
@@ -282,6 +269,23 @@ module Tamoz
       end
 
       private
+
+      def model_started_part(data)
+        @stream.model_started(
+          ordinal: Integer(data.fetch("ordinal")),
+          provider: String(data.fetch("provider")),
+          model_id: String(data.fetch("model_id")),
+          request_sha256: data["request_sha256"]
+        )
+      end
+
+      def model_completed_part(data)
+        @stream.model_completed(
+          ordinal: Integer(data.fetch("ordinal")),
+          usage: wire_usage(data["usage"]),
+          response_sha256: data["response_sha256"]
+        )
+      end
 
       # nil usage (unavailable) crosses as nil — the wire claims nothing it
       # cannot prove. Present usage is mapped 1:1 from the receipt projection.

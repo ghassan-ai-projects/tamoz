@@ -49,36 +49,11 @@ module Tamoz
       # so a small budget is enforced HERE, not merely declared — the host
       # bounds results, not just the client.
       def initialize(implementations, max_result_bytes: MAX_RESULT_BYTES)
-        unless implementations.is_a?(Hash)
-          raise Tamoz::ConfigurationError,
-                "episode capability host requires an implementation map"
-        end
-        unless max_result_bytes.is_a?(Integer) && max_result_bytes.positive?
-          raise Tamoz::ConfigurationError,
-                "episode capability host result cap must be a positive integer"
-        end
+        require_implementation_map!(implementations)
+        require_positive_cap!(max_result_bytes)
+        require_exact_surface!(implementations)
         @max_result_bytes = max_result_bytes
-
-        missing = PERMITTED - implementations.keys
-        unless missing.empty?
-          raise Tamoz::ConfigurationError,
-                "episode capability host requires implementations for: #{missing.join(", ")}"
-        end
-        unknown = implementations.keys - PERMITTED
-        unless unknown.empty?
-          raise Tamoz::ConfigurationError,
-                "episode capability host rejects implementations for: #{unknown.join(", ")}"
-        end
-
-        @surface = PERMITTED.to_h do |id|
-          implementation = implementations.fetch(id)
-          unless implementation.respond_to?(:call)
-            raise Tamoz::ConfigurationError,
-                  "episode tool #{id} must be bound to a callable"
-          end
-
-          [id, implementation]
-        end.freeze
+        @surface = build_surface(implementations).freeze
         freeze
       end
 
@@ -130,6 +105,46 @@ module Tamoz
 
       private
 
+      def require_implementation_map!(implementations)
+        return if implementations.is_a?(Hash)
+
+        raise Tamoz::ConfigurationError,
+              "episode capability host requires an implementation map"
+      end
+
+      def require_positive_cap!(max_result_bytes)
+        return if max_result_bytes.is_a?(Integer) && max_result_bytes.positive?
+
+        raise Tamoz::ConfigurationError,
+              "episode capability host result cap must be a positive integer"
+      end
+
+      def require_exact_surface!(implementations)
+        missing = PERMITTED - implementations.keys
+        unless missing.empty?
+          raise Tamoz::ConfigurationError,
+                "episode capability host requires implementations for: #{missing.join(", ")}"
+        end
+        unknown = implementations.keys - PERMITTED
+        unless unknown.empty?
+          raise Tamoz::ConfigurationError,
+                "episode capability host rejects implementations for: #{unknown.join(", ")}"
+        end
+      end
+
+      def build_surface(implementations)
+        PERMITTED.to_h do |id|
+          [id, callable_implementation(id, implementations.fetch(id))]
+        end
+      end
+
+      def callable_implementation(id, implementation)
+        return implementation if implementation.respond_to?(:call)
+
+        raise Tamoz::ConfigurationError,
+              "episode tool #{id} must be bound to a callable"
+      end
+
       def implementation_for(name)
         implementation = @surface[name]
         return implementation if implementation
@@ -144,21 +159,22 @@ module Tamoz
       # allowlisted context attributes, frozen — whether the caller passed a
       # Tamoz::Context or a plain hash, the effects/store keys never cross.
       def context_view(context)
-        source =
-          if context.is_a?(Hash)
-            context
-          elsif context.nil?
-            {}
-          elsif context.is_a?(Tamoz::Context)
-            context
-          else
-            raise Tamoz::ConfigurationError,
-                  "episode tool context must be a metadata hash or Tamoz::Context"
-          end
+        source = resolve_context_source(context)
         CONTEXT_ALLOWLIST.to_h do |key|
           value = source.is_a?(Tamoz::Context) ? source.public_send(key) : source[key]
           [key, value]
         end.freeze
+      end
+
+      def resolve_context_source(context)
+        case context
+        when Hash then context
+        when nil then {}
+        when Tamoz::Context then context
+        else
+          raise Tamoz::ConfigurationError,
+                "episode tool context must be a metadata hash or Tamoz::Context"
+        end
       end
 
       def enforce_result_bounds!(name, result)

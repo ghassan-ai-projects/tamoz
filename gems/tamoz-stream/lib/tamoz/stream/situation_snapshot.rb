@@ -28,38 +28,55 @@ module Tamoz
       # Returns the parsed snapshot Hash when the payload verifies; raises a
       # typed StreamError otherwise.
       def verify(snapshot_json, expected_digest)
-        unless snapshot_json.is_a?(String) && !snapshot_json.empty?
-          raise SnapshotIdentityError, "situation snapshot payload is empty"
-        end
-
+        require_payload!(snapshot_json)
         value = Tamoz::Core.parse_json_strict(snapshot_json)
-        unless Tamoz::Core.verify_digest(:snapshot, value, expected_digest)
-          raise SnapshotDigestMismatchError,
-                "received situation snapshot digest does not match its payload"
-        end
-        unless value.is_a?(Hash)
-          raise SnapshotIdentityError, "situation snapshot must be a JSON object"
-        end
-
-        missing = REQUIRED_IDENTITY.reject do |key|
-          if key == "situation_version"
-            value[key].is_a?(Integer)
-          else
-            value[key].is_a?(String) && !value[key].empty?
-          end
-        end
-        entity = value["entity"]
-        unless entity.is_a?(Hash) &&
-               entity["type"].is_a?(String) && !entity["type"].empty? &&
-               entity["id"].is_a?(String) && !entity["id"].empty?
-          missing << "entity.type/entity.id"
-        end
-        unless missing.empty?
-          raise SnapshotIdentityError,
-                "situation snapshot is missing identity fields: #{missing.join(", ")}"
-        end
+        require_matching_digest!(value, expected_digest)
+        require_object!(value)
+        require_identity!(value)
 
         value
+      end
+
+      def require_payload!(snapshot_json)
+        return if snapshot_json.is_a?(String) && !snapshot_json.empty?
+
+        raise SnapshotIdentityError, "situation snapshot payload is empty"
+      end
+
+      def require_matching_digest!(value, expected_digest)
+        return if Tamoz::Core.verify_digest(:snapshot, value, expected_digest)
+
+        raise SnapshotDigestMismatchError,
+              "received situation snapshot digest does not match its payload"
+      end
+
+      def require_object!(value)
+        return if value.is_a?(Hash)
+
+        raise SnapshotIdentityError, "situation snapshot must be a JSON object"
+      end
+
+      def require_identity!(value)
+        missing = REQUIRED_IDENTITY.reject { |key| identity_present?(value, key) }
+        missing << "entity.type/entity.id" unless entity_identity?(value["entity"])
+        return if missing.empty?
+
+        raise SnapshotIdentityError,
+              "situation snapshot is missing identity fields: #{missing.join(", ")}"
+      end
+
+      def identity_present?(value, key)
+        if key == "situation_version"
+          value[key].is_a?(Integer)
+        else
+          value[key].is_a?(String) && !value[key].empty?
+        end
+      end
+
+      def entity_identity?(entity)
+        entity.is_a?(Hash) &&
+          entity["type"].is_a?(String) && !entity["type"].empty? &&
+          entity["id"].is_a?(String) && !entity["id"].empty?
       end
     end
   end
