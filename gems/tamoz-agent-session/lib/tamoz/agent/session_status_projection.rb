@@ -48,10 +48,10 @@ module Tamoz
       def project_event(view, event, request_id:, delivery_state:)
         kind = event.fetch('event_type')
         validate_event_kind(kind)
-        projected_event(view, event, kind, request_id:, delivery_state:).compact
+        build_event(view, event, kind, request_id:, delivery_state:).compact
       end
 
-      def projected_event(view, event, kind, request_id:, delivery_state:)
+      def build_event(view, event, kind, request_id:, delivery_state:)
         {
           'schema' => SCHEMA,
           'kind' => kind,
@@ -65,7 +65,7 @@ module Tamoz
           'source_id' => bounded_metadata(event.fetch('source_id', nil)),
           'phase' => event.fetch('phase'),
           'task_state' => kind == 'terminal' ? task_state(view) : 'running',
-          'effect_state' => bounded_effect_state(event.fetch('effect_state')),
+          'effect_state' => normalize_effect_state(event.fetch('effect_state')),
           'capability_state' => event.key?('capability_id') ? 'invoked' : 'not_requested',
           'result' => event_result(event),
           'delivery_state' => delivery_state,
@@ -82,8 +82,8 @@ module Tamoz
         return 'waiting' unless view.interrupts.empty?
 
         receipt = Array(view.effect_receipts).last
-        return bounded_effect_state(receipt.fetch('status')) if receipt
-        return bounded_effect_state(event.fetch('effect_state')) if event
+        return normalize_effect_state(receipt.fetch('status')) if receipt
+        return normalize_effect_state(event.fetch('effect_state')) if event
         return 'none' if view.status == :completed
 
         'pending'
@@ -129,7 +129,7 @@ module Tamoz
         raise ArgumentError, "delivery state #{value.inspect} is not allowlisted"
       end
 
-      def bounded_effect_state(value)
+      def normalize_effect_state(value)
         state = String(value)
         return state if EFFECT_STATES.include?(state)
 
@@ -144,8 +144,8 @@ module Tamoz
         '[invalid metadata]'
       end
       private_class_method(
-        :bounded_metadata, :validate_delivery_state, :bounded_effect_state, :validate_event_kind,
-        :event_result, :projected_event
+        :bounded_metadata, :validate_delivery_state, :normalize_effect_state, :validate_event_kind,
+        :event_result, :build_event
       )
     end
     # rubocop:enable Metrics/ModuleLength
