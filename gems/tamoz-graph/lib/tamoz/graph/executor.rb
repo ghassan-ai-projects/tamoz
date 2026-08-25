@@ -31,8 +31,8 @@ module Tamoz
           end
 
           tasks = compiled.planner.tasks(current)
-          expected = tasks.to_h { |task| [task.id, task] }
-          pending = current.pending.select { |task_id, _outcome| expected.key?(task_id) }
+          scheduled_by_id = tasks.to_h { |task| [task.id, task] }
+          pending = current.pending.select { |task_id, _outcome| scheduled_by_id.key?(task_id) }
           to_execute = tasks.reject { |task| pending.key?(task.id) }
           enforce_task_limits!(current, tasks, to_execute)
           results = execute_tasks(
@@ -46,43 +46,34 @@ module Tamoz
           attempts = current.attempts.merge(
             to_execute.to_h { |task| [task.id, task.attempt] }
           ).freeze
-          successes, interruptions, errors, cancelled = classify(
+          successes, interruptions, errors, pool_cancelled = classify_pool_results(
             to_execute,
             results,
             current
           )
-          return cancelled(current) if cancelled || context.cancelled?
+          return cancelled(current) if pool_cancelled || context.cancelled?
 
           all_successes = pending.merge(successes).freeze
           enforce_pending_limit!(all_successes)
           total_tasks = current.total_tasks + to_execute.length
 
           unless errors.empty?
-            current = append_noncommitting(
+            failed = append_failed_checkpoint(
               current,
               writer:,
-              status: :failed,
+              context:,
               pending: all_successes,
               interrupts: interruptions,
               attempts:,
               resume_values:,
               total_tasks:,
-              failure: failure_descriptors(errors),
-              request_transition: terminal_request_transition(
-                writer,
-                request_id: durable_request_id,
-                execution_id: current.execution_id,
-                action: :failed,
-                graph_status: :failed,
-                retryable: false
-              )
+              errors:,
+              request_id: durable_request_id
             )
-            emit_errors(context, errors)
-            emit_checkpoint(context, current)
             return RunResult.new(
               status: :failed,
-              snapshot: compiled.snapshot(current),
-              interrupts: current.interrupts,
+              snapshot: compiled.snapshot(failed),
+              interrupts: failed.interrupts,
               errors: errors.freeze
             )
           end
@@ -103,29 +94,20 @@ module Tamoz
               )
             end
 
-            current = append_noncommitting(
+            paused = append_paused_checkpoint(
               current,
               writer:,
-              status: :paused,
+              context:,
               pending: all_successes,
               interrupts: interruptions,
               attempts:,
               resume_values:,
               total_tasks:,
-              failure: nil,
-              request_transition: terminal_request_transition(
-                writer,
-                request_id: durable_request_id,
-                execution_id: current.execution_id,
-                action: :completed,
-                graph_status: :paused
-              )
+              request_id: durable_request_id
             )
-            emit_interrupts(context, interruptions)
-            emit_checkpoint(context, current)
             return RunResult.new(
               status: :paused,
-              snapshot: compiled.snapshot(current),
+              snapshot: compiled.snapshot(paused),
               interrupts: interruptions,
               errors: [].freeze
             )
@@ -149,6 +131,15 @@ module Tamoz
           )
           context.check!
           writer.check!
+          completion_transition = if frontier.empty?
+                                    terminal_request_transition(
+                                      writer,
+                                      request_id: durable_request_id,
+                                      execution_id: current.execution_id,
+                                      action: :completed,
+                                      graph_status: :completed
+                                    )
+                                  end
           current = compiled.append_checkpoint(
             writer:,
             thread: current.thread_id,
@@ -167,15 +158,7 @@ module Tamoz
             failure: nil,
             total_tasks:,
             consumed_task_ids: tasks.map(&:id),
-            request_transition: if frontier.empty?
-                                  terminal_request_transition(
-                                    writer,
-                                    request_id: durable_request_id,
-                                    execution_id: current.execution_id,
-                                    action: :completed,
-                                    graph_status: :completed
-                                  )
-                                end
+            request_transition: completion_transition
           )
           ordered.each { |outcome| emit_update(context, outcome) }
           emit_checkpoint(context, current)
@@ -239,18 +222,7 @@ module Tamoz
             "attempt" => task.attempt
           }
         )
-        input = task.input ? compiled.state_manager.task_input(task.input) : checkpoint.state
-        returned = compiled.nodes.fetch(task.node).call(input, task_context)
-        update, routes = normalize_return(returned)
-        outcome = Outcome.new(
-          task_id: task.id,
-          attempt_id: task.attempt_id,
-          base_checkpoint_id: task.base_checkpoint_id,
-          node: task.node,
-          path: task.path,
-          update:,
-          goto: routes
-        )
+        outcome = invoke_node(task, checkpoint, task_context)
         task_context.emit(
           :task_end,
           {
@@ -261,6 +233,21 @@ module Tamoz
         )
         writer.append_writes(task:, outcome:)
         outcome
+      end
+
+      def invoke_node(task, checkpoint, task_context)
+        input = task.input ? compiled.state_manager.task_input(task.input) : checkpoint.state
+        returned = compiled.nodes.fetch(task.node).call(input, task_context)
+        update, routes = normalize_return(returned)
+        Outcome.new(
+          task_id: task.id,
+          attempt_id: task.attempt_id,
+          base_checkpoint_id: task.base_checkpoint_id,
+          node: task.node,
+          path: task.path,
+          update:,
+          goto: routes
+        )
       end
 
       def normalize_return(value)
@@ -281,11 +268,11 @@ module Tamoz
         end
       end
 
-      def classify(tasks, results, checkpoint)
+      def classify_pool_results(tasks, results, checkpoint)
         successes = {}
         interruptions = []
         errors = []
-        cancelled = false
+        pool_cancelled = false
         results.each_with_index do |result, index|
           task = tasks.fetch(index)
           case result
@@ -306,12 +293,12 @@ module Tamoz
           when TaskResult::Failed
             errors << node_error(task, result.error)
           when TaskResult::Cancelled, TaskResult::Stuck
-            cancelled = true
+            pool_cancelled = true
           else
             raise PoolWorkerError, "unknown pool result #{result.class}"
           end
         end
-        [successes.freeze, interruptions.sort_by(&:key).freeze, errors.freeze, cancelled]
+        [successes.freeze, interruptions.sort_by(&:key).freeze, errors.freeze, pool_cancelled]
       end
 
       def node_error(task, original)
@@ -392,6 +379,76 @@ module Tamoz
         )
       end
 
+      def append_failed_checkpoint(
+        checkpoint,
+        writer:,
+        context:,
+        pending:,
+        interrupts:,
+        attempts:,
+        resume_values:,
+        total_tasks:,
+        errors:,
+        request_id:
+      )
+        failed = append_noncommitting(
+          checkpoint,
+          writer:,
+          status: :failed,
+          pending:,
+          interrupts:,
+          attempts:,
+          resume_values:,
+          total_tasks:,
+          failure: failure_descriptors(errors),
+          request_transition: terminal_request_transition(
+            writer,
+            request_id:,
+            execution_id: checkpoint.execution_id,
+            action: :failed,
+            graph_status: :failed,
+            retryable: false
+          )
+        )
+        emit_errors(context, errors)
+        emit_checkpoint(context, failed)
+        failed
+      end
+
+      def append_paused_checkpoint(
+        checkpoint,
+        writer:,
+        context:,
+        pending:,
+        interrupts:,
+        attempts:,
+        resume_values:,
+        total_tasks:,
+        request_id:
+      )
+        paused = append_noncommitting(
+          checkpoint,
+          writer:,
+          status: :paused,
+          pending:,
+          interrupts:,
+          attempts:,
+          resume_values:,
+          total_tasks:,
+          failure: nil,
+          request_transition: terminal_request_transition(
+            writer,
+            request_id:,
+            execution_id: checkpoint.execution_id,
+            action: :completed,
+            graph_status: :paused
+          )
+        )
+        emit_interrupts(context, interrupts)
+        emit_checkpoint(context, paused)
+        paused
+      end
+
       def enforce_task_limits!(checkpoint, tasks, to_execute)
         if tasks.length > limits.max_tasks_per_step
           raise RecursionLimitError,
@@ -458,27 +515,18 @@ module Tamoz
           attempt_id: nil,
           original: error
         )
-        failed = append_noncommitting(
+        failed = append_failed_checkpoint(
           current,
           writer:,
-          status: :failed,
+          context:,
           pending:,
           interrupts: interruptions,
           attempts:,
           resume_values:,
           total_tasks:,
-          failure: failure_descriptors([node_failure]),
-          request_transition: terminal_request_transition(
-            writer,
-            request_id: durable_request_id,
-            execution_id: current.execution_id,
-            action: :failed,
-            graph_status: :failed,
-            retryable: false
-          )
+          errors: [node_failure],
+          request_id: durable_request_id
         )
-        emit_errors(context, [node_failure])
-        emit_checkpoint(context, failed)
         RunResult.new(
           status: :failed,
           snapshot: compiled.snapshot(failed),
