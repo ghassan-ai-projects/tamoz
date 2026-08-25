@@ -72,36 +72,6 @@ module Tamoz
         TEXT
       end
 
-      private
-
-      def failure_record(failure)
-        {
-          'kind' => 'tool_error',
-          'tool' => String(failure.tool),
-          'error_class' => String(failure.error_class),
-          'reason' => String(failure.reason),
-          'failure_signature' => tool_failure_signature(
-            tool: failure.tool,
-            reason: failure.reason,
-            arguments: failure.step.fetch('arguments')
-          )
-        }
-      end
-
-      def failure_observation(state, phase, failure, failure_record)
-        SessionRecords.build(
-          'observation',
-          phase:,
-          repair_attempt: state.fetch(:repair_attempt),
-          step_id: failure.step.fetch('id'),
-          tool: String(failure.tool),
-          output: tool_failure_output(failure.tool, failure.reason),
-          failure: failure_record
-        )
-      end
-
-      public
-
       def tool_failure_signature(tool:, reason:, arguments:)
         Digest::SHA256.hexdigest(
           JSON.generate(
@@ -215,6 +185,34 @@ module Tamoz
         return 'tool effect failed' unless error.is_a?(Hash)
 
         String(error['message'] || 'tool effect failed')
+      end
+
+      private
+
+      def failure_record(failure)
+        {
+          'kind' => 'tool_error',
+          'tool' => String(failure.tool),
+          'error_class' => String(failure.error_class),
+          'reason' => String(failure.reason),
+          'failure_signature' => tool_failure_signature(
+            tool: failure.tool,
+            reason: failure.reason,
+            arguments: failure.step.fetch('arguments')
+          )
+        }
+      end
+
+      def failure_observation(state, phase, failure, failure_record)
+        SessionRecords.build(
+          'observation',
+          phase:,
+          repair_attempt: state.fetch(:repair_attempt),
+          step_id: failure.step.fetch('id'),
+          tool: String(failure.tool),
+          output: tool_failure_output(failure.tool, failure.reason),
+          failure: failure_record
+        )
       end
     end
   end
