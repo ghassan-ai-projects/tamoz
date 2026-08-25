@@ -21,17 +21,10 @@ module Tamoz
         pull_targets = []
         push_entries = []
         outcomes.each do |outcome|
-          declared = declared_routes(outcome.node, candidate)
+          declared = resolve_routes(outcome.node, candidate)
           dynamic = outcome.goto || []
           node = definition.nodes.fetch(outcome.node)
-          if !dynamic.empty? && node.routing == :static
-            raise InvalidUpdateError,
-                  "static node #{outcome.node} returned dynamic routing"
-          end
-          if !dynamic.empty? && !declared.empty? && node.routing != :additive
-            raise InvalidUpdateError,
-                  "node #{outcome.node} combines routes without routing: :additive"
-          end
+          validate_routing_mode!(outcome.node, node, declared, dynamic)
           validate_dynamic_routes!(node, dynamic)
 
           add_routes(
@@ -50,7 +43,7 @@ module Tamoz
 
       private
 
-      def declared_routes(node, candidate)
+      def resolve_routes(node, candidate)
         routes = definition.edges.filter_map do |source, target|
           target if source == node
         end
@@ -60,8 +53,8 @@ module Tamoz
           returned = branch.router.call(candidate)
           values = returned.is_a?(Array) ? returned : [returned]
           values.each do |value|
-            target = value.is_a?(Send) ? value.node : value
-            unless branch.targets.any? { |declared| declared.equal?(target) || declared == target }
+            target = route_target(value)
+            unless declared_route?(branch.targets, target)
               raise InvalidUpdateError,
                     "branch #{branch.name} returned undeclared target #{target.inspect}"
             end
@@ -73,6 +66,19 @@ module Tamoz
           raise InvalidUpdateError, "branch #{branch.name} failed: #{error.class}"
         end
         routes
+      end
+
+      def validate_routing_mode!(node_key, node, declared, dynamic)
+        return if dynamic.empty?
+
+        if node.routing == :static
+          raise InvalidUpdateError,
+                "static node #{node_key} returned dynamic routing"
+        end
+        return if declared.empty? || node.routing == :additive
+
+        raise InvalidUpdateError,
+              "node #{node_key} combines routes without routing: :additive"
       end
 
       def add_routes(routes, outcome:, pull_targets:, push_entries:, logical_step:)
@@ -105,8 +111,8 @@ module Tamoz
 
       def validate_dynamic_routes!(node, routes)
         routes.each do |route|
-          target = route.is_a?(Send) ? route.node : route
-          unless node.routes.any? { |declared| declared.equal?(target) || declared == target }
+          target = route_target(route)
+          unless declared_route?(node.routes, target)
             raise InvalidUpdateError,
                   "node #{node.name} returned undeclared dynamic route #{target.inspect}"
           end
@@ -126,6 +132,14 @@ module Tamoz
             logical_step:
           )
         end
+      end
+
+      def route_target(route)
+        route.is_a?(Send) ? route.node : route
+      end
+
+      def declared_route?(routes, target)
+        routes.any? { |declared| declared.equal?(target) || declared == target }
       end
 
       def validate_target!(target)
