@@ -120,12 +120,14 @@ module Tamoz
 
       def validate_type!(expected, value, path)
         types = Array(expected)
-        matches = types.any? do |name|
-          ruby_types = TYPES.fetch(name) { raise SchemaError, "schema has unsupported type #{name.inspect}" }
-          Array(ruby_types).any? { |ruby_type| value.is_a?(ruby_type) } &&
-            !(name == "integer" && [TrueClass, FalseClass].any? { |type| value.is_a?(type) })
-        end
+        matches = types.any? { |name| type_accepts?(name, value) }
         raise SchemaError, "#{path}: expected #{types.join(" or ")}, got #{value.class}" unless matches
+      end
+
+      def type_accepts?(name, value)
+        ruby_types = TYPES.fetch(name) { raise SchemaError, "schema has unsupported type #{name.inspect}" }
+        Array(ruby_types).any? { |ruby_type| value.is_a?(ruby_type) } &&
+          !(name == "integer" && [TrueClass, FalseClass].any? { |type| value.is_a?(type) })
       end
 
       def validate_const_and_enum!(schema, value, path)
