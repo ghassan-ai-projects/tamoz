@@ -33,6 +33,7 @@ module Tamoz
       ENV_NAME_PATTERN = /\A[A-Za-z_][A-Za-z0-9_]*\z/
       CREDENTIAL_REF_PATTERN = /\ATAMOZ_[A-Z0-9_]+\z/
       MAX_ARGUMENT_BYTES = 4096
+      MAX_HEADER_VALUE_BYTES = 4096
 
       # The argv/metacharacter rules below deliberately DUPLICATE the P8 profile
       # loader's argv policy: a configured server command is an exact argv executed
@@ -137,13 +138,11 @@ module Tamoz
         headers = validate_headers!(headers)
         credential_headers = validate_credential_headers!(credential_headers, credential_refs, headers)
         command, working_directory = validate_process_surface!(
-          transport, command, arguments, env_allowlist, working_directory, workspace
+          transport:, command:, arguments:, env_allowlist:, working_directory:, workspace:
         )
         protocol_range = validate_protocol_range!(protocol_range)
         primitives = validate_primitives!(primitives)
-        unless budgets.is_a?(Budgets)
-          raise ValidationError, "budgets must be a Tamoz::Mcp::ServerConfig::Budgets"
-        end
+        budgets = validate_budgets!(budgets)
 
         super(
           server_id:, transport:, command:, arguments:, env_allowlist:,
@@ -171,17 +170,7 @@ module Tamoz
           "credential_headers" => credential_headers.keys,
           "protocol_range" => protocol_range.dup,
           "primitives" => primitives.map(&:to_s),
-          "budgets" => {
-            "max_catalog_entries" => budgets.max_catalog_entries,
-            "max_description_bytes" => budgets.max_description_bytes,
-            "max_output_bytes" => budgets.max_output_bytes,
-            "connect_timeout" => budgets.connect_timeout,
-            "request_timeout" => budgets.request_timeout,
-            "max_concurrent" => budgets.max_concurrent,
-            "idle_timeout" => budgets.idle_timeout,
-            "max_lifetime" => budgets.max_lifetime,
-            "stderr_bytes" => budgets.stderr_bytes
-          }
+          "budgets" => Budgets.members.to_h { |name| [name.to_s, budgets.public_send(name)] }
         }.freeze
       end
 
@@ -239,8 +228,9 @@ module Tamoz
       end
 
       def validate_endpoint_security!(uri, allow_insecure_http)
-        return unless uri.scheme == "http" && !loopback_host?(uri.host) &&
-                      !(allow_insecure_http && private_ip_host?(uri.host))
+        return unless uri.scheme == "http"
+        return if loopback_host?(uri.host)
+        return if allow_insecure_http && private_ip_host?(uri.host)
 
         raise ValidationError, "endpoint must use https unless it targets loopback"
       end
@@ -306,7 +296,7 @@ module Tamoz
         name.match?(/authorization|cookie|token|secret|api[-_]?key|password/i)
       end
 
-      def validate_process_surface!(transport, command, arguments, env_allowlist, working_directory, workspace)
+      def validate_process_surface!(transport:, command:, arguments:, env_allowlist:, working_directory:, workspace:)
         if transport == :http
           unless command.nil? && arguments.empty? && env_allowlist.empty? && working_directory.nil?
             raise ValidationError,
@@ -466,6 +456,14 @@ module Tamoz
         end
 
         value.uniq.freeze
+      end
+
+      def validate_budgets!(value)
+        unless value.is_a?(Budgets)
+          raise ValidationError, "budgets must be a Tamoz::Mcp::ServerConfig::Budgets"
+        end
+
+        value
       end
     end
 
