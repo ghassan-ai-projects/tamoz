@@ -70,9 +70,9 @@ module Tamoz
           raise ConfigurationError,
                 "durable effects require a graph task Context bound to an effect journal"
         end
-        if safety.to_sym == :reconcilable && reconcile.nil?
-          raise ConfigurationError, "a reconcilable effect requires a reconciler"
-        end
+        return unless safety.to_sym == :reconcilable && reconcile.nil?
+
+        raise ConfigurationError, "a reconcilable effect requires a reconciler"
       end
 
       def resolve_decision(effects, decision, key, actor:, reconcile:, after_start:, &perform)
@@ -182,7 +182,10 @@ module Tamoz
         # correctly on its own.
         rescue Tamoz::Tools::ToolError => error
           return complete_exceptional_attempt(
-            effects, decision, key, reconciliation:, token:, status: :failed,
+            effects, decision, key,
+            reconciliation:,
+            token:,
+            status: :failed,
             detail: tool_error_detail(error)
           )
         rescue Tamoz::EffectUnknownError => error
@@ -191,7 +194,10 @@ module Tamoz
           # attempt as terminal :unknown here rather than letting it stay
           # running until a later recovery pass, and never repair it.
           return complete_exceptional_attempt(
-            effects, decision, key, reconciliation:, token:, status: :unknown,
+            effects, decision, key,
+            reconciliation:,
+            token:,
+            status: :unknown,
             detail: unknown_error_detail(error)
           )
         end
