@@ -6,61 +6,27 @@ module Tamoz
   module SQLite
     class Migrator
       APPLICATION_ID = 0x54414D5A # TAMZ
-      # P11 (three-layer memory): CURRENT_VERSION moves 1 -> 2 through the
-      # checksummed MIGRATION_2, which adds the lexical memory index table
-      # `tamoz_memory_index` (P11 plan §2/§4 P11-B). Ordinals are consumed
-      # monotonically; a later phase cannot reuse ordinal 2 (the
-      # monotonic-ordering test in test/sqlite_migration_test.rb asserts it).
-      # P14 (streaming input) §11/C8: CURRENT_VERSION moves 4 -> 5 through
-      # MIGRATION_5, which adds the processing-plane tables (operator state,
-      # immutable Situation versions, trigger evaluations, outbox) on top of
-      # the admission tables from MIGRATION_4. Existing tables are untouched;
-      # a pre-P14 database loads with the stream disabled (legacy semantics,
-      # never a partial load).
-      # Comms (COMMS_DESIGN §13): 5 -> 6 through MIGRATION_6, the ten
-      # channel-store tables. Ordinals are consumed monotonically and never
-      # reused; the monotonic-ordering test pins the exact ordinal list.
-      # ADR-049 (PLAN_ADR049 Phase 2): 8 -> 9 through MIGRATION_9, which pins
-      # the prompt's required_evidence (INV-C).
-      # ADR-049 (PLAN_ADR049 Phase 4): 9 -> 10 through MIGRATION_10, which
-      # records the decision audit trail — the evidence level that made an
-      # approve legal and why (contract §7.1).
-      # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1): 10 -> 11 through
-      # MIGRATION_11, which registers the digest epoch and clears the rows whose
-      # digests embedded the pre-RFC-8785 canonical serialization.
-      # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3): 11 -> 12 through
-      # MIGRATION_12, which adds the situation/entity scope columns to the
-      # memory index.
-      # P3 (provenance/replay): 14 -> 15 through MIGRATION_15, which adds the
-      # durable verified artifact store (tenant-scoped (digest, bytes) rows
-      # with rehash-on-admission).
-      # OpenClaw Phase 0 identity: persist logical and attempt identities rather
-      # than reconstructing them from the current worker process.
-      # Approval redesign (approval-policy-redesign 05 step 5): 16 -> 17 through
-      # MIGRATION_17, which adds the durable approval-policy homes — session
-      # grants, the append-only decision log with resolution columns, and the
-      # single-row active-policy record the reload loop reads.
-      # Approval redesign 05 step 7B: 16 -> 17 through MIGRATION_17, which adds
-      # the mode-switch audit table and the durable approval-policy homes.
-      # OpenClaw Phase 0 identity: 17 -> 18 through MIGRATION_18, which
-      # rebuilds tamoz_comms_inbound so inbound identity extends with the raw
-      # payload digest (plan 01, work item 2).
-      # OpenClaw Phase 1 truthful status: 18 -> 19 through MIGRATION_19, which
-      # rebuilds tamoz_comms_conversations with the /new generation counter
-      # and tamoz_comms_outbox with the reply_to platform message id
-      # (plan 02, work items 4 and 5).
-      # Bounded conflict amplification: 19 -> 20 through MIGRATION_20, which
-      # rebuilds tamoz_comms_inbound with the conflict counter and last
-      # conflicting digest — one durable row per update_id forever.
-      # OpenClaw Phase 2 visible cancellation: 20 -> 21 through MIGRATION_21,
-      # which rebuilds tamoz_comms_requests with the durable cancellation
-      # timeline stamps (requested at the /cancel enqueue, observed where the
-      # runner consumes it); terminal time stays the existing settle facts.
+      # Ordinals are consumed monotonically and never reused: the migration set
+      # is exactly the contiguous range 1..CURRENT_VERSION, pinned by the
+      # monotonic-ordering assertions in test/sqlite_approval_stores_test.rb,
+      # test/cancellation_visibility_test.rb, and test/memory_store_test.rb.
+      # Each migration's own history is documented beside its constant.
       CURRENT_VERSION = 21
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
       DIGEST_EPOCH = 1
+
+      MIGRATION_BOUNDARY = "\n-- tamoz migration boundary --\n"
+
+      def self.migration_checksum(statements)
+        Digest::SHA256.hexdigest(statements.join(MIGRATION_BOUNDARY)).freeze
+      end
+      private_class_method :migration_checksum
+
+      BACKEND_TIME_SQL =
+        "SELECT ( CAST(strftime('%s', 'now') AS INTEGER) * 1000 + " \
+        "CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER) )".freeze
 
       MIGRATION_1 = [
         <<~SQL.freeze,
@@ -370,9 +336,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_1_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_1.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_1_CHECKSUM = migration_checksum(MIGRATION_1)
 
       # P11 (three-layer memory) §2/§4 P11-B: the lexical memory index. One
       # row per Store version of a memory record, written in the SAME
@@ -413,9 +377,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_2_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_2.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_2_CHECKSUM = migration_checksum(MIGRATION_2)
 
       # P13 (durable scheduling) §10: the scheduler tables. `tamoz_schedules`
       # stores one row per schedule revision (CAS on expected_revision);
@@ -469,9 +431,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_3_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_3.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_3_CHECKSUM = migration_checksum(MIGRATION_3)
 
       # P14 (streaming input) §11/C8: the stream tables.
       # `tamoz_stream_channels` stores the content-addressed ChannelDescriptor
@@ -538,9 +498,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_4_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_4.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_4_CHECKSUM = migration_checksum(MIGRATION_4)
 
       # P14-B (design §8, plan §5/C3): the processing-plane tables.
       # `tamoz_stream_operator_state` holds bounded per-partition operator
@@ -626,9 +584,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_5_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_5.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_5_CHECKSUM = migration_checksum(MIGRATION_5)
 
       # Comm channels (COMMS_DESIGN §13): the CommsStore tables for one shared
       # runtime database. Surface descriptors and revisions, versioned
@@ -821,9 +777,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_6_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_6.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_6_CHECKSUM = migration_checksum(MIGRATION_6)
 
       # Comms (COMMS_DESIGN §10): 6 -> 7 — the outbox gains its transport
       # receipt column. Receipts (message_id, platform date) are recorded on
@@ -834,9 +788,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_7_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_7.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_7_CHECKSUM = migration_checksum(MIGRATION_7)
 
       # Delivery scheduling (COMMS_DESIGN §10): durable next-allowed times
       # make rate limits survive a drainer restart and serialize competing
@@ -855,9 +807,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_8_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_8.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_8_CHECKSUM = migration_checksum(MIGRATION_8)
 
       # ADR-049 (PLAN_ADR049 Phase 2): the approval prompt pins the evidence
       # an approver must present (INV-C). The column is nullable only because
@@ -869,9 +819,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_9_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_9.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_9_CHECKSUM = migration_checksum(MIGRATION_9)
 
       # ADR-049 (PLAN_ADR049 Phase 4): the decision audit records the evidence
       # level that made an approve legal and why (contract §7.1).
@@ -884,9 +832,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_10_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_10.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_10_CHECKSUM = migration_checksum(MIGRATION_10)
 
       # JCS digest-rule cutover (PLAN_TAMOZ_STREAM_BUILD T0.1, CONTRACTS §13):
       # the canonical rule moved to RFC 8785 (`Tamoz::Core.jcs`), so digests
@@ -947,9 +893,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_11_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_11.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_11_CHECKSUM = migration_checksum(MIGRATION_11)
 
       # Situation-scoped memory (PLAN_TAMOZ_STREAM_BUILD T0.3, §5.6): the
       # memory index gains the situation/entity dimension so an episode's
@@ -1023,9 +967,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_12_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_12.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_12_CHECKSUM = migration_checksum(MIGRATION_12)
 
       # T8.3 (PLAN_TAMOZ_STREAM_BUILD T8.3): the old P14 streaming engine is
       # retired by forward migration — no backward compatibility (owner
@@ -1044,9 +986,7 @@ module Tamoz
         tamoz_stream_channels
       ].map { |table| "DROP TABLE IF EXISTS #{table}" }.freeze
 
-      MIGRATION_13_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_13.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_13_CHECKSUM = migration_checksum(MIGRATION_13)
 
       MIGRATION_14 = [
         <<~SQL.freeze,
@@ -1109,9 +1049,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_14_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_14.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_14_CHECKSUM = migration_checksum(MIGRATION_14)
 
       # P3 (provenance/replay): the durable verified artifact store. Every
       # (digest, bytes) pair is tenant-scoped and rehashed on admission (the
@@ -1134,9 +1072,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_15_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_15.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_15_CHECKSUM = migration_checksum(MIGRATION_15)
 
       MIGRATION_16 = [
         "ALTER TABLE tamoz_effects ADD COLUMN logical_key TEXT",
@@ -1144,9 +1080,7 @@ module Tamoz
         "CREATE UNIQUE INDEX idx_tamoz_effect_attempt_identity ON tamoz_effect_attempts(attempt_identity)"
       ].freeze
 
-      MIGRATION_16_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_16.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_16_CHECKSUM = migration_checksum(MIGRATION_16)
 
       MIGRATION_17 = [
         <<~SQL.freeze,
@@ -1214,9 +1148,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_17_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_17.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_17_CHECKSUM = migration_checksum(MIGRATION_17)
 
       # OpenClaw Phase 0 identity (plan 01, work item 2): 17 -> 18 through
       # MIGRATION_18, which rebuilds tamoz_comms_inbound so its identity
@@ -1253,9 +1185,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_18_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_18.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_18_CHECKSUM = migration_checksum(MIGRATION_18)
 
       # OpenClaw Phase 1 truthful status (plan 02, work items 4 and 5):
       # 18 -> 19 through MIGRATION_19. tamoz_comms_conversations gains the
@@ -1320,9 +1250,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_19_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_19.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_19_CHECKSUM = migration_checksum(MIGRATION_19)
 
       # Bounded conflict amplification: 19 -> 20 through MIGRATION_20. A
       # conflicting digest for an already-anchored update_id UPDATES the one
@@ -1360,9 +1288,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_20_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_20.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_20_CHECKSUM = migration_checksum(MIGRATION_20)
 
       # OpenClaw Phase 2 visible cancellation (plan 03, work item 4): 20 -> 21
       # through MIGRATION_21. tamoz_comms_requests gains the nullable
@@ -1391,9 +1317,7 @@ module Tamoz
         SQL
       ].freeze
 
-      MIGRATION_21_CHECKSUM = Digest::SHA256.hexdigest(
-        MIGRATION_21.join("\n-- tamoz migration boundary --\n")
-      ).freeze
+      MIGRATION_21_CHECKSUM = migration_checksum(MIGRATION_21)
 
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
@@ -1420,8 +1344,6 @@ module Tamoz
         20 => [MIGRATION_20, MIGRATION_20_CHECKSUM],
         21 => [MIGRATION_21, MIGRATION_21_CHECKSUM]
       }.freeze
-
-      attr_reader :path, :limits, :fault_injector
 
       def self.verify_connection!(connection)
         application_id = connection.get_first_value("PRAGMA application_id")
@@ -1459,7 +1381,7 @@ module Tamoz
       end
 
       def migrate!
-        connection = ConnectionPool.open(path, limits:, initialize_wal: true)
+        connection = ConnectionPool.open(@path, limits: @limits, initialize_wal: true)
         application_id = connection.get_first_value("PRAGMA application_id")
         version = connection.get_first_value("PRAGMA user_version")
         if application_id != 0 && application_id != APPLICATION_ID
@@ -1508,25 +1430,7 @@ module Tamoz
         begin
           transaction = nil
           (from + 1..CURRENT_VERSION).each do |ordinal|
-            statements, checksum = MIGRATIONS.fetch(ordinal)
-            transaction = Transaction.new(
-              connection:,
-              operation: "migration.#{ordinal}",
-              attempt: 1,
-              fault_injector:
-            )
-            statements.each_with_index do |sql, index|
-              transaction.execute("migration.#{ordinal}.#{index + 1}", sql)
-            end
-            now = transaction.scalar("migration.#{ordinal}.time", backend_time_sql)
-            transaction.execute(
-              "migration.#{ordinal}.record",
-              <<~SQL,
-                INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms)
-                VALUES (?, ?, ?)
-              SQL
-              [ordinal, checksum, now]
-            )
+            transaction = apply_pending_migration(connection:, ordinal:)
           end
           if set_application_id
             transaction.execute(
@@ -1558,14 +1462,29 @@ module Tamoz
         end
       end
 
-      def backend_time_sql
-        sql = <<~SQL
-          SELECT (
-            CAST(strftime('%s', 'now') AS INTEGER) * 1000 +
-            CAST(substr(strftime('%f', 'now'), 4, 3) AS INTEGER)
-          )
-        SQL
-        sql.lines.map(&:strip).join(" ")
+      # Applies one pending ordinal inside the open BEGIN EXCLUSIVE block:
+      # every statement under its own fault-injection label, then the applied
+      # timestamp and the tamoz_schema_migrations record row. Returns the
+      # transaction so the caller can stamp the PRAGMAs on the same handle.
+      def apply_pending_migration(connection:, ordinal:)
+        statements, checksum = MIGRATIONS.fetch(ordinal)
+        transaction = Transaction.new(
+          connection:, operation: "migration.#{ordinal}",
+          attempt: 1, fault_injector: @fault_injector
+        )
+        statements.each_with_index do |sql, index|
+          transaction.execute("migration.#{ordinal}.#{index + 1}", sql)
+        end
+        now = transaction.scalar("migration.#{ordinal}.time", BACKEND_TIME_SQL)
+        transaction.execute(
+          "migration.#{ordinal}.record",
+          <<~SQL,
+            INSERT INTO tamoz_schema_migrations(version, checksum, applied_at_ms)
+            VALUES (?, ?, ?)
+          SQL
+          [ordinal, checksum, now]
+        )
+        transaction
       end
 
       private_constant :APPLICATION_ID, :MIGRATION_1,
@@ -1587,7 +1506,9 @@ module Tamoz
                        :MIGRATION_17, :MIGRATION_17_CHECKSUM,
                        :MIGRATION_18, :MIGRATION_18_CHECKSUM,
                        :MIGRATION_19, :MIGRATION_19_CHECKSUM,
-                       :MIGRATION_20, :MIGRATION_20_CHECKSUM, :MIGRATIONS
+                       :MIGRATION_20, :MIGRATION_20_CHECKSUM,
+                       :MIGRATION_21, :MIGRATION_21_CHECKSUM,
+                       :MIGRATION_BOUNDARY, :BACKEND_TIME_SQL, :MIGRATIONS
     end
   end
 end
