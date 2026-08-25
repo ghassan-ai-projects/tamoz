@@ -16,20 +16,10 @@ module Tamoz
       task_id: nil,
       max_namespaces: DEFAULT_MAX_NAMESPACES
     )
-      unless capacity.is_a?(Integer) && capacity.positive? && capacity <= MAX_CAPACITY
-        raise ConfigurationError, "stream capacity must be between 1 and #{MAX_CAPACITY}"
-      end
-      unless cancellation.respond_to?(:cancelled?) &&
-             cancellation.respond_to?(:cancel!) &&
-             cancellation.respond_to?(:on_cancel)
-        raise ConfigurationError, "stream cancellation token is invalid"
-      end
-      raise ConfigurationError, "stream clock must respond to now" unless clock.respond_to?(:now)
-      unless max_namespaces.is_a?(Integer) &&
-             max_namespaces.positive? &&
-             max_namespaces <= MAX_NAMESPACES
-        raise ConfigurationError, "max_namespaces must be between 1 and #{MAX_NAMESPACES}"
-      end
+      validate_capacity!(capacity)
+      validate_cancellation_token!(cancellation)
+      validate_clock!(clock)
+      validate_max_namespaces!(max_namespaces)
 
       @capacity = capacity
       @max_namespaces = max_namespaces
@@ -148,6 +138,34 @@ module Tamoz
 
     private
 
+    def validate_capacity!(capacity)
+      return if capacity.is_a?(Integer) && capacity.positive? && capacity <= MAX_CAPACITY
+
+      raise ConfigurationError, "stream capacity must be between 1 and #{MAX_CAPACITY}"
+    end
+
+    def validate_cancellation_token!(cancellation)
+      return if cancellation.respond_to?(:cancelled?) &&
+                cancellation.respond_to?(:cancel!) &&
+                cancellation.respond_to?(:on_cancel)
+
+      raise ConfigurationError, "stream cancellation token is invalid"
+    end
+
+    def validate_clock!(clock)
+      return if clock.respond_to?(:now)
+
+      raise ConfigurationError, "stream clock must respond to now"
+    end
+
+    def validate_max_namespaces!(max_namespaces)
+      return if max_namespaces.is_a?(Integer) &&
+                max_namespaces.positive? &&
+                max_namespaces <= MAX_NAMESPACES
+
+      raise ConfigurationError, "max_namespaces must be between 1 and #{MAX_NAMESPACES}"
+    end
+
     def reserve_sequence!(namespace)
       @state_mutex.synchronize do
         if @queue.closed? || cancellation.cancelled?
@@ -190,7 +208,7 @@ module Tamoz
     def close_from_cancellation(reason)
       safe_reason = normalize_reason(reason)
     rescue StandardError
-      safe_reason = "cancelled".freeze
+      safe_reason = "cancelled"
     ensure
       @state_mutex.synchronize do
         @closed_reason ||= safe_reason
