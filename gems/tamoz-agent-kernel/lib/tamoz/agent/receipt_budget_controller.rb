@@ -66,11 +66,7 @@ module Tamoz
       def reconcile_model(state, usage)
         base = (state || ZERO).dup
         base["model_calls_used"] = base.fetch("model_calls_used", 0).to_i + 1
-        if usage && usage.available
-          base["input_tokens"] = base.fetch("input_tokens", 0).to_i + usage.input_tokens
-          base["output_tokens"] = base.fetch("output_tokens", 0).to_i + usage.output_tokens
-          base["cost_microunits"] = base.fetch("cost_microunits", 0).to_i + usage.cost_microunits
-        end
+        add_available_usage(base, usage)
         check_input_tokens!(base)
         check_output_tokens!(base)
         check_cost!(base)
@@ -88,6 +84,14 @@ module Tamoz
       end
 
       private
+
+      def add_available_usage(base, usage)
+        return unless usage && usage.available
+
+        base["input_tokens"] = base.fetch("input_tokens", 0).to_i + usage.input_tokens
+        base["output_tokens"] = base.fetch("output_tokens", 0).to_i + usage.output_tokens
+        base["cost_microunits"] = base.fetch("cost_microunits", 0).to_i + usage.cost_microunits
+      end
 
       def check_input_tokens!(base)
         max = @budget["max_input_tokens"]
