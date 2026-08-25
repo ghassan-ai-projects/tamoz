@@ -43,6 +43,7 @@ module Tamoz
       WEBSEARCH_SERVER_ID = "websearch"
       MCP_EFFECT_CLASSES = %i[read_only bounded reconcilable].freeze
       SKILL_TOOLS = %w[load_skill read_skill_resource].freeze
+      MCP_CAPABILITY_KINDS = %i[mcp_tool websearch].freeze
 
       def self.build(toolbox:, mcp: nil, child_task_runtime: nil, profile: nil)
         new(toolbox:, mcp:, child_task_runtime:, profile:)
@@ -73,12 +74,12 @@ module Tamoz
       # The model-visible surface for one phase, in the pinned order. Discovery
       # sees only read-only capabilities (invariant 55: discovery cannot act).
       def names(phase)
-        read_only = phase == :discovery
+        discovery = phase == :discovery
         @ordered_names.select do |name|
           descriptor = registry.descriptors[name]
           next false unless descriptor
 
-          !read_only || descriptor.effect_class == :read_only
+          !discovery || descriptor.effect_class == :read_only
         end
       end
 
@@ -142,7 +143,7 @@ module Tamoz
         descriptor = registry.descriptors[String(name)]
         return false unless descriptor
 
-        %i[mcp_tool websearch].include?(descriptor.kind)
+        MCP_CAPABILITY_KINDS.include?(descriptor.kind)
       end
 
       def remote_planning_surface(allowed)
@@ -168,8 +169,8 @@ module Tamoz
       end
 
       def build_toolbox_source(source_id, names, toolbox)
-        read_only = toolbox.read_only_names
-        descriptors = names.map { |name| build_toolbox_descriptor(name, source_id, read_only) }
+        read_only_names = toolbox.read_only_names
+        descriptors = names.map { |name| build_toolbox_descriptor(name, source_id, read_only_names) }
         Capability::Source.new(source_id:, descriptors:)
       end
 
@@ -208,11 +209,8 @@ module Tamoz
       end
 
       def source_id_for(descriptor)
-        if descriptor.source_id == WEBSEARCH_SERVER_ID
-          "websearch:#{descriptor.source_id}"
-        else
-          "mcp:#{descriptor.source_id}"
-        end
+        prefix = websearch?(descriptor) ? "websearch" : "mcp"
+        "#{prefix}:#{descriptor.source_id}"
       end
 
       # P10 §3 keeps the MCP descriptor DUCK-TYPED: the source guarantees only
