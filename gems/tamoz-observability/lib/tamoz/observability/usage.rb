@@ -79,8 +79,8 @@ module Tamoz
         @source = String(source).freeze
         @version = String(version).freeze
         validate_identity!(@source, @version)
-        @input = non_negative(input_per_million, :input_per_million)
-        @output = non_negative(output_per_million, :output_per_million)
+        @input = validate_non_negative!(input_per_million, :input_per_million)
+        @output = validate_non_negative!(output_per_million, :output_per_million)
         @digest = Tamoz::Core.digest(DIGEST_DOMAIN, to_h)
         freeze
       end
@@ -114,7 +114,7 @@ module Tamoz
         usage.is_a?(Usage) && usage.input_tokens && usage.output_tokens
       end
 
-      def non_negative(value, name)
+      def validate_non_negative!(value, name)
         value = Float(value)
         return value if value.finite? && value >= 0
 
