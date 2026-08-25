@@ -120,14 +120,14 @@ module Tamoz
         def activate!(context:, reconcile:, transition_registry: nil, adoption_registry: nil, perform: nil)
           require_phase!(:verified, :activate)
           approval = approval_for(:apply)
-          perform ||= profile_activation(approval, transition_registry, adoption_registry)
+          perform ||= profile_activation(approval:, transition_registry:, adoption_registry:)
           run_effect(context:, stage: :activate, approval:, perform:, reconcile:)
         end
 
         def rollback!(context:, reconcile:, perform: nil, transition_registry: nil)
           require_phase!(:active, :rollback)
           approval = approval_for(:rollback)
-          perform ||= profile_rollback(approval, transition_registry)
+          perform ||= profile_rollback(transition_registry:)
           run_effect(context:, stage: :rollback, approval:, perform:, reconcile:)
         end
 
@@ -148,11 +148,17 @@ module Tamoz
           required = %w[profile_id digest scope]
           missing = required.reject { |key| candidate.key?(key) }
           raise ImprovementPolicyError, "candidate artifact is missing #{missing.join(', ')}" unless missing.empty?
-          return if required.all? do |key|
-            candidate.fetch(key).to_s == @proposal.public_send(key == 'digest' ? :to_digest : key).to_s
-          end
+          return if required.all? { |key| candidate_matches_proposal?(candidate, key) }
 
           raise EvaluatorTamperError, 'candidate artifact does not match the proposal'
+        end
+
+        def candidate_matches_proposal?(candidate, key)
+          candidate.fetch(key).to_s == @proposal.public_send(proposal_reader(key)).to_s
+        end
+
+        def proposal_reader(key)
+          key == 'digest' ? :to_digest : key
         end
 
         def validate_actor!(actor)
@@ -227,7 +233,7 @@ module Tamoz
           raise ImprovementPolicyError, "#{label} requires a callable"
         end
 
-        def profile_activation(approval, transition_registry, adoption_registry)
+        def profile_activation(approval:, transition_registry:, adoption_registry:)
           validate_profile_registries!(transition_registry, adoption_registry)
           lambda do
             adoption_registry.activate(@proposal.profile_id, @proposal.to_digest)
@@ -238,7 +244,7 @@ module Tamoz
           end
         end
 
-        def profile_rollback(_approval, transition_registry)
+        def profile_rollback(transition_registry:)
           unless transition_registry.respond_to?(:record)
             raise ImprovementPolicyError, 'profile rollback requires the transition registry seam'
           end
