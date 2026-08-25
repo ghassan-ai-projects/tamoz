@@ -45,10 +45,7 @@ module Tamoz
       @request_id = identity!(request_id, :request_id)
       @thread_id = optional_identity!(thread_id, :thread_id)
       @task_id = optional_identity!(task_id, :task_id)
-      unless %i[interactive non_interactive].include?(interrupt_mode)
-        raise ConfigurationError,
-              "interrupt_mode must be :interactive or :non_interactive"
-      end
+      validate_interrupt_mode!(interrupt_mode)
       @interrupt_mode = interrupt_mode
       @namespace = normalize_list(namespace, :namespace, NAMESPACE_MAX_PARTS)
       @tags = normalize_list(tags, :tags, TAGS_MAX_ITEMS)
@@ -56,24 +53,13 @@ module Tamoz
       raise ConfigurationError, "metadata must be a Hash" unless @metadata.is_a?(Hash)
 
       @deadline = normalize_deadline(deadline)
-      unless cancellation.nil? ||
-             (cancellation.respond_to?(:cancelled?) && cancellation.respond_to?(:reason))
-        raise ConfigurationError, "cancellation must implement cancelled? and reason"
-      end
-      raise ConfigurationError, "clock must respond to now" unless clock.respond_to?(:now)
-      unless notifier.respond_to?(:instrument)
-        raise ConfigurationError, "notifier must respond to instrument"
-      end
-      raise ConfigurationError, "emitter must respond to emit" unless emitter.respond_to?(:emit)
-      if interrupts && !interrupts.respond_to?(:call)
-        raise ConfigurationError, "interrupts must respond to call"
-      end
-      if graph_runtime && !graph_runtime.respond_to?(:call)
-        raise ConfigurationError, "graph_runtime must respond to call"
-      end
-      if episode_tools && !episode_tools.respond_to?(:execute)
-        raise ConfigurationError, "episode_tools must respond to execute"
-      end
+      validate_cancellation!(cancellation)
+      validate_capability!(clock, :now, "clock")
+      validate_capability!(notifier, :instrument, "notifier")
+      validate_capability!(emitter, :emit, "emitter")
+      validate_capability!(interrupts, :call, "interrupts") if interrupts
+      validate_capability!(graph_runtime, :call, "graph_runtime") if graph_runtime
+      validate_capability!(episode_tools, :execute, "episode_tools") if episode_tools
 
       @cancellation = cancellation
       @clock = clock
@@ -178,6 +164,23 @@ module Tamoz
       return value if value.is_a?(Numeric) && value.finite? && !value.negative?
 
       raise ConfigurationError, "deadline must be a finite non-negative monotonic value"
+    end
+
+    def validate_interrupt_mode!(mode)
+      return if %i[interactive non_interactive].include?(mode)
+
+      raise ConfigurationError, "interrupt_mode must be :interactive or :non_interactive"
+    end
+
+    def validate_cancellation!(cancellation)
+      return if cancellation.nil?
+      return if cancellation.respond_to?(:cancelled?) && cancellation.respond_to?(:reason)
+
+      raise ConfigurationError, "cancellation must implement cancelled? and reason"
+    end
+
+    def validate_capability!(collaborator, method, name)
+      raise ConfigurationError, "#{name} must respond to #{method}" unless collaborator.respond_to?(method)
     end
 
     private_constant :ATTRIBUTES, :ID_MAX_BYTES, :NAMESPACE_MAX_PARTS, :TAGS_MAX_ITEMS, :UNCHANGED
