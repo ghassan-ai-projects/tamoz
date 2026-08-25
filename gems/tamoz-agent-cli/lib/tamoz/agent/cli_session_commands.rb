@@ -27,8 +27,7 @@ module Tamoz
       private
 
       def cmd_ask(options, argv)
-        task = argv.join(' ').strip
-        raise OptionParser::MissingArgument, 'TASK' if task.empty?
+        task = control_value!(argv, 'TASK')
 
         profile = load_operator_profile(options)
         thread_id = resolve_thread_id(options)
@@ -122,8 +121,7 @@ module Tamoz
 
       def cmd_follow_up(options, argv)
         thread_id = extract_thread!(argv)
-        task = argv.join(' ').strip
-        raise OptionParser::MissingArgument, 'TASK' if task.empty?
+        task = control_value!(argv, 'TASK')
 
         profile = load_operator_profile(options)
         # DR-5 RC1: same request-id-before-authority rule as cmd_ask — a consumed
@@ -159,23 +157,26 @@ module Tamoz
 
       def cmd_redirect(options, argv)
         thread_id = extract_thread!(argv)
-        task = argv.join(' ').strip
-        raise OptionParser::MissingArgument, 'new task' if task.empty?
+        task = control_value!(argv, 'new task')
 
         profile = load_operator_profile(options)
         profile = resolve_session_authority(options, thread_id, profile, boundary: false)
         run_durable(options, thread_id, read_only: false, profile:) do |session, request_id, owner_id|
           session.verify_skill_binding!(thread: thread_id)
-          session.app.durable_runner.submit(
-            { 'task' => task },
-            thread: thread_id,
-            request_id:,
-            operation: :redirect,
-            delivery: :redirect
-          )
+          submit_redirect(session, task, thread_id, request_id)
           view = drain_to_terminal(session, thread_id:, owner_id:, options:)
           exit_for_view(view)
         end
+      end
+
+      def submit_redirect(session, task, thread_id, request_id)
+        session.app.durable_runner.submit(
+          { 'task' => task },
+          thread: thread_id,
+          request_id:,
+          operation: :redirect,
+          delivery: :redirect
+        )
       end
 
       def cmd_cancel(options, argv)
