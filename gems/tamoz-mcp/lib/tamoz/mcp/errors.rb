@@ -14,7 +14,7 @@ module Tamoz
       attr_reader :stderr_tail
 
       def initialize(message = nil, stderr_tail: nil)
-        @stderr_tail = stderr_tail.nil? ? nil : stderr_tail.dup.freeze
+        @stderr_tail = stderr_tail&.dup&.freeze
         super(message)
       end
     end
