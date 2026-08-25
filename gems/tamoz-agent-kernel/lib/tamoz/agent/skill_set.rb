@@ -32,26 +32,28 @@ module Tamoz
       # skill_refs_json: the ordered wire list [{name, tree_sha256}].
       # source: the operator-approved {name => rendered_text} map.
       def self.verify_wire(skill_refs_json, source:)
-        refs_json = skill_refs_json.to_s
-        refs = if refs_json.empty?
-                 []
-               else
-                 parsed = begin
-                   Tamoz::Core.parse_json_strict(refs_json)
-                 rescue StandardError
-                   raise SkillSetError, "skill_set/not_array"
-                 end
-                 unless parsed.is_a?(Array)
-                   raise SkillSetError, "skill_set/not_array"
-                 end
-                 parsed
-               end
+        refs = parse_refs(skill_refs_json)
         if refs.length > MAX_REFS
           raise SkillSetError, "skill_set/too_many_refs: #{refs.length}"
         end
 
         built = refs.map { |raw| build_ref(raw, source) }
         new(built)
+      end
+
+      def self.parse_refs(skill_refs_json)
+        refs_json = skill_refs_json.to_s
+        return [] if refs_json.empty?
+
+        parsed = begin
+          Tamoz::Core.parse_json_strict(refs_json)
+        rescue StandardError
+          raise SkillSetError, "skill_set/not_array"
+        end
+        unless parsed.is_a?(Array)
+          raise SkillSetError, "skill_set/not_array"
+        end
+        parsed
       end
 
       def self.build_ref(raw, source)
@@ -85,7 +87,7 @@ module Tamoz
 
         SkillRef.new(name:, tree_digest:, text:)
       end
-      private_class_method :build_ref
+      private_class_method :parse_refs, :build_ref
 
       def initialize(refs)
         names = refs.map(&:name)
