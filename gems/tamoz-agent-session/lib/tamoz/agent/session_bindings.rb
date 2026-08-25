@@ -16,7 +16,7 @@ module Tamoz
 
       def intake(state, context)
         raw_task = state.fetch(:task)
-        return cancellation_update if raw_task.is_a?(Hash) && raw_task['cancel'] == true
+        return cancellation_update if cancellation_request?(raw_task)
 
         task = validated_task(raw_task)
 
@@ -33,7 +33,7 @@ module Tamoz
 
       def mcp_binding
         source = @configuration.mcp
-        return {} unless source && !source.catalogs.empty?
+        return {} if source.nil? || source.catalogs.empty?
 
         {
           mcp_catalogs: source.mcp_catalogs,
@@ -81,6 +81,10 @@ module Tamoz
 
       def cancellation_update
         { next_node: 'terminal', terminal_reason: 'cancelled_by_user' }
+      end
+
+      def cancellation_request?(raw_task)
+        raw_task.is_a?(Hash) && raw_task['cancel'] == true
       end
 
       # Channel turns with a transcript nest the text under the task Hash
