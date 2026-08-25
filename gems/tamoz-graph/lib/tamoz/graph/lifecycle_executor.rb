@@ -55,13 +55,13 @@ module Tamoz
         join_grace:
       )
         StreamEmitter.validate_mode!(mode)
-        sink, stream_context, emitter, run_id = stream_parts(
-          thread,
-          request_id,
-          execution_id,
-          context,
-          mode,
-          capacity
+        sink, stream_context, emitter, run_id = build_stream_parts(
+          thread:,
+          request_id:,
+          execution_id:,
+          context:,
+          mode:,
+          capacity:
         )
         Concurrency::EventStream.new(sink:, join_grace:) do
           emitter.emit(:run_start, stream_context.namespace, {
@@ -110,7 +110,7 @@ module Tamoz
 
       attr_reader :compiled
 
-      def stream_parts(thread, request_id, execution_id, context, mode, capacity)
+      def build_stream_parts(thread:, request_id:, execution_id:, context:, mode:, capacity:)
         cancellation = context&.cancellation || CancellationToken.new
         run_id = context&.run_id || SecureRandom.uuid
         sink = StreamSink.new(
