@@ -167,10 +167,7 @@ module Tamoz
                        queue_size: DEFAULT_QUEUE_SIZE, reserved_size: DEFAULT_RESERVED_SIZE,
                        max_file_bytes: DEFAULT_MAX_FILE_BYTES, max_files: DEFAULT_MAX_FILES,
                        flush_interval_ms: 200, strict: false)
-          @directory = File.expand_path(directory)
-          @role = sanitize_role(role)
-          @path = File.join(@directory, "#{@role}-#{Integer(pid)}.ndjson")
-          @health_path = "#{@path}.health.json"
+          resolve_journal_paths(directory:, role:, pid:)
           @catalog = catalog
           @policy_digest = policy.digest
           @queue_size = positive_integer(queue_size, :queue_size)
@@ -292,10 +289,10 @@ module Tamoz
         def write_signal(signal)
           return false if @disabled
 
-          append_line(format_line(signal))
+          append_line(render_line(signal))
         end
 
-        def format_line(signal)
+        def render_line(signal)
           JSON.generate(signal.to_h.merge('policy_digest' => signal.policy_digest || @policy_digest))
         end
 
@@ -375,8 +372,15 @@ module Tamoz
           nil
         end
 
-        def sanitize_role(role)
+        def normalize_role(role)
           String(role).gsub(/[^a-zA-Z0-9_.-]/, '_')
+        end
+
+        def resolve_journal_paths(directory:, role:, pid:)
+          @directory = File.expand_path(directory)
+          @role = normalize_role(role)
+          @path = File.join(@directory, "#{@role}-#{Integer(pid)}.ndjson")
+          @health_path = "#{@path}.health.json"
         end
 
         def prepare_directory(directory)
