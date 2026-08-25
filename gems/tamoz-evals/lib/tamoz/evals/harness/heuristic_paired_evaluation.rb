@@ -53,21 +53,10 @@ module Tamoz
         def evaluate(heuristic, regression: false)
           development = score_partition(@corpus.development_tasks, heuristic)
           holdout_tasks = regression ? regression_tasks : @corpus.holdout_tasks
-          holdout = score_partition(holdout_tasks, heuristic)
 
-          body = {
-            "format_version" => report_module::FORMAT_VERSION,
-            "candidate_digest" => heuristic.digest,
-            "candidate_id" => heuristic.heuristic_id,
-            "generator_principal" => @generator_principal,
-            "evaluator_principal" => @evaluator_principal,
-            "paired_task_digest" => report_module.paired_task_digest(
-              development.fetch("task_digest"), holdout.fetch("task_digest")
-            ),
-            "development" => development.fetch("arms"),
-            "holdout" => holdout.fetch("arms")
-          }
-          report = report_module.sealed(body)
+          report = report_module.sealed(
+            report_body(heuristic, development, score_partition(holdout_tasks, heuristic))
+          )
           @corpus.write_evaluator_output(
             "report.#{regression ? "regression" : "promotion"}.json", report
           )
@@ -86,6 +75,21 @@ module Tamoz
         # `tamoz-agent` at require time (the dependency-isolation test).
         def report_module
           Tamoz::Agent::Improvement::EvaluationReport
+        end
+
+        def report_body(heuristic, development, holdout)
+          {
+            "format_version" => report_module::FORMAT_VERSION,
+            "candidate_digest" => heuristic.digest,
+            "candidate_id" => heuristic.heuristic_id,
+            "generator_principal" => @generator_principal,
+            "evaluator_principal" => @evaluator_principal,
+            "paired_task_digest" => report_module.paired_task_digest(
+              development.fetch("task_digest"), holdout.fetch("task_digest")
+            ),
+            "development" => development.fetch("arms"),
+            "holdout" => holdout.fetch("arms")
+          }
         end
 
         def score_partition(tasks, heuristic)
