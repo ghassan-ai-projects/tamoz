@@ -250,16 +250,22 @@ module Tamoz
           )
         end
 
+        def typed_evidence_complete?(signal, category)
+          return false if category == :unknown
+
+          REQUIRED_EVIDENCE.fetch(category).call(signal)
+        end
+        private_class_method :typed_evidence_complete?
+
         def confidence_for(signal, category)
           return NO_CONFIDENCE if category == :unknown
 
-          REQUIRED_EVIDENCE.fetch(category).call(signal) ? EVIDENCED_CONFIDENCE : PROPOSAL_CONFIDENCE
+          typed_evidence_complete?(signal, category) ? EVIDENCED_CONFIDENCE : PROPOSAL_CONFIDENCE
         end
 
         def evidence_for(signal, category)
           {
-            "typed_evidence_complete" =>
-              category == :unknown ? false : REQUIRED_EVIDENCE.fetch(category).call(signal),
+            "typed_evidence_complete" => typed_evidence_complete?(signal, category),
             "effect_state" => signal.fetch("effect_state"),
             "pre_dispatch" => signal.dig("retryability", "pre_dispatch") == true,
             "capability_absent" => signal.fetch("capability_absent")
