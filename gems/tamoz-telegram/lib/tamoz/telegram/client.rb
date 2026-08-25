@@ -45,9 +45,7 @@ module Tamoz
       # @return [Hash] the parsed `ok` payload.
       def call(method, params, idempotent: false)
         http = build_http
-        request = Net::HTTP::Post.new(path_for(method))
-        request.body = JSON.generate(params)
-        request['Content-Type'] = 'application/json'
+        request = build_request(method, params)
         response = nil
         body = +''
         http.request(request) do |partial|
@@ -68,7 +66,7 @@ module Tamoz
           elsif payload['error_code'] == 401
             raise Comms::AuthenticationError, 'bot token refused'
           else
-            raise transport_failure(method, idempotent, "telegram api error #{payload['error_code']}")
+            raise transport_failure(idempotent, "telegram api error #{payload['error_code']}")
           end
         when Net::HTTPTooManyRequests
           raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(body))
@@ -82,7 +80,7 @@ module Tamoz
           # reading one update stream is a correctness problem.
           raise Comms::PollerConflictError, conflict_message(body)
         else
-          raise transport_failure(method, idempotent, "telegram api error #{response.code}")
+          raise transport_failure(idempotent, "telegram api error #{response.code}")
         end
       rescue Net::OpenTimeout, Net::ReadTimeout, Errno::ECONNRESET, Errno::ETIMEDOUT, JSON::ParserError => e
         # A read observed nothing and changed nothing, so it is typed transient
@@ -91,7 +89,7 @@ module Tamoz
         # retried (design §10).
         raise Comms::TransientTransportError, "#{method} did not complete (#{e.class})" if idempotent
 
-        raise transport_failure(method, idempotent, "#{method} did not return a valid response (#{e.class})")
+        raise transport_failure(idempotent, "#{method} did not return a valid response (#{e.class})")
       end
 
       private
@@ -115,12 +113,19 @@ module Tamoz
         "/bot#{@token}/#{method}"
       end
 
-      def transport_failure(_method, idempotent, message)
+      def transport_failure(idempotent, message)
         if idempotent
           Comms::TransientTransportError.new(message)
         else
           Comms::AmbiguousDeliveryError.new("send may or may not have happened (#{message})")
         end
+      end
+
+      def build_request(method, params)
+        request = Net::HTTP::Post.new(path_for(method))
+        request.body = JSON.generate(params)
+        request['Content-Type'] = 'application/json'
+        request
       end
 
       def build_http
