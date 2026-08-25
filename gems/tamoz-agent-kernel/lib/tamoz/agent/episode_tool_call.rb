@@ -43,7 +43,7 @@ module Tamoz
         request_digest = digest_request(tool_name:, arguments:)
         logical = build_logical_call_key(episode_id:, slot:, request_digest:)
         outcome = dispatch_tool_call(
-          context:, tool_port:, slot:, tool_name:, arguments:, logical:
+          context:, tool_port:, logical:, slot:, call: {tool_name:, arguments:}
         )
         map_outcome(outcome, logical:, request_digest:)
       end
@@ -71,8 +71,10 @@ module Tamoz
         )
       end
 
-      def dispatch_tool_call(context:, tool_port:, slot:, tool_name:, arguments:, logical:)
+      def dispatch_tool_call(context:, tool_port:, logical:, slot:, call:)
         call_index = Integer(slot)
+        tool_name = call.fetch(:tool_name)
+        arguments = call.fetch(:arguments)
         request = dispatch_request(slot:, tool_name:, arguments:, logical:)
         EffectDispatcher.run(
           context:,
