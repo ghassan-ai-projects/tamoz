@@ -51,11 +51,7 @@ module Tamoz
           EvaluationReport.assert_human_gate!(gate_classes:, evidence: human_gate_evidence)
 
           decision = EvaluationReport.decide(body)
-          unless decision.fetch("passed")
-            raise ImprovementPolicyError,
-                  "evaluation did not clear the promotion gates: " \
-                  "#{decision.fetch("reasons").join("; ")}"
-          end
+          assert_decision_passed!(decision)
 
           provenance.assert_complete!
           assert_provenance_binds!(candidate, provenance, body)
@@ -65,24 +61,7 @@ module Tamoz
           after = provenance.affected_behavior.fetch("behavior_version_after")
           assert_forward!(before, after)
 
-          transition, reserved = @registry.record(
-            kind: KIND,
-            candidate_id: candidate.heuristic_id,
-            candidate_digest: candidate.digest,
-            behavior_snapshot: candidate.snapshot,
-            behavior_version_after: after,
-            promotion_evidence_digest: EvaluationReport.seal(body),
-            human_gate_evidence:,
-            created_by: String(actor)
-          )
-          {
-            "transition" => transition,
-            "reserved_version" => reserved,
-            "decision" => decision,
-            "provenance_digest" => provenance.digest,
-            "injection_digest" => self.class.injection_digest(candidate.snapshot),
-            "activated" => false
-          }
+          record_promotion(candidate:, after:, body:, decision:, provenance:, human_gate_evidence:, actor:)
         end
 
         # Roll back the active heuristic epoch. Per DR-1 §7 a rollback is a
@@ -247,6 +226,14 @@ module Tamoz
                 "the presented evaluation report does not match the evaluator's stored artifact"
         end
 
+        def assert_decision_passed!(decision)
+          return if decision.fetch("passed")
+
+          raise ImprovementPolicyError,
+                "evaluation did not clear the promotion gates: " \
+                "#{decision.fetch("reasons").join("; ")}"
+        end
+
         # Invariant 34 / plan §1 hard-zero. The promoting actor must be a third
         # party: not the candidate, not the generator that produced it, and not
         # the evaluator that scored it.
@@ -350,6 +337,27 @@ module Tamoz
 
           raise ImprovementPolicyError,
                 "behavior version #{after.inspect} does not advance #{before.inspect}"
+        end
+
+        def record_promotion(candidate:, after:, body:, decision:, provenance:, human_gate_evidence:, actor:)
+          transition, reserved = @registry.record(
+            kind: KIND,
+            candidate_id: candidate.heuristic_id,
+            candidate_digest: candidate.digest,
+            behavior_snapshot: candidate.snapshot,
+            behavior_version_after: after,
+            promotion_evidence_digest: EvaluationReport.seal(body),
+            human_gate_evidence:,
+            created_by: String(actor)
+          )
+          {
+            "transition" => transition,
+            "reserved_version" => reserved,
+            "decision" => decision,
+            "provenance_digest" => provenance.digest,
+            "injection_digest" => self.class.injection_digest(candidate.snapshot),
+            "activated" => false
+          }
         end
       end
     end
