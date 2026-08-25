@@ -60,6 +60,8 @@ module Tamoz
 
     # In-memory implementation for tests and the one-shot runtime.
     class MemoryDecisionLog < DecisionLog
+      NON_IDENTITY_KEYS = %i[step_scope created_at_ms].freeze
+
       def initialize
         @decisions = {}
         @resolutions = {}
@@ -73,8 +75,7 @@ module Tamoz
           if existing
             # step_scope is provenance, not identity: one question asked in two
             # executions shares the decision id and keeps the first scope.
-            return if existing.reject { |key, _| key == :step_scope || key == :created_at_ms } ==
-                      record.reject { |key, _| key == :step_scope || key == :created_at_ms }
+            return if existing.except(*NON_IDENTITY_KEYS) == record.except(*NON_IDENTITY_KEYS)
 
             raise ConflictingResolutionError,
                   "decision #{record[:decision_id]} already logged with different content"

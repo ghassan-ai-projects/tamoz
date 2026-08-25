@@ -114,7 +114,7 @@ module Tamoz
         def apply(steps)
           return steps unless steps.is_a?(Array)
 
-          seen = []
+          read_targets = []
           inserted = 0
           result = []
           steps.each do |step|
@@ -123,14 +123,15 @@ module Tamoz
               next
             end
 
+            tool = String(step["tool"])
             target = target_of(step)
-            if String(step["tool"]) == String(subject_tool) &&
-               target && !seen.include?(target) && inserted < MAX_INSERTIONS
+            if tool == String(subject_tool) &&
+               target && !read_targets.include?(target) && inserted < MAX_INSERTIONS
               inserted += 1
               result << precursor_step_for(step, target, inserted)
-              seen << target
+              read_targets << target
             end
-            seen << target if String(step["tool"]) == String(precursor_tool) && target
+            read_targets << target if tool == String(precursor_tool) && target
             result << step
           end
           result

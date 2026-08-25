@@ -37,7 +37,7 @@ module Tamoz
           supervisor = build_supervisor(config)
           begin
             client = build_client(supervisor, client_factory)
-            protocol_version = handshake(client, config)
+            protocol_version = negotiate_protocol_version(client, config)
             entries = collect_entries(client, config)
             enforce_entry_budget!(entries, config)
 
@@ -64,14 +64,14 @@ module Tamoz
           factory.call(supervisor)
         end
 
-        def handshake(client, config)
+        def negotiate_protocol_version(client, config)
           min, max = config.protocol_range
           result = ::Timeout.timeout(config.budgets.connect_timeout) do
             client.connect(client_info: CLIENT_INFO, protocol_version: max)
           end
           negotiated = result.is_a?(Hash) ? result["protocolVersion"] : nil
-          assert_protocol_version_shape!(negotiated)
-          assert_protocol_version_in_range!(negotiated, min, max)
+          validate_protocol_version_shape!(negotiated)
+          validate_protocol_version_in_range!(negotiated, min, max)
 
           negotiated.freeze
         rescue ::Timeout::Error
@@ -80,13 +80,13 @@ module Tamoz
           raise ProtocolError, "The MCP server handshake failed."
         end
 
-        def assert_protocol_version_shape!(negotiated)
+        def validate_protocol_version_shape!(negotiated)
           return if negotiated.is_a?(String) && PROTOCOL_VERSION_PATTERN.match?(negotiated)
 
           raise ProtocolError, "The MCP server returned an invalid protocol version."
         end
 
-        def assert_protocol_version_in_range!(negotiated, min, max)
+        def validate_protocol_version_in_range!(negotiated, min, max)
           return unless negotiated < min || negotiated > max
 
           raise ProtocolError,
@@ -119,19 +119,20 @@ module Tamoz
           seen = {}
           tools.map do |tool|
             name = validate_entry_name!(tool.name)
-            if seen.key?(name)
-              raise ValidationError, "The MCP server lists a duplicate entry name #{name.inspect}."
-            end
-            seen[name] = true
+            record_unique_entry_name!(name, seen)
 
             description = bounded_description(tool.description, config)
-            schema = validate_and_canonicalize_schema(name, tool.input_schema)
+            schema = canonicalize_schema(name, tool.input_schema)
             annotations = canonicalize_annotations(tool.annotations)
             build_entry(name, :tool, description, schema, annotations)
           end
         end
 
-        def validate_and_canonicalize_schema(name, schema)
+        def canonicalize_schema(name, schema)
+          canonicalize(validated_schema_candidate(name, schema))
+        end
+
+        def validated_schema_candidate(name, schema)
           candidate = schema.nil? ? {} : schema
           unless candidate.is_a?(Hash)
             raise ValidationError,
@@ -147,7 +148,7 @@ module Tamoz
                   "The MCP server entry #{name.inspect} has an invalid input schema."
           end
 
-          CanonicalJSON.deep_freeze(CanonicalJSON.normalize(candidate))
+          candidate
         end
 
         # --- resources / prompts (catalogued only; never readable in v1) ----
@@ -156,9 +157,9 @@ module Tamoz
           client.resources.map do |resource|
             name = validate_entry_name!(resource["name"] || resource["uri"])
             description = bounded_description(resource["description"], config)
-            schema = CanonicalJSON.deep_freeze(CanonicalJSON.normalize(
+            schema = canonicalize(
               "uri" => resource["uri"].to_s, "mimeType" => resource["mimeType"].to_s
-            ))
+            )
             build_entry(name, :resource, description, schema, nil)
           end
         end
@@ -167,9 +168,7 @@ module Tamoz
           client.prompts.map do |prompt|
             name = validate_entry_name!(prompt["name"])
             description = bounded_description(prompt["description"], config)
-            schema = CanonicalJSON.deep_freeze(CanonicalJSON.normalize(
-              "arguments" => prompt["arguments"] || []
-            ))
+            schema = canonicalize("arguments" => prompt["arguments"] || [])
             build_entry(name, :prompt, description, schema, nil)
           end
         end
@@ -187,6 +186,14 @@ module Tamoz
           value.dup.freeze
         end
 
+        def record_unique_entry_name!(name, seen)
+          if seen.key?(name)
+            raise ValidationError, "The MCP server lists a duplicate entry name #{name.inspect}."
+          end
+
+          seen[name] = true
+        end
+
         # Descriptions are untrusted display text: control characters are
         # stripped and the result is byte-bounded without splitting a UTF-8
         # sequence. Locale-independent: the encoding is named explicitly.
@@ -194,10 +201,14 @@ module Tamoz
           BoundedText.bound(value, config.budgets.max_description_bytes)
         end
 
+        def canonicalize(object)
+          CanonicalJSON.deep_freeze(CanonicalJSON.normalize(object))
+        end
+
         def canonicalize_annotations(annotations)
           return nil if annotations.nil?
 
-          CanonicalJSON.deep_freeze(CanonicalJSON.normalize(annotations))
+          canonicalize(annotations)
         end
 
         def build_entry(name, kind, description, schema, annotations)

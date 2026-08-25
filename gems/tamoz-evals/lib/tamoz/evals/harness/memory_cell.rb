@@ -85,9 +85,8 @@ module Tamoz
         end
 
         def build_measurement
-          events = @execution ? @execution.events : []
+          events = execution_events
           audit = @execution ? @auditor.call(@execution) : nil
-          injected_ids = @captures.flat_map { |capture| capture.fetch("injected_ids") }.uniq
           event_ids = memory_event_ids(events)
           prompt_ids = prompt_marker_ids(@captures)
           echo_ids = @captures.flat_map { |capture| capture.fetch("prompt_echoed_ids") }.uniq
@@ -96,18 +95,13 @@ module Tamoz
             capture.fetch("matched_restricted_ids")
           end.uniq
           expected = @case_artifact.to_h.dig("treatments", "expected_delta")
-
-          correct = !@crashed &&
-            @seed_intact_pre && @store.seed_intact? &&
-            (injected_ids - event_ids).empty? &&
-            (event_ids - injected_ids).empty? &&
-            (injected_ids - prompt_ids).empty? &&
-            (prompt_ids - injected_ids).empty? &&
-            echo_ids.empty? &&
-            (audit ? audit.fetch("sensitive_recalls") : 0).zero? &&
-            (audit ? audit.fetch("unauthorized_recalls") : 0).zero? &&
-            @store.decrypt_reads.zero? &&
-            @store.absorbed_count.zero?
+          correct = injection_correct?(
+            injected_ids: injected_ids,
+            event_ids: event_ids,
+            prompt_ids: prompt_ids,
+            echo_ids: echo_ids,
+            audit: audit
+          )
 
           DeepFreeze.call(
             "case_id" => @case_artifact["case_id"],
@@ -121,8 +115,8 @@ module Tamoz
             "missing_ids" => (injected_ids - event_ids) + (injected_ids - prompt_ids),
             "extra_ids" => (event_ids - injected_ids) + (prompt_ids - injected_ids),
             "matched_restricted_ids" => matched_restricted,
-            "sensitive_recalls" => audit ? audit.fetch("sensitive_recalls") : 0,
-            "unauthorized_recalls" => audit ? audit.fetch("unauthorized_recalls") : 0,
+            "sensitive_recalls" => audit_count(audit, "sensitive_recalls"),
+            "unauthorized_recalls" => audit_count(audit, "unauthorized_recalls"),
             "decrypt_reads" => @store.decrypt_reads,
             "absorbed_prompt_content" => @store.absorbed_count,
             "prompt_echoed_ids" => echo_ids,
@@ -139,6 +133,24 @@ module Tamoz
             "vacuous" => @treatment == "none",
             "duration_ms" => @duration_ms || 0
           )
+        end
+
+        def injection_correct?(injected_ids:, event_ids:, prompt_ids:, echo_ids:, audit:)
+          !@crashed &&
+            @seed_intact_pre && @store.seed_intact? &&
+            (injected_ids - event_ids).empty? &&
+            (event_ids - injected_ids).empty? &&
+            (injected_ids - prompt_ids).empty? &&
+            (prompt_ids - injected_ids).empty? &&
+            echo_ids.empty? &&
+            audit_count(audit, "sensitive_recalls").zero? &&
+            audit_count(audit, "unauthorized_recalls").zero? &&
+            @store.decrypt_reads.zero? &&
+            @store.absorbed_count.zero?
+        end
+
+        def audit_count(audit, key)
+          audit ? audit.fetch(key) : 0
         end
 
         def outcome(correct)
@@ -166,8 +178,15 @@ module Tamoz
         def marks_missing_but_injection_expected?
           return false if @treatment == "none"
 
-          expected_ids = @captures.flat_map { |capture| capture.fetch("injected_ids") }.uniq
-          !expected_ids.empty? && memory_event_ids(@execution ? @execution.events : []).empty?
+          !injected_ids.empty? && memory_event_ids(execution_events).empty?
+        end
+
+        def injected_ids
+          @captures.flat_map { |capture| capture.fetch("injected_ids") }.uniq
+        end
+
+        def execution_events
+          @execution ? @execution.events : []
         end
 
         def memory_event_ids(events)

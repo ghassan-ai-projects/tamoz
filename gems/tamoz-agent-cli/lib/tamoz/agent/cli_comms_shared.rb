@@ -142,7 +142,7 @@ module Tamoz
       end
 
       def credential(descriptor)
-        name = descriptor.transport.fetch(:credential_ref).fetch(:name)
+        name = credential_name(descriptor)
         @env.fetch(name) do
           raise ArgumentError, "credential #{name.inspect} is not set in the environment"
         end

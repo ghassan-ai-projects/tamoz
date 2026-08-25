@@ -16,15 +16,13 @@ module Tamoz
     # rule set; splitting either would fragment the row the store persists.
     # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-    # The envelope is one validated value; the smells below are the
-    # per-field rule set and the fifteen facts a normalized update binds
-    # (design §6.2) — splitting them would fragment the row.
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:FeatureEnvy
     # :reek:NilCheck, :reek:DataClump
     class InboundEnvelope
       KINDS = %w[text command callback membership unsupported].freeze
       MAX_ID_BYTES = 256
+      MAX_ID_VALUE = 9_999_999_999_999_999
       MAX_TEXT_BYTES = 8192
       MAX_FIELD_BYTES = 4096
 
@@ -152,7 +150,7 @@ module Tamoz
         unless surface_revision.is_a?(Integer) && surface_revision.positive?
           raise ValidationError, 'surface_revision must be a positive integer'
         end
-        unless Shapes.bounded_integer?(update_id, max: 9_999_999_999_999_999)
+        unless Shapes.bounded_integer?(update_id, max: MAX_ID_VALUE)
           raise ValidationError, 'update_id must be a bounded integer'
         end
         raise ValidationError, 'raw_payload_hash must be a 64-char hex digest' unless Shapes.hex?(raw_payload_hash)
@@ -169,13 +167,13 @@ module Tamoz
                                            'telegram:supergroup:', 'telegram:channel:')
           raise ValidationError, 'conversation_id must be a bound telegram chat id'
         end
-        if !message_id.nil? && !Shapes.bounded_integer?(message_id, max: 9_999_999_999_999_999)
+        if !message_id.nil? && !Shapes.bounded_integer?(message_id, max: MAX_ID_VALUE)
           raise ValidationError, 'message_id must be a bounded integer'
         end
-        if !reply_to.nil? && !Shapes.bounded_integer?(reply_to, max: 9_999_999_999_999_999)
+        if !reply_to.nil? && !Shapes.bounded_integer?(reply_to, max: MAX_ID_VALUE)
           raise ValidationError, 'reply_to must be a bounded integer'
         end
-        if !callback_message_id.nil? && !Shapes.bounded_integer?(callback_message_id, max: 9_999_999_999_999_999)
+        if !callback_message_id.nil? && !Shapes.bounded_integer?(callback_message_id, max: MAX_ID_VALUE)
           raise ValidationError, 'callback_message_id must be a bounded integer'
         end
         if !callback_query_id.nil? && !Shapes.bounded_string?(callback_query_id, max_bytes: MAX_ID_BYTES)

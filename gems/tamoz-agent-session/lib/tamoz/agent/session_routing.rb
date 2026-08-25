@@ -7,7 +7,7 @@ module Tamoz
     # Owns the durable v2 intake route. The route decision is an ordinary journaled
     # model effect followed by a checkpointed route record, so a resumed thread never
     # asks the model to choose a different graph path.
-    # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists -- the route owns the ordered intake/review protocol and its durable records.
+    # rubocop:disable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity -- the route owns the ordered intake/review protocol and its durable records.
     class SessionRouting
       def initialize(services:)
         @services = services
@@ -33,26 +33,26 @@ module Tamoz
         decision = RoutingDecision.from(request, toolbox: @services.configuration.toolbox)
         route_decision(state, context, call, decision)
       rescue ProtocolError => e
-        fallback(state, raw_digest(call&.value), 'route_protocol_error', e.message)
+        fallback(raw_digest(call&.value), 'route_protocol_error', e.message)
       end
 
       private
 
       def route_decision(state, context, call, decision)
         if decision.direct_response?
-          return fallback(state, route_digest(decision), 'unsafe_direct_response') unless
+          return fallback(route_digest(decision), 'unsafe_direct_response') unless
             RequestRoute.self_contained_task?(state.fetch(:task))
 
           return direct_response(state, call, decision)
         end
 
-        plan_data, records = discovery_plan(state, decision)
-        return fallback_with_records(state, decision, records, 'discovery_plan_rejected') unless plan_data
+        plan_data, records = discovery_plan(decision)
+        return fallback_with_records(decision, records, 'discovery_plan_rejected') unless plan_data
 
         if decision.route == 'managed_action'
           review = discovery_semantic_review(state, context, plan_data)
           records << review[:record]
-          return fallback_with_records(state, decision, records, 'discovery_review_rejected') unless
+          return fallback_with_records(decision, records, 'discovery_review_rejected') unless
             review[:value].fetch('decision') == 'accept'
         end
 
@@ -72,7 +72,7 @@ module Tamoz
         )
       end
 
-      def discovery_plan(_state, decision)
+      def discovery_plan(decision)
         plan = decision.plan
         plan_hash = Deliberation.canonical(plan.to_h)
         plan_digest = SessionRecords.digest(plan_hash)
@@ -225,9 +225,8 @@ module Tamoz
         }
       end
 
-      def fallback(state, digest, reason, detail)
+      def fallback(digest, reason, detail)
         fallback_with_records(
-          state,
           nil,
           [],
           reason,
@@ -236,7 +235,7 @@ module Tamoz
         )
       end
 
-      def fallback_with_records(_state, decision, records, reason, route_digest: nil, detail: nil)
+      def fallback_with_records(decision, records, reason, route_digest: nil, detail: nil)
         decision ||= RoutingDecision.new(
           route: 'legacy_fallback',
           answer: nil,
@@ -280,7 +279,8 @@ module Tamoz
           route_digest: digest
         }
         fields[:plan_digest] = plan_digest if plan_digest
-        fields[:fallback] = fallback || decision.fallback if fallback || decision.fallback
+        fallback ||= decision.fallback
+        fields[:fallback] = fallback if fallback
         SessionRecords.build('route', **fields)
       end
 
@@ -296,7 +296,7 @@ module Tamoz
       def raw_digest(value)
         Digest::SHA256.hexdigest(String(value))
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity, Metrics/ParameterLists
+      # rubocop:enable Metrics/AbcSize, Metrics/ClassLength, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
     end
   end
 end

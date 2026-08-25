@@ -38,7 +38,7 @@ module Tamoz
           call.status == :succeeded
 
         update = verification_update(state, configuration, call, input.terminal_reason)
-        input.compaction && compaction_state_supported? ? update.merge(compactions: [input.compaction]) : update
+        compaction_applicable?(input) ? update.merge(compactions: [input.compaction]) : update
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- terminal assembly
@@ -149,6 +149,10 @@ module Tamoz
           ),
           call_index: 0
         )
+      end
+
+      def compaction_applicable?(input)
+        input.compaction && compaction_state_supported?
       end
 
       def compaction_state_supported?

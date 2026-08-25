@@ -59,10 +59,7 @@ module Tamoz
         def policy!(tools)
           policy = section('policy', POLICY_KEYS)
           validate_allow_changes!(policy, tools)
-          unless SAFETIES.include?(policy['default_check_safety'])
-            raise ValidationError, "#{@path}: policy.default_check_safety must be one of #{SAFETIES.inspect}"
-          end
-
+          validate_default_check_safety!(policy)
           validate_graph_version!(policy)
           validate_behavior_version!(policy)
           validate_catalog_digests!(policy)
@@ -94,6 +91,12 @@ module Tamoz
           return unless tools.fetch('allowed').intersect?(ACTION_TOOLS)
 
           raise ValidationError, "#{@path}: policy.allow_changes is false but action tools are allowed"
+        end
+
+        def validate_default_check_safety!(policy)
+          return if SAFETIES.include?(policy['default_check_safety'])
+
+          raise ValidationError, "#{@path}: policy.default_check_safety must be one of #{SAFETIES.inspect}"
         end
 
         def validate_graph_version!(policy)

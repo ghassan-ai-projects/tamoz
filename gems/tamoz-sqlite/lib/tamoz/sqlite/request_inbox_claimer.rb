@@ -217,7 +217,7 @@ module Tamoz
       # needed because an early turn is skipped and the claim must see what
       # waits behind it; the scan is bounded so a backed-up inbox never turns
       # the claim into a table walk.
-      def candidate_rows(tx, lease, limit: 8) # rubocop:disable Naming/MethodParameterName
+      def candidate_rows(tx, lease) # rubocop:disable Naming/MethodParameterName
         tx.rows(
           'request.claim.candidates',
           <<~SQL,
@@ -227,13 +227,13 @@ module Tamoz
             ORDER BY enqueue_sequence
             LIMIT ?
           SQL
-          [lease.thread_id, lease.namespace, limit]
+          [lease.thread_id, lease.namespace, 8]
         )
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- claim update and transition share one fence.
       def claim_queued_request!(tx, lease:, row:, execution_id:, now:)
-        binding = claim_binding(tx, lease:, operation: row.fetch(5), execution_id:)
+        claim = claim_binding(tx, lease:, operation: row.fetch(5), execution_id:)
         tx.execute(
           'request.claim.update',
           <<~SQL,
@@ -245,8 +245,8 @@ module Tamoz
               AND status = 'queued'
           SQL
           [
-            binding.status, binding.execution_id, binding.target_execution_id,
-            binding.cancellation_generation, lease.fence, now,
+            claim.status, claim.execution_id, claim.target_execution_id,
+            claim.cancellation_generation, lease.fence, now,
             lease.thread_id, lease.namespace, row.fetch(2)
           ]
         )
@@ -258,12 +258,12 @@ module Tamoz
           namespace: lease.namespace,
           request_id: row.fetch(2),
           from_status: 'queued',
-          to_status: binding.status,
+          to_status: claim.status,
           fence: lease.fence,
           evidence: {
             'kind' => 'claim',
-            'target_execution_id' => binding.target_execution_id,
-            'cancellation_generation' => binding.cancellation_generation
+            'target_execution_id' => claim.target_execution_id,
+            'cancellation_generation' => claim.cancellation_generation
           },
           now:
         )

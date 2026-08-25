@@ -68,7 +68,7 @@ module Tamoz
 
         def description(data)
           value = string!(data, 'description', required: true, limit: @limits.fetch(:max_description_bytes))
-          if value.match?(/[[:cntrl:]]/) && !value.match?(/\A[^\x00-\x08\x0B-\x1F\x7F]*\z/)
+          if value.match?(/[\x00-\x08\x0B-\x1F\x7F]/)
             reject!('skill_description_invalid', 'description contains control characters')
           end
 
@@ -116,7 +116,8 @@ module Tamoz
           unless KNOWN_EXTENSIONS.include?(key)
             reject!('skill_metadata_unknown_extension', "unknown extension key #{key}")
           end
-          return unless key == 'tamoz.risk' && !DECLARED_RISKS.include?(entry)
+          return unless key == 'tamoz.risk'
+          return if DECLARED_RISKS.include?(entry)
 
           reject!('skill_metadata_invalid', "tamoz.risk must be one of #{DECLARED_RISKS.join(', ')}")
         end

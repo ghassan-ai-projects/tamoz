@@ -23,9 +23,27 @@ module Tamoz
         RESTART_FIXTURE_MODE = '0644'
         RESTART_FIXTURE_DIGEST = Digest::SHA256.hexdigest(RESTART_FIXTURE_CONTENT)
 
+        # Envelope shared by every oracle result: metrics, hard-zero flags, reasons.
+        module OracleResult
+          private
+
+          def result(metrics:, hard_zero:, reasons:)
+            { 'metrics' => metrics, 'hard_zero' => hard_zero, 'hard_zero_reasons' => reasons }
+          end
+
+          def hard_zero_reason(name, status)
+            case status
+            when 'failed' then "hard_zero_failed:#{name}"
+            when 'unknown' then "hard_zero_unverifiable:#{name}"
+            end
+          end
+        end
+
         # Scores the contradiction from journaled tool and terminal evidence.
         class T3M1M2Oracle
           class << self
+            include OracleResult
+
             def call(evidence:, post_contradiction_digest:, stale_value:, second_observation_ref: nil)
               evidence = {} unless evidence.is_a?(Hash)
               second_ref = second_observation_ref || Array(evidence['observation_refs']).last
@@ -34,11 +52,11 @@ module Tamoz
               expected_digest = normalize_digest(post_contradiction_digest)
               recovery = recovery_metric(evidence, expected_digest, second_ref, verification_refs)
               false_success = false_success_status(evidence, stale_value)
-              {
-                'metrics' => { 'recovery' => recovery },
-                'hard_zero' => { 'false_success' => false_success },
-                'hard_zero_reasons' => hard_zero_reasons(false_success)
-              }
+              result(
+                metrics: { 'recovery' => recovery },
+                hard_zero: { 'false_success' => false_success },
+                reasons: hard_zero_reasons(false_success)
+              )
             end
 
             private
@@ -61,9 +79,11 @@ module Tamoz
             end
 
             def receipt_digest(receipt)
-              explicit = receipt['content_digest'] || receipt['observation_digest'] || receipt['digest']
-              return explicit if explicit
+              receipt['content_digest'] || receipt['observation_digest'] || receipt['digest'] ||
+                output_digest(receipt)
+            end
 
+            def output_digest(receipt)
               result = receipt['result']
               output = result.is_a?(Hash) ? result['output'] : receipt['output']
               return unless output.is_a?(String)
@@ -90,11 +110,7 @@ module Tamoz
             end
 
             def hard_zero_reasons(status)
-              case status
-              when 'failed' then ['hard_zero_failed:false_success']
-              when 'unknown' then ['hard_zero_unverifiable:false_success']
-              else []
-              end
+              [hard_zero_reason('false_success', status)].compact
             end
 
             def normalize_digest(value)
@@ -107,6 +123,8 @@ module Tamoz
         # Scores restart recovery from the final journal and receipt history.
         class T3M3M4Oracle
           class << self
+            include OracleResult
+
             def call(evidence:, pre_kill_effect_key:, restarted:)
               evidence = {} unless evidence.is_a?(Hash)
               history = effect_history(evidence)
@@ -116,17 +134,17 @@ module Tamoz
                 evidence, pre_kill_effect_key, keys, restarted
               )
               false_success = false_success_status(evidence)
-              {
-                'metrics' => {
+              result(
+                metrics: {
                   'recovery' => recovery,
                   'duplicate_effect_rate' => duplicate_effect_rate(keys)
                 },
-                'hard_zero' => {
+                hard_zero: {
                   'duplicate_effect' => duplicate_effect,
                   'false_success' => false_success
                 },
-                'hard_zero_reasons' => hard_zero_reasons(duplicate_effect, false_success)
-              }
+                reasons: hard_zero_reasons(duplicate_effect, false_success)
+              )
             end
 
             private
@@ -200,10 +218,8 @@ module Tamoz
 
             def hard_zero_reasons(duplicate_effect, false_success)
               [
-                ('hard_zero_failed:duplicate_effect' if duplicate_effect == 'failed'),
-                ('hard_zero_unverifiable:duplicate_effect' if duplicate_effect == 'unknown'),
-                ('hard_zero_failed:false_success' if false_success == 'failed'),
-                ('hard_zero_unverifiable:false_success' if false_success == 'unknown')
+                hard_zero_reason('duplicate_effect', duplicate_effect),
+                hard_zero_reason('false_success', false_success)
               ].compact
             end
           end
@@ -283,15 +299,12 @@ module Tamoz
           @adapter = adapter
           @scenario = self.class.definition(scenario)
           required = %i[prepare! result_for evidence_for thread_id_for enqueue! worker!]
-          required.push(:worker_until_effect!, :worker_subprocess!) if
-            @scenario.fetch('id') == RESTART_SCENARIO_ID
-          required.push(:prepare_changes!) if @scenario.fetch('id') == RESTART_SCENARIO_ID
+          required.push(:worker_until_effect!, :worker_subprocess!, :prepare_changes!) if restart_scenario?
           return if required.all? { |method| adapter.respond_to?(method) }
 
           raise ArgumentError, 'scenario adapter does not expose the durable session seams'
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity -- one executor transaction owns the two moments and final evidence join.
         def call(mission:, run_kind:, provider:, model:)
           return @adapter.call(mission:, run_kind:, provider:, model:) unless
             mission.fetch('id') == @scenario.fetch('mission_id')
@@ -300,36 +313,14 @@ module Tamoz
 
           provider = String(provider)
           model = String(model)
-          @adapter.prepare!(provider:, model:)
-          @adapter.prepare_changes! if restart_scenario?
-          materialize_fixture
+          prepare_run(provider:, model:)
           thread = @adapter.thread_id_for(mission.fetch('id'))
-          pre_kill_effect_key = if restart_scenario?
-                                  drive_restart(thread:, provider:, model:, goal: mission.fetch('goal'))
-                                else
-                                  drive(thread:, provider:, model:, goal: mission.fetch('goal'))
-                                end
-          evidence = @adapter.evidence_for(thread:, provider:, model:)
-          oracle_arguments = if restart_scenario?
-                               { evidence:, pre_kill_effect_key:, restarted: true }
-                             else
-                               {
-                                 evidence:,
-                                 post_contradiction_digest: contradicted_digest,
-                                 stale_value: INITIAL_STATUS
-                               }
-                             end
-          oracle = self.class.oracle(scenario_id: @scenario.fetch('id'), **oracle_arguments)
-          @adapter.result_for(
-            mission:, provider:, model:, thread:, evidence:,
-            hard_zero_overrides: oracle.fetch('hard_zero'),
-            hard_zero_reasons: oracle.fetch('hard_zero_reasons'),
-            metric_overrides: oracle.fetch('metrics')
-          )
+          pre_kill_effect_key =
+            drive_scenario(thread:, provider:, model:, goal: mission.fetch('goal'))
+          scored_result(mission:, provider:, model:, thread:, pre_kill_effect_key:)
         rescue Tamoz::Evals::ExecutionError => e
           blocked_result(mission, e.message)
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/PerceivedComplexity
 
         private
 
@@ -342,18 +333,24 @@ module Tamoz
           File.join(@adapter.workspace, relative_path)
         end
 
-        def materialize_fixture
+        def prepare_fixture
           FileUtils.mkdir_p(File.dirname(fixture_path))
-          return write_fixture(definition.fetch('setup').fetch('fixture').fetch('status')) unless
-            restart_scenario?
+          return write_status_fixture unless restart_scenario?
 
+          prepare_restart_fixture
+        end
+
+        def write_status_fixture
+          write_fixture(definition.fetch('setup').fetch('fixture').fetch('status'))
+        end
+
+        def prepare_restart_fixture
           remove_owned_restart_fixture
           raise Tamoz::Evals::ExecutionError, 'restart_fixture_already_exists' if
             File.exist?(fixture_path) || File.symlink?(fixture_path)
         end
 
-        # The fixed restart path is part of the scenario contract. Exact known
-        # bytes and digest are the ownership marker; mismatches and symlinks stay protected.
+        # Exact known bytes are the ownership marker; anything else stays protected.
         def remove_owned_restart_fixture
           return if File.symlink?(fixture_path)
           return unless File.file?(fixture_path)
@@ -363,9 +360,7 @@ module Tamoz
         end
 
         def restart_fixture_owned?
-          content = File.binread(fixture_path)
-          content == RESTART_FIXTURE_CONTENT &&
-            Digest::SHA256.hexdigest(content) == RESTART_FIXTURE_DIGEST
+          File.binread(fixture_path) == RESTART_FIXTURE_CONTENT
         rescue SystemCallError
           false
         end
@@ -405,12 +400,7 @@ module Tamoz
 
         def restart_task(goal, step)
           fixture = definition.fetch('setup').fetch('fixture')
-          arguments = JSON.generate(
-            'path' => fixture.fetch('path'),
-            'content' => fixture.fetch('content'),
-            'expected_sha256' => fixture.fetch('expected_sha256'),
-            'mode' => fixture.fetch('mode')
-          )
+          arguments = JSON.generate(fixture)
           "#{goal}\n\n#{step.fetch('task')} Use these exact create_file arguments: #{arguments}."
         end
 
@@ -421,6 +411,40 @@ module Tamoz
         def enqueue_and_work(thread:, provider:, model:, task:)
           @adapter.enqueue!(thread, task, provider:, model:)
           @adapter.worker!(provider:, model:)
+        end
+
+        def prepare_run(provider:, model:)
+          @adapter.prepare!(provider:, model:)
+          @adapter.prepare_changes! if restart_scenario?
+          prepare_fixture
+        end
+
+        def drive_scenario(thread:, provider:, model:, goal:)
+          if restart_scenario?
+            drive_restart(thread:, provider:, model:, goal:)
+          else
+            drive(thread:, provider:, model:, goal:)
+          end
+        end
+
+        def scored_result(mission:, provider:, model:, thread:, pre_kill_effect_key:)
+          evidence = @adapter.evidence_for(thread:, provider:, model:)
+          arguments = oracle_arguments(evidence:, pre_kill_effect_key:)
+          oracle = self.class.oracle(scenario_id: @scenario.fetch('id'), **arguments)
+          @adapter.result_for(
+            mission:, provider:, model:, thread:, evidence:,
+            hard_zero_overrides: oracle.fetch('hard_zero'),
+            hard_zero_reasons: oracle.fetch('hard_zero_reasons'),
+            metric_overrides: oracle.fetch('metrics')
+          )
+        end
+
+        def oracle_arguments(evidence:, pre_kill_effect_key:)
+          if restart_scenario?
+            { evidence:, pre_kill_effect_key:, restarted: true }
+          else
+            { evidence:, post_contradiction_digest: contradicted_digest, stale_value: INITIAL_STATUS }
+          end
         end
 
         def blocked_result(mission, reason)

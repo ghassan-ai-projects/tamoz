@@ -7,7 +7,7 @@ module Tamoz
     # The bounded, read-only continuation branch of the durable Session graph.
     # Every model and capability boundary remains owned by SessionEffects; this
     # collaborator only validates protocol data and returns checkpoint updates.
-    # rubocop:disable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/ParameterLists -- graph-node methods keep each durable transition visible and ordered.
+    # rubocop:disable Metrics/ClassLength, Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/ParameterLists
     # The graph-node methods keep each durable transition visible and ordered;
     # splitting one transition across helper objects would obscure its checkpoint
     # boundary and make the protocol harder to audit.
@@ -66,20 +66,11 @@ module Tamoz
         record = decision_record(decision, iteration, digest)
         case decision.fetch(:decision)
         when 'final'
-          update = final_update(state, decision, digest, record).merge(lifecycle_events: [model_event])
+          update = final_update(state, decision, record).merge(lifecycle_events: [model_event])
           update.merge(compaction_update(prepared))
         when 'action'
-          {
-            adaptive_action: {
-              'capability_id' => decision.fetch(:capability_id),
-              'arguments' => decision.fetch(:arguments),
-              'decision_digest' => digest,
-              'iteration' => iteration
-            },
-            adaptive_decisions: [record],
-            lifecycle_events: [model_event],
-            next_node: 'adaptive_validate'
-          }.merge(compaction_update(prepared))
+          accepted_action_update(decision, digest, record, model_event, iteration)
+            .merge(compaction_update(prepared))
         end
       rescue ProtocolError, SensitiveValueError => e
         invalid_decision_update(state, e.message).merge(
@@ -96,7 +87,6 @@ module Tamoz
         action = state.fetch(:adaptive_action)
         capability_id = action.fetch('capability_id')
         arguments = action.fetch('arguments')
-        iteration = action.fetch('iteration')
 
         return terminal_update('adaptive_authority_field') if authority_field?(arguments)
 
@@ -116,33 +106,7 @@ module Tamoz
         return terminal_update('adaptive_repeated_action') if
           state.fetch(:adaptive_seen_actions).include?(signature)
 
-        accepted = {
-          'plan_id' => "adaptive.#{iteration}",
-          'plan_digest' => action.fetch('decision_digest')
-        }
-        step = {
-          'id' => "adaptive.#{iteration}",
-          'tool' => capability_id,
-          'arguments' => arguments
-        }
-        intent = @services.effects.build_intent(
-          step,
-          accepted,
-          arguments,
-          iteration:,
-          sub_operation: 1
-        )
-        {
-          effect_intents: [intent],
-          adaptive_seen_actions: [signature],
-          lifecycle_events: [
-            lifecycle_event(
-              state, context, 'tool_started', effect_state: 'prepared',
-                                              capability_id:, iteration:, sub_operation: 1
-            )
-          ],
-          next_node: 'adaptive_dispatch'
-        }
+        prepared_step_update(state, context, action, signature)
       rescue ToolError => e
         terminal_update('adaptive_invalid_action', detail: e.message)
       end
@@ -150,7 +114,7 @@ module Tamoz
       def dispatch(state, context)
         action = state.fetch(:adaptive_action)
         intent = state.fetch(:effect_intents).reverse.find do |record|
-          record.fetch('step_id') == "adaptive.#{action.fetch('iteration')}"
+          record.fetch('step_id') == adaptive_step_id(action.fetch('iteration'))
         end
         raise ToolError, 'adaptive effect intent is missing' unless intent
 
@@ -167,22 +131,7 @@ module Tamoz
           sub_operation: 1
         )
         if %i[unknown wait].include?(outcome.status)
-          update = @services.evidence.blocked_update(
-            outcome,
-            'adaptive effect outcome is unknown',
-            step_id: step.fetch('id'),
-            operation: intent.fetch('operation')
-          )
-          return update.merge(
-            lifecycle_events: [
-              lifecycle_event(
-                state, context, 'tool_result', effect_state: outcome.status.to_s,
-                                               effect_key: outcome.effect_key, attempt_number: outcome.attempt_number,
-                                               capability_id: step.fetch('tool'), iteration: action.fetch('iteration'),
-                                               sub_operation: 1
-              )
-            ]
-          )
+          return blocked_dispatch_update(state, context, action, intent, outcome)
         end
 
         return failed_update(state, context, action, intent, outcome) unless outcome.status == :succeeded
@@ -192,26 +141,16 @@ module Tamoz
         actual_bytes = output.bytesize
         remaining = [SessionNodes::MAX_OBSERVATION_BYTES - @services.evidence.observation_bytes(state), 0].max
         bounded_output = output.byteslice(0, remaining).to_s
-        if remaining.zero? && actual_bytes.positive?
-          return {
-            effect_receipts: [receipt(intent, outcome)],
-            terminal_reason: 'adaptive_observation_budget_exhausted',
-            lifecycle_events: [
-              lifecycle_event(
-                state, context, 'tool_result', effect_state: 'budget_exhausted',
-                                               effect_key: outcome.effect_key, attempt_number: outcome.attempt_number,
-                                               capability_id: step.fetch('tool'), truncated: true,
-                                               iteration: action.fetch('iteration'), sub_operation: 1
-              )
-            ],
-            next_node: 'terminal'
-          }
-        end
+        return budget_exhausted_update(state, context, action, intent, outcome) if
+          remaining.zero? && actual_bytes.positive?
+
+        truncated = value.fetch('truncated', false)
+        provenance = value.fetch('provenance', 'workspace')
         pending = {
           'output' => bounded_output,
           'output_bytes' => actual_bytes,
-          'truncated' => value.fetch('truncated', false) || bounded_output.bytesize < actual_bytes,
-          'provenance' => value.fetch('provenance', 'workspace'),
+          'truncated' => truncated || bounded_output.bytesize < actual_bytes,
+          'provenance' => provenance,
           'source_id' => value['source_id'],
           'effect_key' => outcome.effect_key,
           'attempt_number' => outcome.attempt_number,
@@ -229,8 +168,7 @@ module Tamoz
               state, context, 'tool_result', effect_state: outcome.status.to_s,
                                              effect_key: outcome.effect_key, attempt_number: outcome.attempt_number,
                                              capability_id: step.fetch('tool'), source_id: value['source_id'],
-                                             provenance: value.fetch('provenance', 'workspace'),
-                                             truncated: value.fetch('truncated', false),
+                                             provenance:, truncated:,
                                              iteration: action.fetch('iteration'), sub_operation: 1
             )
           ],
@@ -285,18 +223,7 @@ module Tamoz
         allowed = effects.allowed_tool_names(:discovery)
         descriptions = @services.configuration.toolbox.descriptions.slice(*allowed)
         descriptions = descriptions.merge(effects.mcp_planning_surface(allowed))
-        observations = state.fetch(:observations).filter_map do |record|
-          next unless record['phase'] == 'adaptive_read_only'
-
-          {
-            'evidence_ref' => record['evidence_ref'],
-            'capability_id' => record['tool'],
-            'output' => record['output'],
-            'provenance' => record['provenance'],
-            'truncated' => record['truncated'],
-            'output_bytes' => record['output_bytes']
-          }
-        end
+        observations = adaptive_observations(state)
         compaction = { effects:, durable_context: }
         compacted = @services.planning_context.compact_for(
           state,
@@ -315,6 +242,21 @@ module Tamoz
           ),
           compaction: compacted.record
         )
+      end
+
+      def adaptive_observations(state)
+        state.fetch(:observations).filter_map do |record|
+          next unless record['phase'] == 'adaptive_read_only'
+
+          {
+            'evidence_ref' => record['evidence_ref'],
+            'capability_id' => record['tool'],
+            'output' => record['output'],
+            'provenance' => record['provenance'],
+            'truncated' => record['truncated'],
+            'output_bytes' => record['output_bytes']
+          }
+        end
       end
 
       def compaction_update(prompt)
@@ -363,7 +305,21 @@ module Tamoz
         SessionRecords.build('adaptive_decision', **fields)
       end
 
-      def final_update(state, decision, _digest, record)
+      def accepted_action_update(decision, digest, record, model_event, iteration)
+        {
+          adaptive_action: {
+            'capability_id' => decision.fetch(:capability_id),
+            'arguments' => decision.fetch(:arguments),
+            'decision_digest' => digest,
+            'iteration' => iteration
+          },
+          adaptive_decisions: [record],
+          lifecycle_events: [model_event],
+          next_node: 'adaptive_validate'
+        }
+      end
+
+      def final_update(state, decision, record)
         refs = decision.fetch(:evidence_refs)
         known = state.fetch(:observations).filter_map { |observation| observation['evidence_ref'] }
         return invalid_decision_update(state, 'final evidence_refs do not cite observations') unless
@@ -404,12 +360,33 @@ module Tamoz
         }
       end
 
+      def prepared_step_update(state, context, action, signature)
+        iteration = action.fetch('iteration')
+        capability_id = action.fetch('capability_id')
+        arguments = action.fetch('arguments')
+        step_id = adaptive_step_id(iteration)
+        accepted = { 'plan_id' => step_id, 'plan_digest' => action.fetch('decision_digest') }
+        step = { 'id' => step_id, 'tool' => capability_id, 'arguments' => arguments }
+        intent = @services.effects.build_intent(step, accepted, arguments, iteration:, sub_operation: 1)
+        {
+          effect_intents: [intent],
+          adaptive_seen_actions: [signature],
+          lifecycle_events: [
+            lifecycle_event(
+              state, context, 'tool_started', effect_state: 'prepared',
+                                              capability_id:, iteration:, sub_operation: 1
+            )
+          ],
+          next_node: 'adaptive_dispatch'
+        }
+      end
+
       def handoff_update(state, action, context:)
         observation = SessionRecords.build(
           'observation',
           phase: 'adaptive_read_only',
           repair_attempt: 0,
-          step_id: "adaptive.handoff.#{action.fetch('iteration')}",
+          step_id: "#{adaptive_step_id(action.fetch('iteration'))}.handoff",
           output: 'Adaptive read-only mode handed the request to the reviewed planner.',
           tool: action.fetch('capability_id'),
           result_class: 'mutation_handoff',
@@ -425,6 +402,41 @@ module Tamoz
             )
           ],
           next_node: 'deliberate'
+        }
+      end
+
+      def blocked_dispatch_update(state, context, action, intent, outcome)
+        update = @services.evidence.blocked_update(
+          outcome,
+          'adaptive effect outcome is unknown',
+          step_id: intent.fetch('step_id'),
+          operation: intent.fetch('operation')
+        )
+        update.merge(
+          lifecycle_events: [
+            lifecycle_event(
+              state, context, 'tool_result', effect_state: outcome.status.to_s,
+                                             effect_key: outcome.effect_key, attempt_number: outcome.attempt_number,
+                                             capability_id: intent.fetch('tool'), iteration: action.fetch('iteration'),
+                                             sub_operation: 1
+            )
+          ]
+        )
+      end
+
+      def budget_exhausted_update(state, context, action, intent, outcome)
+        {
+          effect_receipts: [receipt(intent, outcome)],
+          terminal_reason: 'adaptive_observation_budget_exhausted',
+          lifecycle_events: [
+            lifecycle_event(
+              state, context, 'tool_result', effect_state: 'budget_exhausted',
+                                             effect_key: outcome.effect_key, attempt_number: outcome.attempt_number,
+                                             capability_id: intent.fetch('tool'), truncated: true,
+                                             iteration: action.fetch('iteration'), sub_operation: 1
+            )
+          ],
+          next_node: 'terminal'
         }
       end
 
@@ -478,6 +490,10 @@ module Tamoz
           iteration: intent.fetch('iteration'),
           sub_operation: intent.fetch('sub_operation')
         )
+      end
+
+      def adaptive_step_id(iteration)
+        "adaptive.#{iteration}"
       end
 
       def action_signature(capability_id, arguments)

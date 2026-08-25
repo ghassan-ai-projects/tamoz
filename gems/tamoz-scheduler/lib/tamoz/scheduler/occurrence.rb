@@ -65,7 +65,9 @@ module Tamoz
       # --- transitions (closed; each returns a NEW value) ------------------
 
       def claimed(fence:, owner:, now:)
-        transition(:claimed, fence:, owner:, now:)
+        raise SchedulerError, "occurrence #{occurrence_id} is #{state}" unless state == :due
+
+        with_state(:claimed, now:, fence:, owner:)
       end
 
       def enqueued(fence:, now:)
@@ -132,12 +134,6 @@ module Tamoz
 
       private
 
-      def transition(to, fence:, owner: nil, now:)
-        raise SchedulerError, "occurrence #{occurrence_id} is #{state}" unless state == :due
-
-        with_state(to, now:, fence:, owner:)
-      end
-
       def transition_from_running(to, execution_id, evidence, now)
         unless state == :running
           raise SchedulerError,
@@ -159,18 +155,22 @@ module Tamoz
         unless STATES.include?(state)
           raise SchedulerError, "unknown occurrence state #{state.inspect}"
         end
-        unless nominal_fire_at_utc.is_a?(Integer) && nominal_fire_at_utc.positive?
-          raise SchedulerError, "nominal_fire_at_utc must be a positive UTC epoch second"
-        end
+
+        validate_time!(nominal_fire_at_utc, "nominal_fire_at_utc")
         unless not_before.is_a?(Integer) && not_before >= nominal_fire_at_utc
           raise SchedulerError, "not_before must not precede the nominal instant"
         end
-        unless created_at.is_a?(Integer) && created_at.positive?
-          raise SchedulerError, "created_at must be a positive UTC epoch second"
-        end
+
+        validate_time!(created_at, "created_at")
         unless updated_at.is_a?(Integer) && updated_at >= created_at
           raise SchedulerError, "updated_at must not precede created_at"
         end
+      end
+
+      def validate_time!(value, name)
+        return if value.is_a?(Integer) && value.positive?
+
+        raise SchedulerError, "#{name} must be a positive UTC epoch second"
       end
     end
   end

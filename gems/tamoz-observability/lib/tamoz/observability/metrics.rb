@@ -20,8 +20,8 @@ module Tamoz
       def initialize(catalog: Catalog, max_series: DEFAULT_MAX_SERIES,
                      max_histogram_samples: DEFAULT_MAX_HISTOGRAM_SAMPLES)
         @catalog = catalog
-        @max_series = positive_integer(max_series, :max_series)
-        @max_histogram_samples = positive_integer(max_histogram_samples, :max_histogram_samples)
+        @max_series = validate_positive_integer!(max_series, :max_series)
+        @max_histogram_samples = validate_positive_integer!(max_histogram_samples, :max_histogram_samples)
         @counters = Hash.new(0)
         @gauges = {}
         @histograms = Hash.new { |hash, key| hash[key] = [] }
@@ -207,7 +207,7 @@ module Tamoz
         raise ValidationError, "#{name}: metric series limit reached"
       end
 
-      def positive_integer(value, name)
+      def validate_positive_integer!(value, name)
         return value if value.is_a?(Integer) && value.positive?
 
         raise ValidationError, "#{name} must be positive"

@@ -54,7 +54,7 @@ module Tamoz
         # translated into a typed profile error, so no errno detail leaks.
         def open_verified(permissions: true)
           File.open(@path, File::RDONLY | NOFOLLOW | NONBLOCK) do |handle|
-            raise PermissionError, "#{@path}: profile must be a regular file" unless handle.stat.file?
+            refuse_non_regular_file!(handle.stat)
 
             verify_handle!(handle) if permissions
             yield handle
@@ -102,9 +102,15 @@ module Tamoz
           raise ValidationError, "#{@path}: profile is not valid UTF-8"
         end
 
+        def refuse_non_regular_file!(stat)
+          return if stat.file?
+
+          raise PermissionError, "#{@path}: profile must be a regular file"
+        end
+
         def verify_handle!(handle)
           stat = handle.stat
-          raise PermissionError, "#{@path}: profile must be a regular file" unless stat.file?
+          refuse_non_regular_file!(stat)
           raise PermissionError, "#{@path}: profile must be owned by the effective user" unless stat.owned?
           raise PermissionError, "#{@path}: profile mode must be exactly 0600" unless (stat.mode & 0o777) == 0o600
 

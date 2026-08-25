@@ -67,9 +67,9 @@ module Tamoz
         base = (state || ZERO).dup
         base["model_calls_used"] = base.fetch("model_calls_used", 0).to_i + 1
         add_available_usage(base, usage)
-        check_input_tokens!(base)
-        check_output_tokens!(base)
-        check_cost!(base)
+        enforce_input_token_budget!(base)
+        enforce_output_token_budget!(base)
+        enforce_cost_budget!(base)
         base
       end
 
@@ -79,7 +79,7 @@ module Tamoz
         base["tool_calls_used"] = base.fetch("tool_calls_used", 0).to_i + 1
         bytes = Integer(projection.fetch("result_bytes", 0))
         base["tool_result_bytes_used"] = base.fetch("tool_result_bytes_used", 0).to_i + bytes
-        check_tool_bytes!(base)
+        enforce_tool_result_byte_budget!(base)
         base
       end
 
@@ -93,7 +93,7 @@ module Tamoz
         base["cost_microunits"] = base.fetch("cost_microunits", 0).to_i + usage.cost_microunits
       end
 
-      def check_input_tokens!(base)
+      def enforce_input_token_budget!(base)
         max = @budget["max_input_tokens"]
         return if max.nil? || max.to_i <= 0
 
@@ -102,7 +102,7 @@ module Tamoz
         end
       end
 
-      def check_output_tokens!(base)
+      def enforce_output_token_budget!(base)
         max = @budget["max_output_tokens"]
         return if max.nil? || max.to_i <= 0
 
@@ -111,7 +111,7 @@ module Tamoz
         end
       end
 
-      def check_cost!(base)
+      def enforce_cost_budget!(base)
         max = @budget["max_cost_microunits"]
         return if max.nil? || max.to_i <= 0
 
@@ -120,7 +120,7 @@ module Tamoz
         end
       end
 
-      def check_tool_bytes!(base)
+      def enforce_tool_result_byte_budget!(base)
         max = @budget["max_total_tool_result_bytes"]
         return if max.nil? || max.to_i <= 0
 

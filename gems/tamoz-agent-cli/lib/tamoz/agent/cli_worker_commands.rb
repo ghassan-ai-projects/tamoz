@@ -108,22 +108,26 @@ module Tamoz
           entries = Tamoz::Observability::Recorder::Journal.read_entries(
             directory, thread_id:, kind:, since_ms:
           )
-          entries.each do |document, identity|
-            next if seen[identity]
-
-            if options[:json]
-              @out.puts JSON.generate(document)
-            else
-              @out.puts format_observation(document)
-            end
-            seen[identity] = true
-          end
+          render_new_observations(entries, seen, options)
           @out.flush
           break unless follow
 
           sleep 0.2
         end
         0
+      end
+
+      def render_new_observations(entries, seen, options)
+        entries.each do |document, identity|
+          next if seen[identity]
+
+          if options[:json]
+            @out.puts JSON.generate(document)
+          else
+            @out.puts render_observation(document)
+          end
+          seen[identity] = true
+        end
       end
 
       def observe_metrics(options, argv)
@@ -143,58 +147,62 @@ module Tamoz
         0
       end
 
-      # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
       def observe_doctor(options, argv)
         OptionParser.new do |value|
           value.banner = "Usage: tamoz observe doctor"
           accept_json(value, options)
         end.parse!(argv)
-        directory = runtime_dir_path(options)
+        render_doctor_outcome(doctor_redaction_report(runtime_dir_path(options)), options)
+      rescue Tamoz::SensitiveValueError
+        render_doctor_outcome({"ok" => false, "redaction" => false}, options)
+      end
+
+      def doctor_redaction_report(directory)
         recorder = Tamoz::Observability::Recorder::Journal.new(directory:, role: "doctor", max_file_bytes: 1_024)
         producer = Tamoz::Observability::Producer.new(recorder:)
         secret = Tamoz::Secret.new("doctor-secret")
         token = "doctor-token-shaped-value"
-        secret_result = producer.emit(
-          "tamoz.worker.error", attributes: {reason: "doctor"},
-                                content: {error_detail: {"secret" => secret}}
-        )
-        token_result = producer.emit(
-          "tamoz.worker.error", attributes: {reason: "doctor"},
-                                content: {error_detail: {"token" => token}}
-        )
+        secret_result = producer.emit("tamoz.worker.error", attributes: {reason: "doctor"},
+                                                            content: {error_detail: {"secret" => secret}})
+        token_result = producer.emit("tamoz.worker.error", attributes: {reason: "doctor"},
+                                                           content: {error_detail: {"token" => token}})
         recorder.flush(deadline_ms: 1_000)
         body = File.exist?(recorder.path) ? File.read(recorder.path) : ""
         recorder.close
         clean = !body.include?(secret.reveal) && !body.include?(token)
-        document = {
+        {
           "ok" => clean && secret_result == :dropped && token_result == :recorded,
           "redaction" => clean,
           "policy_digest" => Tamoz::Observability::ContentPolicy::NONE.digest,
           "health" => recorder.health
         }
+      end
+
+      def render_doctor_outcome(document, options)
         if options[:json]
           @out.puts(JSON.generate(document))
         else
           @out.puts("observability doctor: #{document.fetch("ok") ? "ok" : "failed"}")
         end
         document.fetch("ok") ? 0 : 1
-      rescue Tamoz::SensitiveValueError
-        if options[:json]
-          @out.puts(JSON.generate("ok" => false,
-                                  "redaction" => false))
-        else
-          @out.puts("observability doctor: failed")
-        end
-        1
       end
-      # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
-      def format_observation(document)
+      def render_observation(document)
         correlation = document.fetch("correlation", {}).map { |key, value| "#{key}=#{value}" }.join(" ")
         "#{document.fetch("observed_at_ms")} #{document.fetch("name")} #{correlation}".strip
       end
 
       def queue_add(options, argv)
+        task, profile_id, thread_id = parse_queue_add_options(options, argv)
+        task ||= argv.join(" ").strip
+        raise OptionParser::MissingArgument, "--task" if task.to_s.empty?
+
+        with_worker_runtime(options) do |runtime|
+          submit_queued_request(runtime, task:, profile_id:, thread_id:, json: options[:json])
+        end
+      end
+
+      def parse_queue_add_options(options, argv)
         task = nil
         profile_id = nil
         thread_id = nil
@@ -205,32 +213,32 @@ module Tamoz
           value.on("--profile ID", "Trusted profile id from the runtime directory") { |entry| profile_id = entry }
           value.on("--thread NAME", "Thread to run on (default: generated)") { |entry| thread_id = entry }
         end.parse!(argv)
-        task ||= argv.join(" ").strip
-        raise OptionParser::MissingArgument, "--task" if task.to_s.empty?
+        [task, profile_id, thread_id]
+      end
 
-        with_worker_runtime(options) do |runtime|
-          # A named profile must exist NOW, at submission, so a queued request can
-          # never be a request to run under authority nobody defined.
-          runtime.profile(profile_id) if profile_id
+      # :reek:ControlParameter
+      def submit_queued_request(runtime, task:, profile_id:, thread_id:, json:)
+        # A named profile must exist NOW, at submission, so a queued request can
+        # never be a request to run under authority nobody defined.
+        runtime.profile(profile_id) if profile_id
 
-          thread = thread_id || generate_thread_id
-          request_id = SecureRandom.uuid
+        thread = thread_id || generate_thread_id
+        request_id = SecureRandom.uuid
 
-          # Authority is bound to the thread before the work is visible to a
-          # worker, so there is no window in which a claimable request exists
-          # without the profile that governs it.
-          runtime.bind_thread_profile(thread, profile_id)
-          runtime.session_for_profile(profile_id).app.durable_runner.submit(
-            {"task" => task}, thread:, request_id:, operation: :turn, delivery: :queue
-          )
+        # Authority is bound to the thread before the work is visible to a
+        # worker, so there is no window in which a claimable request exists
+        # without the profile that governs it.
+        runtime.bind_thread_profile(thread, profile_id)
+        runtime.session_for_profile(profile_id).app.durable_runner.submit(
+          {"task" => task}, thread:, request_id:, operation: :turn, delivery: :queue
+        )
 
-          if options[:json]
-            @out.puts JSON.generate("thread" => thread, "request_id" => request_id, "status" => "queued")
-          else
-            @out.puts "Queued #{request_id} on #{thread}"
-          end
-          0
+        if json
+          @out.puts JSON.generate("thread" => thread, "request_id" => request_id, "status" => "queued")
+        else
+          @out.puts "Queued #{request_id} on #{thread}"
         end
+        0
       end
 
       def queue_list(options, argv)
@@ -263,6 +271,32 @@ module Tamoz
       # nothing, and writes its events to stdout, so launchd/systemd/Docker can
       # own its lifecycle the way they own any other process.
       def cmd_worker(options, argv)
+        worker_options = parse_worker_options(argv, options)
+
+        with_worker_runtime(options) do |runtime|
+          recorder = observability_recorder(runtime)
+          worker = Worker.new(
+            runtime:,
+            session_builder: ->(thread_id) { runtime.session_for(thread_id) },
+            emitter: worker_emitter(options),
+            **worker_options,
+            recorder:
+          )
+          # SIGINT/SIGTERM ask the worker to stop claiming and finish what it
+          # has. Trap.install defers each request to a thread (`stop!` takes a
+          # mutex, illegal to touch directly in trap context), restores the
+          # previous handlers on the way out, and carries the exit codes.
+          stop = ->(reason) { worker.stop!(reason) }
+          Cancellation::Trap.install(int: stop, term: stop) do
+            worker.run
+          ensure
+            recorder.close if recorder.respond_to?(:close)
+          end
+          EXIT_WORKER_STOPPED
+        end
+      end
+
+      def parse_worker_options(argv, options)
         once = false
         concurrency = Worker::DEFAULT_CONCURRENCY
         poll_interval = Worker::DEFAULT_POLL_INTERVAL
@@ -277,27 +311,7 @@ module Tamoz
             poll_interval = entry
           end
         end.parse!(argv)
-
-        with_worker_runtime(options) do |runtime|
-          recorder = observability_recorder(runtime)
-          worker = Worker.new(
-            runtime:,
-            session_builder: ->(thread_id) { runtime.session_for(thread_id) },
-            emitter: worker_emitter(options),
-            once:, concurrency:, poll_interval:, recorder:
-          )
-          # SIGINT/SIGTERM ask the worker to stop claiming and finish what it
-          # has. Trap.install defers each request to a thread (`stop!` takes a
-          # mutex, illegal to touch directly in trap context), restores the
-          # previous handlers on the way out, and carries the exit codes.
-          stop = ->(reason) { worker.stop!(reason) }
-          Cancellation::Trap.install(int: stop, term: stop) do
-            worker.run
-          ensure
-            recorder.close if recorder.respond_to?(:close)
-          end
-          EXIT_WORKER_STOPPED
-        end
+        {once:, concurrency:, poll_interval:}
       end
 
       # `tamoz status [--json]` — what an operator needs to know without a UI.
@@ -321,9 +335,6 @@ module Tamoz
         end
       end
 
-      # Declared in SUBCOMMANDS so the surface is honest about what is coming, and
-      # implemented in the slices that follow. A clear "not built yet" beats a
-      # NoMethodError, and beats a command that silently does nothing.
       # `tamoz approve REQUEST_ID [--deny]` — the human half of unattended work.
       #
       # This records a DECISION; it does not execute anything. The worker picks it
@@ -337,22 +348,7 @@ module Tamoz
       # recorded now can never answer a different question in the same occurrence
       # (design §9).
       def cmd_approve(options, argv)
-        deny = false
-        reload_path = nil
-        mode = nil
-        thread_id = nil
-        parser = OptionParser.new do |value|
-          value.banner = "Usage: tamoz approve REQUEST_ID [--deny] | tamoz approve --reload POLICY_PATH | " \
-                         "tamoz approve --mode NAME --thread ID"
-          accept_json(value, options)
-          value.on("--deny", "Refuse the request instead of granting it") { deny = true }
-          value.on("--reload PATH", "Validate a policy document, then publish it to workers") { |candidate| reload_path = candidate }
-          value.on("--mode NAME", "Queue a mid-session approval-mode switch for the thread's profile lane") { |name| mode = name }
-          value.on("--thread ID", "Target thread of --mode") { |candidate| thread_id = candidate }
-        end
-        parser.order!(argv)
-        request_id = argv.shift
-        parser.parse!(argv)
+        request_id, reload_path, mode, thread_id, deny = parse_approval_target(argv, options)
 
         return approve_reload(options, reload_path) if reload_path
         return approve_mode_switch(options, mode, thread_id) if mode
@@ -371,6 +367,26 @@ module Tamoz
           report_decision(record, direction:, json: options[:json])
           0
         end
+      end
+
+      def parse_approval_target(argv, options)
+        deny = false
+        reload_path = nil
+        mode = nil
+        thread_id = nil
+        parser = OptionParser.new do |value|
+          value.banner = "Usage: tamoz approve REQUEST_ID [--deny] | tamoz approve --reload POLICY_PATH | " \
+                         "tamoz approve --mode NAME --thread ID"
+          accept_json(value, options)
+          value.on("--deny", "Refuse the request instead of granting it") { deny = true }
+          value.on("--reload PATH", "Validate a policy document, then publish it to workers") { |candidate| reload_path = candidate }
+          value.on("--mode NAME", "Queue a mid-session approval-mode switch for the thread's profile lane") { |name| mode = name }
+          value.on("--thread ID", "Target thread of --mode") { |candidate| thread_id = candidate }
+        end
+        parser.order!(argv)
+        request_id = argv.shift
+        parser.parse!(argv)
+        [request_id, reload_path, mode, thread_id, deny]
       end
 
       # The visudo property lives here: this CLI process validates the whole
@@ -488,11 +504,7 @@ module Tamoz
       def paused_approvals(runtime)
         runtime.open_occurrences(limit: 500).filter_map do |record|
           thread_id = record.fetch(:thread_id)
-          view = begin
-            runtime.session_for(thread_id).view(thread: thread_id)
-          rescue StandardError
-            nil
-          end
+          view = session_view(runtime, thread_id)
           next unless view && view.status == :paused && !view.interrupts.empty?
 
           {
@@ -513,11 +525,7 @@ module Tamoz
 
       def session_status(runtime)
         runtime.open_occurrences(limit: 500).filter_map do |record|
-          view = begin
-            runtime.session_for(record.fetch(:thread_id)).view(thread: record.fetch(:thread_id))
-          rescue StandardError
-            unavailable_session_status(record)
-          end
+          view = session_view(runtime, record.fetch(:thread_id)) || unavailable_session_status(record)
           next view if view.is_a?(Hash)
 
           SessionStatusProjection.document(
@@ -526,6 +534,12 @@ module Tamoz
             delivery_state: 'pending'
           )
         end
+      end
+
+      def session_view(runtime, thread_id)
+        runtime.session_for(thread_id).view(thread: thread_id)
+      rescue StandardError
+        nil
       end
 
       def unavailable_session_status(record)
@@ -664,7 +678,7 @@ module Tamoz
         if options[:json]
           ->(event) { emit_line(JSON.generate(event)) }
         else
-          ->(event) { emit_line(format_worker_event(event)) }
+          ->(event) { emit_line(render_worker_event(event)) }
         end
       end
 
@@ -696,7 +710,7 @@ module Tamoz
         @out.flush
       end
 
-      def format_worker_event(event)
+      def render_worker_event(event)
         name = event["event"]
         detail = event.reject { |key, _| %w[event ts].include?(key) }
                       .map { |key, entry| "#{key}=#{entry}" }.join(" ")

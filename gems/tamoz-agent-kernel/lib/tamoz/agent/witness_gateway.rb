@@ -26,6 +26,8 @@ module Tamoz
       SIGNING_ALGORITHM = "sha256"
       MAX_RECORDS = 10_000
       READ_TIMEOUT_SECONDS = 15
+      UPSTREAM_READ_TIMEOUT_SECONDS = 300
+      UPSTREAM_OPEN_TIMEOUT_SECONDS = 60
 
       Record = Data.define(
         :logical_call_id, :frame_digest, :request_digest, :response_digest,
@@ -100,8 +102,7 @@ module Tamoz
         record.signature == sign(record.to_payload)
       end
 
-      # The canonical signed payload — the log line and the tests read it back
-      # from the record.
+      # The canonical signed payload — the log line reads it back from the record.
       def record_payload(record)
         record.to_payload
       end
@@ -184,8 +185,8 @@ module Tamoz
         uri = URI.parse("#{@upstream}/v1/chat/completions")
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = uri.scheme == "https"
-        http.read_timeout = 300
-        http.open_timeout = 60
+        http.read_timeout = UPSTREAM_READ_TIMEOUT_SECONDS
+        http.open_timeout = UPSTREAM_OPEN_TIMEOUT_SECONDS
         response = http.request(
           Net::HTTP::Post.new(uri, "Content-Type" => "application/json"),
           body

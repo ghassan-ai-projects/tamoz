@@ -149,13 +149,8 @@ module Tamoz
         random: Random.new,
         circuit_store: nil
       )
-        unless config.is_a?(ServerConfig)
-          raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
-        end
+        validate_config!(config)
         CircuitSupervision.validate_parameters!(circuit_threshold:, retry_budget:, base_backoff:, max_backoff:)
-
-        store = circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
-        validate_circuit_store!(store)
 
         @config = config
         @environ = environ
@@ -172,7 +167,7 @@ module Tamoz
         @base_backoff = base_backoff.to_f
         @max_backoff = max_backoff.to_f
         @random = random
-        @circuit_store = store
+        @circuit_store = build_circuit_store(circuit_threshold, circuit_store)
         @retired = false
         @request_sent = false
         @sent_mutex = Mutex.new
@@ -246,13 +241,25 @@ module Tamoz
 
         close_transport_pipes
         terminate_process_group
-        cleanup_stderr
+        close_stderr_capture
         mark_closed
         nil
       end
       alias_method :teardown, :close
 
       private
+
+      def validate_config!(config)
+        return if config.is_a?(ServerConfig)
+
+        raise ValidationError, "config must be a Tamoz::Mcp::ServerConfig"
+      end
+
+      def build_circuit_store(circuit_threshold, circuit_store)
+        store = circuit_store || MemoryCircuitStore.new(threshold: circuit_threshold)
+        validate_circuit_store!(store)
+        store
+      end
 
       # The injected store must satisfy the full CircuitStore contract so a
       # durable swap is mechanical (DR-2).
@@ -293,20 +300,25 @@ module Tamoz
       # never logged; a missing credential ref fails closed naming the
       # variable only.
       def child_environment
-        env = {}
-        @config.env_allowlist.each do |name|
+        inherited_environment.merge(resolved_credential_environment)
+      end
+
+      def inherited_environment
+        @config.env_allowlist.each_with_object({}) do |name, env|
           value = @environ[name]
           env[name] = value unless value.nil?
         end
-        @config.credential_refs.each do |name|
+      end
+
+      def resolved_credential_environment
+        @config.credential_refs.to_h do |name|
           value = @environ[name]
           if value.nil?
             raise ValidationError,
                   "credential ref #{name} is not set in the operator environment"
           end
-          env[name] = value
+          [name, value]
         end
-        env
       end
 
       def prepare_redaction_values
@@ -376,7 +388,7 @@ module Tamoz
         wait_for_group_exit(TERM_GRACE_SECONDS)
       end
 
-      def cleanup_stderr
+      def close_stderr_capture
         begin
           @stderr.close unless @stderr.closed?
         rescue IOError
@@ -397,16 +409,19 @@ module Tamoz
         @stderr_thread = Thread.new do
           Thread.current.report_on_exception = false
           loop do
-            chunk = @stderr.readpartial(STDERR_READ_SIZE)
-            @stderr_mutex.synchronize do
-              @stderr_buffer << chunk.b
-              if @stderr_buffer.bytesize > limit
-                @stderr_buffer = @stderr_buffer.byteslice(-limit, limit) || +""
-              end
-            end
+            append_stderr_chunk(@stderr.readpartial(STDERR_READ_SIZE), limit: limit)
           end
         rescue IOError, Errno::EBADF, EOFError
           nil
+        end
+      end
+
+      def append_stderr_chunk(chunk, limit:)
+        @stderr_mutex.synchronize do
+          @stderr_buffer << chunk.b
+          if @stderr_buffer.bytesize > limit
+            @stderr_buffer = @stderr_buffer.byteslice(-limit, limit) || +""
+          end
         end
       end
 

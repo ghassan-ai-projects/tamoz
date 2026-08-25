@@ -83,7 +83,7 @@ module Tamoz
         raise_on_host_refusal!(result)
 
         parsed = verify!(result, call_id:)
-        result_hash(result, parsed)
+        build_result_hash(result, parsed)
       rescue EvidenceError
         raise
       rescue StandardError => error
@@ -157,7 +157,7 @@ module Tamoz
           tool_name:,
           arguments_json: document.to_s.b,
           capability_token: @capability_token.to_s.b,
-          deadline: timestamp(deadline),
+          deadline: build_timestamp(deadline),
           attempt_id: @attempt_id,
           fence: @fence,
           traceparent: @traceparent,
@@ -248,17 +248,17 @@ module Tamoz
         expected
       end
 
-      def result_hash(result, parsed)
+      def build_result_hash(result, parsed)
         {
           "json" => parsed,
           "truncated" => result.truncated,
-          "artifact" => artifact_hash(result.artifact),
+          "artifact" => build_artifact_hash(result.artifact),
           "row_count" => result.row_count,
           "result_bytes" => result.result_bytes
         }
       end
 
-      def artifact_hash(artifact)
+      def build_artifact_hash(artifact)
         return nil if artifact.nil?
 
         {
@@ -269,7 +269,7 @@ module Tamoz
         }
       end
 
-      def timestamp(value)
+      def build_timestamp(value)
         return nil if value.nil?
 
         seconds = value.is_a?(Time) ? value.to_i : Integer(value)

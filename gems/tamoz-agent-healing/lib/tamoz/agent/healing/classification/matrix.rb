@@ -8,7 +8,7 @@ module Tamoz
         # class. `cases` is [{record:, expected_family:}]; the report is pure data
         # so `tamoz-evals` (builder B/the matrix owner) can consume it without a
         # second implementation.
-        # :reek:TooManyStatements — `tally!` records one counter per axis of the
+        # :reek:TooManyStatements — `tally` records one counter per axis of the
         # proof, `report` assembles the published fields, and `abstention_quality`
         # computes both components with their denominators. Each list IS the
         # surface being proved; shortening one would drop a number a reader needs.
@@ -26,7 +26,7 @@ module Tamoz
 
           def run(cases:, rule:)
             per_category = empty_tally
-            cases.each { |entry| tally!(per_category, entry, rule) }
+            cases.each { |entry| tally(per_category, entry, rule) }
             report(per_category, rule)
           end
 
@@ -42,7 +42,7 @@ module Tamoz
             end
           end
 
-          def tally!(per_category, entry, rule)
+          def tally(per_category, entry, rule)
             record = entry.fetch(:record)
             result = Classification.classify(record, rule:)
             bucket = per_category.fetch(record.category.to_s)
@@ -91,8 +91,8 @@ module Tamoz
             handled_denominator = sum_field(per_category, handled, 'denominator')
             over_abstained = sum_field(per_category, handled, 'abstained')
 
-            quality(rate(never_correct, never_denominator), never_denominator,
-                    rate(over_abstained, handled_denominator), handled_denominator)
+            quality(correct_rate: rate(never_correct, never_denominator), never_denominator:,
+                    over_rate: rate(over_abstained, handled_denominator), handled_denominator:)
           end
 
           def correct_abstentions(per_category, never_categories)
@@ -108,7 +108,7 @@ module Tamoz
 
           # Both components are reported alongside the score, with their own
           # denominators, so a reader can see what the number is made of.
-          def quality(correct_rate, never_denominator, over_rate, handled_denominator)
+          def quality(correct_rate:, never_denominator:, over_rate:, handled_denominator:)
             {
               'score' => correct_rate - over_rate,
               'correct_abstention_rate' => correct_rate,

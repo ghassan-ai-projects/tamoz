@@ -49,7 +49,7 @@ module Tamoz
       def self.from_documents(documents, thread_id: nil, execution_id: nil)
         selected = select_matching_documents(documents, thread_id:, execution_id:)
         correlation = first_complete_document_correlation(selected)
-        build_trace(selected, trace_id_from_document_correlation(correlation))
+        build_trace(selected, trace_id_from(correlation))
       end
 
       def to_h
@@ -71,7 +71,7 @@ module Tamoz
 
         def select_matching_documents(documents, thread_id:, execution_id:)
           documents.select do |document|
-            document_correlation_matches?(document_correlation(document), thread_id:, execution_id:)
+            correlation_matches?(document_correlation(document), thread_id:, execution_id:)
           end
         end
 
@@ -90,11 +90,6 @@ module Tamoz
 
         def correlation_matches?(correlation, thread_id:, execution_id:)
           thread_matches?(correlation, thread_id) && execution_matches?(correlation, execution_id)
-        end
-
-        def document_correlation_matches?(correlation, thread_id:, execution_id:)
-          (!thread_id || correlation['thread_id'] == thread_id) &&
-            (!execution_id || correlation['execution_id'] == execution_id)
         end
 
         def thread_matches?(correlation, thread_id)
@@ -128,16 +123,10 @@ module Tamoz
           Correlation.trace_id(thread_id:, execution_id:)
         end
 
-        def trace_id_from_document_correlation(correlation)
-          return unless correlation['thread_id'] && correlation['execution_id']
-
-          Correlation.trace_id(thread_id: correlation['thread_id'], execution_id: correlation['execution_id'])
-        end
-
         def span_from(signal, trace_id:)
-          document = document_from(signal)
           return unless trace_id
 
+          document = document_from(signal)
           attributes = span_attributes(document)
           anchor = span_anchor(document, attributes)
           name = document.fetch('name')

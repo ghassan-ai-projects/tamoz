@@ -62,7 +62,7 @@ module Tamoz
             now:,
             label: 'checkpoint.writes.lease'
           )
-          base = tx.first(
+          base_row = tx.first(
             'checkpoint.writes.base',
             <<~SQL,
               SELECT execution_id
@@ -71,7 +71,7 @@ module Tamoz
             SQL
             [base_id, lease.thread_id, lease.namespace]
           )
-          unless base && base.fetch(0) == execution_id
+          unless base_row && base_row.fetch(0) == execution_id
             raise CheckpointConflictError,
                   'pending write base or execution is incompatible'
           end

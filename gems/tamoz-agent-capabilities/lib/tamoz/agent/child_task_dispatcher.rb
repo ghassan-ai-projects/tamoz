@@ -40,13 +40,13 @@ module Tamoz
 
       def validate(descriptor, arguments)
         assert_descriptor!(descriptor)
-        assert_budget_available!
+        enforce_delegation_budget!
         assert_arguments_shape!(arguments)
 
-        task = extract_task(arguments)
-        capabilities = extract_capabilities(arguments)
+        task = validate_task!(arguments)
+        capabilities = validate_capabilities!(arguments)
         assert_no_secrets!(task, arguments.fetch('capabilities'))
-        assert_capabilities_within_authority!(capabilities)
+        enforce_capabilities_within_authority!(capabilities)
 
         { 'task' => task, 'capabilities' => capabilities.freeze }.freeze
       rescue KeyError => e
@@ -57,7 +57,7 @@ module Tamoz
         normalized = validate(descriptor, arguments)
         thread_id = context&.thread_id
         request_id = context&.request_id
-        assert_durable_identity!(thread_id, request_id)
+        enforce_durable_identity!(thread_id, request_id)
 
         child = build_child_task(normalized, thread_id, request_id)
         stored = @runtime.enqueue_child_task(child, parent_profile: @parent_profile)
@@ -118,7 +118,7 @@ module Tamoz
         }
       end
 
-      def assert_budget_available!
+      def enforce_delegation_budget!
         return unless @current_policy&.values&.any?(&:zero?)
 
         raise ToolPolicyError, 'child delegation budget is exhausted'
@@ -133,7 +133,7 @@ module Tamoz
         raise ToolArgumentError, "#{TOOL_NAME} has unknown arguments: #{unknown.join(', ')}"
       end
 
-      def extract_task(arguments)
+      def validate_task!(arguments)
         task = arguments.fetch('task')
         unless task.is_a?(String) && !task.empty? && task.bytesize <= MAX_TASK_BYTES
           raise ToolArgumentError, "child task must be a non-empty string of at most #{MAX_TASK_BYTES} bytes"
@@ -142,7 +142,7 @@ module Tamoz
         task
       end
 
-      def extract_capabilities(arguments)
+      def validate_capabilities!(arguments)
         capabilities = arguments.fetch('capabilities')
         unless capabilities.is_a?(Array) && capabilities.length.between?(1, MAX_CAPABILITIES) &&
                capabilities.all? { |name| name.is_a?(String) && name.match?(/\Alocal:[A-Za-z0-9_\-.]+\z/) }
@@ -158,14 +158,14 @@ module Tamoz
         raise Tamoz::SensitiveValueError, 'child delegation arguments cannot contain credential-shaped values'
       end
 
-      def assert_capabilities_within_authority!(capabilities)
+      def enforce_capabilities_within_authority!(capabilities)
         parent_capabilities = @parent_profile.fetch('capabilities')
         return if (capabilities - parent_capabilities).empty?
 
         raise ToolPolicyError, 'child capabilities exceed parent authority'
       end
 
-      def assert_durable_identity!(thread_id, request_id)
+      def enforce_durable_identity!(thread_id, request_id)
         return unless thread_id.to_s.empty? || request_id.to_s.empty?
 
         raise ToolPolicyError, 'child delegation requires a durable thread and request identity'

@@ -17,16 +17,7 @@ module Tamoz
         max_threads: DEFAULT_MAX_THREADS,
         max_checkpoints_per_namespace: DEFAULT_MAX_CHECKPOINTS_PER_NAMESPACE
       )
-        unless max_threads.is_a?(Integer) && max_threads.positive? && max_threads <= MAX_THREADS
-          raise ConfigurationError, "max_threads must be between 1 and #{MAX_THREADS}"
-        end
-        unless max_checkpoints_per_namespace.is_a?(Integer) &&
-               max_checkpoints_per_namespace.positive? &&
-               max_checkpoints_per_namespace <= MAX_CHECKPOINTS_PER_NAMESPACE
-          raise ConfigurationError,
-                "max_checkpoints_per_namespace must be between 1 and " \
-                "#{MAX_CHECKPOINTS_PER_NAMESPACE}"
-        end
+        validate_limits!(max_threads:, max_checkpoints_per_namespace:)
 
         @max_threads = max_threads
         @max_checkpoints_per_namespace = max_checkpoints_per_namespace
@@ -107,29 +98,7 @@ module Tamoz
           end
           base = expected_base_id && entries.find { |checkpoint| checkpoint.id == expected_base_id }
           validate_append!(entries, base, expected_base_id, mode)
-          sequence = entries.length
-          immutable_attributes = freeze_value(attributes)
-          checkpoint_id = checkpoint_id_for(
-            immutable_attributes.merge(
-              thread_id: address.first,
-              namespace: address.last,
-              sequence: sequence,
-              parent_id: base&.id
-            )
-          ).freeze
-          frontier = immutable_attributes.fetch(:frontier).map do |entry|
-            entry.activation_checkpoint_id ? entry : entry.with_activation_checkpoint(checkpoint_id)
-          end.freeze
-          checkpoint = Checkpoint.new(
-            format_version: 1,
-            id: checkpoint_id,
-            sequence:,
-            thread_id: address.first,
-            namespace: address.last,
-            parent_id: base&.id,
-            frontier:,
-            **immutable_attributes.except(:frontier)
-          )
+          checkpoint = build_checkpoint(address, base, entries.length, attributes)
           entries << checkpoint
           checkpoint
         end
@@ -201,6 +170,38 @@ module Tamoz
         else
           raise ConfigurationError, "unknown checkpoint append mode #{mode.inspect}"
         end
+      end
+
+      def validate_limits!(max_threads:, max_checkpoints_per_namespace:)
+        unless max_threads.is_a?(Integer) && max_threads.positive? && max_threads <= MAX_THREADS
+          raise ConfigurationError, "max_threads must be between 1 and #{MAX_THREADS}"
+        end
+        unless max_checkpoints_per_namespace.is_a?(Integer) &&
+               max_checkpoints_per_namespace.positive? &&
+               max_checkpoints_per_namespace <= MAX_CHECKPOINTS_PER_NAMESPACE
+          raise ConfigurationError,
+                "max_checkpoints_per_namespace must be between 1 and " \
+                "#{MAX_CHECKPOINTS_PER_NAMESPACE}"
+        end
+      end
+
+      def build_checkpoint(address, base, sequence, attributes)
+        immutable_attributes = freeze_value(attributes)
+        checkpoint_id = checkpoint_id_for(
+          immutable_attributes.merge(
+            thread_id: address.first, namespace: address.last,
+            sequence:, parent_id: base&.id
+          )
+        ).freeze
+        frontier = immutable_attributes.fetch(:frontier).map do |entry|
+          entry.activation_checkpoint_id ? entry : entry.with_activation_checkpoint(checkpoint_id)
+        end.freeze
+        Checkpoint.new(
+          format_version: 1, id: checkpoint_id, sequence:,
+          thread_id: address.first, namespace: address.last,
+          parent_id: base&.id,
+          frontier:, **immutable_attributes.except(:frontier)
+        )
       end
 
       def checkpoint_id_for(attributes)

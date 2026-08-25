@@ -52,6 +52,8 @@ module Tamoz
           intervals.json axis_intervals.json report.json benchmark_report.json score_report.json
           scoreboard_report.json
         ].freeze
+        MANIFEST_REFERENCE_KEYS = %w[report_path report intervals_path axis_intervals_path].freeze
+        INTERVAL_CONTAINER_KEYS = %w[axis_intervals intervals axes report score].freeze
 
         class Error < Tamoz::Evals::ExecutionError; end
         class RegressionError < Error; end
@@ -74,7 +76,6 @@ module Tamoz
             raise Error, "scoreboard JSON is invalid: #{e.message}"
           end
 
-          # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
           def regression_check(scoreboard_path:, manifest:, artifact_base:)
             document = read(scoreboard_path)
             entries = document.fetch('entries')
@@ -84,38 +85,12 @@ module Tamoz
             validate_current_manifest!(current, manifest)
             return passed_regression(current) if entries.length == 1
 
-            prior = entries.fetch(-2)
-            intervals = intervals_for_entry(prior, artifact_base)
-            missing = AXES.reject { |axis| intervals.key?(axis) }
-            raise RegressionError, "prior artifact intervals are incomplete: #{missing.join(', ')}" unless
-              missing.empty?
-
-            drops = AXES.filter_map do |axis|
-              current_value = current.fetch('axes').fetch(axis)
-              prior_low = intervals.fetch(axis).fetch('low')
-              next unless current_value < prior_low
-
-              {
-                'axis' => axis,
-                'current' => current_value,
-                'prior_interval_low' => prior_low,
-                'prior_interval_high' => intervals.fetch(axis).fetch('high')
-              }
-            end
-            acknowledged = acknowledged_note?(current.fetch('notes'))
-            result = {
-              'status' => drops.empty? || acknowledged ? 'passed' : 'failed',
-              'artifact_root' => current.fetch('artifact_root'),
-              'prior_artifact_root' => prior.fetch('artifact_root'),
-              'acknowledged' => acknowledged,
-              'regressions' => drops
-            }
+            result = evaluate_regression(current, entries.fetch(-2), artifact_base)
             return result if result.fetch('status') == 'passed'
 
-            failed_axes = drops.map { |row| row.fetch('axis') }.join(', ')
+            failed_axes = result.fetch('regressions').map { |row| row.fetch('axis') }.join(', ')
             raise RegressionError, "unacknowledged scoreboard regression: #{failed_axes}"
           end
-          # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
           def intervals_for_entry(entry, artifact_base)
             root = artifact_directory(entry.fetch('artifact_root'), artifact_base)
@@ -215,10 +190,52 @@ module Tamoz
           end
 
           def passed_regression(current)
+            regression_result(current, prior_root: nil, acknowledged: false, regressions: [])
+          end
+
+          def regression_result(current, prior_root:, acknowledged:, regressions:)
+            status = regressions.empty? || acknowledged ? 'passed' : 'failed'
             {
-              'status' => 'passed', 'artifact_root' => current.fetch('artifact_root'),
-              'prior_artifact_root' => nil, 'acknowledged' => false, 'regressions' => []
+              'status' => status,
+              'artifact_root' => current.fetch('artifact_root'),
+              'prior_artifact_root' => prior_root,
+              'acknowledged' => acknowledged,
+              'regressions' => regressions
             }
+          end
+
+          def evaluate_regression(current, prior, artifact_base)
+            drops = regression_drops(current, prior_intervals!(prior, artifact_base))
+            acknowledged = acknowledged_note?(current.fetch('notes'))
+            regression_result(
+              current,
+              prior_root: prior.fetch('artifact_root'),
+              acknowledged: acknowledged,
+              regressions: drops
+            )
+          end
+
+          def regression_drops(current, intervals)
+            AXES.filter_map do |axis|
+              current_value = current.fetch('axes').fetch(axis)
+              prior_low = intervals.fetch(axis).fetch('low')
+              next unless current_value < prior_low
+
+              {
+                'axis' => axis,
+                'current' => current_value,
+                'prior_interval_low' => prior_low,
+                'prior_interval_high' => intervals.fetch(axis).fetch('high')
+              }
+            end
+          end
+
+          def prior_intervals!(prior, artifact_base)
+            intervals = intervals_for_entry(prior, artifact_base)
+            missing = AXES.reject { |axis| intervals.key?(axis) }
+            return intervals if missing.empty?
+
+            raise RegressionError, "prior artifact intervals are incomplete: #{missing.join(', ')}"
           end
 
           def artifact_directory(artifact_root, artifact_base)
@@ -227,22 +244,25 @@ module Tamoz
             Pathname.new(artifact_base).expand_path.join(artifact_root)
           end
 
-          # rubocop:disable Metrics/AbcSize
           def interval_documents(root)
             paths = REPORT_FILENAMES.map { |name| root.join(name) }
-            manifest_path = root.join('manifest.json')
-            paths << manifest_path
-            if File.file?(manifest_path)
-              manifest = parse_json_file(manifest_path)
-              %w[report_path report intervals_path axis_intervals_path].each do |key|
-                reference = manifest[key]
-                paths << root.join(reference) if reference.is_a?(String) && !Pathname.new(reference).absolute?
-              end
-            end
+            paths.concat(manifest_referenced_paths(root))
             paths.concat(root.glob('**/*report*.json')).concat(root.glob('**/*interval*.json'))
             paths.uniq.filter_map { |path| parse_json_file(path) if File.file?(path) }
           end
-          # rubocop:enable Metrics/AbcSize
+
+          def manifest_referenced_paths(root)
+            manifest_path = root.join('manifest.json')
+            referenced = [manifest_path]
+            return referenced unless File.file?(manifest_path)
+
+            manifest = parse_json_file(manifest_path)
+            MANIFEST_REFERENCE_KEYS.each do |key|
+              reference = manifest[key]
+              referenced << root.join(reference) if reference.is_a?(String) && !Pathname.new(reference).absolute?
+            end
+            referenced
+          end
 
           def parse_json_file(path)
             JSON.parse(File.read(path, encoding: Encoding::UTF_8))
@@ -256,7 +276,7 @@ module Tamoz
             direct = interval_from(document[axis])
             return direct if direct
 
-            %w[axis_intervals intervals axes report score].each do |key|
+            INTERVAL_CONTAINER_KEYS.each do |key|
               nested = find_interval(document[key], axis)
               return nested if nested
             end
@@ -296,8 +316,16 @@ module Tamoz
             end.then { |number| number if number.is_a?(Integer) && number.between?(0, METRIC_SCALE) }
           end
 
-          # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
           def build_axis_verdicts(report)
+            source, scalar = axis_verdict_source(report)
+            AXES.to_h do |axis|
+              value = source[axis] || scalar || 'inconclusive'
+              value = 'inconclusive' unless VERDICTS.include?(value)
+              [axis, value]
+            end
+          end
+
+          def axis_verdict_source(report)
             sources = [report['axis_verdicts'], report['verdicts']].grep(Hash)
             if report['axes'].is_a?(Hash)
               sources << report['axes'].to_h do |axis, value|
@@ -306,13 +334,8 @@ module Tamoz
             end
             source = sources.find { |candidate| candidate.keys.any? { |key| AXES.include?(key) } } || {}
             scalar = report['verdict'] if VERDICTS.include?(report['verdict'])
-            AXES.to_h do |axis|
-              value = source[axis] || scalar || 'inconclusive'
-              value = 'inconclusive' unless VERDICTS.include?(value)
-              [axis, value]
-            end
+            [source, scalar]
           end
-          # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
           def hard_zero_names(manifest, report)
             rows = Array(manifest['missions'])
@@ -414,35 +437,39 @@ module Tamoz
           (scores.sum.to_f / scores.length).round
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def metric_score(mission, metric_names)
           metrics = mission.fetch('metrics', {})
           metric_name = metric_names.find { |name| metrics.key?(name) }
           return nil unless metric_name
 
-          value = metrics.fetch(metric_name)
-          return nil if value.is_a?(Hash) && value['status'] == 'unavailable'
+          raw = metrics.fetch(metric_name)
+          return nil if metric_unavailable?(raw)
 
-          numeric = if value.is_a?(Hash)
-                      value['normalized'] || value['score'] || value['value']
-                    else
-                      value
-                    end
+          numeric = unwrap_metric_value(raw)
           return nil unless numeric.is_a?(Numeric)
 
           return cost_score(numeric) if metric_name == 'cost'
-          return lower_score(numeric) if Scoreboard::LOWER_IS_BETTER.include?(metric_name)
+          return normalize_lower_score(numeric) if Scoreboard::LOWER_IS_BETTER.include?(metric_name)
 
           normalize_higher_score(numeric)
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        def metric_unavailable?(value)
+          value.is_a?(Hash) && value['status'] == 'unavailable'
+        end
+
+        def unwrap_metric_value(value)
+          return value unless value.is_a?(Hash)
+
+          value['normalized'] || value['score'] || value['value']
+        end
 
         def normalize_higher_score(value)
           number = value.is_a?(Float) && value.between?(0.0, 1.0) ? value * METRIC_SCALE : value
           number.round.clamp(0, METRIC_SCALE)
         end
 
-        def lower_score(value)
+        def normalize_lower_score(value)
           normalized = value.is_a?(Float) && value.between?(0.0, 1.0) ? value : value.to_f / METRIC_SCALE
           (METRIC_SCALE * (1.0 - normalized)).round.clamp(0, METRIC_SCALE)
         end

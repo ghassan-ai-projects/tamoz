@@ -12,7 +12,6 @@ module Tamoz
     # The durable request inbox facade. It preserves the store's request API while
     # keeping enqueue, reads, claims, recovery, and transitions separately cohesive.
     class RequestInbox
-      REQUEST_SELECT = RequestInboxRows::REQUEST_SELECT
       # A mode switch claims against no active checkpoint: it addresses idle
       # threads too, so it carries its own execution identity like a turn.
       FRESH_EXECUTION_OPERATIONS = %w[turn fork redirect mode_switch].freeze
@@ -177,8 +176,6 @@ module Tamoz
       def terminal_fail_in_transaction!(...) = @claimer.__send__(__method__, ...)
       def transition_request_without_checkpoint!(...) = @transitions.__send__(__method__, ...)
       def append_request_transition!(...) = @transitions.__send__(__method__, ...)
-
-      private_constant :REQUEST_SELECT
     end
   end
 end

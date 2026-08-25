@@ -22,11 +22,7 @@ module Tamoz
         bound = child.__send__(:with_checkpointer, parent.checkpointer)
         call_index = next_call_index
         namespace = child_namespace(child, call_index)
-        child_context = context.child(
-          "subgraph.#{child.name}",
-          task_id: context.task_id,
-          run_id: child_execution_id(child, call_index)
-        )
+        child_context = child_context(child, context, call_index)
         loop do
           latest = parent.checkpointer.latest(
             thread_id: checkpoint.thread_id,
@@ -46,7 +42,7 @@ module Tamoz
           next if result.paused?
 
           if result.failed?
-            raise(result.errors.first || failed_child_error(child, result))
+            raise(result.errors.first || failed_child_error(child))
           end
           context.check!
           raise CancelledError, "subgraph execution was cancelled"
@@ -60,13 +56,9 @@ module Tamoz
           return child.__send__(
             :invoke_at,
             input,
-            thread: checkpoint.thread_id,
-            namespace:,
-            request_id: context.request_id,
+            **dispatch_keywords(context, namespace),
             execution_id: child_execution_id(child, call_index),
-            concurrency:,
-            new_execution: false,
-            context:
+            new_execution: false
           )
         end
 
@@ -77,34 +69,26 @@ module Tamoz
           child.__send__(
             :resume_at,
             resume_answers(latest, answer),
-            thread: checkpoint.thread_id,
-            namespace:,
-            request_id: context.request_id,
-            concurrency:,
-            context:
+            **dispatch_keywords(context, namespace)
           )
         when :failed
-          child.__send__(
-            :retry_failed_at,
-            thread: checkpoint.thread_id,
-            namespace:,
-            request_id: context.request_id,
-            concurrency:,
-            context:
-          )
+          child.__send__(:retry_failed_at, **dispatch_keywords(context, namespace))
         when :running
-          child.__send__(
-            :continue_at,
-            thread: checkpoint.thread_id,
-            namespace:,
-            request_id: context.request_id,
-            concurrency:,
-            context:
-          )
+          child.__send__(:continue_at, **dispatch_keywords(context, namespace))
         else
           raise CheckpointConflictError,
                 "subgraph checkpoint has unsupported status #{latest.status.inspect}"
         end
+      end
+
+      def dispatch_keywords(context, namespace)
+        {
+          thread: checkpoint.thread_id,
+          namespace:,
+          request_id: context.request_id,
+          concurrency:,
+          context:
+        }
       end
 
       def child_namespace(child, call_index)
@@ -127,6 +111,14 @@ module Tamoz
             "child_definition_digest" => child.definition_digest
           },
           domain: "tamoz.graph.subgraph.execution\n"
+        )
+      end
+
+      def child_context(child, context, call_index)
+        context.child(
+          "subgraph.#{child.name}",
+          task_id: context.task_id,
+          run_id: child_execution_id(child, call_index)
         )
       end
 
@@ -183,7 +175,7 @@ module Tamoz
         answer
       end
 
-      def failed_child_error(child, result)
+      def failed_child_error(child)
         original = CheckpointError.new("subgraph failed without an immediate error")
         NodeError.new(
           "subgraph #{child.name} failed",

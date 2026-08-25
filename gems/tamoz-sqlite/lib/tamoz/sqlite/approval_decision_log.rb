@@ -62,7 +62,9 @@ module Tamoz
 
       def record_resolution(decision_id:, answer:, scope:, actor_evidence:, grant:)
         @adapter.__send__(:transaction, operation: 'approval.decision.resolve') do |txn|
-          txn.execute('approval.decision.resolve', <<~SQL, resolution_binds(answer, scope, actor_evidence, grant, now_ms, decision_id))
+          binds = resolution_binds(answer: answer, scope: scope, actor_evidence: actor_evidence,
+                                   grant: grant, resolved_at_ms: now_ms, decision_id: decision_id)
+          txn.execute('approval.decision.resolve', <<~SQL, binds)
             UPDATE tamoz_approval_decisions
             SET answer = ?, resolved_scope = ?, actor_evidence = ?,
                 resolved_at_ms = ?, grant_created_at_ms = ?, grant_expires_at_ms = ?
@@ -107,9 +109,7 @@ module Tamoz
           SQL
           if row
             stored = switch_from_row(row)
-            unless stored.fetch(:session_id) == session_id && stored.fetch(:actor_id) == actor_id &&
-                   stored.fetch(:from_rev) == from_rev && stored.fetch(:to_rev) == to_rev &&
-                   stored.fetch(:profile_name) == profile_name
+            unless same_switch?(stored, record)
               raise Approval::ConflictingResolutionError,
                     "mode switch #{id} already recorded with different content"
             end
@@ -169,6 +169,12 @@ module Tamoz
 
       def same_decision?(row, record)
         fields_from_row(row) == fields_from_record(record)
+      end
+
+      def same_switch?(stored, record)
+        %i[session_id actor_id from_rev to_rev profile_name].all? do |field|
+          stored.fetch(field) == record.fetch(field)
+        end
       end
 
       def fields_from_record(record)
@@ -284,7 +290,7 @@ module Tamoz
         ]
       end
 
-      def resolution_binds(answer, scope, actor_evidence, grant, resolved_at_ms, decision_id)
+      def resolution_binds(answer:, scope:, actor_evidence:, grant:, resolved_at_ms:, decision_id:)
         [
           answer.to_s, scope&.to_s, actor_evidence&.to_s,
           resolved_at_ms, grant&.created_at_ms, grant&.expires_at_ms, decision_id

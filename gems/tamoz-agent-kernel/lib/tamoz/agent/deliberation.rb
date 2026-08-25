@@ -71,6 +71,30 @@ module Tamoz
       PLACEHOLDER_WHOLE_STRING = /\A<.*>\z/
       PLACEHOLDER_CONTAINMENT_KEYS = %w[path expected_sha256].freeze
 
+      # D-8 Fix B: an argument must be a concrete value already known from
+      # evidence, and a patch digest is knowable only after a read executes.
+      # A plan is one document, so a step's arguments can only use values
+      # known BEFORE the plan runs (task names, prior discovery evidence) —
+      # never guesses or references to the plan's own steps. `path` is
+      # REQUIRED; `expected_sha256` is the ONE argument a model may omit when
+      # it has not read the target yet (the framework resolves it at step
+      # time).
+      ARGUMENT_RULE =
+        "Every step argument must be a concrete value already known from evidence " \
+        "BEFORE the plan runs: a path, query, or digest taken from the task or " \
+        "from the discovery evidence list above. Never write a placeholder or a " \
+        "reference to another step's output in any argument (for example \"<path " \
+        "from search result>\", \"<SHA-256 from read_file>\", \"from step 1\"); " \
+        "such arguments are rejected and waste a plan attempt. Do not guess a " \
+        "path either: if you do not know the exact path, do not include a read of " \
+        "it in this plan — read it in the action phase using the exact path " \
+        "recorded in discovery evidence. Required arguments such as path must be " \
+        "exact relative paths. The expected_sha256 argument of apply_patch is the " \
+        "ONLY argument you may omit: if you have not read the target yet, leave " \
+        "expected_sha256 out — the framework binds the digest from the current " \
+        "file state before execution, so the patch step still succeeds. If you " \
+        "know the digest from a read_file result, copy it verbatim."
+
       module_function
 
       # P10 §3 planning surface: source-qualified MCP capability names are NOT
@@ -99,29 +123,7 @@ module Tamoz
           "phase_instruction" => planning_phase_instruction(phase),
           "workspace_root" => ".",
           "path_policy" => "All tool paths are relative to the workspace root.",
-          # D-8 Fix B: an argument must be a concrete value already known from
-          # evidence, and a patch digest is knowable only after a read executes.
-          # A plan is one document, so a step's arguments can only use values
-          # known BEFORE the plan runs (task names, prior discovery evidence) —
-          # never guesses or references to the plan's own steps. `path` is
-          # REQUIRED; `expected_sha256` is the ONE argument a model may omit when
-          # it has not read the target yet (the framework resolves it at step
-          # time).
-          "argument_rule" =>
-            "Every step argument must be a concrete value already known from evidence " \
-            "BEFORE the plan runs: a path, query, or digest taken from the task or " \
-            "from the discovery evidence list above. Never write a placeholder or a " \
-            "reference to another step's output in any argument (for example \"<path " \
-            "from search result>\", \"<SHA-256 from read_file>\", \"from step 1\"); " \
-            "such arguments are rejected and waste a plan attempt. Do not guess a " \
-            "path either: if you do not know the exact path, do not include a read of " \
-            "it in this plan — read it in the action phase using the exact path " \
-            "recorded in discovery evidence. Required arguments such as path must be " \
-            "exact relative paths. The expected_sha256 argument of apply_patch is the " \
-            "ONLY argument you may omit: if you have not read the target yet, leave " \
-            "expected_sha256 out — the framework binds the digest from the current " \
-            "file state before execution, so the patch step still succeeds. If you " \
-            "know the digest from a read_file result, copy it verbatim.",
+          "argument_rule" => ARGUMENT_RULE,
           "available_tools" => merge_tool_surfaces(
             toolbox.descriptions.merge(capability_descriptions), allowed_tools, mcp_tools
           ),
@@ -161,13 +163,12 @@ module Tamoz
       end
 
       def routing_prompt(task, toolbox:, planning_context: {}, capability_descriptions: {})
+        work_tools = (toolbox.names + capability_descriptions.keys).uniq
         input = {
           "task" => task,
           "available_read_only_tools" => toolbox.read_only_names,
-          "available_work_tools" => (toolbox.names + capability_descriptions.keys).uniq,
-          "tool_descriptions" => toolbox.descriptions.merge(capability_descriptions).slice(
-            *(toolbox.names + capability_descriptions.keys).uniq
-          )
+          "available_work_tools" => work_tools,
+          "tool_descriptions" => toolbox.descriptions.merge(capability_descriptions).slice(*work_tools)
         }
         input["planning_context"] = planning_context unless planning_context.empty?
         JSON.pretty_generate(input)
@@ -193,9 +194,7 @@ module Tamoz
           "review" => review,
           "observations" => observations
         }
-        unless verification_context.empty?
-          verification_input["verification_context"] = verification_context
-        end
+        verification_input["verification_context"] = verification_context unless verification_context.empty?
         verification_input["planning_context"] = planning_context unless planning_context.empty?
         JSON.pretty_generate(verification_input)
       end
@@ -267,9 +266,11 @@ module Tamoz
       def check_order_issues(plan, phase:, toolbox:)
         return [].freeze unless %i[action repair].include?(phase) && !toolbox.checks.empty?
 
-        check_indexes = plan.steps.each_index.select { |index| plan.steps[index].tool == "run_check" }
-        mutation_indexes = plan.steps.each_index.select do |index|
-          MUTATION_TOOLS.include?(plan.steps[index].tool)
+        check_indexes = plan.steps.each_with_index.filter_map do |step, index|
+          index if step.tool == "run_check"
+        end
+        mutation_indexes = plan.steps.each_with_index.filter_map do |step, index|
+          index if MUTATION_TOOLS.include?(step.tool)
         end
         issues = []
         issues << "action plan must run a configured check" if check_indexes.empty?

@@ -338,21 +338,40 @@ module Tamoz
       end
 
       def validate_hook!(point, metadata)
+        point_name = assert_point(point)
+        assert_envelope(metadata)
+        operation_name = assert_operation(metadata)
+        assert_attempt(metadata.fetch("attempt"))
+        assert_binding(
+          kind: metadata.fetch("kind"),
+          point_name: point_name,
+          operation_name: operation_name,
+          statement_name: metadata.fetch("statement")
+        )
+        true
+      end
+
+      def assert_point(point)
         point_name = point.to_s
         unless POINTS.include?(point_name)
           raise ConfigurationError, "unknown SQLite hook point #{point.inspect}"
         end
+        point_name
+      end
+
+      def assert_envelope(metadata)
         expected_keys = %w[attempt hook_version kind operation statement]
         unless metadata.is_a?(Hash) &&
                metadata.length == expected_keys.length &&
                expected_keys.all? { |key| metadata.key?(key) }
           raise ConfigurationError, "SQLite hook metadata shape is invalid"
         end
-        unless metadata.fetch("hook_version") == VERSION
-          raise ConfigurationError, "SQLite hook metadata version is invalid"
-        end
+        return if metadata.fetch("hook_version") == VERSION
 
-        kind = metadata.fetch("kind")
+        raise ConfigurationError, "SQLite hook metadata version is invalid"
+      end
+
+      def assert_operation(metadata)
         operation_name = bounded_identifier(
           metadata.fetch("operation"),
           name: "SQLite hook operation",
@@ -362,35 +381,55 @@ module Tamoz
           raise ConfigurationError,
                 "SQLite hook operation is absent from the boundary registry"
         end
-        attempt = metadata.fetch("attempt")
-        unless attempt.nil? || (attempt.is_a?(Integer) && attempt.positive?)
-          raise ConfigurationError, "SQLite hook attempt is invalid"
-        end
+        operation_name
+      end
 
-        statement_name = metadata.fetch("statement")
-        if kind == "transaction"
-          unless statement_name.nil? &&
-                 %w[before_begin after_begin before_commit after_commit].include?(point_name)
-            raise ConfigurationError, "transaction hook metadata is inconsistent"
-          end
-        elsif kind == "statement"
-          unless %w[before_sql after_sql].include?(point_name)
-            raise ConfigurationError, "statement hook point is inconsistent"
-          end
-          normalized = bounded_identifier(
-            statement_name,
-            name: "SQLite hook statement",
-            maximum: MAX_STATEMENT_BYTES
+      def assert_attempt(attempt)
+        return if attempt.nil? || (attempt.is_a?(Integer) && attempt.positive?)
+
+        raise ConfigurationError, "SQLite hook attempt is invalid"
+      end
+
+      def assert_binding(kind:, point_name:, operation_name:, statement_name:)
+        case kind
+        when "transaction"
+          assert_transaction_binding(point_name, statement_name)
+        when "statement"
+          assert_statement_binding(
+            operation_name: operation_name,
+            point_name: point_name,
+            statement_name: statement_name
           )
-          unless resolve_statement(operation_name, normalized)
-            raise ConfigurationError,
-                  "SQLite statement is absent from its operation registry"
-          end
         else
           raise ConfigurationError, "SQLite hook kind is invalid"
         end
-        true
       end
+
+      def assert_transaction_binding(point_name, statement_name)
+        return if statement_name.nil? &&
+                  %w[before_begin after_begin before_commit after_commit].include?(point_name)
+
+        raise ConfigurationError, "transaction hook metadata is inconsistent"
+      end
+
+      def assert_statement_binding(operation_name:, point_name:, statement_name:)
+        unless %w[before_sql after_sql].include?(point_name)
+          raise ConfigurationError, "statement hook point is inconsistent"
+        end
+        normalized = bounded_identifier(
+          statement_name,
+          name: "SQLite hook statement",
+          maximum: MAX_STATEMENT_BYTES
+        )
+        return if resolve_statement(operation_name, normalized)
+
+        raise ConfigurationError,
+              "SQLite statement is absent from its operation registry"
+      end
+      private_class_method(
+        :assert_point, :assert_envelope, :assert_operation, :assert_attempt,
+        :assert_binding, :assert_transaction_binding, :assert_statement_binding
+      )
 
       def canonical_json(value)
         JSON.generate(canonicalize(value))

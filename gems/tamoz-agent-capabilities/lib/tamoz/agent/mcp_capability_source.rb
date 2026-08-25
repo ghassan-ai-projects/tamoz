@@ -160,10 +160,10 @@ module Tamoz
       def validate_descriptors!(descriptors, catalogs)
         seen = {}
         descriptors.map do |descriptor|
-          assert_descriptor_interface!(descriptor)
+          validate_descriptor_interface!(descriptor)
           record_unique_descriptor!(descriptor, seen)
-          assert_descriptor_identity!(descriptor)
-          assert_descriptor_pinning!(descriptor, catalogs)
+          validate_descriptor_identity!(descriptor)
+          verify_descriptor_pinning!(descriptor, catalogs)
 
           descriptor.freeze
         end.freeze
@@ -236,7 +236,7 @@ module Tamoz
         [names, read_only_names, name_index]
       end
 
-      def assert_descriptor_interface!(descriptor)
+      def validate_descriptor_interface!(descriptor)
         required = %i[id name source_id definition_digest effect_class]
         missing = required.reject { |method| descriptor.respond_to?(method) }
         return if missing.empty?
@@ -253,7 +253,7 @@ module Tamoz
         seen[descriptor.id] = true
       end
 
-      def assert_descriptor_identity!(descriptor)
+      def validate_descriptor_identity!(descriptor)
         expected = "mcp:#{descriptor.source_id}/#{descriptor.name}"
         return if descriptor.id == expected
 
@@ -262,7 +262,7 @@ module Tamoz
               "#{expected.inspect} (source-qualified)"
       end
 
-      def assert_descriptor_pinning!(descriptor, catalogs)
+      def verify_descriptor_pinning!(descriptor, catalogs)
         snapshot = catalogs[descriptor.source_id]
         unless snapshot
           raise ArgumentError,

@@ -113,10 +113,10 @@ module Tamoz
                  run_read_only_work(task) { |event| yield event if block_given? }
                end
         result = verify(
-          task,
-          work.fetch(:plan),
-          work.fetch(:review),
-          work.fetch(:observations),
+          task:,
+          plan: work.fetch(:plan),
+          review: work.fetch(:review),
+          observations: work.fetch(:observations),
           verification_context: work.fetch(:verification_context)
         )
         [result, work.fetch(:verification_context)]
@@ -208,7 +208,7 @@ module Tamoz
           prompt: Deliberation.routing_prompt(task, toolbox:)
         )
         request = RequestRoute.parse(raw)
-        unless !request.direct_response? || RequestRoute.self_contained_task?(task)
+        if request.direct_response? && !RequestRoute.self_contained_task?(task)
           emit(:route_fallback, "reason" => "unsafe_direct_route") { |event| yield event }
           return nil
         end
@@ -251,10 +251,10 @@ module Tamoz
 
         action = run_action_mode(task, discovery: accepted) { |event| yield event }
         verify(
-          task,
-          action.fetch(:plan),
-          action.fetch(:review),
-          action.fetch(:observations),
+          task:,
+          plan: action.fetch(:plan),
+          review: action.fetch(:review),
+          observations: action.fetch(:observations),
           verification_context: action_verification_context(action)
         )
       end
@@ -263,24 +263,24 @@ module Tamoz
         discovery_plan, = routed_discovery_plan(task, decision) { |event| yield event }
         return unless discovery_plan
 
-        discovery_observations = run_routed_discovery(discovery_plan) { |event| yield event }
+        discovery_observations = routed_discovery_observations(discovery_plan) { |event| yield event }
         plan, review = routed_read_only_plan(task, discovery_observations) do |event|
           yield event
         end
         return unless plan
-        observations = execute_routed_read_only_plan(plan, discovery_observations) do |event|
+        observations = routed_read_only_observations(plan, discovery_observations) do |event|
           yield event
         end
         verify(
-          task,
-          plan,
-          review,
-          discovery_observations + observations,
+          task:,
+          plan:,
+          review:,
+          observations: discovery_observations + observations,
           verification_context: {}
         )
       end
 
-      def run_routed_discovery(discovery_plan)
+      def routed_discovery_observations(discovery_plan)
         observations, = execute(
           discovery_plan,
           phase: :discovery,
@@ -289,7 +289,7 @@ module Tamoz
         observations
       end
 
-      def execute_routed_read_only_plan(plan, discovery_observations)
+      def routed_read_only_observations(plan, discovery_observations)
         observations, = execute(
           plan,
           phase: :read_only,
@@ -302,12 +302,7 @@ module Tamoz
       def routed_discovery_plan(task, decision)
         plan = decision.plan
         issues = routed_discovery_issues(plan)
-        emit(:plan_drafted, "attempt" => 0, "phase" => "discovery", "source" => "route",
-                            "plan" => plan.to_h) { |event| yield event }
-        emit(:plan_reviewed, "attempt" => 0, "phase" => "discovery", "layer" => "structural",
-                             "decision" => issues.empty? ? "accept" : "revise", "issues" => issues) do |event|
-          yield event
-        end
+        emit_discovery_structural_review(plan, issues) { |event| yield event }
         return route_plan_fallback { |event| yield event } if issues.any?
 
         review = routed_discovery_semantic_review(task, decision, plan)
@@ -315,7 +310,7 @@ module Tamoz
           emit(:plan_reviewed, review.merge("attempt" => 0, "phase" => "discovery", "layer" => "semantic")) do |event|
             yield event
           end
-          return route_plan_fallback { |event| yield event } unless review.fetch("decision") == "accept"
+          return route_plan_fallback { |event| yield event } unless semantic_review_accepted?(review)
         end
 
         emit(:plan_accepted, "attempt" => 0, "phase" => "discovery", "source" => "route",
@@ -325,6 +320,17 @@ module Tamoz
         route_plan_fallback { |event| yield event }
         nil
       end
+
+      def emit_discovery_structural_review(plan, issues)
+        emit(:plan_drafted, "attempt" => 0, "phase" => "discovery", "source" => "route",
+                            "plan" => plan.to_h) { |event| yield event }
+        emit(:plan_reviewed, "attempt" => 0, "phase" => "discovery", "layer" => "structural",
+                             "decision" => issues.empty? ? "accept" : "revise", "issues" => issues) do |event|
+          yield event
+        end
+      end
+
+      def semantic_review_accepted?(review) = review.fetch("decision") == "accept"
 
       def routed_discovery_issues(plan)
         issues = structural_issues(
@@ -410,10 +416,18 @@ module Tamoz
             yield event
           end
           break unless candidate_plan
-          recorded = action_plan_recorded?(state, candidate_plan, candidate_review, context) do |event|
-            yield event
+
+          signature = action_signature(candidate_plan)
+          if repeated_action?(state, signature)
+            stop_repair(
+              state,
+              context:,
+              reason: "repeated_action",
+              detail: {"action_signature" => signature}
+            ) { |event| yield event }
+            break
           end
-          break unless recorded
+          record_action_plan(state, candidate_plan, candidate_review, signature)
 
           execute_action_plan(state, context) { |event| yield event }
           break unless resolve_action_outcome(state, context) { |event| yield event }
@@ -442,6 +456,13 @@ module Tamoz
         ) { |event| yield event }
       end
 
+      def stop_repair(state, context:, reason:, detail: nil)
+        state[:terminal_reason] = reason
+        data = context.fetch(:metadata).merge("reason" => reason)
+        data.merge!(detail) if detail
+        emit(:repair_stopped, data) { |event| yield event }
+      end
+
       def draft_action_plan(task, state, context)
         accepted_plan(
           task,
@@ -454,30 +475,18 @@ module Tamoz
       rescue PlanRejectedError
         raise if state.fetch(:repair_attempt).zero?
 
-        state[:terminal_reason] = "repair_plan_rejected"
-        emit(:repair_stopped, context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason))) do |event|
-          yield event
-        end
+        stop_repair(state, context:, reason: "repair_plan_rejected") { |event| yield event }
         nil
       end
 
-      def action_plan_recorded?(state, plan, review, context)
-        signature = action_signature(plan)
-        unless state.fetch(:seen_actions).key?(signature)
-          state.fetch(:seen_actions)[signature] = true
-          state[:plan] = plan
-          state[:review] = review
-          state.fetch(:prior_plans) << plan
-          state.fetch(:prior_reviews) << review
-          return true
-        end
+      def repeated_action?(state, signature) = state.fetch(:seen_actions).key?(signature)
 
-        state[:terminal_reason] = "repeated_action"
-        emit(
-          :repair_stopped,
-          context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason), "action_signature" => signature)
-        ) { |event| yield event }
-        false
+      def record_action_plan(state, plan, review, signature)
+        state.fetch(:seen_actions)[signature] = true
+        state[:plan] = plan
+        state[:review] = review
+        state.fetch(:prior_plans) << plan
+        state.fetch(:prior_reviews) << review
       end
 
       def execute_action_plan(state, context)
@@ -518,23 +527,18 @@ module Tamoz
 
       def continue_repair?(state, failure_signature:, repeated_reason:, context:)
         if state.fetch(:seen_failures).key?(failure_signature)
-          state[:terminal_reason] = repeated_reason
-          emit(
-            :repair_stopped,
-            context.fetch(:metadata).merge(
-              "reason" => state.fetch(:terminal_reason),
-              "failure_signature" => failure_signature
-            )
+          stop_repair(
+            state,
+            context:,
+            reason: repeated_reason,
+            detail: {"failure_signature" => failure_signature}
           ) { |event| yield event }
           return false
         end
         state.fetch(:seen_failures)[failure_signature] = true
 
         if state.fetch(:repair_attempt) >= SessionNodes::MAX_REPAIR_ATTEMPTS
-          state[:terminal_reason] = "repair_attempts_exhausted"
-          emit(:repair_stopped, context.fetch(:metadata).merge("reason" => state.fetch(:terminal_reason))) do |event|
-            yield event
-          end
+          stop_repair(state, context:, reason: "repair_attempts_exhausted") { |event| yield event }
           return false
         end
         state[:repair_attempt] += 1
@@ -553,7 +557,7 @@ module Tamoz
 
       def action_signature(plan) = Deliberation.action_signature(plan)
 
-      def verify(task, plan, review, observations, verification_context:)
+      def verify(task:, plan:, review:, observations:, verification_context:)
         raw = model_generate(
           stage: :verify,
           system: VERIFY_SYSTEM,

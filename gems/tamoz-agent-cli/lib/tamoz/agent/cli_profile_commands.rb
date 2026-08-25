@@ -328,8 +328,8 @@ module Tamoz
         checks = document.checks
         @out.puts "checks: #{checks.empty? ? '(none)' : checks.length}"
         checks.sort.each do |name, check|
-          argv = check.fetch('argv').map(&:inspect).join(' ')
-          @out.puts "  check #{name} [#{check.fetch('safety')}]: #{argv}"
+          check_argv = check.fetch('argv').map(&:inspect).join(' ')
+          @out.puts "  check #{name} [#{check.fetch('safety')}]: #{check_argv}"
         end
       end
 

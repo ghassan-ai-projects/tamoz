@@ -163,10 +163,10 @@ module Tamoz
 
         def validate_limits!
           validate_boolean!(@egress['deny_private_ranges'], 'egress.deny_private_ranges')
-          integer!(@egress['max_request_bytes'], 'egress.max_request_bytes', 1..EGRESS_MAX_REQUEST_BYTES)
-          integer!(@egress['max_response_bytes'], 'egress.max_response_bytes', 1..EGRESS_MAX_RESPONSE_BYTES)
+          validate_integer!(@egress['max_request_bytes'], 'egress.max_request_bytes', 1..EGRESS_MAX_REQUEST_BYTES)
+          validate_integer!(@egress['max_response_bytes'], 'egress.max_response_bytes', 1..EGRESS_MAX_RESPONSE_BYTES)
           validate_timeout!
-          integer!(@egress['redirect_max_hops'], 'egress.redirect_max_hops', 1..EGRESS_MAX_REDIRECT_HOPS)
+          validate_integer!(@egress['redirect_max_hops'], 'egress.redirect_max_hops', 1..EGRESS_MAX_REDIRECT_HOPS)
         end
 
         # :reek:FeatureEnvy — four questions about one local read out of @egress.
@@ -190,7 +190,7 @@ module Tamoz
             raise ValidationError, "#{@path}: egress.circuit.scope_type must be #{EGRESS_SCOPE_TYPE.inspect}"
           end
 
-          integer!(circuit['threshold'], 'egress.circuit.threshold', 1..EGRESS_MAX_CIRCUIT_THRESHOLD)
+          validate_integer!(circuit['threshold'], 'egress.circuit.threshold', 1..EGRESS_MAX_CIRCUIT_THRESHOLD)
           validate_boolean!(circuit['budget_breach'], 'egress.circuit.budget_breach')
         end
 
@@ -216,7 +216,7 @@ module Tamoz
         # wrong order; the message still names them separately.
         #
         # :reek:FeatureEnvy — the Range is the thing being asked about.
-        def integer!(value, field, bounds)
+        def validate_integer!(value, field, bounds)
           return value if value.is_a?(Integer) && bounds.cover?(value)
 
           raise ValidationError,

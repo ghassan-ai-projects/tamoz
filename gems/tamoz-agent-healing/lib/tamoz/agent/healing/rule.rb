@@ -81,6 +81,12 @@ module Tamoz
         # kind exists in v1; a rule naming anything else is refused at construction
         # so "the model said so" can never become an oracle kind.
         ORACLE_KINDS = %w[configured_check].freeze
+        COMPENSATION_KINDS = %w[
+          restore_preimage cancel_with_receipt authorized_compensation contain_only
+        ].freeze
+        OPTIONAL_TRIGGER_MATCHERS = {
+          "operations" => "operation", "tools" => "tool", "effect_states" => "effect_state"
+        }.freeze
 
         def initialize(
           format_version: FORMAT_VERSION,
@@ -108,7 +114,7 @@ module Tamoz
           promotion_evidence: nil,
           created_at_ms: 0
         )
-          validate_header!(format_version, version, minimum_confidence)
+          validate_header(format_version, version, minimum_confidence)
 
           super(
             format_version:,
@@ -147,20 +153,9 @@ module Tamoz
           categories = trigger.fetch("categories")
           return false unless categories.include?(signal.fetch("category"))
 
-          operations = trigger["operations"]
-          if operations.is_a?(Array) && !operations.empty?
-            return false unless operations.include?(signal["operation"])
+          OPTIONAL_TRIGGER_MATCHERS.all? do |trigger_key, signal_key|
+            subset_admits?(trigger[trigger_key], signal[signal_key])
           end
-          tools = trigger["tools"]
-          if tools.is_a?(Array) && !tools.empty?
-            return false unless tools.include?(signal["tool"])
-          end
-          effect_states = trigger["effect_states"]
-          if effect_states.is_a?(Array) && !effect_states.empty?
-            return false unless effect_states.include?(signal["effect_state"])
-          end
-
-          true
         end
 
         def trigger_categories = trigger.fetch("categories").map(&:to_sym)
@@ -289,32 +284,32 @@ module Tamoz
           raise CheckpointCorruptionError, "HealingRule is incomplete: #{error.message}"
         end
 
-        def validate_header!(format_version, version, minimum_confidence)
-          assert_format_version!(format_version)
-          assert_rule_version!(version)
-          assert_minimum_confidence!(minimum_confidence)
+        private
+
+        def validate_header(format_version, version, minimum_confidence)
+          validate_format_version(format_version)
+          validate_rule_version(version)
+          validate_minimum_confidence(minimum_confidence)
         end
 
-        def assert_format_version!(format_version)
+        def validate_format_version(format_version)
           return if format_version == FORMAT_VERSION
 
           raise HealingPolicyError,
                 "HealingRule format_version #{format_version.inspect} is not supported"
         end
 
-        def assert_rule_version!(version)
+        def validate_rule_version(version)
           return if version.is_a?(Integer) && version.positive?
 
           raise HealingPolicyError, "rule version must be a positive integer"
         end
 
-        def assert_minimum_confidence!(minimum_confidence)
+        def validate_minimum_confidence(minimum_confidence)
           return if minimum_confidence.is_a?(Numeric) && minimum_confidence.between?(0.0, 1.0)
 
           raise HealingPolicyError, "minimum_confidence must be between 0.0 and 1.0"
         end
-
-        private
 
         def validate_id(value, name)
           SafeText.normalize(
@@ -338,7 +333,13 @@ module Tamoz
           value
         end
 
-        def validate_hash!(value, name)
+        def subset_admits?(allowed, actual)
+          return true unless allowed.is_a?(Array) && !allowed.empty?
+
+          allowed.include?(actual)
+        end
+
+        def validate_hash(value, name)
           unless value.is_a?(Hash)
             raise HealingPolicyError, "#{name} must be an object"
           end
@@ -346,7 +347,7 @@ module Tamoz
           value
         end
 
-        def validate_array!(value, name)
+        def validate_array(value, name)
           unless value.is_a?(Array)
             raise HealingPolicyError, "#{name} must be an array"
           end
@@ -355,19 +356,19 @@ module Tamoz
         end
 
         def validate_trigger(value)
-          assert_trigger_shape!(value)
-          assert_trigger_keys!(value)
+          validate_trigger_shape(value)
+          validate_trigger_keys(value)
           validate_trigger_categories(value.fetch("categories"))
           value
         end
 
-        def assert_trigger_shape!(value)
+        def validate_trigger_shape(value)
           return if value.is_a?(Hash) && value["categories"].is_a?(Array) && !value["categories"].empty?
 
           raise HealingPolicyError, "trigger must carry a non-empty categories array"
         end
 
-        def assert_trigger_keys!(value)
+        def validate_trigger_keys(value)
           unknown = value.keys.map(&:to_s) - %w[categories operations tools effect_states]
           return if unknown.empty?
 
@@ -389,13 +390,13 @@ module Tamoz
         end
 
         def validate_plan_review(value)
-          validate_hash!(value, "plan_review_policy")
-          assert_plan_review_keys!(value)
-          assert_plan_and_critic_required!(value)
+          validate_hash(value, "plan_review_policy")
+          validate_plan_review_keys(value)
+          validate_plan_and_critic_required(value)
           value
         end
 
-        def assert_plan_review_keys!(value)
+        def validate_plan_review_keys(value)
           missing = REQUIRED_PLAN_REVIEW_KEYS - value.keys.map(&:to_s)
           return if missing.empty?
 
@@ -403,7 +404,7 @@ module Tamoz
                 "plan_review_policy is missing #{missing.sort.inspect}"
         end
 
-        def assert_plan_and_critic_required!(value)
+        def validate_plan_and_critic_required(value)
           return if value["plan_required"] == true && value["semantic_critic_required"] == true
 
           raise HealingPolicyError,
@@ -425,13 +426,13 @@ module Tamoz
         end
 
         def validate_steps(value)
-          validate_array!(value, "remediation_steps")
-          assert_single_step!(value)
+          validate_array(value, "remediation_steps")
+          validate_single_step(value)
           value.each { |step| validate_remediation_step(step) }
           value
         end
 
-        def assert_single_step!(value)
+        def validate_single_step(value)
           return if value.length <= 1
 
           raise HealingPolicyError,
@@ -439,23 +440,36 @@ module Tamoz
         end
 
         def validate_remediation_step(step)
+          validate_step_form(step)
+          validate_step_safety(step)
+          validate_safety_form_pair(step)
+        end
+
+        def validate_step_form(step)
           unless step.is_a?(Hash) && step.key?("form")
             raise HealingPolicyError, "each remediation step must name a form"
           end
 
           form = String(step.fetch("form")).to_sym
-          unless Classification::PERMITTED_FORMS.key?(form)
-            raise HealingPolicyError,
-                  "remediation form #{form.inspect} is not one of the design §6 " \
-                  "permitted forms #{Classification::PERMITTED_FORMS.keys.inspect}"
-          end
-          unless step.key?("safety") &&
-                 FailureRecord::EFFECT_SAFETIES.include?(String(step.fetch("safety")))
-            raise HealingPolicyError,
-                  "remediation step must declare an effect safety from " \
-                  "#{FailureRecord::EFFECT_SAFETIES.inspect}"
-          end
-          return unless String(step.fetch("safety")) == "unsafe" && form == :bounded_retry
+          return if Classification::PERMITTED_FORMS.key?(form)
+
+          raise HealingPolicyError,
+                "remediation form #{form.inspect} is not one of the design §6 " \
+                "permitted forms #{Classification::PERMITTED_FORMS.keys.inspect}"
+        end
+
+        def validate_step_safety(step)
+          return if step.key?("safety") &&
+                    FailureRecord::EFFECT_SAFETIES.include?(String(step.fetch("safety")))
+
+          raise HealingPolicyError,
+                "remediation step must declare an effect safety from " \
+                "#{FailureRecord::EFFECT_SAFETIES.inspect}"
+        end
+
+        def validate_safety_form_pair(step)
+          return unless String(step.fetch("safety")) == "unsafe"
+          return unless String(step.fetch("form")).to_sym == :bounded_retry
 
           raise HealingPolicyError,
                 "an unsafe effect may never declare bounded_retry (design §7)"
@@ -470,21 +484,21 @@ module Tamoz
         end
 
         def validate_budgets(value)
-          validate_hash!(value, "budgets")
-          assert_budget_keys!(value)
-          validate_budget_entries!(value)
-          validate_attempt_budget!(value)
+          validate_hash(value, "budgets")
+          validate_budget_keys(value)
+          validate_budget_entries(value)
+          validate_attempt_budget(value)
           value
         end
 
-        def assert_budget_keys!(value)
+        def validate_budget_keys(value)
           missing = REQUIRED_BUDGET_KEYS - value.keys.map(&:to_s)
           return if missing.empty?
 
           raise HealingPolicyError, "budgets are missing #{missing.sort.inspect}"
         end
 
-        def validate_budget_entries!(value)
+        def validate_budget_entries(value)
           REQUIRED_BUDGET_KEYS.each do |key|
             entry = value.fetch(key)
             next if entry.is_a?(Numeric) && entry.finite? && entry.positive?
@@ -493,7 +507,7 @@ module Tamoz
           end
         end
 
-        def validate_attempt_budget!(value)
+        def validate_attempt_budget(value)
           max_attempts = value.fetch("max_attempts")
           unless max_attempts.is_a?(Integer)
             raise HealingPolicyError, "budget max_attempts must be an integer"
@@ -507,22 +521,22 @@ module Tamoz
 
         # Invariant 33 / C2. The oracle is a CONFIGURED CHECK, pinned by digest.
         def validate_oracle(value)
-          validate_hash!(value, "verification_oracle")
-          assert_oracle_keys!(value)
-          validate_oracle_kind!(value)
-          validate_oracle_digest!(value)
-          validate_oracle_check_name!(value)
+          validate_hash(value, "verification_oracle")
+          validate_oracle_keys(value)
+          validate_oracle_kind(value)
+          validate_oracle_digest(value)
+          validate_oracle_check_name(value)
           value
         end
 
-        def assert_oracle_keys!(value)
+        def validate_oracle_keys(value)
           missing = REQUIRED_ORACLE_KEYS - value.keys.map(&:to_s)
           return if missing.empty?
 
           raise HealingPolicyError, "verification_oracle is missing #{missing.sort.inspect}"
         end
 
-        def validate_oracle_kind!(value)
+        def validate_oracle_kind(value)
           return if ORACLE_KINDS.include?(String(value.fetch("kind")))
 
           raise HealingPolicyError,
@@ -530,14 +544,14 @@ module Tamoz
                 "a model explanation is never an oracle (invariant 33)"
         end
 
-        def validate_oracle_digest!(value)
+        def validate_oracle_digest(value)
           digest = value.fetch("digest")
           return if digest.is_a?(String) && digest.start_with?("sha256:")
 
           raise HealingPolicyError, "verification_oracle digest must be a sha256: digest"
         end
 
-        def validate_oracle_check_name!(value)
+        def validate_oracle_check_name(value)
           SafeText.normalize(
             value.fetch("check_name"), name: "verification_oracle check_name",
             max_bytes: MAX_ID_BYTES, error_class: HealingPolicyError
@@ -549,8 +563,7 @@ module Tamoz
             raise HealingPolicyError, "compensation/containment must be defined (design §5)"
           end
 
-          unless %w[restore_preimage cancel_with_receipt authorized_compensation contain_only]
-                 .include?(String(value.fetch("kind")))
+          unless COMPENSATION_KINDS.include?(String(value.fetch("kind")))
             raise HealingPolicyError,
                   "compensation kind #{value.fetch("kind").inspect} is not a design §9 response"
           end

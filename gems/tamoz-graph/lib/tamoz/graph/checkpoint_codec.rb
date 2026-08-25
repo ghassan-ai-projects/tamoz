@@ -7,6 +7,9 @@ module Tamoz
     class CheckpointCodec
       FORMAT = "tamoz.graph.checkpoint"
       FORMAT_VERSION = 1
+      OUTCOME_FORMAT = "tamoz.graph.outcome"
+      ROUTES_FORMAT = "tamoz.graph.routes"
+      REQUEST_FORMAT = "tamoz.graph.request"
       DEFAULT_MAX_BYTES = 16 * 1024 * 1024
       MAX_BYTES = 64 * 1024 * 1024
       WIRE_SIZE = 16
@@ -64,7 +67,7 @@ module Tamoz
           String(attributes.fetch(:execution_id)),
           attributes.fetch(:status).to_s,
           attributes.fetch(:logical_step),
-          canonical_value_bytes(attributes.fetch(:state_bytes)),
+          verify_canonical_value_bytes(attributes.fetch(:state_bytes)),
           encode_frontier(attributes.fetch(:frontier)),
           encode_pending(attributes.fetch(:pending)),
           encode_interrupts(attributes.fetch(:interrupts)),
@@ -91,7 +94,7 @@ module Tamoz
       # owned by OTHER graphs: identity and node membership are graph-local
       # facts, so only run-path reads enforce them.
       def load(bytes, validate_identity: true)
-        text = validate_input(bytes)
+        text = validate_input_bytes(bytes)
         wire = JSON.parse(text, create_additions: false, max_nesting: 512)
         unless JSON.generate(wire) == text
           raise CheckpointCorruptionError, "checkpoint envelope is not canonical JSON"
@@ -100,24 +103,7 @@ module Tamoz
         strict = validate_identity
         validate_identity!(wire) if strict
 
-        attributes = {
-          graph_name: wire.fetch(2).dup.freeze,
-          graph_version: wire.fetch(3).dup.freeze,
-          definition_digest: wire.fetch(4).dup.freeze,
-          execution_id: bounded_string!(wire.fetch(5), "execution id"),
-          status: status!(wire.fetch(6)),
-          logical_step: non_negative_integer!(wire.fetch(7), "logical step"),
-          state_bytes: canonical_value_bytes(wire.fetch(8)),
-          frontier: decode_frontier(wire.fetch(9), strict:),
-          pending: decode_pending(wire.fetch(10)),
-          interrupts: decode_interrupts(wire.fetch(11)),
-          resume_values: decode_resume_values(wire.fetch(12)),
-          attempts: decode_attempts(wire.fetch(13)),
-          failure: load_value(wire.fetch(14)),
-          total_tasks: non_negative_integer!(wire.fetch(15), "total tasks")
-        }
-        attributes[:state] = decode_state(attributes.fetch(:state_bytes), strict:)
-        attributes.freeze
+        decoded_attributes(wire, strict:)
       rescue CheckpointVersionError, CheckpointCorruptionError
         raise
       rescue JSON::ParserError, JSON::NestingError => error
@@ -130,7 +116,7 @@ module Tamoz
 
       def dump_outcome(outcome)
         wire = [
-          "tamoz.graph.outcome",
+          OUTCOME_FORMAT,
           1,
           outcome.task_id,
           outcome.attempt_id,
@@ -157,7 +143,7 @@ module Tamoz
           }.freeze
         end
         route_payload = JSON.generate(
-          ["tamoz.graph.routes", 1, encode_goto(outcome.goto)]
+          [ROUTES_FORMAT, 1, encode_goto(outcome.goto)]
         ).freeze
         writes << {
           "write_index" => writes.length,
@@ -172,12 +158,7 @@ module Tamoz
         unless metadata.is_a?(Hash) && writes.is_a?(Array) && !writes.empty?
           raise CheckpointCorruptionError, "pending outcome rows are incomplete"
         end
-        ordered = writes.sort_by { |write| write.fetch("write_index") }
-        unless ordered.map { |write| write.fetch("write_index") } ==
-               (0...ordered.length).to_a
-          raise CheckpointCorruptionError,
-                "pending outcome write indices are not contiguous"
-        end
+        ordered = outcome_writes_in_order!(writes)
 
         update = {}
         routes = nil
@@ -185,30 +166,9 @@ module Tamoz
         ordered.each do |write|
           case write.fetch("kind")
           when "channel"
-            if routes_seen
-              raise CheckpointCorruptionError,
-                    "pending channel write appears after routes"
-            end
-            channel = channel!(write.fetch("channel"), "pending write channel")
-            if update.key?(channel)
-              raise CheckpointCorruptionError,
-                    "pending outcome repeats channel #{channel}"
-            end
-            update[channel] = load_value(write.fetch("payload"))
+            decode_pending_channel_write(write, update, routes_seen)
           when "routes"
-            if routes_seen || write.fetch("channel")
-              raise CheckpointCorruptionError, "pending routes write is invalid"
-            end
-            route_wire = parse_canonical_json(
-              write.fetch("payload"),
-              "pending routes"
-            )
-            require_array!(route_wire, 3, "pending routes")
-            unless route_wire.fetch(0) == "tamoz.graph.routes" &&
-                   route_wire.fetch(1) == 1
-              raise CheckpointVersionError, "pending routes format is unsupported"
-            end
-            routes = decode_goto(route_wire.fetch(2))
+            routes = decode_pending_routes_write(write, routes_seen)
             routes_seen = true
           else
             raise CheckpointCorruptionError, "pending write kind is invalid"
@@ -243,7 +203,7 @@ module Tamoz
         return state_codec.dump(payload) unless operation.to_s == "resume"
 
         JSON.generate(
-          ["tamoz.graph.request", 1, "resume", encode_resume_values(payload)]
+          [REQUEST_FORMAT, 1, "resume", encode_resume_values(payload)]
         ).freeze
       rescue JSON::GeneratorError => error
         raise CheckpointCorruptionError.new(
@@ -256,7 +216,7 @@ module Tamoz
 
         wire = parse_canonical_json(bytes, "resume request")
         require_array!(wire, 4, "resume request")
-        unless wire.fetch(0) == "tamoz.graph.request" &&
+        unless wire.fetch(0) == REQUEST_FORMAT &&
                wire.fetch(1) == 1 &&
                wire.fetch(2) == "resume"
           raise CheckpointVersionError, "resume request format is unsupported"
@@ -290,7 +250,68 @@ module Tamoz
         string_array!(wire, "pending path")
       end
 
-      def validate_input(bytes)
+      def outcome_writes_in_order!(writes)
+        ordered = writes.sort_by { |write| write.fetch("write_index") }
+        unless ordered.map { |write| write.fetch("write_index") } ==
+               (0...ordered.length).to_a
+          raise CheckpointCorruptionError,
+                "pending outcome write indices are not contiguous"
+        end
+
+        ordered
+      end
+
+      def decode_pending_channel_write(write, update, routes_seen)
+        if routes_seen
+          raise CheckpointCorruptionError,
+                "pending channel write appears after routes"
+        end
+        channel = channel!(write.fetch("channel"), "pending write channel")
+        if update.key?(channel)
+          raise CheckpointCorruptionError,
+                "pending outcome repeats channel #{channel}"
+        end
+        update[channel] = load_value(write.fetch("payload"))
+      end
+
+      def decode_pending_routes_write(write, routes_seen)
+        if routes_seen || write.fetch("channel")
+          raise CheckpointCorruptionError, "pending routes write is invalid"
+        end
+        route_wire = parse_canonical_json(
+          write.fetch("payload"),
+          "pending routes"
+        )
+        require_array!(route_wire, 3, "pending routes")
+        unless route_wire.fetch(0) == ROUTES_FORMAT && route_wire.fetch(1) == 1
+          raise CheckpointVersionError, "pending routes format is unsupported"
+        end
+
+        decode_goto(route_wire.fetch(2))
+      end
+
+      def decoded_attributes(wire, strict:)
+        attributes = {
+          graph_name: wire.fetch(2).dup.freeze,
+          graph_version: wire.fetch(3).dup.freeze,
+          definition_digest: wire.fetch(4).dup.freeze,
+          execution_id: bounded_string!(wire.fetch(5), "execution id"),
+          status: status!(wire.fetch(6)),
+          logical_step: non_negative_integer!(wire.fetch(7), "logical step"),
+          state_bytes: verify_canonical_value_bytes(wire.fetch(8)),
+          frontier: decode_frontier(wire.fetch(9), strict:),
+          pending: decode_pending(wire.fetch(10)),
+          interrupts: decode_interrupts(wire.fetch(11)),
+          resume_values: decode_resume_values(wire.fetch(12)),
+          attempts: decode_attempts(wire.fetch(13)),
+          failure: load_value(wire.fetch(14)),
+          total_tasks: non_negative_integer!(wire.fetch(15), "total tasks")
+        }
+        attributes[:state] = decode_state(attributes.fetch(:state_bytes), strict:)
+        attributes.freeze
+      end
+
+      def validate_input_bytes(bytes)
         unless bytes.is_a?(String)
           raise CheckpointCorruptionError, "checkpoint payload must be a String"
         end
@@ -402,11 +423,11 @@ module Tamoz
         wire.each_with_object({}) do |entry, result|
           require_array!(entry, OUTCOME_SIZE, "pending outcome")
           task_id = bounded_string!(entry.fetch(0), "pending task id")
-          if previous && task_id <= previous
-            raise CheckpointCorruptionError,
-                  "pending outcomes must have unique sorted task ids"
-          end
-          previous = task_id
+          previous = enforce_strictly_ascending!(
+            task_id,
+            previous,
+            "pending outcomes must have unique sorted task ids"
+          )
           outcome = Outcome.new(
             task_id:,
             attempt_id: bounded_string!(entry.fetch(1), "pending attempt id"),
@@ -446,11 +467,11 @@ module Tamoz
             ),
             descriptor: load_value(entry.fetch(2))
           )
-          if previous && interrupt.key <= previous
-            raise CheckpointCorruptionError,
-                  "interrupts must have unique sorted identities"
-          end
-          previous = interrupt.key
+          previous = enforce_strictly_ascending!(
+            interrupt.key,
+            previous,
+            "interrupts must have unique sorted identities"
+          )
           interrupt
         end.freeze
       end
@@ -471,10 +492,11 @@ module Tamoz
         wire.each_with_object({}) do |entry, result|
           require_array!(entry, 2, "attempt")
           task_id = bounded_string!(entry.fetch(0), "attempt task id")
-          if previous && task_id <= previous
-            raise CheckpointCorruptionError, "attempt ids must be unique and sorted"
-          end
-          previous = task_id
+          previous = enforce_strictly_ascending!(
+            task_id,
+            previous,
+            "attempt ids must be unique and sorted"
+          )
           result[task_id] = non_negative_integer!(entry.fetch(1), "attempt count")
         end.freeze
       end
@@ -578,11 +600,11 @@ module Tamoz
         wire.to_h do |task_entry|
           require_array!(task_entry, 2, "resume task")
           task_id = bounded_string!(task_entry.fetch(0), "resume task id")
-          if previous_task && task_id <= previous_task
-            raise CheckpointCorruptionError,
-                  "resume task ids must be unique and sorted"
-          end
-          previous_task = task_id
+          previous_task = enforce_strictly_ascending!(
+            task_id,
+            previous_task,
+            "resume task ids must be unique and sorted"
+          )
           indices = task_entry.fetch(1)
           require_array!(indices, nil, "resume task values")
           previous_index = nil
@@ -592,11 +614,11 @@ module Tamoz
               index_entry.fetch(0),
               "resume call index"
             )
-            if previous_index && index <= previous_index
-              raise CheckpointCorruptionError,
-                    "resume call indices must be unique and sorted"
-            end
-            previous_index = index
+            previous_index = enforce_strictly_ascending!(
+              index,
+              previous_index,
+              "resume call indices must be unique and sorted"
+            )
             [index, load_value(index_entry.fetch(1))]
           end.freeze
           [task_id, decoded]
@@ -613,7 +635,7 @@ module Tamoz
         ), cause: error
       end
 
-      def canonical_value_bytes(bytes)
+      def verify_canonical_value_bytes(bytes)
         value = load_value(bytes)
         encoded = state_codec.dump(value)
         # Canonicality is a BYTE property: an adapter may hand back the stored
@@ -691,6 +713,14 @@ module Tamoz
         end.freeze
       end
 
+      def enforce_strictly_ascending!(current, previous, message)
+        if previous && current <= previous
+          raise CheckpointCorruptionError, message
+        end
+
+        current
+      end
+
       def require_array!(value, size, name)
         unless value.is_a?(Array) && (size.nil? || value.length == size)
           expectation = size ? " with #{size} items" : ""
@@ -713,7 +743,8 @@ module Tamoz
 
       private_constant :DEFAULT_MAX_BYTES, :MAX_BYTES, :WIRE_SIZE, :FRONTIER_SIZE,
                        :OUTCOME_SIZE, :INTERRUPT_SIZE, :SEND_SIZE, :PULL_SIZE,
-                       :END_SIZE, :STATUSES, :KINDS
+                       :END_SIZE, :STATUSES, :KINDS, :OUTCOME_FORMAT,
+                       :ROUTES_FORMAT, :REQUEST_FORMAT
     end
   end
 end

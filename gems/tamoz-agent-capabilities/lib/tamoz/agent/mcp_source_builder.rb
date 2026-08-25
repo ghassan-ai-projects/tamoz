@@ -63,7 +63,7 @@ module Tamoz
 
           compose_source(state)
         rescue StandardError
-          state.fetch(:supervisors).each_value(&:close)
+          close_supervisors(state)
           raise
         end
       end
@@ -115,7 +115,7 @@ module Tamoz
             raise Error, "no supervisor for MCP server #{server_id.inspect}"
           end
           with_mcp_error_mapping do
-            policy = database_policies.fetch(descriptor.source_id, nil)
+            policy = database_policies.fetch(server_id, nil)
             validated_arguments = policy ? policy.validate(arguments) : arguments
             Tamoz::Mcp::Invocation.call(descriptor, validated_arguments, snapshot:, supervisor:)
           end
@@ -162,6 +162,10 @@ module Tamoz
         end
       end
 
+      def close_supervisors(state)
+        state.fetch(:supervisors).each_value(&:close)
+      end
+
       def compose_source(state)
         McpCapabilitySource.new(
           catalogs: state.fetch(:catalogs),
@@ -171,7 +175,7 @@ module Tamoz
           executor: build_executor(
             state.fetch(:catalogs), state.fetch(:supervisors), state.fetch(:database_policies)
           ),
-          closer: -> { state.fetch(:supervisors).each_value(&:close) }
+          closer: -> { close_supervisors(state) }
         )
       end
 

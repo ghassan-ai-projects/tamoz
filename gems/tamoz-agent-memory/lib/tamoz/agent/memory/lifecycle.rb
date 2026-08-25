@@ -22,9 +22,7 @@ module Tamoz
         # read still works (probe P11-16).
         def correct(memory_id:, statement:, actor:, reason:, layer: nil, klass: nil,
                     sensitivity: nil, scopes: nil, source_refs: nil)
-          current = current_record(memory_id)
-          raise MemoryError, "memory record #{memory_id} does not exist" unless current
-
+          current = current_record!(memory_id)
           record = current.record
           corrected = record.with(
             record_version: current.entry.version + 1,
@@ -39,7 +37,7 @@ module Tamoz
             state: :active,
             transition: transition(actor, reason, prior_version: record.record_version)
           )
-          append_version(record, corrected, expected_version: current.entry.version)
+          append_version(corrected, expected_version: current.entry.version)
           corrected
         end
 
@@ -47,9 +45,7 @@ module Tamoz
         # active recall by state AND head-join); the replacement is admitted
         # separately by the caller.
         def supersede(memory_id:, actor:, reason:, replacement_id: nil)
-          current = current_record(memory_id)
-          raise MemoryError, "memory record #{memory_id} does not exist" unless current
-
+          current = current_record!(memory_id)
           record = current.record
           superseded = record.with(
             record_version: current.entry.version + 1,
@@ -57,23 +53,21 @@ module Tamoz
             supersession_key: replacement_id || record.supersession_key,
             transition: transition(actor, reason, prior_version: record.record_version)
           )
-          append_version(record, superseded, expected_version: current.entry.version)
+          append_version(superseded, expected_version: current.entry.version)
           superseded
         end
 
         # Quarantine: a contradictory or policy-flagged record is quarantined
         # (never "ranked slightly higher").
         def quarantine(memory_id:, actor:, reason:)
-          current = current_record(memory_id)
-          raise MemoryError, "memory record #{memory_id} does not exist" unless current
-
+          current = current_record!(memory_id)
           record = current.record
           quarantined = record.with(
             record_version: current.entry.version + 1,
             state: :quarantined,
             transition: transition(actor, reason, prior_version: record.record_version)
           )
-          append_version(record, quarantined, expected_version: current.entry.version)
+          append_version(quarantined, expected_version: current.entry.version)
           quarantined
         end
 
@@ -81,9 +75,7 @@ module Tamoz
         # transition for expiry; actor otherwise) and emits an invariant-54
         # shape receipt naming removed / retained / pending sinks.
         def delete(memory_id:, actor: nil, reason: "deleted", authority: "tamoz.memory.lifecycle", now: nil)
-          current = current_record(memory_id)
-          raise MemoryError, "memory record #{memory_id} does not exist" unless current
-
+          current = current_record!(memory_id)
           record = current.record
           deleting_actor = actor || (expired?(record) ? "system" : "tamoz.memory.lifecycle")
           deleted = record.with(
@@ -93,7 +85,7 @@ module Tamoz
                                    evidence: {"expiry" => expired?(record)})
           )
           begin
-            append_version(record, deleted, expected_version: current.entry.version)
+            append_version(deleted, expected_version: current.entry.version)
           rescue Tamoz::StoreConflictError => error
             # A concurrent update won the CAS: no silent partial erasure.
             raise MemoryDeletionError.new(
@@ -101,7 +93,7 @@ module Tamoz
               receipt: deletion_receipt(memory_id, now:, removed: {}, retained: {}, pending: ["store_cas_conflict"])
             )
           end
-          sinks = deletion_sinks(memory_id, deleted)
+          sinks = deletion_sinks(memory_id)
           deletion_receipt(memory_id, now:, removed: sinks.fetch(:removed), retained: sinks.fetch(:retained), pending: sinks.fetch(:pending))
         end
 
@@ -115,11 +107,10 @@ module Tamoz
           layer ||= current ? current.record.layer.to_s : nil
           raise MemoryError, "memory record #{memory_id} does not exist" unless layer
 
-          receipt = @engine.repository.purge(
+          @engine.repository.purge(
             @engine.namespace, layer, memory_id,
             now_ms: (now || Time.now).to_i * 1000
           )
-          receipt
         end
 
         private
@@ -155,7 +146,14 @@ module Tamoz
           Current.new(entry:, record: entry.value)
         end
 
-        def append_version(prior, next_record, expected_version:)
+        def current_record!(memory_id)
+          current = current_record(memory_id)
+          raise MemoryError, "memory record #{memory_id} does not exist" unless current
+
+          current
+        end
+
+        def append_version(next_record, expected_version:)
           @engine.repository.append(
             record: next_record,
             index: @engine.index_for(next_record),
@@ -200,7 +198,7 @@ module Tamoz
         # derived consolidations that cite this record as a source, prompt
         # caches, and sync queues. Protected artifacts stay under their own
         # rules; backups fall under their own retention (named pending).
-        def deletion_sinks(memory_id, deleted)
+        def deletion_sinks(memory_id)
           index_rows = index_row_count(memory_id)
           derived = derived_references(memory_id)
           {

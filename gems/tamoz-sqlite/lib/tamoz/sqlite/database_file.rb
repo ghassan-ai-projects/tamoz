@@ -47,10 +47,7 @@ module Tamoz
           next unless File.exist?(sidecar)
 
           stat = File.lstat(sidecar)
-          unless stat.file? && !stat.symlink? &&
-                 stat.mode.nobits?(UNSAFE_MODE_MASK)
-            raise PermissionError, 'SQLite sidecar permissions are unsafe'
-          end
+          raise PermissionError, 'SQLite sidecar permissions are unsafe' unless secure_regular_file?(stat)
         end
       end
 
@@ -59,14 +56,9 @@ module Tamoz
       end
 
       def create_secure_temporary!(target)
-        flags = File::WRONLY | File::CREAT | File::EXCL
-        flags |= File::NOFOLLOW if File.const_defined?(:NOFOLLOW)
-        File.open(target, flags, FILE_MODE) { nil }
+        File.open(target, exclusive_write_flags, FILE_MODE) { nil }
         stat = File.lstat(target)
-        unless stat.file? && !stat.symlink? &&
-               stat.mode.nobits?(UNSAFE_MODE_MASK)
-          raise PermissionError, 'backup temporary file is unsafe'
-        end
+        raise PermissionError, 'backup temporary file is unsafe' unless secure_regular_file?(stat)
       end
 
       def verify_backup!(target)
@@ -100,10 +92,14 @@ module Tamoz
       end
 
       def create_database_file!
+        File.open(path, exclusive_write_flags, FILE_MODE) { nil }
+        File.chmod(FILE_MODE, path)
+      end
+
+      def exclusive_write_flags
         flags = File::WRONLY | File::CREAT | File::EXCL
         flags |= File::NOFOLLOW if File.const_defined?(:NOFOLLOW)
-        File.open(path, flags, FILE_MODE) { nil }
-        File.chmod(FILE_MODE, path)
+        flags
       end
 
       def verify_identity!(stat)
@@ -112,6 +108,11 @@ module Tamoz
         return unless Process.respond_to?(:uid) && stat.uid != Process.uid
 
         raise PermissionError, 'SQLite file is not owned by the current user'
+      end
+
+      def secure_regular_file?(stat)
+        stat.file? && !stat.symlink? &&
+          stat.mode.nobits?(UNSAFE_MODE_MASK)
       end
 
       def repair_permissions!(stat, repair_permissions:)

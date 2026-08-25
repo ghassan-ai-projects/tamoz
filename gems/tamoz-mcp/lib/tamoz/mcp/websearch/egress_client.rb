@@ -49,7 +49,10 @@ module Tamoz
         # the response exceeded the declared budget).
         Result = Data.define(:status, :headers, :body, :truncated)
 
-        attr_reader :policy, :dials
+        attr_reader :policy
+
+        # Frozen copy: the dial audit trail must not be rewritable through the reader.
+        def dials = @dials.dup.freeze
 
         # `resolver:` resolves a hostname to candidate address strings
         # (`call(host) -> Array<String>`). `connector:` performs the exchange
@@ -84,10 +87,7 @@ module Tamoz
             response = @connector.call(
               pinned_ip: pinned,
               host: target.fetch(:host),
-              # The path (and its query) is part of the request, not decoration:
-              # without it the connector had nothing to ask for and dialed "/"
-              # on every fetch, so the live provider path answered a different
-              # question than the caller asked. Every hop recomputes it.
+              # Path + query is the request itself (contract on initialize), recomputed every hop.
               path: target.fetch(:path),
               port: DEFAULT_PORT,
               timeout: policy.connect_timeout_s,

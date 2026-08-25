@@ -59,21 +59,21 @@ module Tamoz
       end
 
       def validate_read_file(arguments)
-        validate_path_only(arguments, %w[path], 'path')
+        validate_path_only(arguments, allowed: %w[path], key: 'path')
       end
 
       def validate_list_directory(arguments)
-        validate_path_only(arguments, %w[path], 'path', '.')
+        validate_path_only(arguments, allowed: %w[path], key: 'path', default: '.')
       end
 
-      def validate_path_only(arguments, allowed, key, default = nil)
+      def validate_path_only(arguments, allowed:, key:, default: nil)
         reject_unknown!(arguments, allowed)
         validate_path_argument!(arguments.fetch(key, default))
         arguments
       end
 
       def validate_search(arguments)
-        validate_path_only(arguments, %w[path query], 'path', '.')
+        validate_path_only(arguments, allowed: %w[path query], key: 'path', default: '.')
         query = arguments.fetch('query')
         raise ToolArgumentError, 'query must be a string' unless query.is_a?(String)
         raise ToolArgumentError, 'query must not be empty' if query.empty?

@@ -30,8 +30,7 @@ module Tamoz
             path: @path,
             fault_injector: @fault_injector
           )
-          @wire = Tamoz::SQLite.const_get(:Wire, false)
-          @namespace = @wire.namespace([])
+          @namespace = Tamoz::SQLite.const_get(:Wire, false).namespace([])
           @compiled = fixture_definition.compile(checkpointer: @adapter)
           @store = @compiled.checkpointer
           prepare_action!
@@ -196,8 +195,7 @@ module Tamoz
         end
 
         def prepare_request_recover_stale
-          lease, request = claimed_request(:turn)
-          current = takeover_lease(lease)
+          current, request = takeover_claimed_request(:turn)
           @action = lambda do
             @store.recover_request(
               lease: current,
@@ -208,8 +206,7 @@ module Tamoz
         end
 
         def prepare_request_recover_claimed
-          lease, request = claimed_request(:turn)
-          current = takeover_lease(lease)
+          current, request = takeover_claimed_request(:turn)
           @action = lambda do
             @store.recover_request(
               lease: current,
@@ -329,11 +326,7 @@ module Tamoz
           checkpoint = commit_start(lease, execution_id: EXECUTION_A)
           task, outcome = task_and_outcome(checkpoint)
           @store.append_writes(lease:, task:, outcome:)
-          state = @compiled.state_manager.apply_outcomes(
-            checkpoint.state,
-            [outcome],
-            remaining_steps: @compiled.limits.max_steps
-          )
+          state = advanced_state(checkpoint, outcome)
           attributes = checkpoint_attributes(
             checkpoint,
             status: :completed,
@@ -359,12 +352,7 @@ module Tamoz
           checkpoint = commit_start(lease, execution_id: EXECUTION_A)
           enqueue_request(:turn)
           request = @store.claim_next_request(lease:)
-          transition = @store.request_transition(
-            request_id: request.request_id,
-            execution_id: request.execution_id,
-            action: :completed,
-            graph_status: :completed
-          )
+          transition = completed_transition(request)
           attributes = checkpoint_attributes(
             checkpoint,
             execution_id: request.execution_id,
@@ -447,16 +435,7 @@ module Tamoz
             graph_status: :failed,
             retryable: false
           )
-          failure = [
-            {
-              "graph" => GRAPH_NAME,
-              "node" => "work",
-              "task_id" => "task.phase2",
-              "attempt_id" => "attempt.phase2",
-              "error_class" => "ScenarioFailure",
-              "safe_message" => "fixed failure"
-            }.freeze
-          ].freeze
+          failure = failure_payload
           attributes = checkpoint_attributes(
             checkpoint,
             status: :failed,
@@ -510,10 +489,12 @@ module Tamoz
           )
         end
 
+        def fixture_column?(column)
+          %w[greatest_backend_time_ms lease_expires_at_ms].include?(column)
+        end
+
         def update_lease_fixture!(lease, column:, value:, operation:)
-          unless %w[
-            greatest_backend_time_ms lease_expires_at_ms
-          ].include?(column)
+          unless fixture_column?(column)
             raise ExecutionError, "SQLite fixture lease column is invalid"
           end
           @adapter.__send__(
@@ -562,6 +543,11 @@ module Tamoz
           enqueue_request(operation)
           lease = acquire_lease(OWNER_A)
           [lease, @store.claim_next_request(lease:)].freeze
+        end
+
+        def takeover_claimed_request(operation)
+          lease, request = claimed_request(operation)
+          [takeover_lease(lease), request].freeze
         end
 
         def commit_start(lease, execution_id:)
@@ -665,6 +651,36 @@ module Tamoz
             goto: nil
           )
           [task, outcome].freeze
+        end
+
+        def advanced_state(checkpoint, outcome)
+          @compiled.state_manager.apply_outcomes(
+            checkpoint.state,
+            [outcome],
+            remaining_steps: @compiled.limits.max_steps
+          )
+        end
+
+        def completed_transition(request)
+          @store.request_transition(
+            request_id: request.request_id,
+            execution_id: request.execution_id,
+            action: :completed,
+            graph_status: :completed
+          )
+        end
+
+        def failure_payload
+          [
+            {
+              "graph" => GRAPH_NAME,
+              "node" => "work",
+              "task_id" => "task.phase2",
+              "attempt_id" => "attempt.phase2",
+              "error_class" => "ScenarioFailure",
+              "safe_message" => "fixed failure"
+            }.freeze
+          ].freeze
         end
 
         private_constant :EXECUTION_A, :EXECUTION_B, :GRAPH_NAME,

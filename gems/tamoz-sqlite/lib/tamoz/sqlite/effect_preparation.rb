@@ -156,10 +156,11 @@ module Tamoz
           when 'failed', 'abandoned'
             action = :failed
           when 'prepared', 'running'
+            current_attempt_number = row.fetch(11)
             attempt = EffectJournalRows.attempt(
               tx,
               effect_key,
-              row.fetch(11),
+              current_attempt_number,
               'effect.prepare.current_attempt'
             )
             raise IntegrityError, 'effect current attempt is missing' unless attempt
@@ -167,7 +168,9 @@ module Tamoz
             # A new fenced writer has proved that the previous owner no longer
             # controls the request. Do not make recovery wait for that dead
             # owner's wall-clock attempt deadline before classifying the effect.
-            if attempt.fetch(4) > now && attempt.fetch(2) == lease.fence
+            attempt_deadline = attempt.fetch(4)
+            attempt_fence = attempt.fetch(2)
+            if attempt_deadline > now && attempt_fence == lease.fence
               action = :wait
               next
             end
@@ -180,7 +183,7 @@ module Tamoz
                   WHERE effect_key = ? AND attempt_number = ?
                     AND status = 'prepared'
                 SQL
-                [now, effect_key, row.fetch(11)]
+                [now, effect_key, current_attempt_number]
               )
               EffectAttemptLedger.grant_next!(
                 tx,
@@ -230,7 +233,7 @@ module Tamoz
                     WHERE effect_key = ? AND attempt_number = ?
                       AND status = 'running'
                   SQL
-                  [now, effect_key, row.fetch(11)]
+                  [now, effect_key, current_attempt_number]
                 )
                 tx.execute(
                   'effect.prepare.unknown_head',

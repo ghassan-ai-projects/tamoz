@@ -112,8 +112,7 @@ module Tamoz
         # grant to do it.
         def write_evaluator_output(name, content)
           path = File.join(@evaluator_root, name)
-          File.write(path, "#{CanonicalJSON.dump(content)}\n", encoding: Encoding::UTF_8)
-          File.chmod(FILE_MODE, path)
+          write_corpus_file(path, content)
           path
         end
 
@@ -147,19 +146,22 @@ module Tamoz
           "sha256:#{Digest::SHA256.hexdigest(CanonicalJSON.dump(value))}"
         end
 
+        def write_corpus_file(path, value)
+          File.write(path, "#{CanonicalJSON.dump(value)}\n", encoding: Encoding::UTF_8)
+          File.chmod(FILE_MODE, path)
+        end
+
         def write_train_trajectories
           TRAIN_TRAJECTORIES.each do |trajectory|
-            path = File.join(@train_root, "trajectories", "#{trajectory.fetch("trajectory_id")}.json")
-            File.write(path, "#{CanonicalJSON.dump(trajectory)}\n", encoding: Encoding::UTF_8)
-            File.chmod(FILE_MODE, path)
+            name = "#{trajectory.fetch("trajectory_id")}.json"
+            write_corpus_file(File.join(@train_root, "trajectories", name), trajectory)
           end
         end
 
         def write_holdout_partition
           HOLDOUT_TASKS.each do |task|
-            path = File.join(@holdout_root, "#{task.fetch("task_id")}.json")
-            File.write(path, "#{CanonicalJSON.dump(task)}\n", encoding: Encoding::UTF_8)
-            File.chmod(FILE_MODE, path)
+            name = "#{task.fetch("task_id")}.json"
+            write_corpus_file(File.join(@holdout_root, name), task)
           end
         end
 

@@ -22,9 +22,6 @@ module Tamoz
       end
 
       def open(descriptor = {}, credential = policy.credential_ref)
-        @opened = false
-        @headers = {}
-        @descriptor = nil
         @headers = credential_headers(credential)
         @descriptor = descriptor.dup.freeze
         @opened = true
@@ -155,18 +152,18 @@ module Tamoz
         Tamoz::Observability::Correlation.span_id(trace_id:, kind: name, anchor:)
       end
 
-      def otel_trace_id(value)
-        return unless value
-        return value if value.to_s.match?(/\A[0-9a-f]{32}\z/)
+      def otel_trace_id(raw_id)
+        return unless raw_id
+        return raw_id if raw_id.to_s.match?(/\A[0-9a-f]{32}\z/)
 
-        Digest::SHA256.hexdigest("tamoz.otel.trace.v1\n#{value}")[0, 32]
+        Digest::SHA256.hexdigest("tamoz.otel.trace.v1\n#{raw_id}")[0, 32]
       end
 
-      def otel_span_id(value)
-        return unless value
-        return value if value.to_s.match?(/\A[0-9a-f]{16}\z/)
+      def otel_span_id(raw_id)
+        return unless raw_id
+        return raw_id if raw_id.to_s.match?(/\A[0-9a-f]{16}\z/)
 
-        Digest::SHA256.hexdigest("tamoz.otel.span.v1\n#{value}")[0, 16]
+        Digest::SHA256.hexdigest("tamoz.otel.span.v1\n#{raw_id}")[0, 16]
       end
     end
   end

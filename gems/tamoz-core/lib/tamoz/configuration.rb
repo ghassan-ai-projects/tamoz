@@ -16,11 +16,7 @@ module Tamoz
       stream_buffer: 32,
       notifier: Notifier::Null::INSTANCE
     )
-      unless CONCURRENCY_MODES.include?(concurrency)
-        raise ConfigurationError, "concurrency must be one of #{CONCURRENCY_MODES.inspect}"
-      end
-
-      @concurrency = concurrency
+      @concurrency = concurrency_mode!(concurrency)
       @pool_size = bounded_integer!(pool_size, :pool_size, MAX_POOL_SIZE)
       @recursion_limit = bounded_integer!(
         recursion_limit,
@@ -32,11 +28,7 @@ module Tamoz
         :stream_buffer,
         MAX_STREAM_BUFFER
       )
-      unless notifier.respond_to?(:instrument)
-        raise ConfigurationError, "notifier must respond to instrument"
-      end
-
-      @notifier = notifier
+      @notifier = instrumenting_notifier!(notifier)
       freeze
     end
 
@@ -67,6 +59,22 @@ module Tamoz
     end
 
     private
+
+    def concurrency_mode!(value)
+      unless CONCURRENCY_MODES.include?(value)
+        raise ConfigurationError, "concurrency must be one of #{CONCURRENCY_MODES.inspect}"
+      end
+
+      value
+    end
+
+    def instrumenting_notifier!(value)
+      unless value.respond_to?(:instrument)
+        raise ConfigurationError, "notifier must respond to instrument"
+      end
+
+      value
+    end
 
     def bounded_integer!(value, name, maximum)
       unless value.is_a?(Integer) && value.positive? && value <= maximum

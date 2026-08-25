@@ -84,7 +84,8 @@ module Tamoz
           end
         end
 
-        # id -> [predicate, detail_builder]. Ordered exactly as CHECK_IDS.
+        # id -> predicate, ordered exactly as CHECK_IDS; DETAILS holds each
+        # failure's wording.
         CHECKS = {
           # "the original operation was authorized"
           original_operation_authorized: lambda { |context|
@@ -193,10 +194,7 @@ module Tamoz
           CHECK_IDS.each do |id|
             next if passes?(id, context)
 
-            return PreflightRejection.new(
-              "preflight rejected: #{DETAILS.fetch(id)}",
-              precondition: id, detail: DETAILS.fetch(id)
-            )
+            return build_rejection(id)
           end
           nil
         end
@@ -211,7 +209,14 @@ module Tamoz
         def passes?(id, context)
           CHECKS.fetch(id).call(context)
         end
-        private_class_method :passes?
+
+        def build_rejection(id)
+          detail = DETAILS.fetch(id)
+          PreflightRejection.new(
+            "preflight rejected: #{detail}", precondition: id, detail:
+          )
+        end
+        private_class_method :passes?, :build_rejection
       end
     end
   end

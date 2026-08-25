@@ -43,7 +43,7 @@ module Tamoz
           now:
         )
         row = request_row_for_enqueue(tx, input, 'request.enqueue.existing')
-        return existing_row(row, input) if row
+        return verify_existing_row!(row, input) if row
 
         sequence = next_request_sequence(tx, input)
         persist_new_request!(tx, input:, sequence:, now:)
@@ -147,7 +147,7 @@ module Tamoz
         raise ConfigurationError,
               'redirect operation and delivery mode must be selected together'
       end
-      def existing_row(row, input)
+      def verify_existing_row!(row, input)
         unless row.fetch(4) == input.input_digest &&
                row.fetch(5) == input.operation_text &&
                row.fetch(6) == input.delivery_text &&

@@ -155,8 +155,6 @@ module Tamoz
       def extract_usage_hash(bytes)
         parsed = Tamoz::Core.parse_json_strict(bytes)
         parsed.is_a?(Hash) ? parsed.fetch("usage", {}) : {}
-      rescue ProtocolError
-        {}
       end
 
       def usage_from(raw)

@@ -76,10 +76,10 @@ module Tamoz
       # marked sends become unknown during reconciliation.
       def claim_delivery(delivery_id:, owner:, fence:, claim_expires_at:, now:)
         transaction('comms.outbox.claim') do |txn|
-          missing = txn.first('comms.outbox.claim.exists', <<~SQL, [delivery_id])
+          existing = txn.first('comms.outbox.claim.exists', <<~SQL, [delivery_id])
             SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
           SQL
-          next :missing unless missing
+          next :missing unless existing
 
           txn.execute('comms.outbox.claim', <<~SQL, [owner, fence, now_ms(claim_expires_at), delivery_id, now_ms(now)])
             UPDATE tamoz_comms_outbox
@@ -173,12 +173,12 @@ module Tamoz
       # holds attempts and receipts, never the outbox. Write-once.
       def bind_journal_effect(delivery_id:, effect_key:, execution_id:, now:)
         transaction('comms.outbox.bind_effect') do |txn|
-          missing = txn.first('comms.outbox.bind_effect.exists', <<~SQL, [delivery_id])
+          existing = txn.first('comms.outbox.bind_effect.exists', <<~SQL, [delivery_id])
             SELECT effect_key FROM tamoz_comms_outbox WHERE delivery_id = ?
           SQL
-          next :missing unless missing
+          next :missing unless existing
 
-          return :conflict if missing[0] && missing[0] != effect_key
+          return :conflict if existing[0] && existing[0] != effect_key
 
           txn.execute('comms.outbox.bind_effect', <<~SQL, [effect_key, execution_id, now_ms(now), delivery_id])
             UPDATE tamoz_comms_outbox
@@ -253,10 +253,10 @@ module Tamoz
       def coalesce_milestone!(txn, delivery_wire, surface_id, request_ref, now)
         live = milestone_rows(txn, surface_id, delivery_wire.fetch('conversation_id'), request_ref,
                               "AND status = 'pending'").first
-        return false unless live
+        return unless live
 
         rewrite_milestone!(txn, delivery_wire, live.fetch(:delivery_id), now)
-        true
+        live
       end
 
       # Past the bound with no pending row to coalesce into, the new milestone
@@ -284,7 +284,9 @@ module Tamoz
       # The milestone text/markup move to the new fact in place; journaled
       # stays 0 and the row keeps its status, id, and effect binding.
       def rewrite_milestone!(txn, delivery_wire, delivery_id, now)
-        txn.execute('comms.outbox.milestone.rewrite', <<~SQL, [delivery_wire.fetch('text'), delivery_wire['markup'], delivery_wire.fetch('content_digest'), now_ms(now), delivery_id])
+        binds = [delivery_wire.fetch('text'), delivery_wire['markup'],
+                 delivery_wire.fetch('content_digest'), now_ms(now), delivery_id]
+        txn.execute('comms.outbox.milestone.rewrite', <<~SQL, binds)
           UPDATE tamoz_comms_outbox
           SET text = ?, markup = ?, content_digest = ?, updated_at_ms = ?
           WHERE delivery_id = ?

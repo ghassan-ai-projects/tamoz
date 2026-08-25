@@ -111,20 +111,16 @@ module Tamoz
                     "control root and filesystem anchor must share a filesystem"
             end
 
-            directory_name = identifier(
+            directory_name = validate_identifier(
               name,
               name: "control directory name",
               maximum: 64
             )
-            directory = File.join(root_path, directory_name)
-            if lstat_if_present(directory)
-              raise ExecutionError, "control directory must not pre-exist"
-            end
-
-            Dir.mkdir(directory, 0o700)
+            directory = create_control_directory!(
+              root_path: root_path,
+              directory_name: directory_name
+            )
             created = true
-            File.chmod(0o700, directory)
-            sync_directory(root_path)
             layout = layout_from_path(directory)
             ensure_control_absent!(layout)
             layout
@@ -138,12 +134,31 @@ module Tamoz
             ), cause: error
           end
 
+          def create_control_directory!(root_path:, directory_name:)
+            directory = File.join(root_path, directory_name)
+            if lstat_if_present(directory)
+              raise ExecutionError, "control directory must not pre-exist"
+            end
+
+            created = false
+            begin
+              Dir.mkdir(directory, 0o700)
+              created = true
+              File.chmod(0o700, directory)
+              sync_directory(root_path)
+            rescue StandardError
+              remove_empty_directory(directory) if created
+              raise
+            end
+            directory
+          end
+
           def attach!(directory:, device:, inode:)
-            expected_device = nonnegative_integer(
+            expected_device = validate_nonnegative_integer(
               device,
               name: "control directory device"
             )
-            expected_inode = positive_integer(
+            expected_inode = validate_positive_integer(
               inode,
               name: "control directory inode",
               maximum: (2**63) - 1
@@ -187,31 +202,18 @@ module Tamoz
               scenario: scenario_value,
               registry:
             )
-            hook = expected_hook(
+            hook = build_expected_hook(
               selector_value,
               hook_version: registry_reference.fetch("version")
             )
             validate_registry_hook!(registry, selector_value.fetch("point"), hook)
 
-            body = {
-              "control_version" => VERSION,
-              "control_digest" => DEFINITION_DIGEST,
-              "scenario" => scenario_value,
-              "registry" => registry_reference,
-              "selector" => selector_value,
-              "observed_hook" => hook
-            }
-            body["content_digest"] = CanonicalJSON.content_digest(
-              body,
-              domain: "eval.sqlite_selector_control"
+            record, bytes = build_control_record(
+              scenario: scenario_value,
+              selector: selector_value,
+              registry_reference: registry_reference,
+              hook: hook
             )
-            record = DeepFreeze.call(body)
-            bytes = "#{CanonicalJSON.dump(record)}\n".freeze
-            if bytes.bytesize > MAX_CONTROL_BYTES
-              raise ExecutionError,
-                    "SQLite selector control exceeds #{MAX_CONTROL_BYTES} bytes"
-            end
-
             Expectation.new(
               scenario: scenario_value,
               selector: selector_value,
@@ -228,21 +230,44 @@ module Tamoz
             ), cause: error
           end
 
+          def build_control_record(scenario:, selector:, registry_reference:, hook:)
+            body = {
+              "control_version" => VERSION,
+              "control_digest" => DEFINITION_DIGEST,
+              "scenario" => scenario,
+              "registry" => registry_reference,
+              "selector" => selector,
+              "observed_hook" => hook
+            }
+            body["content_digest"] = CanonicalJSON.content_digest(
+              body,
+              domain: "eval.sqlite_selector_control"
+            )
+            record = DeepFreeze.call(body)
+            bytes = "#{CanonicalJSON.dump(record)}\n".freeze
+            if bytes.bytesize > MAX_CONTROL_BYTES
+              raise ExecutionError,
+                    "SQLite selector control exceeds #{MAX_CONTROL_BYTES} bytes"
+            end
+
+            [record, bytes]
+          end
+
           def normalize_scenario(value)
-            object = exact_hash(value, SCENARIO_FIELDS, name: "control scenario")
+            object = validate_exact_hash(value, SCENARIO_FIELDS, name: "control scenario")
             DeepFreeze.call(
               {
-                "id" => identifier(
+                "id" => validate_identifier(
                   object.fetch("id"),
                   name: "control scenario id",
                   maximum: MAX_ID_BYTES
                 ),
-                "version" => positive_integer(
+                "version" => validate_positive_integer(
                   object.fetch("version"),
                   name: "control scenario version",
                   maximum: 1_000_000
                 ),
-                "digest" => digest_value(
+                "digest" => validate_digest(
                   object.fetch("digest"),
                   name: "control scenario digest"
                 )
@@ -251,58 +276,18 @@ module Tamoz
           end
 
           def normalize_selector(value, scenario:, registry:)
-            object = exact_hash(value, SELECTOR_FIELDS, name: "control selector")
-            point = identifier(
-              object.fetch("point"),
-              name: "control selector point",
-              maximum: MAX_ID_BYTES
-            )
-            unless POINTS.include?(point)
-              raise ExecutionError, "control selector point is invalid"
-            end
-            operation = identifier(
-              object.fetch("operation"),
-              name: "control selector operation",
-              maximum: MAX_ID_BYTES
-            )
-            operation_entry = registry.operation(operation)
-            unless operation_entry &&
-                   operation_entry.fetch("phase") == 2 &&
-                   operation_entry.fetch("kill_required") == true
-              raise ExecutionError,
-                    "control selector operation is not Phase 2 kill-required"
-            end
-
-            statement = object.fetch("statement")
-            statement = if statement.nil?
-                          nil
-                        else
-                          identifier(
-                            statement,
-                            name: "control selector statement",
-                            maximum: MAX_ID_BYTES
-                          )
-                        end
-            unless object.fetch("scenario") == scenario.fetch("id")
-              raise ExecutionError,
-                    "control selector scenario does not match its scenario"
-            end
-            unless object.fetch("attempt_class") == "first"
-              raise ExecutionError,
-                    "Phase 2 control selectors require the first attempt"
-            end
-            occurrence = positive_integer(
+            object = validate_exact_hash(value, SELECTOR_FIELDS, name: "control selector")
+            point = selector_point(object)
+            operation = enforce_phase2_operation!(object, registry)
+            statement = optional_statement(object)
+            enforce_selector_binding!(object, scenario:)
+            occurrence = validate_positive_integer(
               object.fetch("occurrence"),
               name: "control selector occurrence",
               maximum: MAX_OCCURRENCE
             )
-            iteration_class = object.fetch("iteration_class")
-            unless iteration_class.is_a?(String) &&
-                   ITERATION_CLASSES.include?(iteration_class)
-              raise ExecutionError,
-                    "control selector iteration class is invalid"
-            end
-            selector_digest = digest_value(
+            iteration_class = iteration_class_value(object)
+            selector_digest = validate_digest(
               object.fetch("selector_digest"),
               name: "control selector digest"
             )
@@ -316,18 +301,82 @@ module Tamoz
               "occurrence" => occurrence,
               "iteration_class" => iteration_class.dup.freeze
             }
-            expected_digest = CanonicalJSON.content_digest(
-              body,
-              domain: "eval.sqlite_selector"
-            )
-            unless selector_digest == expected_digest
-              raise ExecutionError, "control selector digest is invalid"
-            end
+            verify_selector_digest!(body, claimed: selector_digest)
             body["selector_digest"] = selector_digest
             DeepFreeze.call(body)
           end
 
-          def expected_hook(selector, hook_version:)
+          def selector_point(object)
+            point = validate_identifier(
+              object.fetch("point"),
+              name: "control selector point",
+              maximum: MAX_ID_BYTES
+            )
+            unless POINTS.include?(point)
+              raise ExecutionError, "control selector point is invalid"
+            end
+            point
+          end
+
+          def enforce_phase2_operation!(object, registry)
+            operation = validate_identifier(
+              object.fetch("operation"),
+              name: "control selector operation",
+              maximum: MAX_ID_BYTES
+            )
+            operation_entry = registry.operation(operation)
+            unless operation_entry &&
+                   operation_entry.fetch("phase") == 2 &&
+                   operation_entry.fetch("kill_required") == true
+              raise ExecutionError,
+                    "control selector operation is not Phase 2 kill-required"
+            end
+            operation
+          end
+
+          def optional_statement(object)
+            statement = object.fetch("statement")
+            return nil if statement.nil?
+
+            validate_identifier(
+              statement,
+              name: "control selector statement",
+              maximum: MAX_ID_BYTES
+            )
+          end
+
+          def enforce_selector_binding!(object, scenario:)
+            unless object.fetch("scenario") == scenario.fetch("id")
+              raise ExecutionError,
+                    "control selector scenario does not match its scenario"
+            end
+            unless object.fetch("attempt_class") == "first"
+              raise ExecutionError,
+                    "Phase 2 control selectors require the first attempt"
+            end
+          end
+
+          def iteration_class_value(object)
+            iteration_class = object.fetch("iteration_class")
+            unless iteration_class.is_a?(String) &&
+                   ITERATION_CLASSES.include?(iteration_class)
+              raise ExecutionError,
+                    "control selector iteration class is invalid"
+            end
+            iteration_class
+          end
+
+          def verify_selector_digest!(body, claimed:)
+            expected_digest = CanonicalJSON.content_digest(
+              body,
+              domain: "eval.sqlite_selector"
+            )
+            return true if claimed == expected_digest
+
+            raise ExecutionError, "control selector digest is invalid"
+          end
+
+          def build_expected_hook(selector, hook_version:)
             point = selector.fetch("point")
             kind = %w[before_sql after_sql].include?(point) ? "statement" : "transaction"
             DeepFreeze.call(
@@ -357,12 +406,12 @@ module Tamoz
 
             DeepFreeze.call(
               {
-                "version" => positive_integer(
+                "version" => validate_positive_integer(
                   document.fetch("registry_version"),
                   name: "control registry version",
                   maximum: 1_000_000
                 ),
-                "digest" => digest_value(
+                "digest" => validate_digest(
                   registry.digest,
                   name: "control registry digest"
                 )
@@ -378,33 +427,33 @@ module Tamoz
           end
 
           def preflight_record!(record)
-            exact_hash(record, RECORD_FIELDS, name: "selector control record")
+            validate_exact_hash(record, RECORD_FIELDS, name: "selector control record")
             unless record.fetch("control_version") == VERSION &&
                    record.fetch("control_digest") == DEFINITION_DIGEST
               raise ExecutionError,
                     "selector control protocol identity is invalid"
             end
-            exact_hash(
+            validate_exact_hash(
               record.fetch("scenario"),
               SCENARIO_FIELDS,
               name: "selector control scenario"
             )
-            exact_hash(
+            validate_exact_hash(
               record.fetch("registry"),
               REGISTRY_FIELDS,
               name: "selector control registry"
             )
-            exact_hash(
+            validate_exact_hash(
               record.fetch("selector"),
               SELECTOR_FIELDS,
               name: "selector control selector"
             )
-            exact_hash(
+            validate_exact_hash(
               record.fetch("observed_hook"),
               OBSERVED_HOOK_FIELDS,
               name: "selector control observed hook"
             )
-            digest_value(
+            validate_digest(
               record.fetch("content_digest"),
               name: "selector control content digest"
             )
@@ -460,16 +509,19 @@ module Tamoz
             true
           end
 
-          def private_directory(value, name:)
+          def resolve_real_path(value, name:)
             raw = File.path(value)
             raise ExecutionError, "#{name} contains a NUL byte" if raw.include?("\0")
 
             expanded = File.expand_path(raw)
-            supplied = File.lstat(expanded)
-            if supplied.symlink?
+            if File.lstat(expanded).symlink?
               raise ExecutionError, "#{name} must not be a symlink"
             end
-            real = File.realpath(expanded).freeze
+            File.realpath(expanded).freeze
+          end
+
+          def private_directory(value, name:)
+            real = resolve_real_path(value, name: name)
             stat = File.stat(real)
             unless stat.directory? &&
                    stat.uid == Process.euid &&
@@ -486,14 +538,8 @@ module Tamoz
           end
 
           def filesystem_anchor_stat(value)
-            raw = File.path(value)
-            raise ExecutionError, "filesystem anchor contains a NUL byte" if raw.include?("\0")
-
-            expanded = File.expand_path(raw)
-            if File.lstat(expanded).symlink?
-              raise ExecutionError, "filesystem anchor must not be a symlink"
-            end
-            File.stat(File.realpath(expanded))
+            real = resolve_real_path(value, name: "filesystem anchor")
+            File.stat(real)
           rescue ExecutionError
             raise
           rescue StandardError => error
@@ -534,7 +580,7 @@ module Tamoz
             nil
           end
 
-          def exact_hash(value, fields, name:)
+          def validate_exact_hash(value, fields, name:)
             unless value.is_a?(Hash) &&
                    value.length == fields.length &&
                    fields.all? { |field| value.key?(field) }
@@ -543,7 +589,7 @@ module Tamoz
             value
           end
 
-          def identifier(value, name:, maximum:)
+          def validate_identifier(value, name:, maximum:)
             unless value.is_a?(String) &&
                    value.valid_encoding? &&
                    !value.empty? &&
@@ -554,7 +600,7 @@ module Tamoz
             value.dup.freeze
           end
 
-          def digest_value(value, name:)
+          def validate_digest(value, name:)
             unless value.is_a?(String) &&
                    value.valid_encoding? &&
                    Tamoz::Core.valid_digest?(value)
@@ -563,7 +609,7 @@ module Tamoz
             value.dup.freeze
           end
 
-          def positive_integer(value, name:, maximum:)
+          def validate_positive_integer(value, name:, maximum:)
             return value if value.is_a?(Integer) &&
                             value.positive? &&
                             value <= maximum
@@ -571,7 +617,7 @@ module Tamoz
             raise ExecutionError, "#{name} is invalid"
           end
 
-          def nonnegative_integer(value, name:)
+          def validate_nonnegative_integer(value, name:)
             return value if value.is_a?(Integer) && value >= 0
 
             raise ExecutionError, "#{name} is invalid"

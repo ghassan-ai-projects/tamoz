@@ -33,7 +33,7 @@ module Tamoz
         conversation = @services.planning_context.conversation_transcript(context)
         loop_state, compaction = build_loop_state(state, context, conversation)
         update = run_attempts(state, context, loop_state)
-        compaction && compaction_state_supported? ? update.merge(compactions: [compaction]) : update
+        with_compaction(update, compaction)
       end
 
       private
@@ -45,6 +45,12 @@ module Tamoz
 
       def compaction_state_supported?
         @services.configuration.graph_version != GraphVersions::GRAPH_VERSION
+      end
+
+      def with_compaction(update, compaction)
+        return update unless compaction && compaction_state_supported?
+
+        update.merge(compactions: [compaction])
       end
 
       # rubocop:disable Metrics/MethodLength -- one ordered planner-context assembly.

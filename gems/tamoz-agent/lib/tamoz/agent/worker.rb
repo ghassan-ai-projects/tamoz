@@ -427,20 +427,8 @@ module Tamoz
         return park({thread_id:, head_request_id: occurrence_id}, view) && PARKED unless claim == :claimed
 
         granted = decision.granted?
-        answers = {}
-        view.interrupts.each do |interrupt|
-          descriptor = interrupt.descriptor || {}
-          if descriptor['kind'] == 'approve_tool' && (asked = descriptor['decision'])
-            # The engine is the resolution authority: the journaled verdict and
-            # any minted grant both come from this one call (replay-safe).
-            @runtime.approval_engine.resolve(
-              decision_id: asked.fetch('id'),
-              answer: granted ? :approve : :deny,
-              scope: granted ? :once : nil
-            )
-          end
-          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
-        end
+        resolve_approval_asks(view.interrupts, answer: granted ? :approve : :deny, scope: granted ? :once : nil)
+        answers = answers_for(view.interrupts, granted)
 
         conclude_resolution(session,
                             thread_id: thread_id, occurrence_id: occurrence_id, view: view,
@@ -473,6 +461,24 @@ module Tamoz
         case descriptor["kind"]
         when "approve_tool" then granted
         else granted ? "" : nil
+        end
+      end
+
+      # The engine is the resolution authority: the journaled verdict and any
+      # minted grant both come from these calls (replay-safe).
+      def resolve_approval_asks(interrupts, answer:, scope:)
+        interrupts.each do |interrupt|
+          descriptor = interrupt.descriptor || {}
+          asked = descriptor['decision'] if descriptor['kind'] == 'approve_tool'
+          next unless asked
+
+          @runtime.approval_engine.resolve(decision_id: asked.fetch('id'), answer:, scope:)
+        end
+      end
+
+      def answers_for(interrupts, granted)
+        interrupts.each_with_object({}) do |interrupt, answers|
+          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, granted)
         end
       end
 
@@ -663,17 +669,25 @@ module Tamoz
         Array(view.lifecycle_events).last&.fetch("phase", nil)
       end
 
-      def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
-        @monitor.synchronize { @processed += 1 }
-        notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
+      # Outbox row BEFORE close (design §11): a crash between the two still
+      # leaves the terminal answer deliverable.
+      def settle_terminal_delivery(thread_id, kind, occurrence_id, text)
+        notify_sink(thread_id, kind, text, request_id: occurrence_id)
         close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
+      end
+
+      def pending_status_projection(view, occurrence_id)
+        SessionStatusProjection.document(view, request_id: occurrence_id, delivery_state: 'pending')
+      end
+
+      def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
+        @monitor.synchronize { @processed += 1 }
+        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view))
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
              duration_ms:,
-             status_projection: SessionStatusProjection.document(
-               view, request_id: occurrence_id, delivery_state: 'pending'
-             ),
+             status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
         PROGRESSED
       end
@@ -681,38 +695,24 @@ module Tamoz
       def settle_failed_view(view, thread_id, occurrence_id, duration_ms)
         # Correspondents receive a generic phrase; the detailed reason remains
         # in the worker event stream for operators.
-        notify_sink(thread_id, "request.failed", failure_text(view),
-                    request_id: occurrence_id)
-        close_occurrence(thread_id, occurrence_id)
-        unpark(thread_id)
+        settle_terminal_delivery(thread_id, "request.failed", occurrence_id, failure_text(view))
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
              duration_ms:,
              reason: settled_failure_reason(view),
-             status_projection: SessionStatusProjection.document(
-               view, request_id: occurrence_id, delivery_state: 'pending'
-             ),
+             status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
         PROGRESSED
       end
 
       def settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
-        notify_sink(
-          thread_id,
-          "request.blocked",
-          blocked_text(view),
-          request_id: occurrence_id
-        )
-        close_occurrence(thread_id, occurrence_id)
-        unpark(thread_id)
+        settle_terminal_delivery(thread_id, "request.blocked", occurrence_id, blocked_text(view))
         emit("request.blocked",
              thread: thread_id,
              request_id: occurrence_id,
              duration_ms:,
              reason: "effect_unknown",
-             status_projection: SessionStatusProjection.document(
-               view, request_id: occurrence_id, delivery_state: 'pending'
-             ),
+             status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
         PROGRESSED
       end
@@ -722,9 +722,7 @@ module Tamoz
           emit("request.paused",
                thread: thread_id, request_id: occurrence_id, reason: "paused",
                duration_ms:,
-               status_projection: SessionStatusProjection.document(
-                 view, request_id: occurrence_id, delivery_state: 'pending'
-               ),
+               status_projection: pending_status_projection(view, occurrence_id),
                observability: {execution_id: view.execution_id})
         else
           notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
@@ -766,9 +764,7 @@ module Tamoz
              duration_ms:,
              reason: "approval_required",
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
-             status_projection: SessionStatusProjection.document(
-               view, request_id: occurrence_id, delivery_state: 'pending'
-             ),
+             status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
       end
 
@@ -1026,24 +1022,11 @@ module Tamoz
       # row before resolving.
       def enforce_ask_deadlines
         now = Time.now.utc
-        candidates = {}
-        @monitor.synchronize do
-          @parked.each do |thread_id, meta|
-            next unless meta[:signature].last == 'approval_required'
-
-            candidates[thread_id] = now - meta[:since]
-          end
-        end
-        @runtime.open_occurrences(limit: 500).each do |occurrence|
-          opened = occurrence[:opened_at]
-          next unless opened
-
-          thread_id = occurrence.fetch(:thread_id)
-          candidates[thread_id] = now - Time.parse(opened) unless candidates.key?(thread_id)
-        end
+        candidates = parked_deadline_ages(now)
+        open_occurrence_deadline_ages(now).each { |thread_id, age| candidates[thread_id] ||= age }
 
         candidates.each do |thread_id, lower_bound_age_s|
-          ask = lane_ask(thread_id, now:)
+          ask = lane_ask(thread_id)
           next unless ask.fetch(:on_timeout) == :deny
           next unless lower_bound_age_s >= ask.fetch(:timeout_s)
 
@@ -1051,7 +1034,29 @@ module Tamoz
         end
       end
 
-      def lane_ask(thread_id, now:)
+      # Parked ages are exact (stamped when the pause was recorded) and win over
+      # an occurrence's cheap upper bound; the scan only fills threads with no
+      # parked approval.
+      def parked_deadline_ages(now)
+        @monitor.synchronize do
+          @parked.each_with_object({}) do |(thread_id, meta), ages|
+            next unless meta[:signature].last == 'approval_required'
+
+            ages[thread_id] = now - meta[:since]
+          end
+        end
+      end
+
+      def open_occurrence_deadline_ages(now)
+        @runtime.open_occurrences(limit: 500).each_with_object({}) do |occurrence, ages|
+          opened = occurrence[:opened_at]
+          next unless opened
+
+          ages[occurrence.fetch(:thread_id)] = now - Time.parse(opened)
+        end
+      end
+
+      def lane_ask(thread_id)
         engine = @runtime.approval_engine
         key = "profile:#{@runtime.thread_profile(thread_id) || 'default'}"
         document = engine.policy_for(key)
@@ -1059,12 +1064,7 @@ module Tamoz
       end
 
       def apply_timeout_denial(thread_id)
-        meta = @monitor.synchronize { @parked[thread_id] }
-        occurrence_id =
-          meta&.fetch(:occurrence_id) ||
-          @runtime.open_occurrences(limit: 500)
-                  .find { |occ| occ.fetch(:thread_id) == thread_id }
-                  &.fetch(:occurrence_id)
+        occurrence_id = timeout_occurrence_id(thread_id)
         return unless occurrence_id
 
         session = @runtime.session_for(thread_id)
@@ -1073,27 +1073,27 @@ module Tamoz
         view = view_of(session, thread_id)
         return unless view && view.status == :paused && !view.interrupts.empty?
 
-        ask = lane_ask(thread_id, now: Time.now.utc)
+        ask = lane_ask(thread_id)
         return unless ask.fetch(:on_timeout) == :deny
         pending_ms = oldest_open_ask_ms(view.interrupts, now_ms: (Time.now.to_f * 1000).to_i)
         return unless pending_ms && pending_ms >= ask.fetch(:timeout_s) * 1000
 
-        view.interrupts.each do |interrupt|
-          descriptor = interrupt.descriptor || {}
-          next unless descriptor['kind'] == 'approve_tool' && (asked = descriptor['decision'])
-
-          @runtime.approval_engine.resolve(decision_id: asked.fetch('id'), answer: :deny, scope: nil)
-        end
-        answers = {}
-        view.interrupts.each do |interrupt|
-          (answers[interrupt.task_id] ||= {})[interrupt.call_index] = answer_for(interrupt, false)
-        end
+        resolve_approval_asks(view.interrupts, answer: :deny, scope: nil)
+        answers = answers_for(view.interrupts, false)
         conclude_resolution(session,
                             thread_id: thread_id, occurrence_id: occurrence_id, view: view,
                             granted: false, actor: 'policy.timeout', message: 'Denied.',
                             resume_request_id: "timeout-#{occurrence_id}", answers: answers)
       rescue StandardError => error
         emit('worker.error', reason: error.message)
+      end
+
+      def timeout_occurrence_id(thread_id)
+        meta = @monitor.synchronize { @parked[thread_id] }
+        meta&.fetch(:occurrence_id) ||
+          @runtime.open_occurrences(limit: 500)
+                  .find { |occ| occ.fetch(:thread_id) == thread_id }
+                  &.fetch(:occurrence_id)
       end
 
       # How long the OLDEST open approval ask in this pause has been pending.
@@ -1184,24 +1184,36 @@ module Tamoz
         }.fetch(event) { event.start_with?("request.") ? "tamoz.worker.request.#{event.delete_prefix("request.")}" : nil }
         return unless name && Tamoz::Observability::Catalog.registered?(name)
 
+        @observability.emit(
+          name,
+          correlation: observability_correlation(document, observability),
+          attributes: observable_attributes(name, document)
+        )
+      rescue StandardError
+        :dropped
+      end
+
+      def observability_correlation(document, observability)
         correlation = {}
         correlation[:thread_id] = document["thread"] if document["thread"]
         correlation[:occurrence_id] = document["request_id"] if document["request_id"]
         correlation[:execution_id] = observability[:execution_id] if observability[:execution_id]
-        attributes = Tamoz::Observability::Catalog.fetch(name).optional.keys.filter_map do |key|
+        correlation
+      end
+
+      def observable_attributes(name, document)
+        optional = Tamoz::Observability::Catalog.fetch(name).optional
+        optional.keys.filter_map do |key|
           key = key.to_s
           next unless document.key?(key)
 
           value = document.fetch(key)
-          declaration = Tamoz::Observability::Catalog.fetch(name).optional.fetch(key.to_sym)
+          declaration = optional.fetch(key.to_sym)
           if declaration == :low_cardinality && !value.to_s.match?(Tamoz::Observability::SignalCatalog::LOW_CARDINALITY_PATTERN)
             value = "sha256:#{Digest::SHA256.hexdigest(value.to_s)}"
           end
           [key, value]
         end.to_h
-        @observability.emit(name, correlation:, attributes:)
-      rescue StandardError
-        :dropped
       end
 
       def emit_durable_model_calls(session, thread_id:, request_id:)

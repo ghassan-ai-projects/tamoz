@@ -1,4 +1,3 @@
-require 'set'
 # frozen_string_literal: true
 
 require "digest"
@@ -186,6 +185,7 @@ module Tamoz
       CHILD_ADOPTIONS = %w[tamoz worker child_adoption].freeze
       CHILD_BUDGETS = %w[tamoz worker child_budget].freeze
       CHILD_ACTIVE_STATUSES = %w[pending running].freeze
+      CHILD_VIEW_TERMINAL_STATUSES = %i[completed failed blocked].freeze
 
       def create_child_task(child_task, parent_profile:)
         unless child_task.is_a?(ChildTask)
@@ -230,7 +230,7 @@ module Tamoz
       def settle_child_task(child_id, view)
         child = child_task(child_id)
         return unless child && CHILD_ACTIVE_STATUSES.include?(child.status)
-        return unless %i[completed failed blocked].include?(view.status)
+        return unless CHILD_VIEW_TERMINAL_STATUSES.include?(view.status)
 
         receipt = child_completion_receipt(child_id, view)
         transition_child_task(child_id) do |current|
@@ -392,20 +392,25 @@ module Tamoz
 
       def occurrence_age_seconds(thread_id)
         durable("occurrence age for #{thread_id.inspect}") do
-          opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+          opened = occurrence_opened_at(thread_id)
           next 0.0 unless opened
 
-          (Time.now.utc - Time.parse(opened)).to_f
+          (Time.now.utc - opened).to_f
         end
       end
 
       def occurrence_age_milliseconds(thread_id)
         durable("occurrence age for #{thread_id.inspect}") do
-          opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+          opened = occurrence_opened_at(thread_id)
           next 0 unless opened
 
-          [(Time.now.utc - Time.parse(opened)).to_f * 1_000, 0].max.round
+          [(Time.now.utc - opened).to_f * 1_000, 0].max.round
         end
+      end
+
+      def occurrence_opened_at(thread_id)
+        opened = record(OPEN_OCCURRENCES, thread_id)&.fetch("opened_at", nil)
+        opened && Time.parse(opened)
       end
 
       # A stop caused by a spent budget. Durable so `tamoz status` can report it
@@ -426,6 +431,9 @@ module Tamoz
         end
       end
 
+      SCHEDULED_WORK_SCHEMA = "tamoz.scheduled_work.v1"
+      OCCURRENCE_TERMINAL_STATES = %w[succeeded failed cancelled unknown skipped coalesced].freeze
+
       # The schedule store owns schedule/occurrence state; the worker owns the
       # operator's current grant. This projection joins them without treating a
       # queued or delivered request as execution success.
@@ -438,7 +446,7 @@ module Tamoz
         end
       rescue StoreUnavailableError => error
         [{
-          "schema" => "tamoz.scheduled_work.v1",
+          "schema" => SCHEDULED_WORK_SCHEMA,
           "task_state" => "unavailable",
           "effect_state" => "unknown",
           "capability_state" => "unknown",
@@ -578,7 +586,7 @@ module Tamoz
             active = Array(current['active_child_ids'])
             return if active.include?(child.child_id)
 
-            ensure_child_capacity!(current, active, limit)
+            enforce_child_capacity!(current, active, limit)
 
             store.put(
               CHILD_BUDGETS, key,
@@ -629,7 +637,7 @@ module Tamoz
         [entry, current]
       end
 
-      def ensure_child_capacity!(current, active, limit)
+      def enforce_child_capacity!(current, active, limit)
         return if current['limit'] == limit && active.length < limit
 
         raise ToolPolicyError, 'child delegation concurrency budget is exhausted'
@@ -913,7 +921,7 @@ module Tamoz
         revoked = grant.fetch("status") == :revoked
         paused = !schedule.enabled || revoked
         {
-          "schema" => "tamoz.scheduled_work.v1",
+          "schema" => SCHEDULED_WORK_SCHEMA,
           "schedule_id" => schedule.id,
           "schedule_revision" => schedule.revision,
           "definition_digest" => schedule.definition_digest,
@@ -943,7 +951,7 @@ module Tamoz
       def scheduled_effect_state(state)
         case state
         when "running" then "running"
-        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        when *OCCURRENCE_TERMINAL_STATES then "terminal"
         else "pending"
         end
       end
@@ -952,7 +960,7 @@ module Tamoz
         case state
         when "enqueued" then "enqueued"
         when "running" then "delivered"
-        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "settled"
+        when *OCCURRENCE_TERMINAL_STATES then "settled"
         else "pending"
         end
       end
@@ -964,7 +972,7 @@ module Tamoz
 
         case occurrence.state.to_s
         when "running" then "running"
-        when "succeeded", "failed", "cancelled", "unknown", "skipped", "coalesced" then "terminal"
+        when *OCCURRENCE_TERMINAL_STATES then "terminal"
         else "queued"
         end
       end
@@ -1029,8 +1037,6 @@ module Tamoz
           routing: @routing
         )
       end
-
-      private
 
       def normalize_routing(routing)
         normalized = routing.to_sym
@@ -1179,12 +1185,12 @@ module Tamoz
           allow_changes: resolved.allow_changes?,
           checks: resolved.checks.transform_values { |check| check.fetch("argv") },
           check_safeties: resolved.checks.transform_values { |check| check.fetch("safety").to_sym },
-          allowed_tools: narrowed_tools(resolved, allowed_tools),
+          allowed_tools: enforce_narrowed_tools(resolved, allowed_tools),
           skills: skills_snapshot
         )
       end
 
-      def narrowed_tools(resolved, allowed_tools)
+      def enforce_narrowed_tools(resolved, allowed_tools)
         return resolved.tools_allowed unless allowed_tools
 
         unknown = allowed_tools - resolved.tools_allowed
@@ -1211,7 +1217,7 @@ module Tamoz
       def settle_child_request(child, request)
         view = session_for_child(child).view(thread: child.child_id)
         return settle_child_task(child.child_id, view) if
-          view && %i[completed failed blocked].include?(view.status)
+          view && CHILD_VIEW_TERMINAL_STATUSES.include?(view.status)
 
         transition_child_task(child.child_id) do |current|
           next current unless CHILD_ACTIVE_STATUSES.include?(current.status)

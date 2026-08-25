@@ -103,10 +103,10 @@ module Tamoz
 
       def normalize_option(value, content_class)
         enabled = parse_enabled(value)
-        max_bytes = parse_max_bytes(value)
-        validate_max_bytes!(max_bytes, content_class)
+        limit = parse_max_bytes(value)
+        validate_max_bytes!(limit, content_class)
 
-        {enabled: !!enabled, max_bytes: max_bytes}.freeze
+        {enabled: !!enabled, max_bytes: limit}.freeze
       end
 
       def parse_enabled(value)
@@ -121,8 +121,8 @@ module Tamoz
         DEFAULT_MAX_BYTES
       end
 
-      def validate_max_bytes!(max_bytes, content_class)
-        return if max_bytes.is_a?(Integer) && max_bytes.positive? && max_bytes <= 1_048_576
+      def validate_max_bytes!(limit, content_class)
+        return if limit.is_a?(Integer) && limit.positive? && limit <= 1_048_576
 
         raise ValidationError, "#{content_class}: max_bytes must be between 1 and 1048576"
       end

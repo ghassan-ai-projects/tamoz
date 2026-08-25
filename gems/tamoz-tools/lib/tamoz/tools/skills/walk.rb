@@ -73,14 +73,14 @@ module Tamoz
           path = relative + [child]
           joined = path.join('/')
           validate_component!(child, joined)
-          note_case!(joined)
+          validate_case!(joined)
           entry_absolute = File.join(absolute, child)
           stat = File.lstat(entry_absolute)
           ftype = stat.ftype
           reject!('skill_entry_type_invalid', "#{joined} is a #{ftype}", joined) unless ENTRY_TYPES.include?(ftype)
 
           validate_layout!(path, stat, joined)
-          bump!(joined)
+          count_entry!(joined)
           record_entry(entry_absolute, path, joined, stat, depth)
         end
 
@@ -148,7 +148,7 @@ module Tamoz
         # ASCII-only components make NFC a no-op; it runs anyway so the property
         # holds if the component alphabet is ever widened, and it is locale
         # independent either way.
-        def note_case!(joined)
+        def validate_case!(joined)
           key = joined.unicode_normalize(:nfc).downcase
           reject!('skill_case_collision', "#{joined} collides with #{@seen.fetch(key)}", joined) if @seen.key?(key)
 
@@ -168,7 +168,7 @@ module Tamoz
           end
         end
 
-        def bump!(joined)
+        def count_entry!(joined)
           max_entries = @limits.fetch(:max_tree_entries)
           @count += 1
           return unless @count > max_entries

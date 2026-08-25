@@ -229,8 +229,8 @@ module Tamoz
         end
 
         def fetch_bounded_string(hash, key, max)
-          value = hash[key]
           raise ProtocolError, "reasoning_document/#{key}_missing" unless hash.key?(key)
+          value = hash[key]
           raise ProtocolError, "reasoning_document/#{key}_not_string" unless value.is_a?(String)
           reject_bad_utf8(value)
           reject_oversize(value.bytesize, key, max)
@@ -256,12 +256,8 @@ module Tamoz
         def reject_bad_utf8(string)
           # Validate the bytes, not the label: a provider may hand back valid
           # UTF-8 tagged ASCII-8BIT. Only genuinely invalid byte sequences fail.
-          valid = if string.encoding == Encoding::UTF_8
-                    string.valid_encoding?
-                  else
-                    string.dup.force_encoding(Encoding::UTF_8).valid_encoding?
-                  end
-          raise ProtocolError, "reasoning_document/invalid_utf8" unless valid
+          utf8 = string.dup.force_encoding(Encoding::UTF_8)
+          raise ProtocolError, "reasoning_document/invalid_utf8" unless utf8.valid_encoding?
         end
 
         def validate_catalog(catalog)

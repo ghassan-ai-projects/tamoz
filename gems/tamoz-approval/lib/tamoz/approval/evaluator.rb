@@ -57,14 +57,15 @@ module Tamoz
 
       def decision_from(rule, request, verdict)
         tier = tier_for(request)
-        build_decision(request, tier, verdict, rule[:reason], rule[:id])
+        build_decision(request:, tier:, verdict:, reason: rule[:reason], rule_id: rule[:id])
       end
 
       def decision_for_tier(request, tier, verdict)
-        build_decision(request, tier, verdict, "tier #{tier.fetch(:name)} default", "tier.#{tier.fetch(:name)}")
+        name = tier.fetch(:name)
+        build_decision(request:, tier:, verdict:, reason: "tier #{name} default", rule_id: "tier.#{name}")
       end
 
-      def build_decision(request, tier, verdict, reason, rule_id)
+      def build_decision(request:, tier:, verdict:, reason:, rule_id:)
         Decision.new(
           id: decision_id(request),
           verdict: verdict,

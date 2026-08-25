@@ -116,8 +116,7 @@ module Tamoz
             reasons.concat(metric_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(surface_reasons(manifest, mission_catalog)) if mission_catalog
             reasons.concat(manifest_consistency_reasons(manifest))
-            reasons.concat(missing_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
-            reasons.concat(unexpected_mission_reasons(manifest.fetch('missions'), expected_mission_ids))
+            reasons.concat(expected_mission_id_reasons(manifest.fetch('missions'), expected_mission_ids))
             reasons
           end
           # rubocop:enable Metrics/AbcSize
@@ -166,7 +165,7 @@ module Tamoz
           def validate_manifest_strings!(manifest)
             %w[provider model artifact_root git_revision command].each do |key|
               value = manifest.fetch(key)
-              next if value.is_a?(String) && !value.empty?
+              next if non_empty_string?(value)
 
               schema_error("benchmark #{key} must be a non-empty string")
             end
@@ -243,11 +242,8 @@ module Tamoz
             end
           end
 
-          # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
           def validate_surface_execution!(mission_id, surface, record)
-            unless MISSION_SURFACES.include?(surface) && record.is_a?(Hash) &&
-                   record.keys.sort == SURFACE_FIELDS.sort && SURFACE_STATUSES.include?(record['status']) &&
-                   record['provenance'].is_a?(Hash)
+            unless surface_record_shape_valid?(surface, record)
               schema_error("benchmark surface execution is invalid:#{mission_id}:#{surface}")
             end
             provenance = record.fetch('provenance')
@@ -256,7 +252,12 @@ module Tamoz
 
             schema_error("benchmark surface provenance is invalid:#{mission_id}:#{surface}")
           end
-          # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+          def surface_record_shape_valid?(surface, record)
+            MISSION_SURFACES.include?(surface) && record.is_a?(Hash) &&
+              record.keys.sort == SURFACE_FIELDS.sort && SURFACE_STATUSES.include?(record['status']) &&
+              record['provenance'].is_a?(Hash)
+          end
 
           def validate_mission_catalog!(catalog)
             schema_error('benchmark mission catalog must contain missions') unless valid_catalog_shape?(catalog)
@@ -291,7 +292,7 @@ module Tamoz
 
           def validate_catalog_identity!(mission)
             valid = mission.fetch('id').is_a?(String) && MISSION_ID_PATTERN.match?(mission.fetch('id')) &&
-                    mission.fetch('goal').is_a?(String) && !mission.fetch('goal').empty?
+                    non_empty_string?(mission.fetch('goal'))
             return if valid
 
             schema_error('benchmark mission catalog mission identity is invalid')
@@ -306,7 +307,11 @@ module Tamoz
           end
 
           def valid_string_list?(value)
-            value.is_a?(Array) && !value.empty? && value.all? { |entry| entry.is_a?(String) && !entry.empty? }
+            value.is_a?(Array) && !value.empty? && value.all? { |entry| non_empty_string?(entry) }
+          end
+
+          def non_empty_string?(value)
+            value.is_a?(String) && !value.empty?
           end
 
           def validate_mission!(mission, run_kind:)
@@ -314,7 +319,7 @@ module Tamoz
             return unless mission['status'] == 'ready'
             return if run_kind == 'fixture'
 
-            return if valid_real_provider_mission?(mission)
+            return if real_provider_mission_verified?(mission)
 
             raise Tamoz::Evals::DigestError, 'ready mission artifact or durable evidence binding is invalid'
           end
@@ -342,16 +347,14 @@ module Tamoz
 
           def valid_surface_map?(surfaces)
             surfaces.is_a?(Hash) && !surfaces.empty? && surfaces.all? do |surface, record|
-              MISSION_SURFACES.include?(surface) && record.is_a?(Hash) &&
-                record.keys.sort == SURFACE_FIELDS.sort && SURFACE_STATUSES.include?(record['status']) &&
-                record['provenance'].is_a?(Hash)
+              surface_record_shape_valid?(surface, record)
             end
           end
 
-          def valid_real_provider_mission?(mission)
+          def real_provider_mission_verified?(mission)
             DIGEST_PATTERN.match?(mission['artifact_digest'].to_s) &&
               safe_artifact_path?(mission['artifact_path']) &&
-              valid_durable_mission?(mission['durable_mission'], mission.fetch('id'))
+              durable_mission_verified?(mission['durable_mission'], mission.fetch('id'))
           end
 
           def capability_reasons(capabilities)
@@ -441,22 +444,14 @@ module Tamoz
             "mission_hard_zero_mismatch:#{mission.fetch('id')}"
           end
 
-          def missing_mission_reasons(missions, expected_ids)
+          def expected_mission_id_reasons(missions, expected_ids)
             return [] unless expected_ids
 
             actual = missions.map { |mission| mission.fetch('id') }
-            Array(expected_ids).uniq.filter_map do |id|
-              "mission_missing:#{id}" unless actual.include?(id)
-            end
-          end
-
-          def unexpected_mission_reasons(missions, expected_ids)
-            return [] unless expected_ids
-
             expected = Array(expected_ids).uniq
-            missions.map { |mission| mission.fetch('id') }.uniq.filter_map do |id|
-              "mission_unexpected:#{id}" unless expected.include?(id)
-            end
+            missing = expected.filter_map { |id| "mission_missing:#{id}" unless actual.include?(id) }
+            unexpected = actual.uniq.filter_map { |id| "mission_unexpected:#{id}" unless expected.include?(id) }
+            missing + unexpected
           end
 
           def artifact_reasons(manifest, artifact_root_base, mission_catalog = nil)
@@ -509,24 +504,20 @@ module Tamoz
             document = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
             return ["artifact_secret_value:#{mission.fetch('id')}"] if Tamoz::Core.secret_shaped?(document)
 
-            reason = artifact_binding_reason(document, mission, manifest)
-            return [reason] if reason
-
-            reason = artifact_shape_reason(document, mission)
-            return [reason] if reason
-
-            reason = artifact_mission_reason(document, mission, mission_catalog)
-            return [reason] if reason
-
-            reason = artifact_result_reason(document, mission)
-            return [reason] if reason
-
-            reason = artifact_provenance_reason(document, mission, manifest)
+            reason = first_document_reason(document, mission, manifest, mission_catalog)
             reason ? [reason] : []
           rescue JSON::ParserError, TypeError
             ["artifact_schema_invalid:#{mission.fetch('id')}"]
           rescue SystemCallError, EncodingError => e
             ["artifact_unavailable:#{mission.fetch('id')}:#{e.class}"]
+          end
+
+          def first_document_reason(document, mission, manifest, mission_catalog)
+            artifact_binding_reason(document, mission, manifest) ||
+              artifact_shape_reason(document, mission) ||
+              artifact_mission_reason(document, mission, mission_catalog) ||
+              artifact_result_reason(document, mission) ||
+              artifact_provenance_reason(document, mission, manifest)
           end
 
           def artifact_binding_reason(document, mission, manifest)
@@ -571,31 +562,32 @@ module Tamoz
             "artifact_result_mismatch:#{mission.fetch('id')}"
           end
 
-          # rubocop:disable Metrics/AbcSize
           def artifact_provenance_reason(document, mission, manifest)
             provenance = document['provenance']
-            unless provenance_binding_valid?(provenance, manifest)
-              return "artifact_provenance_mismatch:#{mission.fetch('id')}"
-            end
+            return "artifact_provenance_mismatch:#{mission.fetch('id')}" unless
+              provenance_binding_valid?(provenance, manifest)
             return "artifact_surface_provenance_mismatch:#{mission.fetch('id')}" unless
               provenance['surface_executions'] == mission['surface_executions']
             return unless manifest.fetch('run_kind') == 'real_provider'
 
+            real_provider_trace_reason(provenance, document, mission)
+          end
+
+          def real_provider_trace_reason(provenance, document, mission)
             receipts = provenance['provider_effect_receipts']
             return "artifact_provider_receipts_invalid:#{mission.fetch('id')}" unless valid_provider_receipts?(receipts)
 
             independent_trace = provenance['independent_trace']
             return "artifact_independent_trace_unavailable:#{mission.fetch('id')}" unless independent_trace.is_a?(Hash)
 
-            return "artifact_provider_trace_mismatch:#{mission.fetch('id')}" unless provider_trace_valid?(
+            return "artifact_provider_trace_mismatch:#{mission.fetch('id')}" unless provider_trace_digest_verified?(
               provenance, document.fetch('mission_digest'), receipts, independent_trace
             )
 
-            return if valid_independent_trace?(independent_trace, receipts, mission)
+            return if independent_trace_verified?(independent_trace, receipts, mission)
 
             "artifact_independent_trace_unavailable:#{mission.fetch('id')}"
           end
-          # rubocop:enable Metrics/AbcSize
 
           def provenance_binding_valid?(provenance, manifest)
             %w[run_kind provider model].all? do |field|
@@ -603,7 +595,7 @@ module Tamoz
             end
           end
 
-          def provider_trace_valid?(provenance, mission_digest, receipts, independent_trace)
+          def provider_trace_digest_verified?(provenance, mission_digest, receipts, independent_trace)
             provenance['provider_trace_digest'] == provider_trace_digest(
               mission_digest:, receipts:, independent_trace:
             )
@@ -626,12 +618,12 @@ module Tamoz
           end
 
           # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-          def valid_independent_trace?(evidence, receipts, mission)
+          def independent_trace_verified?(evidence, receipts, mission)
             return false unless evidence.is_a?(Hash) && evidence['source'] == INDEPENDENT_TRACE_SOURCE
-            return false unless evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty?
+            return false unless non_empty_string?(evidence['trace_id'])
             return false unless evidence['mission_id'] == mission.fetch('id')
-            return false unless evidence['run_id'].is_a?(String) && !evidence['run_id'].empty?
-            return false unless evidence['thread_id'].is_a?(String) && !evidence['thread_id'].empty?
+            return false unless non_empty_string?(evidence['run_id'])
+            return false unless non_empty_string?(evidence['thread_id'])
             return false unless DIGEST_PATTERN.match?(evidence['trace_digest'].to_s)
             return false unless evidence['trace'].is_a?(Hash)
             return false unless evidence['trace_digest'] == canonical_digest(evidence['trace'])
@@ -647,11 +639,11 @@ module Tamoz
           end
 
           def safe_artifact_path?(path)
-            path.is_a?(String) && !path.empty? && !Pathname.new(path).absolute? &&
+            non_empty_string?(path) && !Pathname.new(path).absolute? &&
               Pathname.new(path).each_filename.none?('..')
           end
 
-          def valid_durable_mission?(evidence, mission_id)
+          def durable_mission_verified?(evidence, mission_id)
             return false unless durable_mission_shape?(evidence)
             return false unless durable_mission_identity_valid?(evidence, mission_id)
 
@@ -668,9 +660,7 @@ module Tamoz
           end
 
           def durable_mission_binding_valid?(evidence)
-            %w[run_id thread_id].all? do |field|
-              evidence[field].is_a?(String) && !evidence[field].empty?
-            end
+            %w[run_id thread_id].all? { |field| non_empty_string?(evidence[field]) }
           end
 
           def surface_reasons(manifest, catalog)

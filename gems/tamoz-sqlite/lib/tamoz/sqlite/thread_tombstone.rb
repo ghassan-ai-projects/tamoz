@@ -24,7 +24,6 @@ module Tamoz
         normalized_tips = ThreadDeletionQueries.normalize_expected_tips(expected_tips)
         authorization_payload = ThreadDeletionQueries.authorization_payload(authorization)
         tombstone_id = SecureRandom.uuid.freeze
-        report = nil
         context = {
           thread:,
           normalized_tips:,
@@ -34,9 +33,8 @@ module Tamoz
         }
 
         adapter.__send__(:transaction, operation: 'thread.tombstone') do |transaction|
-          report = tombstone(transaction, context)
+          tombstone(transaction, context)
         end
-        report
       end
 
       private
@@ -69,7 +67,7 @@ module Tamoz
         unresolved = unresolved_effects(transaction, thread)
         abandon_effects!(transaction, unresolved, authorization, now)
         counts = ThreadDeletionQueries.counts(transaction, thread, 'thread.tombstone')
-        report = report_bytes(thread, context.fetch(:tombstone_id), counts, unresolved, now)
+        report = build_report(thread, context.fetch(:tombstone_id), counts, unresolved, now)
         persist_new_tombstone!(transaction, context, report, now)
         reports.decode_report(report.fetch(0), digest: report.fetch(1))
       end
@@ -148,9 +146,10 @@ module Tamoz
       end
 
       def validate_live_leases!(namespaces, authorization, now)
-        namespaces.each do |row|
-          next unless row.fetch(3) && row.fetch(4) && row.fetch(4) > now
-          next if authorization.lease_fences.fetch(row.fetch(0), nil) == row.fetch(2)
+        namespaces.each do |namespace, _active_checkpoint_id,
+                            lease_fence, lease_owner_id, lease_expires_at_ms|
+          next unless lease_owner_id && lease_expires_at_ms && lease_expires_at_ms > now
+          next if authorization.lease_fences.fetch(namespace, nil) == lease_fence
 
           raise CheckpointConflictError,
                 'live lease requires its exact current fence'
@@ -187,7 +186,7 @@ module Tamoz
         )
       end
 
-      def report_bytes(thread, tombstone_id, counts, unresolved, now)
+      def build_report(thread, tombstone_id, counts, unresolved, now)
         purge_after = now + (adapter.limits.deletion_retention * 1_000).ceil
         report_hash = {
           'thread_id' => thread,

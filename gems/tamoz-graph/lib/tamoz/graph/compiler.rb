@@ -38,9 +38,18 @@ module Tamoz
       private
 
       def validate!
+        validate_required_declarations!
+        validate_references!
+        validate_routing_modes!
+        validate_topology!
+      end
+
+      def validate_required_declarations!
         raise GraphDefinitionError, "graph must declare at least one state channel" if definition.channels.empty?
         raise GraphDefinitionError, "graph must declare at least one node" if definition.nodes.empty?
+      end
 
+      def validate_references!
         definition.edges.each do |source, target|
           validate_source!(source)
           validate_target!(target)
@@ -49,6 +58,9 @@ module Tamoz
           validate_source!(branch.source)
           branch.targets.each { |target| validate_target!(target) }
         end
+      end
+
+      def validate_routing_modes!
         definition.nodes.each_value do |node|
           node.routes.each { |target| validate_target!(target) }
           declared = static_sources.key?(node.name)
@@ -61,7 +73,9 @@ module Tamoz
                   "additive node #{node.name} requires a static or branch successor"
           end
         end
+      end
 
+      def validate_topology!
         entries = definition.edges.select { |source, _target| source.equal?(START) }.map(&:last)
         raise GraphDefinitionError, "graph must have an edge from START" if entries.empty?
 
@@ -71,8 +85,7 @@ module Tamoz
           raise GraphDefinitionError, "unreachable nodes: #{missing.sort.inspect}"
         end
 
-        terminal = reverse_reachable_from_end
-        trapped = reachable - terminal
+        trapped = reachable - reverse_reachable_from_end
         unless trapped.empty?
           raise GraphDefinitionError, "nodes have no declared path to END: #{trapped.sort.inspect}"
         end
@@ -91,14 +104,14 @@ module Tamoz
                codec.respond_to?(:load)
           raise GraphDefinitionError, "codec must implement normalize, dump, and load"
         end
-        protocol = @checkpointer.respond_to?(:checkpoint_protocol_version) &&
-               @checkpointer.checkpoint_protocol_version == CHECKPOINT_PROTOCOL_VERSION &&
-               @checkpointer.respond_to?(:durable?)
+        durable_protocol = @checkpointer.respond_to?(:checkpoint_protocol_version) &&
+                           @checkpointer.checkpoint_protocol_version == CHECKPOINT_PROTOCOL_VERSION &&
+                           @checkpointer.respond_to?(:durable?)
         bound_contract = @checkpointer.respond_to?(:open_writer) &&
                          @checkpointer.respond_to?(:latest) &&
                          @checkpointer.respond_to?(:find) &&
                          @checkpointer.respond_to?(:history)
-        unless protocol &&
+        unless durable_protocol &&
                (bound_contract || @checkpointer.respond_to?(:bind_graph))
           raise GraphDefinitionError, "checkpointer does not implement the graph checkpoint contract"
         end
@@ -148,10 +161,6 @@ module Tamoz
           end
         end
         terminal.keys
-      end
-
-      def declared_targets(node)
-        target_map.fetch(node)
       end
 
       def target_map

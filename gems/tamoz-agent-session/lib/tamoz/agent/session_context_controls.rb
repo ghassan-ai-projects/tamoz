@@ -76,6 +76,12 @@ module Tamoz
         end
       end
 
+      CompactionToolbox = Struct.new(:catalog_digest, keyword_init: true)
+
+      CompactionConfiguration = Struct.new(
+        :model_call_safety, :model, :profile, :toolbox, :mcp, keyword_init: true
+      )
+
       def next_generation_thread(thread_id)
         match = /\A(.+)\.g(\d+)\z/.match(String(thread_id))
         return "#{match[1]}.g#{Integer(match[2]) + 1}" if match
@@ -118,12 +124,12 @@ module Tamoz
       # leaves the frame (cumulative, like /compact), keeps every prior turn
       # in durable audit history, and continues budget accounting untouched.
       def reset_episode(thread:, request_id:)
-        fields = lambda do |state|
+        fields = lambda do |source, _writer|
           total = SessionPlanningContext.conversation_history(app_for_thread(thread).checkpointer,
                                                               thread_id: thread).length
           {
             truncated_fragments: total,
-            cleared_channels: resettable_channels(state)
+            cleared_channels: resettable_channels(source.state)
           }
         end
         apply_control(thread:, request_id:, control: 'reset', fields:) do |candidate|
@@ -159,33 +165,19 @@ module Tamoz
       # so a replay returns the recorded receipt.
       def compact_transcript(thread:, request_id:)
         guard_state!(thread)
-        app = app_for_thread(thread)
-        checkpointer = app.checkpointer
-        conversation = SessionPlanningContext.conversation_history(checkpointer, thread_id: thread)
-        projection = nil
-        checkpointer.open_writer(
-          thread_id: thread, namespace: [],
-          owner_id: control_owner(request_id), ttl: checkpointer.writer_ttl
-        ) do |writer|
-          source = control_base(app, writer)
+        conversation = SessionPlanningContext.conversation_history(
+          app_for_thread(thread).checkpointer, thread_id: thread
+        )
+        fields = lambda do |source, writer|
           observations = verbose_input(source, conversation)
           before_digest = SessionRecords.digest('input' => observations)
-          summarized = summarize_conversation(writer, source, observations, request_id)
-          record = compact_record(
-            thread, request_id, before_digest, summarized,
-            conversation.length, pinned_reference(observations)
-          )
-          candidate = source.state.to_h.merge(
-            context_controls: Array(source.state[:context_controls]) + [record]
-          )
-          checkpoint = commit_control(writer, app, source, candidate)
-          projection = ContextControlProjection.new(
-            control: 'compact', thread_id: String(thread), successor_thread_id: nil,
-            generation: generation_of(thread), checkpoint_id: checkpoint.id,
-            sequence: checkpoint.sequence, record:
+          summarized = bounded_compaction(writer:, source:, observations:, request_id:)
+          compact_fields(
+            before_digest:, summarized:, fragment_count: conversation.length,
+            pinned: pinned_reference(observations)
           )
         end
-        projection
+        apply_control(thread:, request_id:, control: 'compact', fields:)
       end
 
       # /usage — read-only projection of durable budget/accounting facts.
@@ -217,7 +209,6 @@ module Tamoz
         total = SessionPlanningContext.conversation_history(
           app_for_thread(thread).checkpointer, thread_id: thread
         ).length
-        offset = SessionContextControls.visible_fragment_offset(controls)
         ContextProjection.new(
           thread_id: String(thread),
           generation: generation_of(thread),
@@ -228,14 +219,7 @@ module Tamoz
               'prompt_surface_digest' => session_record['prompt_surface_digest']
             }.compact,
             'memory' => memory_layer(session_record),
-            'transcript' => {
-              'fragments_total' => total,
-              'fragments_visible' => total - (offset || 0),
-              'truncated_by_control' => offset || 0,
-              'earlier_summary_pinned' => controls.any? do |record|
-                record['control'] == 'compact' && record.key?('summary_digest')
-              end
-            },
+            'transcript' => transcript_layer(total, controls),
             'observations' => Array(state[:observations]).length,
             'compaction_records' => Array(state[:compactions]).length,
             'authoritative_keys' => authoritative_frame_keys(state)
@@ -273,7 +257,8 @@ module Tamoz
 
       # One fenced transaction: read under the lock, decide, append exactly one
       # audit record, commit. `fields` may be a lambda resolved against the
-      # locked state so the record carries facts measured under the same fence.
+      # locked source and writer so the record carries facts measured under
+      # the same fence.
       def apply_control(thread:, request_id:, control:, fields: {})
         guard_state!(thread)
         app = app_for_thread(thread)
@@ -292,7 +277,7 @@ module Tamoz
             thread_id: String(thread),
             request_id: String(request_id),
             generation: generation_of(thread),
-            **(fields.respond_to?(:call) ? fields.call(source.state) : fields)
+            **(fields.respond_to?(:call) ? fields.call(source, writer) : fields)
           )
           candidate = base_state.merge(
             context_controls: Array(base_state[:context_controls]) + [record]
@@ -358,22 +343,19 @@ module Tamoz
       # episode's observation outputs, both bounded inputs to the compactor.
       def verbose_input(source, conversation)
         conversation.map do |fragment|
-          {
-            'output' => "#{fragment.fetch('role')}: #{fragment.fetch('text')}",
-            'provenance' => 'conversation_untrusted',
-            'truncated' => false
-          }
+          compaction_entry("#{fragment.fetch('role')}: #{fragment.fetch('text')}",
+                           'conversation_untrusted')
         end +
           Array(source.state[:observations]).map do |record|
-            {
-              'output' => record.fetch('output', ''),
-              'provenance' => record.fetch('provenance', 'workspace'),
-              'truncated' => false
-            }
+            compaction_entry(record.fetch('output', ''), record.fetch('provenance', 'workspace'))
           end
       end
 
-      def summarize_conversation(writer, source, observations, request_id)
+      def compaction_entry(output, provenance)
+        { 'output' => output, 'provenance' => provenance, 'truncated' => false }
+      end
+
+      def bounded_compaction(writer:, source:, observations:, request_id:)
         compactor = SessionPlanningContext::BoundedCompactor.new(
           artifact_store: @artifact_store, tenant: @artifact_tenant
         )
@@ -386,12 +368,8 @@ module Tamoz
         )
       end
 
-      def compact_record(thread, request_id, before_digest, summarized, fragment_count, pinned)
+      def compact_fields(before_digest:, summarized:, fragment_count:, pinned:)
         fields = {
-          control: 'compact',
-          thread_id: String(thread),
-          request_id: String(request_id),
-          generation: generation_of(thread),
           before_digest:,
           after_digest: SessionRecords.digest('frame' => summarized.context),
           truncated_fragments: fragment_count,
@@ -403,7 +381,7 @@ module Tamoz
           fields[:summary_digest] = summary_digest
         end
         fields[:artifact_refs] = [pinned] if pinned
-        SessionRecords.build('context_control', **fields)
+        fields
       end
 
       # The exact pre-compact verbose input is externalized behind its verified
@@ -425,8 +403,10 @@ module Tamoz
       end
 
       def compaction_configuration
-        Struct.new(:model_call_safety, :model, :profile, :toolbox, :mcp).new(
-          :idempotent, @model, nil, Struct.new(:catalog_digest).new(@toolbox.catalog_digest), nil
+        CompactionConfiguration.new(
+          model_call_safety: :idempotent,
+          model: @model,
+          toolbox: CompactionToolbox.new(catalog_digest: @toolbox.catalog_digest)
         )
       end
 
@@ -485,6 +465,20 @@ module Tamoz
       def memory_layer(session_record)
         epoch = session_record['memory_epoch']
         epoch.is_a?(Hash) ? { 'layers' => epoch.fetch('layers', []) } : {}
+      end
+
+      def transcript_layer(total, controls)
+        offset = SessionContextControls.visible_fragment_offset(controls) || 0
+        {
+          'fragments_total' => total,
+          'fragments_visible' => total - offset,
+          'truncated_by_control' => offset,
+          'earlier_summary_pinned' => summary_pinned?(controls)
+        }
+      end
+
+      def summary_pinned?(controls)
+        controls.any? { |record| record['control'] == 'compact' && record.key?('summary_digest') }
       end
     end
   end

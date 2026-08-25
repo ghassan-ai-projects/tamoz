@@ -86,16 +86,11 @@ module Tamoz
         end
 
         def model_roles!(hash)
-          roles = hash['model_roles'] || {}
-          raise ValidationError, "#{@path}: model_roles must be a mapping" unless roles.is_a?(Hash)
-
-          roles.each { |name, role| validate_role!(name, role) }
+          optional_section!(hash, 'model_roles').each { |name, role| validate_role!(name, role) }
         end
 
         def budgets!(hash)
-          budgets = hash['budgets'] || {}
-          raise ValidationError, "#{@path}: budgets must be a mapping" unless budgets.is_a?(Hash)
-
+          budgets = optional_section!(hash, 'budgets')
           refuse_unknown!(budgets.keys - BUDGET_KEYS, 'budget')
           budgets.each { |key, value| validate_budget!(key, value) }
         end
@@ -123,6 +118,15 @@ module Tamoz
           return if File.directory?(expanded)
 
           raise ValidationError, "#{@path}: #{field} must be an existing directory"
+        end
+
+        # An absent section is an empty one; a present non-mapping section is refused
+        # under its own name.
+        def optional_section!(hash, name)
+          section = hash[name] || {}
+          return section if section.is_a?(Hash)
+
+          raise ValidationError, "#{@path}: #{name} must be a mapping"
         end
 
         def refuse_unknown!(unknown, section_name)
@@ -171,8 +175,8 @@ module Tamoz
           refuse_unknown!(role.keys - MODEL_ROLE_KEYS, 'model role')
           validate_provider!(role['provider'], name)
           validate_model!(role['model'], name)
-          credential_ref!(role['credential_ref'], name) if role.key?('credential_ref')
-          normalized_settings!(role['normalized_settings'], name) if role.key?('normalized_settings')
+          validate_credential_ref!(role['credential_ref'], name) if role.key?('credential_ref')
+          validate_normalized_settings!(role['normalized_settings'], name) if role.key?('normalized_settings')
         end
 
         # :reek:UtilityFunction — a pure name-shape predicate.
@@ -196,7 +200,7 @@ module Tamoz
         # P0B/§4.2: a bounded mapping of plain strings (endpoint overrides and
         # the like). Values must be non-secret config; secrets belong in
         # credential_ref, whose validator rejects value-shaped entries.
-        def normalized_settings!(settings, role)
+        def validate_normalized_settings!(settings, role)
           named = role.inspect
           raise ValidationError, "#{@path}: normalized_settings for #{named} must be a mapping" unless settings.is_a?(Hash)
 
@@ -212,7 +216,7 @@ module Tamoz
         # A NAME of an environment variable, never a value. The same pattern the
         # egress declaration's credential_refs use, so there is one spelling of
         # "this is a reference, not a secret".
-        def credential_ref!(ref, role)
+        def validate_credential_ref!(ref, role)
           named = role.inspect
           raise ValidationError, "#{@path}: credential_ref for #{named} must be a mapping" unless ref.is_a?(Hash)
 

@@ -108,35 +108,15 @@ module Tamoz
             raise ImprovementPolicyError, "trajectory corpus exceeds #{MAX_TRAJECTORIES} entries"
           end
 
-          trajectories = paths.sort.map { |path| read_trajectory(path) }
-          verified = trajectories.select { |entry| entry.is_a?(Hash) && entry["verified"] == true }
+          verified = paths.sort.map { |path| read_trajectory(path) }
+                               .select { |entry| entry.is_a?(Hash) && entry["verified"] == true }
           return nil if verified.empty?
 
-          best = rank(verified)
-          return nil unless best
-
-          pair, support = best
-          precursor, subject = pair
-          trials = verified.count { |entry| uses?(entry, subject) }
-          return nil if trials < MIN_TRIALS || support < MIN_SUPPORT
-
-          confidence = support.to_f / trials
-          return nil if confidence < MIN_CONFIDENCE
+          candidate = strongest_candidate(verified)
+          return nil unless candidate
 
           @generated += 1
-          Heuristic.new(
-            heuristic_id: "heuristic.#{precursor}-before-#{subject}",
-            surface: :planning,
-            precursor_tool: precursor,
-            subject_tool: subject,
-            support:,
-            trials:,
-            confidence: (confidence * 10_000).round / 10_000.0,
-            statement:
-              "When a plan step uses #{subject} on a path, first plan a #{precursor} step on that " \
-              "same path. Observed in #{support} of #{trials} verified trajectories.",
-            generator_principal: @principal
-          ).assert_bounded!
+          candidate.assert_bounded!
         end
 
         # The verified source trajectories in provenance shape. Only the
@@ -159,6 +139,35 @@ module Tamoz
 
         private
 
+        # Most-supported ordered (precursor, subject) pair that clears every
+        # evidence floor, or `nil` when the evidence supports no heuristic.
+        def strongest_candidate(verified)
+          best = rank(verified)
+          return unless best
+
+          precursor, subject = best.first
+          support = best.last
+          trials = verified.count { |entry| uses?(entry, subject) }
+          return if trials < MIN_TRIALS || support < MIN_SUPPORT
+
+          confidence = support.to_f / trials
+          return if confidence < MIN_CONFIDENCE
+
+          Heuristic.new(
+            heuristic_id: "heuristic.#{precursor}-before-#{subject}",
+            surface: :planning,
+            precursor_tool: precursor,
+            subject_tool: subject,
+            support:,
+            trials:,
+            confidence: (confidence * 10_000).round / 10_000.0,
+            statement:
+              "When a plan step uses #{subject} on a path, first plan a #{precursor} step on that " \
+              "same path. Observed in #{support} of #{trials} verified trajectories.",
+            generator_principal: @principal
+          )
+        end
+
         def uses?(trajectory, tool)
           Array(trajectory["steps"]).any? { |step| step.is_a?(Hash) && step["tool"] == tool }
         end
@@ -175,7 +184,6 @@ module Tamoz
           return nil if counts.empty?
 
           counts.max_by { |pair, count| [count, -pair.join("\0").bytes.sum, pair.join("\0")] }
-                &.then { |pair, count| [pair, count] }
         end
 
         def pairs_in(trajectory)

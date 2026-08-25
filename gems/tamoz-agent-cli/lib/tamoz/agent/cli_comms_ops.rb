@@ -121,21 +121,21 @@ module Tamoz
             return 1
           end
           revision = Tamoz::Comms::SurfaceDescriptor.from_wire(surface).revision
-          binding = Tamoz::Comms::Binding.new(
+          binding_wire = Tamoz::Comms::Binding.new(
             surface_id: candidate.fetch('surface_id'), surface_revision: revision,
             correspondent_id: candidate.fetch('correspondent_id'),
             conversation_id: candidate.fetch('conversation_id'),
             bound_at: Time.now.utc, bound_by: os_user_id
           ).wire
           outcome = store.approve_pairing(
-            challenge_digest: candidate.fetch('challenge_digest'), binding_wire: binding, now: Time.now.utc
+            challenge_digest: candidate.fetch('challenge_digest'), binding_wire:, now: Time.now.utc
           )
           unless outcome == :approved
             @err.puts 'tamoz: pairing code was already consumed'
             return 1
           end
 
-          @out.puts options[:json] ? JSON.generate(binding) : "paired #{binding.fetch('correspondent_id')}"
+          @out.puts options[:json] ? JSON.generate(binding_wire) : "paired #{binding_wire.fetch('correspondent_id')}"
           0
         end
       end
@@ -306,8 +306,9 @@ module Tamoz
       end
 
       def task_word(projection)
-        internal = { 'not_started' => 'admitted', 'claimed' => 'running', 'redirecting' => 'waiting' }
-                    .fetch(projection.fetch('task_state'), projection.fetch('task_state'))
+        stored = projection.fetch('task_state')
+        internal = { 'not_started' => 'admitted', 'claimed' => 'running',
+                     'redirecting' => 'waiting' }.fetch(stored, stored)
         Tamoz::Comms::Lifecycle.task_state_for(internal) || 'idle'
       rescue Tamoz::Comms::ValidationError
         internal

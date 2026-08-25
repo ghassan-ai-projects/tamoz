@@ -88,18 +88,22 @@ module Tamoz
                   "modified after the evaluator sealed it"
           end
 
+          assert_shape!(body)
+          assert_principals!(body)
+          assert_paired!(body)
+          body
+        end
+
+        # A sealed report must still be complete and in the supported format.
+        def assert_shape!(body)
           REQUIRED_KEYS.each do |key|
             next unless body[key].nil? || (body[key].respond_to?(:empty?) && body[key].empty?)
 
             raise EvaluatorTamperError, "evaluation report is missing #{key}"
           end
-          unless body.fetch("format_version") == FORMAT_VERSION
-            raise EvaluatorTamperError, "unsupported evaluation report format_version"
-          end
+          return if body.fetch("format_version") == FORMAT_VERSION
 
-          assert_principals!(body)
-          assert_paired!(body)
-          body
+          raise EvaluatorTamperError, "unsupported evaluation report format_version"
         end
 
         # The evaluator, the generator, and the candidate are three distinct

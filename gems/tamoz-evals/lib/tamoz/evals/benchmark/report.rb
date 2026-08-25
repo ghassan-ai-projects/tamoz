@@ -41,15 +41,7 @@ module Tamoz
           metrics = compute_metrics
           baselines = run_baselines
           strongest = strongest_baseline(baselines)
-          comparison = Comparison.new.paired(
-            candidate: @produced,
-            baseline: strongest.fetch("cells"),
-            cells: @produced,
-            metric: method(:per_cell_correctness),
-            minimum_effect: @protocol.dig("thresholds", "minimum_practical_effect"),
-            confidence: @protocol.dig("thresholds", "confidence_interval"),
-            seed: @protocol.dig("statistics", "bootstrap_seed")
-          )
+          comparison = compute_comparison(strongest)
           violations = stop_rule_violations
           report = {
             "benchmark_protocol_version" => @protocol.fetch("benchmark_protocol_version"),
@@ -153,6 +145,18 @@ module Tamoz
 
         def strongest_baseline(baselines)
           baselines.max_by { |row| row.fetch("macro_f1") }
+        end
+
+        def compute_comparison(strongest)
+          Comparison.new.paired(
+            candidate: @produced,
+            baseline: strongest.fetch("cells"),
+            cells: @produced,
+            metric: method(:per_cell_correctness),
+            minimum_effect: @protocol.dig("thresholds", "minimum_practical_effect"),
+            confidence: @protocol.dig("thresholds", "confidence_interval"),
+            seed: @protocol.dig("statistics", "bootstrap_seed")
+          )
         end
 
         # The paired per-cell quantity the go rule's interval is over: 1 when

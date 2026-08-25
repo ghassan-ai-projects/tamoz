@@ -25,11 +25,11 @@ module Tamoz
       def comms_doctor(options, argv)
         bootstrap = false
         credential_ref = nil
-        OptionParser.new do |value|
-          value.banner = 'Usage: tamoz comms doctor [--bootstrap] [--credential-ref NAME]'
-          accept_json(value, options)
-          value.on('--bootstrap', 'Authenticate before a surface exists') { bootstrap = true }
-          value.on('--credential-ref NAME', 'Env var name holding the token (bootstrap)') do |name|
+        OptionParser.new do |parser|
+          parser.banner = 'Usage: tamoz comms doctor [--bootstrap] [--credential-ref NAME]'
+          accept_json(parser, options)
+          parser.on('--bootstrap', 'Authenticate before a surface exists') { bootstrap = true }
+          parser.on('--credential-ref NAME', 'Env var name holding the token (bootstrap)') do |name|
             credential_ref = name
           end
         end.parse!(argv)
@@ -58,9 +58,9 @@ module Tamoz
       # missing credential is named without a network call; the adapter check
       # runs before the client is built.
       def doctor_surface(store, descriptor)
-        checks = []
-        checks << ["token #{credential_name(descriptor)}", credential_present?(descriptor)]
-        return checks unless checks.last.last == true
+        token_check = ["token #{credential_name(descriptor)}", credential_present?(descriptor)]
+        checks = [token_check]
+        return checks unless token_check.last == true
 
         client, client_error = comms_client(descriptor)
         return checks + [['adapter', client_error.message]] if client_error

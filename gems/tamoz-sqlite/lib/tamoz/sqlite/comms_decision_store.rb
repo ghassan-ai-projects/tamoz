@@ -40,7 +40,7 @@ module Tamoz
         SQL
         return :duplicate if existing
 
-        txn.execute('comms.decision.insert', <<~SQL, decision_binds(wire))
+        txn.execute('comms.decision.insert', <<~SQL, build_decision_binds(wire))
           INSERT INTO tamoz_comms_decisions (
             decision_id, thread_id, occurrence_id, interrupt_digest,
             direction, actor_kind, actor_id, source, evidence, reason,
@@ -132,7 +132,7 @@ module Tamoz
         (now.utc.to_r * 1000).to_i
       end
 
-      def decision_binds(wire)
+      def build_decision_binds(wire)
         [
           wire.fetch('decision_id'), wire.fetch('thread_id'), wire.fetch('occurrence_id'),
           wire.fetch('interrupt_digest'), wire.fetch('direction'), wire.fetch('actor_kind'),

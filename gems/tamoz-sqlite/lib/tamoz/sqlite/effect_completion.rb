@@ -4,8 +4,8 @@ module Tamoz
   # The SQLite namespace owns durable effect-journal storage boundaries.
   module SQLite
     # Records terminal, idempotent, and late effect receipts.
-    # :reek:DuplicateMethodCall :reek:FeatureEnvy -- repeated row reads are
-    # the durable receipt predicates owned by this effect boundary.
+    # :reek:DuplicateMethodCall :reek:FeatureEnvy -- the receipt comparisons and
+    # ordered CAS updates are the durable contract owned by this effect boundary.
     # :reek:TooManyStatements :reek:LongParameterList -- the receipt fields and
     # ordered SQL branches are one atomic durable contract.
     # :reek:RepeatedConditional -- each changes check guards a different CAS.
@@ -66,19 +66,29 @@ module Tamoz
           )
           raise CheckpointConflictError, 'effect attempt token does not exist' unless row
 
-          if @terminal_attempt_statuses.include?(row.fetch(1))
-            unless row.fetch(1) == status_text &&
-                   row.fetch(2) == result_bytes &&
-                   row.fetch(3) == result_digest &&
-                   row.fetch(4) == external &&
-                   row.fetch(5) == error_bytes &&
-                   row.fetch(6) == error_digest
+          attempt_number = row.fetch(0)
+          attempt_status = row.fetch(1)
+          stored_result_bytes = row.fetch(2)
+          stored_result_digest = row.fetch(3)
+          stored_external_id = row.fetch(4)
+          stored_error_bytes = row.fetch(5)
+          stored_error_digest = row.fetch(6)
+          head_current_attempt = row.fetch(7)
+          head_status = row.fetch(8)
+
+          if @terminal_attempt_statuses.include?(attempt_status)
+            unless attempt_status == status_text &&
+                   stored_result_bytes == result_bytes &&
+                   stored_result_digest == result_digest &&
+                   stored_external_id == external &&
+                   stored_error_bytes == error_bytes &&
+                   stored_error_digest == error_digest
               raise CheckpointConflictError,
                     'effect attempt already has a different terminal receipt'
             end
             next
           end
-          unless %w[running unknown].include?(row.fetch(1))
+          unless %w[running unknown].include?(attempt_status)
             raise CheckpointConflictError,
                   'effect completion requires a started attempt'
           end
@@ -96,13 +106,13 @@ module Tamoz
             [
               status_text, Wire.blob(result_bytes), result_digest, external,
               Wire.blob(error_bytes), error_digest, now, effect_key,
-              row.fetch(0), token
+              attempt_number, token
             ]
           )
           raise CheckpointConflictError, 'effect receipt commit lost' unless tx.changes == 1
 
-          if row.fetch(0) == row.fetch(7)
-            if row.fetch(8) == 'succeeded'
+          if attempt_number == head_current_attempt
+            if head_status == 'succeeded'
               tx.execute(
                 'effect.complete.succeeded_head',
                 <<~SQL,
@@ -115,9 +125,9 @@ module Tamoz
                   WHERE effect_key = ? AND current_attempt = ?
                     AND status = 'succeeded'
                 SQL
-                [status_text, now, effect_key, row.fetch(0)]
+                [status_text, now, effect_key, attempt_number]
               )
-            elsif %w[failed abandoned].include?(row.fetch(8)) &&
+            elsif %w[failed abandoned].include?(head_status) &&
                   status_text == 'succeeded'
               tx.execute(
                 'effect.complete.resolved_conflict',
@@ -127,7 +137,7 @@ module Tamoz
                       updated_at_ms = ?
                   WHERE effect_key = ? AND current_attempt = ?
                 SQL
-                [now, effect_key, row.fetch(0)]
+                [now, effect_key, attempt_number]
               )
             else
               tx.execute(
@@ -137,7 +147,7 @@ module Tamoz
                   SET status = ?, updated_at_ms = ?
                   WHERE effect_key = ? AND current_attempt = ?
                 SQL
-                [status_text, now, effect_key, row.fetch(0)]
+                [status_text, now, effect_key, attempt_number]
               )
             end
           elsif status_text == 'succeeded'
@@ -160,9 +170,9 @@ module Tamoz
             tx,
             effect_key:,
             transition: "complete.#{status_text}",
-            attempt_number: row.fetch(0),
+            attempt_number:,
             actor: nil,
-            evidence: { 'late' => row.fetch(0) != row.fetch(7) },
+            evidence: { 'late' => attempt_number != head_current_attempt },
             now:
           )
         end

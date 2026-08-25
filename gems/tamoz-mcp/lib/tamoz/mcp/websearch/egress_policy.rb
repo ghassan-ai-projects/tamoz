@@ -105,9 +105,7 @@ module Tamoz
 
           text = text.sub(/%[0-9A-Za-z.]+$/, "") if text.include?("%")
           text = normalize_ipv4_mapped(text)
-          text = normalize_numeric_ipv4(text) if text.match?(/\A[0-9]+\z/) ||
-                                                  text.match?(/\A0[xX][0-9A-Fa-f]+\z/) ||
-                                                  text.match?(/\A0[0-7]+\z/)
+          text = normalize_numeric_ipv4(text) if NUMERIC_IP_PATTERN.match?(text)
           IPAddr.new(text)
         rescue IPAddr::InvalidAddressError, ArgumentError
           nil

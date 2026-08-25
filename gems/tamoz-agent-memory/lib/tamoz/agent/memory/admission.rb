@@ -229,14 +229,14 @@ module Tamoz
           # already exists is durably rejected, never duplicated.
           if @engine.repository.current_version(@engine.namespace, record.layer.to_s, record.memory_id)
             rejected = rejected_version(record, "duplicate_identity",
-              transition_message: "duplicate candidate identity", gate:, evidence:)
+                                        transition_message: "duplicate candidate identity", gate:, evidence:)
             return AdmissionResult.new(record: rejected, rejected: true, reason: "duplicate_identity")
           end
 
-          reason = reject_reason(record, gate:)
+          reason = reject_reason(record)
           unless reason.nil?
             rejected = rejected_version(record, reason,
-              transition_message: "rejected at admission", gate:, evidence:)
+                                        transition_message: "rejected at admission", gate:, evidence:)
             store_rejected(rejected)
             return AdmissionResult.new(record: rejected, rejected: true, reason:)
           end
@@ -268,7 +268,7 @@ module Tamoz
           )
         end
 
-        def reject_reason(record, gate:)
+        def reject_reason(record)
           return "unbounded_statement" if record.statement.bytesize > MemoryLimits.fetch(:max_statement_bytes)
           return "secret_shaped" if Surface.secret_shaped?(record.statement)
           if record.epistemic_kind == :observed &&
@@ -406,12 +406,10 @@ module Tamoz
         end
 
         def episode_evidence(episode)
-          observed = episode.fetch(:observed_outcome, {})
-          observed = observed.transform_keys(&:to_s) if observed.is_a?(Hash)
           {
             "session_id" => episode.fetch(:session_id),
             "plan_digest" => episode.fetch(:plan_digest),
-            "observed_outcome" => observed["outcome"]
+            "observed_outcome" => normalized_outcome(episode)["outcome"]
           }
         end
 
@@ -437,12 +435,7 @@ module Tamoz
         end
 
         def store_rejected(record)
-          @engine.repository.append(
-            record: record,
-            index: @engine.index_for(record),
-            expected_version: nil,
-            sensitive: record.sensitive?
-          )
+          append(record)
         rescue StandardError
           # A rejected admission is durable evidence, but a storage failure
           # must not fabricate a durable rejection. The rejection is still the

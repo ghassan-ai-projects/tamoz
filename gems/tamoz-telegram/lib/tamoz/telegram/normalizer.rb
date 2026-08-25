@@ -36,7 +36,7 @@ module Tamoz
         message = update['message']
         callback = update['callback_query']
         member = update['my_chat_member'] || update['chat_member']
-        observed = Time.at(update['message']&.dig('date').to_i).utc
+        observed = Time.at(message&.dig('date').to_i).utc
 
         if message
           message_envelope(update_id, message, observed)
@@ -71,7 +71,7 @@ module Tamoz
         envelope(
           update_id:, kind: 'callback',
           digest_fields: [update_id, 'callback_query', callback['id'], callback['data'],
-                          callback.dig('message', 'message_id'), callback.dig('from', 'id')],
+                          message['message_id'], callback.dig('from', 'id')],
           text: callback['data'].to_s,
           correspondent_id: "telegram:user:#{callback.fetch('from').fetch('id')}",
           conversation_id: chat_id(message.fetch('chat')),

@@ -81,20 +81,35 @@ module Tamoz
         private
 
         def validate!(payload, scope, scope_id)
+          validate_key_set!(payload)
+          validate_scope!(payload, scope, scope_id)
+          validate_scalars!(payload)
+          validate_open_state!(payload)
+          validate_owners!(payload["owners"], scope)
+          validate_conditions_met!(payload["conditions_met"])
+          validate_last_failure!(payload["last_failure"])
+        end
+
+        def validate_key_set!(payload)
           extra = payload.keys.map(&:to_s) - KEYS
           corrupt!("unexpected keys #{extra.sort.join(", ")}") unless extra.empty?
           missing = KEYS - payload.keys.map(&:to_s)
           corrupt!("missing keys #{missing.sort.join(", ")}") unless missing.empty?
+        end
 
+        def validate_scope!(payload, scope, scope_id)
           unless payload["scope_type"] == scope.scope_type
             corrupt!("scope type does not match its namespace")
           end
           unless payload["scope_id"].is_a?(String) && !payload["scope_id"].empty?
             corrupt!("scope id is missing")
           end
-          if scope_id && payload["scope_id"] != scope_id.to_s
-            corrupt!("scope id does not match its key digest")
-          end
+          return unless scope_id && payload["scope_id"] != scope_id.to_s
+
+          corrupt!("scope id does not match its key digest")
+        end
+
+        def validate_scalars!(payload)
           unless STATES.include?(payload["state"])
             corrupt!("state must be #{STATES.join(" or ")}")
           end
@@ -113,12 +128,12 @@ module Tamoz
                  DIGEST_PATTERN.match?(payload["last_reset_evidence"].to_s)
             corrupt!("last_reset_evidence must be a digest")
           end
-          if payload["state"] == "open" && payload["opened_at_wall_ms"].nil?
-            corrupt!("an open circuit must record when it opened")
-          end
-          validate_owners!(payload["owners"], scope)
-          validate_conditions_met!(payload["conditions_met"])
-          validate_last_failure!(payload["last_failure"])
+        end
+
+        def validate_open_state!(payload)
+          return unless payload["state"] == "open" && payload["opened_at_wall_ms"].nil?
+
+          corrupt!("an open circuit must record when it opened")
         end
 
         def validate_time!(value, name)
@@ -321,60 +336,18 @@ module Tamoz
       def with_failure(owner_id:, kind: :transport, context_digest: nil, now_ms:,
                        run_id: nil, fingerprint: nil)
         owner = Circuit.owner_id!(owner_id)
-        admit!(owner)
+        enforce_admission!(owner)
         failure_kind = Circuit.identity!(kind, name: "circuit failure kind")
-        consuming = scope.conditions_for(failure_kind)
 
         next_owners = deep_copy(owners)
         entry = next_owners[owner] ||= {"failures" => 0, "conditions" => {}}
-        consuming.each do |condition|
-          case condition.kind
-          when "consecutive"
-            entry["failures"] = entry.fetch("failures", 0) + 1
-          when "immediate"
-            sub = entry["conditions"][condition.id] ||= {"kind" => "immediate", "count" => 0}
-            sub["count"] += 1
-            sub["last_at_ms"] = now_ms
-          when "window"
-            sub = entry["conditions"][condition.id] ||=
-              {"kind" => "window", "window_ms" => condition.window_ms, "events" => []}
-            sub["events"] = bound_events(
-              prune(sub.fetch("events"), condition.window_ms, now_ms) +
-                [{"digest" => context_digest, "observed_at_ms" => now_ms}]
-            )
-          when "run"
-            # A run-scoped condition is meaningless without the run and the
-            # fingerprint it counts; fail closed rather than counting a blank.
-            if run_id.nil? || fingerprint.nil?
-              raise ConfigurationError,
-                    "condition #{condition.id} requires run_id: and fingerprint:"
-            end
-            sub = entry["conditions"][condition.id] ||=
-              {"kind" => "run", "run_id" => nil, "counts" => {}}
-            run = Circuit.identity!(run_id, name: "circuit run id")
-            sub["counts"] = {} unless sub["run_id"] == run
-            sub["run_id"] = run
-            print = Circuit.identity!(fingerprint, name: "failure fingerprint")
-            sub["counts"] = bound_counts(sub.fetch("counts"), print)
-          when "rate"
-            sub = entry["conditions"][condition.id] ||=
-              {"kind" => "rate", "window_ms" => condition.window_ms, "events" => []}
-            sub["events"] = bound_events(
-              prune(sub.fetch("events"), condition.window_ms, now_ms) +
-                [{"outcome" => "failure", "observed_at_ms" => now_ms}]
-            )
-          end
+        scope.conditions_for(failure_kind).each do |condition|
+          apply_failure_condition(entry, condition,
+                                  context_digest:, now_ms:, run_id:, fingerprint:)
         end
 
-        candidate = replace(
-          "owners" => next_owners,
-          "last_failure" => {
-            "kind" => failure_kind,
-            "context_digest" => context_digest,
-            "owner" => owner,
-            "observed_at_ms" => now_ms
-          }
-        )
+        candidate = failed_candidate(owner, failure_kind, next_owners,
+                                     context_digest, now_ms)
         met = candidate.met_conditions(now_ms: now_ms)
         return candidate if met.empty? || state == "open"
 
@@ -387,7 +360,7 @@ module Tamoz
       # makes those conditions non-consecutive, DR-2 C3/D1/D5).
       def with_success(owner_id:, now_ms:)
         owner = Circuit.owner_id!(owner_id)
-        admit!(owner)
+        enforce_admission!(owner)
 
         next_owners = deep_copy(owners)
         entry = next_owners[owner] ||= {"failures" => 0, "conditions" => {}}
@@ -460,23 +433,23 @@ module Tamoz
       def self.repaired(scope:, scope_id:, evidence:, observed_digest:, now_ms:)
         resolved = Registry.fetch(scope)
         validated = Evidence.validate!(evidence, scope: resolved)
-        base = initial(scope: resolved, scope_id: scope_id, now_ms: now_ms)
-        base.__send__(
-          :replace,
-          "last_reset_at" => now_ms,
-          "last_reset_evidence" => Evidence.digest(validated),
-          "conditions_met" => [
-            {
-              "condition" => "corrupt_record_repaired",
-              "owner" => nil,
-              "digest" => Circuit.digest_of(
-                {"observed_payload_digest" => String(observed_digest)},
-                domain: CONDITIONS_DIGEST_DOMAIN
-              ),
-              "observed_at_ms" => now_ms
-            }
-          ]
-        )
+        payload = initial(scope: resolved, scope_id: scope_id, now_ms: now_ms)
+                  .to_payload.merge(
+                    "last_reset_at" => now_ms,
+                    "last_reset_evidence" => Evidence.digest(validated),
+                    "conditions_met" => [
+                      {
+                        "condition" => "corrupt_record_repaired",
+                        "owner" => nil,
+                        "digest" => Circuit.digest_of(
+                          {"observed_payload_digest" => String(observed_digest)},
+                          domain: CONDITIONS_DIGEST_DOMAIN
+                        ),
+                        "observed_at_ms" => now_ms
+                      }
+                    ]
+                  )
+        new(scope: resolved, payload: payload, now_ms: now_ms)
       end
 
       # --- predicates -------------------------------------------------------
@@ -574,13 +547,80 @@ module Tamoz
         end
       end
 
-      def admit!(owner)
+      def enforce_admission!(owner)
         return if owners.key?(owner)
         return unless owners_full?
 
         raise CircuitPolicyError,
               "the circuit owner map is full (#{MAX_CIRCUIT_OWNERS}); retire an " \
               "owner with the scope's reset evidence before admitting another"
+      end
+
+      def apply_failure_condition(entry, condition, context_digest:, now_ms:,
+                                  run_id:, fingerprint:)
+        case condition.kind
+        when "consecutive" then count_consecutive_failure(entry)
+        when "immediate" then count_immediate_failure(entry, condition, now_ms)
+        when "window" then append_window_event(entry, condition, context_digest, now_ms)
+        when "run" then count_run_failure(entry, condition, run_id, fingerprint)
+        when "rate" then append_rate_event(entry, condition, now_ms)
+        end
+      end
+
+      def count_consecutive_failure(entry)
+        entry["failures"] = entry.fetch("failures", 0) + 1
+      end
+
+      def count_immediate_failure(entry, condition, now_ms)
+        sub = entry["conditions"][condition.id] ||= {"kind" => "immediate", "count" => 0}
+        sub["count"] += 1
+        sub["last_at_ms"] = now_ms
+      end
+
+      def append_window_event(entry, condition, context_digest, now_ms)
+        sub = entry["conditions"][condition.id] ||=
+          {"kind" => "window", "window_ms" => condition.window_ms, "events" => []}
+        sub["events"] = bound_events(
+          prune(sub.fetch("events"), condition.window_ms, now_ms) +
+            [{"digest" => context_digest, "observed_at_ms" => now_ms}]
+        )
+      end
+
+      def count_run_failure(entry, condition, run_id, fingerprint)
+        # A run-scoped condition is meaningless without the run and the
+        # fingerprint it counts; fail closed rather than counting a blank.
+        if run_id.nil? || fingerprint.nil?
+          raise ConfigurationError,
+                "condition #{condition.id} requires run_id: and fingerprint:"
+        end
+        sub = entry["conditions"][condition.id] ||=
+          {"kind" => "run", "run_id" => nil, "counts" => {}}
+        run = Circuit.identity!(run_id, name: "circuit run id")
+        sub["counts"] = {} unless sub["run_id"] == run
+        sub["run_id"] = run
+        normalized_fingerprint = Circuit.identity!(fingerprint, name: "failure fingerprint")
+        sub["counts"] = bound_counts(sub.fetch("counts"), normalized_fingerprint)
+      end
+
+      def append_rate_event(entry, condition, now_ms)
+        sub = entry["conditions"][condition.id] ||=
+          {"kind" => "rate", "window_ms" => condition.window_ms, "events" => []}
+        sub["events"] = bound_events(
+          prune(sub.fetch("events"), condition.window_ms, now_ms) +
+            [{"outcome" => "failure", "observed_at_ms" => now_ms}]
+        )
+      end
+
+      def failed_candidate(owner, failure_kind, next_owners, context_digest, now_ms)
+        replace(
+          "owners" => next_owners,
+          "last_failure" => {
+            "kind" => failure_kind,
+            "context_digest" => context_digest,
+            "owner" => owner,
+            "observed_at_ms" => now_ms
+          }
+        )
       end
 
       # DR-2 C7: evidence is deduped by digest and deterministically ordered, so
@@ -607,7 +647,7 @@ module Tamoz
       end
 
       def bound_counts(counts, fingerprint)
-        next_counts = counts.to_h { |key, value| [key, value] }
+        next_counts = counts.dup
         next_counts[fingerprint] = (next_counts[fingerprint] || 0) + 1
         return next_counts if next_counts.length <= MAX_RUN_FINGERPRINTS
 

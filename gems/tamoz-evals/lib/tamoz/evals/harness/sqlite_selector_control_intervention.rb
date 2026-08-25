@@ -26,13 +26,7 @@ module Tamoz
             unless @state == :waiting
               raise ExecutionError, "selector intervention is not waiting"
             end
-            unless stop_signal == "STOP"
-              fail_control!("selector child stopped under an unexpected signal")
-            end
-            unless remaining_ms.is_a?(Integer) &&
-                   remaining_ms.between?(0, MAX_REMAINING_MS)
-              fail_control!("selector intervention remaining budget is invalid")
-            end
+            validate_poll_request!(stop_signal:, remaining_ms:)
 
             SQLiteSelectorControl.send(:validate_layout!, @layout)
             SQLiteSelectorControl.send(
@@ -64,24 +58,8 @@ module Tamoz
               raise ExecutionError,
                     "selector control was not authorized before process completion"
             end
-            final_bytes, final_fingerprint = read_stable_control!
-            validate_control_bytes!(final_bytes)
-            unless final_fingerprint == @authorized_fingerprint
-              fail_control!(
-                "selector control changed after kill authorization"
-              )
-            end
-            unless result.instance_of?(SubprocessRunner::Result) &&
-                   result.frozen?
-              fail_control!("selector process result contract is invalid")
-            end
-            unless result.termination == "kill" &&
-                   result.termination_reason == "intervention" &&
-                   result.term_signal == "KILL" &&
-                   result.timed_out == false &&
-                   result.exit_status.nil?
-              fail_control!("selector process result is not an intentional SIGKILL")
-            end
+            assert_control_unchanged!
+            assert_intentional_kill!(result)
 
             @state = :verified
             true
@@ -102,6 +80,16 @@ module Tamoz
                    Thread.current.equal?(@owner_thread)
               raise ExecutionError,
                     "selector intervention must remain in its parent context"
+            end
+          end
+
+          def validate_poll_request!(stop_signal:, remaining_ms:)
+            unless stop_signal == "STOP"
+              fail_control!("selector child stopped under an unexpected signal")
+            end
+            unless remaining_ms.is_a?(Integer) &&
+                   remaining_ms.between?(0, MAX_REMAINING_MS)
+              fail_control!("selector intervention remaining budget is invalid")
             end
           end
 
@@ -187,6 +175,28 @@ module Tamoz
             raise ExecutionError.new(
               "selector control is invalid: #{error.class}"
             ), cause: error
+          end
+
+          def assert_control_unchanged!
+            final_bytes, final_fingerprint = read_stable_control!
+            validate_control_bytes!(final_bytes)
+            return if final_fingerprint == @authorized_fingerprint
+
+            fail_control!("selector control changed after kill authorization")
+          end
+
+          def assert_intentional_kill!(result)
+            unless result.instance_of?(SubprocessRunner::Result) &&
+                   result.frozen?
+              fail_control!("selector process result contract is invalid")
+            end
+            unless result.termination == "kill" &&
+                   result.termination_reason == "intervention" &&
+                   result.term_signal == "KILL" &&
+                   result.timed_out == false &&
+                   result.exit_status.nil?
+              fail_control!("selector process result is not an intentional SIGKILL")
+            end
           end
 
           def validate_control_stat!(stat)

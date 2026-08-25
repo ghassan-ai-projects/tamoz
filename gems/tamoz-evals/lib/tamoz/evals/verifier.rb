@@ -37,14 +37,7 @@ module Tamoz
       )
 
       def verify(path)
-        raw_path = begin
-          File.path(path)
-        rescue TypeError, ArgumentError => error
-          raise ReferenceError, "invalid artifact path: #{error.message}"
-        end
-        raise ReferenceError, "artifact path contains a NUL byte" if raw_path.include?("\0")
-
-        expanded_path = File.expand_path(raw_path)
+        expanded_path = expand_artifact_path(path)
         document = read_document(expanded_path)
         artifact_type = document["artifact_type"]
         domain = DIGEST_DOMAINS.fetch(artifact_type) do
@@ -53,7 +46,7 @@ module Tamoz
 
         Schema.load(artifact_type).validate!(document)
         verify_digest!(document, domain)
-        assert_unique_ids!(document.fetch("references"), "references")
+        validate_unique_ids!(document.fetch("references"), "references")
         references = verify_references!(document.fetch("references"), expanded_path)
         decision = verify_semantics!(artifact_type, document)
 
@@ -72,6 +65,17 @@ module Tamoz
       end
 
       private
+
+      def expand_artifact_path(path)
+        raw_path = begin
+          File.path(path)
+        rescue TypeError, ArgumentError => error
+          raise ReferenceError, "invalid artifact path: #{error.message}"
+        end
+        raise ReferenceError, "artifact path contains a NUL byte" if raw_path.include?("\0")
+
+        File.expand_path(raw_path)
+      end
 
       def read_document(path)
         bytes = read_stable_file(path, max_bytes: MAX_ARTIFACT_BYTES, kind: "artifact")
@@ -105,19 +109,7 @@ module Tamoz
 
         references.map do |reference|
           relative_path = reference.fetch("path")
-          if relative_path.include?("\0") ||
-             relative_path.include?("\\") ||
-             Pathname.new(relative_path).absolute? ||
-             Pathname.new(relative_path).each_filename.include?("..")
-            raise ReferenceError, "reference path escapes artifact directory: #{relative_path.inspect}"
-          end
-
-          candidate = File.expand_path(relative_path, root)
-          real_path = File.realpath(candidate)
-          root_prefix = root.end_with?(File::SEPARATOR) ? root : "#{root}#{File::SEPARATOR}"
-          unless real_path != root && real_path.start_with?(root_prefix)
-            raise ReferenceError, "reference resolves outside artifact directory: #{relative_path.inspect}"
-          end
+          real_path = resolve_reference_path!(relative_path, root)
 
           expected_size = reference.fetch("size_bytes")
           bytes = read_stable_file(
@@ -150,15 +142,38 @@ module Tamoz
         end
       end
 
-      def verify_semantics!(artifact_type, document)
-        if artifact_type == "case"
-          verify_case_semantics!(document)
-          return "verified"
-        end
-        if artifact_type == "evidence"
-          return verify_evidence_semantics!(document)
+      def resolve_reference_path!(relative_path, root)
+        if relative_path.include?("\0") ||
+           relative_path.include?("\\") ||
+           Pathname.new(relative_path).absolute? ||
+           Pathname.new(relative_path).each_filename.include?("..")
+          raise ReferenceError, "reference path escapes artifact directory: #{relative_path.inspect}"
         end
 
+        candidate = File.expand_path(relative_path, root)
+        real_path = File.realpath(candidate)
+        root_prefix = root.end_with?(File::SEPARATOR) ? root : "#{root}#{File::SEPARATOR}"
+        unless real_path != root && real_path.start_with?(root_prefix)
+          raise ReferenceError, "reference resolves outside artifact directory: #{relative_path.inspect}"
+        end
+
+        real_path
+      end
+
+      def verify_semantics!(artifact_type, document)
+        case artifact_type
+        when "case"
+          verify_case_semantics!(document)
+          "verified"
+        when "evidence"
+          verify_evidence_semantics!(document)
+        else
+          # only "result" reaches here: verify rejects other types via DIGEST_DOMAINS
+          verify_result_semantics!(document)
+        end
+      end
+
+      def verify_result_semantics!(document)
         expected = RESULT_DECISIONS.fetch(document.fetch("status"))
         actual = document.fetch("decision")
         unless actual == expected
@@ -169,18 +184,11 @@ module Tamoz
 
         references = document.fetch("references")
         hard_gates = document.fetch("hard_gates")
-        assert_unique_ids!(hard_gates, "hard_gates")
-        assert_unique_ids!(document.fetch("scores"), "scores")
+        validate_unique_ids!(hard_gates, "hard_gates")
+        validate_unique_ids!(document.fetch("scores"), "scores")
         reference_ids = references.map { |reference| reference.fetch("id") }
 
-        hard_gates.each do |gate|
-          missing = gate.fetch("evidence_ids") - reference_ids
-          unless missing.empty?
-            raise InvalidArtifactError,
-                  "hard gate #{gate.fetch("id").inspect} cites missing evidence #{missing.inspect}"
-          end
-        end
-
+        validate_citations!("hard gate", hard_gates, cited_field: "evidence_ids", reference_ids: reference_ids)
         verify_provenance!(document, reference_ids)
         verify_timing!(document.fetch("timing"))
         verify_decision_evidence!(document, hard_gates, references)
@@ -190,8 +198,8 @@ module Tamoz
       def verify_case_semantics!(document)
         evidence = document.fetch("evidence")
         evidence_specs = evidence.fetch("required") + evidence.fetch("optional")
-        assert_unique_ids!(evidence_specs, "evidence")
-        assert_unique_ids!(document.fetch("scorers"), "scorers")
+        validate_unique_ids!(evidence_specs, "evidence")
+        validate_unique_ids!(document.fetch("scorers"), "scorers")
 
         capabilities = document.fetch("capabilities")
         overlap = capabilities.fetch("allowed") & capabilities.fetch("prohibited")
@@ -216,8 +224,8 @@ module Tamoz
         reference_ids = references.map { |reference| reference.fetch("id") }
         claims = document.fetch("claims")
         measurements = document.fetch("measurements")
-        assert_unique_ids!(claims, "claims")
-        assert_unique_ids!(measurements, "measurements")
+        validate_unique_ids!(claims, "claims")
+        validate_unique_ids!(measurements, "measurements")
         content_policy = document.fetch("content_policy")
         if content_policy.fetch("classification") == "public" &&
            !content_policy.fetch("sanitized")
@@ -225,17 +233,17 @@ module Tamoz
                 "public evidence must declare sanitized content"
         end
 
-        claims.each do |claim|
-          missing = claim.fetch("evidence_ids") - reference_ids
-          unless missing.empty?
-            raise InvalidArtifactError,
-                  "claim #{claim.fetch("id").inspect} cites missing evidence " \
-                  "#{missing.inspect}"
-          end
-        end
+        validate_citations!("claim", claims, cited_field: "evidence_ids", reference_ids: reference_ids)
 
         processes = document.fetch("processes")
-        assert_unique_ids!(processes, "processes")
+        verify_evidence_processes!(document, processes)
+        verify_evidence_timing!(document, processes)
+        verify_evidence_status!(document, claims)
+        RESULT_DECISIONS.fetch(document.fetch("status"))
+      end
+
+      def verify_evidence_processes!(document, processes)
+        validate_unique_ids!(processes, "processes")
         processes.each { |process| verify_evidence_process!(process) }
         if %w[process crash race fault].include?(document.fetch("kind")) &&
            processes.empty?
@@ -247,23 +255,30 @@ module Tamoz
           raise InvalidArtifactError,
                 "selector evidence requires an intentional SIGKILL process record"
         end
+      end
 
+      def verify_evidence_timing!(document, processes)
         timing = document.fetch("timing")
         verify_timing!(timing)
         process_exceeds_envelope = processes.any? do |process|
           process.fetch("duration_ms") > timing.fetch("duration_ms")
         end
-        if process_exceeds_envelope
-          raise InvalidArtifactError,
-                "process duration exceeds evidence envelope duration"
-        end
-        verify_evidence_status!(document, claims)
-        RESULT_DECISIONS.fetch(document.fetch("status"))
+        return unless process_exceeds_envelope
+
+        raise InvalidArtifactError,
+              "process duration exceeds evidence envelope duration"
       end
 
       def verify_evidence_process!(process)
         return unless process
 
+        verify_process_status_consistency!(process)
+        verify_process_termination_action!(process)
+        verify_process_kill_signal!(process)
+        verify_process_streams!(process)
+      end
+
+      def verify_process_status_consistency!(process)
         exited = !process.fetch("exit_status").nil?
         signaled = !process.fetch("term_signal").nil?
         if exited == signaled
@@ -272,41 +287,45 @@ module Tamoz
         end
 
         timed_out = process.fetch("timed_out")
+        termination_reason = process.fetch("termination_reason")
+        return if timed_out == (termination_reason == "timeout")
+
+        raise InvalidArtifactError,
+              "process timed_out and termination reason disagree"
+      end
+
+      def verify_process_termination_action!(process)
         termination = process.fetch("termination")
         termination_reason = process.fetch("termination_reason")
-        unless timed_out == (termination_reason == "timeout")
-          raise InvalidArtifactError,
-                "process timed_out and termination reason disagree"
-        end
-
         case termination_reason
         when "none"
           unless termination == "none"
-            raise InvalidArtifactError,
-                  "ordinary process termination requires no harness action"
+            raise InvalidArtifactError, "ordinary process termination requires no harness action"
           end
         when "timeout"
           if termination == "none"
-            raise InvalidArtifactError,
-                  "process timeout requires a harness termination action"
+            raise InvalidArtifactError, "process timeout requires a harness termination action"
           end
         when "intervention"
           unless intentional_intervention?(process)
-            raise InvalidArtifactError,
-                  "process intervention requires intentional SIGKILL status"
+            raise InvalidArtifactError, "process intervention requires intentional SIGKILL status"
           end
         when "cleanup"
           if termination == "none"
-            raise InvalidArtifactError,
-                  "process cleanup requires a harness termination action"
+            raise InvalidArtifactError, "process cleanup requires a harness termination action"
           end
         end
+      end
 
-        if termination == "kill" && process.fetch("term_signal") != "KILL"
-          raise InvalidArtifactError,
-                "SIGKILL harness termination requires KILL process status"
-        end
+      def verify_process_kill_signal!(process)
+        return unless process.fetch("termination") == "kill"
+        return if process.fetch("term_signal") == "KILL"
 
+        raise InvalidArtifactError,
+              "SIGKILL harness termination requires KILL process status"
+      end
+
+      def verify_process_streams!(process)
         %w[stdout stderr].each do |name|
           stream = process.fetch(name)
           bytes = stream.fetch("bytes")
@@ -340,13 +359,13 @@ module Tamoz
             raise InvalidArtifactError,
                   "passed evidence requires every claim to pass"
           end
-          assert_no_diagnostic_errors!("passed evidence", invalid, gaps, infrastructure)
+          validate_no_diagnostic_errors!("passed evidence", invalid, gaps, infrastructure)
         when "failed"
           unless claims.any? { |claim| claim.fetch("status") == "fail" }
             raise InvalidArtifactError,
                   "failed evidence requires at least one failed claim"
           end
-          assert_no_diagnostic_errors!("failed evidence", invalid, gaps, infrastructure)
+          validate_no_diagnostic_errors!("failed evidence", invalid, gaps, infrastructure)
         when "invalid"
           if invalid.empty?
             raise InvalidArtifactError,
@@ -386,6 +405,12 @@ module Tamoz
       end
 
       def verify_provenance!(document, reference_ids)
+        verify_provenance_components!(document)
+        verify_provenance_structure!(document)
+        verify_provenance_citations!(document, reference_ids)
+      end
+
+      def verify_provenance_components!(document)
         provenance = document.fetch("provenance")
         components = provenance.fetch("components")
         identities = components.map { |component| [component.fetch("role"), component.fetch("id")] }
@@ -404,34 +429,34 @@ module Tamoz
 
         authority = document.fetch("decision_authority")
         gate = components.find { |component| component.fetch("role") == "gate" }
-        unless %w[id version digest].all? { |key| gate.fetch(key) == authority.fetch(key) }
-          raise InvalidArtifactError, "decision authority does not match the provenance gate"
-        end
+        return if %w[id version digest].all? { |key| gate.fetch(key) == authority.fetch(key) }
 
+        raise InvalidArtifactError, "decision authority does not match the provenance gate"
+      end
+
+      def verify_provenance_structure!(document)
+        provenance = document.fetch("provenance")
         attempts = provenance.fetch("attempts")
-        assert_unique_ids!(attempts, "attempts")
+        validate_unique_ids!(attempts, "attempts")
         attempt_indexes = attempts.map { |attempt| attempt.fetch("index") }
         unless attempt_indexes.uniq.length == attempt_indexes.length
           raise InvalidArtifactError, "provenance attempts contain duplicate indexes"
         end
-        assert_unique_ids!(provenance.fetch("fixtures"), "fixtures")
+        validate_unique_ids!(provenance.fetch("fixtures"), "fixtures")
         snapshot_kinds = provenance.fetch("snapshots").map { |snapshot| snapshot.fetch("kind") }
         unless snapshot_kinds.uniq.length == snapshot_kinds.length
           raise InvalidArtifactError, "provenance snapshots contain duplicate kinds"
         end
 
         repetition = provenance.fetch("repetition")
-        if repetition.fetch("index") > repetition.fetch("count")
-          raise InvalidArtifactError, "repetition index exceeds repetition count"
-        end
+        return unless repetition.fetch("index") > repetition.fetch("count")
 
-        attempts.each do |attempt|
-          missing = attempt.fetch("reference_ids") - reference_ids
-          unless missing.empty?
-            raise InvalidArtifactError,
-                  "attempt #{attempt.fetch("id").inspect} cites missing evidence #{missing.inspect}"
-          end
-        end
+        raise InvalidArtifactError, "repetition index exceeds repetition count"
+      end
+
+      def verify_provenance_citations!(document, reference_ids)
+        attempts = document.fetch("provenance").fetch("attempts")
+        validate_citations!("attempt", attempts, cited_field: "reference_ids", reference_ids: reference_ids)
 
         document.fetch("infrastructure_errors").each do |error|
           attempt = attempts.find { |candidate| candidate.fetch("id") == error.fetch("attempt_id") }
@@ -446,7 +471,17 @@ module Tamoz
         end
       end
 
-      def assert_unique_ids!(records, field)
+      def validate_citations!(kind, records, cited_field:, reference_ids:)
+        records.each do |record|
+          missing = record.fetch(cited_field) - reference_ids
+          next if missing.empty?
+
+          raise InvalidArtifactError,
+                "#{kind} #{record.fetch("id").inspect} cites missing evidence #{missing.inspect}"
+        end
+      end
+
+      def validate_unique_ids!(records, field)
         ids = records.map { |record| record.fetch("id") }
         duplicates = ids.tally.select { |_id, count| count > 1 }.keys
         return if duplicates.empty?
@@ -482,7 +517,7 @@ module Tamoz
             raise InvalidArtifactError, "passed result requires every applicable hard gate to pass"
           end
           raise InvalidArtifactError, "passed result requires referenced evidence" if references.empty?
-          assert_no_diagnostic_errors!(
+          validate_no_diagnostic_errors!(
             "#{status} result",
             invalid_evidence,
             evidence_gaps,
@@ -492,7 +527,7 @@ module Tamoz
           unless hard_gates.any? { |gate| gate.fetch("status") == "fail" }
             raise InvalidArtifactError, "failed result requires at least one failed hard gate"
           end
-          assert_no_diagnostic_errors!(
+          validate_no_diagnostic_errors!(
             "#{status} result",
             invalid_evidence,
             evidence_gaps,
@@ -524,7 +559,7 @@ module Tamoz
         end
       end
 
-      def assert_no_diagnostic_errors!(label, invalid_evidence, evidence_gaps, infrastructure_errors)
+      def validate_no_diagnostic_errors!(label, invalid_evidence, evidence_gaps, infrastructure_errors)
         return if invalid_evidence.empty? && evidence_gaps.empty? && infrastructure_errors.empty?
 
         raise InvalidArtifactError,

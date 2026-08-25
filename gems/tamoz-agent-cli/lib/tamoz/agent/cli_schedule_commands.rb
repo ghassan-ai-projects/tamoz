@@ -12,12 +12,6 @@ module Tamoz
     module CLIScheduleCommands
       SCHEDULE_ID_PATTERN = /\A[A-Za-z0-9][A-Za-z0-9_\-.]{0,63}\z/
 
-      # Where a schedule's task text lives. The `payload_ref` on the schedule is a
-      # content digest; this is the content it addresses. It is kept in the
-      # operator's runtime database — never in the workspace — so a checkout the
-      # agent can write to cannot rewrite what a schedule will ask for.
-      SCHEDULE_PAYLOADS = %w[tamoz scheduler payload].freeze
-
       def cmd_schedule(options, argv)
         action = argv.shift
         case action
@@ -257,8 +251,7 @@ module Tamoz
         validate_schedule_id!(id)
 
         with_worker_runtime(options) do |runtime|
-          page = runtime.schedule_store.list_occurrences(schedule_id: id, limit:)
-          rows = Array(page.respond_to?(:occurrences) ? page.occurrences : page)
+          rows = runtime.schedule_store.list_occurrences(schedule_id: id, limit:)
           documents = rows.map { |entry| occurrence_document(entry) }
           if options[:json]
             @out.puts JSON.generate("schedule_id" => id, "occurrences" => documents)

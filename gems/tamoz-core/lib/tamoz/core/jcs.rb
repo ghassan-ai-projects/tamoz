@@ -111,32 +111,8 @@ module Tamoz
 
       def emit(value, out)
         case value
-        when Hash
-          pairs = []
-          seen = {}
-          value.each do |key, entry|
-            key = String(key)
-            raise Error, "duplicate canonical key after stringification: #{key}" if seen[key]
-
-            seen[key] = true
-            pairs << [key, entry]
-          end
-          pairs.sort_by! { |(key, _)| key.encode("UTF-16BE").b }
-          out << "{"
-          pairs.each_with_index do |(key, entry), index|
-            out << "," if index.positive?
-            emit_string(key, out)
-            out << ":"
-            emit(entry, out)
-          end
-          out << "}"
-        when Array
-          out << "["
-          value.each_with_index do |entry, index|
-            out << "," if index.positive?
-            emit(entry, out)
-          end
-          out << "]"
+        when Hash then emit_object(value, out)
+        when Array then emit_array(value, out)
         when String
           emit_string(value, out)
         when Symbol
@@ -152,6 +128,36 @@ module Tamoz
           raise Error, "unsupported canonical value: #{value.class}"
         end
         out
+      end
+
+      def emit_object(value, out)
+        pairs = []
+        seen = {}
+        value.each do |key, entry|
+          key = String(key)
+          raise Error, "duplicate canonical key after stringification: #{key}" if seen[key]
+
+          seen[key] = true
+          pairs << [key, entry]
+        end
+        pairs.sort_by! { |(key, _)| key.encode("UTF-16BE").b }
+        out << "{"
+        pairs.each_with_index do |(key, entry), index|
+          out << "," if index.positive?
+          emit_string(key, out)
+          out << ":"
+          emit(entry, out)
+        end
+        out << "}"
+      end
+
+      def emit_array(value, out)
+        out << "["
+        value.each_with_index do |entry, index|
+          out << "," if index.positive?
+          emit(entry, out)
+        end
+        out << "]"
       end
 
       def emit_string(value, out)

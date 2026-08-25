@@ -19,9 +19,6 @@ module Tamoz
     # fragment the row the store persists.
     # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-    # The delivery is one validated value; the smells below are the
-    # per-field rule set and the thirteen facts one outbound effect binds
-    # (design §6.3) — splitting them would fragment the outbox row.
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:DuplicateMethodCall, :reek:NilCheck
     # :reek:BooleanParameter -- `journaled` is part of the delivery contract.

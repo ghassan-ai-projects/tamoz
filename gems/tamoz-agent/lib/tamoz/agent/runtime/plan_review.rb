@@ -74,8 +74,8 @@ module Tamoz
 
             feedback = review.fetch("issues")
             last_layer = :semantic
-          rescue ProtocolError => error
-            feedback = [error.message]
+          rescue ProtocolError => e
+            feedback = [e.message]
             last_layer = :protocol
             emit(
               :plan_reviewed,

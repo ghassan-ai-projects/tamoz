@@ -23,14 +23,14 @@ module Tamoz
     # SQLite decision store implements its contract over that form without
     # referencing this constant (dependency rule 9).
     #
-    # The class-level structure is the design §9 contract itself: fifteen
+    # The class-level structure is the design §9 contract itself: seventeen
     # fields, seven vocabulary constants, bang validators, and one row per
     # record. Splitting them would fragment the record the store persists as a
     # single wire hash.
     # :reek:TooManyConstants, :reek:TooManyInstanceVariables, :reek:TooManyMethods
     # :reek:MissingSafeMethod -- every `validate_*!` raises by construction;
     #   a "safe" variant would be a lie.
-    # :reek:LongParameterList -- the fifteen fields ARE the record (see above).
+    # :reek:LongParameterList -- the seventeen fields ARE the record (see above).
     # :reek:FeatureEnvy -- `==` and the field validators necessarily read the
     #   other value/wire being compared.
     # :reek:ControlParameter -- `interrupt_digest:` on `build` lets the
@@ -101,7 +101,7 @@ module Tamoz
       # is part of the id: a later re-decision of the SAME question is a NEW
       # decision (single-use consumption), never a duplicate of a consumed one.
       # @return [DecisionRecord]
-      # rubocop:disable Metrics/ParameterLists -- the same fifteen-field value
+      # rubocop:disable Metrics/ParameterLists -- the same seventeen-field value
       # contract as initialize: every bound fact is part of the record.
       def self.build(
         thread_id:, occurrence_id:, interrupts:, direction:,
@@ -125,7 +125,7 @@ module Tamoz
       end
       # rubocop:enable Metrics/ParameterLists
 
-      # Same fifteen-field value contract as initialize: every bound fact is
+      # Same seventeen-field value contract as initialize: every bound fact is
       # part of the derived id.
       # rubocop:disable Metrics/ParameterLists
       def self.decision_id_for(
@@ -282,14 +282,11 @@ module Tamoz
       # different field requirement, and the validation IS that dispatch.
       # :reek:ControlParameter, :reek:NilCheck
       def validate_claim!(status:, claim_owner:, claim_fence:, claim_expires_at:)
-        if status == 'claimed'
-          fields = [claim_owner, claim_fence, claim_expires_at]
-          if fields.any?(&:nil?)
-            raise ValidationError, 'a claimed decision needs claim_owner, claim_fence and claim_expires_at'
-          end
+        fields = [claim_owner, claim_fence, claim_expires_at]
+        if status == 'claimed' && fields.any?(&:nil?)
+          raise ValidationError, 'a claimed decision needs claim_owner, claim_fence and claim_expires_at'
         end
-        return unless status == 'pending' &&
-                      [claim_owner, claim_fence, claim_expires_at].any? { |field| !field.nil? }
+        return unless status == 'pending' && fields.any? { |field| !field.nil? }
 
         raise ValidationError, 'a pending decision carries no claim fields'
       end

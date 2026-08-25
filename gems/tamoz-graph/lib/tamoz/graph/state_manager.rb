@@ -20,7 +20,7 @@ module Tamoz
                   end
           [name, value]
         end
-        writes = normalize_update(input, allow_managed: false, allow_immutable: true)
+        writes = normalize_update(input, allow_immutable: true)
         apply_writes(
           state,
           [{"task_id" => "input", "update" => writes}],
@@ -29,7 +29,7 @@ module Tamoz
         )
       end
 
-      def normalize_update(value, allow_managed: false, allow_immutable: false)
+      def normalize_update(value, allow_immutable: false)
         normalized = codec.normalize(value)
         raise InvalidUpdateError, "node update must be a Hash" unless normalized.is_a?(Hash)
 
@@ -37,7 +37,7 @@ module Tamoz
         normalized.each do |raw_name, entry|
           name = resolve_channel(raw_name)
           channel = channels.fetch(name)
-          if channel.managed? && !allow_managed
+          if channel.managed?
             raise InvalidUpdateError, "managed channel #{name} is read-only"
           end
           if channel.immutable? && !allow_immutable
@@ -72,15 +72,7 @@ module Tamoz
       private
 
       def apply_writes(state, records, remaining_steps:, allow_immutable: false)
-        grouped = Hash.new { |hash, key| hash[key] = [] }
-        writers = Hash.new { |hash, key| hash[key] = [] }
-        records.each do |record|
-          record.fetch("update").each do |name, value|
-            grouped[name] << value
-            writers[name] << record.fetch("task_id")
-          end
-        end
-
+        grouped, writers = group_writes(records)
         candidate = state.dup
         grouped.each do |name, values|
           channel = channels.fetch(name)
@@ -107,6 +99,18 @@ module Tamoz
           candidate[name] = remaining_steps if channel.managed?
         end
         normalize_state(candidate)
+      end
+
+      def group_writes(records)
+        grouped = Hash.new { |hash, key| hash[key] = [] }
+        writers = Hash.new { |hash, key| hash[key] = [] }
+        records.each do |record|
+          record.fetch("update").each do |name, value|
+            grouped[name] << value
+            writers[name] << record.fetch("task_id")
+          end
+        end
+        [grouped, writers]
       end
 
       def normalize_state(state)

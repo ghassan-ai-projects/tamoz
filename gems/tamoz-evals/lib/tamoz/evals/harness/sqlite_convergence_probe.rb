@@ -101,6 +101,13 @@ module Tamoz
             }
           }
         )
+        RECOVERY_HISTORY_COUNTS = DeepFreeze.call(
+          {
+            "request.recover-claimed" => 2,
+            "request.recover-running" => 2,
+            "request.recover-redirecting" => 3
+          }
+        )
         DEFINITION = DeepFreeze.call(
           {
             "id" => "tamoz.sqlite.convergence_probe",
@@ -153,34 +160,15 @@ module Tamoz
           primary_error = nil
           validate_capabilities!
           scenario = @scenario_registry.fetch(scenario_id)
-          state = validate_classification!(scenario, classification)
+          classification = validate_classification!(scenario, classification)
           database_path = validate_path!(path, "database")
-          probe = PROBES.fetch(scenario.fetch("id"))
-          ledger = if probe == "pending-write-replay"
-                     validate_path!(ledger_path, "ledger")
-                   elsif ledger_path.nil?
-                     nil
-                   else
-                     raise ExecutionError,
-                           "SQLite convergence ledger is unexpected"
-                   end
-
+          id = scenario.fetch("id")
+          probe = PROBES.fetch(id)
+          ledger = resolve_ledger(probe, ledger_path)
           adapter = Tamoz::SQLite::Adapter.new(path: database_path)
           app = fixture_definition(ledger).compile(checkpointer: adapter)
-          facts = send(
-            "probe_#{probe.tr("-", "_")}",
-            app,
-            adapter,
-            scenario.fetch("id"),
-            state,
-            ledger
-          )
-          report(
-            scenario: scenario.fetch("id"),
-            classification: state,
-            probe:,
-            facts:
-          )
+          facts = execute_probe(app:, adapter:, scenario_id: id, classification:, ledger:)
+          build_report(scenario: id, classification:, probe:, facts:)
         rescue KeyError, TypeError => error
           primary_error = error
           raise ExecutionError.new(
@@ -219,6 +207,12 @@ module Tamoz
         end
 
         def validate_path!(value, name)
+          validate_path_shape!(value, name)
+          enforce_path_safety!(value, name)
+          value.dup.freeze
+        end
+
+        def validate_path_shape!(value, name)
           unless value.is_a?(String) &&
                  value.valid_encoding? &&
                  !value.empty? &&
@@ -226,6 +220,9 @@ module Tamoz
                  File.absolute_path(value) == value
             raise ExecutionError, "SQLite convergence #{name} path is invalid"
           end
+        end
+
+        def enforce_path_safety!(value, name)
           stat = File.lstat(value)
           parent = File.lstat(File.dirname(value))
           maximum = name == "database" ? MAX_DATABASE_BYTES : MAX_LEDGER_BYTES
@@ -239,11 +236,21 @@ module Tamoz
                  (parent.mode & 0o077).zero?
             raise ExecutionError, "SQLite convergence #{name} path is unsafe"
           end
-          value.dup.freeze
         rescue Errno::ENOENT, Errno::ELOOP => error
           raise ExecutionError.new(
             "SQLite convergence #{name} path is invalid"
           ), cause: error
+        end
+
+        def resolve_ledger(probe, ledger_path)
+          if probe == "pending-write-replay"
+            validate_path!(ledger_path, "ledger")
+          elsif ledger_path.nil?
+            nil
+          else
+            raise ExecutionError,
+                  "SQLite convergence ledger is unexpected"
+          end
         end
 
         def fixture_definition(ledger_path)
@@ -283,41 +290,25 @@ module Tamoz
           end
         end
 
-        def probe_lease_fencing(_app, adapter, _scenario, _state, _ledger)
-          encoded = Tamoz::SQLite.const_get(:Wire, false).namespace([])
-          prior = adapter.__send__(:read, operation: "eval.convergence.lease") do |tx|
-            tx.first(
-              "eval.convergence.lease",
-              <<~SQL,
-                SELECT lease_owner_id, lease_fence, lease_expires_at_ms
-                FROM tamoz_namespaces
-                WHERE thread_id = ? AND namespace = ?
-              SQL
-              [THREAD_ID, encoded]
-            )
-          end
-          prior_fence = prior ? prior.fetch(1) : 0
-          stale = if prior&.fetch(0)
-                    lease_class = Tamoz::SQLite.const_get(:LeaseRecord, false)
-                    lease_class.new(
-                      thread_id: THREAD_ID,
-                      namespace: encoded,
-                      owner_id: prior.fetch(0),
-                      fence: prior.fetch(1),
-                      expires_at_ms: prior.fetch(2),
-                      ttl: 30.0
-                    )
-                  end
-          current = adapter.__send__(
-            :acquire_lease,
-            thread_id: THREAD_ID,
-            namespace: encoded,
-            owner_id: OWNER_ID,
-            ttl: adapter.limits.lease_ttl
+        def execute_probe(app:, adapter:, scenario_id:, classification:, ledger:)
+          probe = PROBES.fetch(scenario_id)
+          send(
+            "probe_#{probe.tr("-", "_")}",
+            app,
+            adapter,
+            scenario_id,
+            classification,
+            ledger
           )
-          unless current.fence == prior_fence + 1
-            raise ExecutionError, "SQLite convergence fence did not advance"
-          end
+        end
+
+        def probe_lease_fencing(_app, adapter, _scenario, _classification, _ledger)
+          encoded = Tamoz::SQLite.const_get(:Wire, false).namespace([])
+          prior = read_prior_lease(adapter, encoded)
+          prior_fence = prior ? prior.fetch(1) : 0
+          stale = stale_lease_record(prior, encoded)
+          current = acquire_convergence_lease(adapter, encoded)
+          assert_fence_advanced!(current, prior_fence)
           stale_fenced = stale && stale_lease_fenced?(adapter, stale)
           unless stale.nil? || stale_fenced
             raise ExecutionError, "SQLite convergence stale lease remained valid"
@@ -334,6 +325,50 @@ module Tamoz
           }
         end
 
+        def read_prior_lease(adapter, encoded)
+          adapter.__send__(:read, operation: "eval.convergence.lease") do |tx|
+            tx.first(
+              "eval.convergence.lease",
+              <<~SQL,
+                SELECT lease_owner_id, lease_fence, lease_expires_at_ms
+                FROM tamoz_namespaces
+                WHERE thread_id = ? AND namespace = ?
+              SQL
+              [THREAD_ID, encoded]
+            )
+          end
+        end
+
+        def stale_lease_record(prior, encoded)
+          return unless prior&.fetch(0)
+
+          lease_class = Tamoz::SQLite.const_get(:LeaseRecord, false)
+          lease_class.new(
+            thread_id: THREAD_ID,
+            namespace: encoded,
+            owner_id: prior.fetch(0),
+            fence: prior.fetch(1),
+            expires_at_ms: prior.fetch(2),
+            ttl: 30.0
+          )
+        end
+
+        def acquire_convergence_lease(adapter, encoded)
+          adapter.__send__(
+            :acquire_lease,
+            thread_id: THREAD_ID,
+            namespace: encoded,
+            owner_id: OWNER_ID,
+            ttl: adapter.limits.lease_ttl
+          )
+        end
+
+        def assert_fence_advanced!(current, prior_fence)
+          return if current.fence == prior_fence + 1
+
+          raise ExecutionError, "SQLite convergence fence did not advance"
+        end
+
         def stale_lease_fenced?(adapter, stale)
           adapter.__send__(:validate_lease, stale)
           false
@@ -341,12 +376,12 @@ module Tamoz
           true
         end
 
-        def probe_inbox_reopen(app, _adapter, scenario, state, _ledger)
+        def probe_inbox_reopen(app, _adapter, scenario, classification, _ledger)
           request = app.durable_runner.fetch(
             thread: THREAD_ID,
             request_id: REQUEST_ID
           )
-          expected = REQUEST_STATES.fetch(scenario).fetch(state)
+          expected = REQUEST_STATES.fetch(scenario).fetch(classification)
           actual = request&.status&.to_s
           expected_bound = %w[claimed redirecting running].include?(expected)
           actual_bound = !request&.execution_id.nil?
@@ -361,7 +396,7 @@ module Tamoz
           }
         end
 
-        def probe_duplicate_delivery(app, _adapter, _scenario, _state, _ledger)
+        def probe_duplicate_delivery(app, _adapter, _scenario, _classification, _ledger)
           runner = app.durable_runner
           before = runner.fetch(thread: THREAD_ID, request_id: REQUEST_ID)
           after = runner.submit(
@@ -384,7 +419,7 @@ module Tamoz
           }
         end
 
-        def probe_request_recovery(app, _adapter, scenario, _state, _ledger)
+        def probe_request_recovery(app, _adapter, scenario, _classification, _ledger)
           runner = app.durable_runner
           before = runner.fetch(thread: THREAD_ID, request_id: REQUEST_ID)
           unless before && before.execution_id
@@ -397,11 +432,7 @@ module Tamoz
             owner_id: OWNER_ID
           )
           snapshot = app.state(thread: THREAD_ID)
-          expected_history = {
-            "request.recover-claimed" => 2,
-            "request.recover-running" => 2,
-            "request.recover-redirecting" => 3
-          }.fetch(scenario)
+          expected_history = RECOVERY_HISTORY_COUNTS.fetch(scenario)
           history_count = app.history(thread: THREAD_ID).length
           unless recovered.status == :completed &&
                  recovered.execution_id == before.execution_id &&
@@ -423,15 +454,15 @@ module Tamoz
         # DR-4: a stale request terminal-failed at claim or recover is a durable
         # failed request carrying the typed terminal payload and a claim-time
         # execution binding; it is never re-claimable.
-        def probe_stale_request_fail(app, _adapter, scenario, state, _ledger)
+        def probe_stale_request_fail(app, _adapter, scenario, classification, _ledger)
           runner = app.durable_runner
           request = runner.fetch(thread: THREAD_ID, request_id: REQUEST_ID)
-          expected = REQUEST_STATES.fetch(scenario).fetch(state)
+          expected = REQUEST_STATES.fetch(scenario).fetch(classification)
           unless request && request.status.to_s == expected
             raise ExecutionError,
                   "SQLite convergence stale-fail state is inconsistent"
           end
-          if state == "new"
+          if classification == "new"
             unless request.terminal_error.is_a?(Hash) &&
                    request.terminal_error.fetch("graph_status") == "failed" &&
                    !request.terminal_error.fetch("reason").to_s.empty? &&
@@ -449,8 +480,8 @@ module Tamoz
           }
         end
 
-        def probe_pending_write_replay(app, _adapter, _scenario, state, ledger)
-          expected_before = state == "old" ? 0 : 1
+        def probe_pending_write_replay(app, _adapter, _scenario, classification, ledger)
+          expected_before = classification == "old" ? 0 : 1
           before_count = ledger_count(ledger)
           unless before_count == expected_before
             raise ExecutionError,
@@ -470,13 +501,8 @@ module Tamoz
                  snapshot.status == :completed &&
                  snapshot.state.fetch(:value) == 1 &&
                  after_count == 1
-            raise ExecutionError, [
-              "SQLite convergence pending write replay failed",
-              "request=#{recovered&.status || "missing"}",
-              "checkpoint=#{snapshot.status}",
-              "value=#{snapshot.state.fetch(:value)}",
-              "ledger=#{after_count}"
-            ].join(" ")
+            raise ExecutionError,
+                  replay_failure_message(recovered, snapshot, after_count)
           end
           {
             "ledger_before" => before_count,
@@ -484,6 +510,16 @@ module Tamoz
             "request_status" => recovered.status.to_s,
             "checkpoint_status" => snapshot.status.to_s
           }
+        end
+
+        def replay_failure_message(recovered, snapshot, after_count)
+          [
+            "SQLite convergence pending write replay failed",
+            "request=#{recovered&.status || "missing"}",
+            "checkpoint=#{snapshot.status}",
+            "value=#{snapshot.state.fetch(:value)}",
+            "ledger=#{after_count}"
+          ].join(" ")
         end
 
         def ledger_count(path)
@@ -512,9 +548,9 @@ module Tamoz
           database&.close
         end
 
-        def probe_checkpoint_reopen(app, _adapter, scenario, state, _ledger)
+        def probe_checkpoint_reopen(app, _adapter, scenario, classification, _ledger)
           expected_count, expected_status =
-            CHECKPOINT_STATES.fetch(scenario).fetch(state)
+            CHECKPOINT_STATES.fetch(scenario).fetch(classification)
           history = app.history(thread: THREAD_ID)
           actual_status = history.first&.status&.to_s
           unless history.length == expected_count &&
@@ -534,22 +570,22 @@ module Tamoz
           app,
           _adapter,
           scenario,
-          state,
+          classification,
           _ledger
         )
-          expected_count, checkpoint_status, request_status =
-            REQUEST_CHECKPOINT_STATES.fetch(scenario).fetch(state)
+          expected = REQUEST_CHECKPOINT_STATES.fetch(scenario).fetch(classification)
           history = app.history(thread: THREAD_ID)
           request = app.durable_runner.fetch(
             thread: THREAD_ID,
             request_id: REQUEST_ID
           )
           snapshot = app.state(thread: THREAD_ID)
-          unless history.length == expected_count &&
-                 snapshot.status.to_s == checkpoint_status &&
-                 request&.status&.to_s == request_status &&
-                 (request.checkpoint_id.nil? ||
-                  request.execution_id == snapshot.execution_id)
+          unless request_checkpoint_relation_consistent?(
+            history_length: history.length,
+            snapshot:,
+            request:,
+            expected:
+          )
             raise ExecutionError,
                   "SQLite convergence request/checkpoint relation is inconsistent"
           end
@@ -562,7 +598,21 @@ module Tamoz
           }
         end
 
-        def report(scenario:, classification:, probe:, facts:)
+        def request_checkpoint_relation_consistent?(
+          history_length:,
+          snapshot:,
+          request:,
+          expected:
+        )
+          expected_count, checkpoint_status, request_status = expected
+          history_length == expected_count &&
+            snapshot.status.to_s == checkpoint_status &&
+            request&.status&.to_s == request_status &&
+            (request.checkpoint_id.nil? ||
+             request.execution_id == snapshot.execution_id)
+        end
+
+        def build_report(scenario:, classification:, probe:, facts:)
           body = {
             "convergence_version" => VERSION,
             "definition_digest" => DEFINITION_DIGEST,
@@ -583,7 +633,8 @@ module Tamoz
         private_constant :CHECKPOINT_STATES, :DEFINITION, :DEFINITION_DIGEST,
                          :GRAPH_NAME, :GRAPH_VERSION, :LEDGER_INVOCATION,
                          :MAX_DATABASE_BYTES, :MAX_LEDGER_BYTES, :MAX_PATH_BYTES,
-                         :OWNER_ID, :PROBES, :REQUEST_CHECKPOINT_STATES,
+                         :OWNER_ID, :PROBES, :RECOVERY_HISTORY_COUNTS,
+                         :REQUEST_CHECKPOINT_STATES,
                          :REQUEST_ID, :REQUEST_STATES, :THREAD_ID
       end
 

@@ -36,9 +36,7 @@ module Tamoz
         managed: nil,
         immutable: false
       )
-        if @channels.length >= MAX_CHANNELS
-          raise GraphDefinitionError, "graph exceeds #{MAX_CHANNELS} state channels"
-        end
+        enforce_capacity!(@channels.length, MAX_CHANNELS, "state channels")
         key = Identifier.symbol(name, name: "state channel")
         raise GraphDefinitionError, "duplicate state channel #{key}" if @channels.key?(key)
 
@@ -66,9 +64,7 @@ module Tamoz
         routes: [],
         &block
       )
-        if @nodes.length >= MAX_NODES
-          raise GraphDefinitionError, "graph exceeds #{MAX_NODES} nodes"
-        end
+        enforce_capacity!(@nodes.length, MAX_NODES, "nodes")
         key = Identifier.symbol(name, name: "node")
         raise GraphDefinitionError, "duplicate node #{key}" if @nodes.key?(key)
         if callable && block
@@ -89,10 +85,8 @@ module Tamoz
       end
 
       def edge(source, target)
-        if @edges.length >= MAX_EDGES
-          raise GraphDefinitionError, "graph exceeds #{MAX_EDGES} edges"
-        end
-        pair = [normalize_endpoint(source, source: true), normalize_endpoint(target, source: false)]
+        enforce_capacity!(@edges.length, MAX_EDGES, "edges")
+        pair = [normalize_source(source), normalize_target(target)]
         raise GraphDefinitionError, "duplicate edge #{pair.inspect}" if @edges.include?(pair)
 
         @edges << pair.freeze
@@ -101,9 +95,7 @@ module Tamoz
 
       def branch(source, version:, targets:, name: nil, &router)
         raise ArgumentError, "a branch block is required" unless router
-        if @branches.length >= MAX_BRANCHES
-          raise GraphDefinitionError, "graph exceeds #{MAX_BRANCHES} branches"
-        end
+        enforce_capacity!(@branches.length, MAX_BRANCHES, "branches")
 
         value = Branch.new(source:, name:, version:, targets:, router:)
         if @branches.any? { |entry| entry.source == value.source && entry.name == value.name }
@@ -126,14 +118,24 @@ module Tamoz
 
       private
 
-      def normalize_endpoint(value, source:)
-        return START if source && value.equal?(START)
-        return Tamoz::END if !source && value.equal?(Tamoz::END)
-        if value.equal?(START) || value.equal?(Tamoz::END)
-          raise GraphDefinitionError, "invalid edge endpoint #{value.inspect}"
-        end
+      def normalize_source(value)
+        return START if value.equal?(START)
+        raise GraphDefinitionError, "invalid edge endpoint #{value.inspect}" if value.equal?(Tamoz::END)
 
-        Identifier.symbol(value, name: source ? "edge source" : "edge target")
+        Identifier.symbol(value, name: "edge source")
+      end
+
+      def normalize_target(value)
+        return Tamoz::END if value.equal?(Tamoz::END)
+        raise GraphDefinitionError, "invalid edge endpoint #{value.inspect}" if value.equal?(START)
+
+        Identifier.symbol(value, name: "edge target")
+      end
+
+      def enforce_capacity!(current, maximum, what)
+        return if current < maximum
+
+        raise GraphDefinitionError, "graph exceeds #{maximum} #{what}"
       end
 
       private_constant :UNSET, :MAX_CHANNELS, :MAX_NODES, :MAX_EDGES, :MAX_BRANCHES

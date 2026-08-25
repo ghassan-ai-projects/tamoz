@@ -47,7 +47,7 @@ module Tamoz
       ].freeze
       PACING_GLOBAL_SCOPE = '__global__'
       REQUEST_REF_WIDTH = 10
-      REQUEST_REF_PATTERN = /\Ar[0-9a-f]{#{REQUEST_REF_WIDTH}}\z/.freeze
+      REQUEST_REF_PATTERN = /\Ar[0-9a-f]{#{REQUEST_REF_WIDTH}}\z/
 
       # The connection's backend clock, for read projections whose age
       # arithmetic has no caller-bound `now:`; never Ruby wall-clock.
@@ -249,7 +249,7 @@ module Tamoz
           delivery_wire['reply_to'],
           delivery_wire.fetch('journaled') ? 1 : 0, delivery_wire.fetch('content_digest'),
           delivery_wire.fetch('render_version'),
-          delivery_wire['expires_at'] && now_ms(Time.parse(delivery_wire['expires_at'])),
+          wire_time_ms(delivery_wire['expires_at']),
           now_ms(now), now_ms(now)
         ]
       end

@@ -54,7 +54,7 @@ module Tamoz
         outcome = journal_episode_model_call(
           context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
         )
-        result_for_effect_outcome(
+        map_outcome(
           outcome, logical:, invocation:, request_bytes:, frame_digest:
         )
       end
@@ -82,7 +82,7 @@ module Tamoz
         end
       end
 
-      def result_for_effect_outcome(outcome, logical:, invocation:, request_bytes:, frame_digest:)
+      def map_outcome(outcome, logical:, invocation:, request_bytes:, frame_digest:)
         case outcome.status
         when :succeeded
           projection = codec_projection(outcome)
@@ -117,11 +117,17 @@ module Tamoz
           "request_digest" => @transport.request_digest(request_bytes),
           "content" => response.content,
           "response_digest" => response.response_digest,
-          "usage" => response.usage.available ? {
-            "input_tokens" => response.usage.input_tokens,
-            "output_tokens" => response.usage.output_tokens,
-            "cost_microunits" => response.usage.cost_microunits
-          } : nil
+          "usage" => usage_projection(response)
+        }
+      end
+
+      def usage_projection(response)
+        return nil unless response.usage.available
+
+        {
+          "input_tokens" => response.usage.input_tokens,
+          "output_tokens" => response.usage.output_tokens,
+          "cost_microunits" => response.usage.cost_microunits
         }
       end
 

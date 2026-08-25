@@ -165,8 +165,8 @@ module Tamoz
                 "expected_payload_digest must be a sha256:... digest"
         end
 
-        namespace_text = normalize_namespace(@namespace)
-        key_text = normalize_key(@key)
+        namespace_text = normalize_name(@namespace, label: "Store namespace")
+        key_text = normalize_name(@key, label: "Store key")
         repaired = nil
         @store.open_transaction(label: "circuit.repair") do |tx|
           row = tx.first(
@@ -260,19 +260,10 @@ module Tamoz
       # The Store normalizes namespace/key with SafeText (MAX_NAME_BYTES =
       # 1024); the raw repair read binds the SAME normalized forms so the query
       # matches the rows the Store wrote.
-      def normalize_namespace(value)
+      def normalize_name(value, label:)
         SafeText.normalize(
           value,
-          name: "Store namespace",
-          max_bytes: STORE_NAME_MAX_BYTES,
-          error_class: Tamoz::ConfigurationError
-        )
-      end
-
-      def normalize_key(value)
-        SafeText.normalize(
-          value,
-          name: "Store key",
+          name: label,
           max_bytes: STORE_NAME_MAX_BYTES,
           error_class: Tamoz::ConfigurationError
         )

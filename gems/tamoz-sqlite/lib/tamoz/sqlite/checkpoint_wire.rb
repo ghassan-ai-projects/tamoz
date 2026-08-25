@@ -135,7 +135,7 @@ module Tamoz
       # wire contract (columns and payload must agree).
       def decode_checkpoint_row(row)
         attributes = verified_attributes(row)
-        checkpoint(row, attributes, attributes.fetch(:pending))
+        build_checkpoint(row, attributes, attributes.fetch(:pending))
       end
 
       # The active-checkpoint mapper: decode plus the durable pending merge.
@@ -154,7 +154,7 @@ module Tamoz
 
           pending = merge_pending(pending, durable_pending)
         end
-        checkpoint(row, attributes, pending)
+        build_checkpoint(row, attributes, pending)
       end
 
       # :reek:TooManyStatements
@@ -200,7 +200,7 @@ module Tamoz
 
       # :reek:UtilityFunction -- the row->Checkpoint field mapping is a pure
       # declarative contract with no instance state to move it to.
-      def checkpoint(row, attributes, pending)
+      def build_checkpoint(row, attributes, pending)
         Tamoz::Graph::Checkpoint.new(
           format_version: row.fetch(5),
           id: Wire.identity(row.fetch(0), name: 'stored checkpoint id'),

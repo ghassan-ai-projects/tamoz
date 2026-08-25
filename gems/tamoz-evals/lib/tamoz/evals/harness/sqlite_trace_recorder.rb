@@ -102,13 +102,7 @@ module Tamoz
           @subject = normalize_subject(subject)
           @registry = validate_registry(registry)
           @registry_ref = registry_reference
-          operation_entry = @registry.operation(@operation)
-          unless operation_entry &&
-                 operation_entry.fetch("phase") == 2 &&
-                 operation_entry.fetch("kill_required") == true
-            raise ExecutionError,
-                  "trace operation is not a Phase 2 kill-required boundary"
-          end
+          enforce_phase2_operation!
 
           @mutex = Mutex.new
           @state = :fresh
@@ -140,16 +134,10 @@ module Tamoz
           @mutex.synchronize do
             return nil if @state == :fresh
 
-            ensure_armed_owner!
-            record!(point, metadata)
-          rescue ExecutionError
-            @state = :failed
-            raise
-          rescue StandardError => error
-            @state = :failed
-            raise ExecutionError.new(
-              "SQLite trace hook is invalid: #{error.class}: #{error.message}"
-            ), cause: error
+            with_failure_tracking("SQLite trace hook is invalid: ") do
+              ensure_armed_owner!
+              record!(point, metadata)
+            end
           end
           nil
         end
@@ -158,46 +146,16 @@ module Tamoz
           @mutex.synchronize do
             return @manifest if @state == :finished
 
-            begin
+            with_failure_tracking("cannot finalize SQLite trace: ") do
               ensure_armed_owner!
-              unless @protocol_state == :complete &&
-                     @events.any? &&
-                     @statements.any?
-                raise ExecutionError, "SQLite trace is incomplete"
-              end
-              unless registry_reference == @registry_ref
-                raise ExecutionError,
-                      "SQLite boundary registry changed during trace"
-              end
-
+              ensure_trace_complete!
+              ensure_registry_stable!
               events = @events.dup.freeze
-              selectors = SelectorDeriver.new(
-                scenario: @scenario.fetch("id"),
-                events:,
-                registry: @registry
-              ).derive
-              if selectors.length > MAX_SELECTORS
-                raise ExecutionError,
-                      "SQLite trace exceeds #{MAX_SELECTORS} selectors"
-              end
-
+              selectors = derive_selectors(events)
               @manifest = build_manifest(events, selectors)
-              @events.freeze
-              @occurrences.freeze
-              @semantic_counts.freeze
-              @operations.freeze
-              @statements.freeze
-              @attempts.freeze
+              freeze_results!
               @state = :finished
               @manifest
-            rescue ExecutionError
-              @state = :failed
-              raise
-            rescue StandardError => error
-              @state = :failed
-              raise ExecutionError.new(
-                "cannot finalize SQLite trace: #{error.class}: #{error.message}"
-              ), cause: error
             end
           end
         end
@@ -212,6 +170,21 @@ module Tamoz
             raise ExecutionError, "SQLite trace exceeds #{MAX_EVENTS} events"
           end
 
+          point_name, operation_name, statement, attempt = accepted_hook_fields(point, metadata)
+          track_unique!(@operations, operation_name, MAX_OPERATIONS, "operations")
+          track_unique!(@attempts, attempt, MAX_ATTEMPTS, "attempts")
+          track_unique!(@statements, statement, MAX_STATEMENTS, "statements") if statement
+          resolved = statement && @registry.resolve_statement(operation_name, statement)
+          enforce_protocol!(point_name, statement)
+
+          occurrence_key = [point_name, operation_name, statement, attempt].freeze
+          occurrence = next_occurrence!(occurrence_key)
+          enforce_semantic_bound!(point_name, resolved)
+
+          @events << build_event(occurrence_key, metadata, occurrence)
+        end
+
+        def accepted_hook_fields(point, metadata)
           unless deeply_frozen?(metadata)
             raise ExecutionError, "SQLite trace hook must be deeply frozen"
           end
@@ -227,24 +200,22 @@ module Tamoz
             raise ExecutionError,
                   "Phase 2 traces accept only the first transaction attempt"
           end
+          [point_name, operation_name, metadata.fetch("statement")&.dup&.freeze, attempt]
+        end
 
-          track_unique!(@operations, operation_name, MAX_OPERATIONS, "operations")
-          track_unique!(@attempts, attempt, MAX_ATTEMPTS, "attempts")
-          statement = metadata.fetch("statement")&.dup&.freeze
-          track_unique!(@statements, statement, MAX_STATEMENTS, "statements") if statement
-          resolved = statement && @registry.resolve_statement(operation_name, statement)
-          enforce_protocol!(point_name, statement)
-
-          occurrence_key = [point_name, operation_name, statement, attempt].freeze
+        def next_occurrence!(occurrence_key)
           occurrence = @occurrences[occurrence_key] + 1
           if occurrence > MAX_OCCURRENCES
             raise ExecutionError,
                   "SQLite trace exceeds #{MAX_OCCURRENCES} occurrences"
           end
           @occurrences[occurrence_key] = occurrence
-          enforce_semantic_bound!(point_name, resolved)
+          occurrence
+        end
 
-          @events << DeepFreeze.call(
+        def build_event(occurrence_key, metadata, occurrence)
+          point_name, operation_name, statement, attempt = occurrence_key
+          DeepFreeze.call(
             {
               "sequence" => @events.length + 1,
               "scenario" => @scenario.fetch("id"),
@@ -327,6 +298,55 @@ module Tamoz
           end
         end
 
+        def with_failure_tracking(wrap_prefix)
+          yield
+        rescue ExecutionError
+          @state = :failed
+          raise
+        rescue StandardError => error
+          @state = :failed
+          raise ExecutionError.new(
+            "#{wrap_prefix}#{error.class}: #{error.message}"
+          ), cause: error
+        end
+
+        def ensure_trace_complete!
+          unless @protocol_state == :complete &&
+                 @events.any? &&
+                 @statements.any?
+            raise ExecutionError, "SQLite trace is incomplete"
+          end
+        end
+
+        def ensure_registry_stable!
+          unless registry_reference == @registry_ref
+            raise ExecutionError,
+                  "SQLite boundary registry changed during trace"
+          end
+        end
+
+        def derive_selectors(events)
+          selectors = SelectorDeriver.new(
+            scenario: @scenario.fetch("id"),
+            events:,
+            registry: @registry
+          ).derive
+          if selectors.length > MAX_SELECTORS
+            raise ExecutionError,
+                  "SQLite trace exceeds #{MAX_SELECTORS} selectors"
+          end
+          selectors
+        end
+
+        def freeze_results!
+          @events.freeze
+          @occurrences.freeze
+          @semantic_counts.freeze
+          @operations.freeze
+          @statements.freeze
+          @attempts.freeze
+        end
+
         def build_manifest(events, selectors)
           document = {
             "manifest_version" => 1,
@@ -350,7 +370,7 @@ module Tamoz
         end
 
         def normalize_scenario(value)
-          normalized = exact_hash(
+          normalized = validate_exact_hash(
             value,
             %w[id version digest],
             name: "trace scenario"
@@ -372,41 +392,35 @@ module Tamoz
         end
 
         def normalize_subject(value)
-          normalized = exact_hash(
+          normalized = validate_exact_hash(
             value,
             %w[id version git_revision git_tree dirty],
             name: "trace subject"
           )
-          id = identifier(
-            normalized.fetch("id"),
-            name: "subject id",
-            maximum: MAX_ID_BYTES
+          body = validated_subject_body(normalized)
+          body["digest"] = CanonicalJSON.content_digest(
+            body,
+            domain: "eval.subject"
           )
+          DeepFreeze.call(body)
+        end
+
+        def validated_subject_body(normalized)
+          id = identifier(normalized.fetch("id"), name: "subject id", maximum: MAX_ID_BYTES)
           version = version_value(normalized.fetch("version"))
-          revision = git_object(
-            normalized.fetch("git_revision"),
-            name: "subject revision"
-          )
-          tree = git_object(
-            normalized.fetch("git_tree"),
-            name: "subject tree"
-          )
+          revision = git_object(normalized.fetch("git_revision"), name: "subject revision")
+          tree = git_object(normalized.fetch("git_tree"), name: "subject tree")
           dirty = normalized.fetch("dirty")
           unless dirty == true || dirty == false
             raise ExecutionError, "subject dirty state must be boolean"
           end
-          body = {
+          {
             "id" => id,
             "version" => version,
             "git_revision" => revision,
             "git_tree" => tree,
             "dirty" => dirty
           }
-          body["digest"] = CanonicalJSON.content_digest(
-            body,
-            domain: "eval.subject"
-          )
-          DeepFreeze.call(body)
         end
 
         def validate_registry(registry)
@@ -446,7 +460,17 @@ module Tamoz
           )
         end
 
-        def exact_hash(value, keys, name:)
+        def enforce_phase2_operation!
+          operation_entry = @registry.operation(@operation)
+          unless operation_entry &&
+                 operation_entry.fetch("phase") == 2 &&
+                 operation_entry.fetch("kill_required") == true
+            raise ExecutionError,
+                  "trace operation is not a Phase 2 kill-required boundary"
+          end
+        end
+
+        def validate_exact_hash(value, keys, name:)
           unless value.is_a?(Hash) &&
                  value.length == keys.length &&
                  keys.all? { |key| value.key?(key) }

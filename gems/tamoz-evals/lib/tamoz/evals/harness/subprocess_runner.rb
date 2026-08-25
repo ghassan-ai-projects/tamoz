@@ -71,21 +71,8 @@ module Tamoz
         end
 
         def self.resolve_executable(name, path:)
-          unless name.is_a?(String)
-            raise ExecutionError, "executable name must be a basename"
-          end
-          normalized_name = name.encode(Encoding::UTF_8)
-          unless normalized_name.match?(/\A[A-Za-z0-9][A-Za-z0-9._+-]*\z/)
-            raise ExecutionError, "executable name must be a basename"
-          end
-          unless path.is_a?(String)
-            raise ExecutionError, "executable search path is invalid"
-          end
-          normalized_path = path.encode(Encoding::UTF_8)
-          if normalized_path.b.include?("\0".b) ||
-             normalized_path.bytesize > MAX_ENVIRONMENT_BYTES
-            raise ExecutionError, "executable search path is invalid"
-          end
+          normalized_name = normalize_executable_name(name)
+          normalized_path = normalize_search_path(path)
 
           normalized_path.split(File::PATH_SEPARATOR).each do |entry|
             next unless Pathname.new(entry).absolute?
@@ -103,6 +90,32 @@ module Tamoz
             "cannot resolve executable #{name.inspect}: #{error.message}"
           ), cause: error
         end
+
+        def self.normalize_executable_name(name)
+          unless name.is_a?(String)
+            raise ExecutionError, "executable name must be a basename"
+          end
+          normalized_name = name.encode(Encoding::UTF_8)
+          unless normalized_name.match?(/\A[A-Za-z0-9][A-Za-z0-9._+-]*\z/)
+            raise ExecutionError, "executable name must be a basename"
+          end
+
+          normalized_name
+        end
+
+        def self.normalize_search_path(path)
+          unless path.is_a?(String)
+            raise ExecutionError, "executable search path is invalid"
+          end
+          normalized_path = path.encode(Encoding::UTF_8)
+          if normalized_path.b.include?("\0".b) ||
+             normalized_path.bytesize > MAX_ENVIRONMENT_BYTES
+            raise ExecutionError, "executable search path is invalid"
+          end
+
+          normalized_path
+        end
+        private_class_method :normalize_executable_name, :normalize_search_path
 
         def initialize(
           root:,
@@ -173,7 +186,7 @@ module Tamoz
             poller
           )
           reaped = true
-          drain_readers!(
+          assert_readers_finished!(
             pid,
             [stdout_reader, stderr_reader],
             [stdout_thread, stderr_thread]
@@ -199,10 +212,7 @@ module Tamoz
           ), cause: error
         ensure
           terminate_and_reap(pid) if pid && !reaped
-          stdout_writer&.close unless stdout_writer&.closed?
-          stderr_writer&.close unless stderr_writer&.closed?
-          stdout_reader&.close unless stdout_reader&.closed?
-          stderr_reader&.close unless stderr_reader&.closed?
+          close_pipes(stdout_writer, stderr_writer, stdout_reader, stderr_reader)
           stdout_thread&.join(@termination_grace_ms.fdiv(1_000))
           stderr_thread&.join(@termination_grace_ms.fdiv(1_000))
         end
@@ -222,37 +232,42 @@ module Tamoz
         end
 
         def capture_thread(reader)
+          Thread.new { capture_stream(reader) }
+        end
+
+        def capture_stream(reader)
           limit = @output_limit_bytes
-          Thread.new do
-            digest = Digest::SHA256.new
-            bytes = 0
-            captured = +"".b
+          digest = Digest::SHA256.new
+          captured = +"".b
+          bytes = 0
 
-            begin
-              loop do
-                chunk = reader.readpartial(READ_CHUNK_BYTES)
-                digest.update(chunk)
-                bytes += chunk.bytesize
-                remaining = limit - captured.bytesize
-                captured << chunk.byteslice(0, remaining) if remaining.positive?
-              end
-            rescue EOFError
-              nil
-            rescue IOError
-              raise unless reader.closed?
-            ensure
-              reader.close unless reader.closed?
-            end
-
-            text = bounded_utf8(captured, limit)
-            Stream.new(
-              text:,
-              bytes:,
-              captured_bytes: captured.bytesize,
-              truncated: bytes > captured.bytesize,
-              digest: "sha256:#{digest.hexdigest}".freeze
-            ).freeze
+          each_chunk(reader) do |chunk|
+            digest.update(chunk)
+            bytes += chunk.bytesize
+            remaining = limit - captured.bytesize
+            captured << chunk.byteslice(0, remaining) if remaining.positive?
           end
+
+          text = bounded_utf8(captured, limit)
+          Stream.new(
+            text:,
+            bytes:,
+            captured_bytes: captured.bytesize,
+            truncated: bytes > captured.bytesize,
+            digest: "sha256:#{digest.hexdigest}".freeze
+          ).freeze
+        end
+
+        def each_chunk(reader)
+          loop do
+            yield reader.readpartial(READ_CHUNK_BYTES)
+          end
+        rescue EOFError
+          nil
+        rescue IOError
+          raise unless reader.closed?
+        ensure
+          reader.close unless reader.closed?
         end
 
         def wait_for_child(pid, timeout_ms, intervention, poller)
@@ -275,53 +290,33 @@ module Tamoz
             break if remaining <= 0
 
             if poller
-              decision = poll_running_child(
+              decision = validated_poller_decision(
                 poller,
                 pid,
                 [(remaining * 1_000).floor, 0].max
               )
-              if decision == INTERVENTION_KILL
-                signal_group("KILL", pid)
-                status = wait_for_exit(pid, @termination_grace_ms)
-                unless status&.signaled? && Signal.signame(status.termsig) == "KILL"
-                  raise ExecutionError,
-                        "poller did not produce SIGKILL process status"
-                end
-
-                return [status, false, "kill", "poller"]
-              end
+              return kill_on_decision(pid, "poller") if decision == INTERVENTION_KILL
             end
 
             if stop_signal && intervention
-              decision = poll_intervention(
+              decision = validated_intervention_decision(
                 intervention,
                 stop_signal,
                 [(remaining * 1_000).floor, 0].max
               )
-              unless decision.nil? ||
-                     (decision.instance_of?(String) && decision == INTERVENTION_KILL)
-                raise ExecutionError,
-                      "intervention must return nil or #{INTERVENTION_KILL.inspect}"
-              end
               break if Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
 
-              if decision == INTERVENTION_KILL
-                signal_group("KILL", pid)
-                status = wait_for_exit(pid, @termination_grace_ms)
-                unless status&.signaled? &&
-                       Signal.signame(status.termsig) == "KILL"
-                  raise ExecutionError,
-                        "intervention did not produce SIGKILL process status"
-                end
-
-                return [status, false, "kill", "intervention"]
-              end
+              return kill_on_decision(pid, "intervention") if decision == INTERVENTION_KILL
             end
 
             sleep([remaining, 0.01].min)
           end
 
-          term_sent = signal_group("TERM", pid, allow_missing: true)
+          escalate_termination(pid)
+        end
+
+        def escalate_termination(pid)
+          term_sent = signal_group_if_present("TERM", pid)
           status = wait_for_exit(pid, @termination_grace_ms)
           if status
             return [
@@ -332,7 +327,7 @@ module Tamoz
             ]
           end
 
-          kill_sent = signal_group("KILL", pid, allow_missing: true)
+          kill_sent = signal_group_if_present("KILL", pid)
           status = wait_for_exit(pid, @termination_grace_ms)
           unless status
             raise ExecutionError,
@@ -352,7 +347,29 @@ module Tamoz
           end
         end
 
-        def poll_running_child(poller, pid, remaining_ms)
+        def kill_on_decision(pid, source)
+          signal_group("KILL", pid)
+          status = wait_for_exit(pid, @termination_grace_ms)
+          unless status&.signaled? && Signal.signame(status.termsig) == "KILL"
+            raise ExecutionError,
+                  "#{source} did not produce SIGKILL process status"
+          end
+
+          [status, false, "kill", source]
+        end
+
+        def validated_intervention_decision(intervention, stop_signal, remaining_ms)
+          decision = poll_intervention(intervention, stop_signal, remaining_ms)
+          unless decision.nil? ||
+                 (decision.instance_of?(String) && decision == INTERVENTION_KILL)
+            raise ExecutionError,
+                  "intervention must return nil or #{INTERVENTION_KILL.inspect}"
+          end
+
+          decision
+        end
+
+        def validated_poller_decision(poller, pid, remaining_ms)
           decision = poller.poll(pid:, remaining_ms:)
           unless decision.nil? ||
                  (decision.instance_of?(String) && decision == INTERVENTION_KILL)
@@ -389,12 +406,12 @@ module Tamoz
           end
         end
 
-        def drain_readers!(pid, readers, threads)
+        def assert_readers_finished!(pid, readers, threads)
           return if readers_finished?(threads)
 
-          signal_group("TERM", pid, allow_missing: true)
+          signal_group_if_present("TERM", pid)
           unless readers_finished?(threads)
-            signal_group("KILL", pid, allow_missing: true)
+            signal_group_if_present("KILL", pid)
             readers.each { |reader| reader.close unless reader.closed? }
             readers_finished?(threads)
           end
@@ -402,21 +419,27 @@ module Tamoz
                 "child descendants retained output streams after process exit"
         end
 
-        def signal_group(signal, pid, allow_missing: false)
+        def close_pipes(*pipes)
+          pipes.each { |pipe| pipe&.close unless pipe&.closed? }
+        end
+
+        def signal_group(signal, pid)
           Process.kill(signal, -pid)
           true
-        rescue Errno::ESRCH
-          raise unless allow_missing
-
-          false
         rescue Errno::EPERM => error
           raise ExecutionError.new(
             "cannot signal child process group: #{error.message}"
           ), cause: error
         end
 
+        def signal_group_if_present(signal, pid)
+          signal_group(signal, pid)
+        rescue Errno::ESRCH
+          false
+        end
+
         def terminate_and_reap(pid)
-          signal_group("KILL", pid, allow_missing: true)
+          signal_group_if_present("KILL", pid)
           status = wait_for_exit(pid, @termination_grace_ms)
           return if status
 

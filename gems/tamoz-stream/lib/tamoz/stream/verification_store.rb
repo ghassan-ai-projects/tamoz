@@ -88,7 +88,7 @@ module Tamoz
           row = fetch_locked(tenant_id, intent_id)
           @rows[[tenant_id, intent_id]] = reconciled_row(
             row, command_id:, outcome_id:, outcome_digest:, verdict:,
-            reconciliation_version:, source_authority:
+                 reconciliation_version:, source_authority:
           )
         end
         self

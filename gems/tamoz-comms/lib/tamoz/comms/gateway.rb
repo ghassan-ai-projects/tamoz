@@ -185,6 +185,7 @@ module Tamoz
         return :auth_failed if drain && drain_outbox(now:) == :authentication_refused
 
         :served
+      # A lost lease is never transient: it must escape the CommsError catch-all below.
       rescue Comms::PollerConflictError
         raise
       rescue Comms::ThrottledError => e
@@ -252,30 +253,12 @@ module Tamoz
           resolve_callback(envelope, now:)
           acknowledge_callback(envelope)
         when :rejected
-          @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'rejected',
-                                            reason: decision.reason.to_s, now:)
+          record_disposition(envelope, disposition: 'rejected', reason: decision.reason.to_s, now:)
           append_control(decision.control_reply, envelope, now:) if decision.control_reply
         when :control
-          if control_inbound_too_large?(envelope)
-            refuse_admission(envelope, :inbound_too_large, now:)
-          else
-            outcome = @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored',
-                                                        reason: decision.reason.to_s,
-                                                        now:)
-            # A replayed control already has its disposition durable and its
-            # command applied; re-running it would double /new generations
-            # and append duplicate audit records (mirrors admit_request).
-            return if outcome == :duplicate
-
-            if decision.command_intent
-              handle_command(envelope, decision, now:)
-            elsif decision.control_reply
-              append_control(decision.control_reply, envelope, now:)
-            end
-          end
+          admit_control(envelope, decision, now:)
         else
-          @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
-                                            now:)
+          record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
           handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
         end
       end
@@ -313,20 +296,17 @@ module Tamoz
         prompt = @store.prompt(reference_digest: digest)
 
         unless prompt && prompt.fetch('status') == 'active'
-          @store.disposition_only(envelope, surface_id:, bot_id:,
-                                            disposition: 'ignored', reason: 'unknown_reference', now:)
+          record_disposition(envelope, disposition: 'ignored', reason: 'unknown_reference', now:)
           return
         end
 
         unless prompt_binding_matches?(prompt, envelope)
-          @store.disposition_only(envelope, surface_id:, bot_id:,
-                                            disposition: 'rejected', reason: 'binding_mismatch', now:)
+          record_disposition(envelope, disposition: 'rejected', reason: 'binding_mismatch', now:)
           return
         end
 
         if action == 'approve' && approval_insufficient_evidence?(prompt)
-          @store.disposition_only(envelope, surface_id:, bot_id:,
-                                            disposition: 'rejected', reason: 'insufficient_evidence', now:)
+          record_disposition(envelope, disposition: 'rejected', reason: 'insufficient_evidence', now:)
           return
         end
 
@@ -338,8 +318,7 @@ module Tamoz
           decided_at: now, ttl_s: @descriptor.approvals.fetch(:prompt_ttl_s)
         )
         outcome = @store.consume_prompt(reference_digest: digest, decision_wire: decision.wire, now:)
-        @store.disposition_only(envelope, surface_id:, bot_id:,
-                                          disposition: 'decision', reason: outcome.to_s, now:)
+        record_disposition(envelope, disposition: 'decision', reason: outcome.to_s, now:)
       end
 
       # Contract §7.1 exact binding: the callback's surface id+revision,
@@ -369,7 +348,7 @@ module Tamoz
           action, reference = text.split(':', 2)
           [action, reference.to_s]
         else
-          [:deny, text]
+          ['deny', text]
         end
       end
 
@@ -379,9 +358,7 @@ module Tamoz
       # reverse order is forbidden. An allowlisted first contact also gets its
       # correspondent binding (bound_by records the operator config, so
       # `comms list` and `pair revoke` can see and revoke it).
-      def admit_request(envelope, now:)
-        conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
-        thread = admission_thread(envelope, conversation)
+      def bind_admission(envelope, thread, conversation, now:)
         if conversation.nil?
           bind_thread_profile(thread)
           @store.bind_conversation(
@@ -396,6 +373,12 @@ module Tamoz
         elsif conversation.fetch('thread_id') != thread
           bind_thread_profile(thread)
         end
+      end
+
+      def admit_request(envelope, now:)
+        conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+        thread = admission_thread(envelope, conversation)
+        bind_admission(envelope, thread, conversation, now:)
         history = @store.conversation_history(
           surface_id:, conversation_id: envelope.fetch('conversation_id')
         )
@@ -420,8 +403,32 @@ module Tamoz
       # bounded reply; nothing is enqueued.
       def refuse_admission(envelope, outcome, now:)
         disposition, reply = ADMISSION_REFUSALS.fetch(outcome)
-        @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason: outcome.to_s, now:)
+        record_disposition(envelope, disposition:, reason: outcome.to_s, now:)
         append_control(reply, envelope, now:)
+      end
+
+      # The control arm of admit: a too-large command refuses; otherwise one
+      # durable ignored disposition precedes the command or its bounded reply.
+      def admit_control(envelope, decision, now:)
+        if control_inbound_too_large?(envelope)
+          refuse_admission(envelope, :inbound_too_large, now:)
+        else
+          outcome = record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
+          # A replayed control already has its disposition durable and its
+          # command applied; re-running it would double /new generations
+          # and append duplicate audit records (mirrors admit_request).
+          return if outcome == :duplicate
+
+          if decision.command_intent
+            handle_command(envelope, decision, now:)
+          elsif decision.control_reply
+            append_control(decision.control_reply, envelope, now:)
+          end
+        end
+      end
+
+      def record_disposition(envelope, disposition:, reason:, now:)
+        @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason:, now:)
       end
 
       # Commands are bounded by the same declared intake limit as task text.
@@ -482,6 +489,13 @@ module Tamoz
         )
       end
 
+      def command_request_id(envelope, tags)
+        Comms::Canonical.hexdigest(
+          'tamoz.comms.command.v1',
+          [surface_id, envelope.fetch('update_id'), *tags]
+        )
+      end
+
       # Command registry parity (invariant 8): every name in Commands::KNOWN
       # has a branch here producing a distinct outcome — there is no
       # fallthrough, because an unimplemented command must not parse as known.
@@ -533,10 +547,7 @@ module Tamoz
       end
 
       def run_context_control(controls, thread, envelope, intent)
-        request_id = Comms::Canonical.hexdigest(
-          'tamoz.comms.command.v1',
-          [surface_id, envelope.fetch('update_id'), 'context_control', intent.name]
-        )
+        request_id = command_request_id(envelope, ['context_control', intent.name])
         case intent.name
         when 'reset' then controls.reset_episode(thread:, request_id:).document
         when 'compact' then controls.compact_transcript(thread:, request_id:).document
@@ -637,10 +648,7 @@ module Tamoz
         return NO_WORK_REPLY unless status
 
         "Work status: task=#{task_word(status)}; " \
-          "phase=#{status.fetch('phase', 'unknown')}; " \
-          "event=#{status.fetch('event_kind', 'unknown')}##{status.fetch('event_sequence', 'unknown')}; " \
-          "effect=#{status.fetch('effect_state')}; " \
-          "capability=#{status.fetch('capability_state')}; " \
+          "#{state_axes(status)}" \
           "delivery=#{delivery_word(status)}; " \
           "next=#{status.fetch('next_action', 'inspect')}; " \
           "open requests=#{status.fetch('open_requests')}." \
@@ -657,10 +665,7 @@ module Tamoz
 
         "Request #{resolved.fetch('request_ref')}: task=#{task_word(resolved)}; " \
           "delivery=#{delivery_word(resolved)}; " \
-          "phase=#{resolved.fetch('phase', 'unknown')}; " \
-          "event=#{resolved.fetch('event_kind', 'unknown')}##{resolved.fetch('event_sequence', 'unknown')}; " \
-          "effect=#{resolved.fetch('effect_state')}; " \
-          "capability=#{resolved.fetch('capability_state')}; " \
+          "#{state_axes(resolved)}" \
           "next=#{resolved.fetch('next_action', 'inspect')}." \
           "#{queue_sentence(resolved)}#{cancellation_sentence(resolved)}#{reason_sentence(resolved)}"
       end
@@ -693,9 +698,7 @@ module Tamoz
 
         @checkpoints.enqueue_request(
           thread_id: resolved.fetch('thread_id'),
-          request_id: Comms::Canonical.hexdigest(
-            'tamoz.comms.command.v1', [surface_id, envelope.fetch('update_id'), 'redirect']
-          ),
+          request_id: command_request_id(envelope, %w[redirect]),
           operation: :redirect,
           payload: { 'task' => task_text },
           delivery: :redirect
@@ -736,6 +739,13 @@ module Tamoz
         return 'none' if internal == 'none'
 
         Lifecycle.delivery_state_for(internal)
+      end
+
+      def state_axes(projection)
+        "phase=#{projection.fetch('phase', 'unknown')}; " \
+          "event=#{projection.fetch('event_kind', 'unknown')}##{projection.fetch('event_sequence', 'unknown')}; " \
+          "effect=#{projection.fetch('effect_state')}; " \
+          "capability=#{projection.fetch('capability_state')}; "
       end
 
       def reference_sentence(projection)
@@ -806,10 +816,7 @@ module Tamoz
                                            status.fetch('thread_id') == thread_id &&
                                            status.fetch('open_requests').positive?
 
-        request_id = Comms::Canonical.hexdigest(
-          'tamoz.comms.command.v1',
-          [surface_id, envelope.fetch('update_id'), 'cancel']
-        )
+        request_id = command_request_id(envelope, %w[cancel])
         @store.request_cancellation(
           thread_id:,
           request_id:,

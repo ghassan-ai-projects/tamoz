@@ -8,6 +8,7 @@ module Tamoz
     module BoundarySourceAudit
       MAX_SOURCE_BYTES = 2 * 1024 * 1024
       TRANSACTION_METHODS = %w[read transaction].freeze
+      CALL_NODES = %i[command command_call method_add_arg].freeze
       STATEMENT_ACCESS = {
         "execute" => "write",
         "first" => "read",
@@ -65,12 +66,22 @@ module Tamoz
           @paths.each { |path| parse_source(path) }
           reject_duplicate_operations!
           @roots.each { |root| inspect_root(*root) }
-          unreachable = @methods.keys.to_set - @visited_methods
-          unless unreachable.empty?
-            raise ConfigurationError,
-                  "boundary helpers are unreachable: #{unreachable.to_a.sort.join(", ")}"
-          end
+          assert_no_unreachable_helpers!
           compare_registry!
+          frozen_source
+        end
+
+        private
+
+        def assert_no_unreachable_helpers!
+          unreachable = @methods.keys.to_set - @visited_methods
+          return if unreachable.empty?
+
+          raise ConfigurationError,
+                "boundary helpers are unreachable: #{unreachable.to_a.sort.join(", ")}"
+        end
+
+        def frozen_source
           deep_freeze(
             @source.keys.sort.to_h do |operation|
               statements = @source.fetch(operation)
@@ -83,8 +94,6 @@ module Tamoz
             end
           )
         end
-
-        private
 
         def parse_source(path)
           bytes = File.binread(path, MAX_SOURCE_BYTES + 1)
@@ -141,9 +150,8 @@ module Tamoz
               @roots << [operation, block_body(block), tx_name]
               return
             end
-          elsif %i[command command_call method_add_arg].include?(
-            node.fetch(0, nil)
-          ) && transaction_call?(parse_call(node))
+          elsif CALL_NODES.include?(node.fetch(0, nil)) &&
+                transaction_call?(parse_call(node))
             raise ConfigurationError, "boundary operation requires a block"
           end
           node.each { |child| collect_roots!(child) if child.is_a?(Array) }
@@ -166,8 +174,7 @@ module Tamoz
         def inspect_node(node, operation, environment)
           return unless node.is_a?(Array)
 
-          call = parse_call(node) if
-            %i[command command_call method_add_arg].include?(node.fetch(0, nil))
+          call = parse_call(node) if CALL_NODES.include?(node.fetch(0, nil))
           if call
             if statement_call?(call, environment)
               record_statement!(operation, call, environment)
@@ -236,16 +243,17 @@ module Tamoz
             )
           end
           definition.keyword_parameters.each do |name|
-            argument = call.keywords[name]
-            environment[name] = if argument
-                                  resolve_value(argument, caller_environment)
-                                elsif call.keywords.key?(name)
-                                  caller_environment.fetch(name, UNKNOWN)
-                                else
-                                  UNKNOWN
-                                end
+            environment[name] = bound_keyword_value(name, call.keywords, caller_environment)
           end
           environment
+        end
+
+        def bound_keyword_value(name, call_keywords, caller_environment)
+          argument = call_keywords[name]
+          return resolve_value(argument, caller_environment) if argument
+          return caller_environment.fetch(name, UNKNOWN) if call_keywords.key?(name)
+
+          UNKNOWN
         end
 
         def compare_registry!
@@ -326,11 +334,9 @@ module Tamoz
             when :string_embexpr
               expression = part.dig(1, 0)
               value = resolve_value(expression, environment, label: true)
-              if allow_index &&
-                 !value.is_a?(String) &&
-                 reviewed_index_expression?(expression) &&
-                 index == content.length - 1 &&
-                 DYNAMIC_INDEX_PREFIXES.include?(fragments.join)
+              if allow_index && reviewed_trailing_index_slot?(
+                value:, expression:, fragments:, last: index == content.length - 1
+              )
                 value = "{index}"
               end
               unless value.is_a?(String)
@@ -345,6 +351,14 @@ module Tamoz
             end
           end
           fragments.join
+        end
+
+        def reviewed_trailing_index_slot?(value:, expression:, fragments:, last:)
+          return false if value.is_a?(String)
+
+          reviewed_index_expression?(expression) &&
+            last &&
+            DYNAMIC_INDEX_PREFIXES.include?(fragments.join)
         end
 
         def reviewed_index_expression?(node)
@@ -408,21 +422,7 @@ module Tamoz
           end
 
           if %w[__send__ public_send send].include?(base_name)
-            return Call.new(
-              name: base_name.freeze,
-              receiver:,
-              positional: positional.freeze,
-              keywords: keywords.freeze
-            ) if positional.empty?
-
-            dispatched = symbol_name(positional.first)
-            unless dispatched
-              raise ConfigurationError,
-                    "dynamic dispatch is forbidden in boundary source"
-            end
-
-            base_name = dispatched
-            positional = positional.drop(1)
+            base_name, positional = resolve_dispatched_target(base_name, positional)
           end
           Call.new(
             name: base_name.freeze,
@@ -430,6 +430,18 @@ module Tamoz
             positional: positional.freeze,
             keywords: keywords.freeze
           )
+        end
+
+        def resolve_dispatched_target(name, positional)
+          return [name, positional] if positional.empty?
+
+          dispatched = symbol_name(positional.first)
+          unless dispatched
+            raise ConfigurationError,
+                  "dynamic dispatch is forbidden in boundary source"
+          end
+
+          [dispatched, positional.drop(1)]
         end
 
         def call_target(node)
@@ -542,24 +554,26 @@ module Tamoz
           end
 
           call = parse_call(node)
-          if call
-            receiver = constant_name(call.receiver)
-            if call.name == "execute" &&
-               !%w[tx].include?(identifier(call.receiver))
-              raise ConfigurationError,
-                    "direct execute outside Transaction is forbidden in boundary source"
-            end
-            if FILESYSTEM_CONSTANTS.include?(receiver) &&
-               FILE_MUTATIONS.include?(call.name)
-              raise ConfigurationError,
-                    "filesystem mutation #{receiver}.#{call.name} is forbidden"
-            end
-            if DYNAMIC_EXECUTION.include?(call.name)
-              raise ConfigurationError,
-                    "dynamic execution #{call.name} is forbidden in boundary source"
-            end
-          end
+          assert_call_allowed!(call) if call
           node.each { |child| inspect_forbidden!(child) if child.is_a?(Array) }
+        end
+
+        def assert_call_allowed!(call)
+          receiver = constant_name(call.receiver)
+          if call.name == "execute" &&
+             !%w[tx].include?(identifier(call.receiver))
+            raise ConfigurationError,
+                  "direct execute outside Transaction is forbidden in boundary source"
+          end
+          if FILESYSTEM_CONSTANTS.include?(receiver) &&
+             FILE_MUTATIONS.include?(call.name)
+            raise ConfigurationError,
+                  "filesystem mutation #{receiver}.#{call.name} is forbidden"
+          end
+          return unless DYNAMIC_EXECUTION.include?(call.name)
+
+          raise ConfigurationError,
+                "dynamic execution #{call.name} is forbidden in boundary source"
         end
 
         def constant_name(node)
@@ -602,7 +616,7 @@ module Tamoz
         end
       end
 
-      private_constant :Auditor, :Call, :DYNAMIC_EXECUTION,
+      private_constant :Auditor, :CALL_NODES, :Call, :DYNAMIC_EXECUTION,
                        :DYNAMIC_INDEX_PREFIXES, :FILESYSTEM_CONSTANTS,
                        :FILE_MUTATIONS, :MAX_SOURCE_BYTES,
                        :MethodDefinition, :STATEMENT_ACCESS,

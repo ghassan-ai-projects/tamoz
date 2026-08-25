@@ -18,9 +18,6 @@ module Tamoz
     # rule set; splitting either would fragment the row the store persists.
     # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-    # The binding is one validated value; the smells below are the
-    # per-field rule set and the facts one approved correspondent binds
-    # (design §7) — splitting them would fragment the binding row.
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:NilCheck
     class Binding

@@ -37,15 +37,11 @@ module Tamoz
         attr_reader :scope_id, :threshold, :budget_breach, :reset_authority
 
         def initialize(threshold:, scope_id:, budget_breach: true, reset_authority: OPERATOR_AUTHORITY)
-          unless threshold.is_a?(Integer) && threshold >= 1
-            raise ValidationError, "egress circuit threshold must be an integer >= 1"
-          end
-          unless scope_id.is_a?(String) && !scope_id.empty?
-            raise ValidationError, "egress circuit scope_id must be a non-empty string"
-          end
-          unless budget_breach == true || budget_breach == false
-            raise ValidationError, "egress circuit budget_breach must be true or false"
-          end
+          validate_configuration!(
+            threshold: threshold,
+            scope_id: scope_id,
+            budget_breach: budget_breach
+          )
 
           @threshold = threshold
           @scope_id = scope_id
@@ -123,6 +119,30 @@ module Tamoz
         end
 
         private
+
+        def validate_configuration!(threshold:, scope_id:, budget_breach:)
+          validate_threshold!(threshold)
+          validate_scope_id!(scope_id)
+          validate_budget_breach!(budget_breach)
+        end
+
+        def validate_threshold!(threshold)
+          return if threshold.is_a?(Integer) && threshold >= 1
+
+          raise ValidationError, "egress circuit threshold must be an integer >= 1"
+        end
+
+        def validate_scope_id!(scope_id)
+          return if scope_id.is_a?(String) && !scope_id.empty?
+
+          raise ValidationError, "egress circuit scope_id must be a non-empty string"
+        end
+
+        def validate_budget_breach!(budget_breach)
+          return if budget_breach == true || budget_breach == false
+
+          raise ValidationError, "egress circuit budget_breach must be true or false"
+        end
 
         def capture_failure(kind, context)
           @last_failure_kind = kind.to_sym

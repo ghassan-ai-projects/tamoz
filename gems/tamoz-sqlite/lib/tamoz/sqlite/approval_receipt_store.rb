@@ -7,6 +7,7 @@ module Tamoz
     class ApprovalReceiptStore
       NAMESPACE_PREFIX = "tamoz.stream.approvals"
       STATES = %w[requested withdrawn resolved].freeze
+      CLAIM_ATTEMPTS = 3
 
       def initialize(adapter:, tenant:, clock: -> { Time.now })
         @store = adapter.store
@@ -72,7 +73,7 @@ module Tamoz
       end
 
       def claim_delivery(approval_id:)
-        3.times do
+        CLAIM_ATTEMPTS.times do
           current = fetch!(approval_id)
           return :delivered if current.fetch("delivery_receipt")
           return :terminal unless current.fetch("state") == "requested"
@@ -145,8 +146,7 @@ module Tamoz
       end
 
       def replace(approval_id, value)
-        storage_key = key(approval_id)
-        @store.put(@namespace, storage_key, value, if_version: @store.head_version(@namespace, storage_key))
+        put(key(approval_id), value)
       end
 
       def key(approval_id)

@@ -153,8 +153,8 @@ module Tamoz
           transition = BehaviorTransition::Transition.from_h(entry.value)
           unless transition.status == :recorded
             if transition.status == :claimed
-              existing = transition.claimant
-              if existing && existing.fetch('owner') == owner && transition.consumed_by.nil?
+              existing_claimant = transition.claimant
+              if existing_claimant && existing_claimant.fetch('owner') == owner && transition.consumed_by.nil?
                 return transition.with(claimant: { 'owner' => owner, 'attempt' => attempt })
               end
             end

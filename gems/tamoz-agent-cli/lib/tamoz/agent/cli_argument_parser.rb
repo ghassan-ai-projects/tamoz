@@ -23,7 +23,17 @@ module Tamoz
         # the "target" the logic would move to is Array itself, which is
         # exactly what OptionParser drives here.
         def parse(argv)
-          options = {
+          options = default_options
+          grammar(options).order!(argv)
+
+          subcommand = @subcommands.include?(argv.first) ? argv.shift : nil
+          [options, subcommand, argv]
+        end
+
+        private
+
+        def default_options
+          {
             root: Dir.pwd,
             json: false,
             assume_model_exists: false,
@@ -34,13 +44,7 @@ module Tamoz
             non_interactive: false,
             checks: {}
           }
-          grammar(options).order!(argv)
-
-          subcommand = @subcommands.include?(argv.first) ? argv.shift : nil
-          [options, subcommand, argv]
         end
-
-        private
 
         # A declarative option registry (CODING_STANDARD §6): one value.on per
         # option, homogeneous by construction; the OptionParser API drives the
@@ -91,16 +95,7 @@ module Tamoz
               options[:shadow_routing] = true
             end
             value.on('--check NAME=COMMAND', 'Configure a named verification command') do |entry|
-              name, command = entry.split('=', 2)
-              if name.to_s.empty? || command.to_s.empty?
-                raise OptionParser::InvalidArgument, 'check must be NAME=COMMAND'
-              end
-
-              check_argv = Shellwords.split(command)
-              raise OptionParser::InvalidArgument, 'check command must not be empty' if check_argv.empty?
-              raise OptionParser::InvalidArgument, "duplicate check #{name.inspect}" if options[:checks].key?(name)
-
-              options[:checks][name] = check_argv
+              register_check(options, entry)
             end
             value.on('--assume-model-exists', 'Allow an unlisted model at a custom endpoint') do
               options[:assume_model_exists] = true
@@ -118,6 +113,17 @@ module Tamoz
           end
         end
         # rubocop:enable Metrics/MethodLength, Metrics/AbcSize, Metrics/BlockLength
+
+        def register_check(options, entry)
+          name, command = entry.split('=', 2)
+          raise OptionParser::InvalidArgument, 'check must be NAME=COMMAND' if name.to_s.empty? || command.to_s.empty?
+
+          check_argv = Shellwords.split(command)
+          raise OptionParser::InvalidArgument, 'check command must not be empty' if check_argv.empty?
+          raise OptionParser::InvalidArgument, "duplicate check #{name.inspect}" if options[:checks].key?(name)
+
+          options[:checks][name] = check_argv
+        end
       end
     end
   end

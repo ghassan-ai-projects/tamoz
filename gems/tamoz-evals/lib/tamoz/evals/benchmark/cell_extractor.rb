@@ -76,11 +76,11 @@ module Tamoz
           executions.filter_map do |surface, execution|
             next unless execution.is_a?(Hash) && execution.fetch('status', 'executed') == 'executed'
 
-            [surface, surface_record(surface, mission, artifact)]
+            [surface, resolve_surface_record(surface, mission, artifact)]
           end.to_h
         end
 
-        def surface_record(surface, mission, artifact)
+        def resolve_surface_record(surface, mission, artifact)
           candidates = [
             mission.dig('surface_data', surface),
             artifact.dig('surface_data', surface),
@@ -190,7 +190,7 @@ module Tamoz
         end
 
         def first_present(*values)
-          values.find { |value| !value.nil? }
+          values.compact.first
         end
 
         def catalog_mission(mission)
@@ -274,10 +274,8 @@ module Tamoz
         end
 
         def probabilities(receipts, primary_code)
-          vectors = receipts.reverse_each.filter_map { |receipt| probability_vector(receipt) }
-          vector = vectors.first
-          vector ||= { primary_code => 1.0 }
-          normalize_probabilities(vector)
+          vector = receipts.reverse_each.filter_map { |receipt| probability_vector(receipt) }.first
+          normalize_probabilities(vector || { primary_code => 1.0 })
         end
 
         def probability_vector(receipt)
@@ -319,14 +317,16 @@ module Tamoz
         end
 
         def decision_at(trace)
-          span_time(Array(trace['spans']).reverse.find { |span| action_code(span) }) ||
-            span_time(Array(trace['spans']).last) || explicit_time(trace, 'decision_at')
+          spans = Array(trace['spans'])
+          span_time(spans.reverse.find { |span| action_code(span) }) ||
+            span_time(spans.last) || explicit_time(trace, 'decision_at')
         end
 
         def first_observable_at(trace)
-          span_time(Array(trace['spans']).find do |span|
+          spans = Array(trace['spans'])
+          span_time(spans.find do |span|
             span['name'].to_s.match?(/observation|tool/i) || span.dig('attributes', 'observable') == true
-          end) || span_time(Array(trace['spans']).first) || explicit_time(trace, 'first_observable_at')
+          end) || span_time(spans.first) || explicit_time(trace, 'first_observable_at')
         end
 
         def explicit_time(trace, key)

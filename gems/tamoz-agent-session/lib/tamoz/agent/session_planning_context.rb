@@ -65,19 +65,6 @@ module Tamoz
           )
         end
 
-        def compaction_frame(context, authoritative, observations)
-          {
-            'compaction' => {
-              'version' => VERSION,
-              'mode' => 'deterministic',
-              'context_bytes' => bytesize(context),
-              'observation_count' => observations.length
-            },
-            'authoritative' => bounded_authoritative(authoritative),
-            'observations' => observations
-          }
-        end
-
         def summarize(result, effects:, durable_context:, phase:, iteration:)
           return result unless result.compacted
 
@@ -94,7 +81,7 @@ module Tamoz
           )
           return summarize_with_model(result, call, phase:, input_digest:) if call.status == :succeeded
 
-          deterministic_result(result, call, phase:, input_digest:)
+          fallback_result(result, call, phase:, input_digest:)
         end
 
         private
@@ -125,10 +112,10 @@ module Tamoz
             )
           )
         rescue ProtocolError, SensitiveValueError
-          deterministic_result(result, call, phase:, input_digest:)
+          fallback_result(result, call, phase:, input_digest:)
         end
 
-        def deterministic_result(result, call, phase:, input_digest:)
+        def fallback_result(result, call, phase:, input_digest:)
           summary = 'Deterministic bounded context retained; model summary unavailable.'
           result.with(
             record: compaction_record(
@@ -137,6 +124,19 @@ module Tamoz
               fallback_reason: call.status.to_s
             )
           )
+        end
+
+        def compaction_frame(context, authoritative, observations)
+          {
+            'compaction' => {
+              'version' => VERSION,
+              'mode' => 'deterministic',
+              'context_bytes' => bytesize(context),
+              'observation_count' => observations.length
+            },
+            'authoritative' => bounded_authoritative(authoritative),
+            'observations' => observations
+          }
         end
 
         def apply_summary(result, summary)
@@ -192,19 +192,21 @@ module Tamoz
         def bound_observations(observations)
           remaining = MAX_OBSERVATIONS_BYTES
           observations.filter_map do |observation|
-            candidate = if bytesize(observation) <= remaining
-                          observation
-                        else
-                          observation.reject { |key, _value| key.to_s == 'output' }.merge(
-                            'output_truncated' => true,
-                            'output_unavailable' => true
-                          )
-                        end
+            candidate = fit_observation(observation, remaining)
             next if bytesize(candidate) > remaining
 
             remaining -= bytesize(candidate)
             candidate
           end
+        end
+
+        def fit_observation(observation, remaining)
+          return observation if bytesize(observation) <= remaining
+
+          without_output(observation).merge(
+            'output_truncated' => true,
+            'output_unavailable' => true
+          )
         end
 
         def artifact_refs(observations)
@@ -300,6 +302,10 @@ module Tamoz
         def observation_metadata(observation)
           return {} unless observation.is_a?(Hash)
 
+          without_output(observation)
+        end
+
+        def without_output(observation)
           observation.reject { |key, _value| key.to_s == 'output' }
         end
 
@@ -391,7 +397,13 @@ module Tamoz
         @transcript_reader.call(thread_id: context.thread_id, request_id: context.request_id)
       end
 
-      def memory_caller(_state)
+      def authoritative_frame(state)
+        authoritative_context(state, :read_only)
+      end
+
+      private
+
+      def memory_caller
         @configuration.memory.caller(
           user: memory_owner,
           project: 'session',
@@ -406,12 +418,6 @@ module Tamoz
       def memory_owner
         @configuration.memory_owner || 'session'
       end
-
-      def authoritative_frame(state)
-        authoritative_context(state, :read_only)
-      end
-
-      private
 
       # rubocop:disable Metrics/AbcSize -- this is the single allowlisted durable envelope
       # rubocop:disable Metrics/MethodLength -- this is the single allowlisted durable envelope.
@@ -524,15 +530,19 @@ module Tamoz
         controls = Array(state[:context_controls])
         return if controls.empty?
 
-        directives = {}
-        SessionContextControls.last_preference(controls, 'think', 'reasoning_depth').then do |depth|
-          directives['reasoning_depth'] = depth if depth
-        end
-        SessionContextControls.last_preference(controls, 'verbose', 'answer_verbosity').then do |verbosity|
-          directives['answer_verbosity'] = verbosity if verbosity
-        end
+        directives = control_directives(controls)
         context['directives'] = directives unless directives.empty?
+        add_earlier_summary(context, controls)
+      end
 
+      def control_directives(controls)
+        {
+          'reasoning_depth' => SessionContextControls.last_preference(controls, 'think', 'reasoning_depth'),
+          'answer_verbosity' => SessionContextControls.last_preference(controls, 'verbose', 'answer_verbosity')
+        }.compact
+      end
+
+      def add_earlier_summary(context, controls)
         compacted = controls.reverse.find { |record| record.fetch('control') == 'compact' }
         return unless compacted&.key?('summary_digest')
 
@@ -559,7 +569,7 @@ module Tamoz
         return unless (state[:session] && state[:session]['memory_epoch']).is_a?(Hash)
 
         recall = @configuration.memory.retrieval.recall(
-          caller: memory_caller(state),
+          caller: memory_caller,
           query: { terms: [state.fetch(:task)] },
           automatic: true
         )

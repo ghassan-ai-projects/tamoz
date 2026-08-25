@@ -153,11 +153,11 @@ module Tamoz
         approval_id = data.fetch("approval_id")
         event_digest = approval_event_digest("withdraw", data)
         receipt = @approval_receipts.fetch(approval_id)
-        raise StreamError, "approval delivery receipt is missing" unless receipt&.fetch("delivery_receipt")
+        delivery_receipt = receipt&.fetch("delivery_receipt")
+        raise StreamError, "approval delivery receipt is missing" unless delivery_receipt
         return if already_withdrawn?(receipt, event_digest)
 
-        message_id = receipt.fetch("delivery_receipt").fetch("message_id")
-        @approval_relay.withdraw(message_id:)
+        @approval_relay.withdraw(message_id: delivery_receipt.fetch("message_id"))
         @approval_receipts.transition(
           approval_id:, tenant_id: @tenant, state: "withdrawn", event_digest:,
           identity: approval_identity(data)

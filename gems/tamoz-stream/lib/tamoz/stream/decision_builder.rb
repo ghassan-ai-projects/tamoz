@@ -129,10 +129,6 @@ module Tamoz
       # P6: RECONSIDER episodes are built by the compensate node
       # (build_decision) — this DIAGNOSE-only path never sees them.
       def intents
-        diagnose_intents
-      end
-
-      def diagnose_intents
         proposal = recommended_proposal
         return [watch_condition_intent] if watch_fallback?(proposal)
 
@@ -228,10 +224,12 @@ module Tamoz
         parameters["entity_id"] = @snapshot.fetch("entity").fetch("id")
         parameters["situation_id"] = @snapshot.fetch("situation_id")
         parameters["situation_version"] = @snapshot.fetch("situation_version")
-        return unless entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+        apply_watch_bindings!(parameters) if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+      end
 
-        # The watch condition's target IS the entity — per-episode bound,
-        # never operator- or model-authored.
+      # The watch condition's target IS the entity — per-episode bound,
+      # never operator- or model-authored.
+      def apply_watch_bindings!(parameters)
         parameters["target"] = @snapshot.fetch("entity").fetch("id")
         parameters["expires_at"] = valid_until
       end
@@ -240,7 +238,9 @@ module Tamoz
         writable = entry.model_writable_fields
         Array(proposal_parameters(proposal)).each do |key, value|
           field = String(key)
-          raise StreamError, "intent parameter #{field} is not model-writable for #{entry.type}" unless writable.include?(field)
+          unless writable.include?(field)
+            raise StreamError, "intent parameter #{field} is not model-writable for #{entry.type}"
+          end
 
           parameters[field] = value
         end

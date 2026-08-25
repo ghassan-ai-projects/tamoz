@@ -12,17 +12,7 @@ module Tamoz
     class Drain
       def initialize(lanes:, batch_size:, interval: 0.2)
         limits = lanes.to_h { |lane, limit| [lane.to_sym, limit] }
-        limits.each do |lane, limit|
-          unless limit.is_a?(Integer) && limit.positive?
-            raise ConfigurationError, "drain lane #{lane} limit must be a positive integer"
-          end
-        end
-        unless batch_size.is_a?(Integer) && batch_size.positive?
-          raise ConfigurationError, "drain batch_size must be a positive integer"
-        end
-        unless interval.is_a?(Numeric) && interval.finite? && interval.positive?
-          raise ConfigurationError, "drain interval must be a positive number"
-        end
+        validate_configuration!(limits, batch_size, interval)
 
         @lanes = limits.freeze
         @batch_size = batch_size
@@ -43,7 +33,7 @@ module Tamoz
       end
 
       def depths
-        synchronize { @queues.transform_values(&:length) }
+        synchronize { lane_depths }
       end
 
       def in_flight
@@ -88,6 +78,20 @@ module Tamoz
       private
 
       attr_reader :batch_size
+
+      def validate_configuration!(limits, batch_size, interval)
+        limits.each do |lane, limit|
+          unless limit.is_a?(Integer) && limit.positive?
+            raise ConfigurationError, "drain lane #{lane} limit must be a positive integer"
+          end
+        end
+        unless batch_size.is_a?(Integer) && batch_size.positive?
+          raise ConfigurationError, "drain batch_size must be a positive integer"
+        end
+        return if interval.is_a?(Numeric) && interval.finite? && interval.positive?
+
+        raise ConfigurationError, "drain interval must be a positive number"
+      end
 
       # Callers of these helpers hold @mutex; none may re-enter the lock.
       def synchronize
