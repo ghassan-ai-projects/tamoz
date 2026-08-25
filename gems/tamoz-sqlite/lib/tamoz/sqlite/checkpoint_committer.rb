@@ -29,7 +29,7 @@ module Tamoz
         consumed_task_ids:,
         request_transition:
       )
-        validate_commit_arguments!(
+        @store.validate_commit_arguments!(
           expected_base_id:,
           mode:,
           consumed_task_ids:,
@@ -74,7 +74,7 @@ module Tamoz
             SQL
             [lease.thread_id, lease.namespace]
           )
-          validate_mode!(
+          @store.validate_commit_mode!(
             tx,
             lease:,
             mode:,

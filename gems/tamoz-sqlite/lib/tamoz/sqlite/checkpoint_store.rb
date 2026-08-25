@@ -120,7 +120,23 @@ module Tamoz
         @appender.append_writes(lease:, task:, outcome:)
       end
 
-      def append_checkpoint(...) = @committer.append_checkpoint(...)
+      def append_checkpoint(
+        lease:,
+        expected_base_id:,
+        mode:,
+        attributes:,
+        consumed_task_ids:,
+        request_transition:
+      )
+        @committer.append_checkpoint(
+          lease:,
+          expected_base_id:,
+          mode:,
+          attributes:,
+          consumed_task_ids:,
+          request_transition:
+        )
+      end
 
       def normalize_address(thread_id, namespace)
         [
@@ -180,11 +196,47 @@ module Tamoz
         @queries.pending_outcomes(thread_id:, namespace:, execution_id:)
       end
 
-      def verify_existing_writes!(...) = @appender.verify_pending_writes!(...)
+      def verify_existing_writes!(tx, lease:, execution_id:, task_id:, writes:)
+        @appender.verify_pending_writes!(
+          tx,
+          lease:,
+          execution_id:,
+          task_id:,
+          writes:
+        )
+      end
 
-      def validate_commit_arguments!(...) = @committer.validate_commit_arguments!(...)
+      def validate_commit_arguments!(
+        expected_base_id:,
+        mode:,
+        consumed_task_ids:,
+        request_transition:
+      )
+        @committer.validate_commit_arguments!(
+          expected_base_id:,
+          mode:,
+          consumed_task_ids:,
+          request_transition:
+        )
+      end
 
-      def validate_commit_mode!(...) = @committer.validate_mode!(...)
+      def validate_commit_mode!(
+        tx,
+        lease:,
+        mode:,
+        head:,
+        expected_base_id:,
+        execution_id:
+      )
+        @committer.validate_mode!(
+          tx,
+          lease:,
+          mode:,
+          head:,
+          expected_base_id:,
+          execution_id:
+        )
+      end
 
       public :active_execution_id!, :latest_checkpoint_in_transaction
 
