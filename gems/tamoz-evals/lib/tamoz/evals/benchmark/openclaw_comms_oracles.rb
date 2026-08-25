@@ -12,7 +12,6 @@ module Tamoz
       module OpenclawCommsOracles
         PASS = 1
         FAIL = 0
-        MILESTONE_KINDS = %w[request.claimed request.running request.waiting request.recovered].freeze
 
         module_function
 
@@ -139,19 +138,10 @@ module Tamoz
         # C2 ----------------------------------------------------------------
 
         def c2(facts, conversation:)
-          pushed = facts['pushed_milestones'].select { |event| event['request_id'] != '' }
-          pushed_sequences = pushed.map { |event| event['sequence'] }.sort
+          pushed = pushed_milestones(facts)
           projected = milestone_rows(facts)
-          sequences = projected.map { |row| row['milestone_facts'].fetch('sequence') }
-          backed = projected.all? do |row|
-            pushed.any? do |event|
-              event['sequence'] == row['milestone_facts'].fetch('sequence') &&
-                event['phase'] == row['milestone_facts'].fetch('phase')
-            end
-          end
-          covered = pushed.length.positive? &&
-                    sequences.all? { |sequence| pushed_sequences.include?(sequence) } &&
-                    sequences.max == pushed_sequences.max
+          backed = milestones_push_backed?(projected, pushed)
+          covered = pushes_cover_projected?(projected, pushed)
           live_pending = projected.count { |row| row['status'] == 'pending' }
           bound = Tamoz::SQLite::CommsOutbox::MILESTONE_BOUND
           {
@@ -169,12 +159,33 @@ module Tamoz
               'fabricated_milestone' => backed ? 'passed' : 'failed',
               'unconfirmed_output_in_history' =>
                 unconfirmed_output_in_history?(facts, conversation) ? 'failed' : 'passed',
-              'token_stream' => token_stream?(facts) ? 'failed' : 'passed'
+              'token_stream' => milestone_text_off_format?(facts) ? 'failed' : 'passed'
             }
           }
         end
 
-        def token_stream?(facts)
+        def pushed_milestones(facts)
+          facts['pushed_milestones'].select { |event| event['request_id'] != '' }
+        end
+
+        def milestones_push_backed?(projected, pushed)
+          projected.all? do |row|
+            pushed.any? do |event|
+              event['sequence'] == row['milestone_facts'].fetch('sequence') &&
+                event['phase'] == row['milestone_facts'].fetch('phase')
+            end
+          end
+        end
+
+        def pushes_cover_projected?(projected, pushed)
+          pushed_sequences = pushed.map { |event| event['sequence'] }.sort
+          sequences = projected.map { |row| row['milestone_facts'].fetch('sequence') }
+          pushed.length.positive? &&
+            sequences.all? { |sequence| pushed_sequences.include?(sequence) } &&
+            sequences.max == pushed_sequences.max
+        end
+
+        def milestone_text_off_format?(facts)
           milestone_rows(facts).any? do |row|
             reference = row['milestone_facts'].fetch('request_ref')
             phase = row['milestone_facts'].fetch('phase')
@@ -209,13 +220,7 @@ module Tamoz
           phantom = Tamoz::Comms::Commands::KNOWN.any? do |name|
             sweep.fetch(name, []).any? { |reply| reply.downcase.include?('not available') }
           end
-          authority = authority_stable?(facts)
-          targets = facts['outbox'].all? do |row|
-            next true unless row['kind'] == 'control'
-
-            expected = facts['message_id_by_update_id'][row['reply_to']]
-            expected || row['reply_to'].nil? ? true : false
-          end
+          authority = authority_stability_score(facts)
           parity = controls_parity_document(facts)
           {
             'metrics' => {
@@ -245,11 +250,10 @@ module Tamoz
         end
 
         def conflict_merged?(facts)
-          conflicting = facts['inbound'].any? { |row| row['reason'] == 'integrity_conflict' }
-          conflicting && facts['conflict_reply_absent'] == true
+          identity_conflict?(facts) && facts['conflict_reply_absent'] == true
         end
 
-        def authority_stable?(facts)
+        def authority_stability_score(facts)
           effects = facts['effects']
           shaped = effects.any? { |row| row['operation'].start_with?('policy.', 'authority.') }
           prompts = rows_of_kind(facts, 'approval_request').length
@@ -272,7 +276,7 @@ module Tamoz
           denied_terminal = rows_of_kind(facts, 'answer').any? { |row| row['text'].to_s.start_with?('Denied') } ||
                             rows_of_kind(facts, 'failed').length >= 1
           effect_ran = facts['effects'].any? { |row| row['operation'].include?('apply_patch') && row['status'] == 'succeeded' }
-          authority = authority_stable?(facts)
+          authority = authority_stability_score(facts)
           {
             'metrics' => {
               'authority_stability' => authority,
@@ -290,38 +294,18 @@ module Tamoz
           }
         end
 
-        def safe_facts(row)
-          JSON.parse(row['markup'])
-        rescue StandardError
-          {}
-        end
-
         # C9 ----------------------------------------------------------------
 
         def c9(facts, conversations:)
           refs = conversations.to_h do |conversation|
             [conversation, requests_for(facts, conversation).map { |row| row.fetch('request_ref') }]
           end
-          cross_resolved = refs.flat_map { |_conversation, references| references }.any? do |reference|
-            resolution = facts.fetch('cross_projections')[reference]
-            resolution.is_a?(Hash) && resolution['request_ref'] == reference
-          end
-          sends_isolated = facts['sends'].group_by { |send| send['conversation_id'] }.keys.sort ==
-                           conversations.sort
+          cross_resolved = c9_cross_resolved?(facts, refs)
+          sends_isolated = c9_sends_isolated?(facts, conversations)
           own_references = refs.values.flatten +
                            facts.fetch('cli_legs', []).map { |leg| leg.fetch('reference') }
-          history_isolated = conversations.all? do |conversation|
-            own = requests_for(facts, conversation).map { |row| row.fetch('request_id') }
-            assistant_entries(facts, conversation).length ==
-              confirmed_answer_texts(facts, conversation).length &&
-              facts.fetch('history').fetch(conversation, []).all? do |entry|
-                entry['role'] != 'assistant' || own.any?
-              end
-          end
-          milestone_isolated = milestone_rows(facts).all? do |row|
-            reference = row['milestone_facts'].fetch('request_ref')
-            own_references.include?(reference)
-          end
+          history_isolated = c9_history_isolated?(facts, conversations)
+          milestone_isolated = c9_milestone_isolated?(facts, own_references)
           parity = core_parity_document(facts)
           {
             'metrics' => {
@@ -340,6 +324,36 @@ module Tamoz
             },
             'parity' => parity
           }
+        end
+
+        def c9_cross_resolved?(facts, refs)
+          refs.flat_map { |_conversation, references| references }.any? do |reference|
+            resolution = facts.fetch('cross_projections')[reference]
+            resolution.is_a?(Hash) && resolution['request_ref'] == reference
+          end
+        end
+
+        def c9_sends_isolated?(facts, conversations)
+          facts['sends'].group_by { |send| send['conversation_id'] }.keys.sort ==
+            conversations.sort
+        end
+
+        def c9_history_isolated?(facts, conversations)
+          conversations.all? do |conversation|
+            own = requests_for(facts, conversation).map { |row| row.fetch('request_id') }
+            assistant_entries(facts, conversation).length ==
+              confirmed_answer_texts(facts, conversation).length &&
+              facts.fetch('history').fetch(conversation, []).all? do |entry|
+                entry['role'] != 'assistant' || own.any?
+              end
+          end
+        end
+
+        def c9_milestone_isolated?(facts, own_references)
+          milestone_rows(facts).all? do |row|
+            reference = row['milestone_facts'].fetch('request_ref')
+            own_references.include?(reference)
+          end
         end
 
         # C4 ----------------------------------------------------------------
@@ -536,7 +550,6 @@ module Tamoz
         def c6(facts, conversation:)
           document = core_parity_document(facts)
           parity_score = document.fetch('score')
-          authority = authority_stable?(facts)
           cancellation = cancellation_parity(facts)
           distinct_texts = facts['distinct_answer_texts'] == true
           {
@@ -707,10 +720,10 @@ module Tamoz
         # Invariant 11 plus the C8-specific rule: no cancellation fact — the
         # command reply, the timeline wording, the reason code — ever enters
         # conversation history.
-        def c8_history_clean?(facts, conversation)
-          entries = facts.fetch('history').fetch(conversation, [])
+        def c8_history_clean?(run, conversation)
+          entries = run.fetch('history').fetch(conversation, [])
           entries.none? { |entry| entry['text'].to_s.match?(/cancel/i) } &&
-            context_inclusion(facts, conversation) == PASS
+            context_inclusion(run, conversation) == PASS
         end
 
         # C5 controls subset that exists on BOTH surfaces: /status word agreement
