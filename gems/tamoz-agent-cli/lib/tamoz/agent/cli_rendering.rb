@@ -8,8 +8,8 @@ module Tamoz
     #
     # Two audiences, one source of truth. `--json` emits a machine document and
     # the human form prints the same facts as text, so the two can never drift
-    # into disagreeing about what happened — `show_document` builds the document
-    # and `render_show_human` renders from the same view.
+    # into disagreeing about what happened — `build_show_document` builds the
+    # document and `render_show_human` renders from the same view.
     #
     # The exit code is part of the rendering, not separate from it: a terminal
     # outcome is only fully reported when the shell can branch on it, which is
@@ -42,7 +42,7 @@ module Tamoz
     # :reek:FeatureEnvy — a renderer's whole job is to read the view it was given
     # and print it; the data is the subject, and moving these onto the view would
     # put @out and the operator's formatting choices inside the domain object.
-    # :reek:UtilityFunction — `exit_for_view` and `show_document` are pure
+    # :reek:UtilityFunction — `exit_for_view` and `build_show_document` are pure
     # mappings from a view to a value; they belong beside the text they
     # accompany, not on a collaborator of their own.
     # :reek:ControlParameter — `json:` is the operator's choice of AUDIENCE, and
@@ -63,10 +63,7 @@ module Tamoz
             'thread_id' => view.thread_id,
             'request_id' => view.request_id,
             'status' => view.status.to_s,
-            'progress' => TerminalProgress.summarize(view),
-            'terminal' => view.terminal,
-            'status_projection' => SessionStatusProjection.document(view),
-            'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
+            **projection_fields(view)
           })
         else
           render_final_view_human(view)
@@ -94,7 +91,6 @@ module Tamoz
 
       # A completed session prints its answer only when it verified one; a
       # completion without verification says nothing rather than something empty.
-      # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity -- one bounded terminal renderer.
       def render_verification(view)
         verification = view.state&.fetch(:verification, nil)
         return unless verification
@@ -105,18 +101,25 @@ module Tamoz
         if reason == 'direct_response'
           @out.puts 'Response provided; no task completion was claimed.'
         elsif verification.fetch('satisfied', false)
-          artifact_line = TerminalProgress.artifact_line(view)
-          @out.puts artifact_line if artifact_line
-          @out.puts "\nVerification: satisfied"
+          render_satisfied_verification(view)
         else
-          @out.puts TerminalProgress.progress_line(view)
-          artifact_line = TerminalProgress.artifact_line(view)
-          @out.puts artifact_line if artifact_line
-          @out.puts 'Verification: not satisfied'
-          @out.puts "Next action: #{TerminalProgress.next_action(reason)}"
+          render_unsatisfied_verification(view, reason)
         end
       end
-      # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+      def render_satisfied_verification(view)
+        artifact_line = TerminalProgress.artifact_line(view)
+        @out.puts artifact_line if artifact_line
+        @out.puts "\nVerification: satisfied"
+      end
+
+      def render_unsatisfied_verification(view, reason)
+        @out.puts TerminalProgress.progress_line(view)
+        artifact_line = TerminalProgress.artifact_line(view)
+        @out.puts artifact_line if artifact_line
+        @out.puts 'Verification: not satisfied'
+        @out.puts "Next action: #{TerminalProgress.next_action(reason)}"
+      end
 
       def exit_for_view(view)
         case view.status
@@ -136,13 +139,22 @@ module Tamoz
 
       def render_show(view, thread_id:, transcript:, json:)
         if json
-          @out.puts JSON.generate(show_document(view, thread_id:, transcript:))
+          @out.puts JSON.generate(build_show_document(view, thread_id:, transcript:))
         else
           render_show_human(view, thread_id:, transcript:)
         end
       end
 
-      def show_document(view, thread_id:, transcript:)
+      def projection_fields(view)
+        {
+          'progress' => TerminalProgress.summarize(view),
+          'terminal' => view.terminal,
+          'status_projection' => SessionStatusProjection.document(view),
+          'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
+        }
+      end
+
+      def build_show_document(view, thread_id:, transcript:)
         receipts = view.effect_receipts.last(transcript).map(&:to_h)
         {
           'thread_id' => thread_id,
@@ -155,10 +167,7 @@ module Tamoz
               'descriptor' => interrupt.descriptor }
           end,
           'effect_receipts' => receipts,
-          'progress' => TerminalProgress.summarize(view),
-          'terminal' => view.terminal,
-          'status_projection' => SessionStatusProjection.document(view),
-          'lifecycle_events' => SessionStatusProjection.lifecycle_events(view)
+          **projection_fields(view)
         }
       end
 
