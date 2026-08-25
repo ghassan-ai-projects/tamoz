@@ -123,7 +123,7 @@ module Tamoz
         end
 
         def check_tag!(tag)
-          return unless tag && !tag.start_with?('tag:yaml.org,2002:')
+          return if tag.nil? || tag.start_with?('tag:yaml.org,2002:')
 
           raise ValidationError, "#{@path}: YAML tags are not allowed in profiles"
         end
