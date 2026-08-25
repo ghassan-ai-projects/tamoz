@@ -85,7 +85,7 @@ module Tamoz
       state.fetch(:active)[object_id] = true
       yield
     ensure
-      state.fetch(:active).delete(object_id) if object_id
+      state.fetch(:active).delete(object_id)
     end
     private_class_method :copy_container
 
