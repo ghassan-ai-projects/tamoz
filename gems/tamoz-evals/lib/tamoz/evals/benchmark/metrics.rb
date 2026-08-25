@@ -51,12 +51,7 @@ module Tamoz
         def calibration(cells, codes, bins: 10)
           return 0.0 if cells.empty?
 
-          rows = cells.map do |cell|
-            confidence = normalized(cell.fetch("probabilities"), codes)
-                           .fetch(cell.fetch("primary_code"))
-            correct = cell.fetch("primary_code") == cell.fetch("truth_code")
-            [confidence, correct]
-          end
+          rows = calibration_rows(cells, codes)
           bin_edges = (0..bins).map { |i| i / bins.to_f }
           (0...bins).sum do |index|
             low, high = bin_edges[index], bin_edges[index + 1]
@@ -177,6 +172,15 @@ module Tamoz
 
         def self.one_hot(code, codes)
           codes.to_h { |candidate| [candidate, candidate == code ? 1.0 : 0.0] }
+        end
+
+        def self.calibration_rows(cells, codes)
+          cells.map do |cell|
+            confidence = normalized(cell.fetch("probabilities"), codes)
+                           .fetch(cell.fetch("primary_code"))
+            correct = cell.fetch("primary_code") == cell.fetch("truth_code")
+            [confidence, correct]
+          end
         end
 
         # Completes a sparse probability mapping over the code set and
