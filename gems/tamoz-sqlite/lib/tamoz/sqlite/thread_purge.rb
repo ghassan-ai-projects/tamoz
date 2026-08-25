@@ -25,6 +25,22 @@ module Tamoz
         receipt
       end
 
+      def receipt(tombstone_id:)
+        id = Wire.identity(tombstone_id, name: 'tombstone id')
+        row = adapter.__send__(:read, operation: 'thread.deletion_receipt') do |tx|
+          tx.first(
+            'thread.deletion_receipt',
+            <<~SQL,
+              SELECT thread_id_digest, report, report_digest, purged_at_ms
+              FROM tamoz_deletion_receipts
+              WHERE tombstone_id = ?
+            SQL
+            [id]
+          )
+        end
+        row && reports.decode_receipt(id, row)
+      end
+
       private
 
       def purge(transaction, id)
@@ -95,7 +111,10 @@ module Tamoz
 
       def ensure_purgeable!(transaction, row, now)
         thread = row.fetch(0)
-        raise CheckpointConflictError, 'thread retention window has not expired' if row.fetch(3) && now < row.fetch(3)
+        purge_after_ms = row.fetch(3)
+        if purge_after_ms && now < purge_after_ms
+          raise CheckpointConflictError, 'thread retention window has not expired'
+        end
 
         unresolved = transaction.scalar(
           'thread.purge.unresolved',
@@ -192,26 +211,6 @@ module Tamoz
         )
       end
       # rubocop:enable Metrics/MethodLength
-
-      public
-
-      def receipt(tombstone_id:)
-        id = Wire.identity(tombstone_id, name: 'tombstone id')
-        row = adapter.__send__(:read, operation: 'thread.deletion_receipt') do |tx|
-          tx.first(
-            'thread.deletion_receipt',
-            <<~SQL,
-              SELECT thread_id_digest, report, report_digest, purged_at_ms
-              FROM tamoz_deletion_receipts
-              WHERE tombstone_id = ?
-            SQL
-            [id]
-          )
-        end
-        row && reports.decode_receipt(id, row)
-      end
-
-      private
 
       attr_reader :adapter, :reports
     end
