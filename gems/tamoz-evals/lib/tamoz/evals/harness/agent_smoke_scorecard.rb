@@ -38,9 +38,7 @@ module Tamoz
           document = build_report(artifacts, case_reports)
           document["content_digest"] = CanonicalJSON.content_digest(document, domain: REPORT_DOMAIN)
           Report.new(document:)
-        rescue InvalidArtifactError
-          raise
-        rescue ExecutionError
+        rescue InvalidArtifactError, ExecutionError
           raise
         rescue StandardError
           raise ExecutionError, "agent smoke scorecard failed"
@@ -67,7 +65,7 @@ module Tamoz
         end
 
         def build_report(artifacts, cases)
-          aggregate = aggregate(cases)
+          aggregate = build_aggregate(cases)
           gates = [
             # T8.3: the corpus identity is validated by the corpus itself
             # (case ids match the definitions exactly); the scorecard only
@@ -118,7 +116,7 @@ module Tamoz
           }
         end
 
-        def aggregate(cases)
+        def build_aggregate(cases)
           total = cases.length
           task_successes = count_true(cases, "task_success")
           verified = count_true(cases, "verified_completion")
