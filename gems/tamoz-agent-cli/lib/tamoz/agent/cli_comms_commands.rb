@@ -58,12 +58,14 @@ module Tamoz
           end
 
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
+          controls_source = comms_controls_source(directory, adapter, options)
           with_delivery_drainers(directory, descriptors) do |drainers|
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
               transport = build_transport(descriptor, credential(descriptor))
               Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
-                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:
+                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
+                controls: controls_source
               )
             end
             if once

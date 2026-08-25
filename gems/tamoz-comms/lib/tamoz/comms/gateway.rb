@@ -31,8 +31,9 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
 
       HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
-                   '/redirect r<reference> <new task>, /whoami, /start <pairing code>. ' \
-                   'Commands never become task text.'.freeze
+                   '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
+                   '/reset, /compact, /usage, /context, /think <low|medium|high>, ' \
+                   '/verbose <quiet|normal|detailed>. Commands never become task text.'.freeze
       NO_WORK_REPLY = 'No work is admitted for this conversation.'.freeze
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'.freeze
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'.freeze
@@ -51,6 +52,16 @@ module Tamoz
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'.freeze
       FINISHED_REQUEST_REPLY = 'That request has already finished.'.freeze
       CANCEL_NO_WORK_REPLY = 'No running request to cancel on this conversation.'.freeze
+
+      # The typed session controls (phase 3 work item 1). The gateway never
+      # constructs a Session itself: the wiring hands in a `controls` callable
+      # resolving one thread id to the same session-access seam the worker
+      # uses. Without one, the commands answer with the bounded unavailable
+      # reply instead of failing silently or becoming task text.
+      CONTEXT_CONTROL_COMMANDS = %w[reset compact usage context think verbose].freeze
+      CONTROLS_UNAVAILABLE_REPLY = 'Context controls are not available on this channel.'.freeze
+      CONTROLS_NO_SESSION_REPLY =
+        'No session state exists for this conversation yet; send a task first.'.freeze
 
       # Store-projection states the Lifecycle tables do not name resolve here
       # first: the checkpoint inbox statuses and the admitted-but-unclaimed
@@ -74,7 +85,8 @@ module Tamoz
         capacity_refused: ['rejected', 'The channel is at capacity; try again later.']
       }.freeze
 
-      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil)
+      def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil,
+                     controls: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
@@ -82,6 +94,7 @@ module Tamoz
         @descriptor = descriptor
         @poller_owner = poller_owner
         @batch_size = batch_size
+        @controls = controls
         @fence = 0
         @stopping = false
         # The store keeps only challenge digests; the plaintext codes live
@@ -444,6 +457,48 @@ module Tamoz
           append_control(whoami_text(envelope), envelope, now:)
         when 'start'
           append_control(start_text(intent.arguments), envelope, now:)
+        when *CONTEXT_CONTROL_COMMANDS
+          append_control(context_control_text(envelope, intent), envelope, now:)
+        end
+      end
+
+      # One bounded line per typed control, built from the projection document
+      # the session layer returned. Resolution goes through the conversation's
+      # CURRENT generation — after /new the controls address the successor
+      # thread automatically. An unknown preference value surfaces as the
+      # semantics layer's typed failure message, never as an exception.
+      def context_control_text(envelope, intent)
+        return CONTROLS_UNAVAILABLE_REPLY unless @controls
+
+        conversation_id = envelope.fetch('conversation_id')
+        return NEW_CONVERSATION_UNBOUND_REPLY unless @store.conversation(surface_id:, conversation_id:)
+
+        thread = Comms::Admission.thread_id(
+          surface_id, conversation_id,
+          generation: @store.conversation_generation(surface_id:, conversation_id:)
+        )
+        controls = @controls.call(thread)
+        return CONTROLS_UNAVAILABLE_REPLY unless controls
+
+        Comms::ControlReply.line(intent.name, run_context_control(controls, thread, envelope, intent))
+      rescue ArgumentError => e
+        e.message
+      rescue Tamoz::CheckpointConflictError
+        CONTROLS_NO_SESSION_REPLY
+      end
+
+      def run_context_control(controls, thread, envelope, intent)
+        request_id = Comms::Canonical.hexdigest(
+          'tamoz.comms.command.v1',
+          [surface_id, envelope.fetch('update_id'), 'context_control', intent.name]
+        )
+        case intent.name
+        when 'reset' then controls.reset_episode(thread:, request_id:).document
+        when 'compact' then controls.compact_transcript(thread:, request_id:).document
+        when 'usage' then controls.usage_report(thread:).document
+        when 'context' then controls.context_report(thread:).document
+        when 'think' then controls.set_reasoning_depth(thread:, request_id:, depth: intent.arguments).document
+        else controls.set_answer_verbosity(thread:, request_id:, verbosity: intent.arguments).document
         end
       end
 

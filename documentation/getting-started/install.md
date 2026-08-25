@@ -147,6 +147,12 @@ The interactive subcommands drive one thread while you watch it.
 | `redirect` | Replace the goal of an in-flight turn |
 | `cancel` | Route a thread to a terminal cancellation |
 | `resolve` | Record a human decision about an `:unknown` effect |
+| `reset` | Clear a thread's episode context; audit history stays |
+| `compact` | Summarize and pin the transcript behind verified digests |
+| `usage` | Show the thread's budget and accounting projection |
+| `context` | Show which layers make up the model-visible frame |
+| `think` | Set the per-thread reasoning depth (`low`, `medium`, `high`) |
+| `verbose` | Set the per-thread answer verbosity (`quiet`, `normal`, `detailed`) |
 | `profile` | Preview, import, list, show and activate trusted profiles |
 
 Add `--json` to any of them for a newline-delimited JSON event stream, and

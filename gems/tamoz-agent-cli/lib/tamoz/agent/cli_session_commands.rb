@@ -254,6 +254,82 @@ module Tamoz
         end
       end
 
+      # The typed context controls (phase 3 work item 1) on the durable CLI:
+      # the same SessionContextControls operations the channel gateway invokes,
+      # producing the same projection documents — JSON output IS the document,
+      # text output renders it through the shared Comms::ControlReply line.
+      def cmd_reset(options, argv)
+        run_control_mutation(options, argv) do |session, thread_id, request_id|
+          session.reset_episode(thread: thread_id, request_id:)
+        end
+      end
+
+      def cmd_compact(options, argv)
+        run_control_mutation(options, argv) do |session, thread_id, request_id|
+          session.compact_transcript(thread: thread_id, request_id:)
+        end
+      end
+
+      def cmd_think(options, argv)
+        thread_id = extract_thread!(argv)
+        depth = control_value!(argv, 'DEPTH')
+        run_durable(options, thread_id) do |session, request_id, _owner_id|
+          emit_control_document(session.set_reasoning_depth(thread: thread_id, request_id:, depth:), options)
+          0
+        end
+      end
+
+      def cmd_verbose(options, argv)
+        thread_id = extract_thread!(argv)
+        verbosity = control_value!(argv, 'MODE')
+        run_durable(options, thread_id) do |session, request_id, _owner_id|
+          emit_control_document(session.set_answer_verbosity(thread: thread_id, request_id:, verbosity:), options)
+          0
+        end
+      end
+
+      def cmd_usage(options, argv)
+        run_control_read(options, argv) { |session, thread_id| session.usage_report(thread: thread_id) }
+      end
+
+      def cmd_context(options, argv)
+        run_control_read(options, argv) { |session, thread_id| session.context_report(thread: thread_id) }
+      end
+
+      def run_control_mutation(options, argv)
+        thread_id = extract_thread!(argv)
+        run_durable(options, thread_id) do |session, request_id, _owner_id|
+          emit_control_document(yield(session, thread_id, request_id), options)
+          0
+        end
+      end
+
+      def run_control_read(options, argv)
+        thread_id = extract_thread!(argv)
+        run_durable(options, thread_id, read_only: true) do |session, _request_id, _owner_id|
+          emit_control_document(yield(session, thread_id), options)
+          0
+        end
+      end
+
+      def control_value!(argv, label)
+        value = argv.join(' ').strip
+        raise OptionParser::MissingArgument, label if value.empty?
+
+        value
+      end
+
+      # JSON mode prints the projection document itself (the stable session-layer
+      # schema); text mode prints the same bounded line the channel replies with.
+      def emit_control_document(projection, options)
+        document = projection.document
+        if options[:json]
+          @out.puts JSON.generate(document)
+        else
+          @out.puts Comms::ControlReply.line(document.fetch('control'), document)
+        end
+      end
+
       # The word an operator types IS the state that gets recorded.
       #
       # This used to accept `unknown` and durably record `:failed`, which is one

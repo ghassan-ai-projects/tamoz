@@ -22,7 +22,8 @@ class CommsCommandParityTest < Minitest::Test
   AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
 
   def test_known_is_exactly_the_handled_command_set
-    assert_equal %w[help status new cancel redirect whoami start], Comms::Commands::KNOWN
+    assert_equal %w[help status new cancel redirect whoami start reset compact usage context think verbose],
+                 Comms::Commands::KNOWN
 
     with_gateway do |gateway, transport, _store, _adapter, checkpoints|
       admit_turn(gateway, transport, 101)
@@ -32,7 +33,8 @@ class CommsCommandParityTest < Minitest::Test
 
         assert_equal word, parsed.command, 'every known name must parse as known'
 
-        reply = drive_command(gateway, transport, "/#{word}", id: 900 + Comms::Commands::KNOWN.index(word))
+        text = { 'think' => '/think high', 'verbose' => '/verbose quiet' }.fetch(word, "/#{word}")
+        reply = drive_command(gateway, transport, text, id: 900 + Comms::Commands::KNOWN.index(word))
 
         assert_kind_of String, reply, word
         refute_empty reply, word
@@ -264,13 +266,39 @@ class CommsCommandParityTest < Minitest::Test
         store = adapter.bind_comms_store(checkpoints)
         store.deploy_surface(descriptor.wire, now: NOW)
         transport = ScriptedTransport.new
+        controls_root = File.join(directory, 'workspace')
+        FileUtils.mkdir_p(controls_root)
+        session = nil
         gateway = Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'parity:test'
+          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'parity:test',
+          controls: ->(_thread) do
+            session ||= controls_session(adapter, controls_root)
+          end
         )
         yield gateway, transport, store, adapter, checkpoints
       ensure
         adapter&.close
       end
+    end
+  end
+
+  # The session-access seam under test, built exactly as the CLI wiring builds
+  # it: one profile-less Session over the shared runtime database.
+  def controls_session(adapter, root)
+    Tamoz::Agent::Session.new(
+      model: ControlsStubModel.new,
+      toolbox: Tamoz::Agent::Toolbox.new(root:),
+      checkpointer: adapter
+    )
+  end
+
+  # Context controls never plan or verify; only /compact's summarization call
+  # can reach the model, and the sweep never compacts enough to need it.
+  class ControlsStubModel
+    def generate(stage:, **)
+      return JSON.generate('summary' => 'kept') if stage == :context_compact
+
+      '{}'
     end
   end
 
