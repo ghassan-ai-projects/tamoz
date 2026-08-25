@@ -93,8 +93,8 @@ module Tamoz
         private
 
         def record_line(record)
-          declared = record.version
-          version = declared ? " v#{clip(declared, 32)}" : ''
+          declared_version = record.version
+          version = declared_version ? " v#{clip(declared_version, 32)}" : ''
           "- #{record.id} [#{record.source_trust}, declared-risk #{record.declared_risk}]" \
             "#{version}: #{clip(record.description, MAX_CATALOG_DESCRIPTION_BYTES)}"
         end
