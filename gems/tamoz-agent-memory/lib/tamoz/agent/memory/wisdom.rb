@@ -42,7 +42,7 @@ module Tamoz
           actor: "tamoz.agent.memory.wisdom"
         )
           assert_candidate_shapes!(candidate)
-          assert_no_active_wisdom!
+          assert_no_pending_promotion!
           assert_authority_gates!(candidate, development_evaluation, human_gate)
 
           # The candidate never sees the holdout: the holdout partition is read
@@ -50,10 +50,7 @@ module Tamoz
           holdout_evidence = verify_holdout(holdout, candidate)
           development_evidence = development_evaluation.fetch(:evidence_digest)
           evidence = {"development" => development_evidence, "holdout" => holdout_evidence}
-
-          evidence_digest = Digest::SHA256.hexdigest(
-            JSON.generate(Tamoz::Core.canonical(evidence))
-          )
+          evidence_digest = canonical_digest(evidence)
 
           transition, reserved = @registry.record(
             kind: :wisdom_promotion,
@@ -90,12 +87,13 @@ module Tamoz
           end
         end
 
-        def assert_no_active_wisdom!
+        def assert_no_pending_promotion!
+          pending_id = @registry.pending_transition_id
           active = @registry.active
-          if active.fetch("active_transition_id") && @registry.pending_transition_id
+          if active.fetch("active_transition_id") && pending_id
             raise MemoryPolicyError, "one promoted candidate already active or pending"
           end
-          if @registry.pending_transition_id
+          if pending_id
             raise MemoryPolicyError, "a promotion is already pending"
           end
         end
@@ -135,9 +133,11 @@ module Tamoz
             raise UnverifiedTransitionError, "protected holdout did not pass"
           end
 
-          Digest::SHA256.hexdigest(
-            JSON.generate(Tamoz::Core.canonical(outcome.reject { |k, _| k == "content" }))
-          )
+          canonical_digest(outcome.reject { |k, _| k == "content" })
+        end
+
+        def canonical_digest(value)
+          Digest::SHA256.hexdigest(JSON.generate(Tamoz::Core.canonical(value)))
         end
       end
     end
