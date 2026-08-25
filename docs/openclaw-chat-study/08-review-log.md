@@ -201,3 +201,36 @@ harness scoring the nine scenarios deterministically on fake transports).
 Honest limits unchanged: all phase evidence is fixture/scripted-transport
 plumbing evidence; no live Telegram conversation or real-provider run is
 claimed, and usefulness remains the benchmark's claim to make later.
+
+## Implementation round 2026-08-24, part 2 (Phases 2–3 complete)
+
+Phases 2 (bounded semantic liveness) and 3 (conversation model) are
+implemented and reviewed on the same branch; evidence lives in
+`implementation-plan/evidence/phase-2` and `phase-3`. Milestones project from
+committed facts with coalescing and a hard bound; cancellation is visible
+through a durable timeline (`requested`/`observed`/terminal keyed to what the
+correspondent was actually told); `/status r<ref>` reconnects from SQLite
+alone; callback queries acknowledge after durable recording; typed context
+controls (`/new /reset /compact /usage /context /think /verbose`) run under
+the fenced writer with exactly-one audit record per mutation and identical
+meaning on both surfaces.
+
+The final review round ran three fresh read-only lenses over the completed
+phases — correctness against the twelve invariants, security/trust over the
+new surfaces, and test quality/evidence honesty. All three returned NEEDS
+FIXES; every finding was repaired and re-gated: control replies no longer
+reflect unbounded input (a poison argument could stall a surface), commands
+pass the declared inbound-byte limit, pairing approval enforces challenge
+expiry where it grants authority, redelivered updates no longer re-execute
+control commands, the cancellation terminal word follows the settle kind
+rather than the reservation axis, reset/compact count truncation over the one
+stream the frame consumes, and the CLI milestone renderer was removed rather
+than left as unwired dead code. The canonical cross-surface composition test
+composes the whole story — two isolated conversations, cancel mid-wait,
+crash-recovery, duplicate replay, tightened-limit refusal, one ambiguous send
+— deterministically over real stores.
+
+The B0 harness now scores all nine scenarios ready with empty pending seams,
+byte-identical across runs. Honest limits unchanged: fixture transports and
+scripted models only; publication stays blocked until a real transport and
+real provider run exists.

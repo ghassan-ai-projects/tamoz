@@ -1,14 +1,14 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-24T19:47:37Z",
-  "manifest_requirements": 505,
-  "named_cases_run": 264,
+  "generated_at": "2026-08-25T03:16:59Z",
+  "manifest_requirements": 512,
+  "named_cases_run": 277,
   "counts": {
     "deferred-by-contract": 11,
     "indirect": 4,
     "missing": 15,
-    "pass": 475
+    "pass": 482
   },
   "release_blocking_gaps": [
     "ADR-041",
@@ -6172,6 +6172,23 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-compact",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz compact",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_compact_pins_the_transcript_behind_digests_and_audits_before_after"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-config",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6181,6 +6198,23 @@
       "named_test": "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
       "supporting_tests": [
         "test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-context",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz context",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces",
+      "supporting_tests": [
+        "test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards"
       ],
       "classification": "direct",
       "rationale": null,
@@ -6316,6 +6350,24 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-reset",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz reset",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_reset_clears_episode_state_keeps_audit_history_and_continues_accounting",
+        "test/session_context_controls_test.rb#test_a_second_reset_keeps_every_truncation_cumulative"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-resolve",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6397,6 +6449,24 @@
       "owner_signature": null
     },
     {
+      "id": "CLI-think",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz think",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_preference_controls_are_consumed_by_episode_composition",
+        "test/context_control_exposure_test.rb#test_a_bad_think_value_is_a_typed_bounded_reply_and_writes_nothing"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "CLI-trace",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -6405,6 +6475,40 @@
       "status": "pass",
       "named_test": "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-usage",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz usage",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_read_only_controls_change_no_durable_state"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "CLI-verbose",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz verbose",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_preference_controls_are_consumed_by_episode_composition"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
@@ -7586,6 +7690,25 @@
       "status": "pass",
       "named_test": "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "MIG-21",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_21",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21",
+      "supporting_tests": [
+        "test/sqlite_comms_store_test.rb#test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue",
+        "test/sqlite_comms_store_test.rb#test_cancellation_observed_stamp_lands_once_and_requires_a_request",
+        "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,

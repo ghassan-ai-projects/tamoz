@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 505 | 264 | 15 | **no** |
+| 512 | 277 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 475 |
+| pass | 482 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -423,7 +423,9 @@ generating run.
 | `CLI-ask` | cli_command | yes | pass | `test/agent_cli_test.rb#test_ask_creates_session_file` |
 | `CLI-cancel` | cli_command | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
 | `CLI-comms` | cli_command | yes | pass | `test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly` |
+| `CLI-compact` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards` |
 | `CLI-config` | cli_command | yes | pass | `test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup` |
+| `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
@@ -432,12 +434,16 @@ generating run.
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
 | `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `CLI-redirect` | cli_command | yes | pass | `test/agent_cli_test.rb#test_redirect_replaces_in_flight_goal` |
+| `CLI-reset` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-resolve` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution` |
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
 | `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
+| `CLI-think` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-trace` | cli_command | yes | pass | `test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal` |
+| `CLI-usage` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
+| `CLI-verbose` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-worker` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `INV-01` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
 | `INV-02` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
@@ -505,6 +511,7 @@ generating run.
 | `MIG-19` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise` |
 | `MIG-2` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-20` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
+| `MIG-21` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |

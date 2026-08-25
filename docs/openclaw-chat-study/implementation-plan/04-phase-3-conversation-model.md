@@ -1,6 +1,8 @@
 # Phase 3 — deepen the conversation model and prove recovery
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented and reviewed — see
+`evidence/phase-3/implementation-review.md` (semantics `f3bddc7`, exposure
+`d1944d0`, canonical composition test, final correctness pass).
 Requires: Phases 0–2 (the shared lifecycle, bounded progress, and visible
 cancellation must be reliable first).
 

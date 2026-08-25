@@ -1,6 +1,8 @@
 # Phase 2 — bounded semantic liveness
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented and reviewed — see
+`evidence/phase-2/implementation-review.md` (waves `6426f4f`, `5b6df96`,
+`16606bd`; repairs `2e12af9`, `94d73e2`, final correctness pass).
 Requires: Phases 0 and 1 (delivery fence, identity, state vocabulary, request
 references, and `/status` must already exist).
 
