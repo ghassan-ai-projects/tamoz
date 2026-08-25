@@ -74,27 +74,6 @@ module Tamoz
         freeze
       end
 
-      def assign_identity(attributes)
-        @child_id = require_text(attributes.fetch(:child_id), 'child_id')
-        @parent_thread_id = require_text(attributes.fetch(:parent_thread_id), 'parent_thread_id')
-        @parent_request_id = require_text(attributes.fetch(:parent_request_id), 'parent_request_id')
-        @task = validate_task!(attributes.fetch(:task))
-      end
-
-      def assign_policy(attributes)
-        @capability_profile = validate_profile(attributes.fetch(:capability_profile))
-        @depth = validate_integer(attributes.fetch(:depth), 'depth', 0..8)
-        @concurrency = validate_integer(attributes.fetch(:concurrency), 'concurrency', 1..16)
-      end
-
-      def assign_state(attributes)
-        @status = String(attributes.fetch(:status))
-        raise ArgumentError, "unknown child task status #{@status.inspect}" unless STATUSES.include?(@status)
-
-        completion_digest = attributes.fetch(:completion_digest)
-        @completion_digest = completion_digest && require_text(completion_digest, 'completion_digest')
-      end
-
       def to_h
         {
           'child_id' => child_id,
@@ -135,6 +114,27 @@ module Tamoz
 
       private
 
+      def assign_identity(attributes)
+        @child_id = require_text(attributes.fetch(:child_id), 'child_id')
+        @parent_thread_id = require_text(attributes.fetch(:parent_thread_id), 'parent_thread_id')
+        @parent_request_id = require_text(attributes.fetch(:parent_request_id), 'parent_request_id')
+        @task = validate_task!(attributes.fetch(:task))
+      end
+
+      def assign_policy(attributes)
+        @capability_profile = validate_profile(attributes.fetch(:capability_profile))
+        @depth = validate_integer(attributes.fetch(:depth), 'depth', 0..8)
+        @concurrency = validate_integer(attributes.fetch(:concurrency), 'concurrency', 1..16)
+      end
+
+      def assign_state(attributes)
+        @status = String(attributes.fetch(:status))
+        raise ArgumentError, "unknown child task status #{@status.inspect}" unless STATUSES.include?(@status)
+
+        completion_digest = attributes.fetch(:completion_digest)
+        @completion_digest = completion_digest && require_text(completion_digest, 'completion_digest')
+      end
+
       def validate_attribute_keys!(attributes, expected_keys)
         unknown_keys = attributes.keys - expected_keys
         return if unknown_keys.empty?
@@ -148,7 +148,7 @@ module Tamoz
         raise ArgumentError, 'parent capability profile must be a string-keyed object'
       end
 
-      def validate_parent_capabilities!(parent_profile)
+      def enforce_parent_capabilities!(parent_profile)
         parent_capabilities = Array(parent_profile.fetch('capabilities', []))
         child_capabilities = Array(capability_profile.fetch('capabilities', []))
         return if (child_capabilities - parent_capabilities).empty?
@@ -156,7 +156,7 @@ module Tamoz
         raise Tamoz::Agent::ToolPolicyError, 'child capabilities exceed parent authority'
       end
 
-      def validate_parent_revision!(parent_profile)
+      def enforce_parent_revision!(parent_profile)
         parent_revision = parent_profile.fetch('authority_revision', nil)
         child_revision = capability_profile.fetch('authority_revision', nil)
         return if parent_revision && child_revision == parent_revision
@@ -266,8 +266,8 @@ module Tamoz
 
       def validate_parent_identity!(parent_profile)
         validate_parent_profile!(parent_profile)
-        validate_parent_capabilities!(parent_profile)
-        validate_parent_revision!(parent_profile)
+        enforce_parent_capabilities!(parent_profile)
+        enforce_parent_revision!(parent_profile)
       end
 
       def enforce_parent_bounds!(parent_profile)
