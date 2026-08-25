@@ -35,6 +35,8 @@ class BenchmarkCommsB0Test < Minitest::Test
 
       assert_equal 'ready', records.fetch('C5').fetch('status'), records.fetch('C5')['reason']
       assert_equal 1, records.fetch('C5').dig('metrics', 'command_parity')
+      assert_equal 'passed', records.fetch('C5').dig('hard_zero', 'phantom_command'),
+                   'every registry command, the six controls included, must answer a real outcome'
       assert_equal 1, records.fetch('C5').dig('metrics', 'inbound_identity')
       assert_equal 1, records.fetch('C5').dig('metrics', 'authority_stability')
     end

@@ -191,7 +191,13 @@ module Tamoz
           'cancel' => ['No running request to cancel', 'Cancellation requested'],
           'redirect' => ['Redirecting', 'That request has already finished.', 'Usage: /redirect'],
           'whoami' => ['You are telegram:user:'],
-          'start' => ['Usage: /start']
+          'start' => ['Usage: /start'],
+          'reset' => ['Episode reset on generation '],
+          'compact' => ['Transcript compacted; '],
+          'usage' => ['Usage: requests '],
+          'context' => ['Context: fragments visible '],
+          'think' => ['Reasoning depth set to '],
+          'verbose' => ['Answer verbosity set to ']
         }.freeze
 
         def c5(facts, conversation:)

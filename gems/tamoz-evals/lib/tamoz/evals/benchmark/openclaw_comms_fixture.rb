@@ -234,7 +234,8 @@ module Tamoz
           @transport = FakeTransport.new(surface_id: SURFACE_ID, surface_revision: SURFACE_REVISION)
           @gateway = Tamoz::Comms::Gateway.new(
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-            descriptor: descriptor(admission_mode), poller_owner: 'fixture:gateway'
+            descriptor: descriptor(admission_mode), poller_owner: 'fixture:gateway',
+            controls: ->(thread_id) { @runtime.session_for(thread_id) }
           )
           sink = Tamoz::Comms::OutboxDeliverySink.new(
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints

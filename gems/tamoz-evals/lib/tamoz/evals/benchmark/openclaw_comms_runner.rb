@@ -741,7 +741,13 @@ module Tamoz
             'cancel' => '/cancel',
             'redirect' => "/redirect #{reference} replacement task",
             'whoami' => '/whoami',
-            'start' => '/start'
+            'start' => '/start',
+            'reset' => '/reset',
+            'compact' => '/compact',
+            'usage' => '/usage',
+            'context' => '/context',
+            'think' => '/think medium',
+            'verbose' => '/verbose normal'
           }
           sweep = {}
           update_id = 550

@@ -200,8 +200,8 @@
     {
       "scenario_id": "C8",
       "path": "C8-cancellation-states.md",
-      "state": "INCOMPLETE",
-      "status_reason": "The B0 scenario runner and controller-owned oracle are not present; this entry is not a runnable fixture claim.",
+      "state": "READY",
+      "status_reason": "The B0 scenario runner and controller-owned oracle score this scenario end-to-end over deterministic fixtures (script/benchmark_comms_run); fixture results are not experience evidence.",
       "tier": "C",
       "classification": "composite",
       "primary_axis": "recovery",
