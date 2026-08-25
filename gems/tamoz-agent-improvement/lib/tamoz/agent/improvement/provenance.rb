@@ -84,20 +84,7 @@ module Tamoz
             raise ProvenanceIncompleteError, "provenance is missing candidate_id"
           end
 
-          REQUIRED_AXES.each do |axis|
-            value = public_send(axis)
-            if blank?(value)
-              raise ProvenanceIncompleteError, "provenance is missing #{axis}"
-            end
-
-            AXIS_KEYS.fetch(axis, []).each do |key|
-              entry = value[key]
-              next unless blank?(entry)
-
-              raise ProvenanceIncompleteError, "provenance #{axis} is missing #{key}"
-            end
-          end
-
+          assert_axes!
           assert_trajectories!
           assert_boundary!
           assert_scope!
@@ -145,6 +132,22 @@ module Tamoz
           when Array, Hash then value.empty?
           when false then false # an explicit `false` is a recorded answer
           else false
+          end
+        end
+
+        def assert_axes!
+          REQUIRED_AXES.each do |axis|
+            value = public_send(axis)
+            if blank?(value)
+              raise ProvenanceIncompleteError, "provenance is missing #{axis}"
+            end
+
+            AXIS_KEYS.fetch(axis, []).each do |key|
+              entry = value[key]
+              next unless blank?(entry)
+
+              raise ProvenanceIncompleteError, "provenance #{axis} is missing #{key}"
+            end
           end
         end
 
