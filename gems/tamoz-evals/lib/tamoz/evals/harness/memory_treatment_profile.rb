@@ -62,7 +62,6 @@ module Tamoz
           case @mode
           when :ci then run_ci
           when :live then run_live
-          else raise ExecutionError, "unknown treatment mode #{@mode.inspect}"
           end
         rescue InvalidArtifactError, ExecutionError
           raise
@@ -196,11 +195,7 @@ module Tamoz
             "hard_gates" => gates,
             "decision" => gates.all? { |entry| entry.fetch("status") == "pass" } ? "pass" : "fail"
           }
-          document["content_digest"] = CanonicalJSON.content_digest(
-            self.class.reproducible_surface(document),
-            domain: REPORT_DOMAIN
-          )
-          Report.new(document:)
+          final_report(document)
         end
 
         def aggregate_ci(measurements)
@@ -291,11 +286,7 @@ module Tamoz
             "hard_gates" => gates,
             "decision" => gates.all? { |entry| entry.fetch("status") == "pass" } ? "pass" : "fail"
           }
-          document["content_digest"] = CanonicalJSON.content_digest(
-            self.class.reproducible_surface(document),
-            domain: REPORT_DOMAIN
-          )
-          Report.new(document:)
+          final_report(document)
         end
 
         # Live measurements come from the operator's adapter with at least:
@@ -313,6 +304,14 @@ module Tamoz
             "sensitive_recalls" => cells.sum { |entry| entry.fetch("sensitive_recalls") },
             "unauthorized_recalls" => cells.sum { |entry| entry.fetch("unauthorized_recalls") }
           }
+        end
+
+        def final_report(document)
+          document["content_digest"] = CanonicalJSON.content_digest(
+            self.class.reproducible_surface(document),
+            domain: REPORT_DOMAIN
+          )
+          Report.new(document:)
         end
 
         def gate(id, passed)
