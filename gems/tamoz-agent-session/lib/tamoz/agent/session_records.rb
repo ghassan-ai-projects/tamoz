@@ -380,6 +380,19 @@ module Tamoz
       # Validates one stored record. Rejection order is load-bearing: an unsupported
       # newer version must fail before any field is inspected.
       def load!(value, kind: nil)
+        stored_kind = validate_record_header!(value, kind)
+        validate_record_version!(value, stored_kind)
+
+        migrated = migrate_to_current!(value, stored_kind)
+        migrated = apply_legacy_session_defaults!(migrated) if stored_kind == "session"
+
+        validate_fields!(migrated, stored_kind)
+        reject_sensitive!(migrated)
+        reject_credential_values!(migrated) if CREDENTIAL_SCANNED_KINDS.include?(stored_kind)
+        migrated
+      end
+
+      def validate_record_header!(value, expected_kind)
         unless value.is_a?(Hash)
           raise CheckpointCorruptionError, "session record must be an object"
         end
@@ -389,11 +402,14 @@ module Tamoz
           raise CheckpointCorruptionError,
                 "session record kind #{stored_kind.inspect} is not allowlisted"
         end
-        if kind && String(kind) != stored_kind
+        if expected_kind && String(expected_kind) != stored_kind
           raise CheckpointCorruptionError,
-                "expected session record #{String(kind).inspect}, found #{stored_kind.inspect}"
+                "expected session record #{String(expected_kind).inspect}, found #{stored_kind.inspect}"
         end
+        stored_kind
+      end
 
+      def validate_record_version!(value, stored_kind)
         version = value["record_version"]
         unless version.is_a?(Integer) && version.positive?
           raise CheckpointCorruptionError,
@@ -404,14 +420,7 @@ module Tamoz
                 "session record #{stored_kind} version #{version} exceeds supported " \
                 "version #{RECORD_VERSION}"
         end
-
-        migrated = migrate_to_current!(value, stored_kind)
-        migrated = apply_legacy_session_defaults!(migrated) if stored_kind == "session"
-
-        validate_fields!(migrated, stored_kind)
-        reject_sensitive!(migrated)
-        reject_credential_values!(migrated) if CREDENTIAL_SCANNED_KINDS.include?(stored_kind)
-        migrated
+        version
       end
 
       def load_state!(state)
@@ -482,15 +491,20 @@ module Tamoz
         Tamoz::Core.deep_freeze(migrated.merge(defaults))
       end
 
-      def reject_sensitive!(value)
+      def each_nested_value(value, &block)
         case value
-        when Secret
+        when Hash then value.each_value { |entry| each_nested_value(entry, &block) }
+        when Array then value.each { |entry| each_nested_value(entry, &block) }
+        else yield(value)
+        end
+      end
+
+      def reject_sensitive!(value)
+        each_nested_value(value) do |entry|
+          next unless entry.is_a?(Secret)
+
           raise SensitiveValueError,
                 "session records reject Tamoz::Secret; use a credential reference"
-        when Hash
-          value.each_value { |entry| reject_sensitive!(entry) }
-        when Array
-          value.each { |entry| reject_sensitive!(entry) }
         end
         value
       end
@@ -500,17 +514,13 @@ module Tamoz
       # which `SessionNodes#deliberate` converts into a plan-revision issue so
       # the model replans without the value — nothing is committed.
       def reject_credential_values!(value)
-        case value
-        when String
-          if SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(value) }
-            raise SensitiveValueError,
-                  "the plan step arguments carry a credential value; use a " \
-                  "credential reference instead"
-          end
-        when Hash
-          value.each_value { |entry| reject_credential_values!(entry) }
-        when Array
-          value.each { |entry| reject_credential_values!(entry) }
+        each_nested_value(value) do |entry|
+          next unless entry.is_a?(String)
+          next unless SECRET_VALUE_PATTERNS.any? { |pattern| pattern.match?(entry) }
+
+          raise SensitiveValueError,
+                "the plan step arguments carry a credential value; use a " \
+                "credential reference instead"
         end
         value
       end
@@ -542,17 +552,21 @@ module Tamoz
 
           check_type!(value.fetch(name), type, kind, name)
         end
-        # P11 (C4): the memory_epoch value is either the legacy "none" sentinel
-        # or a hash-shaped snapshot; anything else is corruption.
-        if value.key?("memory_epoch")
-          snapshot = value.fetch("memory_epoch")
-          unless snapshot == Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH || snapshot.is_a?(Hash)
-            raise CheckpointCorruptionError,
-                  "session record memory_epoch must be #{Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH.inspect} " \
-                  "or an object"
-          end
-        end
+        validate_memory_epoch!(value)
         value
+      end
+
+      # P11 (C4): the memory_epoch value is either the legacy "none" sentinel
+      # or a hash-shaped snapshot; anything else is corruption.
+      def validate_memory_epoch!(value)
+        return unless value.key?("memory_epoch")
+
+        snapshot = value.fetch("memory_epoch")
+        return if snapshot == Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH || snapshot.is_a?(Hash)
+
+        raise CheckpointCorruptionError,
+              "session record memory_epoch must be #{Tamoz::Agent::Memory::LEGACY_MEMORY_EPOCH.inspect} " \
+              "or an object"
       end
 
       def check_type!(value, type, kind, name)
