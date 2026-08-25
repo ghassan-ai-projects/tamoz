@@ -29,10 +29,8 @@ module Tamoz
     # sensitive statement never enters a searchable column (invariant 24).
     class MemoryStore
       MEMORY_NAMESPACE_PREFIX = "tamoz.memory."
-      ELIGIBLE_STATES = %w[active consolidated].freeze
       SENSITIVITY_ORDER = %w[public internal sensitive].freeze
       MAX_LIMIT = 100_000
-      SEARCH_COLUMNS = %w[statement_search layer class].freeze
 
       # One immutable index row per Store version of a memory record.
       IndexRow = Data.define(
@@ -121,7 +119,6 @@ module Tamoz
         unless index.is_a?(IndexRow)
           raise ConfigurationError, "MemoryStore append requires an IndexRow"
         end
-        address = normalize_memory_address(index)
         bytes = store.state_codec.dump(record)
         stored = sensitive ? store.protect_bytes(bytes, namespace: index.store_namespace, key: index.key) : bytes
         entry = nil
@@ -205,11 +202,11 @@ module Tamoz
       #          compatibility_behavior:}
       # query:  {terms: [String], layer: String|nil, klass: String|nil}
       def search(caller:, query: {terms: []}, limit: MAX_LIMIT)
-        normalized_limit = normalize_limit(limit)
+        normalized_limit = validate_limit(limit)
         caller_values = validate_caller!(caller)
         namespace = "#{MEMORY_NAMESPACE_PREFIX}#{caller_values.fetch(:tenant)}"
         terms, layer, klass = validate_query!(query)
-        now_ms = now_ms()
+        as_of_ms = now_ms()
         allowed_sensitivities = sensitivity_at_most(caller_values.fetch(:sensitivity))
 
         binds = [
@@ -218,7 +215,7 @@ module Tamoz
           *allowed_sensitivities,
           caller_values.fetch(:compatibility_graph),
           caller_values.fetch(:compatibility_behavior),
-          now_ms
+          as_of_ms
         ]
         # T0.3 situation boundary: a situation-scoped caller retrieves only
         # rows of the same entity type (default relatedness authority: same
@@ -267,11 +264,148 @@ module Tamoz
                        []
                      else
                        scan_matched_restricted(
-                         namespace, caller_values, terms, layer, klass, now_ms
+                         namespace, caller_values, terms, layer, klass, as_of_ms
                        )
                      end
         SearchResult.new(candidates:, matched_restricted: restricted)
       end
+
+      # Reads one index row (metadata only, never materialized).
+      def index_row(store_namespace, memory_id, record_version)
+        row = nil
+        store.open_transaction(label: "memory.index_row") do |tx|
+          row = tx.first(
+            "memory.index_row",
+            <<~SQL,
+              SELECT store_namespace, memory_id, record_version, layer, class,
+                     state, scopes_tenant, scopes_user, scopes_project,
+                     sensitivity, valid_until_ms, compatibility_graph,
+                     compatibility_behavior, statement_search, searchable,
+                     scopes_situation_type, scopes_entity_type, scopes_entity_id
+              FROM tamoz_memory_index
+              WHERE store_namespace = ? AND memory_id = ? AND record_version = ?
+            SQL
+            [store_namespace, memory_id, record_version]
+          )
+        end
+        return nil unless row
+
+        IndexRow.new(
+          store_namespace: row.fetch(0),
+          memory_id: row.fetch(1),
+          record_version: row.fetch(2),
+          layer: row.fetch(3),
+          klass: row.fetch(4),
+          state: row.fetch(5),
+          scopes_tenant: row.fetch(6),
+          scopes_user: row.fetch(7),
+          scopes_project: row.fetch(8),
+          sensitivity: row.fetch(9),
+          valid_until_ms: row.fetch(10),
+          compatibility_graph: row.fetch(11),
+          compatibility_behavior: row.fetch(12),
+          statement_search: row.fetch(13),
+          searchable: row.fetch(14) == 1,
+          scopes_situation_type: row.fetch(15),
+          scopes_entity_type: row.fetch(16),
+          scopes_entity_id: row.fetch(17)
+        )
+      end
+
+      # P11-D2 (C6): the tamoz-agent-orchestrated hard-purge. The sqlite
+      # repository — never agent code reaching into tables — physically removes
+      # the ciphertext version rows AND the index rows of one deleted memory
+      # record after its retention window expired, and emits an invariant-54
+      # shape receipt. Before the retention boundary the purge refuses with the
+      # StoreConflictError family and emits NO receipt.
+      def purge(store_namespace, layer, memory_id, now_ms: nil)
+        now_ms ||= now_ms()
+        key = "#{layer}/#{memory_id}"
+        receipt = nil
+        store.open_transaction(label: "memory.purge") do |tx|
+          tombstone = tx.first(
+            "memory.purge.tombstone",
+            <<~SQL,
+              SELECT v.created_at_ms
+              FROM tamoz_store_heads h
+              JOIN tamoz_store_versions v
+                ON v.namespace = h.namespace
+               AND v.key = h.key
+               AND v.version = h.current_version
+              LEFT JOIN tamoz_memory_index i
+                ON i.store_namespace = h.namespace
+               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
+               AND i.record_version = h.current_version
+              WHERE h.namespace = ? AND h.key = ?
+                AND (h.deleted = 1 OR i.state = 'deleted')
+            SQL
+            [store_namespace, key]
+          )
+          unless tombstone
+            raise StoreConflictError, "memory record #{store_namespace}/#{key} is not tombstoned"
+          end
+          if now_ms < tombstone.fetch(0) + retention_ms
+            raise StoreConflictError,
+                  "memory record retention window has not expired for #{store_namespace}/#{key}"
+          end
+
+          tx.execute(
+            "memory.purge.versions",
+            <<~SQL,
+              DELETE FROM tamoz_store_versions
+              WHERE namespace = ? AND key = ?
+            SQL
+            [store_namespace, key]
+          )
+          version_rows = tx.changes
+          tx.execute(
+            "memory.purge.head",
+            <<~SQL,
+              DELETE FROM tamoz_store_heads
+              WHERE namespace = ? AND key = ?
+            SQL
+            [store_namespace, key]
+          )
+          tx.execute(
+            "memory.purge.index",
+            <<~SQL,
+              DELETE FROM tamoz_memory_index
+              WHERE store_namespace = ? AND memory_id = ?
+            SQL
+            [store_namespace, memory_id]
+          )
+          index_rows = tx.changes
+          receipt = build_receipt(
+            store_namespace, memory_id, now_ms,
+            removed: {"records" => 1, "version_rows" => version_rows, "index_rows" => index_rows},
+            retained: {"protected_artifacts" => 0, "backups" => 0},
+            pending: []
+          )
+        end
+        receipt
+      end
+
+      # The batch purge pass: selects every expired memory tombstone, removes it,
+      # and returns one receipt naming removed / retained / pending. Keys still
+      # inside their retention window are named `pending`, never removed and
+      # never reported as removed.
+      def purge_expired(now_ms: now_ms())
+        expired = expired_tombstones(now_ms:)
+        still_pending = pending_tombstones(now_ms:)
+        removed = expired.map do |namespace, key, memory_id, _deleted_at|
+          purge(namespace, *key.split("/", 2), now_ms:)
+          {"namespace" => namespace, "memory_id" => memory_id, "key" => key}
+        end
+        {
+          "memory_purge_receipt" => 1,
+          "purged_at_ms" => now_ms,
+          "removed" => {"records" => removed.length, "entries" => removed},
+          "retained" => {"protected_artifacts" => 0, "backups" => 0},
+          "pending" => still_pending
+        }.freeze
+      end
+
+      private
 
       # Head-eligible rows that matched the searchable dimensions but carry
       # sensitivity `sensitive` — the hard-zero signal that the filter path
@@ -331,73 +465,54 @@ module Tamoz
         end.freeze
       end
 
-      # Reads one index row (metadata only, never materialized).
-      def index_row(store_namespace, memory_id, record_version)
-        row = nil
-        store.open_transaction(label: "memory.index_row") do |tx|
-          row = tx.first(
-            "memory.index_row",
-            <<~SQL,
-              SELECT store_namespace, memory_id, record_version, layer, class,
-                     state, scopes_tenant, scopes_user, scopes_project,
-                     sensitivity, valid_until_ms, compatibility_graph,
-                     compatibility_behavior, statement_search, searchable,
-                     scopes_situation_type, scopes_entity_type, scopes_entity_id
-              FROM tamoz_memory_index
-              WHERE store_namespace = ? AND memory_id = ? AND record_version = ?
-            SQL
-            [store_namespace, memory_id, record_version]
-          )
-        end
-        return nil unless row
+      def build_receipt(store_namespace, memory_id, now_ms, removed:, retained:, pending:)
+        {
+          "memory_purge_receipt" => 1,
+          "namespace" => store_namespace,
+          "memory_id" => memory_id,
+          "removed" => removed,
+          "retained" => retained,
+          "pending" => pending,
+          "purged_at_ms" => now_ms
+        }.freeze
+      end
 
-        IndexRow.new(
-          store_namespace: row.fetch(0),
-          memory_id: row.fetch(1),
-          record_version: row.fetch(2),
-          layer: row.fetch(3),
-          klass: row.fetch(4),
-          state: row.fetch(5),
-          scopes_tenant: row.fetch(6),
-          scopes_user: row.fetch(7),
-          scopes_project: row.fetch(8),
-          sensitivity: row.fetch(9),
-          valid_until_ms: row.fetch(10),
-          compatibility_graph: row.fetch(11),
-          compatibility_behavior: row.fetch(12),
-          statement_search: row.fetch(13),
-          searchable: row.fetch(14) == 1,
-          scopes_situation_type: row.fetch(15),
-          scopes_entity_type: row.fetch(16),
-          scopes_entity_id: row.fetch(17)
-        )
+      # The tombstone scan shared by the retention passes: heads ⋈ versions ⟕
+      # index for every memory-namespaced key whose head is store-deleted or
+      # agent-deleted. Callers own the transaction, statement label, and
+      # retention comparison.
+      def tombstone_query
+        [
+          <<~SQL,
+            SELECT h.namespace, h.key, v.created_at_ms
+            FROM tamoz_store_heads h
+            JOIN tamoz_store_versions v
+              ON v.namespace = h.namespace
+             AND v.key = h.key
+             AND v.version = h.current_version
+            LEFT JOIN tamoz_memory_index i
+              ON i.store_namespace = h.namespace
+             AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
+             AND i.record_version = h.current_version
+            WHERE h.namespace LIKE ?
+              AND (h.deleted = 1 OR i.state = 'deleted')
+            ORDER BY h.namespace, h.key
+          SQL
+          ["#{MEMORY_NAMESPACE_PREFIX}%"]
+        ]
+      end
+
+      def retention_ms
+        (store.adapter.limits.deletion_retention * 1_000).ceil
       end
 
       # Tombstoned memory keys whose retention window has expired, with their
       # tombstone times. Returns [[store_namespace, key, memory_id, deleted_at_ms], ...].
       def expired_tombstones(now_ms: now_ms())
-        retention_ms = (store.adapter.limits.deletion_retention * 1_000).ceil
         rows = nil
         store.open_transaction(label: "memory.tombstones") do |tx|
-          rows = tx.rows(
-            "memory.tombstones",
-            <<~SQL,
-              SELECT h.namespace, h.key, v.created_at_ms
-              FROM tamoz_store_heads h
-              JOIN tamoz_store_versions v
-                ON v.namespace = h.namespace
-               AND v.key = h.key
-               AND v.version = h.current_version
-              LEFT JOIN tamoz_memory_index i
-                ON i.store_namespace = h.namespace
-               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
-               AND i.record_version = h.current_version
-              WHERE h.namespace LIKE ?
-                AND (h.deleted = 1 OR i.state = 'deleted')
-              ORDER BY h.namespace, h.key
-            SQL
-            ["#{MEMORY_NAMESPACE_PREFIX}%"]
-          )
+          sql, binds = tombstone_query
+          rows = tx.rows("memory.tombstones", sql, binds)
         end
         # P11 critic defect 2: matches BOTH store-tombstoned heads (h.deleted = 1,
         # the manual Store#delete path) AND agent-deleted records (index state
@@ -413,125 +528,11 @@ module Tamoz
         end.freeze
       end
 
-      # P11-D2 (C6): the tamoz-agent-orchestrated hard-purge. The sqlite
-      # repository — never agent code reaching into tables — physically removes
-      # the ciphertext version rows AND the index rows of one deleted memory
-      # record after its retention window expired, and emits an invariant-54
-      # shape receipt. Before the retention boundary the purge refuses with the
-      # StoreConflictError family and emits NO receipt.
-      def purge(store_namespace, layer, memory_id, now_ms: nil)
-        now_ms ||= now_ms()
-        key = "#{layer}/#{memory_id}"
-        retention_ms = (store.adapter.limits.deletion_retention * 1_000).ceil
-        receipt = nil
-        store.open_transaction(label: "memory.purge") do |tx|
-          tombstone = tx.first(
-            "memory.purge.tombstone",
-            <<~SQL,
-              SELECT v.created_at_ms
-              FROM tamoz_store_heads h
-              JOIN tamoz_store_versions v
-                ON v.namespace = h.namespace
-               AND v.key = h.key
-               AND v.version = h.current_version
-              LEFT JOIN tamoz_memory_index i
-                ON i.store_namespace = h.namespace
-               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
-               AND i.record_version = h.current_version
-              WHERE h.namespace = ? AND h.key = ?
-                AND (h.deleted = 1 OR i.state = 'deleted')
-            SQL
-            [store_namespace, key]
-          )
-          unless tombstone
-            raise StoreConflictError, "memory record #{store_namespace}/#{key} is not tombstoned"
-          end
-          if now_ms < tombstone.fetch(0) + retention_ms
-            raise StoreConflictError,
-                  "memory record retention window has not expired for #{store_namespace}/#{key}"
-          end
-
-          version_rows = nil
-          tx.execute(
-            "memory.purge.versions",
-            <<~SQL,
-              DELETE FROM tamoz_store_versions
-              WHERE namespace = ? AND key = ?
-            SQL
-            [store_namespace, key]
-          )
-          version_rows = tx.changes
-          tx.execute(
-            "memory.purge.head",
-            <<~SQL,
-              DELETE FROM tamoz_store_heads
-              WHERE namespace = ? AND key = ?
-            SQL
-            [store_namespace, key]
-          )
-          index_rows = nil
-          tx.execute(
-            "memory.purge.index",
-            <<~SQL,
-              DELETE FROM tamoz_memory_index
-              WHERE store_namespace = ? AND memory_id = ?
-            SQL
-            [store_namespace, memory_id]
-          )
-          index_rows = tx.changes
-          receipt = build_receipt(
-            store_namespace, memory_id, now_ms,
-            removed: {"records" => 1, "version_rows" => version_rows, "index_rows" => index_rows},
-            retained: {"protected_artifacts" => 0, "backups" => 0},
-            pending: []
-          )
-        end
-        receipt
-      end
-
-      # The batch purge pass: selects every expired memory tombstone, removes it,
-      # and returns one receipt naming removed / retained / pending. Keys still
-      # inside their retention window are named `pending`, never removed and
-      # never reported as removed.
-      def purge_expired(now_ms: now_ms())
-        expired = expired_tombstones(now_ms:)
-        still_pending = pending_tombstones(now_ms:)
-        removed = expired.map do |namespace, key, memory_id, _deleted_at|
-          purge(namespace, *key.split("/", 2), now_ms:)
-          {"namespace" => namespace, "memory_id" => memory_id, "key" => key}
-        end
-        {
-          "memory_purge_receipt" => 1,
-          "purged_at_ms" => now_ms,
-          "removed" => {"records" => removed.length, "entries" => removed},
-          "retained" => {"protected_artifacts" => 0, "backups" => 0},
-          "pending" => still_pending
-        }.freeze
-      end
-
       def pending_tombstones(now_ms: now_ms())
-        retention_ms = (store.adapter.limits.deletion_retention * 1_000).ceil
         rows = nil
         store.open_transaction(label: "memory.pending") do |tx|
-          rows = tx.rows(
-            "memory.pending",
-            <<~SQL,
-              SELECT h.namespace, h.key, v.created_at_ms
-              FROM tamoz_store_heads h
-              JOIN tamoz_store_versions v
-                ON v.namespace = h.namespace
-               AND v.key = h.key
-               AND v.version = h.current_version
-              LEFT JOIN tamoz_memory_index i
-                ON i.store_namespace = h.namespace
-               AND i.memory_id = substr(h.key, instr(h.key, '/') + 1)
-               AND i.record_version = h.current_version
-              WHERE h.namespace LIKE ?
-                AND (h.deleted = 1 OR i.state = 'deleted')
-              ORDER BY h.namespace, h.key
-            SQL
-            ["#{MEMORY_NAMESPACE_PREFIX}%"]
-          )
+          sql, binds = tombstone_query
+          rows = tx.rows("memory.pending", sql, binds)
         end
         rows.filter_map do |row|
           next unless row.fetch(2) && now_ms < row.fetch(2) + retention_ms
@@ -542,24 +543,6 @@ module Tamoz
             "retention_expires_at_ms" => row.fetch(2) + retention_ms
           }
         end.freeze
-      end
-
-      private
-
-      def build_receipt(store_namespace, memory_id, now_ms, removed:, retained:, pending:)
-        {
-          "memory_purge_receipt" => 1,
-          "namespace" => store_namespace,
-          "memory_id" => memory_id,
-          "removed" => removed,
-          "retained" => retained,
-          "pending" => pending,
-          "purged_at_ms" => now_ms
-        }.freeze
-      end
-
-      def normalize_memory_address(index)
-        [index.store_namespace, index.key]
       end
 
       def index_row_binds(index)
@@ -601,38 +584,43 @@ module Tamoz
         unless caller.is_a?(Hash)
           raise ConfigurationError, "memory search requires a caller hash"
         end
-        tenant = text_value(caller.fetch(:tenant), "caller tenant")
-        user = text_value(caller.fetch(:user), "caller user")
-        project = text_value(caller.fetch(:project), "caller project")
+        tenant = validate_text(caller.fetch(:tenant), "caller tenant")
+        user = validate_text(caller.fetch(:user), "caller user")
+        project = validate_text(caller.fetch(:project), "caller project")
         sensitivity = caller.fetch(:sensitivity).to_s
         unless SENSITIVITY_ORDER.include?(sensitivity)
           raise ConfigurationError, "caller sensitivity must be one of #{SENSITIVITY_ORDER.join(", ")}"
         end
-        graph = text_value(caller.fetch(:compatibility_graph), "caller compatibility graph")
-        behavior = text_value(caller.fetch(:compatibility_behavior), "caller compatibility behavior")
-        # T0.3: the situation authority accepts both key conventions (symbols
-        # and strings) and requires the identity complete BY VALUE — a nil or
-        # empty entity key cannot silently widen or narrow the boundary. The
-        # values are normalized like the other caller fields (bounded, no
-        # empty strings).
+        graph = validate_text(caller.fetch(:compatibility_graph), "caller compatibility graph")
+        behavior = validate_text(caller.fetch(:compatibility_behavior), "caller compatibility behavior")
+        situation_type, entity_type, entity_id = validate_situation_identity!(caller)
+        {
+          tenant:, user:, project:, sensitivity:,
+          compatibility_graph: graph, compatibility_behavior: behavior,
+          situation_type:, entity_type:, entity_id:
+        }
+      end
+
+      # T0.3: the situation authority accepts both key conventions (symbols
+      # and strings) and requires the identity complete BY VALUE — a nil or
+      # empty entity key cannot silently widen or narrow the boundary. The
+      # values are normalized like the other caller fields (bounded, no
+      # empty strings).
+      def validate_situation_identity!(caller)
         situation_type = caller[:situation_type] || caller["situation_type"]
         entity_type = caller[:entity_type] || caller["entity_type"]
         entity_id = caller[:entity_id] || caller["entity_id"]
         if situation_type || entity_type || entity_id
-          situation_type = text_value(situation_type, "caller situation_type")
-          entity_type = text_value(entity_type, "caller entity_type")
-          entity_id = text_value(entity_id, "caller entity_id")
+          situation_type = validate_text(situation_type, "caller situation_type")
+          entity_type = validate_text(entity_type, "caller entity_type")
+          entity_id = validate_text(entity_id, "caller entity_id")
         end
         present = [situation_type, entity_type, entity_id].compact
         unless present.empty? || present.length == 3
           raise ConfigurationError,
                 "caller situation identity must be complete: situation_type, entity_type, entity_id"
         end
-        {
-          tenant:, user:, project:, sensitivity:,
-          compatibility_graph: graph, compatibility_behavior: behavior,
-          situation_type:, entity_type:, entity_id:
-        }
+        [situation_type, entity_type, entity_id]
       end
 
       # The T0.3 situation boundary as SQL: same entity type for a
@@ -658,14 +646,14 @@ module Tamoz
           raise ConfigurationError, "memory search requires a query hash"
         end
         terms = Array(query.fetch(:terms, [])).first(64).map do |term|
-          text_value(term, "search term")
+          validate_text(term, "search term")
         end.reject(&:empty?)
-        layer = query[:layer] && text_value(query[:layer], "layer filter")
-        klass = query[:class] && text_value(query[:class], "class filter")
+        layer = query[:layer] && validate_text(query[:layer], "layer filter")
+        klass = query[:class] && validate_text(query[:class], "class filter")
         [terms.freeze, layer, klass]
       end
 
-      def text_value(value, name)
+      def validate_text(value, name)
         text = SafeText.normalize(
           value,
           name:,
@@ -725,7 +713,7 @@ module Tamoz
         term.gsub(/[\\%_]/) { |char| "\\#{char}" }
       end
 
-      def normalize_limit(value)
+      def validate_limit(value)
         return value if value.is_a?(Integer) && value.between?(1, MAX_LIMIT)
 
         raise ConfigurationError, "memory search limit must be between 1 and #{MAX_LIMIT}"
