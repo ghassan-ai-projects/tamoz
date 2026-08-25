@@ -40,12 +40,12 @@ module Tamoz
       end
 
       def preview(name, arguments)
-        "Browser #{name}\narguments: #{JSON.generate(Tamoz::Core.canonical(validated_arguments(arguments)))}"
+        "Browser #{name}\narguments: #{JSON.generate(Tamoz::Core.canonical(validate_arguments(arguments)))}"
       end
 
       def execute(context, name, arguments)
         descriptor_for(name)
-        normalized = validated_arguments(arguments)
+        normalized = validate_arguments(arguments)
         require_adapter!
 
         raw = @adapter.execute(context:, capability_id: String(name), arguments: normalized)
@@ -71,10 +71,6 @@ module Tamoz
 
         validate_url!(arguments['url']) if arguments['url']
         arguments
-      end
-
-      def validated_arguments(arguments)
-        validate_arguments(arguments)
       end
 
       def adapter_status(raw)
