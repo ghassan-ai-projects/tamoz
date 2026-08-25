@@ -402,10 +402,10 @@ module Tamoz
             result = execute_turn(envelope, context, snapshot)
             finalize_stream(envelope, stream, adapter, result, snapshot)
           rescue Tamoz::Stream::StreamError => error
-            fail_stream(stream, wire_request, error, code: error.class::CATEGORY)
+            stream = fail_stream(stream, wire_request, error, code: error.class::CATEGORY)
           rescue StandardError => error
             code = error.class.const_defined?(:CATEGORY) ? error.class::CATEGORY : "internal_error"
-            fail_stream(stream, wire_request, error, code:)
+            stream = fail_stream(stream, wire_request, error, code:)
           ensure
             watcher&.kill
           end
@@ -427,6 +427,7 @@ module Tamoz
         stream ||= EpisodeStream.new(identity_for(wire_request))
         stream.diagnostic(code:, message: error.message)
         stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
+        stream
       end
 
       def admit_request(wire_request)
@@ -692,6 +693,8 @@ module Tamoz
       def emit_model_started(adapter, receipt)
         emit_model_part(
           adapter, receipt, :model_started,
+          "provider" => receipt.fetch("provider"),
+          "model_id" => receipt.fetch("model"),
           "request_sha256" => receipt.fetch("request_digest")
         )
       end
