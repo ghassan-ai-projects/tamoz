@@ -567,6 +567,126 @@ module Tamoz
           end ? PASS : FAIL
         end
 
+        # C8 ----------------------------------------------------------------
+        # Visible cancellation, scored ONLY over durable facts: the
+        # requested/observed stamps and the projection state of each target,
+        # the store's own terminal derivation (a settled request is NEVER
+        # rendered as stopped — invariant 9), the wording class of the real
+        # ref-addressed /status rendering, and the absence of cancellation
+        # facts from conversation history.
+
+        def c8(facts, conversation:)
+          checked = %w[clean_stop raced_restart].map do |name|
+            c8_run_check(name, facts.fetch(name), conversation)
+          end
+          failures = checked.flat_map { |check| check['failures'] }.uniq
+
+          {
+            'metrics' => {
+              'cancellation_honesty' =>
+                failures.empty? &&
+                checked.all? { |check| check['wording_consistent'] && check['history_clean'] } &&
+                checked.all? { |check| check['command_accepted'] } ? PASS : FAIL,
+              'restart_safety' =>
+                checked.all? { |check| check['restart_ok'] } ? PASS : FAIL,
+              'parity' => unavailable('cli_surface_executor_is_phase_b2_single_surface_fixture')
+            },
+            'hard_zero' => {
+              'false_stopped_claim' => c8_stopped_claimed_against_completion?(checked) ?
+                                         'failed' : 'passed',
+              'race_misresolved' => failures.include?('race_misresolved') ? 'failed' : 'passed',
+              'cancellation_state_lost' =>
+                (failures.include?('cancellation_state_lost') ||
+                 checked.any? { |check| !check['command_accepted'] }) ? 'failed' : 'passed'
+            },
+            'timelines' => checked.flat_map { |check| check['timelines'] },
+            'wordings' => checked.flat_map { |check| check['wordings'] },
+            'edges' => [
+              unavailable_edge('engine_observed_before_settle',
+                               'the runner consumes cancel redirects only after the thread\'s open ' \
+                               'occurrence settles, so an observed stamp that precedes settlement is ' \
+                               'not expressible through the engine offline; the clean_stop leg stamps ' \
+                               'observation through the same store method the worker calls'),
+              cli_visibility_edge
+            ]
+          }
+        end
+
+        def c8_run_check(name, run, conversation)
+          timelines = run.fetch('cancellation_timelines')
+          wordings = run.fetch('terminal_wordings')
+          pairs = c8_wording_pairs(timelines, wordings)
+          failures = c8_timeline_failures(timelines)
+          unless run['waiting_milestone_recorded'] == true || name != 'clean_stop'
+            failures << 'cancellation_state_lost'
+          end
+          {
+            'timelines' => timelines,
+            'wordings' => wordings,
+            'pairs' => pairs,
+            'wording_consistent' => pairs.length == timelines.length &&
+                                    pairs.all? { |timeline, wording| c8_wording_matches?(timeline, wording) },
+            'history_clean' => c8_history_clean?(run, conversation),
+            'restart_ok' => name != 'raced_restart' ||
+                            run.fetch('restart_boundary').values.all?(true),
+            'command_accepted' => run['cancel_command_accepted'] == true &&
+                                  (name != 'clean_stop' || run['observation_stamp_accepted'] == true),
+            'failures' => failures.uniq
+          }
+        end
+
+        # The store's terminal derivation is the race verdict: a request whose
+        # projection settled completed is completed_before_effect, everything
+        # else observed is stopped — never the reverse.
+        def c8_timeline_failures(timelines)
+          timelines.flat_map do |timeline|
+            expected = timeline['settled'] ? 'completed_before_effect' : 'stopped'
+            failures = []
+            failures << 'cancellation_state_lost' unless timeline['requested_present'] &&
+                                                         timeline['observed_present'] &&
+                                                         timeline['state'] == 'terminal'
+            failures << 'race_misresolved' unless timeline['requested_le_observed'] == true
+            failures << 'race_misresolved' unless timeline['terminal_word'] == expected
+            if timeline['settled'] && !timeline['settle_le_observed'].nil?
+              failures << 'race_misresolved' unless timeline['settle_le_observed'] == true
+            end
+            failures
+          end
+        end
+
+        def c8_wording_pairs(timelines, wordings)
+          wordings.filter_map do |wording|
+            timeline = timelines.find { |candidate| candidate['reference'] == wording['reference'] }
+            next nil unless timeline
+
+            [timeline, wording]
+          end
+        end
+
+        def c8_wording_matches?(timeline, wording)
+          expected_stopped = timeline['terminal_word'] == 'stopped'
+          wording['claims_stopped'] == expected_stopped &&
+            wording['claims_completed_before_effect'] == !expected_stopped
+        end
+
+        def c8_stopped_claimed_against_completion?(checked)
+          checked.any? do |check|
+            check['pairs'].any? do |timeline, wording|
+              timeline['settled'] &&
+                (timeline['terminal_word'] == 'stopped' || wording['claims_stopped'])
+            end
+          end
+        end
+
+        # Invariant 11 plus the C8-specific rule: no cancellation fact — the
+        # command reply, the timeline wording, the reason code — ever enters
+        # conversation history.
+        def c8_history_clean?(facts, conversation)
+          entries = facts.fetch('history').fetch(conversation, [])
+          entries.none? { |entry| entry['text'].to_s.match?(/cancel/i) } &&
+            context_inclusion(facts, conversation) == PASS
+        end
+
         # C5 controls subset that exists on BOTH surfaces: /status word agreement
         # and /cancel semantics (same durable payload contract, same terminal
         # reason). The remaining sweep commands have no operator-CLI counterpart

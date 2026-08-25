@@ -174,7 +174,7 @@ class BenchmarkCommsB0Test < Minitest::Test
     digests = 2.times.map do
       with_runner do |runner, directory|
         runner.run
-        files = %w[manifest.json C1.json C5.json C6.json C9.json]
+        files = %w[manifest.json C1.json C2.json C3.json C4.json C5.json C6.json C7.json C8.json C9.json]
         files.to_h { |name| [name, Digest::SHA256.file(File.join(directory, 'fixtures/scenarios', name)).hexdigest] }
       end
     end
@@ -183,13 +183,15 @@ class BenchmarkCommsB0Test < Minitest::Test
                  'artifact bytes (manifest + parity artifacts) must be identical across two runs'
   end
 
-  def test_all_nine_catalog_scenarios_appear_with_pending_seams_named_not_faked
+  def test_all_nine_catalog_scenarios_score_with_an_empty_pending_seam
     with_runner do |runner, directory|
       result = runner.run
       manifest = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/manifest.json')))
 
       assert_equal %w[C1 C2 C3 C4 C5 C6 C7 C8 C9], manifest.fetch('scenarios')
-      assert_equal %w[C8], manifest.fetch('pending_seam').keys.sort
+      assert_equal({}, manifest.fetch('pending_seam'),
+                   'every catalog scenario is expressible over landed seams; none may stay pending')
+      assert_empty result.manifest.fetch('pending_seam').keys
       assert_equal(
         { 'C1' => %w[cli telegram], 'C2' => %w[telegram], 'C3' => %w[telegram], 'C4' => %w[telegram],
           'C5' => %w[cli telegram], 'C6' => %w[cli telegram], 'C7' => %w[telegram],
@@ -199,8 +201,7 @@ class BenchmarkCommsB0Test < Minitest::Test
       assert_equal 'fixture', manifest.fetch('run_kind')
       assert manifest.fetch('fixture')
       assert_includes manifest.fetch('transport'), 'no_egress'
-      scored = %w[C1 C2 C3 C4 C5 C6 C7 C9]
-      scored.each do |scenario|
+      %w[C1 C2 C3 C4 C5 C6 C7 C8 C9].each do |scenario|
         artifact = JSON.parse(
           File.read(File.join(directory, "fixtures/scenarios/#{scenario}.json"))
         )
@@ -210,18 +211,59 @@ class BenchmarkCommsB0Test < Minitest::Test
         assert_equal Runner.const_get(:PROVIDER), artifact.fetch('provider')
         refute_nil artifact.fetch('seam_revisions')
         assert_equal manifest.dig('surfaces_driven', scenario), artifact.fetch('surfaces_driven')
+        assert_equal 'ready', artifact.dig('result', 'status'), "#{scenario}: #{artifact.dig('result', 'reason')}"
       end
-      pending = JSON.parse(
-        File.read(File.join(directory, 'fixtures/scenarios/C8.json'))
-      )
-
-      assert_equal 'pending_seam', pending.dig('result', 'status')
-      assert_instance_of String, pending.dig('result', 'reason')
       c6 = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/C6.json')))
 
-      assert_equal 'ready', c6.dig('result', 'status'), c6.dig('result', 'reason')
       assert_equal 'scored', c6.dig('result', 'parity', 'status')
       assert_equal result.manifest.fetch('results'), manifest.fetch('results')
+    end
+  end
+
+  def test_c8_visible_cancellation_scores_end_to_end_over_durable_facts
+    with_runner(scenarios: ['C8']) do |runner, directory|
+      records = scores(runner)
+      record = records.fetch('C8')
+
+      assert_equal 'ready', record.fetch('status'), record['reason']
+      assert_equal 1, record.dig('metrics', 'cancellation_honesty')
+      assert_equal 1, record.dig('metrics', 'restart_safety')
+      assert_equal 'unavailable', record.dig('metrics', 'parity', 'status')
+      %w[false_stopped_claim race_misresolved cancellation_state_lost].each do |hard_zero|
+        assert_equal 'passed', record.dig('hard_zero', hard_zero)
+      end
+
+      artifact = JSON.parse(File.read(File.join(directory, 'fixtures/scenarios/C8.json')))
+      timelines = artifact.fetch('result').fetch('timelines')
+      clean = timelines.find { |timeline| timeline.fetch('writer') == 'store_seam' }
+      raced = timelines.find { |timeline| timeline.fetch('writer') == 'engine' }
+
+      # Clean stop: requested -> observed -> terminal stopped on a turn that
+      # never settled.
+      assert_equal 'terminal', clean.fetch('state')
+      assert_equal 'stopped', clean.fetch('terminal_word')
+      assert_equal false, clean.fetch('settled')
+      assert clean.fetch('requested_present')
+      assert clean.fetch('observed_present')
+      assert clean.fetch('requested_le_observed')
+
+      # Raced restart: the settle fact won, so the timeline and the real
+      # /status rendering both say completed_before_effect — never stopped.
+      assert_equal 'completed_before_effect', raced.fetch('terminal_word')
+      assert raced.fetch('settled')
+      assert raced.fetch('settle_le_observed')
+
+      wordings = artifact.fetch('result').fetch('wordings')
+      stopped_wording = wordings.find { |wording| wording.fetch('reference') == clean.fetch('reference') }
+      completed_wording = wordings.find { |wording| wording.fetch('reference') == raced.fetch('reference') }
+
+      assert_equal true, stopped_wording.fetch('claims_stopped')
+      assert_equal false, stopped_wording.fetch('claims_completed_before_effect')
+      assert_equal true, completed_wording.fetch('claims_completed_before_effect')
+      assert_equal false, completed_wording.fetch('claims_stopped')
+
+      edges = artifact.fetch('result').fetch('edges')
+      assert edges.any? { |edge| edge['fact'] == 'engine_observed_before_settle' }
     end
   end
 

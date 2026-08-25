@@ -34,9 +34,10 @@ module Tamoz
         MANIFEST_FILENAME = 'manifest.json'
         MAX_ARTIFACT_BYTES = 262_144
 
-        PENDING_SEAM = {
-          'C8' => 'visible cancellation (requested -> observed -> terminal) is Phase 2 work item 4; not landed at HEAD'
-        }.freeze
+        # Seams whose scenario cannot be scored at HEAD land here as an
+        # honest gap record; an empty map means every catalog scenario is
+        # expressible over the seams this runner drives.
+        PENDING_SEAM = {}.freeze
 
         # Surfaces each scenario's driver exercises. Scenarios without a CLI
         # leg stay telegram-only; their parity metric stays typed-unavailable.
@@ -164,6 +165,7 @@ module Tamoz
           when 'C5' then OpenclawCommsOracles.c5(facts, conversation: OpenclawCommsFixture::CONVERSATION_A)
           when 'C6' then OpenclawCommsOracles.c6(facts, conversation: OpenclawCommsFixture::CONVERSATION_A)
           when 'C7' then OpenclawCommsOracles.c7(facts, conversation: OpenclawCommsFixture::CONVERSATION_A)
+          when 'C8' then OpenclawCommsOracles.c8(facts, conversation: OpenclawCommsFixture::CONVERSATION_A)
           when 'C9' then OpenclawCommsOracles.c9(
             facts, conversations: [OpenclawCommsFixture::CONVERSATION_A, OpenclawCommsFixture::CONVERSATION_B]
           )
@@ -811,6 +813,205 @@ module Tamoz
               'injection_text' => content_bait
             )
           end
+        end
+
+        # C8 drives visible cancellation across two sub-runs over the Phase 2c
+        # seam (MIGRATION_21 stamps, gateway /cancel same-txn stamping, worker
+        # observation at consume). clean_stop: a turn parked on an approval
+        # ask (the C7 waiting machinery), /cancel issued through the REAL
+        # gateway command path mid-flight, then the observation point stamped
+        # through the store method the turn runner itself calls — the engine
+        # consumes redirects only after the open occurrence settles, so
+        # observed-before-settle is not reachable offline (typed edge in the
+        # oracle). raced_restart: /cancel lands while the turn is crashed
+        # mid-flight, a fresh worker recovers it to completion BEFORE the
+        # redirect is consumed, and the settle fact therefore says completed.
+        def drive_c8
+          {
+            'clean_stop' => drive_c8_clean_stop,
+            'raced_restart' => drive_c8_raced_restart
+          }
+        end
+
+        C8_CANCELLED_REASON = 'cancelled_by_user'
+        C8_CANCEL_REPLY = 'Cancellation requested.'
+
+        def c8_waiting_factory
+          read_step = { 'id' => 'look', 'purpose' => 'read the note', 'tool' => 'read_file',
+                        'arguments' => { 'path' => 'note.txt' },
+                        'verification' => 'the output is present' }
+          edit_step = { 'id' => 'edit', 'purpose' => 'apply the exact replacement', 'tool' => 'apply_patch',
+                        'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
+                        'verification' => 'the receipt reports the new digest' }
+          OpenclawCommsFixture.model_factory(
+            plan: [
+              { 'goal' => 'inspect then fix note.txt', 'done_when' => ['note.txt reads fixed'],
+                'steps' => [read_step] },
+              { 'goal' => 'fix note.txt', 'done_when' => ['note.txt reads fixed'],
+                'steps' => [edit_step] }
+            ],
+            review: [OpenclawCommsFixture::ACCEPTED_REVIEW,
+                     OpenclawCommsFixture::ACCEPTED_REVIEW],
+            verify: [{ 'answer' => 'fixed', 'satisfied' => true, 'evidence' => ['note.txt'] }]
+          )
+        end
+
+        def drive_c8_clean_stop
+          with_fixture(model_factory: c8_waiting_factory,
+                       approval_ask: { timeout_s: 86_400, on_timeout: :park }) do |fixture|
+            conversation = OpenclawCommsFixture::CONVERSATION_A
+            thread = fixture.thread_for(conversation)
+            fixture.bind_thread(conversation)
+
+            fixture.submit([raw_update(871, 'Fix note.txt to say fixed.')])
+            fixture.work
+            target = fixture.request_ids_for(conversation).last
+            raise 'the approval-bearing turn was not admitted durably' unless target
+
+            cancel_accepted = control_reply_text(fixture, 872, '/cancel') == C8_CANCEL_REPLY
+            observed = fixture.store.mark_cancellation_observed(thread_id: thread, now: Time.now.utc)
+            reference = Tamoz::Comms::Lifecycle::RequestRef.for(target)
+            snapshot = fixture.snapshot(conversations: [conversation])
+            snapshot.merge(
+              'driven_update_ids' => [871, 872],
+              'waiting_milestone_recorded' => milestone_phase_recorded?(snapshot, 'waiting'),
+              'cancel_command_accepted' => cancel_accepted,
+              'observation_stamp_accepted' => observed == :observed,
+              'cancellation_timelines' =>
+                [cancellation_timeline(fixture, conversation, target, writer: 'store_seam')],
+              'terminal_wordings' => [terminal_wording(fixture, 875, reference)]
+            )
+          end
+        end
+
+        def drive_c8_raced_restart
+          factory = OpenclawCommsFixture.crashing_factory(
+            after: :plan,
+            plan: OpenclawCommsFixture::PLAN_STEPS * 2,
+            review: [OpenclawCommsFixture::ACCEPTED_REVIEW],
+            verify: OpenclawCommsFixture::VERIFY_OK
+          )
+          with_fixture(model_factory: factory) do |fixture|
+            conversation = OpenclawCommsFixture::CONVERSATION_A
+            fixture.submit([raw_update(881, 'Summarize both notes.')])
+            begin
+              fixture.work
+            rescue OpenclawCommsFixture::Killed
+              nil
+            end
+            target = fixture.request_ids_for(conversation).last
+            raise 'the crashed turn was not admitted durably' unless target
+
+            cancel_accepted = control_reply_text(fixture, 882, '/cancel') == C8_CANCEL_REPLY
+            requested_before = cancellation_stamp(fixture, target)
+            6.times do
+              break if cancelled_thread?(fixture, conversation)
+
+              fixture.fresh_worker.poll_once
+            end
+            unless cancelled_thread?(fixture, conversation)
+              raise 'the cancel redirect was never consumed after the restart boundary'
+            end
+
+            fixture.drain
+            timeline = cancellation_timeline(
+              fixture, conversation, target, writer: 'engine',
+                                              settle_at_ms: first_terminal_settle_ms(fixture)
+            )
+            reference = Tamoz::Comms::Lifecycle::RequestRef.for(target)
+            snapshot = fixture.snapshot(conversations: [conversation])
+            snapshot.merge(
+              'driven_update_ids' => [881, 882],
+              'cancel_command_accepted' => cancel_accepted,
+              'restart_boundary' => {
+                'requested_stamp_survived_restart' =>
+                  requested_before['requested_at_ms'] == cancellation_stamp(fixture, target)['requested_at_ms'] &&
+                  !requested_before['requested_at_ms'].nil?,
+                'one_terminal_send_per_request' => terminal_send_count(fixture) == 2,
+                'unique_effect_keys' => unique_effect_keys?(fixture)
+              },
+              'cancellation_timelines' => [timeline],
+              'terminal_wordings' => [terminal_wording(fixture, 885, reference)]
+            )
+          end
+        end
+
+        # One request's durable cancellation facts: the stamps read from the
+        # request rows, the store's own terminal derivation, and — when the
+        # leg settled — the durable instant of its first terminal delivery
+        # so the oracle can order settle against observation. Only derived
+        # booleans cross into the artifact; raw milliseconds never do.
+        def cancellation_timeline(fixture, conversation, request_id, writer:, settle_at_ms: nil)
+          reference = Tamoz::Comms::Lifecycle::RequestRef.for(request_id)
+          resolved = fixture.request_status(conversation, reference)
+          document = resolved.is_a?(Hash) ? resolved.fetch('cancellation', {}) : {}
+          stamps = cancellation_stamp(fixture, request_id)
+          requested = stamps['requested_at_ms']
+          observed = stamps['observed_at_ms']
+          settled = stamps['projection_state'] == 'completed'
+          {
+            'request_id' => request_id,
+            'reference' => reference,
+            'writer' => writer,
+            'settled' => settled,
+            'requested_present' => !requested.nil?,
+            'observed_present' => !observed.nil?,
+            'requested_le_observed' => requested && observed ? requested <= observed : false,
+            'settle_le_observed' =>
+              settled && observed && settle_at_ms ? settle_at_ms <= observed : nil,
+            'state' => document['state'],
+            'terminal_word' => document['terminal']
+          }
+        end
+
+        def cancellation_stamp(fixture, request_id)
+          fixture.cancellation_stamp_rows.find { |row| row.fetch('request_id') == request_id } || {}
+        end
+
+        # The wording class of the REAL ref-addressed /status rendering,
+        # reduced to booleans so no wall-clock age phrase enters the artifact.
+        def terminal_wording(fixture, update_id, reference)
+          text = control_reply_text(fixture, update_id, "/status #{reference}")
+          {
+            'reference' => reference,
+            'claims_stopped' => text.include?('stopped'),
+            'claims_completed_before_effect' =>
+              text.include?('completed before the cancellation took effect')
+          }
+        end
+
+        def control_reply_text(fixture, update_id, text)
+          before = fixture.outbox.map { |row| row.fetch('delivery_id') }
+          fixture.submit([raw_update(update_id, text)])
+          reply = fixture.outbox.reject { |row| before.include?(row.fetch('delivery_id')) }
+                                .find { |row| row['kind'] == 'control' }
+          reply ? reply.fetch('text').to_s : ''
+        end
+
+        def cancelled_thread?(fixture, conversation)
+          fixture.view(fixture.thread_for(conversation))&.terminal&.dig('reason') ==
+            C8_CANCELLED_REASON
+        end
+
+        def milestone_phase_recorded?(facts, phase)
+          OpenclawCommsOracles.milestone_rows(facts)
+                              .any? { |row| row.dig('milestone_facts', 'phase') == phase }
+        end
+
+        def first_terminal_settle_ms(fixture)
+          row = fixture.outbox.select { |candidate|
+            OpenclawCommsOracles::TERMINAL_KINDS.include?(candidate['kind'])
+          }.min_by { |candidate| candidate.fetch('created_at_ms') }
+          row && row.fetch('created_at_ms')
+        end
+
+        def terminal_send_count(fixture)
+          fixture.transport.sends.count { |send| send[:kind] == 'answer' }
+        end
+
+        def unique_effect_keys?(fixture)
+          keys = fixture.effect_census.map { |row| row[:effect_key] }
+          keys.uniq == keys
         end
 
         def drive_c9

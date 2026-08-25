@@ -343,6 +343,18 @@ module Tamoz
           ).map { |row| row.fetch('request_id') }
         end
 
+        # The durable cancellation-timeline inputs of every comms request:
+        # the requested/observed stamps and the projection state whose
+        # `completed` value decides whether a raced completion won the race.
+        def cancellation_stamp_rows
+          read_rows(
+            %w[request_id projection_state requested_at_ms observed_at_ms],
+            'SELECT request_id, projection_state, cancellation_requested_at_ms,
+                    cancellation_observed_at_ms
+             FROM tamoz_comms_requests ORDER BY created_at_ms ASC, request_id ASC'
+          )
+        end
+
         def history(conversation_id)
           @store.conversation_history(surface_id: SURFACE_ID, conversation_id: conversation_id)
         end
