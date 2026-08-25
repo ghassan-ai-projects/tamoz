@@ -77,16 +77,16 @@ module Tamoz
       end
 
       def open_writer(thread, namespace, owner_id: SecureRandom.uuid, ttl: nil, &)
-        actual_ttl = ttl || if compiled.checkpointer.respond_to?(:writer_ttl)
-                              compiled.checkpointer.writer_ttl
-                            else
-                              DEFAULT_WRITER_TTL
-                            end
+        resolved_ttl = ttl || if compiled.checkpointer.respond_to?(:writer_ttl)
+                                compiled.checkpointer.writer_ttl
+                              else
+                                DEFAULT_WRITER_TTL
+                              end
         compiled.checkpointer.open_writer(
           thread_id: thread,
           namespace:,
           owner_id:,
-          ttl: actual_ttl,
+          ttl: resolved_ttl,
           &
         )
       end
