@@ -84,11 +84,12 @@ module Tamoz
         def call(descriptor, arguments, snapshot:, supervisor:, client_factory: nil, headless: false, url_policy: nil)
           validate_descriptor!(descriptor)
           arguments = validate_arguments!(descriptor, arguments)
-          verify_pinned_digest!(descriptor, snapshot)
-          ensure_available!(descriptor, supervisor)
-
-          client = build_client(supervisor, client_factory)
-          ensure_connected!(descriptor, client, supervisor)
+          client = open_pinned_channel(
+            descriptor,
+            snapshot: snapshot,
+            supervisor: supervisor,
+            client_factory: client_factory
+          )
           effect_key = effect_key(descriptor, arguments)
 
           round_trip(
@@ -106,11 +107,12 @@ module Tamoz
         # the server asks for more input.
         def reissue(descriptor, arguments, snapshot:, supervisor:, interrupt:, answers:, client_factory: nil, headless: false, url_policy: nil)
           validate_descriptor!(descriptor)
-          verify_pinned_digest!(descriptor, snapshot)
-          ensure_available!(descriptor, supervisor)
-
-          client = build_client(supervisor, client_factory)
-          ensure_connected!(descriptor, client, supervisor)
+          client = open_pinned_channel(
+            descriptor,
+            snapshot: snapshot,
+            supervisor: supervisor,
+            client_factory: client_factory
+          )
           merge = Elicitation.answer(interrupt, answers)
           effect_key = effect_key(descriptor, arguments)
 
@@ -285,6 +287,15 @@ module Tamoz
 
         # --- supervision gate -------------------------------------------------
 
+        def open_pinned_channel(descriptor, snapshot:, supervisor:, client_factory:)
+          verify_pinned_digest!(descriptor, snapshot)
+          ensure_available!(descriptor, supervisor)
+
+          client = build_client(supervisor, client_factory)
+          ensure_connected!(descriptor, client, supervisor)
+          client
+        end
+
         def ensure_available!(descriptor, supervisor)
           case supervisor.state
           when :open
@@ -350,13 +361,36 @@ module Tamoz
         # --- the wire round-trip ----------------------------------------------
 
         def round_trip(descriptor:, arguments:, client:, supervisor:, effect_key:, headless:, url_policy:, input:)
+          begin
+            response = transport_round_trip(
+              descriptor: descriptor, arguments: arguments, client: client,
+              supervisor: supervisor, input: input
+            )
+          rescue MCP::Client::ServerError => error
+            supervisor.record_success
+            raise remote_tool_error(descriptor, error.code)
+          rescue MCP::Client::ValidationError
+            supervisor.record_failure(kind: :protocol)
+            raise malformed_response_error(descriptor)
+          rescue MCP::Client::InputRequiredError => error
+            supervisor.record_success
+            return interrupt_or_deny(
+              descriptor, error,
+              effect_key: effect_key, headless: headless, url_policy: url_policy
+            )
+          end
+
+          succeeded_outcome(response, descriptor: descriptor, supervisor: supervisor, effect_key: effect_key)
+        end
+
+        def transport_round_trip(descriptor:, arguments:, client:, supervisor:, input:)
           max_attempts = 1 + (descriptor.read_only? ? supervisor.retry_budget : 0)
           attempts = 0
           begin
             response = call_with_deadline(client, descriptor, arguments, supervisor, input)
           rescue Timeout::Error, MCP::Client::RequestHandlerError => error
             attempts += 1
-            sent = transport_failure(descriptor, supervisor, error)
+            sent = record_transport_failure(descriptor, supervisor, error)
             # Read-only calls may retry through the supervisor's restart budget;
             # corruption is terminal and never retried. The restart spawns a
             # fresh process, so the transport must be reconnected before retry.
@@ -366,23 +400,8 @@ module Tamoz
               retry
             end
             raise_classified_transport(descriptor, supervisor, error, sent: sent)
-          rescue MCP::Client::ServerError => error
-            supervisor.record_success
-            raise remote_tool_error(descriptor, error.code)
-          rescue MCP::Client::ValidationError
-            supervisor.record_failure(kind: :protocol)
-            raise ToolPolicyError,
-                  "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned a " \
-                  "malformed response for #{descriptor.id}"
-          rescue MCP::Client::InputRequiredError => error
-            supervisor.record_success
-            return interrupt_or_deny(
-              descriptor, error,
-              effect_key: effect_key, headless: headless, url_policy: url_policy
-            )
           end
-
-          classify_response(response, descriptor: descriptor, supervisor: supervisor, effect_key: effect_key)
+          response
         end
 
         def retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
@@ -418,7 +437,7 @@ module Tamoz
         # non-idempotent); `false` ⇒ provably no effect. The typed context is
         # recorded with the failure so a caller-initiated reset carries a
         # meaningful conditions digest (DR-2).
-        def transport_failure(descriptor, supervisor, error)
+        def record_transport_failure(descriptor, supervisor, error)
           sent = supervisor.request_sent?
           kind = if error.is_a?(OutputLimitError)
                    :output_limit
@@ -461,6 +480,13 @@ module Tamoz
             "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
             "malformed frames for #{descriptor.id}; the protocol contract was broken",
             **stderr_metadata(supervisor)
+          )
+        end
+
+        def malformed_response_error(descriptor)
+          ToolPolicyError.new(
+            "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned a " \
+            "malformed response for #{descriptor.id}"
           )
         end
 
@@ -539,7 +565,7 @@ module Tamoz
 
         # --- result shape validation (protocol contract) ----------------------
 
-        def classify_response(response, descriptor:, supervisor:, effect_key:)
+        def succeeded_outcome(response, descriptor:, supervisor:, effect_key:)
           result = validate_result_shape!(response, descriptor)
           if result["isError"] == true
             supervisor.record_success
