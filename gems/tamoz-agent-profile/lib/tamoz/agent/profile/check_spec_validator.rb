@@ -134,7 +134,7 @@ module Tamoz
           return unless ARGV0_DENYLIST.include?(basename)
 
           raise ValidationError,
-                "#{named} is a shell or " \
+                "#{prefix} is a shell or " \
                 'interpreter wrapper; a profile check names a program, not a command string'
         end
 
