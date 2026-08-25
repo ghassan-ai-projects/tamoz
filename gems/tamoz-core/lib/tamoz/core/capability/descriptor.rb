@@ -116,8 +116,7 @@ module Tamoz
         private
 
         def compute_digest(fields)
-          definition = fields.reject { |key, _value| key == :definition_digest }
-          Tamoz::Core.digest(DIGEST_DOMAIN, definition)
+          Tamoz::Core.digest(DIGEST_DOMAIN, fields)
         end
 
         def validate!(**fields)
