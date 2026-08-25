@@ -92,10 +92,7 @@ module Tamoz
       private
 
       def validate_contract!(request)
-        unless request.protocol_version == PROTOCOL_VERSION
-          raise GRPC::FailedPrecondition,
-                "unsupported protocol version #{request.protocol_version.inspect}"
-        end
+        validate_protocol_version!(request)
         unless request.contract_version == CONTRACT_VERSION
           raise GRPC::FailedPrecondition,
                 "unsupported contract version #{request.contract_version.inspect}"
@@ -114,15 +111,21 @@ module Tamoz
         true
       end
 
+      def validate_protocol_version!(request)
+        unless request.protocol_version == PROTOCOL_VERSION
+          raise GRPC::FailedPrecondition,
+                "unsupported protocol version #{request.protocol_version.inspect}"
+        end
+
+        true
+      end
+
       # T1.3'/T1.2 parity with the Go validateRequest: the RPC that spends
       # model budget is validated at the worker boundary, never only in the
       # runner. (non_interactive is handshake-only — the request itself has no
       # such field.)
       def validate_request!(request)
-        unless request.protocol_version == PROTOCOL_VERSION
-          raise GRPC::FailedPrecondition,
-                "unsupported protocol version #{request.protocol_version.inspect}"
-        end
+        validate_protocol_version!(request)
         if request.episode_id.empty? || request.attempt_id.empty?
           raise GRPC::InvalidArgument,
                 "episode_id and attempt_id are required"
@@ -158,8 +161,8 @@ module Tamoz
 
       # The worker owns the stream contract (Go streamValidator parity): the
       # runner's events are validated for exact sequence, one terminal, no
-      # event after the terminal, and the event-size bound — and the terminal
-      # is forced when the runner forgets it.
+      # event after the terminal, and the event-size bound — a missing
+      # terminal is a typed failure, not a synthesized event.
       def validate_stream(enumerator)
         Enumerator.new do |yielder|
           state = { expected_sequence: 1, terminal_seen: false }
@@ -167,7 +170,7 @@ module Tamoz
             validate_stream_event(event, state)
             yielder << event
           end
-          ensure_terminal(state)
+          assert_terminal!(state)
         end
       end
 
@@ -186,7 +189,7 @@ module Tamoz
         state[:terminal_seen] = true if event.terminal != nil
       end
 
-      def ensure_terminal(state)
+      def assert_terminal!(state)
         return if state[:terminal_seen]
 
         raise GRPC::Internal, "episode stream ended without a terminal"
