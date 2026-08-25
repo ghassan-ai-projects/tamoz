@@ -3,11 +3,11 @@
 module Tamoz
   module Agent
     module Memory
-      # P11 §2 package boundary: `tamoz-agent` owns the memory surface
+      # P11 §2 package boundary: `tamoz-agent-memory` owns the memory surface
       # (canonical record, admission, retrieval, consolidation, promotion,
       # correction/deletion protocols) and depends on the structural
       # `Tamoz::SQLite::MemoryStore` contract. All P11 code lands under
-      # `gems/tamoz-agent/lib/tamoz/agent/memory/`.
+      # `gems/tamoz-agent-memory/lib/tamoz/agent/memory/`.
       module Surface
         module_function
 
