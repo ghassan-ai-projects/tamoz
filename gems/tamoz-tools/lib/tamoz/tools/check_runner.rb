@@ -15,7 +15,7 @@ module Tamoz
                      DEEPSEEK_API_KEY GEMINI_API_KEY MISTRAL_API_KEY OLLAMA_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY PERPLEXITY_API_KEY XAI_API_KEY].freeze
 
       def self.credential_free_env(env = ENV)
-        env.keys.each_with_object({}) { |name, delta| delta[name] = nil if credential_env?(name) }
+        env.keys.each_with_object({}) { |name, redactions| redactions[name] = nil if credential_env?(name) }
       end
 
       def self.credential_env?(name)
@@ -38,14 +38,7 @@ module Tamoz
         name = arguments.fetch('name')
         argv = toolbox.checks.fetch(name)
         stdout_text, stderr_text, status, timed_out = execute(argv)
-        outcome = if timed_out
-                    'timed_out'
-                  elsif status.signaled?
-                    "signal_#{status.termsig}"
-                  else
-                    "exit_#{status.exitstatus}"
-                  end
-        CheckReceipt.new(name:, outcome:, stdout: stdout_text, stderr: stderr_text)
+        CheckReceipt.new(name:, outcome: outcome_label(status, timed_out), stdout: stdout_text, stderr: stderr_text)
       rescue SystemCallError => e
         raise ToolError, "check #{name.inspect} could not start: #{e.class}"
       end
@@ -53,6 +46,13 @@ module Tamoz
       private
 
       attr_reader :toolbox
+
+      def outcome_label(status, timed_out)
+        return 'timed_out' if timed_out
+        return "signal_#{status.termsig}" if status.signaled?
+
+        "exit_#{status.exitstatus}"
+      end
 
       def execute(argv)
         stdout_text = stderr_text = status = nil
