@@ -94,8 +94,7 @@ module Tamoz
       # (nil for DIAGNOSE; a typed refusal for a RECONSIDER without the prior
       # decision).
       def parsed_reconsideration
-        return nil unless KIND_NAMES.key?(@wire.kind)
-        return nil if kind != :reconsider
+        return nil unless reconsider?
 
         Reconsideration.parse(@wire.reconsideration).to_h
       end
@@ -400,12 +399,9 @@ module Tamoz
             context = build_context(envelope, wire_request, snapshot, adapter)
             watcher = watch_cancellation(call, context)
             result = execute_turn(envelope, context, snapshot)
-            finalize_stream(envelope, stream, adapter, result, snapshot)
-          rescue Tamoz::Stream::StreamError => error
-            stream = fail_stream(stream, wire_request, error, code: error.class::CATEGORY)
+            finalize_stream(envelope:, stream:, adapter:, result:, snapshot:)
           rescue StandardError => error
-            code = error.class.const_defined?(:CATEGORY) ? error.class::CATEGORY : "internal_error"
-            stream = fail_stream(stream, wire_request, error, code:)
+            stream = fail_stream(stream, wire_request, error, code: wire_code_for(error))
           ensure
             watcher&.kill
           end
@@ -428,6 +424,14 @@ module Tamoz
         stream.diagnostic(code:, message: error.message)
         stream.terminal(:TERMINAL_STATUS_FAILED, reason_code: code)
         stream
+      end
+
+      # Every StreamError subclass defines CATEGORY; anything else is
+      # unclassified and reports internal_error.
+      def wire_code_for(error)
+        return error.class::CATEGORY if error.class.const_defined?(:CATEGORY)
+
+        "internal_error"
       end
 
       def admit_request(wire_request)
@@ -473,7 +477,7 @@ module Tamoz
       def build_context(envelope, wire_request, snapshot, adapter)
         Tamoz::Context.new(
           run_id: envelope.request_id,
-          execution_id: "episode.#{envelope.episode_id}.#{envelope.attempt_id}.#{envelope.fence}",
+          execution_id: envelope.request_id,
           request_id: envelope.request_id,
           interrupt_mode: :non_interactive,
           emitter: adapter,
@@ -501,25 +505,35 @@ module Tamoz
         )
       end
 
-      def finalize_stream(envelope, stream, adapter, result, snapshot)
+      def finalize_stream(envelope:, stream:, adapter:, result:, snapshot:)
         status = adapter.terminal_status(result, adapter.last_diagnostic_code)
+        produced = status == :TERMINAL_STATUS_PRODUCED
         terminal_state = load_terminal_state(envelope, result)
         manifest = nil
         if result.checkpoint_id
-          manifest = build_artifact_manifest(envelope, terminal_state)
-          retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
-          emit_model_events(adapter, terminal_state, envelope)
-          emit_budget_update(stream, adapter, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
+          manifest = emit_terminal_outputs(envelope:, stream:, adapter:, terminal_state:, status:)
         end
-        if status == :TERMINAL_STATUS_PRODUCED
-          decision, digest = translate_decision(stream, envelope, terminal_state)
-          open_verifications(envelope, snapshot, decision, digest)
-        end
+        record_produced_decision(envelope:, stream:, snapshot:, terminal_state:) if produced
         manifest ||= build_artifact_manifest(envelope, terminal_state)
         stream.terminal(
           status, reason_code: reason_code_for(result),
           artifact_manifest: manifest
         )
+      end
+
+      # Checkpointed terminals only — a FAILED-after-call run still witnesses
+      # its receipts (B4); this is never produced-only.
+      def emit_terminal_outputs(envelope:, stream:, adapter:, terminal_state:, status:)
+        manifest = build_artifact_manifest(envelope, terminal_state)
+        retain_manifest_artifacts(envelope, terminal_state) if @artifact_store
+        emit_model_events(adapter, terminal_state, envelope)
+        emit_budget_update(stream, adapter, terminal_state) if status == :TERMINAL_STATUS_PRODUCED
+        manifest
+      end
+
+      def record_produced_decision(envelope:, stream:, snapshot:, terminal_state:)
+        decision, digest = translate_decision(stream, envelope, terminal_state)
+        open_verifications(envelope, snapshot, decision, digest)
       end
 
       def load_terminal_state(envelope, result)
@@ -587,13 +601,13 @@ module Tamoz
         return unless @verification_store && decision
 
         entity = snapshot.fetch("entity")
-        episode_content = episode_content_for(envelope, snapshot, entity, decision, digest)
+        episode_content = episode_content_for(envelope:, snapshot:, entity:, decision:, digest:)
         decision.fetch("intents", []).each do |intent|
-          open_verification_for_intent(envelope, intent, episode_content, digest)
+          open_verification_for_intent(envelope:, intent:, episode_content:, digest:)
         end
       end
 
-      def episode_content_for(envelope, snapshot, entity, decision, digest)
+      def episode_content_for(envelope:, snapshot:, entity:, decision:, digest:)
         {
           session_id: envelope.episode_id,
           episode_id: envelope.episode_id,
@@ -616,7 +630,7 @@ module Tamoz
         }
       end
 
-      def open_verification_for_intent(envelope, intent, episode_content, digest)
+      def open_verification_for_intent(envelope:, intent:, episode_content:, digest:)
         # A watch condition (R0) has no command and no outcome to verify —
         # verification rows open only for consequential intents.
         return if intent.fetch("risk_class", "R0").to_s.upcase == "R0"
@@ -651,7 +665,7 @@ module Tamoz
           receipts.each do |receipt|
             record = writer.effects.fetch(receipt.fetch("effect_key"))
             verify_receipt_against_journal!(receipt, record)
-            ensure_genuine_provider!(receipt)
+            enforce_genuine_provider!(receipt)
             emit_model_started(adapter, receipt)
             emit_model_completed(adapter, receipt)
           end
@@ -669,7 +683,7 @@ module Tamoz
         end
       end
 
-      def ensure_genuine_provider!(receipt)
+      def enforce_genuine_provider!(receipt)
         provider = receipt.fetch("provider", "").to_s
         # Audit F3 (B8's stated proof, literal): a receipt carrying a
         # FORGED provider marker invalidates the stream artifact even with
