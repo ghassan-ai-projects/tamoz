@@ -74,17 +74,20 @@ module Tamoz
       def lexical_path(raw_path)
         text = String(raw_path)
         reject_absolute!(text)
-        lexical = root.join(text).cleanpath
-        reject_lexical_escape!(lexical)
-        lexical
+        workspace_path(text)
       end
 
       def create_candidate(raw_path)
         text = String(raw_path)
         reject_file_path_shape!(text)
-        lexical = root.join(text).cleanpath
+        lexical = workspace_path(text)
         raise ToolArgumentError, 'path must name a file' if lexical == root
 
+        lexical
+      end
+
+      def workspace_path(text)
+        lexical = root.join(text).cleanpath
         reject_lexical_escape!(lexical)
         lexical
       end
@@ -105,12 +108,6 @@ module Tamoz
         return if path == root || path.to_s.start_with?(workspace_prefix)
 
         raise ToolPolicyError, 'path escapes the workspace root'
-      end
-
-      def reject_symlink!(lexical, real)
-        return if lexical.to_s == real.to_s
-
-        raise ToolPolicyError, 'patch path must not contain symlinks'
       end
 
       def validate_type!(path, type)
