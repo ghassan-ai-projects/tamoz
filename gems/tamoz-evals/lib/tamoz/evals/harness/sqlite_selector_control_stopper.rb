@@ -80,9 +80,9 @@ module Tamoz
             write_control!
             @state = :stopped
             Process.kill("STOP", Process.pid)
-            @state = :failed
-            raise ExecutionError,
-                  "selector child resumed after SIGSTOP without parent SIGKILL"
+            fail_control!(
+              "selector child resumed after SIGSTOP without parent SIGKILL"
+            )
           rescue ExecutionError
             @state = :failed unless @state == :stopped
             raise
@@ -99,8 +99,7 @@ module Tamoz
               raise ExecutionError, "selector stopper cannot finish from #{@state}"
             end
 
-            @state = :failed
-            raise ExecutionError, "SQLite selector was not reached"
+            fail_control!("SQLite selector was not reached")
           end
 
           private
