@@ -33,7 +33,7 @@ module Tamoz
         MILESTONE_EVENT_KINDS = %w[request.claimed request.running request.waiting
                                    request.recovered].freeze
 
-        attr_reader :transport, :store, :runtime, :worker_events, :sent, :now
+        attr_reader :transport, :store, :runtime, :now
 
         class ScriptedModel
           def initialize(**responses)
@@ -156,23 +156,13 @@ module Tamoz
         end
 
         def submit_cli_task(thread_id:, purpose:, task:)
-          bind_cli_thread(thread_id)
-          request_id = cli_request_id(thread_id, purpose)
-          @runtime.session_for(thread_id).app.durable_runner.submit(
-            { 'task' => task }, thread: thread_id, request_id: request_id,
-                                 operation: :turn, delivery: :queue
-          )
-          request_id
+          submit_cli_request({ 'task' => task }, thread_id: thread_id, purpose: purpose,
+                                                 operation: :turn, delivery: :queue)
         end
 
         def submit_cli_cancel(thread_id:, purpose: 'cancel')
-          bind_cli_thread(thread_id)
-          request_id = cli_request_id(thread_id, purpose)
-          @runtime.session_for(thread_id).app.durable_runner.submit(
-            CLI_CANCEL_PAYLOAD, thread: thread_id, request_id: request_id,
-                                operation: :redirect, delivery: :redirect
-          )
-          request_id
+          submit_cli_request(CLI_CANCEL_PAYLOAD, thread_id: thread_id, purpose: purpose,
+                                                 operation: :redirect, delivery: :redirect)
         end
 
         def request_row(thread_id, request_id)
@@ -206,49 +196,25 @@ module Tamoz
                 'arguments' => { 'path' => 'other.txt' }, 'verification' => 'the output is present' }
             ] }.freeze
         ].freeze
+        DEFAULT_PLAN = [{ 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
+                          'steps' => [{ 'id' => 's1', 'purpose' => 'gather evidence', 'tool' => 'read_file',
+                                        'arguments' => { 'path' => 'note.txt' },
+                                        'verification' => 'the output is present' }] }].freeze
         ACCEPTED_REVIEW = { 'decision' => 'accept', 'issues' => [], 'rationale' => 'sound' }.freeze
         VERIFY_OK = [{ 'answer' => 'the verified answer', 'satisfied' => true,
                        'evidence' => ['note.txt'] }].freeze
+        DEFAULT_MODEL_RESPONSES = { plan: DEFAULT_PLAN, review: [ACCEPTED_REVIEW],
+                                    verify: VERIFY_OK }.freeze
 
-        def initialize(model_factory: self.class.model_factory(
-          plan: [{ 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
-                   'steps' => [{ 'id' => 's1', 'purpose' => 'gather evidence', 'tool' => 'read_file',
-                                 'arguments' => { 'path' => 'note.txt' },
-                                 'verification' => 'the output is present' } ] }],
-          review: [ACCEPTED_REVIEW], verify: VERIFY_OK
-        ), admission_mode: :allowlist, approval_ask: nil)
+        def initialize(model_factory: self.class.model_factory(**DEFAULT_MODEL_RESPONSES),
+                       admission_mode: :allowlist, approval_ask: nil)
           @now = Time.now.utc
           @directory = Dir.mktmpdir('tamoz-comms-b0')
-          @workspace = File.join(@directory, 'workspace')
-          runtime_dir = File.join(@directory, 'runtime')
-          FileUtils.mkdir_p(@workspace)
-          FileUtils.mkdir_p(runtime_dir, mode: 0o700)
-          write_config(runtime_dir, approval_ask)
-          write_profile(runtime_dir)
-          resolved = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_dir, env: {})
           @model_factory = model_factory
-          @runtime = Tamoz::Agent::WorkerRuntime.open(resolved, model_factory: @model_factory)
-          @store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
-          @store.deploy_surface(descriptor(admission_mode).wire, now: @now)
-          bind_correspondent(USER_BOUND, CONVERSATION_A)
-          @transport = FakeTransport.new(surface_id: SURFACE_ID, surface_revision: SURFACE_REVISION)
-          @gateway = Tamoz::Comms::Gateway.new(
-            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-            descriptor: descriptor(admission_mode), poller_owner: 'fixture:gateway',
-            controls: ->(thread_id) { @runtime.session_for(thread_id) }
-          )
-          sink = Tamoz::Comms::OutboxDeliverySink.new(
-            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
-          )
-          @recording_sink = RecordingSink.new(sink)
-          @runtime.instance_variable_set(:@delivery_sink, @recording_sink)
-          @worker = Tamoz::Agent::Worker.new(
-            runtime: @runtime,
-            session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
-            emitter: ->(_event) {}, once: true
-          )
-          File.write(File.join(@workspace, 'note.txt'), "hello\n")
-          File.write(File.join(@workspace, 'other.txt'), "world\n")
+          runtime_dir = provision_runtime_directory(approval_ask)
+          deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
+          wire_delivery_pipeline(admission_mode)
+          seed_workspace_files
         end
 
         def close
@@ -263,8 +229,7 @@ module Tamoz
                          credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
                          poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
             identity: { expected_bot_id: BOT_ID, bot_username: BOT_USERNAME },
-            admission: mode == :pairing ? { direct: 'pairing', correspondents: [] }
-                                        : { direct: 'allowlist', correspondents: ["telegram:user:#{USER_BOUND}"] },
+            admission: admission_spec(mode),
             threading: 'conversation', profile_id: PROFILE_ID,
             approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
             rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
@@ -368,13 +333,7 @@ module Tamoz
           @runtime.checkpoints.effect_census(limit: 10_000)
         end
 
-        def fresh_worker
-          Tamoz::Agent::Worker.new(
-            runtime: @runtime,
-            session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
-            emitter: ->(_event) {}, once: true
-          )
-        end
+        def fresh_worker = new_worker
 
         def prompt(reference_digest)
           @store.prompt(reference_digest:)
@@ -398,18 +357,97 @@ module Tamoz
             'session' => conversations.to_h do |conversation|
               [conversation, view_snapshot(view(thread_for(conversation)))]
             end,
-            'effects' => effect_census.map do |row|
-              { 'thread_id' => row[:thread_id], 'effect_key' => row[:effect_key],
-                'operation' => row[:operation], 'status' => row[:status] }
-            end,
+            'effects' => effect_rows,
             'sends' => @transport.sends.map { |send| send.transform_keys(&:to_s) },
-            'pushed_milestones' => @recording_sink.pushed.select do |event|
-              MILESTONE_EVENT_KINDS.include?(event[:kind].to_s)
-            end.map { |event| { 'kind' => event[:kind].to_s, 'phase' => event[:phase].to_s,
-                                'sequence' => event[:sequence], 'request_id' => event[:request_id].to_s } }
+            'pushed_milestones' => pushed_milestones
           }
           references = facts['requests'].filter_map { |row| row['request_ref'] }.uniq
-          facts['request_projections'] = references.to_h do |reference|
+          facts['request_projections'] = resolved_request_projections(references, conversations)
+          facts
+        end
+
+        private
+
+        def provision_runtime_directory(approval_ask)
+          @workspace = File.join(@directory, 'workspace')
+          runtime_dir = File.join(@directory, 'runtime')
+          FileUtils.mkdir_p(@workspace)
+          FileUtils.mkdir_p(runtime_dir, mode: 0o700)
+          write_config(runtime_dir, approval_ask)
+          write_profile(runtime_dir)
+          runtime_dir
+        end
+
+        def deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
+          resolved = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_dir, env: {})
+          @runtime = Tamoz::Agent::WorkerRuntime.open(resolved, model_factory: @model_factory)
+          @store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
+          @store.deploy_surface(descriptor(admission_mode).wire, now: @now)
+          bind_correspondent(USER_BOUND, CONVERSATION_A)
+        end
+
+        def wire_delivery_pipeline(admission_mode)
+          @transport = FakeTransport.new(surface_id: SURFACE_ID, surface_revision: SURFACE_REVISION)
+          @gateway = Tamoz::Comms::Gateway.new(
+            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
+            descriptor: descriptor(admission_mode), poller_owner: 'fixture:gateway',
+            controls: ->(thread_id) { @runtime.session_for(thread_id) }
+          )
+          sink = Tamoz::Comms::OutboxDeliverySink.new(
+            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
+          )
+          @recording_sink = RecordingSink.new(sink)
+          @runtime.instance_variable_set(:@delivery_sink, @recording_sink)
+          @worker = new_worker
+        end
+
+        def seed_workspace_files
+          File.write(File.join(@workspace, 'note.txt'), "hello\n")
+          File.write(File.join(@workspace, 'other.txt'), "world\n")
+        end
+
+        def new_worker
+          Tamoz::Agent::Worker.new(
+            runtime: @runtime,
+            session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
+            emitter: ->(_event) {}, once: true
+          )
+        end
+
+        def submit_cli_request(payload, thread_id:, purpose:, operation:, delivery:)
+          bind_cli_thread(thread_id)
+          request_id = cli_request_id(thread_id, purpose)
+          @runtime.session_for(thread_id).app.durable_runner.submit(
+            payload, thread: thread_id, request_id: request_id,
+                     operation: operation, delivery: delivery
+          )
+          request_id
+        end
+
+        def admission_spec(mode)
+          return { direct: 'pairing', correspondents: [] } if mode == :pairing
+
+          { direct: 'allowlist', correspondents: ["telegram:user:#{USER_BOUND}"] }
+        end
+
+        def pushed_milestones
+          @recording_sink.pushed.filter_map do |event|
+            next nil unless MILESTONE_EVENT_KINDS.include?(event[:kind].to_s)
+
+            { 'kind' => event[:kind].to_s, 'phase' => event[:phase].to_s,
+              'sequence' => event[:sequence], 'request_id' => event[:request_id].to_s }
+          end
+        end
+
+        def effect_rows
+          effect_census.map do |row|
+            { 'thread_id' => row[:thread_id], 'effect_key' => row[:effect_key],
+              'operation' => row[:operation], 'status' => row[:status] }
+          end
+        end
+
+        def resolved_request_projections(references, conversations)
+          references.to_h do |reference|
             resolved_projection = conversations.filter_map do |conversation|
               resolved = request_status(conversation, reference)
               next nil unless resolved.is_a?(Hash)
@@ -418,10 +456,7 @@ module Tamoz
             end.first
             [reference, resolved_projection]
           end.compact
-          facts
         end
-
-        private
 
         def projection(projection_hash)
           return nil unless projection_hash.is_a?(Hash)
