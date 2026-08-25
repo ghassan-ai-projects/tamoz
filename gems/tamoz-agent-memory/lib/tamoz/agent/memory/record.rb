@@ -177,25 +177,25 @@ module Tamoz
                   "MemoryRecord format_version #{version.inspect} is not supported"
           end
 
-          string_state = hash.fetch("state").to_sym
-          string_layer = hash.fetch("layer").to_sym
-          string_klass = hash.fetch("class").to_sym
-          string_kind = hash.fetch("epistemic_kind").to_sym
-          string_sensitivity = hash.fetch("sensitivity").to_sym
+          state = hash.fetch("state").to_sym
+          layer = hash.fetch("layer").to_sym
+          klass = hash.fetch("class").to_sym
+          epistemic_kind = hash.fetch("epistemic_kind").to_sym
+          sensitivity = hash.fetch("sensitivity").to_sym
           new(
             format_version: version,
             memory_id: hash.fetch("memory_id"),
             record_version: hash.fetch("record_version"),
-            layer: string_layer,
-            klass: string_klass,
-            state: string_state,
+            layer: layer,
+            klass: klass,
+            state: state,
             statement: hash.fetch("statement"),
-            epistemic_kind: string_kind,
+            epistemic_kind: epistemic_kind,
             source_refs: hash.fetch("source_refs"),
             owner: hash.fetch("owner"),
             actor: hash["actor"],
             scopes: hash.fetch("scopes"),
-            sensitivity: string_sensitivity,
+            sensitivity: sensitivity,
             disclosure_policy: hash.fetch("disclosure_policy"),
             confidence: hash["confidence"],
             confidence_method: hash["confidence_method"],
