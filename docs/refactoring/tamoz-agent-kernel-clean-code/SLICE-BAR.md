@@ -4,9 +4,10 @@ This bar is checked after each file. It does not waive the final requirements in
 `BAR.md`; it separates evidence that is available per file from evidence that can only
 exist after the full checklist is complete.
 
-- [ ] S1 Scope: only the current file and its per-file evidence note changed.
-- [ ] S2 Candidate: the note names the concrete reading-order defect or explains why the
-      file remains stable.
+- [ ] S1 Scope: only the current production file changed; per-file evidence notes are not
+      retained by owner request.
+- [ ] S2 Candidate: the agent report and `TODO.md` status name the concrete reading-order
+      defect or explain why the file remains stable.
 - [ ] S3 Story: changed public/top-level functions state their workflow in domain order.
 - [ ] S4 Abstraction: changed functions stay at one level and call intent-named helpers.
 - [ ] S5 Names: new or renamed helpers add domain meaning and are not wrapper-only names.

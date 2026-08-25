@@ -48,8 +48,8 @@
 
 - [ ] B1 Scope: only owned production/docs paths changed; forbidden interfaces and tests
       are untouched.
-- [ ] B2 File assessment: every Ruby file in the gem has a candidate decision recorded;
-      changed files have a named reading-order defect and unchanged files have a reason.
+- [ ] B2 File assessment: every gem file has a candidate decision recorded in `TODO.md`;
+      changed files name the reading-order defect there and unchanged files have a reason.
 - [ ] B3 Story: each changed public/top-level function states its workflow in domain
       order without lower-level parsing, collection, serialization, or byte mechanics.
 - [ ] B4 Abstraction: each changed function stays at one coherent level and calls named
@@ -78,7 +78,8 @@ post-change snapshot/diff.
 
 - One implementation agent may inspect every owned file, propose candidates, edit only
   owned paths, and report its file-by-file decisions.
-- One independent reviewer is read-only and checks the actual diff and final evidence.
+- Independent reviewers are read-only and check the actual diff and final evidence. Per-file
+  notes are deliberately not retained; agent reports and the commit history are the evidence.
 - The reviewer returns `PASS`, `FAIL`, or `BLOCKED` with a B1–B10 matrix. A failed item
   returns to the same implementation agent for correction; the bar cannot be lowered.
 - The orchestrator owns commits, final gates, and any behavior-change report.
