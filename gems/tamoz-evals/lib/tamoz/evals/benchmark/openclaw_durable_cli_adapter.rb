@@ -97,7 +97,7 @@ module Tamoz
           raise ArgumentError, 'model is required' if String(model).empty?
 
           @change_profile_id = nil
-          credential_binding!(provider)
+          enforce_credential_availability!(provider)
           initialize_runtime!
         end
 
@@ -114,7 +114,8 @@ module Tamoz
         end
 
         def thread_id_for(mission_id)
-          thread_id(mission_id)
+          digest = Digest::SHA256.hexdigest("#{@run_id}\n#{mission_id}")[0, 24]
+          "#{THREAD_PREFIX}.#{digest}"
         end
 
         def evidence_for(thread:, provider:, model:)
@@ -158,17 +159,14 @@ module Tamoz
                        hard_zero_reasons: [], metric_overrides: {})
           trace = trace!(thread)
           durable_receipts = durable_effect_receipts(evidence.fetch('effect_receipts'))
-          receipts = model_receipts(durable_receipts)
+          receipts = model_generate_receipts(durable_receipts)
           validate_receipts!(receipts)
           independent_trace = independent_trace!(trace, receipts, mission:, thread:)
           durable_mission = durable_mission!(evidence, mission:, thread:)
-          hard_zero, reasons = hard_zero_evidence(mission:, evidence:, receipts: durable_receipts)
-          hard_zero = hard_zero.merge(hard_zero_overrides)
-          reasons = reasons.reject do |reason|
-            name = reason.delete_prefix('hard_zero_unverifiable:')
-            hard_zero_overrides.key?(name)
-          end
-          reasons.concat(Array(hard_zero_reasons))
+          hard_zero, reasons = evaluated_hard_zero(
+            mission:, evidence:, durable_receipts:,
+            overrides: hard_zero_overrides, extra_reasons: hard_zero_reasons
+          )
           effect_outcomes = effect_outcomes(durable_receipts)
           reasons.concat(effect_outcome_reasons(effect_outcomes))
           surfaces = surface_executions(provider:, model:)
@@ -201,60 +199,6 @@ module Tamoz
           result.compact
         end
         # rubocop:enable Metrics/ParameterLists
-
-        private
-
-        def effect_poll_row(database, thread:, operation:)
-          attempts = 0
-          begin
-            attempts += 1
-            database.get_first_row(effect_poll_sql, [thread, operation])
-          rescue SQLite3::BusyException
-            raise if attempts >= EFFECT_POLL_MAX_ATTEMPTS
-
-            sleep(EFFECT_POLL_RETRY_DELAY_SECONDS)
-            retry
-          end
-        end
-
-        def effect_poll_sql
-          <<~SQL
-            SELECT effect_key, logical_key, operation, status
-            FROM tamoz_effects
-            WHERE thread_id = ? AND operation = ? AND status != 'prepared'
-            ORDER BY created_at_ms ASC, call_index ASC, effect_key ASC
-            LIMIT 1
-          SQL
-        end
-
-        def validate_inputs!
-          raise ArgumentError, 'runtime_dir is required' if @runtime_dir.empty?
-          raise ArgumentError, 'workspace is required' if @workspace.empty?
-          raise ArgumentError, 'cli must respond to call' unless @cli.respond_to?(:call)
-          raise ArgumentError, 'evidence_reader must respond to call' unless @evidence_reader.respond_to?(:call)
-          raise ArgumentError, 'routing is invalid' unless Tamoz::Agent::Session::ROUTINGS.include?(@routing)
-        end
-
-        def credential_binding!(provider)
-          key = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(provider.downcase.to_sym) do
-            raise CredentialUnavailable, "provider_credential_unavailable:#{provider}"
-          end
-          return { 'kind' => 'api_key', 'name' => key } unless @env[key].to_s.empty?
-          return { 'kind' => 'api_base', 'name' => 'OLLAMA_API_BASE' } if
-            provider.casecmp('ollama').zero? && !@env['OLLAMA_API_BASE'].to_s.empty?
-
-          raise CredentialUnavailable, "provider_credential_unavailable:#{key}"
-        end
-
-        def initialize_runtime!
-          invoke(base_args + ['init', '--workspace', @workspace, '--json'])
-          directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env)
-          return if File.expand_path(directory.workspace_root) == @workspace
-
-          raise Tamoz::Evals::ExecutionError, 'runtime_workspace_mismatch'
-        rescue Tamoz::Agent::Error => e
-          raise Tamoz::Evals::ExecutionError, "runtime_initialization_failed:#{e.class}"
-        end
 
         def enqueue!(thread, task, provider:, model:)
           profile = @change_profile_id ? ['--profile', @change_profile_id] : []
@@ -292,6 +236,60 @@ module Tamoz
           result
         end
 
+        private
+
+        def effect_poll_row(database, thread:, operation:)
+          attempts = 0
+          begin
+            attempts += 1
+            database.get_first_row(effect_poll_sql, [thread, operation])
+          rescue SQLite3::BusyException
+            raise if attempts >= EFFECT_POLL_MAX_ATTEMPTS
+
+            sleep(EFFECT_POLL_RETRY_DELAY_SECONDS)
+            retry
+          end
+        end
+
+        def effect_poll_sql
+          <<~SQL
+            SELECT effect_key, logical_key, operation, status
+            FROM tamoz_effects
+            WHERE thread_id = ? AND operation = ? AND status != 'prepared'
+            ORDER BY created_at_ms ASC, call_index ASC, effect_key ASC
+            LIMIT 1
+          SQL
+        end
+
+        def validate_inputs!
+          raise ArgumentError, 'runtime_dir is required' if @runtime_dir.empty?
+          raise ArgumentError, 'workspace is required' if @workspace.empty?
+          raise ArgumentError, 'cli must respond to call' unless @cli.respond_to?(:call)
+          raise ArgumentError, 'evidence_reader must respond to call' unless @evidence_reader.respond_to?(:call)
+          raise ArgumentError, 'routing is invalid' unless Tamoz::Agent::Session::ROUTINGS.include?(@routing)
+        end
+
+        def enforce_credential_availability!(provider)
+          key = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(provider.downcase.to_sym) do
+            raise CredentialUnavailable, "provider_credential_unavailable:#{provider}"
+          end
+          return { 'kind' => 'api_key', 'name' => key } unless @env[key].to_s.empty?
+          return { 'kind' => 'api_base', 'name' => 'OLLAMA_API_BASE' } if
+            provider.casecmp('ollama').zero? && !@env['OLLAMA_API_BASE'].to_s.empty?
+
+          raise CredentialUnavailable, "provider_credential_unavailable:#{key}"
+        end
+
+        def initialize_runtime!
+          invoke(base_args + ['init', '--workspace', @workspace, '--json'])
+          directory = Tamoz::Agent::RuntimeDirectory.resolve(path: @runtime_dir, env: @env)
+          return if File.expand_path(directory.workspace_root) == @workspace
+
+          raise Tamoz::Evals::ExecutionError, 'runtime_workspace_mismatch'
+        rescue Tamoz::Agent::Error => e
+          raise Tamoz::Evals::ExecutionError, "runtime_initialization_failed:#{e.class}"
+        end
+
         def trace!(thread)
           document = invoke(['--runtime-dir', @runtime_dir, 'trace', thread, '--json'])
           unless document.is_a?(Hash) && document['trace_id'].is_a?(String) &&
@@ -308,15 +306,16 @@ module Tamoz
           out = StringIO.new
           err = StringIO.new
           status = @cli.call(argv, out:, err:, input: StringIO.new, env: @env)
-          unless status.zero?
-            raise Tamoz::Evals::ExecutionError, "cli_command_failed:#{argv.drop_while do |arg|
-              arg.start_with?('--')
-            end.first}"
-          end
+          raise Tamoz::Evals::ExecutionError, "cli_command_failed:#{cli_failure_label(argv)}" unless
+            status.zero?
 
           parse_json_output(out.string)
         rescue JSON::ParserError
           raise Tamoz::Evals::ExecutionError, 'cli_output_invalid'
+        end
+
+        def cli_failure_label(argv)
+          argv.drop_while { |arg| arg.start_with?('--') }.first
         end
 
         def run_worker_subprocess(provider:, model:, poller: nil)
@@ -402,12 +401,7 @@ module Tamoz
           }
         end
 
-        def thread_id(mission_id)
-          digest = Digest::SHA256.hexdigest("#{@run_id}\n#{mission_id}")[0, 24]
-          "#{THREAD_PREFIX}.#{digest}"
-        end
-
-        def model_receipts(receipts)
+        def model_generate_receipts(receipts)
           receipts.filter_map do |receipt|
             next unless receipt['operation'].start_with?('model.generate.')
 
@@ -452,15 +446,22 @@ module Tamoz
             receipt['status'] == 'succeeded'
         end
 
+        def evaluated_hard_zero(mission:, evidence:, durable_receipts:, overrides:, extra_reasons:)
+          hard_zero, reasons = hard_zero_evidence(mission:, evidence:, receipts: durable_receipts)
+          hard_zero = hard_zero.merge(overrides)
+          reasons = reasons.reject do |reason|
+            name = reason.delete_prefix('hard_zero_unverifiable:')
+            overrides.key?(name)
+          end
+          reasons.concat(Array(extra_reasons))
+          [hard_zero, reasons]
+        end
+
         def hard_zero_evidence(mission:, evidence:, receipts:)
-          names = Array(mission.fetch('hard_zero', nil))
-          statuses = names.to_h do |name|
-            [name, hard_zero_status(name, evidence:, receipts:).first]
+          verdicts = Array(mission.fetch('hard_zero', nil)).to_h do |name|
+            [name, hard_zero_status(name, evidence:, receipts:)]
           end
-          reasons = names.filter_map do |name|
-            hard_zero_status(name, evidence:, receipts:).last
-          end
-          [statuses, reasons]
+          [verdicts.transform_values(&:first), verdicts.values.filter_map(&:last)]
         end
 
         def hard_zero_status(name, evidence:, receipts:)
@@ -502,10 +503,14 @@ module Tamoz
           true
         end
 
-        def fabricated_evidence_status(evidence)
+        def verification_refs(evidence)
           verification = evidence['verification']
           refs = verification['evidence'] if verification.is_a?(Hash)
-          resolved = evidence['observation_refs']
+          [refs, evidence['observation_refs']]
+        end
+
+        def fabricated_evidence_status(evidence)
+          refs, resolved = verification_refs(evidence)
           return ['unknown', 'hard_zero_unverifiable:fabricated_evidence'] unless
             refs.is_a?(Array) && !refs.empty? && resolved.is_a?(Array)
 
@@ -610,7 +615,7 @@ module Tamoz
           spans = independent_trace.fetch('trace').fetch('spans')
           durations = spans.filter_map { |span| span['duration_ms'] if span['name'] == 'tamoz.model.call' }
           surface_executions = context[:surface_executions]
-          metrics = {
+          base_metrics = {
             # Keep the scale declaration beside the scaled values in each manifest mission.
             'metric_scale' => METRIC_SCALE,
             'model_calls' => receipts.length,
@@ -620,12 +625,12 @@ module Tamoz
             'terminal_status' => evidence.fetch('status').to_s,
             'parity' => parity_metric(surface_executions)
           }
-          metrics['model_latency_ms'] = durations.sum unless durations.empty?
+          base_metrics['model_latency_ms'] = durations.sum unless durations.empty?
           reported_tokens = provider_tokens(receipts)
-          metrics['provider_tokens'] = reported_tokens unless reported_tokens.nil?
+          base_metrics['provider_tokens'] = reported_tokens unless reported_tokens.nil?
           catalog = catalog_metrics(
             evidence,
-            metrics.fetch('provider_tokens', 0),
+            base_metrics.fetch('provider_tokens', 0),
             durations:,
             durable_receipts: context[:durable_receipts] || evidence['effect_receipts'],
             independent_trace:,
@@ -633,7 +638,7 @@ module Tamoz
           )
           requested_metrics = context[:mission].is_a?(Hash) && context[:mission]['metrics']
           catalog = catalog.slice(*requested_metrics) if requested_metrics.is_a?(Array)
-          metrics.merge(catalog)
+          base_metrics.merge(catalog)
         end
         # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
 
@@ -804,11 +809,10 @@ module Tamoz
         end
 
         def evidence_quality(evidence)
-          verification = evidence['verification']
-          refs = verification['evidence'] if verification.is_a?(Hash)
+          refs, observation_refs = verification_refs(evidence)
           return 0 unless refs.is_a?(Array) && !refs.empty?
 
-          resolved = Array(evidence['observation_refs'])
+          resolved = Array(observation_refs)
           (refs.count { |ref| resolved.include?(ref) } * METRIC_SCALE) / refs.length
         end
 
@@ -851,8 +855,6 @@ module Tamoz
         def bounded_reason(message)
           String(message).byteslice(0, 256).to_s
         end
-
-        public :enqueue!, :worker!, :worker_until_effect!, :worker_subprocess!
       end
       # rubocop:enable Metrics/ClassLength
 
