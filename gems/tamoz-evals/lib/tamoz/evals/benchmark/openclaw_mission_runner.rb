@@ -24,6 +24,7 @@ module Tamoz
         HARD_ZERO_STATUSES = %w[passed failed unknown].freeze
         EFFECT_OUTCOME_STATUSES = %w[succeeded failed unknown].freeze
         SURFACE_FIELDS = %w[status provenance].freeze
+        SURFACE_STATUS_BY_REASON = { 'executor_error' => 'blocked' }.freeze
         PROVIDER_RECEIPT_FIELDS = %w[effect_key operation status].freeze
         PROVIDER_RECEIPT_STATUSES = %w[succeeded].freeze
         MANIFEST_FILENAME = 'manifest.json'
@@ -36,34 +37,40 @@ module Tamoz
           new(**arguments).run
         end
 
-        # rubocop:disable Metrics/AbcSize -- normalize one explicit runner binding.
+        # rubocop:disable Metrics/AbcSize -- fifteen explicit runner bindings.
         def initialize(**arguments)
-          values = arguments.fetch_values(
-            :protocol, :catalog, :run_kind, :provider, :model, :artifact_root, :artifact_base,
-            :git_revision, :config_sha256, :graph, :surfaces, :capabilities, :controls_passed,
-            :command, :executor
-          )
-          @protocol, @catalog, raw_run_kind, raw_provider, raw_model, raw_artifact_root,
-            raw_artifact_base, raw_git_revision, raw_config_sha256, @graph, @surfaces,
-            @capabilities, @controls_passed, raw_command, @executor = values
-          @run_kind = String(raw_run_kind)
-          @provider = String(raw_provider)
-          @model = String(raw_model)
-          @artifact_root = String(raw_artifact_root)
-          @artifact_base = Pathname.new(raw_artifact_base)
-          @git_revision = String(raw_git_revision)
-          @config_sha256 = String(raw_config_sha256)
-          @command = String(raw_command)
+          @protocol = arguments.fetch(:protocol)
+          @catalog = arguments.fetch(:catalog)
+          @run_kind = String(arguments.fetch(:run_kind))
+          @provider = String(arguments.fetch(:provider))
+          @model = String(arguments.fetch(:model))
+          @artifact_root = String(arguments.fetch(:artifact_root))
+          @artifact_base = Pathname.new(arguments.fetch(:artifact_base))
+          @git_revision = String(arguments.fetch(:git_revision))
+          @config_sha256 = String(arguments.fetch(:config_sha256))
+          @graph = arguments.fetch(:graph)
+          @surfaces = arguments.fetch(:surfaces)
+          @capabilities = arguments.fetch(:capabilities)
+          @controls_passed = arguments.fetch(:controls_passed)
+          @command = String(arguments.fetch(:command))
+          @executor = arguments.fetch(:executor)
           validate_inputs!
         end
         # rubocop:enable Metrics/AbcSize
 
-        # rubocop:disable Metrics/MethodLength -- assemble and persist one manifest atomically.
         def run
           artifact_directory = @artifact_base.join(@artifact_root)
           FileUtils.mkdir_p(artifact_directory)
           artifacts = @catalog.fetch('missions').map { |mission| run_mission(mission, artifact_directory) }
-          manifest = {
+          manifest = build_manifest(artifacts)
+          write_manifest(artifact_directory, manifest)
+          Result.new(manifest:, artifacts: artifacts.freeze)
+        end
+
+        private
+
+        def build_manifest(artifacts)
+          {
             'runner_schema_version' => SCHEMA_VERSION,
             'protocol_sha256' => Readiness.protocol_digest(@protocol),
             'run_kind' => @run_kind,
@@ -76,18 +83,17 @@ module Tamoz
             'surfaces' => @surfaces,
             'command' => @command,
             'capabilities' => @capabilities,
-            'surface_executions' => artifacts.to_h do |artifact|
-              [artifact.fetch('mission').fetch('id'), artifact.fetch('mission').fetch('surface_executions')]
-            end,
+            'surface_executions' => surface_execution_index(artifacts),
             'missions' => artifacts.map { |artifact| artifact.fetch('mission') },
             'controls_passed' => @controls_passed
           }
-          write_manifest(artifact_directory, manifest)
-          Result.new(manifest:, artifacts: artifacts.freeze)
         end
-        # rubocop:enable Metrics/MethodLength
 
-        private
+        def surface_execution_index(artifacts)
+          artifacts.to_h do |artifact|
+            [artifact.fetch('mission').fetch('id'), artifact.fetch('mission').fetch('surface_executions')]
+          end
+        end
 
         def validate_inputs!
           validate_catalog!
@@ -176,26 +182,12 @@ module Tamoz
           raise SchemaError, 'OpenClaw surfaces are invalid'
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         def run_mission(mission, artifact_directory)
-          result = execute(mission)
+          result = validated_execution(mission)
           status = result.fetch('status')
           artifact = (write_artifact(mission, result, artifact_directory) if status == 'ready')
-          mission_record = {
-            'id' => mission.fetch('id'),
-            'status' => status,
-            'artifact_path' => artifact&.fetch('path'),
-            'artifact_digest' => artifact&.fetch('digest'),
-            'metrics' => result.fetch('metrics', {}),
-            'metrics_schema_version' => result.fetch('metrics_schema_version'),
-            'hard_zero' => result.fetch('hard_zero'),
-            'effect_outcomes' => result.fetch('effect_outcomes'),
-            'surface_executions' => result.fetch('surface_executions'),
-            'durable_mission' => result['durable_mission']
-          }.compact
-          mission_record['reason'] = result.fetch('reason') if result['reason']
           {
-            'mission' => mission_record,
+            'mission' => mission_record(result, mission, artifact:),
             'artifact' => artifact,
             'reason' => result['reason']
           }.compact
@@ -203,9 +195,8 @@ module Tamoz
           failure = normalized_failure(mission, "artifact_error:#{e.class}")
           { 'mission' => mission_record(failure, mission), 'reason' => failure.fetch('reason') }
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-        def execute(mission)
+        def validated_execution(mission)
           result = @executor.call(
             mission: mission,
             run_kind: @run_kind,
@@ -242,9 +233,30 @@ module Tamoz
           raise SchemaError, 'mission executor returned an invalid status'
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
         def normalize_result(result, mission)
           status = result.fetch('status')
+          evidence = normalize_evidence(result, mission, status)
+          status = outcome_status(
+            status,
+            hard_zero: evidence['hard_zero'],
+            effect_outcomes: evidence['effect_outcomes'],
+            surface_executions: evidence['surface_executions']
+          )
+          provenance = result.fetch('provenance', {})
+          raise SchemaError, 'OpenClaw mission provenance must be an object' unless provenance.is_a?(Hash)
+
+          result.merge(
+            'status' => status,
+            'metrics' => evidence['metrics'],
+            'metrics_schema_version' => METRICS_SCHEMA_VERSION,
+            'hard_zero' => evidence['hard_zero'],
+            'effect_outcomes' => evidence['effect_outcomes'],
+            'surface_executions' => evidence['surface_executions'],
+            'provenance' => provenance.merge('surface_executions' => evidence['surface_executions'])
+          )
+        end
+
+        def normalize_evidence(result, mission, status)
           metrics = result.fetch('metrics', {})
           metrics = unavailable_metrics(mission, status).merge(metrics) unless status == 'ready'
           validate_metrics!(metrics, result.fetch('metrics_schema_version', METRICS_SCHEMA_VERSION), mission)
@@ -254,24 +266,14 @@ module Tamoz
           effect_outcomes = normalize_effect_outcomes(result.fetch('effect_outcomes', []))
           surface_input = result.fetch('surface_executions', nil)
           surface_input = unavailable_surfaces(mission, status).merge(surface_input || {}) unless status == 'ready'
-          surface_executions = normalize_surface_executions(
-            surface_input, mission, status
-          )
-          status = outcome_status(status, hard_zero, effect_outcomes, surface_executions)
-          provenance = result.fetch('provenance', {})
-          raise SchemaError, 'OpenClaw mission provenance must be an object' unless provenance.is_a?(Hash)
-
-          result.merge(
-            'status' => status,
+          surface_executions = normalize_surface_executions(surface_input, mission, status)
+          {
             'metrics' => metrics,
-            'metrics_schema_version' => METRICS_SCHEMA_VERSION,
             'hard_zero' => hard_zero,
             'effect_outcomes' => effect_outcomes,
-            'surface_executions' => surface_executions,
-            'provenance' => provenance.merge('surface_executions' => surface_executions)
-          )
+            'surface_executions' => surface_executions
+          }
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
         def validate_metrics!(metrics, schema_version, mission)
           unless schema_version == METRICS_SCHEMA_VERSION && metrics.is_a?(Hash) &&
@@ -340,7 +342,7 @@ module Tamoz
         # rubocop:enable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
 
         # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
-        def outcome_status(status, hard_zero, effect_outcomes, surface_executions)
+        def outcome_status(status, hard_zero:, effect_outcomes:, surface_executions:)
           return 'blocked' if status == 'blocked'
 
           failed = hard_zero.value?('failed') || effect_outcomes.any? { |outcome| outcome['status'] == 'failed' }
@@ -370,7 +372,7 @@ module Tamoz
         def unavailable_surfaces(mission, reason)
           mission.fetch('surfaces').to_h do |surface|
             [surface, {
-              'status' => reason == 'executor_error' ? 'blocked' : reason,
+              'status' => SURFACE_STATUS_BY_REASON.fetch(reason, reason),
               'provenance' => {
                 'surface' => surface, 'run_kind' => @run_kind,
                 'provider' => @provider, 'model' => @model, 'reason' => reason
@@ -391,16 +393,21 @@ module Tamoz
           }
         end
 
-        def mission_record(result, mission)
-          {
-            'id' => mission.fetch('id'), 'status' => result.fetch('status'),
+        def mission_record(result, mission, artifact: nil)
+          record = {
+            'id' => mission.fetch('id'),
+            'status' => result.fetch('status'),
+            'artifact_path' => artifact&.fetch('path'),
+            'artifact_digest' => artifact&.fetch('digest'),
             'metrics' => result.fetch('metrics'),
             'metrics_schema_version' => result.fetch('metrics_schema_version'),
             'hard_zero' => result.fetch('hard_zero'),
             'effect_outcomes' => result.fetch('effect_outcomes'),
             'surface_executions' => result.fetch('surface_executions'),
-            'reason' => result.fetch('reason')
-          }
+            'durable_mission' => result['durable_mission']
+          }.compact
+          record['reason'] = result['reason'] if result['reason']
+          record
         end
 
         def validate_ready_provenance!(provenance, mission)
@@ -410,6 +417,10 @@ module Tamoz
           end
           return unless @run_kind == 'real_provider'
 
+          validate_real_provider_trace!(provenance, mission)
+        end
+
+        def validate_real_provider_trace!(provenance, mission)
           receipts = provenance['provider_effect_receipts']
           validate_provider_receipts!(receipts)
           independent_trace = provenance.fetch('independent_trace')
@@ -445,24 +456,32 @@ module Tamoz
             PROVIDER_RECEIPT_STATUSES.include?(receipt.fetch('status'))
         end
 
-        # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
         def validate_independent_trace!(evidence, receipts, mission)
-          spans = evidence.is_a?(Hash) && evidence['trace'].is_a?(Hash) ? evidence['trace']['spans'] : nil
-          model_spans = Array(spans).count { |span| span.is_a?(Hash) && span['name'] == 'tamoz.model.call' }
-          valid = evidence.is_a?(Hash) && evidence['source'] == Readiness::INDEPENDENT_TRACE_SOURCE &&
-                  evidence['trace_id'].is_a?(String) && !evidence['trace_id'].empty? &&
-                  evidence['mission_id'] == mission.fetch('id') &&
-                  evidence['run_id'].is_a?(String) && !evidence['run_id'].empty? &&
-                  evidence['thread_id'].is_a?(String) && !evidence['thread_id'].empty? &&
-                  Readiness::DIGEST_PATTERN.match?(evidence['trace_digest'].to_s) &&
-                  evidence['trace'].is_a?(Hash) &&
-                  evidence['trace_digest'] == digest(evidence['trace']) &&
-                  model_spans >= receipts.length
-          return if valid
+          return if trace_envelope_valid?(evidence, mission) && trace_digest_bound?(evidence, receipts)
 
           raise SchemaError, 'real-provider mission lacks independent trace evidence'
         end
-        # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
+
+        def trace_envelope_valid?(evidence, mission)
+          evidence.is_a?(Hash) && evidence['source'] == Readiness::INDEPENDENT_TRACE_SOURCE &&
+            present_string?(evidence['trace_id']) && evidence['mission_id'] == mission.fetch('id') &&
+            present_string?(evidence['run_id']) && present_string?(evidence['thread_id'])
+        end
+
+        def trace_digest_bound?(evidence, receipts)
+          Readiness::DIGEST_PATTERN.match?(evidence['trace_digest'].to_s) &&
+            evidence['trace'].is_a?(Hash) &&
+            evidence['trace_digest'] == digest(evidence['trace']) &&
+            model_call_span_count(evidence['trace']) >= receipts.length
+        end
+
+        def model_call_span_count(trace)
+          Array(trace['spans']).count { |span| span.is_a?(Hash) && span['name'] == 'tamoz.model.call' }
+        end
+
+        def present_string?(value)
+          value.is_a?(String) && !value.empty?
+        end
 
         def write_artifact(mission, result, artifact_directory)
           path = "#{mission.fetch('id')}.json"
