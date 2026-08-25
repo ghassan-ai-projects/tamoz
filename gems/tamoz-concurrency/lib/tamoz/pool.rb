@@ -131,29 +131,10 @@ module Tamoz
         stuck_worker_limit:
       )
         super(max_tasks:, cancellation:)
-        unless size.is_a?(Integer) &&
-               size.positive? &&
-               size <= Configuration::MAX_POOL_SIZE
-          raise ConfigurationError,
-                "thread pool size must be between 1 and #{Configuration::MAX_POOL_SIZE}"
-        end
-        unless queue_capacity.is_a?(Integer) &&
-               queue_capacity.positive? &&
-               queue_capacity <= MAX_QUEUE_CAPACITY
-          raise ConfigurationError,
-                "queue_capacity must be between 1 and #{MAX_QUEUE_CAPACITY}"
-        end
-        unless cancellation_grace.is_a?(Numeric) &&
-               cancellation_grace.finite? &&
-               !cancellation_grace.negative? &&
-               cancellation_grace <= 60
-          raise ConfigurationError, "cancellation_grace must be between 0 and 60 seconds"
-        end
-        unless stuck_worker_limit.is_a?(Integer) &&
-               stuck_worker_limit.positive? &&
-               stuck_worker_limit <= size
-          raise ConfigurationError, "stuck_worker_limit must be between 1 and pool size"
-        end
+        validate_size!(size)
+        validate_queue_capacity!(queue_capacity)
+        validate_cancellation_grace!(cancellation_grace)
+        validate_stuck_worker_limit!(size:, limit: stuck_worker_limit)
 
         @size = size
         @queue_capacity = queue_capacity
@@ -186,6 +167,32 @@ module Tamoz
       end
 
       private
+
+      def validate_size!(size)
+        return if size.is_a?(Integer) && size.positive? && size <= Configuration::MAX_POOL_SIZE
+
+        raise ConfigurationError,
+              "thread pool size must be between 1 and #{Configuration::MAX_POOL_SIZE}"
+      end
+
+      def validate_queue_capacity!(capacity)
+        return if capacity.is_a?(Integer) && capacity.positive? && capacity <= MAX_QUEUE_CAPACITY
+
+        raise ConfigurationError,
+              "queue_capacity must be between 1 and #{MAX_QUEUE_CAPACITY}"
+      end
+
+      def validate_cancellation_grace!(grace)
+        return if grace.is_a?(Numeric) && grace.finite? && !grace.negative? && grace <= 60
+
+        raise ConfigurationError, "cancellation_grace must be between 0 and 60 seconds"
+      end
+
+      def validate_stuck_worker_limit!(size:, limit:)
+        return if limit.is_a?(Integer) && limit.positive? && limit <= size
+
+        raise ConfigurationError, "stuck_worker_limit must be between 1 and pool size"
+      end
 
       def execute_threads(values, token, block)
         work = SizedQueue.new(queue_capacity)
@@ -307,7 +314,7 @@ module Tamoz
         stuck_jobs.each do |index, worker_name|
           collected[index] = TaskResult::Stuck.new(index:, worker_name:)
         end
-        record_stuck!(stuck_jobs.length)
+        record_stuck(stuck_jobs.length)
 
         submitted.times do |index|
           next if collected.key?(index)
@@ -342,7 +349,7 @@ module Tamoz
         fatal
       end
 
-      def record_stuck!(count)
+      def record_stuck(count)
         return if count.zero?
 
         @state_mutex.synchronize do
