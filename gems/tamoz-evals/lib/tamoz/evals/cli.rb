@@ -72,28 +72,24 @@ module Tamoz
         end
 
         factory = @treatment_factory || -> { Harness::MemoryTreatmentProfile.new(mode: :ci) }
-        report = factory.call.run
-        @out.puts(report.to_json)
-        report.passed? ? SUCCESS : GATE_FAILURE
-      rescue InvalidArtifactError => error
-        @err.puts("treatment memory: invalid evidence: #{error.message}")
-        INVALID_EVIDENCE
-      rescue ExecutionError => error
-        @err.puts("treatment memory: infrastructure failure: #{error.message}")
-        INFRASTRUCTURE_FAILURE
+        run_gate("treatment memory") { factory.call.run }
       end
 
       def scorecard(arguments)
         return usage("expected: tamoz-eval scorecard agent-smoke") unless arguments == ["agent-smoke"]
 
-        report = @scorecard_factory.call.run
+        run_gate("agent-smoke") { @scorecard_factory.call.run }
+      end
+
+      def run_gate(label)
+        report = yield
         @out.puts(report.to_json)
         report.passed? ? SUCCESS : GATE_FAILURE
       rescue InvalidArtifactError => error
-        @err.puts("agent-smoke: invalid evidence: #{error.message}")
+        @err.puts("#{label}: invalid evidence: #{error.message}")
         INVALID_EVIDENCE
       rescue ExecutionError => error
-        @err.puts("agent-smoke: infrastructure failure: #{error.message}")
+        @err.puts("#{label}: infrastructure failure: #{error.message}")
         INFRASTRUCTURE_FAILURE
       end
 
