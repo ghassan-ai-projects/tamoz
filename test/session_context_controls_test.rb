@@ -205,6 +205,76 @@ class SessionContextControlsTest < Minitest::Test
     end
   end
 
+  # ONE durable stream serves both sides of the truncation contract. After
+  # more than the admission window of prior turns, /reset declares exactly
+  # the prefix it removed and the next composed frame keeps the newest
+  # fragment visible — counts agree between /context and the composition.
+  def test_reset_truncation_counts_and_composition_agree_over_one_stream
+    with_session do |session, _workspace|
+      checkpointer = session.app.checkpointer
+      13.times do |index|
+        checkpointer.enqueue_request(
+          thread_id: THREAD, request_id: "seed.#{index}", operation: :turn,
+          payload: { 'task' => "turn #{index}" }, delivery: :queue
+        )
+      end
+
+      reset = session.reset_episode(thread: THREAD, request_id: "r.reset.window")
+      assert_equal 13, reset.record.fetch("truncated_fragments")
+
+      report = session.context_report(thread: THREAD).document
+      transcript_layer = report.dig("layers", "transcript")
+      assert_equal 13, transcript_layer.fetch("truncated_by_control")
+      assert_equal 0, transcript_layer.fetch("fragments_visible")
+
+      checkpointer.enqueue_request(
+        thread_id: THREAD, request_id: "seed.after", operation: :turn,
+        payload: { 'task' => 'turn after reset' }, delivery: :queue
+      )
+      frame = session.send(:conversation_transcript, thread_id: THREAD, request_id: "seed.after")
+      stream = Tamoz::Agent::SessionPlanningContext.conversation_history(checkpointer, thread_id: THREAD)
+
+      assert_equal ['turn after reset'], frame.map { |fragment| fragment.fetch('text') },
+                   'the newest fragment stays visible after /reset'
+      assert_equal transcript_layer.fetch('truncated_by_control'), stream.length - frame.length,
+                   'exactly the declared number left the frame'
+    end
+  end
+
+  # A second truncating control records its CUMULATIVE prefix, so fragments
+  # hidden by the first control never re-enter a later frame.
+  def test_a_second_reset_keeps_every_truncation_cumulative
+    with_session do |session, _workspace|
+      checkpointer = session.app.checkpointer
+      5.times do |index|
+        checkpointer.enqueue_request(
+          thread_id: THREAD, request_id: "seed.a#{index}", operation: :turn,
+          payload: { 'task' => "early #{index}" }, delivery: :queue
+        )
+      end
+      session.reset_episode(thread: THREAD, request_id: 'r.reset.one')
+
+      3.times do |index|
+        checkpointer.enqueue_request(
+          thread_id: THREAD, request_id: "seed.b#{index}", operation: :turn,
+          payload: { 'task' => "late #{index}" }, delivery: :queue
+        )
+      end
+      second = session.reset_episode(thread: THREAD, request_id: 'r.reset.two')
+
+      assert_equal 8, second.record.fetch('truncated_fragments')
+
+      checkpointer.enqueue_request(
+        thread_id: THREAD, request_id: 'seed.c', operation: :turn,
+        payload: { 'task' => 'newest turn' }, delivery: :queue
+      )
+      frame = session.send(:conversation_transcript, thread_id: THREAD, request_id: 'seed.c')
+
+      assert_equal ['newest turn'], frame.map { |fragment| fragment.fetch('text') },
+                   'no fragment hidden by an earlier control returns'
+    end
+  end
+
   def test_generation_addressing_helpers_are_pure_and_total
     assert_equal "t.g2", CONTROLS.next_generation_thread("t")
     assert_equal "t.g3", CONTROLS.next_generation_thread("t.g2")

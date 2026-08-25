@@ -831,7 +831,8 @@ module Tamoz
         # observed-before-settle is not reachable offline (typed edge in the
         # oracle). raced_restart: /cancel lands while the turn is crashed
         # mid-flight, a fresh worker recovers it to completion BEFORE the
-        # redirect is consumed, and the settle fact therefore says completed.
+        # redirect is consumed, and the recorded answer settle therefore
+        # reads completed_before_effect.
         def drive_c8
           {
             'clean_stop' => drive_c8_clean_stop,
@@ -943,10 +944,11 @@ module Tamoz
         end
 
         # One request's durable cancellation facts: the stamps read from the
-        # request rows, the store's own terminal derivation, and — when the
-        # leg settled — the durable instant of its first terminal delivery
-        # so the oracle can order settle against observation. Only derived
-        # booleans cross into the artifact; raw milliseconds never do.
+        # request rows, the store's own terminal derivation keyed to the
+        # recorded settle kind (answer/failed/stopped/blocked), and — when
+        # the leg settled — the durable instant of its first terminal
+        # delivery so the oracle can order settle against observation. Only
+        # derived booleans cross into the artifact; raw milliseconds never do.
         def cancellation_timeline(fixture, conversation, request_id, writer:, settle_at_ms: nil)
           reference = Tamoz::Comms::Lifecycle::RequestRef.for(request_id)
           resolved = fixture.request_status(conversation, reference)
@@ -954,11 +956,13 @@ module Tamoz
           stamps = cancellation_stamp(fixture, request_id)
           requested = stamps['requested_at_ms']
           observed = stamps['observed_at_ms']
-          settled = stamps['projection_state'] == 'completed'
+          settle_kind = stamps['projection_state']
+          settled = !settle_kind.nil? && settle_kind != 'admitted'
           {
             'request_id' => request_id,
             'reference' => reference,
             'writer' => writer,
+            'settle_kind' => settle_kind,
             'settled' => settled,
             'requested_present' => !requested.nil?,
             'observed_present' => !observed.nil?,
@@ -982,7 +986,10 @@ module Tamoz
             'reference' => reference,
             'claims_stopped' => text.include?('stopped'),
             'claims_completed_before_effect' =>
-              text.include?('completed before the cancellation took effect')
+              text.include?('completed before the cancellation took effect'),
+            'claims_failed_before_effect' =>
+              text.include?('failed before the cancellation took effect'),
+            'claims_blocked' => text.include?('blocked')
           }
         end
 

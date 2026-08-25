@@ -109,9 +109,11 @@ module Tamoz
           )
         end
         # The terminal projection is durable; its reservation returns to
-        # intake (design §12, invariant 57).
+        # intake (design §12, invariant 57). The settle kind is recorded with
+        # it so the status wording follows the task axis, never a guess.
         if reserved_request_id
-          @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id)
+          @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id,
+                                             settle_kind: kind)
         end
         :accepted
       end

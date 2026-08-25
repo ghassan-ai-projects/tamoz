@@ -61,9 +61,11 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Terminal projection is durable; release the request's reserved slots.
+      # Terminal projection is durable; `settle_kind` records what the
+      # correspondent was told (answer/failed/stopped/blocked) and releases
+      # the request's reserved slots.
       # @return [:released, :not_admitted]
-      def complete_request(thread_id:, request_id:)
+      def complete_request(thread_id:, request_id:, settle_kind:)
         raise NotImplementedError
       end
 

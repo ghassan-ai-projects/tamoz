@@ -401,15 +401,18 @@ module Tamoz
       end
       private :current_egress_pin
 
-      # Reads the conversation transcript a channel turn carries in its
-      # request payload, through the compiled app's BOUND checkpointer (what
-      # arrives at the constructor is the unbound adapter). A /reset or
-      # /compact control on the thread truncates the model-visible prefix:
-      # fragments the control counted are dropped from every later frame.
+      # Reads the conversation transcript a channel turn carries, through the
+      # compiled app's BOUND checkpointer (what arrives at the constructor is
+      # the unbound adapter). ONE authoritative stream serves both sides of
+      # the truncation contract: the thread-scoped durable turn fragments are
+      # what /reset and /compact count, and the same stream minus the latest
+      # truncating control's cumulative prefix is what every later frame
+      # composes — so the report's counts and the actual composition can
+      # never disagree across windows.
       def conversation_transcript(thread_id:, request_id:)
-        fragments = SessionPlanningContext.transcript_from(@app.checkpointer, thread_id:, request_id:)
         state = stored_state(thread_id)
         offset = SessionContextControls.visible_fragment_offset(Array(state[:context_controls])) if state
+        fragments = SessionPlanningContext.conversation_history(@app.checkpointer, thread_id:)
         offset ? fragments.drop(offset) : fragments
       end
       private :conversation_transcript

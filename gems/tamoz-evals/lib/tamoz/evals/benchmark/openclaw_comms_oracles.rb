@@ -641,12 +641,28 @@ module Tamoz
           }
         end
 
-        # The store's terminal derivation is the race verdict: a request whose
-        # projection settled completed is completed_before_effect, everything
-        # else observed is stopped — never the reverse.
+        # The store's terminal derivation is the race verdict, keyed to the
+        # SAME settle kind the store records at complete_request: an answer
+        # settles completed_before_effect, failed and blocked say so, and
+        # only an observed-but-unsettled request is stopped — never the
+        # reverse.
+        SETTLE_WORDS = {
+          'answer' => 'completed_before_effect',
+          'failed' => 'failed_before_effect',
+          'stopped' => 'stopped',
+          'blocked' => 'blocked'
+        }.freeze
+
+        def c8_expected_terminal_word(timeline)
+          kind = timeline['settle_kind']
+          return SETTLE_WORDS.fetch(kind, nil) if kind && kind != 'admitted'
+
+          'stopped' if timeline['observed_present']
+        end
+
         def c8_timeline_failures(timelines)
           timelines.flat_map do |timeline|
-            expected = timeline['settled'] ? 'completed_before_effect' : 'stopped'
+            expected = c8_expected_terminal_word(timeline)
             failures = []
             failures << 'cancellation_state_lost' unless timeline['requested_present'] &&
                                                          timeline['observed_present'] &&
@@ -670,9 +686,13 @@ module Tamoz
         end
 
         def c8_wording_matches?(timeline, wording)
-          expected_stopped = timeline['terminal_word'] == 'stopped'
-          wording['claims_stopped'] == expected_stopped &&
-            wording['claims_completed_before_effect'] == !expected_stopped
+          word = timeline['terminal_word']
+          {
+            'stopped' => wording['claims_stopped'],
+            'completed_before_effect' => wording['claims_completed_before_effect'],
+            'failed_before_effect' => wording['claims_failed_before_effect'],
+            'blocked' => wording['claims_blocked']
+          }.all? { |expected, claimed| claimed == (word == expected) }
         end
 
         def c8_stopped_claimed_against_completion?(checked)

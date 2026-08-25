@@ -751,6 +751,87 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # A replayed control update already has its disposition durable and its
+  # command applied; re-running it would double /new generations. The replay
+  # records nothing new and answers nothing new.
+  def test_a_replayed_new_command_bumps_the_generation_once_only
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+      generation = store.conversation_generation(surface_id: 'telegram-ops',
+                                                 conversation_id: 'telegram:chat:22222222')
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal generation, store.conversation_generation(surface_id: 'telegram-ops',
+                                                             conversation_id: 'telegram:chat:22222222'),
+                   'a replayed /new must not bump the generation twice'
+      assert_equal 1, inbound_rows_count(store, 2), 'the replay inserts no second anchor row'
+    end
+  end
+
+  def test_a_replayed_context_control_executes_its_command_once
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(3, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/think high')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(4, text: '/think high')])
+      gateway.serve_once(drain: false)
+
+      assert_equal [[:think, 'high']], controls.calls,
+                   'the replayed command must not execute a second time'
+    end
+  end
+
+  # The stateless thread keeps the existing guidance line; a REAL fence
+  # conflict from the controls seam answers the distinct bounded busy line.
+  def test_a_stateless_thread_keeps_the_guidance_reply_on_a_read_only_control
+    controls = ConflictControls.new('thread tg.g1 has no checkpoint')
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(5, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(6, text: '/context')])
+      gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::CONTROLS_NO_SESSION_REPLY, appended.last.fetch('text')
+    end
+  end
+
+  def test_a_real_fence_conflict_answers_the_distinct_conflict_reply
+    controls = ConflictControls.new('writer lease for thread tg.g1 is held by owner tamoz.worker/9')
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(7, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(8, text: '/context')])
+      gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal Tamoz::Comms::Gateway::CONTROLS_CONFLICT_REPLY, reply
+      refute_equal Tamoz::Comms::Gateway::CONTROLS_NO_SESSION_REPLY, reply
+    end
+  end
+
+  def inbound_rows_count(store, update_id)
+    store.__send__(:read, 'test.gateway.inbound.count') do |txn|
+      txn.scalar('test.gateway.inbound.count', 'SELECT COUNT(*) FROM tamoz_comms_inbound WHERE update_id = ?',
+                 [update_id]).to_i
+    end
+  end
+
   private
 
   def build_checkpoints(adapter)
@@ -794,6 +875,19 @@ class CommsGatewayTest < Minitest::Test
     def projection(control)
       Struct.new(:document).new('control' => control, 'generation' => 1,
                                 'preferences' => {}, 'truncated_fragments' => 0)
+    end
+  end
+
+  # A controls seam that raises the checkpoint-conflict class with a chosen
+  # message: the stateless wording keeps the guidance line, everything else
+  # is a real fence conflict.
+  class ConflictControls
+    def initialize(message)
+      @message = message
+    end
+
+    def context_report(thread:)
+      raise Tamoz::CheckpointConflictError, @message
     end
   end
 

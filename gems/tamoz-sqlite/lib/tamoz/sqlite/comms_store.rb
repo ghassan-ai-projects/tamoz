@@ -49,6 +49,18 @@ module Tamoz
       DEFAULT_NAMESPACE = '[]'
       HISTORY_LIMIT = 12
       HISTORY_TEXT_CHARACTERS = 500
+      # The settle kinds a terminal delivery can carry (OutboxDeliverySink);
+      # stamped into projection_state at complete_request so every later
+      # reader derives the terminal task status from the SAME durable fact.
+      TERMINAL_SETTLES = %w[answer failed stopped blocked].freeze
+      # The settle word per recorded kind: only an ANSWER claims the
+      # completion won the race; failed and blocked settles say so plainly.
+      SETTLE_WORDS = {
+        'answer' => 'completed_before_effect',
+        'failed' => 'failed_before_effect',
+        'stopped' => 'stopped',
+        'blocked' => 'blocked'
+      }.freeze
 
       def initialize(adapter:, checkpoints: nil)
         @adapter = adapter
@@ -269,13 +281,18 @@ module Tamoz
                                                reserved_request_id:, now:)
       end
 
-      # Terminal projection is durable; release the request's reservation so
-      # its slots return to intake (design §12: unused slots release only
+      # Terminal projection records the settle kind the correspondent was
+      # actually told (answer/failed/stopped/blocked) — the truthful axis the
+      # cancellation wording derives from; release the request's reservation
+      # so its slots return to intake (design §12: unused slots release only
       # after terminal projection is durable).
-      def complete_request(thread_id:, request_id:)
+      def complete_request(thread_id:, request_id:, settle_kind:)
+        kind = settle_kind.to_s
+        raise KeyError, "unknown settle kind #{settle_kind.inspect}" unless TERMINAL_SETTLES.include?(kind)
+
         transaction('comms.request.complete') do |txn|
-          txn.execute('comms.request.complete', <<~SQL, [thread_id, request_id])
-            UPDATE tamoz_comms_requests SET projection_state = 'completed'
+          txn.execute('comms.request.complete', <<~SQL, [kind, thread_id, request_id])
+            UPDATE tamoz_comms_requests SET projection_state = ?
             WHERE thread_id = ? AND request_id = ? AND projection_state = 'admitted'
           SQL
           txn.changes == 1 ? :released : :not_admitted
@@ -433,11 +450,11 @@ module Tamoz
       # The durable cancellation timeline of one request (plan 03, work item
       # 4), derived only from committed rows (invariant 12): `requested` is
       # the /cancel stamp, `observed` the runner's consumption stamp, and the
-      # terminal point is the EXISTING settle fact. A request that settled
-      # completed keeps terminal=completed_before_effect even when observed —
-      # a raced completion is never rendered as a stop (invariant 9). The
-      # document nests under one key so it never collides with the
-      # projection's own axes.
+      # terminal point is the recorded settle kind. A request that settled
+      # answered keeps terminal=completed_before_effect even when observed —
+      # a raced completion is never rendered as a stop (invariant 9), and a
+      # failed or blocked settle never reads as a success. The document nests
+      # under one key so it never collides with the projection's own axes.
       def cancellation_document(txn, request_id, now)
         facts = cancellation_facts(txn, request_id, now)
         facts.empty? ? {} : { 'cancellation' => facts }
@@ -462,13 +479,17 @@ module Tamoz
           facts['observed_at_ms'] = observed
           facts['observed_age_ms'] = clock - observed
         end
-        facts['terminal'] = cancellation_outcome(observed:, settled: row.fetch(0) == 'completed')
+        facts['terminal'] = cancellation_outcome(observed:, settled: row.fetch(0))
         facts['state'] = facts['terminal'] ? 'terminal' : (observed ? 'observed' : 'requested')
         facts
       end
 
+      # The settle word follows the TASK axis: projection_state carries the
+      # settle kind recorded at complete_request. An observed-but-unsettled
+      # request is the one honest `stopped` — work seen stopping at the
+      # boundary while still open.
       def cancellation_outcome(observed:, settled:)
-        return 'completed_before_effect' if settled
+        return SETTLE_WORDS.fetch(settled, nil) if settled && settled != 'admitted'
 
         'stopped' if observed
       end

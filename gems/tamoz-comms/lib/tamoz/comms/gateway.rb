@@ -62,6 +62,12 @@ module Tamoz
       CONTROLS_UNAVAILABLE_REPLY = 'Context controls are not available on this channel.'.freeze
       CONTROLS_NO_SESSION_REPLY =
         'No session state exists for this conversation yet; send a task first.'.freeze
+      CONTROLS_CONFLICT_REPLY =
+        'Context controls are busy right now; another writer holds this conversation. Try again.'.freeze
+      # The stateless signal read_control_state! raises; any other
+      # CheckpointConflictError from the controls seam is a real fence
+      # conflict and answers the distinct busy line.
+      STATELESS_THREAD_MESSAGE = 'has no checkpoint'
 
       # Fixed bounded refusals for the typed preference controls. The session
       # layer's ArgumentError message can echo the raw argument bytes, so it
@@ -253,9 +259,14 @@ module Tamoz
           if control_inbound_too_large?(envelope)
             refuse_admission(envelope, :inbound_too_large, now:)
           else
-            @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored',
-                                              reason: decision.reason.to_s,
-                                              now:)
+            outcome = @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored',
+                                                        reason: decision.reason.to_s,
+                                                        now:)
+            # A replayed control already has its disposition durable and its
+            # command applied; re-running it would double /new generations
+            # and append duplicate audit records (mirrors admit_request).
+            return if outcome == :duplicate
+
             if decision.command_intent
               handle_command(envelope, decision, now:)
             elsif decision.control_reply
@@ -517,8 +528,8 @@ module Tamoz
         Comms::ControlReply.line(intent.name, run_context_control(controls, thread, envelope, intent))
       rescue ArgumentError
         CONTROL_ARGUMENT_REFUSALS.fetch(intent.name, CONTROLS_UNAVAILABLE_REPLY)
-      rescue Tamoz::CheckpointConflictError
-        CONTROLS_NO_SESSION_REPLY
+      rescue Tamoz::CheckpointConflictError => error
+        error.message.to_s.end_with?(STATELESS_THREAD_MESSAGE) ? CONTROLS_NO_SESSION_REPLY : CONTROLS_CONFLICT_REPLY
       end
 
       def run_context_control(controls, thread, envelope, intent)
@@ -745,8 +756,9 @@ module Tamoz
       end
 
       # The cancellation timeline in external words (invariant 9): the three
-      # points render distinctly, and a raced completion says exactly that —
-      # it never claims an already-issued external call stopped.
+      # points render distinctly, the terminal word follows the recorded
+      # settle kind, and a raced completion says exactly that — it never
+      # claims an already-issued external call stopped.
       def cancellation_sentence(projection)
         facts = projection['cancellation']
         return '' unless facts
@@ -758,6 +770,10 @@ module Tamoz
           "#{sentence} Terminal: stopped at the cancellation boundary."
         when 'completed_before_effect'
           "#{sentence} Terminal: completed before the cancellation took effect."
+        when 'failed_before_effect'
+          "#{sentence} Terminal: failed before the cancellation took effect."
+        when 'blocked'
+          "#{sentence} Terminal: work was blocked when the cancellation arrived."
         else
           sentence
         end

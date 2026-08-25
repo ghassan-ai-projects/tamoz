@@ -59,13 +59,39 @@ class CancellationVisibilityTest < Minitest::Test
       assert_equal :requested, store.request_cancellation(
         thread_id: THREAD, request_id: 'cancel-302', payload: CANCEL_PAYLOAD, now: NOW + 2
       )
-      assert_equal :released, store.complete_request(thread_id: THREAD, request_id:)
+      assert_equal :released,
+                   store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'answer')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
       text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
 
       assert_match(/Terminal: completed before the cancellation took effect\./, text)
       refute_match(/stopped/i, text, 'a raced completion must not be rendered as a stop')
+    end
+  end
+
+  # A turn that FAILS under cancellation renders the failed wording next to
+  # task=failed — the settle word follows the recorded settle kind, never a
+  # success claim for work that did not succeed.
+  def test_a_failed_settle_renders_failed_wording_on_the_task_axis
+    with_engine do |store, adapter, checkpoints|
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 304))
+      request_id = request_ids(checkpoints).first
+      fail_inbox_request!(checkpoints, request_id)
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: THREAD, request_id: 'cancel-304', payload: CANCEL_PAYLOAD, now: NOW + 2
+      )
+      assert_equal :released,
+                   store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'failed')
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
+
+      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
+
+      assert_match(/task=failed/, text)
+      assert_match(/Terminal: failed before the cancellation took effect\./, text)
+      refute_match(/completed/i, text, 'a failed settle never reads as a completion')
     end
   end
 
@@ -473,6 +499,18 @@ class CancellationVisibilityTest < Minitest::Test
 
   def request_ids(checkpoints)
     checkpoints.request_history(thread_id: THREAD).map(&:request_id)
+  end
+
+  # Marks the admitted turn failed in the checkpoint inbox — the same fenced
+  # transition the worker's terminal_fail performs.
+  def fail_inbox_request!(checkpoints, request_id)
+    checkpoints.open_writer(thread_id: THREAD, namespace: [], owner_id: 'test.fail', ttl: 30) do |writer|
+      claimed = writer.claim_next_request(validator: nil)
+      raise 'the turn was not claimable' unless claimed&.request_id == request_id
+
+      writer.mark_request_running(request_id:, execution_id: claimed.execution_id)
+      writer.terminal_fail(request_id:, operation: :turn, reason: 'model_error')
+    end
   end
 
   def ref(request_id) = "r#{request_id[0, 10]}"

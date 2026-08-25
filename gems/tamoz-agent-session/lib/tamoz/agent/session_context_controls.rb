@@ -95,8 +95,9 @@ module Tamoz
         found && found.dig('preferences', key)
       end
 
-      # Fragments counted by the latest truncating control (/reset, /compact)
-      # never re-enter a later model-visible frame.
+      # The cumulative durable-transcript prefix recorded by the latest
+      # truncating control (/reset, /compact) never re-enters a later
+      # model-visible frame.
       def visible_fragment_offset(controls)
         found = controls.reverse.find { |record| %w[reset compact].include?(record.fetch('control')) }
         found&.fetch('truncated_fragments', nil)
@@ -113,16 +114,15 @@ module Tamoz
       end
 
       # /reset — SAME generation, fresh episode state: clears the accumulated
-      # prompt-context channels, marks how much transcript leaves the frame,
-      # keeps every prior turn in durable audit history, and continues budget
-      # accounting untouched.
+      # prompt-context channels, records the durable-transcript prefix that
+      # leaves the frame (cumulative, like /compact), keeps every prior turn
+      # in durable audit history, and continues budget accounting untouched.
       def reset_episode(thread:, request_id:)
         fields = lambda do |state|
-          offset = SessionContextControls.visible_fragment_offset(Array(state[:context_controls])) || 0
           total = SessionPlanningContext.conversation_history(app_for_thread(thread).checkpointer,
                                                               thread_id: thread).length
           {
-            truncated_fragments: total - offset,
+            truncated_fragments: total,
             cleared_channels: resettable_channels(state)
           }
         end

@@ -349,7 +349,8 @@ class SQLiteCommsStoreTest < Minitest::Test
       request_id = checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id
       assert_equal :open_request_limit, admit(store, envelope(update_id: 82))
 
-      assert_equal :released, store.complete_request(thread_id: 'tg.ops.abc', request_id: request_id)
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: request_id, settle_kind: 'answer')
 
       assert_equal :enqueued, admit(store, envelope(update_id: 82)),
                    'the freed slot lets the next admission through'
@@ -857,7 +858,8 @@ class SQLiteCommsStoreTest < Minitest::Test
         thread_id: 'tg.ops.abc', request_id: 'cancel-95',
         payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
       )
-      assert_equal :released, store.complete_request(thread_id: 'tg.ops.abc', request_id:)
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id:, settle_kind: 'answer')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
 
       facts = store.request_status(
@@ -874,6 +876,48 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_empty store.requests_by_reference('r0000000000'), 'an unknown ref matches nothing'
       assert_empty store.requests_by_reference('half-a-ref'), 'a malformed ref matches nothing'
     end
+  end
+
+  # The terminal word is keyed to the recorded settle kind — the task axis —
+  # so a failed or blocked settle never renders as a completion and an
+  # unknown settle kind refuses at the seam.
+  def test_settle_words_follow_the_recorded_settle_kind
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 96))
+      assert_equal :enqueued, admit(store, envelope(update_id: 97))
+      failed_id, blocked_id = request_ids(checkpoints, 'tg.ops.abc').first(2)
+      raise 'two requests were not admitted' unless blocked_id
+
+      [failed_id, blocked_id].each do |request_id|
+        assert_equal :requested, store.request_cancellation(
+          thread_id: 'tg.ops.abc', request_id: "cancel-#{request_id[0, 6]}",
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+        )
+      end
+
+      assert_raises(KeyError) do
+        store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'vanished')
+      end
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'failed')
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: blocked_id, settle_kind: 'blocked')
+
+      assert_equal 'failed_before_effect', settle_terminal(store, failed_id)
+      assert_equal 'blocked', settle_terminal(store, blocked_id)
+    end
+  end
+
+  def settle_terminal(store, request_id)
+    row = store.__send__(:read, 'test.settle.word') do |txn|
+      txn.first('test.settle.word', <<~SQL, [request_id])
+        SELECT projection_state, cancellation_requested_at_ms FROM tamoz_comms_requests
+        WHERE request_id = ?
+      SQL
+    end
+    store.__send__(:cancellation_outcome, observed: true, settled: row.fetch(0))
   end
 
   def cancellation_stamps(store, request_id)
