@@ -87,9 +87,9 @@ module Tamoz
         if fields[:logical_call_id] != gateway_record.logical_call_id
           raise ProtocolError, "witness_gateway/logical_call_id_mismatch"
         end
-        if fields[:provider] != gateway_record.provider || fields[:model] != gateway_record.model
-          raise ProtocolError, "witness_gateway/identity_mismatch"
-        end
+        return unless fields[:provider] != gateway_record.provider || fields[:model] != gateway_record.model
+
+        raise ProtocolError, "witness_gateway/identity_mismatch"
       end
 
       def field(receipt, name)
