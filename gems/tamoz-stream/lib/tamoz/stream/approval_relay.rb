@@ -31,6 +31,7 @@ module Tamoz
     # (plan §5), and the relay never sees the private key material.
     class ApprovalRelay
       ASSERTION_DOMAIN = "situation-runtime/approval-assertion/v1\n"
+      SUBMISSION_DOMAIN = "situation-runtime/approval-submission/v1\n"
       ASSERTION_FIELDS = %w[
         approver_id tenant_id approval_id intent_digest snapshot_digest
         decision expires_at nonce audience relay_id key_id
@@ -277,8 +278,8 @@ module Tamoz
       end
 
       def require_prompt_fields!(approval)
-        %w[summary delta hypothesis action decline_consequence].each do |field|
-          require_field!(approval, field)
+        %w[summary delta hypothesis action decline_consequence].each do |key|
+          require_field!(approval, key)
         end
       end
 
@@ -325,12 +326,12 @@ module Tamoz
         unless reason.nil? || reason.to_s.empty?
           keyed = keyed.merge(
             "reason_digest" => Tamoz::Core.digest(
-              "situation-runtime/approval-submission/v1\n",
+              SUBMISSION_DOMAIN,
               {"reason" => reason.to_s}
             )
           )
         end
-        Tamoz::Core.digest("situation-runtime/approval-submission/v1\n", keyed)
+        Tamoz::Core.digest(SUBMISSION_DOMAIN, keyed)
       end
 
       def stringify(hash)
