@@ -128,9 +128,7 @@ module Tamoz
             retryability: Tamoz::Core.deep_freeze(validate_retryability(retryability)),
             capability_absent:,
             trusted_context: Tamoz::Core.deep_freeze(validate_trusted_context(trusted_context)),
-            untrusted_message_ref: untrusted_message_ref.nil? ? nil : Tamoz::Core.deep_freeze(
-              validate_message_ref(untrusted_message_ref)
-            ),
+            untrusted_message_ref: normalize_message_ref(untrusted_message_ref),
             observed_at_ms:
           )
         end
@@ -139,7 +137,7 @@ module Tamoz
         # never-mutate classes. A `true` here forbids automatic mutation
         # regardless of what any rule, adapter, or model proposes.
         def never_mutate?
-          NEVER_MUTATE_CATEGORIES.include?(category) || capability_absent
+          !never_mutate_class.nil?
         end
 
         # The name of the never-mutate class that applies, or nil.
@@ -274,6 +272,8 @@ module Tamoz
           }
         end
 
+        private
+
         def validate_format_version!(format_version)
           return if format_version == FORMAT_VERSION
 
@@ -362,7 +362,7 @@ module Tamoz
                 "untrusted_message_ref must carry digest and source"
         end
 
-        def forbid_raw_text!(value)
+        def validate_no_raw_text!(value)
           return unless value.key?("text") || value.key?("message") || value.key?("body")
 
           raise HealingPolicyError,
@@ -374,8 +374,6 @@ module Tamoz
 
           raise HealingPolicyError, "#{name} must be a non-empty string"
         end
-
-        private
 
         def validate_id(value, name)
           SafeText.normalize(
@@ -420,9 +418,13 @@ module Tamoz
           value
         end
 
+        def normalize_message_ref(value)
+          value.nil? ? nil : Tamoz::Core.deep_freeze(validate_message_ref(value))
+        end
+
         def validate_message_ref(value)
           validate_reference_keys!(value)
-          forbid_raw_text!(value)
+          validate_no_raw_text!(value)
           validate_non_empty_string!(value.fetch("digest"), "untrusted_message_ref digest")
           value
         end
