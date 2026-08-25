@@ -45,7 +45,7 @@ module Tamoz
             identity = effect_identity(classification)
             return non_mutating_terminal(classification, plan, review, identity) unless classification.mutating?
 
-            effect_outcome = execute_effect(classification, identity)
+            effect_outcome = execute_effect(identity)
             ambiguous_terminal = handle_ambiguous_effect(effect_outcome, classification, plan, review, identity)
             return ambiguous_terminal if ambiguous_terminal
 
@@ -79,7 +79,7 @@ module Tamoz
             )
           end
 
-          def run_preflight(classification)
+          def preflight_rejection(classification)
             PreflightCheck.new(
               record: @record, rule: @rule, attempt: @attempt,
               context: @preflight_context
@@ -123,7 +123,7 @@ module Tamoz
           end
 
           def run_preflight_check(classification, plan, review)
-            rejection = run_preflight(classification)
+            rejection = preflight_rejection(classification)
             if rejection
               transition(
                 :preflighted,
@@ -152,7 +152,7 @@ module Tamoz
             )
           end
 
-          def execute_effect(_classification, identity)
+          def execute_effect(identity)
             execution_for.call(identity) { @performed = true }.tap do |outcome|
               transition(
                 :remediating,
