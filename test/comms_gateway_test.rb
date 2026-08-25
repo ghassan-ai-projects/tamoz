@@ -11,7 +11,7 @@ require_relative 'test_helper'
 class CommsGatewayTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  def with_gateway
+  def with_gateway(limits: {}, controls: nil)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -23,21 +23,32 @@ class CommsGatewayTest < Minitest::Test
           edge :finish, Tamoz::END
         end
         checkpoints = definition.compile(checkpointer: adapter).checkpointer
+        appended = []
+        # The gateway binds its own store, so the capture rides the adapter:
+        # every appended delivery wire is recorded for reply-targeting proofs.
+        adapter.singleton_class.define_method(:bind_comms_store) do |*bound|
+          super(*bound).tap do |store|
+            store.singleton_class.define_method(:append_delivery) do |delivery_wire, **arguments|
+              appended << delivery_wire
+              super(delivery_wire, **arguments)
+            end
+          end
+        end
         store = adapter.bind_comms_store(checkpoints)
-        store.deploy_surface(descriptor.wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
+        store.deploy_surface(descriptor(limits:).wire, now: Time.utc(2026, 8, 10, 12, 0, 0))
         transport = ScriptedTransport.new
         gateway = Tamoz::Comms::Gateway.new(
-          adapter:, checkpoints:, transport:, descriptor:,
-          poller_owner: 'gateway:test'
+          adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
+          poller_owner: 'gateway:test', controls:
         )
-        yield gateway, transport, store, adapter, checkpoints
+        yield gateway, transport, store, adapter, checkpoints, appended
       ensure
         adapter&.close
       end
     end
   end
 
-  def descriptor
+  def descriptor(limits: {})
     Comms::SurfaceDescriptor.build(
       surface_id: 'telegram-ops', revision: 1,
       transport: { mode: 'long_poll',
@@ -51,7 +62,7 @@ class CommsGatewayTest < Minitest::Test
       limits: { max_inbound_bytes: 8192, max_open_requests: 50,
                 max_denial_prompts_per_request: 4, outbox_capacity: 500,
                 control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 }
+                global_messages_per_s: 25.0 }.merge(limits)
     )
   end
 
@@ -66,13 +77,48 @@ class CommsGatewayTest < Minitest::Test
 
   def update(id, text: 'hello', user_id: 111_111_11)
     { 'update_id' => id,
-      'message' => { 'message_id' => id, 'date' => 1_752_700_800,
+      'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
                      'chat' => { 'id' => 222_222_22, 'type' => 'private' },
                      'from' => { 'id' => user_id }, 'text' => text } }
   end
 
+  def callback_update(id, data:, callback_message_id:, user_id: 111_111_11)
+    { 'update_id' => id,
+      'callback_query' => { 'id' => "cb#{id}", 'data' => data,
+                            'from' => { 'id' => user_id },
+                            'message' => { 'message_id' => callback_message_id, 'date' => 1_752_700_800,
+                                           'chat' => { 'id' => 222_222_22, 'type' => 'private' } } } }
+  end
+
   def seed_binding(store, now: Time.utc(2026, 8, 10, 12, 0, 0))
     store.bind_correspondent(binding_wire, now:)
+  end
+
+  def inbound_dispositions(store, update_id)
+    store.__send__(:read, 'test.gateway.inbound.read') do |txn|
+      txn.rows('test.gateway.inbound.read', <<~SQL, [update_id])
+        SELECT disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?
+      SQL
+    end
+  end
+
+  def stored_hashes(store, update_id)
+    store.__send__(:read, 'test.gateway.hash.read') do |txn|
+      txn.rows('test.gateway.hash.read', 'SELECT raw_payload_hash FROM tamoz_comms_inbound WHERE update_id = ?',
+               [update_id]).map(&:first)
+    end
+  end
+
+  def membership_update(id, chat_id:)
+    { 'update_id' => id,
+      'my_chat_member' => { 'chat' => { 'id' => chat_id, 'type' => 'private' },
+                            'from' => { 'id' => 111_111_11 } } }
+  end
+
+  def request_row_count(store)
+    store.__send__(:read, 'test.gateway.request.count') do |txn|
+      txn.scalar('test.gateway.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
+    end
   end
 
   def test_an_inbound_message_becomes_a_queued_turn_and_the_offset_persists
@@ -127,9 +173,15 @@ class CommsGatewayTest < Minitest::Test
         fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
       ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
+      first_ref = Comms::Lifecycle::RequestRef.for(
+        Tamoz::Core::RequestIdentity.request_id(
+          surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
+          update_id: 101, raw_payload_hash: transport.digest_of(update(101, text: 'make it blue'))
+        )
+      )
 
-      assert_equal 'Accepted. I will report committed progress.', replies.first
-      assert_match(/Queued behind earlier work/, replies.last)
+      assert_equal "Accepted #{first_ref}. I will report committed progress.", replies.first
+      assert_match(/Accepted r\h{10}; queued behind earlier work/, replies.last)
     end
   end
 
@@ -274,6 +326,113 @@ class CommsGatewayTest < Minitest::Test
       assert_equal %i[turn redirect], history.map(&:operation)
       assert history.last.payload.fetch('task').fetch('cancel')
       refute_match(%r{/cancel}, history.last.payload.inspect)
+
+      turn_request_id = history.first.request_id
+      row = store.__send__(:read, 'test.gateway.cancel.stamp') do |txn|
+        txn.first('test.gateway.cancel.stamp', <<~SQL, [turn_request_id])
+          SELECT cancellation_requested_at_ms FROM tamoz_comms_requests WHERE request_id = ?
+        SQL
+      end
+
+      refute_nil row&.first, '/cancel handling must stamp the requested point in the same commit'
+    end
+  end
+
+  # After /new rotates the generation, /cancel targets the CURRENT
+  # generation's thread — the same derivation admission uses — so the live
+  # request there is cancelled and work on the pre-rotation thread is never
+  # touched.
+  def test_cancel_after_a_rotation_affects_only_the_current_generation
+    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      seed_binding(store)
+      old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+      new_thread = Comms::Admission.thread_id(
+        'telegram-ops', 'telegram:chat:22222222',
+        generation: store.conversation_generation(surface_id: 'telegram-ops',
+                                                  conversation_id: 'telegram:chat:22222222')
+      )
+
+      refute_equal old_thread, new_thread, 'the rotation must derive a fresh thread'
+      transport.batch([update(3, text: 'more work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/cancel')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal 'Cancellation requested.', appended.last.fetch('text')
+      assert_equal 1, cancellation_stamped_count(store, new_thread),
+                   'the live request on the CURRENT generation is stamped'
+      assert_equal 0, cancellation_stamped_count(store, old_thread),
+                   'the pre-rotation request keeps running untouched'
+      assert_empty checkpoints.request_history(thread_id: old_thread)
+                      .select { |request| request.operation == :redirect },
+                   'no cancel operation lands on the old thread'
+      assert_equal %i[turn redirect], checkpoints.request_history(thread_id: new_thread).map(&:operation)
+    end
+  end
+
+  # Nothing admitted on the current generation means /cancel refuses
+  # honestly instead of queueing an operation against a stale thread.
+  def test_cancel_with_no_running_work_on_the_current_generation_refuses_bounded
+    with_gateway do |gateway, transport, store, _adapter, checkpoints, appended|
+      seed_binding(store)
+      old_thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new'), update(3, text: '/cancel')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::CANCEL_NO_WORK_REPLY, appended.last.fetch('text')
+      assert_equal 0, cancellation_stamped_count(store, old_thread),
+                   'the pre-rotation request is neither stamped nor redirected'
+      assert_equal [:turn], checkpoints.request_history(thread_id: old_thread).map(&:operation)
+    end
+  end
+
+  # Aggregate /status projects the active request on the thread it was
+  # ADMITTED to, so after a rotation it reports the real task state instead
+  # of a not_started mismatch (phase-1 blind spot).
+  def test_aggregate_status_reports_the_current_generation_after_a_rotation
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new'), update(3, text: 'more work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/status')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      status_reply = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                          .map { |row| row.fetch('text') }
+                          .reverse.find { |text| text.start_with?('Work status:') }
+
+      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+
+      warn({ status_reply:, rows: store.outbox_rows(surface_id: 'telegram-ops',
+                                                     statuses: %w[pending claimed succeeded failed unknown])
+        .map { |r| "#{r['kind']}:#{r['status']}:#{r['text'][0, 45].inspect}" } }.inspect)
+      stx = store.conversation_status(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+      warn("agg=#{stx['task_state']} open=#{stx['open_requests']}")
+
+      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      refute_match(/task=accepted/, status_reply)
+    end
+  end
+
+  def cancellation_stamped_count(store, thread_id)
+    store.__send__(:read, 'test.gateway.cancel.stamp.count') do |txn|
+      txn.scalar('test.gateway.cancel.stamp.count', <<~SQL, [thread_id]).to_i
+        SELECT COUNT(*) FROM tamoz_comms_requests
+        WHERE thread_id = ? AND cancellation_requested_at_ms IS NOT NULL
+      SQL
     end
   end
 
@@ -347,6 +506,332 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # Invariant 1 / hard-zero list: the same (surface, bot, update_id) under
+  # different payload bytes is a durable quarantine with one bounded reply —
+  # never a silent duplicate, never a second turn. The conflict lands on the
+  # ONE anchor row (counter + last conflicting digest), so the identity reads
+  # as quarantined, not as two rows.
+  def test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(300, text: 'original bytes')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(300, text: 'conflicting bytes')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal [%w[quarantined integrity_conflict]], inbound_dispositions(store, 300)
+      assert_equal 1, request_row_count(store), 'the conflict enqueues no second request'
+      assert_equal 1, checkpoints.request_history(thread_id: thread).length,
+                   'the conflicting update never becomes a turn'
+      replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                     .select { |row| row.fetch('kind') == 'control' }
+
+      assert_equal 1, replies.length
+      assert_equal 'This update conflicts with an earlier message carrying the same identity. ' \
+                   'An operator can review it.', replies.first.fetch('text')
+    end
+  end
+
+  # The digest admission dedups on is the PRODUCTION normalizer's digest of
+  # the raw Bot-API update — proven end to end: the stored raw_payload_hash
+  # equals Normalizer.normalize(update)'s own, and mutating any meaningful
+  # field under the same update_id (text here, chat id for membership) is a
+  # detectable integrity conflict.
+  def test_admission_binds_the_real_normalizer_digest_and_detects_mutations_end_to_end
+    with_gateway do |_gateway, _transport, store|
+      seed_binding(store)
+      normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      admit = lambda do |wire|
+        store.admit_and_enqueue(
+          wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                thread:, profile_id: 'ops', reservation: 9, now: Time.utc(2026, 8, 10, 12, 0, 0)
+        )
+      end
+
+      original = normalizer.normalize(update(600, text: 'original bytes')).wire
+
+      assert_equal :enqueued, admit.call(original)
+      assert_equal [original.fetch('raw_payload_hash')], stored_hashes(store, 600),
+                   'the stored digest is the production normalizer\'s'
+
+      mutated = normalizer.normalize(update(600, text: 'conflicting bytes')).wire
+
+      refute_equal original.fetch('raw_payload_hash'), mutated.fetch('raw_payload_hash')
+
+      assert_equal :integrity_conflict, admit.call(mutated)
+
+      membership_first = normalizer.normalize(membership_update(601, chat_id: 111_111)).wire
+      membership_second = normalizer.normalize(membership_update(601, chat_id: 222_222)).wire
+
+      refute_equal membership_first.fetch('raw_payload_hash'),
+                   membership_second.fetch('raw_payload_hash'),
+                   'membership digests are sensitive to the chat id under one update_id'
+    end
+  end
+
+  def test_the_open_request_limit_rejects_with_a_bounded_reply_and_no_turn
+    with_gateway(limits: { max_open_requests: 1 }) do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(310, text: 'first turn')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(311, text: 'second turn')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal [%w[rejected open_request_limit]], inbound_dispositions(store, 311)
+      assert_equal 1, request_row_count(store), 'the refused update enqueues no work'
+      assert_equal 1, checkpoints.request_history(thread_id: thread).length
+      replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                     .select { |row| row.fetch('kind') == 'control' }
+
+      assert_equal 1, replies.length
+      assert_equal 'This channel has too much open work right now; try again later.',
+                   replies.first.fetch('text')
+    end
+  end
+
+  def test_an_oversized_inbound_message_rejects_with_a_bounded_reply_and_no_turn
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(320, text: 'x' * 33)])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal [%w[rejected inbound_too_large]], inbound_dispositions(store, 320)
+      assert_equal 0, request_row_count(store), 'the oversized update enqueues no work'
+      assert_empty checkpoints.request_history(thread_id: thread)
+      replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                     .select { |row| row.fetch('kind') == 'control' }
+
+      assert_equal 1, replies.length
+      assert_equal "That message exceeds this channel's size limit.", replies.first.fetch('text')
+    end
+  end
+
+  # Invariant 2: a control reply targets the message id the update carries,
+  # never the update_id the fixtures once kept equal to it.
+  def test_control_replies_target_the_message_id_not_the_update_id
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(400, text: '/help')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last
+
+      assert_equal 'control', reply.fetch('kind')
+      assert_equal 10_400, reply.fetch('reply_to'), 'the reply targets the carried message id'
+      refute_equal 400, reply.fetch('reply_to')
+    end
+  end
+
+  def test_a_callback_reply_targets_the_callback_message_id_not_the_update_id
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      store.revoke_binding(correspondent_id: 'telegram:user:11111111', surface_id: 'telegram-ops',
+                           reason: 'revoked for test', now: Time.utc(2026, 8, 10, 12, 0, 0))
+      transport.batch([callback_update(500, data: 'deny:r1', callback_message_id: 88)])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last
+
+      assert_equal 'control', reply.fetch('kind')
+      assert_equal 88, reply.fetch('reply_to'), 'the reply targets the callback message id'
+      refute_equal 500, reply.fetch('reply_to')
+    end
+  end
+
+  # The poison-argument surface is frozen: a /think argument of ~1400 CJK
+  # characters gets the FIXED short refusal — never the session layer's
+  # ArgumentError text, which would echo the raw argument bytes back.
+  def test_an_oversized_cjk_think_argument_gets_the_fixed_bounded_refusal
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(2, text: "/think #{'思' * 1400}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal 'Reasoning depth must be low, medium, or high.', reply
+      refute_includes(reply, '思')
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES
+      assert_empty controls.calls, 'the refused preference executes no control'
+    end
+  end
+
+  def test_a_bad_verbose_argument_gets_its_own_fixed_bounded_refusal
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(2, text: "/verbose #{'大' * 1400}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal 'Answer verbosity must be quiet, normal, or detailed.', reply
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES
+    end
+  end
+
+  # Belt-and-braces at the single choke point: whatever a control handler
+  # produced, the delivery build can never raise on reply length.
+  def test_append_control_clamps_oversized_reply_text_to_the_delivery_ceiling
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      envelope = transport.normalize(update(1, text: '/help'))
+
+      gateway.send(:append_control, '字' * 5000, envelope, now: Time.utc(2026, 8, 10, 12, 0, 0))
+
+      reply = appended.last.fetch('text')
+
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES,
+                      'a delivery build can never raise from control-reply length'
+    end
+  end
+
+  def test_every_fixed_control_reply_constant_fits_the_delivery_ceiling
+    replies = Tamoz::Comms::Gateway.constants.sort
+                                         .filter_map { |name| Tamoz::Comms::Gateway.const_get(name) }
+                                         .select { |value| value.is_a?(String) }
+
+    refute_empty replies
+    replies.each do |reply|
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES,
+                      "#{reply.inspect} exceeds Delivery::MAX_TEXT_BYTES"
+    end
+  end
+
+  # The declared inbound limit covers COMMAND/control-kind updates too: an
+  # oversized command refuses typed with the same bounded wording as an
+  # oversized message and creates no request row.
+  def test_an_oversized_command_refuses_with_the_bounded_reply_and_no_request_row
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(330, text: "/status #{'x' * 40}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal [%w[rejected inbound_too_large]], inbound_dispositions(store, 330)
+      assert_equal 0, request_row_count(store), 'the oversized command creates no request row'
+      assert_empty checkpoints.request_history(thread_id: thread)
+      replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                     .select { |row| row.fetch('kind') == 'control' }
+
+      assert_equal ["That message exceeds this channel's size limit."], replies.map { |row| row.fetch('text') }
+    end
+  end
+
+  def test_a_within_limit_command_still_passes_the_size_gate
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(331, text: '/help')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal [%w[ignored command]], inbound_dispositions(store, 331)
+      assert_equal Tamoz::Comms::Gateway::HELP_REPLY, appended.last.fetch('text')
+    end
+  end
+
+  # A replayed control update already has its disposition durable and its
+  # command applied; re-running it would double /new generations. The replay
+  # records nothing new and answers nothing new.
+  def test_a_replayed_new_command_bumps_the_generation_once_only
+    with_gateway do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+      generation = store.conversation_generation(surface_id: 'telegram-ops',
+                                                 conversation_id: 'telegram:chat:22222222')
+
+      transport.batch([update(2, text: '/new')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal generation, store.conversation_generation(surface_id: 'telegram-ops',
+                                                             conversation_id: 'telegram:chat:22222222'),
+                   'a replayed /new must not bump the generation twice'
+      assert_equal 1, inbound_rows_count(store, 2), 'the replay inserts no second anchor row'
+    end
+  end
+
+  def test_a_replayed_context_control_executes_its_command_once
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store|
+      seed_binding(store)
+      transport.batch([update(3, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(4, text: '/think high')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(4, text: '/think high')])
+      gateway.serve_once(drain: false)
+
+      assert_equal [[:think, 'high']], controls.calls,
+                   'the replayed command must not execute a second time'
+    end
+  end
+
+  # The stateless thread keeps the existing guidance line; a REAL fence
+  # conflict from the controls seam answers the distinct bounded busy line.
+  def test_a_stateless_thread_keeps_the_guidance_reply_on_a_read_only_control
+    controls = ConflictControls.new('thread tg.g1 has no checkpoint')
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(5, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(6, text: '/context')])
+      gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::CONTROLS_NO_SESSION_REPLY, appended.last.fetch('text')
+    end
+  end
+
+  def test_a_real_fence_conflict_answers_the_distinct_conflict_reply
+    controls = ConflictControls.new('writer lease for thread tg.g1 is held by owner tamoz.worker/9')
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(7, text: 'work')])
+      gateway.serve_once(drain: false)
+
+      transport.batch([update(8, text: '/context')])
+      gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal Tamoz::Comms::Gateway::CONTROLS_CONFLICT_REPLY, reply
+      refute_equal Tamoz::Comms::Gateway::CONTROLS_NO_SESSION_REPLY, reply
+    end
+  end
+
+  def inbound_rows_count(store, update_id)
+    store.__send__(:read, 'test.gateway.inbound.count') do |txn|
+      txn.scalar('test.gateway.inbound.count', 'SELECT COUNT(*) FROM tamoz_comms_inbound WHERE update_id = ?',
+                 [update_id]).to_i
+    end
+  end
+
   private
 
   def build_checkpoints(adapter)
@@ -357,6 +842,53 @@ class CommsGatewayTest < Minitest::Test
       edge :finish, Tamoz::END
     end
     definition.compile(checkpointer: adapter).checkpointer
+  end
+
+  # A scripted session-controls seam for gateway-level control tests: the
+  # real SessionContextControls validation semantics (typed ArgumentError on
+  # a bad preference) without constructing a Session.
+  class ScriptedControls
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def set_reasoning_depth(thread:, request_id:, depth:)
+      unless %w[low medium high].include?(depth)
+        raise ArgumentError, "reasoning_depth must be one of low, medium, high (got #{depth.inspect})"
+      end
+
+      @calls << [:think, depth]
+      projection('think')
+    end
+
+    def set_answer_verbosity(thread:, request_id:, verbosity:)
+      unless %w[quiet normal detailed].include?(verbosity)
+        raise ArgumentError, "answer_verbosity must be one of quiet, normal, detailed (got #{verbosity.inspect})"
+      end
+
+      @calls << [:verbose, verbosity]
+      projection('verbose')
+    end
+
+    def projection(control)
+      Struct.new(:document).new('control' => control, 'generation' => 1,
+                                'preferences' => {}, 'truncated_fragments' => 0)
+    end
+  end
+
+  # A controls seam that raises the checkpoint-conflict class with a chosen
+  # message: the stateless wording keeps the guidance line, everything else
+  # is a real fence conflict.
+  class ConflictControls
+    def initialize(message)
+      @message = message
+    end
+
+    def context_report(thread:)
+      raise Tamoz::CheckpointConflictError, @message
+    end
   end
 
   # A scripted Transport for the loop: batches of raw updates, optional
@@ -408,16 +940,36 @@ class CommsGatewayTest < Minitest::Test
     def deliveries = @sent || []
 
     def normalize(update)
-      Comms::InboundEnvelope.new(
-        surface_id: 'telegram-ops', surface_revision: 1,
-        update_id: update.fetch('update_id'), raw_payload_hash: 'a' * 64,
-        parser_version: 1, kind: update.dig('message', 'text')&.start_with?('/') ? 'command' : 'text',
-        correspondent_id: "telegram:user:#{update.dig('message', 'from', 'id')}",
-        conversation_id: "telegram:chat:#{update.dig('message', 'chat', 'id')}",
-        text: update.dig('message', 'text'),
-        observed_time: Time.at(update.dig('message', 'date')).utc
-      ).wire
+      if (callback = update['callback_query'])
+        Comms::InboundEnvelope.new(
+          surface_id: 'telegram-ops', surface_revision: 1,
+          update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
+          parser_version: 1, kind: 'callback',
+          correspondent_id: "telegram:user:#{callback.dig('from', 'id')}",
+          conversation_id: "telegram:chat:#{callback.dig('message', 'chat', 'id')}",
+          callback_message_id: callback.dig('message', 'message_id'),
+          text: callback['data'],
+          observed_time: Time.at(callback.dig('message', 'date') || 1_752_700_800).utc
+        ).wire
+      else
+        Comms::InboundEnvelope.new(
+          surface_id: 'telegram-ops', surface_revision: 1,
+          update_id: update.fetch('update_id'), raw_payload_hash: payload_digest(update),
+          parser_version: 1, kind: update.dig('message', 'text')&.start_with?('/') ? 'command' : 'text',
+          correspondent_id: "telegram:user:#{update.dig('message', 'from', 'id')}",
+          conversation_id: "telegram:chat:#{update.dig('message', 'chat', 'id')}",
+          message_id: update.dig('message', 'message_id'),
+          text: update.dig('message', 'text'),
+          observed_time: Time.at(update.dig('message', 'date')).utc
+        ).wire
+      end
     end
+
+    def payload_digest(update)
+      Digest::SHA256.hexdigest(JSON.generate(update))
+    end
+
+    def digest_of(update) = payload_digest(update)
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength

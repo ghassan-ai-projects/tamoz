@@ -106,19 +106,10 @@ class AgentRubyLLMModelTest < Minitest::Test
       )
       puts Encoding.default_external.name
     RUBY
-    load_paths = %w[
-      tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
-      tamoz-tools tamoz-observability tamoz-comms tamoz-cancellation tamoz-concurrency
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-agent
-    ].map do |name|
-      "-I#{GEM_ROOTS.fetch(name).join('lib')}"
-    end
     stdout, stderr, status = Open3.capture3(
       {"LC_ALL" => "C", "LANG" => "C"},
       RbConfig.ruby,
-      *load_paths,
+      *SUBPROCESS_LIB_ARGS,
       "-e",
       script
     )

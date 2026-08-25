@@ -87,9 +87,32 @@ class StreamEpisodeSkillsMemoryTest < Minitest::Test
                     "a skill swap must change the frame digest"
     assert_operator states[0].fetch(:skill_set_digest), :!=, states[1].fetch(:skill_set_digest),
                     "a skill swap must change the skill-set digest"
-    # Nothing else changes: the same decision digest (the same inputs produce
-    # the same decision — skills are untrusted evidence, not authority).
-    assert_equal states[0].fetch(:decision_digest), states[1].fetch(:decision_digest)
+    # The same inputs produce the same decision — skills are untrusted
+    # evidence, not authority. The decide node stamps the validity window from
+    # the wall clock into the digested document, so two independently-timed
+    # episodes legitimately differ in valid_until/expires_at (and in the
+    # decision/intent digests that cover them): those are compared apart, and
+    # every run's digests must still verify their own documents.
+    strip_validity = lambda do |state|
+      decision = state.fetch(:decision)
+      decision.merge(
+        "valid_until" => nil,
+        "intents" => decision.fetch("intents").map do |intent|
+          intent.reject { |key, _| %w[expires_at intent_digest].include?(key) }
+        end
+      )
+    end
+    assert_equal strip_validity.call(states[0]), strip_validity.call(states[1])
+    states.each do |state|
+      decision = state.fetch(:decision)
+      assert Tamoz::Core.verify_digest(:decision, decision, state.fetch(:decision_digest)),
+             "the decision digest must verify its own document"
+      decision.fetch("intents").each do |intent|
+        assert Tamoz::Core.verify_digest(
+          :intent, intent.reject { |key, _| key == "intent_digest" }, intent.fetch("intent_digest")
+        ), "each intent digest must verify its own document"
+      end
+    end
   end
 
   def test_gate2_attacker_skill_text_cannot_change_authority_or_smuggle_tools

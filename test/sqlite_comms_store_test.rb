@@ -38,7 +38,7 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def now = Time.utc(2026, 8, 10, 12, 0, 0)
 
-  def descriptor(**overrides)
+  def descriptor(limits: {}, **overrides)
     Comms::SurfaceDescriptor.build(
       surface_id: 'telegram-ops', revision: 1, transport: {
                                                  mode: 'long_poll',
@@ -53,7 +53,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       limits: { max_inbound_bytes: 8192, max_open_requests: 50,
                 max_denial_prompts_per_request: 4, outbox_capacity: 500,
                 control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 },
+                global_messages_per_s: 25.0 }.merge(limits),
       **overrides
     )
   end
@@ -61,10 +61,71 @@ class SQLiteCommsStoreTest < Minitest::Test
   def envelope(update_id: 12_345, text: 'hello', **overrides)
     Comms::InboundEnvelope.new(
       surface_id: 'telegram-ops', surface_revision: 1, update_id:,
-      raw_payload_hash: 'a' * 64, parser_version: 1, kind: 'text',
+      raw_payload_hash: format('%064x', update_id), parser_version: 1, kind: 'text',
       correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
-      text:, observed_time: now, **overrides
+      message_id: update_id + 10_000, text:, observed_time: now, **overrides
     ).wire
+  end
+
+  def inbound_dispositions(store, update_id)
+    store.__send__(:read, 'test.inbound.read') do |txn|
+      txn.rows('test.inbound.read', <<~SQL, [update_id])
+        SELECT disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?
+      SQL
+    end
+  end
+
+  def inbound_anchor_rows(store, update_id)
+    rows = store.__send__(:read, 'test.inbound.anchor') do |txn|
+      txn.rows('test.inbound.anchor', <<~SQL, [update_id])
+        SELECT raw_payload_hash, conflict_count, last_conflict_digest,
+               disposition, reason FROM tamoz_comms_inbound WHERE update_id = ?
+      SQL
+    end
+    rows.map do |hash, count, last, disposition, reason|
+      { 'raw_payload_hash' => hash, 'conflict_count' => count,
+        'last_conflict_digest' => last, 'disposition' => disposition, 'reason' => reason }
+    end
+  end
+
+  def request_row_count(store)
+    store.__send__(:read, 'test.request.count') do |txn|
+      txn.scalar('test.request.count', 'SELECT COUNT(*) FROM tamoz_comms_requests').to_i
+    end
+  end
+
+  def request_ids(checkpoints, thread)
+    checkpoints.request_history(thread_id: thread).map(&:request_id)
+  end
+
+  def bind_route!(store, thread: 'tg.ops.abc', conversation_id: 'telegram:chat:22222222')
+    store.bind_conversation(
+      Comms::Conversation.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        conversation_id:, thread_id: thread,
+        profile_id: 'ops', bound_at: now
+      ).wire, now:
+    )
+  end
+
+  def insert_request!(store, request_id:, conversation_id:, created_at_ms:, thread: 'tg.ops.abc')
+    store.__send__(:transaction, 'test.request.insert') do |tx|
+      binds = [request_id, 'telegram-ops', 1, conversation_id, thread, 'ops', 1, 'admitted', created_at_ms, created_at_ms]
+      tx.execute('test.request.insert', <<~SQL, binds)
+        INSERT INTO tamoz_comms_requests (
+          request_id, surface_id, surface_revision, conversation_id,
+          thread_id, profile_id, reservation, projection_state,
+          created_at_ms, updated_at_ms
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      SQL
+    end
+  end
+
+  def admit(store, wire, thread: 'tg.ops.abc', now: self.now)
+    store.admit_and_enqueue(
+      wire, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+            thread:, profile_id: 'ops', reservation: 1, now:
+    )
   end
 
   def delivery(**overrides)
@@ -157,18 +218,11 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   def test_admit_and_enqueue_is_one_transaction_and_dedups_replays
     with_engine do |store, _adapter, checkpoints|
-      result = store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now:
-      )
+      store.deploy_surface(descriptor.wire, now:)
+      result = admit(store, envelope)
 
       assert_equal :enqueued, result
-      assert_equal :duplicate, store.admit_and_enqueue(
-        envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                  thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now: now + 1
-      )
+      assert_equal :duplicate, admit(store, envelope, now: now + 1)
 
       requests = checkpoints.request_history(thread_id: 'tg.ops.abc')
 
@@ -179,18 +233,178 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # Invariant 1: an exact replay maps to the ONE existing request — one
+  # inbound row, one enqueued turn, nothing new.
+  def test_an_exact_duplicate_maps_to_the_one_existing_request
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      admit(store, envelope(update_id: 7))
+      outcome = admit(store, envelope(update_id: 7))
+
+      assert_equal :duplicate, outcome
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, request_row_count(store)
+      assert_equal [%w[request accepted]], inbound_dispositions(store, 7)
+    end
+  end
+
+  # Invariant 1 / hard-zero list: the SAME (surface, bot, update_id) under a
+  # DIFFERENT payload digest is never silently deduplicated — and it never
+  # grows storage either: every conflicting digest lands on the ONE anchor
+  # row as a counter plus the last conflicting digest, enqueuing nothing.
+  def test_three_conflicting_digests_share_one_anchor_row_with_counters
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      first = envelope(update_id: 9, raw_payload_hash: 'a' * 64)
+      second = envelope(update_id: 9, raw_payload_hash: 'b' * 64)
+      third = envelope(update_id: 9, raw_payload_hash: 'c' * 64)
+
+      assert_equal :enqueued, admit(store, first)
+      assert_equal :integrity_conflict, admit(store, second)
+      assert_equal :conflict_recorded, store.disposition_only(
+        second, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+                disposition: 'quarantined', reason: 'integrity_conflict', now: now + 1
+      )
+      assert_equal :integrity_conflict, admit(store, third)
+
+      rows = inbound_anchor_rows(store, 9)
+
+      assert_equal 1, rows.length, 'conflicts are counters on the anchor row, never more rows'
+      anchor = rows.first
+
+      assert_equal('a' * 64, anchor.fetch('raw_payload_hash'))
+      assert_equal 2, anchor.fetch('conflict_count')
+      assert_equal('c' * 64, anchor.fetch('last_conflict_digest'))
+      assert_equal(%w[quarantined integrity_conflict],
+                   [anchor.fetch('disposition'), anchor.fetch('reason')])
+      assert_equal 1, request_row_count(store), 'the original request row is untouched'
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length,
+                   'no conflicting digest ever becomes a turn'
+
+      assert_equal :integrity_conflict, admit(store, third, now: now + 2),
+                   'a replayed conflict stays a conflict'
+      assert_equal 2, inbound_anchor_rows(store, 9).first.fetch('conflict_count'),
+                   'the same conflicting bytes count once'
+
+      assert_equal :duplicate, admit(store, first, now: now + 3),
+                   'the original digest still replays as a duplicate'
+      assert_equal :duplicate, store.disposition_only(
+        third, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
+               disposition: 'quarantined', reason: 'integrity_conflict', now: now + 4
+      ), 're-recording the identical quarantine dedups'
+    end
+  end
+
+  # Declared limits are enforced at the admission boundary from the DEPLOYED
+  # surface row (invariant 10): a breach refuses with its typed symbol and
+  # inserts nothing into requests, inbox, or inbound.
+  def test_the_open_request_limit_refuses_at_admission_without_enqueueing
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 11))
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 12))
+
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+      assert_equal 1, request_row_count(store)
+      assert_empty inbound_dispositions(store, 12), 'the refusal inserts no inbound row'
+    end
+  end
+
+  def test_oversized_inbound_text_refuses_at_admission_without_enqueueing
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_inbound_bytes: 32 }).wire, now:)
+
+      assert_equal :inbound_too_large, admit(store, envelope(update_id: 13, text: 'x' * 33))
+
+      assert_empty checkpoints.request_history(thread_id: 'tg.ops.abc')
+      assert_empty inbound_dispositions(store, 13), 'the refusal inserts no inbound row'
+    end
+  end
+
+  # Declared intake limits are inclusive bounds: text AT max_inbound_bytes
+  # admits, and the request AT open-request capacity fills the last slot —
+  # only the NEXT one refuses.
+  def test_exact_boundary_limits_admit_at_the_line_and_refuse_the_next
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_inbound_bytes: 32, max_open_requests: 2 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 71, text: 'x' * 32)),
+                   'text exactly at max_inbound_bytes is within the bound'
+      assert_equal :enqueued, admit(store, envelope(update_id: 72)), 'the second slot fills'
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 73)),
+                   'the request past max_open_requests refuses'
+      assert_equal 2, checkpoints.request_history(thread_id: 'tg.ops.abc').length
+    end
+  end
+
+  # A terminal projection releases its reservation (design §12): once the
+  # request completes, its slot returns and the previously-refused admission
+  # goes through.
+  def test_a_completed_request_releases_its_slot_for_the_next_admission
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor(limits: { max_open_requests: 1 }).wire, now:)
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 81))
+      request_id = checkpoints.request_history(thread_id: 'tg.ops.abc').first.request_id
+      assert_equal :open_request_limit, admit(store, envelope(update_id: 82))
+
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: request_id, settle_kind: 'answer')
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 82)),
+                   'the freed slot lets the next admission through'
+    end
+  end
+
+  # Invariant 4 fenced result recording: only the current claim's owner AND
+  # fence may mark an outcome; a losing caller records nothing.
+  def test_mark_delivery_is_fenced_to_the_current_claim_owner_and_fence
+    with_engine do |store|
+      store.append_delivery(delivery, surface_id: 'telegram-ops', capacity: 10, now:)
+      delivery_id = delivery.fetch('delivery_id')
+      store.claim_delivery(delivery_id:, owner: 'gateway:a', fence: 7,
+                           claim_expires_at: now + 30, now:)
+
+      assert_equal :not_claimable, store.mark_delivery(
+        delivery_id:, owner: 'gateway:b', fence: 7, status: 'succeeded',
+        receipt: { 'message_id' => 1 }, now: now + 1
+      )
+      assert_equal :not_claimable, store.mark_delivery(
+        delivery_id:, owner: 'gateway:a', fence: 8, status: 'succeeded',
+        receipt: { 'message_id' => 1 }, now: now + 2
+      )
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[claimed]).first
+
+      assert_equal 'claimed', row.fetch('status'), 'a losing mark changes nothing'
+      assert_nil row.fetch('receipt')
+
+      assert_equal :marked, store.mark_delivery(
+        delivery_id:, owner: 'gateway:a', fence: 7, status: 'succeeded',
+        receipt: { 'message_id' => 42 }, now: now + 3
+      )
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[succeeded]).first
+
+      assert_equal 'succeeded', row.fetch('status')
+      assert_includes row.fetch('receipt'), '42'
+    end
+  end
+
   # The transcript a turn is planned with: admitted task texts interleaved
-  # with the terminal replies the correspondent saw. Control deliveries
-  # ('Accepted…') and non-admitted messages never enter it.
+  # with the terminal replies the correspondent confirmably saw (invariant
+  # 11 — the answer enters only once its delivery is `succeeded`). Control
+  # deliveries ('Accepted…') and non-admitted messages never enter it.
   def test_conversation_history_interleaves_admitted_tasks_and_terminal_replies
     with_engine do |store, _adapter, _checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
       store.admit_and_enqueue(
         envelope(update_id: 1, text: 'make it blue'), surface_id: 'telegram-ops',
                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
-                                                      reservation: 1, capacity: 500, now:
+                                                      reservation: 1, now:
       )
-      store.append_delivery(delivery(text: 'done, it is blue'),
-                            surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      answer = delivery(text: 'done, it is blue')
+      store.append_delivery(answer, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      claim_and_mark!(store, answer.fetch('delivery_id'), 'succeeded')
       store.append_delivery(
         delivery(text: 'Accepted. I will report committed progress.', kind: 'control',
                  journaled: false, content_digest: 'c' * 64),
@@ -199,7 +413,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.admit_and_enqueue(
         envelope(update_id: 2, text: 'and the font?'), surface_id: 'telegram-ops',
                                                        bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
-                                                       reservation: 1, capacity: 500, now: now + 2
+                                                       reservation: 1, now: now + 2
       )
 
       history = store.conversation_history(
@@ -221,11 +435,12 @@ class SQLiteCommsStoreTest < Minitest::Test
   # never sees the comms store — plans the turn with the thread's context.
   def test_admit_and_enqueue_carries_the_history_in_the_turn_payload
     with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
       history = [{ 'role' => 'user', 'text' => 'earlier' }]
       store.admit_and_enqueue(
         envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
                   thread: 'tg.ops.abc', profile_id: 'ops', reservation: 1,
-                  capacity: 500, now:, history:
+                  now:, history:
       )
 
       payload = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload
@@ -416,6 +631,412 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # Plan 02 work item 3: the status projection is reference-addressed and
+  # queue-aware from durable rows alone — the active request's short
+  # reference, its queue position, and the age of the oldest admitted
+  # request — and none of those keys exist when nothing is admitted.
+  def test_conversation_status_is_reference_addressed_and_queue_aware
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+
+      idle = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      )
+
+      assert_equal 'idle', idle.fetch('state')
+      refute idle.key?('request_ref')
+      refute idle.key?('queue_position')
+      refute idle.key?('queue_age_ms')
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 41), now:)
+      assert_equal :enqueued, admit(store, envelope(update_id: 42), now: now + 1)
+
+      active = request_ids(checkpoints, 'tg.ops.abc').last
+      status = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now: now + 5
+      )
+
+      assert_equal 'accepted', status.fetch('state')
+      assert_equal 2, status.fetch('open_requests')
+      assert_equal active, status.fetch('request_id')
+      assert_equal "r#{active[0, 10]}", status.fetch('request_ref')
+      assert_equal 1, status.fetch('queue_position'), 'one admitted request is older than the active one'
+      assert_equal 5_000, status.fetch('queue_age_ms')
+    end
+  end
+
+  def test_a_unique_reference_resolves_to_its_full_status_and_unknown_fails_typed
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 51))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      found = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{request_id[0, 10]}", now:
+      )
+
+      assert_kind_of Hash, found
+      assert_equal request_id, found.fetch('request_id')
+      assert_equal "r#{request_id[0, 10]}", found.fetch('request_ref')
+      assert_equal 'tg.ops.abc', found.fetch('thread_id')
+      assert_equal 0, found.fetch('queue_position')
+      assert found.key?('terminal_reason')
+
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: 'r0000000000', now:
+      )
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: 'half-a-ref', now:
+      ), 'a malformed reference resolves to nothing'
+    end
+  end
+
+  def test_a_reference_never_resolves_across_conversations
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      bind_route!(store, thread: 'tg.ops.other', conversation_id: 'telegram:chat:33333333')
+
+      assert_equal :enqueued, admit(store, envelope(update_id: 61))
+      foreign_ref = "r#{request_ids(checkpoints, 'tg.ops.abc').first[0, 10]}"
+
+      assert_equal :unknown_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:33333333',
+        ref: foreign_ref, now:
+      ), 'the caller-bound scope never leaks another conversation\'s request'
+
+      assert_kind_of Hash, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: foreign_ref, now:
+      )
+    end
+  end
+
+  def test_an_ambiguous_reference_is_typed_not_guessed
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      insert_request!(store, request_id: 'a' * 63 + '1',
+                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+      insert_request!(store, request_id: 'a' * 63 + '2',
+                           conversation_id: 'telegram:chat:22222222', created_at_ms: 1_000)
+
+      assert_equal :ambiguous_ref, store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{'a' * 10}", now:
+      )
+    end
+  end
+
+  # Plan 03 work item 4: the cancellation timeline is durable. The
+  # `requested` stamp commits in the SAME transaction as the cancel enqueue,
+  # so an enqueue failure (here: a tombstoned thread) leaves neither behind.
+  def test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 91))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-91',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+
+      stamps = cancellation_stamps(store, request_id)
+
+      assert_equal epoch_ms(now + 2), stamps.fetch('requested_at_ms')
+      history = checkpoints.request_history(thread_id: 'tg.ops.abc')
+
+      assert_equal :redirect, history.last.operation
+      assert_equal 'redirect', history.last.delivery_mode.to_s
+      assert history.last.payload.fetch('task').fetch('cancel')
+
+      tombstone_thread!(store, 'tg.ops.abc')
+      assert_raises(Tamoz::CheckpointConflictError) do
+        store.request_cancellation(
+          thread_id: 'tg.ops.abc', request_id: 'cancel-92',
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 4
+        )
+      end
+
+      assert_equal epoch_ms(now + 2), cancellation_stamps(store, request_id).fetch('requested_at_ms'),
+                   'a failed enqueue must not leave a later requested stamp behind'
+      assert_equal 1, checkpoints.request_history(thread_id: 'tg.ops.abc')
+                                .count { |request| request.operation == :redirect }
+    end
+  end
+
+  def test_cancellation_observed_stamp_lands_once_and_requires_a_request
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 93))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 1)
+      assert_nil cancellation_stamps(store, request_id).fetch('observed_at_ms'),
+                'an unrequested thread gains no observed stamp'
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-93',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 5)
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 9)
+
+      assert_equal epoch_ms(now + 5), cancellation_stamps(store, request_id).fetch('observed_at_ms'),
+                   'first write wins; a replay never moves the stamp'
+    end
+  end
+
+  # The three timeline states render from durable rows alone: requested
+  # (stamped, unseen), terminal stopped (seen, work still open), and the
+  # aggregate conversation status carries the newest live timeline too.
+  def test_cancellation_timeline_states_derive_from_durable_rows
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 94))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      ref = "r#{request_id[0, 10]}"
+
+      bare = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 1
+      )
+
+      refute bare.key?('cancellation'), 'no cancellation key exists until a cancel was handled'
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-94',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      requested = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 3
+      ).fetch('cancellation')
+
+      assert_equal 'requested', requested.fetch('state')
+      assert_equal epoch_ms(now + 2), requested.fetch('requested_at_ms')
+      assert_equal 1_000, requested.fetch('requested_age_ms')
+      assert_nil requested.fetch('terminal')
+
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+      stopped = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
+      ).fetch('cancellation')
+
+      assert_equal 'terminal', stopped.fetch('state')
+      assert_equal 'stopped', stopped.fetch('terminal')
+      assert_equal epoch_ms(now + 6), stopped.fetch('observed_at_ms')
+
+      aggregate = store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now: now + 8
+      )
+
+      assert_equal 'stopped', aggregate.dig('cancellation', 'terminal'),
+                   'the newest live timeline is exposed on the aggregate'
+    end
+  end
+
+  # A turn that settled completed keeps terminal=completed even when the
+  # runner later observed the cancellation: the status says the completion
+  # won the race, never that issued external work was stopped (invariant 9).
+  def test_a_raced_completion_stays_completed_before_effect
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 95))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      ref = "r#{request_id[0, 10]}"
+
+      assert_equal :requested, store.request_cancellation(
+        thread_id: 'tg.ops.abc', request_id: 'cancel-95',
+        payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+      )
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id:, settle_kind: 'answer')
+      assert_equal :observed, store.mark_cancellation_observed(thread_id: 'tg.ops.abc', now: now + 6)
+
+      facts = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref:, now: now + 7
+      ).fetch('cancellation')
+
+      assert_equal 'terminal', facts.fetch('state')
+      assert_equal 'completed_before_effect', facts.fetch('terminal')
+      refute_nil facts.fetch('observed_at_ms')
+
+      assert_empty(store.requests_by_reference(ref).reject do |_, _, found|
+        found == request_id
+      end, 'the operator scan resolves the same reference')
+      assert_empty store.requests_by_reference('r0000000000'), 'an unknown ref matches nothing'
+      assert_empty store.requests_by_reference('half-a-ref'), 'a malformed ref matches nothing'
+    end
+  end
+
+  # The terminal word is keyed to the recorded settle kind — the task axis —
+  # so a failed or blocked settle never renders as a completion and an
+  # unknown settle kind refuses at the seam.
+  def test_settle_words_follow_the_recorded_settle_kind
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 96))
+      assert_equal :enqueued, admit(store, envelope(update_id: 97))
+      failed_id, blocked_id = request_ids(checkpoints, 'tg.ops.abc').first(2)
+      raise 'two requests were not admitted' unless blocked_id
+
+      [failed_id, blocked_id].each do |request_id|
+        assert_equal :requested, store.request_cancellation(
+          thread_id: 'tg.ops.abc', request_id: "cancel-#{request_id[0, 6]}",
+          payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }, now: now + 2
+        )
+      end
+
+      assert_raises(KeyError) do
+        store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'vanished')
+      end
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: failed_id, settle_kind: 'failed')
+      assert_equal :released,
+                   store.complete_request(thread_id: 'tg.ops.abc', request_id: blocked_id, settle_kind: 'blocked')
+
+      assert_equal 'failed_before_effect', settle_terminal(store, failed_id)
+      assert_equal 'blocked', settle_terminal(store, blocked_id)
+    end
+  end
+
+  def settle_terminal(store, request_id)
+    row = store.__send__(:read, 'test.settle.word') do |txn|
+      txn.first('test.settle.word', <<~SQL, [request_id])
+        SELECT projection_state, cancellation_requested_at_ms FROM tamoz_comms_requests
+        WHERE request_id = ?
+      SQL
+    end
+    store.__send__(:cancellation_outcome, observed: true, settled: row.fetch(0))
+  end
+
+  def cancellation_stamps(store, request_id)
+    row = store.__send__(:read, 'test.cancellation.stamps') do |txn|
+      txn.first('test.cancellation.stamps', <<~SQL, [request_id])
+        SELECT projection_state, cancellation_requested_at_ms, cancellation_observed_at_ms
+        FROM tamoz_comms_requests WHERE request_id = ?
+      SQL
+    end
+
+    { 'projection_state' => row&.fetch(0), 'requested_at_ms' => row&.fetch(1),
+      'observed_at_ms' => row&.fetch(2) }
+  end
+
+  def tombstone_thread!(store, thread_id)
+    store.__send__(:transaction, 'test.thread.tombstone') do |tx|
+      tx.execute('test.thread.tombstone', 'UPDATE tamoz_threads SET tombstone_id = ? WHERE thread_id = ?',
+                 ["t-#{thread_id}", thread_id])
+    end
+  end
+
+  def epoch_ms(value)
+    (value.to_r * 1000).to_i
+  end
+
+  # Invariant 11 (plan 02 work item 5): history inclusion requires confirmed
+  # delivery — a journaled terminal answer enters only when its SAME row is
+  # `succeeded`; pending and unknown stay out of every later model prompt.
+  def test_history_includes_only_confirmed_successful_terminal_deliveries
+    with_engine do |store|
+      store.deploy_surface(descriptor.wire, now:)
+      draft = delivery(text: 'draft answer', content_digest: 'b' * 63 + '1')
+      lost = delivery(text: 'lost reply', content_digest: 'b' * 63 + '2')
+      store.append_delivery(draft, surface_id: 'telegram-ops', capacity: 10, now:)
+      store.append_delivery(lost, surface_id: 'telegram-ops', capacity: 10, now: now + 1)
+      assistant_texts = lambda {
+        store.conversation_history(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
+             .select { |entry| entry.fetch('role') == 'assistant' }.map { |entry| entry.fetch('text') }
+      }
+
+      assert_empty(assistant_texts.call, 'pending terminal output never enters history')
+
+      claim_and_mark!(store, draft.fetch('delivery_id'), 'succeeded')
+      claim_and_mark!(store, lost.fetch('delivery_id'), 'unknown')
+
+      assert_includes assistant_texts.call, 'draft answer', 'the same row flipped to succeeded IS included'
+      refute_includes assistant_texts.call, 'lost reply', 'an unknown outcome stays out of history'
+    end
+  end
+
+  def claim_and_mark!(store, delivery_id, status)
+    assert_equal :claimed, store.claim_delivery(
+      delivery_id:, owner: 'gateway:a', fence: 7, claim_expires_at: now + 30, now:
+    )
+    assert_equal :marked, store.mark_delivery(
+      delivery_id:, owner: 'gateway:a', fence: 7, status:, now: now + 1
+    )
+  end
+
+  # Plan 02 work item 4: `/new` bumps a durable per-conversation generation;
+  # an absent conversation row raises before anything mutates.
+  def test_generation_bumps_are_durable_and_absent_rows_raise
+    Dir.mktmpdir('tamoz-comms-generation') do |directory|
+      path = File.join(directory, 'runtime.sqlite3')
+      first = Tamoz::SQLite::Adapter.new(path:)
+      begin
+        store = first.bind_comms_store
+        bind_route!(store)
+
+        assert_equal 0, store.conversation_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+        assert_equal 1, store.bump_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+        assert_equal 2, store.bump_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        )
+
+        error = assert_raises(KeyError) do
+          store.bump_generation(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:99999999')
+        end
+
+        assert_match(/not bound/, error.message)
+      ensure
+        first&.close
+      end
+
+      reopened = Tamoz::SQLite::Adapter.new(path:)
+      begin
+        store = reopened.bind_comms_store
+
+        assert_equal 2, store.conversation_generation(
+          surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222'
+        ), 'the bump is durable across a reopen'
+      ensure
+        reopened&.close
+      end
+    end
+  end
+
+  # Plan 02 work item 5: reply_to survives append -> outbox row -> the
+  # drainer's Delivery rebuild, so it reaches the transport untouched.
+  def test_reply_to_round_trips_from_append_to_transport_wire
+    with_engine do |store|
+      store.append_delivery(delivery(reply_to: 4242), surface_id: 'telegram-ops', capacity: 10, now:)
+      store.append_delivery(
+        delivery(content_digest: 'c' * 64), surface_id: 'telegram-ops', capacity: 10, now: now + 1
+      )
+
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+      rebuilt = Comms::Delivery.from_wire(rows.first.merge('journaled' => rows.first.fetch('journaled') == 1))
+
+      assert_equal 4242, rows.first.fetch('reply_to')
+      assert_equal 4242, rebuilt.reply_to, 'the drainer rebuild carries reply_to to the transport'
+      assert_nil rows.last.fetch('reply_to'), 'rows without a target round-trip nil'
+    end
+  end
+
   def test_a_restart_sees_the_same_rows
     Dir.mktmpdir('tamoz-comms-restart') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
@@ -456,6 +1077,160 @@ class SQLiteCommsStoreTest < Minitest::Test
       ensure
         reopened&.close
       end
+    end
+  end
+  # Expiry is enforced where authority is granted: a challenge that is still
+  # status-pending but past its expires_at_ms consumes zero rows, so the
+  # approve refuses typed instead of writing a binding.
+  def test_an_expired_pending_challenge_cannot_be_approved
+    with_engine do |store|
+      expired = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200
+      )
+      store.insert_pairing_challenge(
+        digest: expired.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: expired.expires_at, now: now - 7200
+      )
+      binding_wire = Comms::Binding.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        bound_at: now, bound_by: 'operator:test'
+      ).wire
+
+      assert_equal :missing,
+                   store.approve_pairing(
+                     challenge_digest: expired.digest, binding_wire: binding_wire, now:
+                   ),
+                   'the consume UPDATE affects zero rows for an expired challenge'
+      assert_nil store.binding(correspondent_id: 'telegram:user:11111111', surface_id: 'telegram-ops')
+    end
+  end
+
+  def test_a_live_challenge_still_approves_and_consumes
+    with_engine do |store|
+      live = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:
+      )
+      store.insert_pairing_challenge(
+        digest: live.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: live.expires_at, now:
+      )
+      outcome = store.approve_pairing(
+        challenge_digest: live.digest,
+        binding_wire: Comms::Binding.new(
+          surface_id: 'telegram-ops', surface_revision: 1,
+          correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+          bound_at: now + 1, bound_by: 'operator:test'
+        ).wire,
+        now: now + 1
+      )
+
+      assert_equal :approved, outcome
+      assert_equal 'active',
+                   store.binding(correspondent_id: 'telegram:user:11111111',
+                                 surface_id: 'telegram-ops').fetch('status')
+    end
+  end
+
+  def test_retain_refuses_a_payload_above_the_artifact_ceiling
+    with_engine do |_store, adapter|
+      artifacts = adapter.bind_artifact_store(tenant: 'tenant.ceiling')
+      oversized = 'x' * (Tamoz::SQLite::ArtifactStore::MAX_ARTIFACT_BYTES + 1)
+      digest = "sha256:#{Digest::SHA256.hexdigest(oversized)}"
+
+      error = assert_raises(Tamoz::SQLite::ArtifactStore::ArtifactStoreError) do
+        artifacts.retain(digest:, bytes: oversized)
+      end
+
+      assert_match(/ceiling/, error.message)
+      assert_equal 0, artifacts.size, 'the refused payload is stored nowhere'
+    end
+  end
+
+  def test_retain_still_accepts_a_normal_compaction_envelope
+    with_engine do |_store, adapter|
+      artifacts = adapter.bind_artifact_store(tenant: 'tenant.ceiling')
+      envelope = 'p' * 60_000
+      retained = artifacts.retain(
+        digest: "sha256:#{Digest::SHA256.hexdigest(envelope)}", bytes: envelope
+      )
+
+      assert_match(/\Asha256:[0-9a-f]{64}\z/, retained.fetch('digest'))
+      assert_equal envelope.bytesize, artifacts.resolve("sha256:#{Digest::SHA256.hexdigest(envelope)}")
+                                          .fetch('bytes').bytesize
+    end
+  end
+
+  # One LIVE pending challenge per (surface, correspondent, conversation):
+  # issuing over older live rows supersedes them in the same transaction;
+  # other correspondents are untouched and consumed/expired rows stay for
+  # the audit trail.
+  def test_issue_supersedes_older_live_pending_challenges_for_the_same_triple
+    with_engine do |store|
+      expired = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200, code: 'EEEE5555'
+      )
+      store.insert_pairing_challenge(
+        digest: expired.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: expired.expires_at, now: now - 7200
+      )
+      other = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:99999999',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'DDDD4444'
+      )
+      store.insert_pairing_challenge(
+        digest: other.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:99999999', conversation_id: 'telegram:chat:22222222',
+        expires_at: other.expires_at, now:
+      )
+      codes = %w[AAAA1111 BBBB2222 CCCC3333].map do |code|
+        Tamoz::Comms::PairingChallenge.build(
+          surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+          conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code:
+        )
+      end
+      codes.each do |challenge|
+        store.insert_pairing_challenge(
+          digest: challenge.digest, surface_id: 'telegram-ops',
+          correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+          expires_at: challenge.expires_at, now:
+        )
+      end
+
+      pending = store.pairing_challenges(status: 'pending', surface_id: 'telegram-ops',
+                                         correspondent_id: 'telegram:user:11111111', now:)
+      all_rows = store.pairing_challenges
+
+      assert_equal [codes.last.digest], pending.map { |row| row.fetch('challenge_digest') },
+                   'three contacts leave exactly one live pending row for that correspondent'
+      assert_equal 3, all_rows.length,
+                   'the superseded rows are gone; the expired row and both survivors stay'
+    end
+  end
+
+  def test_pairing_challenges_filters_run_in_sql
+    with_engine do |store|
+      challenge = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'FFFF6666'
+      )
+      store.insert_pairing_challenge(
+        digest: challenge.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: challenge.expires_at, now:
+      )
+
+      assert_empty store.pairing_challenges(status: 'pending', surface_id: 'telegram-other', now:)
+      assert_empty store.pairing_challenges(status: 'pending',
+                                            correspondent_id: 'telegram:user:22222222', now:)
+      assert_equal 1, store.pairing_challenges(surface_id: 'telegram-ops',
+                                               correspondent_id: 'telegram:user:11111111', now:).length
     end
   end
 end

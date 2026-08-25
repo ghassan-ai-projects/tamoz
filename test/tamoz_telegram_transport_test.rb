@@ -13,9 +13,10 @@ require_relative 'support/telegram_fixture_server'
 class TamozTelegramTransportTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  def with_transport
+  def with_transport(max_response_bytes: Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES)
     server = TelegramFixtureServer.new
-    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0)
+    client = Tamoz::Telegram::Client.new('test-token', origin: server.url, read_timeout: 1.0,
+                                                        max_response_bytes:)
     normalizer = Tamoz::Telegram::Normalizer.new(surface_id: 'telegram-ops', surface_revision: 1)
     transport = Tamoz::Telegram::Transport.new(client:, normalizer:)
     begin
@@ -29,7 +30,7 @@ class TamozTelegramTransportTest < Minitest::Test
     {
       'update_id' => id,
       'message' => {
-        'message_id' => id,
+        'message_id' => id + 10_000,
         'date' => 1_752_700_800,
         'chat' => { 'id' => chat_id, 'type' => chat_type },
         'from' => { 'id' => user_id },
@@ -117,6 +118,40 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  # Honest auth classification: a 200 body WITHOUT the ok field is malformed,
+  # not refused — ValidationError, never KeyError. And among ok:false bodies
+  # only error_code 401 is an authentication refusal; any other code follows
+  # the ordinary transport-failure mapping.
+  def test_an_ok_missing_body_is_a_validation_error_not_a_key_error
+    with_transport do |transport, server|
+      server.script('getUpdates', body: { 'result' => [] }, times: 1)
+
+      assert_raises(Comms::ValidationError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+    end
+  end
+
+  def test_ok_false_with_a_non_401_error_code_is_not_an_authentication_failure
+    with_transport do |transport, server|
+      server.script('getUpdates', body: { 'ok' => false, 'error_code' => 500,
+                                          'description' => 'Internal Server Error' }, times: 1)
+
+      error = assert_raises(Comms::TransientTransportError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+
+      refute_kind_of Comms::AuthenticationError, error
+
+      server.script('getUpdates', body: { 'ok' => false, 'error_code' => 401,
+                                          'description' => 'Unauthorized' }, times: 1)
+
+      assert_raises(Comms::AuthenticationError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+    end
+  end
+
   def test_deliver_send_message_returns_the_receipt
     with_transport do |transport, server|
       server.script('sendMessage', body: {
@@ -183,6 +218,37 @@ class TamozTelegramTransportTest < Minitest::Test
       )
 
       assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }
+    end
+  end
+
+  # The transport cap (plan 01, work item 4): a body beyond the configured
+  # max_response_bytes is abandoned mid-read with the typed error — never
+  # buffered unbounded.
+  def test_a_response_beyond_the_transport_cap_raises_response_too_large
+    with_transport(max_response_bytes: 1024) do |transport, server|
+      server.script('getUpdates', body: {
+        'ok' => true,
+        'result' => [update(101, text: 'x' * 4096)]
+      }, times: 1)
+
+      error = assert_raises(Tamoz::Telegram::ResponseTooLargeError) do
+        transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+      end
+
+      assert error.retryable? == false
+    end
+  end
+
+  def test_a_response_within_the_transport_cap_is_read_normally
+    with_transport(max_response_bytes: 8192) do |transport, server|
+      server.script('getUpdates', body: {
+        'ok' => true,
+        'result' => [update(101, text: 'hello')]
+      }, times: 1)
+
+      batch = transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
+
+      assert_equal 1, batch[:updates].length
     end
   end
 
@@ -256,6 +322,33 @@ class TamozTelegramTransportTest < Minitest::Test
 
     assert_equal 'callback', wire.fetch('kind')
     assert_equal 2001, wire.fetch('callback_message_id')
+  end
+
+  # Plan 03 work item 6: the press carries its callback query id so the
+  # gateway can answerCallbackQuery immediately after admission.
+  def test_normalizer_extracts_the_callback_query_id
+    callback = { 'update_id' => 4,
+                 'callback_query' => { 'id' => 'q-4', 'from' => { 'id' => 111_111_11 },
+                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                      'message_id' => 2002 },
+                                       'data' => 'approve:abc' } }
+    wire = Tamoz::Telegram::Normalizer.new(surface_id: 's', surface_revision: 1).normalize(callback).wire
+
+    assert_equal 'q-4', wire.fetch('callback_query_id')
+  end
+
+  def test_envelope_round_trip_carries_the_callback_query_id
+    envelope = Comms::InboundEnvelope.new(
+      surface_id: 's', surface_revision: 1, update_id: 5, raw_payload_hash: 'a' * 64,
+      parser_version: 1, kind: 'callback', correspondent_id: 'telegram:user:11111111',
+      conversation_id: 'telegram:chat:22222222', callback_message_id: 2003,
+      callback_query_id: 'q-5', text: 'approve:abc', observed_time: Time.utc(2026, 8, 10, 12, 0, 0)
+    )
+
+    round_tripped = Comms::InboundEnvelope.from_wire(envelope.wire)
+
+    assert_equal 'q-5', round_tripped.callback_query_id
+    assert_equal envelope.wire, round_tripped.wire
   end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize

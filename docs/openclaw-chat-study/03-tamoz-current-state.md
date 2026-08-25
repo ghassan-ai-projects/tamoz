@@ -28,7 +28,7 @@ Telegram getUpdates
   -> Telegram::Transport#poll
   -> Telegram::Normalizer#normalize
   -> Comms::Admission.decide
-  -> CommsGateway#serve_once / #admit
+  -> Tamoz::Comms::Gateway#serve_once / #admit
   -> CommsStore#admit_and_enqueue
   -> SQLite request inbox
   -> Agent::Worker#claim_and_run
@@ -81,14 +81,14 @@ backend for Telegram or durable chat.
 
 `Comms::Admission` enforces disabled, allowlist, pairing, private-chat, typed
 command, and callback policy. It deterministically maps a surface and
-conversation to a thread. `CommsGateway#admit_request` binds the profile,
+conversation to a thread. `Comms::Gateway#admit_request` binds the profile,
 conversation, and correspondent before enqueueing work. Untrusted messages do
 not choose a profile, model, root, tool, budget, or schedule.
 
 Evidence:
 
 - `gems/tamoz-comms/lib/tamoz/comms/admission.rb`;
-- `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb`;
+- `gems/tamoz-comms/lib/tamoz/comms/gateway.rb`;
 - `test/comms_admission_test.rb`;
 - `test/autonomy_scorecard_test.rb` (`test_case_14_an_unbound_sender_never_reaches_a_turn`).
 
@@ -107,7 +107,8 @@ Evidence:
 
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb`;
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_*.rb`;
-- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb`;
+- `gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb`;
+- `gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb`;
 - `gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb`;
 - `test/sqlite_request_inbox_test.rb`;
 - `test/agent_session_kill_matrix_test.rb`.
@@ -123,7 +124,7 @@ answer.
 Evidence:
 
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb`;
-- `gems/tamoz-agent/lib/tamoz/agent/delivery_drainer.rb`;
+- `gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb`;
 - `test/delivery_drainer_test.rb`;
 - `test/tamoz_telegram_transport_test.rb`;
 - `test/comms_cli_ops_test.rb`.
@@ -197,7 +198,7 @@ accepted/idle aggregate, open-request count, the active `request_id`,
 checkpoint-derived `phase`, `event_kind`, `event_sequence`, `next_action`, and
 `terminal_reason`. But the projection stops short of being useful:
 
-- `CommsGateway#status_text` renders most fields but drops `terminal_reason`
+- `Comms::Gateway#status_text` renders most fields but drops `terminal_reason`
   and the request identity, so a failed turn cannot be named or correlated.
 - There is no short, human-readable request reference, so a user cannot ask
   about a specific turn (`/status <ref>`); status is conversation-scoped only.
@@ -221,7 +222,7 @@ request reference, the user cannot query or correlate that work.
 ### 4. Command contract diverges from implementation
 
 `Comms::Commands::KNOWN` advertises `/help`, `/status`, `/new`, `/cancel`,
-`/redirect`, and `/whoami`. `CommsGateway#handle_command` implements only
+`/redirect`, and `/whoami`. `Comms::Gateway#handle_command` implements only
 `/help`, `/status`, and `/cancel`; the other known commands return that they are
 not available. This is a confirmed usability defect. Either implement each
 declared command or remove it from the closed grammar.
@@ -234,7 +235,7 @@ without comparing the digest. Same identity with changed content is therefore
 silently treated as a duplicate instead of an integrity conflict.
 
 The normalizer also records the quoted message ID as `reply_to` but does not
-retain the current message's own Telegram `message_id`. `CommsGateway` uses
+retain the current message's own Telegram `message_id`. `Comms::Gateway` uses
 `envelope.update_id` as the control reply target. Existing fixtures set
 `message_id == update_id`, so they can mask a real Telegram mismatch.
 
@@ -262,24 +263,39 @@ The safety review identified important correctness items that are separate from
 UX polish:
 
 - `DeliveryDrainer#send_row` must not cross the external send boundary after its
-  owner/fence transition fails; a stale drainer takeover test is missing.
+  owner/fence transition fails. `CommsOutbox#mark_delivery_send_started` already
+  carries owner and fence and returns `:not_claimable` when the claim was lost
+  (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:112-122`); the defect is
+  that `send_row` ignores that result and proceeds to the external send
+  (`gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb:84-87`). A stale drainer
+  takeover test is missing.
 - `mark_delivery` should carry owner/fence/attempt identity rather than allowing
-  a stale caller to mark another owner's row.
+  a stale caller to mark another owner's row; it currently takes no owner or
+  fence (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:190-200`).
 - descriptor limits are split: `outbox_capacity`, `control_capacity`, and
   `max_denial_prompts_per_request` are enforced at the admission/delivery
-  boundary (`CommsStore#capacity_saturated?`, `append_delivery`), but
-  `max_open_requests` and `max_inbound_bytes` are only validated in
-  `SurfaceDescriptor` configuration and enforced nowhere, and
-  `max_response_bytes` lives under the descriptor's `transport` section and is
-  likewise validated only — none of the three reaches its resource boundary;
+  boundary — the `CommsOutbox#append_delivery` capacity guard
+  (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:44`) with
+  `CommsStore#capacity_saturated?`
+  (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:150-152`),
+  `control_capacity` at `gems/tamoz-comms/lib/tamoz/comms/gateway.rb:416` and
+  `:445`, and the denial prompts folded into reservation slots
+  (`gems/tamoz-comms/lib/tamoz/comms/gateway.rb:451-454`) — while
+  `max_open_requests`, `max_inbound_bytes`, and `max_response_bytes` are only
+  validated in `SurfaceDescriptor` configuration
+  (`gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:184-186`,
+  `:248-254`) and reach no resource boundary; the inbound byte bound actually
+  enforced today is the hard constant `InboundEnvelope::MAX_TEXT_BYTES = 8192`;
 - the drainer needs typed handling for authentication/storage failures so it
   cannot stop without an operator-visible state.
 - pairing challenge issuance has no production path: `Comms::PairingChallenge.build`
-  and `CommsStore#insert_pairing_challenge` exist, but their only call sites are
-  tests; the gateway silently ignores `pairing_pending` senders, and
-  `tamoz comms pair approve` only verifies a code against an existing challenge.
-  Confirmed by direct code inspection (previously a medium-confidence static
-  finding).
+  and `CommsStore#insert_pairing_challenge`
+  (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:678`) exist, but their only
+  call sites are tests; the gateway silently ignores `pairing_pending` senders
+  (`gems/tamoz-comms/lib/tamoz/comms/admission.rb:71`, `:106`), and
+  `tamoz comms pair approve` only verifies a code against an existing challenge
+  (`gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_ops.rb`). Confirmed by direct
+  code inspection (previously a medium-confidence static finding).
 
 ## Evidence limits
 
@@ -289,3 +305,13 @@ the repository contains that test; it does not mean it passed in this pass.
 One reviewer did run focused comms tests and reported them passing; the Telegram
 fixture server could not bind localhost in the sandbox (`EPERM`). This is an
 environment restriction, not evidence of a product failure.
+
+## Refresh 2026-08-24
+
+Re-verified every cited path, symbol, and root-cause claim against the tree at
+`231629b` on `feature/openclaw-chat-study-refresh`, after the refactor that moved
+`Comms::Gateway`, `DeliveryDrainer`, and `OutboxDeliverySink` into
+`gems/tamoz-comms`, `SessionEffects` into `gems/tamoz-agent-session`, and
+`EffectDispatcher` into `gems/tamoz-agent-kernel`. All eight root causes remain
+valid as written; only locations were corrected. Paths above point at the
+post-refactor layout.

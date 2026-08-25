@@ -114,10 +114,6 @@ module Tamoz
             @err.puts 'tamoz: no pending pairing code matches'
             return 1
           end
-          if candidate.fetch('expires_at_ms') <= (Time.now.utc.to_r * 1000).to_i
-            @err.puts 'tamoz: pairing code expired'
-            return 1
-          end
 
           surface = store.surface(surface_id: candidate.fetch('surface_id'))
           unless surface
@@ -175,9 +171,7 @@ module Tamoz
           threads = affected.flat_map do |surface_id|
             store.bindings(surface_id:).select { |b| b.fetch('correspondent_id') == correspondent_id }
                                        .filter_map do |binding|
-              route = store.conversation(surface_id:,
-                                         conversation_id: binding.fetch('conversation_id'))
-              route&.fetch('thread_id')
+              current_generation_thread(store, surface_id, binding.fetch('conversation_id'))
             end
           end.uniq
           if options[:json]
@@ -227,6 +221,45 @@ module Tamoz
         end
       end
 
+      # The reconnectable status view (plan 03, work item 5): one request
+      # reference (or every match) resolved from the DURABLE stores alone —
+      # no worker process, no session, no model call, and nothing re-runs.
+      # Task and delivery states, queue facts, lifecycle, terminal reason,
+      # and any cancellation timeline come from committed rows; JSON emits
+      # the store's document shape, not a stream envelope.
+      def comms_request(options, argv)
+        OptionParser.new do |value|
+          value.banner = 'Usage: tamoz comms request R<reference> [--surface ID] [--conversation ID]'
+          accept_json(value, options)
+          value.on('--surface ID', 'Restrict to this surface') { |id| options[:surface] = id }
+          value.on('--conversation ID', 'Restrict to this conversation') { |id| options[:conversation] = id }
+        end.parse!(argv)
+        reference = argv.shift
+        raise OptionParser::MissingArgument, 'R<reference>' if reference.to_s.empty?
+
+        with_comms_runtime(options) do |_directory, _adapter, store, _checkpoints|
+          matches = store.requests_by_reference(reference).select do |surface_id, conversation_id, _|
+            (options[:surface].nil? || surface_id == options[:surface]) &&
+              (options[:conversation].nil? || conversation_id == options[:conversation])
+          end
+          if matches.empty?
+            @err.puts "tamoz: no request with reference #{reference.inspect} is admitted"
+            return 1
+          end
+
+          rows = matches.map do |surface_id, conversation_id, _|
+            store.request_status(surface_id:, conversation_id:, ref: reference, now: Time.now.utc)
+                 .merge('surface_id' => surface_id, 'conversation_id' => conversation_id)
+          end
+          if options[:json]
+            @out.puts JSON.generate('schema' => 'tamoz.comms.request_view.v1', 'requests' => rows)
+          else
+            rows.each { |row| render_request_view(row) }
+          end
+        end
+        0
+      end
+
       # The `channels` section of `tamoz status` (design §14/§16): surfaces,
       # last-poll age, outbox depth, `:unknown` deliveries, and the comms
       # safety counters — all derived from durable rows.
@@ -239,6 +272,52 @@ module Tamoz
       end
 
       private
+
+      # The thread the conversation admits onto NOW (its durable generation
+      # derives it, the same derivation admission and /cancel use); an unbound
+      # conversation admits nothing.
+      def current_generation_thread(store, surface_id, conversation_id)
+        generation = store.conversation_generation(surface_id:, conversation_id:)
+        Tamoz::Comms::Admission.thread_id(surface_id, conversation_id, generation:)
+      rescue KeyError
+        nil
+      end
+
+      def render_request_view(row)
+        @out.puts "request #{row.fetch('request_ref')} on #{row.fetch('surface_id')}/" \
+                  "#{row.fetch('conversation_id')} (thread #{row.fetch('thread_id')})"
+        @out.puts "  task=#{task_word(row)} delivery=#{delivery_word(row)} " \
+                  "open_requests=#{row.fetch('open_requests')} state=#{row.fetch('state')}"
+        queue_parts = []
+        queue_parts << "queue_position=#{row['queue_position']}" if row.key?('queue_position')
+        queue_parts << "queue_age_ms=#{row['queue_age_ms']}" if row['queue_age_ms']
+        @out.puts "  #{queue_parts.join(' ')}" unless queue_parts.empty?
+        cancellation = row['cancellation']
+        return unless cancellation
+
+        line = "  cancellation=#{cancellation.fetch('state')}"
+        line += " requested_age_ms=#{cancellation['requested_age_ms']}"
+        line += " observed_age_ms=#{cancellation['observed_age_ms']}" if cancellation['observed_at_ms']
+        line += " terminal=#{cancellation['terminal']}" if cancellation['terminal']
+        @out.puts line
+        return unless cancellation['terminal'] == 'completed_before_effect'
+
+        @out.puts '  terminal: completed before the cancellation took effect.'
+      end
+
+      def task_word(projection)
+        internal = { 'not_started' => 'admitted', 'claimed' => 'running', 'redirecting' => 'waiting' }
+                    .fetch(projection.fetch('task_state'), projection.fetch('task_state'))
+        Tamoz::Comms::Lifecycle.task_state_for(internal) || 'idle'
+      rescue Tamoz::Comms::ValidationError
+        internal
+      end
+
+      def delivery_word(projection)
+        Tamoz::Comms::Lifecycle.delivery_state_for(projection.fetch('delivery_state'))
+      rescue Tamoz::Comms::ValidationError
+        projection.fetch('delivery_state')
+      end
 
       def surface_status(store, row)
         descriptor = Tamoz::Comms::SurfaceDescriptor.from_wire(JSON.parse(row.fetch('descriptor_json')))

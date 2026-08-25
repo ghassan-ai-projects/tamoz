@@ -286,6 +286,26 @@ module Tamoz
             "attempt_number" => INTEGER
           }
         },
+        "context_control" => {
+          required: {
+            "control" => STRING,
+            "thread_id" => STRING,
+            "request_id" => STRING,
+            "generation" => INTEGER
+          },
+          optional: {
+            "successor_thread" => STRING,
+            "preferences" => HASH,
+            "truncated_fragments" => INTEGER,
+            "cleared_channels" => STRINGS,
+            "before_digest" => STRING,
+            "after_digest" => STRING,
+            "summary" => STRING,
+            "summary_digest" => STRING,
+            "compaction_mode" => STRING,
+            "artifact_refs" => ARRAY
+          }
+        },
         "verification" => {
           required: {
             "answer" => STRING,

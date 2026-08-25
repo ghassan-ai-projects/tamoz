@@ -40,7 +40,7 @@ parallel benchmark stack.
 | --- | --- | --- |
 | Production comms | `gems/tamoz-comms/lib/tamoz/comms/*` | Admission, commands, the comms-store **contract** module (implementation lives in `gems/tamoz-sqlite`), delivery, delivery sink, rendering, transport interface, approval/evidence. |
 | Production Telegram | `gems/tamoz-telegram/lib/tamoz/telegram/*` | Normalizer, transport, client. |
-| Durable execution + delivery | `Agent::Worker`, `Agent::DeliveryDrainer`, `Agent::OutboxDeliverySink`, `Sqlite::CommsOutbox`, `Sqlite::CommsStore` | The real Gateway/Worker/Drainer/outbox path a scenario drives. |
+| Durable execution + delivery | `Tamoz::Agent::Worker` (gems/tamoz-agent), `Tamoz::Comms::DeliveryDrainer` + `OutboxDeliverySink` (gems/tamoz-comms), `Tamoz::SQLite::CommsOutbox` + `CommsStore` (gems/tamoz-sqlite) | The real Gateway/Worker/Drainer/outbox path a scenario drives. |
 | Fake transport | `Tamoz::Comms::Transport` interface + `ScriptedTransport` in `test/comms_gateway_test.rb` | Records requests, no egress — the Track A transport. |
 | Fault-injecting runtime | `gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb` | Lease/request/claim/recover/checkpoint fault actions on real SQLite. |
 | Mission runner | `gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb` | Runs a catalog entry; writes atomic, bounded artifacts + `manifest.json`. |

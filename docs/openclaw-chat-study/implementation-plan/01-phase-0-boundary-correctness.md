@@ -1,6 +1,9 @@
 # Phase 0 — correctness at the boundaries
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented — boundary correctness landed in `da8853a`, three-lens
+review findings repaired in `189b38a`; evidence in
+`evidence/phase-0/implementation-review.md`. All claims are
+fixture/scripted-transport plumbing evidence.
 
 Study reference: Stage 0 (`../04-tamoz-target-architecture.md`), P0
 (`../05-comparison-and-priorities.md`), root causes #5 and #8
@@ -36,10 +39,12 @@ status projection until the fence and identity tests are green.
 
 1. **Fence the send boundary.** Ensure `DeliveryDrainer#send_row` cannot cross
    the external send boundary after its owner/fence/attempt transition fails.
-   Carry owner/fence/attempt identity into `mark_delivery` so a stale caller
-   cannot record a result for another owner's row. The current owner is the only
-   writer of a send result; a losing owner records nothing and takes no external
-   action.
+   Today `mark_delivery_send_started` returns `:not_claimable` when the fence is
+   lost and the drainer ignores that result before sending: `send_row` must
+   honor the failed fence transition by aborting before `transport.deliver`,
+   and `mark_delivery` must carry owner/fence/attempt so a stale caller cannot
+   record another owner's result. The current owner is the only writer of a send
+   result; a losing owner records nothing and takes no external action.
 2. **Complete Telegram inbound identity.** Make `Telegram::Normalizer#digest`
    hash the meaningful normalized/raw payload content, not just `update_id`, and
    have the store compare that digest on admission. Same `(surface, bot,

@@ -66,6 +66,28 @@ class CommsAdmissionTest < Minitest::Test
                  Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
   end
 
+  # Plan 02 work item 4: the generation folds into the digest (domain v2),
+  # so `/new` rotates to a fresh thread at a fixed (surface, conversation)
+  # while staying deterministic at a fixed generation.
+  def test_thread_ids_differ_per_generation_and_stay_deterministic
+    base = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+    assert_equal base, Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222'),
+                 'deterministic at a fixed generation'
+    assert_match(/\Atg\.telegram-ops\.[0-9a-f]{16}\z/, base)
+
+    generations = [0, 1, 2].map do |generation|
+      Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222', generation:)
+    end
+
+    assert_equal generations.length, generations.uniq.length, 'each generation derives its own thread'
+    generations.each { |thread| assert_match(/\Atg\.telegram-ops\.[0-9a-f]{16}\z/, thread) }
+  end
+
+  def test_the_thread_domain_is_v2_because_the_digest_input_changed
+    assert_equal 'tamoz.comms.thread.v2', Comms::Admission.thread_domain
+  end
+
   def test_an_unbound_sender_is_ignored_not_rejected
     decision = Comms::Admission.decide(envelope(correspondent: 'telegram:user:99999999'),
                                        surface: surface, binding: nil)

@@ -23,7 +23,7 @@ tests at each claim.
 
 ## High-impact Tamoz evidence
 
-- `gems/tamoz-agent/lib/tamoz/agent/comms_gateway.rb` — Telegram admission,
+- `gems/tamoz-comms/lib/tamoz/comms/gateway.rb` — Telegram admission,
   command handling, status text, control delivery, and the Gateway/worker
   boundary.
 - `gems/tamoz-telegram/lib/tamoz/telegram/normalizer.rb` — update normalization,
@@ -33,16 +33,18 @@ tests at each claim.
   history, inbound identity, and conversation status.
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/request_inbox_*.rb` — FIFO request
   identity, leases, idempotency, redirect, and stale recovery.
-- `gems/tamoz-agent/lib/tamoz/agent/session_effects.rb` and
+- `gems/tamoz-agent-session/lib/tamoz/agent/session_effects.rb`,
+  `gems/tamoz-agent-kernel/lib/tamoz/agent/effect_dispatcher.rb`
+  (`EffectDispatcher`), and
   `gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb` — durable model/tool
   effects and checkpointed request execution.
-- `gems/tamoz-agent/lib/tamoz/agent/outbox_delivery_sink.rb` and
-  `gems/tamoz-agent/lib/tamoz/agent/delivery_drainer.rb` — terminal projection,
+- `gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb` and
+  `gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb` — terminal projection,
   bounded rendering, send boundary, retry classification, and unknown delivery.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — worker claim, lifecycle
   emission, settlement, and notification seams.
 - `gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb`,
-  `gems/tamoz-agent/lib/tamoz/agent/cli_session_commands.rb`, and
+  `gems/tamoz-agent-cli/lib/tamoz/agent/cli_session_commands.rb`, and
   `gems/tamoz-agent-cli/lib/tamoz/agent/cli_rendering.rb` — ephemeral versus
   durable CLI paths, stream rendering, controls, and exit taxonomy.
 - `documentation/design/comms.md`,
@@ -79,7 +81,7 @@ where a new composed test is required.
   adoption completion, retries, watchdog, and dead letters.
 - `src/channels/turn/kernel.ts` and `src/channels/turn/lifecycle.ts` — shared
   channel turn lifecycle.
-- `src/channels/message/durable-delivery.ts` — successful, suppressed, partial,
+- `src/channels/turn/durable-delivery.ts` — successful, suppressed, partial,
   failed, and unknown delivery outcomes.
 - `src/routing/resolve-route.ts` — route precedence and route result.
 - `src/routing/session-key.ts` — canonical session identity and malformed-key
@@ -193,3 +195,11 @@ where a new composed test is required.
   Telegram traffic.
 - OpenClaw's trusted-one-user Gateway model must not be treated as Tamoz's
   authorization model without an explicit decision.
+
+## Refresh 2026-08-24
+
+Paths re-verified against the tree at `231629b` on
+`feature/openclaw-chat-study-refresh`, after the gem split relocated
+gateway, drainer, sink, session-effects, and CLI modules out of
+`gems/tamoz-agent`. All fifteen cited Tamoz test paths and the sampled
+OpenClaw paths were confirmed present; only the moves listed above changed.

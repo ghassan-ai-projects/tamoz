@@ -7,10 +7,12 @@ require 'time'
 module Tamoz
   module Telegram
     # A minimal Bot API HTTP client over net/http (ADR-041: stdlib only).
-    # Every request is a bounded JSON call; a 429 carries the server's
-    # authoritative retry_after, a network timeout on a send is
-    # AmbiguousDeliveryError (genuinely irreconcilable, design §10), and an
-    # auth failure is AuthenticationError (never a retry).
+    # Every request is a bounded JSON call; the response body is streamed and
+    # abandoned past `max_response_bytes` (typed ResponseTooLargeError, never
+    # buffered unbounded); a 429 carries the server's authoritative
+    # retry_after, a network timeout on a send is AmbiguousDeliveryError
+    # (genuinely irreconcilable, design §10), and an auth failure is
+    # AuthenticationError (never a retry).
     # The client is one bounded HTTP call; the metric smells measure the
     # HTTP boundary (timeouts, throttle, idempotent-flag), not a choice to
     # overload.
@@ -20,15 +22,19 @@ module Tamoz
       DEFAULT_ORIGIN = 'https://api.telegram.org'
       DEFAULT_OPEN_TIMEOUT = 10.0
       DEFAULT_READ_TIMEOUT = 65.0
+      DEFAULT_MAX_RESPONSE_BYTES = 10_000_000
 
-      attr_reader :token, :origin
+      attr_reader :token, :origin, :max_response_bytes
 
       def initialize(token, origin: DEFAULT_ORIGIN, open_timeout: DEFAULT_OPEN_TIMEOUT,
-                     read_timeout: DEFAULT_READ_TIMEOUT)
+                     read_timeout: DEFAULT_READ_TIMEOUT, max_response_bytes: DEFAULT_MAX_RESPONSE_BYTES)
         @token = token
         @origin = origin
         @open_timeout = open_timeout
         @read_timeout = read_timeout
+        # An undeclared cap IS the declared default: the client's own limit is
+        # the one source of truth for it.
+        @max_response_bytes = max_response_bytes || DEFAULT_MAX_RESPONSE_BYTES
       end
 
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- one HTTP boundary with timeout and
@@ -42,16 +48,30 @@ module Tamoz
         request = Net::HTTP::Post.new(path_for(method))
         request.body = JSON.generate(params)
         request['Content-Type'] = 'application/json'
-        response = http.request(request)
+        response = nil
+        body = +''
+        http.request(request) do |partial|
+          response = partial
+          partial.read_body do |chunk|
+            body << chunk
+            raise ResponseTooLargeError if body.bytesize > @max_response_bytes
+          end
+        end
 
         case response
         when Net::HTTPSuccess
-          payload = JSON.parse(response.body, create_additions: false)
-          raise Comms::AuthenticationError, 'bot token refused' unless payload.fetch('ok')
+          payload = JSON.parse(body, create_additions: false)
+          raise Comms::ValidationError, "#{method} response carries no ok field" unless payload.key?('ok')
 
-          payload.fetch('result')
+          if payload.fetch('ok')
+            payload.fetch('result')
+          elsif payload['error_code'] == 401
+            raise Comms::AuthenticationError, 'bot token refused'
+          else
+            raise transport_failure(method, idempotent, "telegram api error #{payload['error_code']}")
+          end
         when Net::HTTPTooManyRequests
-          raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(response))
+          raise Comms::ThrottledError.new('rate limited', retry_after: retry_after_from(body))
         when Net::HTTPUnauthorized
           raise Comms::AuthenticationError, 'bot token refused'
         when Net::HTTPConflict
@@ -60,7 +80,7 @@ module Tamoz
           # THIS runtime directory: the competitor can be another host or a
           # webhook set later. Fatal and named, never a retry — two pollers
           # reading one update stream is a correctness problem.
-          raise Comms::PollerConflictError, conflict_message(response)
+          raise Comms::PollerConflictError, conflict_message(body)
         else
           raise transport_failure(method, idempotent, "telegram api error #{response.code}")
         end
@@ -79,16 +99,16 @@ module Tamoz
       # The API's own description names WHICH competitor holds the stream, so
       # it is worth carrying; a malformed body still gets a usable message.
       # :reek:UtilityFunction -- a pure parse of the conflict payload.
-      def conflict_message(response)
-        described = JSON.parse(response.body, create_additions: false)['description']
+      def conflict_message(body)
+        described = JSON.parse(body, create_additions: false)['description']
         described.to_s.empty? ? 'another poller or a webhook holds this bot' : described.to_s
       rescue JSON::ParserError
         'another poller or a webhook holds this bot'
       end
 
       # :reek:UtilityFunction -- a pure parse of the throttle payload.
-      def retry_after_from(response)
-        JSON.parse(response.body, create_additions: false).dig('parameters', 'retry_after') || 1
+      def retry_after_from(body)
+        JSON.parse(body, create_additions: false).dig('parameters', 'retry_after') || 1
       end
 
       def path_for(method)

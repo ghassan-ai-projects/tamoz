@@ -40,10 +40,7 @@ require "time"
 require "digest"
 
 ROOT = File.expand_path("..", __dir__)
-%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-sqlite
-   tamoz-tools tamoz-agent].each do |gem|
-  $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
-end
+$LOAD_PATH.unshift(*Dir[File.join(ROOT, "gems", "*", "lib")].sort)
 require "tamoz/sqlite"
 require "tamoz/agent"
 

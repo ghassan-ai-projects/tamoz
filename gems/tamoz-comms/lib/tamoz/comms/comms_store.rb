@@ -30,17 +30,24 @@ module Tamoz
       # Admit ONE inbound update AND enqueue its turn in one transaction.
       # `bot_id` is the authenticated surface identity the update arrived on;
       # `reservation` is the terminal capacity reserved at admission
-      # (invariant 57) and `capacity` is the surface's outbox_capacity — intake
-      # refuses while pending+claimed deliveries plus open reservations would
-      # meet it, so the reserved terminal answer can always append (design §12,
-      # scorecard case 16). The derived request id dedups replays.
-      # @return [:enqueued, :duplicate, :capacity_refused]
-      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, capacity:, now:)
+      # (invariant 57). Intake limits — max_open_requests, max_inbound_bytes,
+      # and outbox_capacity — are enforced from the DEPLOYED surface row:
+      # pending+claimed deliveries plus open reservations must stay under
+      # outbox_capacity, so the reserved terminal answer can always append
+      # (design §12, scorecard case 16). The first durable observation of
+      # (surface, bot, update_id) anchors dedup: an exact digest replay is
+      # :duplicate, and the SAME identity under a DIFFERENT payload digest is
+      # a durable integrity conflict recorded on the ONE anchor row — its
+      # conflict counter advances, nothing is enqueued (invariant 1).
+      # @return [:enqueued, :duplicate, :integrity_conflict, :open_request_limit, :inbound_too_large, :capacity_refused]
+      def admit_and_enqueue(envelope_wire, surface_id:, bot_id:, thread:, profile_id:, reservation:, now:)
         raise NotImplementedError
       end
 
-      # Record a non-request disposition durably.
-      # @return [:recorded, :duplicate]
+      # Record a non-request disposition durably. A conflicting digest for a
+      # KNOWN update identity updates that identity's single anchor row and
+      # returns :conflict_recorded.
+      # @return [:recorded, :conflict_recorded, :duplicate]
       def disposition_only(envelope_wire, surface_id:, bot_id:, disposition:, reason:, now:)
         raise NotImplementedError
       end
@@ -54,9 +61,11 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Terminal projection is durable; release the request's reserved slots.
+      # Terminal projection is durable; `settle_kind` records what the
+      # correspondent was told (answer/failed/stopped/blocked) and releases
+      # the request's reserved slots.
       # @return [:released, :not_admitted]
-      def complete_request(thread_id:, request_id:)
+      def complete_request(thread_id:, request_id:, settle_kind:)
         raise NotImplementedError
       end
 
@@ -98,6 +107,15 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
+      # the update must match the claim's owner AND fence, so a stale caller
+      # records nothing and takes no external action. `succeeded` carries the
+      # receipt; `unknown` is the honest ambiguity state.
+      # @return [:marked, :not_claimable]
+      def mark_delivery(delivery_id:, owner:, fence:, status:, now:, receipt: nil)
+        raise NotImplementedError
+      end
+
       # Resolve crashed attempts whose transport boundary was already crossed.
       def reconcile_expired_deliveries(now:)
         raise NotImplementedError
@@ -108,8 +126,35 @@ module Tamoz
         raise NotImplementedError
       end
 
-      # Read-only channel status derived from durable admission/projection rows.
-      def conversation_status(surface_id:, conversation_id:)
+      # Read-only channel status derived from durable admission/projection
+      # rows. Reference-addressed and queue-aware: when anything is admitted,
+      # the projection carries the active request's short reference
+      # (`request_ref`) and its queue facts (`queue_age_ms`, `queue_position`);
+      # with nothing admitted those keys are absent. `now:` binds the reader's
+      # clock for age arithmetic; without it the store's backend time answers.
+      def conversation_status(surface_id:, conversation_id:, now: nil)
+        raise NotImplementedError
+      end
+
+      # Resolve ONE request by its short reference inside ONE conversation —
+      # caller-bound, never cross-conversation.
+      # @return [Hash] the full status projection plus `terminal_reason`
+      # @return [:unknown_ref] no request in this conversation matches
+      # @return [:ambiguous_ref] several requests share the ref prefix
+      def request_status(surface_id:, conversation_id:, ref:, now: nil)
+        raise NotImplementedError
+      end
+
+      # The bound conversation's durable /new generation.
+      # @return [Integer]
+      def conversation_generation(surface_id:, conversation_id:)
+        raise NotImplementedError
+      end
+
+      # Durably advance the generation by one and return the new value;
+      # raises when the conversation row is absent, mutating nothing.
+      # @return [Integer]
+      def bump_generation(surface_id:, conversation_id:)
         raise NotImplementedError
       end
 

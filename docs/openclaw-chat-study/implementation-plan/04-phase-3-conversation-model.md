@@ -1,6 +1,8 @@
 # Phase 3 — deepen the conversation model and prove recovery
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented and reviewed — see
+`evidence/phase-3/implementation-review.md` (semantics `f3bddc7`, exposure
+`d1944d0`, canonical composition test, final correctness pass).
 Requires: Phases 0–2 (the shared lifecycle, bounded progress, and visible
 cancellation must be reliable first).
 
@@ -45,9 +47,10 @@ Do not expose a control whose effect on history, budget, or audit is undefined.
    usage accounting; the audit-safe record it writes; and the projection it
    returns. `/compact` externalizes evidence and preserves authoritative facts;
    `/usage` and `/context` are read-only projections of durable accounting.
-2. **Preserve event identity for reconnection.** Ensure CLI JSON carries the full
-   `StreamPart` identity so a reconnecting client can resume an in-flight turn
-   from the request reference and the last sequence, across both surfaces.
+2. **Preserve event identity for reconnection.** Ensure CLI JSON carries the
+   full `StreamPart` (gems/tamoz-core) identity so a reconnecting client can
+   resume an in-flight turn from the request reference and the last sequence,
+   across both surfaces.
 3. **Operational read model.** Add the durable telemetry/read model the study
    requires for diagnosis: queue age, lease loss/recovery, delivery-unknown rate,
    cancellation latency, and dropped-projection events. It is bounded, redacted,

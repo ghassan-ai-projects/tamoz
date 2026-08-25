@@ -12,6 +12,7 @@ module Tamoz
       EXIT_PAUSED = 3
       EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigint")
       EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigterm")
+      ENVELOPE_SCHEMA = 1
 
       # The unattended surface (`init`, `queue`, `worker`, `status`) lives in its
       # own file; it is the same CLI object, split only so neither half becomes
@@ -40,6 +41,12 @@ module Tamoz
         "redirect" => :cmd_redirect,
         "cancel" => :cmd_cancel,
         "resolve" => :cmd_resolve,
+        "reset" => :cmd_reset,
+        "compact" => :cmd_compact,
+        "usage" => :cmd_usage,
+        "context" => :cmd_context,
+        "think" => :cmd_think,
+        "verbose" => :cmd_verbose,
         "profile" => :cmd_profile,
         "comms" => :cmd_comms,
         "config" => :cmd_config,
@@ -399,7 +406,7 @@ module Tamoz
 
       def render_stream_part(part, options:, prompts:)
         if options[:json]
-          @out.puts JSON.generate("type" => part.type.to_s, "data" => part.data)
+          emit_event_envelope(part.type.to_s, part.data, part)
           return
         end
 
@@ -835,7 +842,7 @@ module Tamoz
 
       def render_runtime_event(event, json:)
         if json
-          @out.puts JSON.generate("type" => event.type.to_s, "data" => event.data)
+          emit_event_envelope(event.type.to_s, event.data)
           return
         end
 
@@ -873,7 +880,29 @@ module Tamoz
       end
 
       def emit_cli_event(type, data)
-        @out.puts JSON.generate("type" => type, "data" => data)
+        emit_event_envelope(type, data)
+      end
+
+      # The machine contract for every JSON-mode line. StreamPart-backed events
+      # carry their full identity (run_id, task_id, sequence, emitted_at);
+      # synthetic local events carry none of those keys rather than nulls. The
+      # state axes ride at the top level verbatim from the event data when it
+      # exposes them; vocabulary translation is a later wave.
+      def emit_event_envelope(type, data, part = nil)
+        envelope = {
+          "schema" => ENVELOPE_SCHEMA,
+          "type" => type,
+          "data" => data,
+          "task_state" => data["task_state"],
+          "delivery_state" => data["delivery_state"]
+        }
+        if part
+          envelope["run_id"] = part.run_id
+          envelope["task_id"] = part.task_id
+          envelope["sequence"] = part.sequence
+          envelope["emitted_at"] = part.emitted_at
+        end
+        @out.puts JSON.generate(envelope)
       end
     end
   end

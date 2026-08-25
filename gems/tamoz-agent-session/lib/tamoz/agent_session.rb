@@ -25,6 +25,7 @@ require_relative "agent/session_lifecycle"
 require_relative "agent/session_routing"
 require_relative "agent/session_adaptive"
 require_relative "agent/session_nodes"
+require_relative "agent/session_context_controls"
 require_relative "agent/session"
 require_relative "agent/session_status_projection"
 

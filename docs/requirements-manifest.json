@@ -5442,6 +5442,21 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-compact",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz compact",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_compact_pins_the_transcript_behind_digests_and_audits_before_after"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-config",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -5451,6 +5466,21 @@
       "named_test": "test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup",
       "supporting_tests": [
         "test/runtime_directory_config_test.rb#test_config_migrate_refuses_an_invalid_document_without_writing"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-context",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz context",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces",
+      "supporting_tests": [
+        "test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards"
       ],
       "classification": "direct",
       "rationale": null,
@@ -5568,6 +5598,22 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-reset",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz reset",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_reset_clears_episode_state_keeps_audit_history_and_continues_accounting",
+        "test/session_context_controls_test.rb#test_a_second_reset_keeps_every_truncation_cumulative"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-resolve",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -5639,6 +5685,22 @@
       "promotion_exclusion": null
     },
     {
+      "id": "CLI-think",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz think",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_preference_controls_are_consumed_by_episode_composition",
+        "test/context_control_exposure_test.rb#test_a_bad_think_value_is_a_typed_bounded_reply_and_writes_nothing"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "CLI-trace",
       "category": "cli_command",
       "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
@@ -5647,6 +5709,36 @@
       "status": "unverified",
       "named_test": "test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-usage",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz usage",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_read_only_controls_change_no_durable_state"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "CLI-verbose",
+      "category": "cli_command",
+      "source": "gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb SUBCOMMANDS",
+      "title": "tamoz verbose",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields",
+      "supporting_tests": [
+        "test/session_context_controls_test.rb#test_preference_controls_are_consumed_by_episode_composition"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null
@@ -6643,6 +6735,36 @@
       "promotion_exclusion": null
     },
     {
+      "id": "MIG-18",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_18",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
+      "supporting_tests": [
+        "test/comms_gateway_test.rb#test_an_integrity_conflict_quarantines_with_a_bounded_reply_and_no_turn"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-19",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_19",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise",
+      "supporting_tests": [
+        "test/sqlite_comms_store_test.rb#test_reply_to_round_trips_from_append_to_transport_wire"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
       "id": "MIG-2",
       "category": "migration",
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
@@ -6651,6 +6773,36 @@
       "status": "unverified",
       "named_test": "test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic",
       "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-20",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_20",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null
+    },
+    {
+      "id": "MIG-21",
+      "category": "migration",
+      "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
+      "title": "MIGRATION_21",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21",
+      "supporting_tests": [
+        "test/sqlite_comms_store_test.rb#test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue",
+        "test/sqlite_comms_store_test.rb#test_cancellation_observed_stamp_lands_once_and_requires_a_request",
+        "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows"
+      ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null

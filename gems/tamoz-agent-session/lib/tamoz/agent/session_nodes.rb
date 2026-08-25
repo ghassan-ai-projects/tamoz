@@ -181,6 +181,8 @@ module Tamoz
 
       def recorded_profile_budgets = @bindings.recorded_profile_budgets
 
+      def authoritative_frame(state) = @planning_context.authoritative_frame(state)
+
       def deliberate(state, context) = @deliberation.deliberate(state, context)
 
       def route(state, context) = @routing.route(state, context)

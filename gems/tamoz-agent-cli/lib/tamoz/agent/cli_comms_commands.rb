@@ -28,8 +28,9 @@ module Tamoz
         when 'doctor' then comms_doctor(options, argv)
         when 'pair' then comms_pair(options, argv)
         when 'delivery' then comms_delivery(options, argv)
+        when 'request' then comms_request(options, argv)
         else
-          raise OptionParser::InvalidArgument, 'usage: tamoz comms serve|list|pair|delivery|doctor'
+          raise OptionParser::InvalidArgument, 'usage: tamoz comms serve|list|pair|delivery|request|doctor'
         end
       end
 
@@ -57,12 +58,14 @@ module Tamoz
           end
 
           descriptors.each { |descriptor| store.deploy_surface(descriptor.wire, now: Time.now.utc) }
+          controls_source = comms_controls_source(directory, adapter, options)
           with_delivery_drainers(directory, descriptors) do |drainers|
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
               transport = build_transport(descriptor, credential(descriptor))
               Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
-                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:
+                poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
+                controls: controls_source
               )
             end
             if once
@@ -117,7 +120,11 @@ module Tamoz
 
       # A fenced gateway loop per surface, supervised like `tamoz worker`:
       # INT/TERM ask every loop to stop, and the previous handlers are
-      # restored so an in-process test never leaks traps.
+      # restored so an in-process test never leaks traps. A drainer that
+      # loses its credential stops every loop and exits non-zero; an
+      # unexpected storage failure is captured, named on stderr with its
+      # type, and turns into a non-zero exit — never a quiet spin beside a
+      # dead sibling thread.
       def run_gateway_loops(gateways, drainers)
         # Trap.install hands each stop request to a thread for us: `stop`
         # releases the poller lease with a database write, whose mutex raises
@@ -125,16 +132,46 @@ module Tamoz
         # SIGTERM into a backtrace instead of a released lease.
         stop = ->(_reason) { stop_loops(gateways, drainers) }
         Cancellation::Trap.install(int: stop, term: stop) do
+          failures = []
           threads = gateways.map do |gateway|
             Thread.new do
               outcome = gateway.serve_loop(drain: false)
               stop_loops(gateways, drainers) if %i[auth_failed poller_conflict].include?(outcome)
               outcome
+            rescue StandardError => e
+              failures << e
+              stop_loops(gateways, drainers)
+              :storage_failed
             end
           end
-          threads.concat(drainers.map { |drainer| Thread.new { drainer.serve_loop } })
+          threads.concat(drainers.map do |drainer|
+            Thread.new do
+              outcome = drainer.serve_loop
+              stop_loops(gateways, drainers) if outcome == :authentication_refused
+              outcome
+            rescue StandardError => e
+              failures << e
+              stop_loops(gateways, drainers)
+              :storage_failed
+            end
+          end)
           outcomes = threads.map(&:value)
-          return 1 if outcomes.include?(:auth_failed)
+          failures.each do |failure|
+            @err.puts "tamoz: comms delivery stopped on #{failure.class}: #{failure.message}"
+          end
+          if outcomes.include?(:auth_failed)
+            @err.puts 'tamoz: comms gateway stopped on Comms::AuthenticationError: ' \
+                      'the channel credential was refused'
+          end
+          if outcomes.include?(:authentication_refused)
+            @err.puts 'tamoz: comms delivery stopped on Comms::AuthenticationError: ' \
+                      'the channel credential was refused'
+          end
+
+          return 1 if failures.any? ||
+                      outcomes.include?(:auth_failed) ||
+                      outcomes.include?(:authentication_refused)
+
           if outcomes.include?(:poller_conflict)
             raise Comms::PollerConflictError,
                   'a gateway lost the Telegram poller lease'

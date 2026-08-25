@@ -307,20 +307,12 @@ class AgentProfileMachineryTest < Minitest::Test
   # subprocess because nothing in the agent load chain required "time". Pin the
   # clean-process load chain (the corpus harness's -I lib paths, no bundler).
   def test_clean_subprocess_load_chain_provides_time_iso8601
-    load_paths = %w[
-      tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval tamoz-sqlite
-      tamoz-tools tamoz-observability tamoz-comms tamoz-cancellation tamoz-concurrency
-      tamoz-agent-kernel tamoz-agent-memory tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement tamoz-agent
-    ].flat_map do |gem|
-      ["-I", File.join(ROOT, "gems", gem, "lib")]
-    end
     child = <<~'RUBY'
       require "tamoz/agent"
       raise "iso8601 unavailable" unless Time.now.utc.respond_to?(:iso8601)
       puts "ok"
     RUBY
-    output = IO.popen([RbConfig.ruby, *load_paths, "-e", child], &:read)
+    output = IO.popen([RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", child], &:read)
     assert_equal 0, $?.exitstatus
     assert_includes output, "ok"
   end

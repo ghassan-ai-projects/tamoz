@@ -175,3 +175,14 @@ A phase is complete when:
 4. quality gates pass;
 5. the phase file's status line is updated with date, evidence, and which claims
    are plumbing vs real.
+
+## Refresh 2026-08-24
+
+All named seams, tests, and reuse targets were re-verified to exist against the
+tree at `231629b` on `feature/openclaw-chat-study-refresh`; class locations were
+corrected for the gem split. Work-item status re-audit: of the 21 items across
+Phases 0–3, none is done, four are partial (P0.1 fence exists but unfenced at
+result recording; P0.4 three limits still unenforced; P1.3 status projection
+exists without references or closed vocabulary; P2.6 prompt activation durable,
+callback acknowledgement absent), seventeen are not started. The bar itself is
+unchanged.

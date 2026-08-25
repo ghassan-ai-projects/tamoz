@@ -68,8 +68,8 @@ command parity, then bounded semantic progress.
 | Target architecture and priorities | Complete |
 | Scenario matrix and implementation gates | Complete |
 | Final audit and definition of done | Complete |
-| Implementation plan (bar + Phases 0–3) | Complete; no code written |
-| Communication benchmark protocol and scenarios | Complete; harness not built |
+| Implementation plan (bar + Phases 0–3) | Phases 0–3 implemented with evidence (`implementation-plan/evidence/`); benchmark track B0 scoring all nine scenarios deterministically |
+| Communication benchmark protocol and scenarios | Protocol complete; B0 composition harness scores C1–C9 ready on fixture transports (publication honestly blocked — no real transport/provider) |
 
 Static inspection does not prove perceived quality, real provider quality, or a
 full live Telegram conversation. Those limits are recorded explicitly in the

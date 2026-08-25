@@ -3,7 +3,7 @@
 
 require "fileutils"
 
-$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
 require "tamoz/evals"
 
 root = ENV.fetch(

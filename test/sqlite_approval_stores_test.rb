@@ -32,8 +32,8 @@ class SqliteApprovalStoresTest < Minitest::Test
   end
 
   def test_migration_applies_on_fresh_database_and_checksum_verifies
-    assert_equal 17, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal (1..17).to_a, Tamoz::SQLite::Migrator.migration_ordinals
+    assert_equal 21, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal (1..21).to_a, Tamoz::SQLite::Migrator.migration_ordinals
 
     with_adapter do |adapter|
       tables = adapter.__send__(:read, operation: 'test.tables') do |txn|

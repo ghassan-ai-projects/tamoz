@@ -220,7 +220,40 @@ class CommsCliTest < Minitest::Test
     end
   end
 
+  # R1 (declared cap honesty): the PRODUCTION client factory builds the real
+  # Telegram client carrying the surface's declared max_response_bytes; an
+  # undeclared cap falls through to the client's own default.
+  def test_the_production_client_factory_carries_the_declared_response_cap
+    seam = Object.new.extend(Tamoz::Agent::CLICommsShared)
+
+    declared = seam.comms_client_factory(telegram_descriptor(4096)).call('token')
+
+    assert_kind_of Tamoz::Telegram::Client, declared
+    assert_equal 4096, declared.max_response_bytes
+
+    undeclared = seam.comms_client_factory(telegram_descriptor(nil)).call('token')
+
+    assert_equal Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, undeclared.max_response_bytes
+  end
+
   private
+
+  def telegram_descriptor(max_response_bytes)
+    Tamoz::Comms::SurfaceDescriptor.build(
+      surface_id: 'telegram-ops', revision: 1,
+      transport: { mode: 'long_poll',
+                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
+                   poll_timeout_s: 30, batch: 50, max_response_bytes: },
+      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
+      admission: { direct: 'disabled' }, threading: 'conversation', profile_id: 'ops',
+      approvals: { mode: 'none', prompt_ttl_s: 900 },
+      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
+      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
+                max_denial_prompts_per_request: 4, outbox_capacity: 500,
+                control_capacity: 50, per_chat_messages_per_s: 1.0,
+                global_messages_per_s: 25.0 }
+    )
+  end
 
   def with_store(rt)
     adapter = Tamoz::SQLite::Adapter.new(path: File.join(rt.dir, 'runtime.sqlite3'))
@@ -238,7 +271,7 @@ class CommsCliTest < Minitest::Test
 
   def message_update(id, text:, user_id: 111_111_11)
     { 'update_id' => id,
-      'message' => { 'message_id' => id, 'date' => 1_752_700_800,
+      'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
                      'chat' => { 'id' => 222_222_22, 'type' => 'private' },
                      'from' => { 'id' => user_id }, 'text' => text } }
   end

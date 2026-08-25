@@ -317,13 +317,6 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
   end
 
   def run_child(context, mode:, kill_after_publish: nil)
-    load_paths = %w[
-      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability tamoz-comms
-      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-agent
-    ].flat_map { |gem| ["-I", ROOT.join("gems", gem, "lib").to_s] }
     env = {
       "TAMOZ_MODE" => mode,
       "TAMOZ_DB" => context.fetch(:database),
@@ -332,14 +325,11 @@ class AgentAcceptanceWorkflowTest < Minitest::Test
       "TAMOZ_RESULT" => context.fetch(:result),
       "TAMOZ_TASK" => "make the configured check pass",
       "TAMOZ_KILL_AFTER_PUBLISH" => kill_after_publish&.to_s,
-      # The child must run with ONLY the load paths above, so a missing runtime
-      # dependency surfaces here instead of being masked by the parent's
-      # bundler environment.
       "RUBYOPT" => nil,
       "BUNDLER_SETUP" => nil
     }
     pid = Process.spawn(
-      env, RbConfig.ruby, *load_paths, "-e", CHILD,
+      env, RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", CHILD,
       out: ENV["TAMOZ_ACCEPTANCE_DEBUG"] ? $stdout : File::NULL,
       err: ENV["TAMOZ_ACCEPTANCE_DEBUG"] ? $stderr : File::NULL
     )

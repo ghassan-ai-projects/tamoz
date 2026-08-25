@@ -90,14 +90,14 @@ class CommsCliOpsTest < Minitest::Test
       challenge = Tamoz::Comms::PairingChallenge.build(
         surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
         conversation_id: 'telegram:chat:22222222', ttl_s: 3600,
-        now: Time.utc(2026, 8, 10, 12, 0, 0)
+        now: Time.now.utc
       )
       with_store(rt) do |store|
         store.insert_pairing_challenge(
           digest: challenge.digest, surface_id: 'telegram-ops',
           correspondent_id: 'telegram:user:11111111',
           conversation_id: 'telegram:chat:22222222',
-          expires_at: Time.utc(2026, 8, 10, 12, 5, 0), now: Time.utc(2026, 8, 10, 12, 0, 0)
+          expires_at: Time.now.utc + 300, now: Time.now.utc
         )
       end
 
@@ -130,9 +130,13 @@ class CommsCliOpsTest < Minitest::Test
       status, _out, err = rt.cli(%w[comms pair approve], code: challenge.challenge)
 
       assert_equal 1, status
-      assert_match(/pairing code expired/, err)
+      assert_match(/no pending pairing code matches/, err,
+                   'an expired code is not approvable: it never scans as pending')
       with_store(rt) do |store|
-        assert_equal 1, store.pairing_challenges(status: 'pending').length
+        assert_empty store.pairing_challenges(status: 'pending'),
+                     'the expired challenge is excluded from pending scans'
+        assert_equal 1, store.pairing_challenges.length,
+                     'the expired row stays in the table for the audit trail'
       end
     end
   end
@@ -200,7 +204,8 @@ class CommsCliOpsTest < Minitest::Test
         delivery_id = delivery_wire.fetch('delivery_id')
         store.claim_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
                              claim_expires_at: Time.now.utc + 60, now: Time.now.utc)
-        store.mark_delivery(delivery_id:, status: 'unknown', now: Time.now.utc)
+        store.mark_delivery(delivery_id:, owner: 'gateway:test', fence: 1,
+                            status: 'unknown', now: Time.now.utc)
       end
 
       status, out, err = rt.cli(%w[comms delivery resolve], delivery_id: delivery_wire.fetch('delivery_id'),
@@ -232,6 +237,28 @@ class CommsCliOpsTest < Minitest::Test
     end
   end
 
+  # The gateway's controls seam is crash-safe: a builder that raises (a
+  # missing model credential, a boot failure) answers nil — the bounded
+  # CONTROLS_UNAVAILABLE_REPLY path — and keeps answering on later calls.
+  def test_a_raising_controls_builder_answers_nil_and_stays_safe
+    Dir.mktmpdir('tamoz-controls-source') do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
+      begin
+        source = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
+          workspace_root: File.join(directory, 'workspace'),
+          adapter:,
+          artifact_store: adapter.bind_artifact_store(tenant: 'channel:controls'),
+          model_builder: -> { raise StandardError, 'model boot failed' }
+        )
+
+        assert_nil source.call('thread.controls'), 'the raising builder maps to nil'
+        assert_nil source.call('thread.controls'), 'the seam survives and answers again'
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
   private
 
   def with_store(rt)
@@ -250,7 +277,7 @@ class CommsCliOpsTest < Minitest::Test
 
   def message_update(id, text:, user_id: 111_111_11)
     { 'update_id' => id,
-      'message' => { 'message_id' => id, 'date' => 1_752_700_800,
+      'message' => { 'message_id' => id + 10_000, 'date' => 1_752_700_800,
                      'chat' => { 'id' => 222_222_22, 'type' => 'private' },
                      'from' => { 'id' => user_id }, 'text' => text } }
   end

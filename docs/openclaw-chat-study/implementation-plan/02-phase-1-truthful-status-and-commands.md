@@ -1,6 +1,9 @@
 # Phase 1 — truthful status and command parity
 
-Status: not started — no production code changed by this planning pass.
+Status: implemented — store truth `ca82d20`, CLI JSON identity `676d977`,
+command parity `f322345`, plus owner-directed pairing first contact
+`0fff1f8`; evidence in `evidence/phase-1/implementation-review.md`. All claims
+are fixture/scripted-transport plumbing evidence.
 Requires: Phase 0 (delivery fence and Telegram identity must already be fixed).
 
 Study reference: Stage 1 (`../04-tamoz-target-architecture.md`), P1
@@ -30,7 +33,7 @@ stable before Phase 2 adds progress events.
 
 - Controls are parsed before task admission and never become model input. The
   command table (`Comms::Commands`) and the Gateway handlers
-  (`CommsGateway#handle_command`) are kept in lockstep; an unimplemented command
+  (`Comms::Gateway#handle_command`) are kept in lockstep; an unimplemented command
   must not parse as known.
 - `/status` and CLI status are projections of durable evidence
   (`CommsStore#conversation_status`, request/session/outbox rows), not a live
@@ -52,9 +55,10 @@ stable before Phase 2 adds progress events.
    envelopes. The reference enables `/status`, support, recovery, and machine
    correlation; it grants no authority.
 3. **`/status [reference]` on durable facts.** `CommsStore#conversation_status`
-   already reads durable facts (thread, active `request_id`, `task_state`,
-   `effect_state`, `capability_state`, `delivery_state`, `phase`, `event_kind`,
-   `event_sequence`, `next_action`, `terminal_reason`), and `status_text` renders
+   already reads durable facts (`thread_id`, `state`, `open_requests`, active
+   `request_id`, `task_state`, `effect_state`, `capability_state`,
+   `delivery_state`, `phase`, `event_kind`, `event_sequence`, `next_action`,
+   `terminal_reason`), and `status_text` renders
    most of them. The remaining work is the read-model gap: make status
    caller-bound and reference-addressed (`/status <ref>` resolving one request,
    or an explicit list); render the request reference and the terminal reason
@@ -62,7 +66,7 @@ stable before Phase 2 adds progress events.
    translate internal worker/effect states into the Phase 1 closed vocabulary.
    Both task and delivery axes must appear.
 4. **Command registry parity.** Make `Comms::Commands` and
-   `CommsGateway#handle_command` agree. Implement or remove `/new`, `/redirect`,
+   `Comms::Gateway#handle_command` agree. Implement or remove `/new`, `/redirect`,
    and `/whoami`. Each implemented command has authorization, persistence,
    rendering, and tests; `/new` creates a new conversation generation without
    deleting audit history; `/redirect` reuses the durable redirect path with
@@ -73,10 +77,11 @@ stable before Phase 2 adds progress events.
    `CommsStore#conversation_history` so only confirmed successful terminal
    deliveries enter assistant conversation history. Pending or `unknown` terminal
    output must not enter a later model prompt (invariant 11).
-6. **Preserve CLI JSON event identity.** Stop flattening `StreamPart` identity
-   (`run_id`, `task_id`, `sequence`, `emitted_at`) in CLI JSON output. Emit stable
-   NDJSON envelopes carrying the event identity and both state axes, so the
-   machine contract does not change when Phase 2 adds progress events.
+6. **Preserve CLI JSON event identity.** Stop flattening `StreamPart`
+   (gems/tamoz-core) identity (`run_id`, `task_id`, `sequence`, `emitted_at`)
+   in CLI JSON output. Emit stable NDJSON envelopes carrying the event identity
+   and both state axes, so the machine contract does not change when Phase 2
+   adds progress events.
 
 ## Tests
 

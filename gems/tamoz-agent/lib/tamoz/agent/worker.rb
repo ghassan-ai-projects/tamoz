@@ -69,6 +69,7 @@ module Tamoz
         @observability = Tamoz::Observability::Producer.new(recorder:, policy: content_policy)
         @model_effect_keys = Set.new
         @model_effect_monitor = Mutex.new
+        @milestone_sequences = {}
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
@@ -319,7 +320,7 @@ module Tamoz
         occurrence_id = entry.fetch(:head_request_id)
         terminal_request = entry.fetch(:head_status) == :queued
         settle_child_error(thread_id, error) if terminal_request
-        close_failed_occurrence(thread_id) if terminal_request
+        close_failed_occurrence(thread_id, occurrence_id) if terminal_request
         emit("request.failed",
              thread: thread_id,
              request_id: occurrence_id,
@@ -339,10 +340,17 @@ module Tamoz
         PARKED
       end
 
-      def close_failed_occurrence(thread_id)
-        @runtime.close_occurrence(thread_id)
+      def close_failed_occurrence(thread_id, occurrence_id)
+        close_occurrence(thread_id, occurrence_id)
       rescue StandardError => error
         emit('worker.error', reason: "failed occurrence cleanup: #{error.message}")
+      end
+
+      # Closing an occurrence ends its milestone sequence: the map entry is
+      # dropped so per-request sequence state never accumulates across turns.
+      def close_occurrence(thread_id, request_id)
+        @monitor.synchronize { @milestone_sequences.delete(request_id) }
+        @runtime.close_occurrence(thread_id)
       end
 
       # Which budget, if any, this thread has spent. Returns nil when the profile
@@ -387,7 +395,7 @@ module Tamoz
         # the operator would collect one stop event per poll forever. Raising the
         # ceiling and re-queueing is the deliberate way to continue, which is the
         # right amount of friction for work that already spent its budget.
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.stopped",
              thread: thread_id,
@@ -474,7 +482,9 @@ module Tamoz
         # Durable BEFORE execution: a crash between here and the first checkpoint
         # must still leave a record that this occurrence was started.
         @runtime.open_occurrence(thread_id, occurrence_id)
+        notify_milestone(thread_id, "request.claimed", occurrence_id, phase: "claimed")
         request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
       end
@@ -495,8 +505,37 @@ module Tamoz
         request = session.app.durable_runner.recover(
           thread: thread_id, request_id: occurrence_id, owner_id: owner_id
         )
+        notify_milestone(thread_id, "request.recovered", occurrence_id, phase: "recovered")
+        observe_cancellation(request, thread_id:)
         settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
         settle(session, thread_id:, occurrence_id:, request:)
+      end
+
+      # The durable `observed` point of the cancellation timeline (plan 03,
+      # work item 4): the runner has consumed the cancel operation, so the
+      # stamp lands before settlement. First-write-wins in the store; a
+      # projection failure never becomes fatal to the turn that produced it.
+      def observe_cancellation(request, thread_id:)
+        return unless cancellation_redirect?(request)
+
+        comms_store&.mark_cancellation_observed(thread_id:, now: Time.now.utc)
+      rescue StandardError
+        nil
+      end
+
+      def cancellation_redirect?(request)
+        return false unless request.respond_to?(:operation) && request.operation == :redirect
+
+        task = request.respond_to?(:payload) ? request.payload : nil
+        task.is_a?(Hash) && task['task'].is_a?(Hash) && task['task']['cancel'] == true
+      end
+
+      def comms_store
+        return @comms_store if defined?(@comms_store)
+        return unless @runtime.respond_to?(:adapter) && @runtime.respond_to?(:checkpoints) &&
+                      @runtime.adapter.respond_to?(:bind_comms_store)
+
+        @comms_store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
       end
 
       def settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
@@ -596,7 +635,7 @@ module Tamoz
                     'That message could not be started because earlier work in this conversation ' \
                     'never settled. Please send it again.',
                     request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
@@ -611,14 +650,23 @@ module Tamoz
         when :failed then settle_failed_view(view, thread_id, occurrence_id, duration_ms)
         when :blocked then settle_blocked_view(view, thread_id, occurrence_id, duration_ms)
         when :paused then settle_paused_view(view, thread_id, occurrence_id, duration_ms)
-        else PROGRESSED
+        else
+          notify_milestone(thread_id, "request.running", occurrence_id,
+                           phase: committed_phase(view) || "running")
+          PROGRESSED
         end
+      end
+
+      # The latest engine lifecycle phase in the committed checkpoint state —
+      # a durable fact, never a guess about work still ahead.
+      def committed_phase(view)
+        Array(view.lifecycle_events).last&.fetch("phase", nil)
       end
 
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
         @monitor.synchronize { @processed += 1 }
         notify_sink(thread_id, "request.completed", completion_text(view), request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
@@ -635,7 +683,7 @@ module Tamoz
         # in the worker event stream for operators.
         notify_sink(thread_id, "request.failed", failure_text(view),
                     request_id: occurrence_id)
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.failed",
              thread: thread_id, request_id: occurrence_id,
@@ -655,7 +703,7 @@ module Tamoz
           blocked_text(view),
           request_id: occurrence_id
         )
-        @runtime.close_occurrence(thread_id)
+        close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
         emit("request.blocked",
              thread: thread_id,
@@ -679,6 +727,7 @@ module Tamoz
                ),
                observability: {execution_id: view.execution_id})
         else
+          notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
           notify_sink(thread_id, "request.approval_request", "Approval requested.",
                       request_id: occurrence_id, interrupts: interrupt_facts(view))
           emit_approval_request(thread_id, occurrence_id, view)
@@ -728,8 +777,24 @@ module Tamoz
       # answer. Nil-safe — an unconfigured worker delivers nothing. An
       # approval pause carries the occurrence and its exact interrupt set so
       # the rendered prompt answers THAT question (ADR-043).
-      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil)
-        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:)
+      def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil, sequence: nil, phase: nil)
+        @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:,
+                                     sequence:, phase:)
+      end
+
+      # One lifecycle milestone (plan 03, work item 1): projected from a fact
+      # that has ALREADY committed, with the request's short reference and a
+      # sequence monotonic within the request. A projection failure is
+      # dropped, never fatal to the turn that produced the fact.
+      def notify_milestone(thread_id, kind, request_id, phase:)
+        return unless request_id
+
+        sequence = @monitor.synchronize do
+          @milestone_sequences[request_id] = (@milestone_sequences[request_id] || 0) + 1
+        end
+        notify_sink(thread_id, kind, nil, request_id:, sequence:, phase:)
+      rescue StandardError
+        nil
       end
 
       # What a correspondent receives when a turn completes: the VERIFIED

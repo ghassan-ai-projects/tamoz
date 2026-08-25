@@ -136,8 +136,7 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
 
   # THREAT_MODEL §4.3.2: the dependency-direction test. The episode path must
   # not reference the effectful modules — proven by source scan AND by an
-  # isolated load that cannot see any other tamoz gem (env-scrubbed,
-  # gems disabled).
+  # env-scrubbed clean-subprocess load that pulls in none of the effectful gems.
   def test_dependency_direction_episode_path_has_no_effectful_reference
     # The containment set: the episode host now, plus the worker files the
     # later phases add. A new episode-path file must be added here OR the
@@ -158,10 +157,6 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
   end
 
   def test_the_host_loads_without_the_effectful_gems
-    lib_paths = [
-      ROOT.join("gems/tamoz-core/lib").to_s,
-      ROOT.join("gems/tamoz-stream/lib").to_s
-    ]
     script = <<~RUBY
       require "tamoz/core"
       require "tamoz/stream/capability_host"
@@ -183,7 +178,7 @@ class StreamEpisodeCapabilityHostTest < Minitest::Test
     env = ENV.each_key.grep(/\A(?:BUNDLE|BUNDLER)/).to_h { |key| [key, nil] }
     env.merge!("RUBYLIB" => nil, "RUBYOPT" => nil)
     output, error, status = Open3.capture3(
-      env, RbConfig.ruby, "-I#{lib_paths.join(":")}", "-e", script
+      env, RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", script
     )
     assert status.success?, "isolated episode host load failed: #{error}"
     assert_equal PERMITTED.join(","), output.strip

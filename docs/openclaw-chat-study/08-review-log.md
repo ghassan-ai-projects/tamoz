@@ -169,3 +169,68 @@ The study is complete as a report. The implementation is not complete. The next
 work should begin at P0 in `05-comparison-and-priorities.md`, add the composition
 tests in `06-scenario-matrix.md`, and only then expose richer progress or context
 controls. No production code was changed by this study.
+
+## Addendum 2026-08-24
+
+A later refactor moved several classes cited by the passes above without changing
+their behavior: `Comms::Gateway`, `DeliveryDrainer`, and `OutboxDeliverySink` now
+live in `gems/tamoz-comms`; `SessionEffects` in `gems/tamoz-agent-session`;
+`EffectDispatcher` in `gems/tamoz-agent-kernel`. Follow the corrected paths in
+`03-tamoz-current-state.md` and `07-evidence-index.md`, not the paths as written
+at review time.
+
+## Implementation round 2026-08-24 (branch `feature/openclaw-chat-study-refresh`)
+
+The plan began executing. Phase 0 (boundary correctness) and Phase 1 (truthful
+status, command parity, CLI JSON identity) are implemented and reviewed; the
+evidence lives in `implementation-plan/evidence/phase-0` and `phase-1`. The
+review loop for Phase 0 ran three independent read-only lenses —
+correctness/invariants, security/trust boundaries, test quality/evidence — over
+the committed revision. Verdicts: NEEDS FIXES (correctness: declared response
+cap never wired to the production client), NEEDS FIXES (security: unbounded
+quarantine amplification plus two remote-reachable intake freezes), GAPS NOTED
+(tests: storage-failure supervision unproven, digest guarded only by a
+test-local parallel). Every finding was repaired in a single follow-up commit
+and re-gated; the phase evidence records the full loop.
+
+Owner-directed additions beyond the study list: pairing first contact (a new
+sender on a pairing-mode surface receives a relayable code instead of silence;
+approval stays operator-only) and a benchmark-track start (B0 composition
+harness scoring the nine scenarios deterministically on fake transports).
+
+Honest limits unchanged: all phase evidence is fixture/scripted-transport
+plumbing evidence; no live Telegram conversation or real-provider run is
+claimed, and usefulness remains the benchmark's claim to make later.
+
+## Implementation round 2026-08-24, part 2 (Phases 2–3 complete)
+
+Phases 2 (bounded semantic liveness) and 3 (conversation model) are
+implemented and reviewed on the same branch; evidence lives in
+`implementation-plan/evidence/phase-2` and `phase-3`. Milestones project from
+committed facts with coalescing and a hard bound; cancellation is visible
+through a durable timeline (`requested`/`observed`/terminal keyed to what the
+correspondent was actually told); `/status r<ref>` reconnects from SQLite
+alone; callback queries acknowledge after durable recording; typed context
+controls (`/new /reset /compact /usage /context /think /verbose`) run under
+the fenced writer with exactly-one audit record per mutation and identical
+meaning on both surfaces.
+
+The final review round ran three fresh read-only lenses over the completed
+phases — correctness against the twelve invariants, security/trust over the
+new surfaces, and test quality/evidence honesty. All three returned NEEDS
+FIXES; every finding was repaired and re-gated: control replies no longer
+reflect unbounded input (a poison argument could stall a surface), commands
+pass the declared inbound-byte limit, pairing approval enforces challenge
+expiry where it grants authority, redelivered updates no longer re-execute
+control commands, the cancellation terminal word follows the settle kind
+rather than the reservation axis, reset/compact count truncation over the one
+stream the frame consumes, and the CLI milestone renderer was removed rather
+than left as unwired dead code. The canonical cross-surface composition test
+composes the whole story — two isolated conversations, cancel mid-wait,
+crash-recovery, duplicate replay, tightened-limit refusal, one ambiguous send
+— deterministically over real stores.
+
+The B0 harness now scores all nine scenarios ready with empty pending seams,
+byte-identical across runs. Honest limits unchanged: fixture transports and
+scripted models only; publication stays blocked until a real transport and
+real provider run exists.

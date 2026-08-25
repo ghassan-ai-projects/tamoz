@@ -1,0 +1,67 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+
+require 'json'
+require 'optparse'
+require 'open3'
+require 'pathname'
+require 'tamoz/evals'
+
+root = File.expand_path('..', __dir__)
+options = {
+  scenario_index: File.join(root, 'docs', 'openclaw-chat-study', 'benchmark-protocol',
+                            'scenarios', 'SCENARIO_INDEX.json'),
+  artifact_base: Dir.pwd,
+  artifact_root: nil,
+  scenarios: nil
+}
+OptionParser.new do |parser|
+  parser.banner = 'Usage: script/benchmark_comms_run --out DIR [--scenarios C1,C2]'
+  parser.on('--scenario-index PATH') { |value| options[:scenario_index] = value }
+  parser.on('--scenarios IDS') { |value| options[:scenarios] = value.split(',').map(&:strip) }
+  parser.on('--artifact-root PATH') { |value| options[:artifact_root] = value }
+  parser.on('--out DIR') { |value| options[:artifact_base] = value }
+end.parse!
+
+artifact_root = options[:artifact_root]
+if artifact_root.nil?
+  date = Time.now.utc.strftime('%Y-%m-%d')
+  artifact_root = File.join('fixtures', 'comms', date)
+end
+
+# The same safe-relative-path rule OpenclawMissionRunner enforces on the
+# mission side; an escape hatch of a root would write outside the tree.
+def safe_path?(path)
+  pathname = Pathname.new(path)
+  !pathname.absolute? && pathname.each_filename.none?('..') && !path.empty?
+end
+abort 'artifact root must be a safe relative path' unless safe_path?(artifact_root.to_s)
+
+git_revision, status = Open3.capture2('git', '-C', root, 'rev-parse', 'HEAD')
+abort 'could not resolve git revision' unless status.success?
+git_revision = git_revision.strip
+
+runner = Tamoz::Evals::Benchmark::OpenclawCommsRunner.new(
+  artifact_base: options.fetch(:artifact_base),
+  artifact_root:,
+  git_revision:,
+  command: "script/benchmark_comms_run #{ARGV.join(' ')}",
+  scenario_index_path: options.fetch(:scenario_index),
+  scenarios: options[:scenarios]
+)
+run = runner.run
+
+summary = {
+  'run_kind' => run.manifest.fetch('run_kind'),
+  'fixture' => true,
+  'transport' => run.manifest.fetch('transport'),
+  'artifact_root' => File.join(options.fetch(:artifact_base), artifact_root.to_s, 'manifest.json'),
+  'git_revision' => git_revision,
+  'results' => run.manifest.fetch('results'),
+  'pending_seam' => run.manifest.fetch('pending_seam').keys
+}
+puts JSON.pretty_generate(summary)
+
+exit 2 if runner.failed?

@@ -66,7 +66,7 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     ).wire
     store.admit_and_enqueue(
       envelope, surface_id: 'telegram-ops', bot_id: 7_463_512_990,
-                thread:, profile_id: 'ops', reservation: 1, capacity: 500, now:
+                thread:, profile_id: 'ops', reservation: 1, now:
     )
   end
 

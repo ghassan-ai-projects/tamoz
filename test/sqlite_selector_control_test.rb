@@ -755,13 +755,6 @@ class SQLiteSelectorControlTest < Minitest::Test
   end
 
   def child_command(layout, scenario, selector, calls: 1)
-    load_paths = %w[
-      tamoz-core tamoz-cancellation tamoz-concurrency tamoz-graph tamoz-scheduler
-      tamoz-stream tamoz-approval tamoz-comms tamoz-tools tamoz-observability tamoz-mcp
-      tamoz-agent-kernel tamoz-agent-capabilities tamoz-agent-session
-      tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-improvement
-      tamoz-sqlite tamoz-agent tamoz-evals
-    ].flat_map { |gem| ["-I", GEM_ROOTS.fetch(gem).join("lib").to_s] }
     descriptor = layout.descriptor
     script = <<~RUBY
       require "tamoz/evals"
@@ -783,7 +776,7 @@ class SQLiteSelectorControlTest < Minitest::Test
       #{calls}.times { stopper.call("before_begin", metadata) }
       abort "selector stopper returned"
     RUBY
-    [RbConfig.ruby, *load_paths, "-e", script]
+    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", script]
   end
 
   def build_runner(termination_grace_ms: 200)

@@ -25,7 +25,7 @@ accepted request with a pending acknowledgement is not running yet.
 ## Ownership model
 
 ```text
-CommsGateway
+Comms::Gateway
   owns transport credentials, inbound normalization, admission, controls,
   request references, and read-only status projection
 
@@ -101,12 +101,12 @@ Delivery state is independently `pending`, `delivered`, `failed`, or `unknown`.
 | Target behavior | Extend | Do not create |
 | --- | --- | --- |
 | Stable turn identity | `SessionView`, request inbox IDs, execution/occurrence IDs | A second chat ID system |
-| Status snapshot | `Session#view`, request records, `CommsStore`, outbox rows | A mutable in-memory status cache as authority |
-| Durable event identity | `StreamPart`, `Graph::StreamEmitter`, worker emitter | Raw model-token persistence |
-| Telegram lifecycle projection | `Worker#notify_sink`, `OutboxDeliverySink::EVENT_KINDS` | A Telegram-only worker loop |
+| Status snapshot | `Session#view` (gems/tamoz-agent-session), request records, `CommsStore`, outbox rows | A mutable in-memory status cache as authority |
+| Durable event identity | `StreamPart` (gems/tamoz-core), `Graph::StreamEmitter`, worker emitter | Raw model-token persistence |
+| Telegram lifecycle projection | `Worker#notify_sink`, `OutboxDeliverySink::EVENT_KINDS` (gems/tamoz-comms) | A Telegram-only worker loop |
 | CLI lifecycle projection | `CLI#run_with_stream`, `CLIRendering` | Separate CLI semantics for each command |
 | Controls | `Comms::CommandIntent`, `DurableRunner`, `Session#resume/continue`, redirect | Free-form command prompts to the model |
-| Delivery truth | `CommsOutbox`, `DeliveryDrainer`, `CLICommsOps` | Automatic retry after ambiguous send |
+| Delivery truth | `CommsOutbox` (impl in gems/tamoz-sqlite), `DeliveryDrainer` (gems/tamoz-comms), `CLICommsOps` | Automatic retry after ambiguous send |
 | Telegram identity | `InboundEnvelope`, `Telegram::Normalizer`, `CommsStoreRows` | Treating update ID as message ID or payload digest |
 
 ## Proposed behavior by surface
@@ -253,3 +253,12 @@ The redesign must preserve or strengthen these invariants:
 
 Do not expand groups, media, multi-agent routing, or affirmative remote approvals
 until these stages and their evidence gates pass.
+
+## Refresh 2026-08-24
+
+Seam map re-verified against the tree at `231629b` on
+`feature/openclaw-chat-study-refresh`. Every named extension seam exists; the
+gem-split annotations record where each now lives. The twelve integrity and
+safety invariants were re-read against current code and remain unsatisfied
+exactly where the study says they are (digest compare, fence at the send
+boundary, limit enforcement, history inclusion, callback acknowledgement).

@@ -7,17 +7,16 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 497 | 260 | 17 | **no** |
+| 512 | 277 | 15 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
-| failing | 2 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 465 |
+| pass | 482 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -30,7 +29,6 @@ generating run.
 | `ADR-045` — The observability gems add no durable table and no second source of truth | missing | No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The migration-count proof and the separately authorized model usage persistence land with slice E. |
 | `ADR-046` — Content capture is off by default, per class, and refused for restricted classifications | missing | Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice. |
 | `ADR-047` — Sampling applies to export only and never to safety-bearing signals | missing | Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice. |
-| `INV-19` — Atomic compare-and-append commit | failing | no direct evidence names this requirement |
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-56` — A user channel is identified, bound, and grants nothing | missing | Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence. |
 | `INV-57` — Channel delivery is ordered, bounded, and ambiguity-safe | missing | Channel outbox, offset persistence, and ambiguity handling (COMMS_TELEGRAM_PLAN slices C/G). No test exists before the channel gems are built; the kill matrix in the telegram slices converts this row to direct evidence. |
@@ -38,13 +36,7 @@ generating run.
 | `INV-59` — Observation cannot change execution, and its surface is bounded and versioned | missing | The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual. |
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
-| `OBJ-4` — durable effects stop or reconcile ambiguity without guessing | failing | no direct evidence names this requirement |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
-
-## Failing evidence (release stopper)
-
-- `INV-19` — test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state
-- `OBJ-4` — test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven
 
 ## Full audit
 
@@ -79,7 +71,7 @@ generating run.
 | `ADR-027` | adr | yes | pass | `test/memory_engine_test.rb#test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge` |
 | `ADR-028` | adr | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
 | `ADR-029` | adr | yes | pass | `test/mcp_catalog_test.rb#test_compile_produces_immutable_catalog_with_exact_digests` |
-| `ADR-030` | adr | yes | pass | `test/agent_capability_binding_test.rb#test_every_decision_routes_to_the_owning_sources_dispatcher` |
+| `ADR-030` | adr | yes | pass | `test/capability_host_test.rb#test_every_decision_routes_to_the_owning_sources_dispatcher` |
 | `ADR-031` | adr | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `ADR-032` | adr | yes | pass | `test/sqlite_schedule_store_test.rb#test_claim_time_grant_revocation_skips_the_schedule` |
 | `ADR-033` | adr | yes | pass | `test/agent_skills_test.rb#test_compiles_a_portable_skill_into_an_immutable_content_addressed_record` |
@@ -143,6 +135,8 @@ generating run.
 | `API-tamoz-agent-kernel-Tamoz::Agent::Plan` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-kernel-Tamoz::Agent::PlanRejectedError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-kernel-Tamoz::Agent::Providers` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-agent-kernel-Tamoz::Agent::RequestProjection` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-agent-kernel-Tamoz::Agent::RequestRoute` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-kernel-Tamoz::Agent::SkillSnapshotUnavailableError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-kernel-Tamoz::Agent::Step` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-memory-Tamoz::Agent::Memory::Engine` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -151,6 +145,7 @@ generating run.
 | `API-tamoz-agent-profile-Tamoz::Agent::Profile::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-session-Tamoz::Agent::Session` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-session-Tamoz::Agent::SessionGem::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-agent-session-Tamoz::Agent::SessionNodes` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-session-Tamoz::Agent::SessionOutcome` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-session-Tamoz::Agent::SessionPlanningContext` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-session-Tamoz::Agent::SessionRecords` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -206,6 +201,7 @@ generating run.
 | `API-tamoz-comms-Tamoz::Comms::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency.join_all` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-concurrency-Tamoz::Concurrency::Drain` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency::EventStream` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Pool.for` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -229,6 +225,7 @@ generating run.
 | `API-tamoz-core-Tamoz::Core.parse_object` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz::Core.string` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz::Core.strings` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-core-Tamoz::Core::LEGACY_PROFILE_ID` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz::Core::LEGACY_SKILL_EPOCH` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz::Core::ProtocolError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-core-Tamoz::Core::RawHttp` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -426,7 +423,9 @@ generating run.
 | `CLI-ask` | cli_command | yes | pass | `test/agent_cli_test.rb#test_ask_creates_session_file` |
 | `CLI-cancel` | cli_command | yes | pass | `test/agent_cli_test.rb#test_cancel_routes_to_terminal` |
 | `CLI-comms` | cli_command | yes | pass | `test/comms_cli_test.rb#test_serve_once_deploys_the_surface_and_exits_cleanly` |
+| `CLI-compact` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_compact_pins_the_transcript_and_the_pinned_digests_show_in_context_afterwards` |
 | `CLI-config` | cli_command | yes | pass | `test/runtime_directory_config_test.rb#test_config_migrate_bumps_to_schema_two_with_a_backup` |
+| `CLI-context` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
 | `CLI-continue` | cli_command | yes | pass | `test/agent_cli_test.rb#test_continue_advances_a_paused_thread_without_new_input` |
 | `CLI-follow-up` | cli_command | yes | pass | `test/agent_cli_test.rb#test_follow_up_queues_behind_paused_request` |
 | `CLI-init` | cli_command | yes | pass | `test/agent_worker_test.rb#test_init_creates_a_private_runtime_directory` |
@@ -435,12 +434,16 @@ generating run.
 | `CLI-profile` | cli_command | yes | pass | `test/agent_cli_profile_test.rb#test_profile_flag_conflicts_and_unsupported_subcommands` |
 | `CLI-queue` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `CLI-redirect` | cli_command | yes | pass | `test/agent_cli_test.rb#test_redirect_replaces_in_flight_goal` |
+| `CLI-reset` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-resolve` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resolve_records_a_human_effect_resolution` |
 | `CLI-resume` | cli_command | yes | pass | `test/agent_cli_test.rb#test_resume_collects_interrupt_answers` |
 | `CLI-schedule` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_02_interval_schedule_produces_exactly_one_occurrence` |
 | `CLI-show` | cli_command | yes | pass | `test/agent_cli_test.rb#test_show_renders_the_thread_state_in_both_modes` |
 | `CLI-status` | cli_command | yes | pass | `test/agent_worker_test.rb#test_status_reports_pending_work_without_a_configured_model` |
+| `CLI-think` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-trace` | cli_command | yes | pass | `test/observability_cli_test.rb#test_trace_command_reconstructs_a_deterministic_trace_from_the_journal` |
+| `CLI-usage` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_read_only_controls_leave_the_state_digest_unchanged_on_both_surfaces` |
+| `CLI-verbose` | cli_command | yes | pass | `test/context_control_exposure_test.rb#test_each_control_reachable_from_both_surfaces_yields_the_same_projection_fields` |
 | `CLI-worker` | cli_command | yes | pass | `test/autonomy_scorecard_test.rb#test_case_01_queued_read_only_task_completes_unattended` |
 | `INV-01` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
 | `INV-02` | invariant | yes | pass | `test/graph_execution_test.rb#test_supersteps_share_one_snapshot_and_fan_in_runs_once` |
@@ -460,7 +463,7 @@ generating run.
 | `INV-16` | invariant | yes | pass | `test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it` |
 | `INV-17` | invariant | yes | pass | `test/agent_tool_error_recovery_test.rb#test_taxonomy_marks_only_argument_failures_repairable` |
 | `INV-18` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read` |
-| `INV-19` | invariant | yes | failing | `test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state` |
+| `INV-19` | invariant | yes | pass | `test/sqlite_store_test.rb#test_every_store_transaction_fault_reopens_as_old_or_new_complete_state` |
 | `INV-20` | invariant | yes | pass | `test/sqlite_checkpoint_test.rb#test_expired_owner_cannot_write_after_takeover` |
 | `INV-21` | invariant | yes | pass | `test/agent_session_kill_matrix_test.rb#test_every_declared_seam_survives_a_real_kill_and_applies_the_effect_once` |
 | `INV-22` | invariant | yes | pass | `test/legacy_session_resume_test.rb#test_a_current_build_reads_the_old_database` |
@@ -476,7 +479,7 @@ generating run.
 | `INV-32` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_scope_intersection_refuses_a_target_outside_authorized_resources` |
 | `INV-33` | invariant | no | deferred-by-contract | `test/healing_remediation_test.rb#test_recovered_always_carries_a_passing_oracle_result` |
 | `INV-34` | invariant | no | deferred-by-contract | `test/healing_matrix_test.rb#test_promotion_gate_rejects_total_abstention_and_never_mutate_leak` |
-| `INV-35` | invariant | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
+| `INV-35` | invariant | yes | pass | `test/capability_host_test.rb#test_the_admission_set_bounds_the_surface` |
 | `INV-36` | invariant | yes | pass | `test/agent_mcp_capability_source_test.rb#test_session_resume_guard_accepts_the_identical_source_and_fails_closed_on_mismatch` |
 | `INV-37` | invariant | yes | pass | `test/agent_mcp_adversarial_test.rb#test_crash_mid_call_is_typed_unknown_and_never_retried` |
 | `INV-38` | invariant | yes | pass | `test/sqlite_schedule_determinism_test.rb#test_concurrent_owners_materialize_exactly_one_occurrence` |
@@ -504,7 +507,11 @@ generating run.
 | `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
 | `MIG-16` | migration | yes | pass | `test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it` |
 | `MIG-17` | migration | yes | pass | `test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies` |
+| `MIG-18` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
+| `MIG-19` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise` |
 | `MIG-2` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
+| `MIG-20` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
+| `MIG-21` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
@@ -521,8 +528,8 @@ generating run.
 | `OBJ-1` | objective | no | indirect | `—` |
 | `OBJ-2` | objective | yes | pass | `test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound` |
 | `OBJ-3` | objective | yes | pass | `test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates` |
-| `OBJ-4` | objective | yes | failing | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
-| `OBJ-5` | objective | yes | pass | `test/agent_capability_binding_test.rb#test_the_admission_set_bounds_the_surface` |
+| `OBJ-4` | objective | yes | pass | `test/agent_session_effect_test.rb#test_reconcilable_effect_stops_unknown_when_neither_state_is_proven` |
+| `OBJ-5` | objective | yes | pass | `test/capability_host_test.rb#test_the_admission_set_bounds_the_surface` |
 | `OBJ-6` | objective | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
 | `OBJ-7` | objective | yes | missing | `—` |
 | `PHASE-DR-2` | phase_exit_criterion | yes | pass | `test/sqlite_circuit_store_test.rb#test_d1_consecutive_threshold_opens_and_owner_success_does_not_mask` |
@@ -538,7 +545,7 @@ generating run.
 | `PHASE-P14` | phase_exit_criterion | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
 | `PHASE-P16` | phase_exit_criterion | yes | pass | `test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent` |
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
-| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/agent_capability_binding_test.rb#test_production_surface_is_byte_identical_to_the_p18_start_fixture` |
+| `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |
 | `PHASE-P2` | phase_exit_criterion | yes | pass | `test/agent_repair_evaluation_test.rb#test_failed_check_becomes_evidence_for_a_reviewed_repair_that_passes` |
 | `PHASE-P3` | phase_exit_criterion | yes | pass | `test/agent_scorecard_test.rb#test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps` |
 | `PHASE-P4` | phase_exit_criterion | yes | pass | `test/agent_toolbox_test.rb#test_compound_patch_applies_two_distinct_replacements` |

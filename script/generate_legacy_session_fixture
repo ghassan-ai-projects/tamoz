@@ -30,11 +30,7 @@ require "tmpdir"
 require "delegate"
 
 ROOT = File.expand_path("..", __dir__)
-%w[tamoz-core tamoz-graph tamoz-scheduler tamoz-stream tamoz-approval
-   tamoz-tools tamoz-observability tamoz-comms tamoz-mcp tamoz-sqlite
-   tamoz-agent].each do |gem|
-  $LOAD_PATH.unshift(File.join(ROOT, "gems", gem, "lib"))
-end
+$LOAD_PATH.unshift(*Dir[File.join(ROOT, "gems", "*", "lib")])
 require "tamoz/sqlite"
 require "tamoz/agent"
 

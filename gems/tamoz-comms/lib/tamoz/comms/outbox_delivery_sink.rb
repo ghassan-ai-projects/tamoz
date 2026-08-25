@@ -3,6 +3,7 @@
 require 'time'
 require 'json'
 
+require_relative 'lifecycle'
 
 module Tamoz
   module Comms
@@ -32,12 +33,25 @@ module Tamoz
         'request.failed' => 'failed',
         'request.stopped' => 'stopped',
         'request.blocked' => 'blocked',
-        'request.approval_request' => 'approval_request'
+        'request.approval_request' => 'approval_request',
+        'request.claimed' => 'running',
+        'request.running' => 'running',
+        'request.waiting' => 'waiting',
+        'request.recovered' => 'progress',
+        'request.phase' => 'progress'
       }.freeze
 
       # Kinds whose rows the admission reservation covers (design §12): the
       # request is finished once they are durable, so the reservation releases.
       TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
+
+      # Non-terminal milestone kinds (plan 03, work items 1-2): each projects
+      # one committed worker fact onto ONE coalesced control row whose markup
+      # carries the request reference. They never reserve, never terminate,
+      # and never journal into conversation history.
+      MILESTONE_KINDS = %w[running waiting progress].freeze
+      MILESTONE_TASK_STATES = { 'running' => 'running', 'waiting' => 'waiting', 'progress' => 'running' }.freeze
+      MILESTONE_TEXT_CHARACTERS = 200
 
       def initialize(adapter:, checkpoints:, rendering: Comms::Rendering)
         @store = adapter.bind_comms_store(checkpoints)
@@ -58,6 +72,8 @@ module Tamoz
 
         surface = @store.surface(surface_id: route.fetch('surface_id'))
         return nil unless surface
+
+        return push_milestone(event, kind, route, surface) if MILESTONE_KINDS.include?(kind)
 
         if kind == 'approval_request'
           unless surface.fetch('approvals').fetch('mode') == 'deny_only'
@@ -93,14 +109,79 @@ module Tamoz
           )
         end
         # The terminal projection is durable; its reservation returns to
-        # intake (design §12, invariant 57).
+        # intake (design §12, invariant 57). The settle kind is recorded with
+        # it so the status wording follows the task axis, never a guess.
         if reserved_request_id
-          @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id)
+          @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id,
+                                             settle_kind: kind)
         end
         :accepted
       end
 
       private
+
+      # One committed worker fact -> ONE bounded control row whose markup is
+      # the milestone projection (plan 03, behavior model 1/5). The row is
+      # journaled = 0 (invariant 11), reserves nothing (TERMINAL_KINDS are
+      # untouched), and the store coalesces it into the request's live pending
+      # row instead of streaming new messages.
+      def push_milestone(event, kind, route, surface)
+        request_id = event[:request_id]
+        return nil unless request_id
+
+        reference = Lifecycle::RequestRef.for(request_id)
+        phase = event[:phase] ? event[:phase].to_s : kind
+        text = "#{reference}: #{phase}".byteslice(0, MILESTONE_TEXT_CHARACTERS)
+        markup = JSON.generate(
+          'request_ref' => reference,
+          'milestone' => kind,
+          'phase' => phase,
+          'sequence' => Integer(event.fetch(:sequence)),
+          'task_state' => Lifecycle.task_state_for(MILESTONE_TASK_STATES.fetch(kind)),
+          'delivery_state' => Lifecycle.delivery_state_for('pending')
+        )
+        # Once the request's first card carries a delivery receipt, every
+        # successor milestone UPDATES that same platform message (plan 03,
+        # behavior model 1) instead of sending a new one. While no receipt
+        # exists — first card still pending or lost — the row stays an
+        # ordinary send and coalescing keeps it one live row.
+        card = delivered_card_message_id(route, reference)
+        @store.append_delivery(
+          Comms::Delivery.build(
+            conversation_id: route.fetch('conversation_id'), kind: 'control',
+            operation: card ? 'edit_message' : 'send_message', reply_to: card,
+            text:, part_index: 0, part_count: 1, journaled: false,
+            render_version: @rendering::RENDER_VERSION,
+            content_digest: @rendering.content_digest(text),
+            identity_key: request_id.to_s, markup:
+          ).wire,
+          surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface),
+          now: Time.now.utc
+        )
+        :accepted
+      end
+
+      # The platform message id the request's live card is bound to: the
+      # receipt of the NEWEST delivered milestone row for the reference.
+      # Rows come back oldest-first, so the scan runs newest-first.
+      def delivered_card_message_id(route, request_ref)
+        @store.outbox_rows(surface_id: route.fetch('surface_id'), statuses: %w[succeeded])
+              .reverse_each
+              .filter_map { |row| card_message_id(row, request_ref) }
+              .first
+      end
+
+      def card_message_id(row, request_ref)
+        return nil unless row.fetch('kind') == 'control' && row['markup'] && row['receipt']
+
+        facts = JSON.parse(row.fetch('markup'))
+        return nil unless facts.is_a?(Hash) && facts['request_ref'] == request_ref &&
+                          facts['milestone'].is_a?(String)
+
+        JSON.parse(row.fetch('receipt')).fetch('message_id')
+      rescue JSON::ParserError
+        nil
+      end
 
       # A fresh single-use prompt is stored inactive, and the control
       # delivery's markup carries the plaintext reference so the gateway can

@@ -18,6 +18,8 @@ module Tamoz
     class PairingChallenge
       DIGEST_DOMAIN = 'tamoz.comms.pairing.v1'
       MAX_TEXT_BYTES = 256
+      CODE_LENGTH = 8
+      CODE_ALPHABET = [*'A'..'Z', *'0'..'9'].freeze
 
       attr_reader :challenge, :digest, :surface_id, :correspondent_id,
                   :conversation_id, :expires_at
@@ -33,10 +35,18 @@ module Tamoz
         freeze
       end
 
+      # A human-relayable code: uppercase alphanumeric, readable over a
+      # voice or operator channel.
+      def self.generate_code
+        Array.new(CODE_LENGTH) { CODE_ALPHABET[SecureRandom.random_number(CODE_ALPHABET.length)] }.join
+      end
+
       # Issues a fresh challenge for one correspondent; only its digest is
-      # ever stored. `secret` is the per-surface pairing secret.
-      def self.build(surface_id:, correspondent_id:, conversation_id:, ttl_s:, now:)
-        challenge = SecureRandom.hex(16)
+      # ever stored. `secret` is the per-surface pairing secret. `code`
+      # supplies the relayable challenge value; without one the challenge is
+      # an opaque hex string.
+      def self.build(surface_id:, correspondent_id:, conversation_id:, ttl_s:, now:, code: nil)
+        challenge = code || SecureRandom.hex(16)
         digest = Canonical.hexdigest(
           DIGEST_DOMAIN,
           [surface_id, correspondent_id, conversation_id, challenge]

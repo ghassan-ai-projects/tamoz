@@ -731,12 +731,75 @@ class AgentCLITest < Minitest::Test
       refute_empty lines
       lines.each do |line|
         event = JSON.parse(line)
+        assert_equal 1, event.fetch("schema")
         assert event.key?("type")
         assert event.key?("data")
+        assert event.key?("task_state")
+        assert event.key?("delivery_state")
       end
       session_event = lines.map { |line| JSON.parse(line) }.find { |event| event["type"] == "cli.session" }
       refute_nil session_event
       assert_equal "completed", session_event["data"]["status"]
+    end
+  end
+
+  # The machine contract: a StreamPart-backed line carries the part's full
+  # identity (run_id, task_id, sequence, emitted_at) so it survives the
+  # round-trip, sequences increase within one run, and synthetic local events
+  # (cli.session) carry no null-valued identity keys.
+  def test_json_envelope_preserves_stream_part_identity
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = ->(_options) do
+        ScriptedModel.new(
+          plan: [plan_for("read_file", {"path" => "note.txt"}, id: "s1")],
+          review: [accepted_review],
+          verify: [{"answer" => "hello", "satisfied" => true, "evidence" => ["note.txt"]}]
+        )
+      end
+
+      out = StringIO.new
+      status = run_cli(
+        ["--json", "ask", "read note.txt"],
+        session: "th", workspace:, session_dir:, out:, err: StringIO.new, factory:
+      )
+
+      assert_equal 0, status
+      events = out.string.lines.map { |line| JSON.parse(line) }
+      stream_events = events.select { |event| event.key?("run_id") }
+      synthetic_events = events.reject { |event| event.key?("run_id") }
+
+      refute_empty stream_events
+      first = stream_events.first
+      assert_instance_of String, first.fetch("run_id")
+      refute_empty first.fetch("run_id")
+      stream_events.each do |event|
+        assert_instance_of String, event.fetch("type")
+        refute_empty event.fetch("type")
+        assert_instance_of Integer, event.fetch("sequence")
+        assert_operator event.fetch("sequence"), :>=, 0
+        assert_kind_of Numeric, event.fetch("emitted_at")
+        assert event.key?("task_id")
+      end
+
+      run_sequences = Hash.new { |hash, key| hash[key] = [] }
+      stream_events.each { |event| run_sequences[event.fetch("run_id")] << event.fetch("sequence") }
+      run_sequences.each_value do |sequences|
+        assert_equal sequences.sort, sequences, "sequence must increase in emission order"
+        assert_equal sequences.uniq.size, sequences.size
+      end
+      assert_operator run_sequences.values.count { |sequences| sequences.size > 1 }, :>=, 1,
+                     "at least one run must emit multiple sequenced events"
+
+      session_event = events.find { |event| event["type"] == "cli.session" }
+      refute_nil session_event
+      assert_includes stream_events.map { |event| event.fetch("run_id") },
+                      session_event["data"]["request_id"]
+      synthetic_events.each do |event|
+        refute event.key?("task_id")
+        refute event.key?("sequence")
+        refute event.key?("emitted_at")
+      end
     end
   end
 
@@ -853,6 +916,13 @@ class AgentCLITest < Minitest::Test
     assert_equal :unknown, cli.send(:map_answer, "resolve_effect", "?")
     assert_raises(ArgumentError) { cli.send(:map_answer, "resolve_effect", "maybe") }
   end
+
+  # --- Milestone facts on the CLI ---
+  # A committed milestone never rides a turn-scoped stream event (the engine
+  # emits run/task/update/checkpoint parts only), so there is no in-turn
+  # milestone renderer to pin here. The operator surface for those facts is
+  # the reconnectable view, pinned by the live-dispatch tests in
+  # test/cancellation_visibility_test.rb.
 
   private
 

@@ -20,6 +20,10 @@ GEM_ROOTS.each_value do |root|
   $LOAD_PATH.unshift(root.join("lib").to_s)
 end
 
+# Load-path arguments for ruby child processes spawned by tests: every gem
+# lib, so extracting a class into a new gem cannot stale-date a spawn.
+SUBPROCESS_LIB_ARGS = GEM_ROOTS.values.flat_map { |root| ["-I", root.join("lib").to_s] }.freeze
+
 require "tamoz/cancellation"
 require "tamoz/concurrency"
 require "tamoz/core"

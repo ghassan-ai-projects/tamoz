@@ -27,6 +27,8 @@ module Tamoz
       def serve_loop(interval_s: 0.25)
         until @stopping
           outcome = drain_once(now: @clock.call)
+          return outcome if outcome == :authentication_refused
+
           delay = outcome == :throttled ? @retry_after_s.to_f : interval_s
           @sleeper.call(delay) if delay.positive? && !@stopping
         end
@@ -45,7 +47,7 @@ module Tamoz
         rows.each do |row|
           next unless claim(row, now:)
 
-          send_row(row, now:)
+          return :authentication_refused if send_row(row, now:) == :authentication_refused
         end
         :drained
       rescue Comms::ThrottledError => e
@@ -81,19 +83,36 @@ module Tamoz
           execution_id: "comms:#{row.fetch('delivery_id')}",
           now: scheduled_at
         )
-        @store.mark_delivery_send_started(
+        send_started = @store.mark_delivery_send_started(
           delivery_id: row.fetch('delivery_id'), owner: @owner, fence: @fence, now: scheduled_at
         )
+        # A lost fence bars the external send absolutely: a stale owner takes
+        # no external action and records nothing on a row it no longer holds.
+        return nil unless send_started == :marked
+
         outcome = send_delivery(row)
-        @store.mark_delivery(
+        marked = @store.mark_delivery(
           delivery_id: row.fetch('delivery_id'),
+          owner: @owner,
+          fence: @fence,
           status: outcome.fetch(:status),
           receipt: outcome[:receipt],
           now: scheduled_at
         )
-        if outcome.fetch(:status) == 'succeeded'
+        if marked == :marked && outcome.fetch(:status) == 'succeeded'
           activate_after_receipt(row, receipt: outcome[:receipt], now: scheduled_at)
         end
+        nil
+      rescue Comms::AuthenticationError
+        @store.mark_delivery(
+          delivery_id: row.fetch('delivery_id'),
+          owner: @owner,
+          fence: @fence,
+          status: 'failed',
+          receipt: { 'reason_code' => 'authentication_refused' },
+          now: scheduled_at
+        )
+        :authentication_refused
       rescue Comms::ThrottledError => e
         @store.defer_delivery(
           surface_id:,
@@ -124,7 +143,9 @@ module Tamoz
         delivery = Comms::Delivery.from_wire(wire)
         receipt = @transport.deliver(delivery)
         { status: 'succeeded', receipt: }
-      rescue Comms::AmbiguousDeliveryError
+      rescue Comms::AmbiguousDeliveryError, Tamoz::Telegram::ResponseTooLargeError
+        # An abandoned response may have transmitted the request — the same
+        # honest ambiguity as a timeout (errors.rb's stated mapping).
         { status: 'unknown', receipt: nil }
       end
 
