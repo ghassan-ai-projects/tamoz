@@ -44,13 +44,7 @@ module Tamoz
         &perform
       )
         effects = context.effects
-        unless effects.respond_to?(:prepare)
-          raise ConfigurationError,
-                "durable effects require a graph task Context bound to an effect journal"
-        end
-        if safety.to_sym == :reconcilable && reconcile.nil?
-          raise ConfigurationError, "a reconcilable effect requires a reconciler"
-        end
+        validate_run_contract!(effects, safety, reconcile)
 
         key, logical_key = resolve_key(
           effects, context, operation:, call_index:, logical_key:, logical_identity:
@@ -64,8 +58,25 @@ module Tamoz
           request:,
           logical_key:
         )
-        reconciliation = nil
+        resolve_decision(
+          effects, decision, key,
+          actor:, reconcile:, after_start:,
+          &perform
+        )
+      end
 
+      def validate_run_contract!(effects, safety, reconcile)
+        unless effects.respond_to?(:prepare)
+          raise ConfigurationError,
+                "durable effects require a graph task Context bound to an effect journal"
+        end
+        if safety.to_sym == :reconcilable && reconcile.nil?
+          raise ConfigurationError, "a reconcilable effect requires a reconciler"
+        end
+      end
+
+      def resolve_decision(effects, decision, key, actor:, reconcile:, after_start:, &perform)
+        reconciliation = nil
         if decision.action == :reconcile
           decision, reconciliation, recovered =
             run_reconciliation(effects, key, decision, actor:, reconcile:)
@@ -170,20 +181,18 @@ module Tamoz
         # only exists after the runtime facade loads, and this gem must rescue
         # correctly on its own.
         rescue Tamoz::Tools::ToolError => error
-          detail = tool_error_detail(error)
-          effects.complete(key:, attempt_token: token, status: :failed, error: detail)
-          return recorded_outcome(
-            :failed, decision.record, key, reconciliation:, error: detail, reused: false
+          return complete_exceptional_attempt(
+            effects, decision, key, reconciliation:, token:, status: :failed,
+            detail: tool_error_detail(error)
           )
         rescue Tamoz::EffectUnknownError => error
           # A request was sent whose external outcome is unknown (e.g. an MCP
           # non-idempotent call that failed after send). Record the started
           # attempt as terminal :unknown here rather than letting it stay
           # running until a later recovery pass, and never repair it.
-          detail = unknown_error_detail(error)
-          effects.complete(key:, attempt_token: token, status: :unknown, error: detail)
-          return recorded_outcome(
-            :unknown, decision.record, key, reconciliation:, error: detail, reused: false
+          return complete_exceptional_attempt(
+            effects, decision, key, reconciliation:, token:, status: :unknown,
+            detail: unknown_error_detail(error)
           )
         end
         record = effects.complete(
@@ -193,6 +202,15 @@ module Tamoz
           result: value
         )
         recorded_outcome(:succeeded, record, key, reconciliation:, value:, reused: false)
+      end
+
+      def complete_exceptional_attempt(
+        effects, decision, key, reconciliation:, token:, status:, detail:
+      )
+        effects.complete(key:, attempt_token: token, status:, error: detail)
+        recorded_outcome(
+          status, decision.record, key, reconciliation:, error: detail, reused: false
+        )
       end
 
       def build_logical_key(effects, context, identity)
@@ -292,6 +310,9 @@ module Tamoz
 
         observed["mode"] == intent.fetch("after_mode")
       end
+
+      private_class_method :validate_run_contract!, :resolve_decision,
+                           :complete_exceptional_attempt
     end
   end
 end
