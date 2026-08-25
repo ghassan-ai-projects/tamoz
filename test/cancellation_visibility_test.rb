@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require_relative 'support/autonomy_case'
 
 # Plan 03 work items 4-5 — visible cancellation and the reconnectable CLI
 # status view. The timeline is durable (`requested` stamped inside the /cancel
@@ -11,6 +12,8 @@ require_relative 'test_helper'
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:disable Metrics/BlockLength, Metrics/ClassLength
 class CancellationVisibilityTest < Minitest::Test
+  include AutonomyCase
+
   Comms = Tamoz::Comms
 
   BOT_ID = 7_463_512_990
@@ -121,6 +124,205 @@ class CancellationVisibilityTest < Minitest::Test
     end
   end
 
+  # Black-box drive (the way agent_worker_test drives real workers): a real
+  # WorkerRuntime/Worker whose pass consumes a queued cancel redirect through
+  # claim_and_run alone — no private poke — must carry the timeline from
+  # `requested` to `observed`, and must never stamp while an ordinary turn or
+  # a plain redirect runs.
+  def test_a_real_worker_claim_consumes_a_cancel_redirect_and_stamps_observation
+    with_runtime do |rt|
+      File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        lease_ttl: 5.0
+      )
+      begin
+        store = runtime.adapter.bind_comms_store(runtime.checkpoints)
+        insert_request!(store, request_id: 'c' * 63 + '1')
+        worker = Tamoz::Agent::Worker.new(
+          runtime:,
+          session_builder: ->(thread) { runtime.session_for(thread) },
+          emitter: ->(_event) {}, once: true
+        )
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'd' * 63 + '1', operation: :turn,
+          payload: { 'task' => 'Read note.txt' }, delivery: :queue
+        )
+        assert worker.poll_once
+
+        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        assert_nil stamps.fetch('observed_at_ms'),
+                  'a settled ordinary turn is not a cancellation observation'
+
+        requested_at = (Time.now.to_r * 1000).to_i
+        assert_equal :requested, store.request_cancellation(
+          thread_id: THREAD, request_id: 'cancel-claim', payload: CANCEL_PAYLOAD,
+          now: Time.at(requested_at / 1000.0)
+        )
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'e' * 63 + '1', operation: :redirect,
+          payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
+        )
+        assert worker.poll_once
+
+        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        refute_nil stamps.fetch('observed_at_ms'), 'consuming the cancel stamps observed'
+        assert_operator stamps.fetch('observed_at_ms'), :>=, stamps.fetch('requested_at_ms')
+
+        history = runtime.checkpoints.request_history(thread_id: THREAD)
+        assert_equal 1, history.count { |request| request.operation == :turn },
+                     'no second turn ran behind the cancel'
+        redirect = history.find { |request| request.operation == :redirect }
+        assert redirect.terminal?, 'the consumed cancel redirect is terminal'
+
+        view = runtime.session_for(THREAD).view(thread: THREAD)
+        assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
+      ensure
+        runtime&.close
+      end
+    end
+  end
+
+  # The recover call site observes too: a redirect left `redirecting` by a
+  # worker that died between claim and execution is re-entered by the next
+  # worker's recover path, and THAT production call site stamps `observed`.
+  def test_a_crashed_claim_is_recovered_through_the_recover_path_and_stamps_observation
+    with_runtime do |rt|
+      File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
+      runtime = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        lease_ttl: 5.0
+      )
+      begin
+        store = runtime.adapter.bind_comms_store(runtime.checkpoints)
+        insert_request!(store, request_id: 'f' * 63 + '1')
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'a' * 63 + '1', operation: :turn,
+          payload: { 'task' => 'Read note.txt' }, delivery: :queue
+        )
+        first = Tamoz::Agent::Worker.new(
+          runtime:,
+          session_builder: ->(thread) { runtime.session_for(thread) },
+          emitter: ->(_event) {}, once: true
+        )
+        assert first.poll_once
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'b' * 63 + '9', operation: :redirect,
+          payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
+        )
+        # Exactly what a kill between claim and execution leaves behind: the
+        # redirect claimed (`redirecting`, target bound), nothing executed.
+        runtime.checkpoints.open_writer(
+          thread_id: THREAD, namespace: [], owner_id: 'ghost.claim', ttl: 5.0
+        ) do |writer|
+          claimed = writer.claim_next_request
+          refute_nil claimed
+          assert_equal :redirecting, claimed.status
+        end
+
+        assert_equal :requested, store.request_cancellation(
+          thread_id: THREAD, request_id: 'cancel-recover', payload: CANCEL_PAYLOAD,
+          now: Time.now
+        )
+
+        events = []
+        recovering = Tamoz::Agent::Worker.new(
+          runtime:,
+          session_builder: ->(thread) { runtime.session_for(thread) },
+          emitter: ->(event) { events << event.fetch('event') }, once: true
+        )
+        assert recovering.poll_once
+
+        assert_includes events, 'request.recovered', 'the redirect was re-entered by recover'
+        stamps = cancellation_stamps(store, 'f' * 63 + '1')
+        refute_nil stamps.fetch('observed_at_ms'),
+                  'the recover-path observation stamped the timeline'
+
+        view = runtime.session_for(THREAD).view(thread: THREAD)
+        assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
+      ensure
+        runtime&.close
+      end
+    end
+  end
+
+  # A crashed TURN (not the cancel) recovered to completion must NOT stamp:
+  # the observation tracks consumption of the cancel operation itself, so the
+  # stamp waits for the pass that actually consumes the queued redirect.
+  def test_recovery_of_a_crashed_turn_alone_leaves_the_timeline_unstamped
+    with_runtime do |rt|
+      File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
+      directory = Tamoz::Agent::RuntimeDirectory.resolve(path: rt.dir, env: {})
+      first = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) {
+          CrashingModel.new(after: :claim, **read_only_responses)
+        },
+        lease_ttl: 0.2
+      )
+      begin
+        store = first.adapter.bind_comms_store(first.checkpoints)
+        insert_request!(store, request_id: '9' * 63 + '1')
+        first.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: '8' * 63 + '1', operation: :turn,
+          payload: { 'task' => 'Read note.txt' }, delivery: :queue
+        )
+        crashing = Tamoz::Agent::Worker.new(
+          runtime: first,
+          session_builder: ->(thread) { first.session_for(thread) },
+          emitter: ->(_event) {}, once: true
+        )
+        assert_raises(CrashingModel::Killed) { crashing.poll_once }
+        requested_at = Time.now
+        assert_equal :requested, store.request_cancellation(
+          thread_id: THREAD, request_id: 'cancel-crash', payload: CANCEL_PAYLOAD, now: requested_at
+        )
+        first.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: '7' * 63 + '1', operation: :redirect,
+          payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
+        )
+      ensure
+        first&.close
+      end
+
+      sleep 0.25
+      second = Tamoz::Agent::WorkerRuntime.open(
+        directory,
+        model_factory: ->(profile:) { ScriptedModel.new(**read_only_responses) },
+        lease_ttl: 0.2
+      )
+      begin
+        worker = Tamoz::Agent::Worker.new(
+          runtime: second,
+          session_builder: ->(thread) { second.session_for(thread) },
+          emitter: ->(_event) {}, once: true
+        )
+        assert worker.poll_once, 'the recovered occurrence made progress'
+
+        store = second.adapter.bind_comms_store(second.checkpoints)
+        stamps = cancellation_stamps(store, '9' * 63 + '1')
+        assert_nil stamps.fetch('observed_at_ms'),
+                  'recovering the crashed turn consumed no cancel operation'
+
+        assert worker.poll_once, 'the queued cancel redirect was consumed'
+
+        stamps = cancellation_stamps(store, '9' * 63 + '1')
+        refute_nil stamps.fetch('observed_at_ms')
+        assert_operator stamps.fetch('observed_at_ms'), :>=, stamps.fetch('requested_at_ms')
+      ensure
+        second&.close
+      end
+    end
+  end
+
   # Reconnectable view (plan 03 work item 5): with every writer long gone,
   # `tamoz comms request <ref>` answers from the durable stores alone — task
   # and delivery states, queue facts, and the cancellation timeline — and an
@@ -174,6 +376,14 @@ class CancellationVisibilityTest < Minitest::Test
 
   RuntimeStub = Struct.new(:adapter, :checkpoints)
   CancelProbe = Struct.new(:operation, :payload)
+
+  def read_only_responses
+    {
+      plan: [plan_step('read_file', { 'path' => 'note.txt' })],
+      review: [accepted_review],
+      verify: [{ 'answer' => 'hello', 'satisfied' => true, 'evidence' => ['note.txt'] }]
+    }
+  end
 
   def record(operation:, plain_task: false)
     task = plain_task ? { 'task' => 'plain' } : { 'task' => { 'cancel' => true } }
