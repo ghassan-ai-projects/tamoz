@@ -228,43 +228,10 @@ module Tamoz
         raise ProtocolError, "MCP supervisor already started" if @started
 
         child_env = child_environment
-        # F2: redact exactly the values resolved for declared credential refs —
-        # the allowlist values are operator-chosen and not credentials by
-        # definition. Short values (< 8 bytes) are skipped to avoid mangling
-        # common innocuous substrings.
-        @redaction_values = @config.credential_refs.filter_map do |name|
-          value = @environ[name]
-          value if value.is_a?(String) && value.bytesize >= 8
-        end.freeze
-        stdin_r, stdin_w = IO.pipe
-        stdout_r, stdout_w = IO.pipe
-        stderr_r, stderr_w = IO.pipe
-        begin
-          @pid = Process.spawn(
-            child_env,
-            @command, *@args,
-            unsetenv_others: true,
-            pgroup: true,
-            chdir: @working_directory,
-            in: stdin_r, out: stdout_w, err: stderr_w
-          )
-        rescue SystemCallError
-          raise ProtocolError, "The MCP server process could not be spawned."
-        ensure
-          stdin_r.close
-          stdout_w.close
-          stderr_w.close
-        end
-
-        @stdin = stdin_w
-        @stdout = stdout_r
-        @stderr = stderr_r
-        @stdout.set_encoding("UTF-8")
-        @stdin.set_encoding("UTF-8")
-        @wait_thread = Process.detach(@pid)
-        start_stderr_capture
-        @started = true
-        @retired = false
+        prepare_redaction_values
+        @pid, @stdin, @stdout, @stderr = spawn_child_process(child_env)
+        attach_pipes
+        begin_supervision
         nil
       end
 
@@ -277,32 +244,10 @@ module Tamoz
         @retired = true
         return unless @started
 
-        [@stdin, @stdout].each do |io|
-          io.close unless io.closed?
-        rescue IOError
-          nil
-        end
-
-        wait_for_group_exit(EXIT_GRACE_SECONDS)
-        if process_group_alive?
-          signal_process_group("TERM")
-          wait_for_group_exit(TERM_GRACE_SECONDS)
-        end
-        if process_group_alive?
-          signal_process_group("KILL")
-          wait_for_group_exit(TERM_GRACE_SECONDS)
-        end
-
-        begin
-          @stderr.close unless @stderr.closed?
-        rescue IOError
-          nil
-        end
-        @stderr_thread&.join(TERM_GRACE_SECONDS)
-        @started = false
-        @initialized = false
-        @server_info = nil
-        @retired = true
+        close_transport_pipes
+        terminate_process_group
+        cleanup_stderr
+        mark_closed
         nil
       end
       alias_method :teardown, :close
@@ -362,6 +307,89 @@ module Tamoz
           env[name] = value
         end
         env
+      end
+
+      def prepare_redaction_values
+        # F2: redact exactly the values resolved for declared credential refs —
+        # the allowlist values are operator-chosen and not credentials by
+        # definition. Short values (< 8 bytes) are skipped to avoid mangling
+        # common innocuous substrings.
+        @redaction_values = @config.credential_refs.filter_map do |name|
+          value = @environ[name]
+          value if value.is_a?(String) && value.bytesize >= 8
+        end.freeze
+      end
+
+      def spawn_child_process(child_env)
+        stdin_r, stdin_w = IO.pipe
+        stdout_r, stdout_w = IO.pipe
+        stderr_r, stderr_w = IO.pipe
+        begin
+          pid = Process.spawn(
+            child_env,
+            @command, *@args,
+            unsetenv_others: true,
+            pgroup: true,
+            chdir: @working_directory,
+            in: stdin_r, out: stdout_w, err: stderr_w
+          )
+        rescue SystemCallError
+          raise ProtocolError, "The MCP server process could not be spawned."
+        ensure
+          stdin_r.close
+          stdout_w.close
+          stderr_w.close
+        end
+
+        [pid, stdin_w, stdout_r, stderr_r]
+      end
+
+      def attach_pipes
+        @stdout.set_encoding("UTF-8")
+        @stdin.set_encoding("UTF-8")
+      end
+
+      def begin_supervision
+        @wait_thread = Process.detach(@pid)
+        start_stderr_capture
+        @started = true
+        @retired = false
+      end
+
+      def close_transport_pipes
+        [@stdin, @stdout].each do |io|
+          io.close unless io.closed?
+        rescue IOError
+          nil
+        end
+      end
+
+      def terminate_process_group
+        wait_for_group_exit(EXIT_GRACE_SECONDS)
+        if process_group_alive?
+          signal_process_group("TERM")
+          wait_for_group_exit(TERM_GRACE_SECONDS)
+        end
+        return unless process_group_alive?
+
+        signal_process_group("KILL")
+        wait_for_group_exit(TERM_GRACE_SECONDS)
+      end
+
+      def cleanup_stderr
+        begin
+          @stderr.close unless @stderr.closed?
+        rescue IOError
+          nil
+        end
+        @stderr_thread&.join(TERM_GRACE_SECONDS)
+      end
+
+      def mark_closed
+        @started = false
+        @initialized = false
+        @server_info = nil
+        @retired = true
       end
 
       def start_stderr_capture

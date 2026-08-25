@@ -52,36 +52,14 @@ module Tamoz
         # `ValidationError` naming the offending field; a malformed declaration
         # never reaches the dial path.
         def initialize(declaration)
-          unless declaration.is_a?(Hash)
-            raise ValidationError, "websearch egress declaration must be a mapping"
-          end
-          unknown = declaration.keys - %w[
-            allowlisted_hosts schemes deny_private_ranges max_request_bytes
-            max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs
-          ]
-          unless unknown.empty?
-            raise ValidationError, "websearch egress declaration has unknown fields #{unknown.sort.inspect}"
-          end
+          validate_declaration_shape!(declaration)
 
           @allowlisted_hosts = validate_hosts!(declaration["allowlisted_hosts"])
-          schemes = declaration["schemes"]
-          unless schemes == SCHEMES
-            raise ValidationError, "egress.schemes must be exactly #{SCHEMES.inspect} in v1"
-          end
-          @schemes = schemes.dup.freeze
-          deny = declaration["deny_private_ranges"]
-          unless deny == true || deny == false
-            raise ValidationError, "egress.deny_private_ranges must be true or false"
-          end
-          @deny_private_ranges = deny
+          @schemes = validate_schemes!(declaration["schemes"])
+          @deny_private_ranges = validate_deny_private_ranges!(declaration["deny_private_ranges"])
           @max_request_bytes = bounded_integer!(declaration["max_request_bytes"], "max_request_bytes", 1, MAX_REQUEST_BYTES)
           @max_response_bytes = bounded_integer!(declaration["max_response_bytes"], "max_response_bytes", 1, MAX_RESPONSE_BYTES)
-          timeout = declaration["connect_timeout_s"]
-          unless timeout.is_a?(Numeric) && timeout.finite? && timeout.positive? &&
-                 timeout <= MAX_CONNECT_TIMEOUT_S
-            raise ValidationError, "egress.connect_timeout_s must be a positive finite number of at most #{MAX_CONNECT_TIMEOUT_S}"
-          end
-          @connect_timeout_s = timeout.to_f
+          @connect_timeout_s = validate_connect_timeout!(declaration["connect_timeout_s"])
           @redirect_max_hops = bounded_integer!(declaration["redirect_max_hops"], "redirect_max_hops", MIN_REDIRECT_HOPS, MAX_REDIRECT_HOPS)
           @circuit = validate_circuit!(declaration["circuit"]).freeze
           @credential_refs = validate_credential_refs!(declaration["credential_refs"]).freeze
@@ -116,25 +94,7 @@ module Tamoz
           ip = classify_address(address)
           return true if ip.nil?
 
-          refused = ip.loopback? || ip.private? || ip.link_local?
-          if ip.ipv4?
-            octets = ip.to_s.split(".").map(&:to_i)
-            first, second = octets
-            # 0.0.0.0/8 (this-host / unspecified), 224.0.0.0/4 (multicast),
-            # 255.255.255.255 (limited broadcast).
-            refused ||= first == 0 || first.between?(224, 239) || ip.to_s == "255.255.255.255"
-            # 100.64.0.0/10 (CGNAT), 192.0.0.0/24, 198.18.0.0/15, 240.0.0.0/4 —
-            # reserved blocks no outbound search provider legitimately lives in.
-            refused ||= (first == 100 && second.between?(64, 127)) ||
-                        (first == 192 && second == 0) ||
-                        (first == 198 && second.between?(18, 19)) ||
-                        first >= 240
-          elsif ip.ipv6?
-            # ff00::/8 (multicast) and ::/128 (unspecified) — IPAddr has no
-            # predicates for either, so the leading hextet is checked directly.
-            refused ||= ip.to_s.start_with?("ff") || ip.to_s == "::"
-          end
-          refused
+          refused_private_range?(ip)
         end
 
         # Neutralizes exotic spellings of an address string to a canonical
@@ -175,6 +135,46 @@ module Tamoz
 
         private
 
+        def validate_declaration_shape!(declaration)
+          unless declaration.is_a?(Hash)
+            raise ValidationError, "websearch egress declaration must be a mapping"
+          end
+
+          known = %w[
+            allowlisted_hosts schemes deny_private_ranges max_request_bytes
+            max_response_bytes connect_timeout_s redirect_max_hops circuit credential_refs
+          ]
+          unknown = declaration.keys - known
+          return if unknown.empty?
+
+          raise ValidationError, "websearch egress declaration has unknown fields #{unknown.sort.inspect}"
+        end
+
+        def validate_schemes!(schemes)
+          unless schemes == SCHEMES
+            raise ValidationError, "egress.schemes must be exactly #{SCHEMES.inspect} in v1"
+          end
+
+          schemes.dup.freeze
+        end
+
+        def validate_deny_private_ranges!(deny)
+          unless deny == true || deny == false
+            raise ValidationError, "egress.deny_private_ranges must be true or false"
+          end
+
+          deny
+        end
+
+        def validate_connect_timeout!(timeout)
+          unless timeout.is_a?(Numeric) && timeout.finite? && timeout.positive? &&
+                 timeout <= MAX_CONNECT_TIMEOUT_S
+            raise ValidationError, "egress.connect_timeout_s must be a positive finite number of at most #{MAX_CONNECT_TIMEOUT_S}"
+          end
+
+          timeout.to_f
+        end
+
         def validate_hosts!(hosts)
           unless hosts.is_a?(Array) && !hosts.empty? &&
                  hosts.all? { |host| host.is_a?(String) } && hosts.uniq == hosts
@@ -186,11 +186,23 @@ module Tamoz
         end
 
         def validate_host!(host)
-          if CREDENTIAL_NAME_PATTERN.match?(host)
-            raise ValidationError,
-                  "egress.allowlisted_hosts entry #{host.inspect} is credential-shaped"
-          end
-          if host.bytesize > 253 || host.empty?
+          reject_credential_shaped_host!(host)
+          reject_invalid_host_shape!(host)
+          reject_ip_literal_host!(host)
+          assert_absolute_dns_name!(host)
+
+          host
+        end
+
+        def reject_credential_shaped_host!(host)
+          return unless CREDENTIAL_NAME_PATTERN.match?(host)
+
+          raise ValidationError,
+                "egress.allowlisted_hosts entry #{host.inspect} is credential-shaped"
+        end
+
+        def reject_invalid_host_shape!(host)
+          if host.empty? || host.bytesize > 253
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be an absolute DNS name"
           end
           if host.include?("*")
@@ -199,22 +211,57 @@ module Tamoz
           if host.include?("/") || host.include?("@") || host.include?(":") || host.match?(/\s/)
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be a bare hostname"
           end
-          unless host == host.downcase
-            raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be lowercase"
-          end
-          if IPV4_PATTERN.match?(host) || ip_literal?(host)
-            raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} is an IP literal; v1 allows exact FQDNs only"
-          end
+          return if host == host.downcase
+
+          raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must be lowercase"
+        end
+
+        def reject_ip_literal_host!(host)
+          return unless IPV4_PATTERN.match?(host) || ip_literal?(host)
+
+          raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} is an IP literal; v1 allows exact FQDNs only"
+        end
+
+        def assert_absolute_dns_name!(host)
           labels = host.split(".")
           unless labels.length >= 2 && labels.none?(&:empty?) &&
                  labels.all? { |label| label.bytesize <= 63 && HOST_LABEL_PATTERN.match?(label) }
             raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} is not a valid absolute DNS name"
           end
-          if labels.last.match?(/\A\d+\z/)
-            raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must not end in a numeric label"
-          end
+          return unless labels.last.match?(/\A\d+\z/)
 
-          host
+          raise ValidationError, "egress.allowlisted_hosts entry #{host.inspect} must not end in a numeric label"
+        end
+
+        def refused_private_range?(ip)
+          refused = ip.loopback? || ip.private? || ip.link_local?
+          if ip.ipv4?
+            refused ||= refused_private_ipv4?(ip)
+          elsif ip.ipv6?
+            refused ||= refused_private_ipv6?(ip)
+          end
+          refused
+        end
+
+        def refused_private_ipv4?(ip)
+          octets = ip.to_s.split(".").map(&:to_i)
+          first, second = octets
+          # 0.0.0.0/8 (this-host / unspecified), 224.0.0.0/4 (multicast),
+          # 255.255.255.255 (limited broadcast).
+          refused = first == 0 || first.between?(224, 239) || ip.to_s == "255.255.255.255"
+          # 100.64.0.0/10 (CGNAT), 192.0.0.0/24, 198.18.0.0/15, 240.0.0.0/4 —
+          # reserved blocks no outbound search provider legitimately lives in.
+          refused ||
+            (first == 100 && second.between?(64, 127)) ||
+            (first == 192 && second == 0) ||
+            (first == 198 && second.between?(18, 19)) ||
+            first >= 240
+        end
+
+        def refused_private_ipv6?(ip)
+          # ff00::/8 (multicast) and ::/128 (unspecified) — IPAddr has no
+          # predicates for either, so the leading hextet is checked directly.
+          ip.to_s.start_with?("ff") || ip.to_s == "::"
         end
 
         def validate_circuit!(circuit)

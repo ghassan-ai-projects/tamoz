@@ -66,16 +66,8 @@ module Tamoz
         # every other failure kind counts consecutively toward the threshold.
         def record_failure(kind: :transport, context: nil)
           @mutex.synchronize do
-            @last_failure_kind = kind.to_sym
-            @last_failure_context = context.nil? ? nil : context.to_h.freeze
-            if @budget_breach && @last_failure_kind == BUDGET_BREACH_KIND
-              @state = :open
-              return @state
-            end
-
-            @failures += 1
-            @state = @failures >= @threshold ? :open : :degraded
-            @state
+            capture_failure(kind, context)
+            transition_on_failure
           end
         end
 
@@ -127,36 +119,70 @@ module Tamoz
         # Typed digest of the failure state a reset clears — the "conditions
         # met" evidence (DR-2). Deterministic given the same failure state.
         def conditions_digest(server_id)
-          payload = CONDITIONS_DOMAIN + CanonicalJSON.dump(
+          sha256_digest(conditions_payload(server_id))
+        end
+
+        private
+
+        def capture_failure(kind, context)
+          @last_failure_kind = kind.to_sym
+          @last_failure_context = context.nil? ? nil : context.to_h.freeze
+        end
+
+        def transition_on_failure
+          if @budget_breach && @last_failure_kind == BUDGET_BREACH_KIND
+            @state = :open
+            return @state
+          end
+
+          @failures += 1
+          @state = @failures >= @threshold ? :open : :degraded
+        end
+
+        def conditions_payload(server_id)
+          CONDITIONS_DOMAIN + CanonicalJSON.dump(
             "scope_type" => "egress",
             "server_id" => server_id.to_s,
             "failure_kind" => last_failure_kind&.to_s,
             "context" => last_failure_context || {}
           )
+        end
+
+        def sha256_digest(payload)
           "sha256:#{Digest::SHA256.hexdigest(payload)}"
         end
 
-        private
-
         def validate_reset_evidence!(evidence)
-          unless evidence.is_a?(Hash)
-            raise CircuitPolicyError,
-                  "the egress circuit reset was refused: evidence must be a mapping " \
-                  "naming the operator authority and command"
-          end
-          unless evidence["authority"] == @reset_authority
-            raise CircuitPolicyError,
-                  "the egress circuit reset was refused: authority must be " \
-                  "#{@reset_authority.inspect} with the operator command record"
-          end
-          digest = evidence["operator_command_digest"]
-          unless digest.is_a?(String) && COMMAND_DIGEST_PATTERN.match?(digest)
-            raise CircuitPolicyError,
-                  "the egress circuit reset was refused: the operator command digest " \
-                  "is missing or malformed"
-          end
+          validate_evidence_is_hash!(evidence)
+          validate_evidence_authority!(evidence)
+          validate_evidence_digest!(evidence)
 
           evidence
+        end
+
+        def validate_evidence_is_hash!(evidence)
+          return if evidence.is_a?(Hash)
+
+          raise CircuitPolicyError,
+                "the egress circuit reset was refused: evidence must be a mapping " \
+                "naming the operator authority and command"
+        end
+
+        def validate_evidence_authority!(evidence)
+          return if evidence["authority"] == @reset_authority
+
+          raise CircuitPolicyError,
+                "the egress circuit reset was refused: authority must be " \
+                "#{@reset_authority.inspect} with the operator command record"
+        end
+
+        def validate_evidence_digest!(evidence)
+          digest = evidence["operator_command_digest"]
+          return if digest.is_a?(String) && COMMAND_DIGEST_PATTERN.match?(digest)
+
+          raise CircuitPolicyError,
+                "the egress circuit reset was refused: the operator command digest " \
+                "is missing or malformed"
         end
       end
     end

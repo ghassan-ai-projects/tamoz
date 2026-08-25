@@ -191,17 +191,25 @@ module Tamoz
           begin
             MCP::Tool::InputSchema.new(strict_schema(descriptor.input_schema || {})).validate_arguments(arguments)
           rescue MCP::Tool::InputSchema::ValidationError => error
-            detail = Tamoz::Error.disclosable_message(
-              error.message.sub(/\AInvalid arguments:\s*/, ""),
-              fallback: "the arguments do not match the snapshotted schema"
-            )
-            raise ToolArgumentError,
-                  "the arguments for #{descriptor.id} are invalid: #{detail}"
+            raise schema_validation_error(descriptor, error)
           rescue ArgumentError, JSON::NestingError
-            raise ToolArgumentError,
-                  "the arguments for #{descriptor.id} are malformed or too deeply nested"
+            raise malformed_arguments_error(descriptor)
           end
           arguments
+        end
+
+        def schema_validation_error(descriptor, error)
+          detail = Tamoz::Error.disclosable_message(
+            error.message.sub(/\AInvalid arguments:\s*/, ""),
+            fallback: "the arguments do not match the snapshotted schema"
+          )
+          ToolArgumentError.new("the arguments for #{descriptor.id} are invalid: #{detail}")
+        end
+
+        def malformed_arguments_error(descriptor)
+          ToolArgumentError.new(
+            "the arguments for #{descriptor.id} are malformed or too deeply nested"
+          )
         end
 
         def assert_depth!(descriptor, value, depth)
@@ -303,36 +311,40 @@ module Tamoz
           return if supervisor.connected?
 
           supervisor.start unless supervisor.started?
-          min, max = supervisor.config.protocol_range
+          _min, max = supervisor.config.protocol_range
           begin
             ::Timeout.timeout(supervisor.config.budgets.connect_timeout) do
               client.connect(client_info: CLIENT_INFO, protocol_version: max)
             end
           rescue ::Timeout::Error, MCP::Client::RequestHandlerError,
                  MCP::Client::ServerError, MCP::Client::ValidationError => error
-            # §6's corruption row applies to the handshake too: a server that
-            # answers initialize with malformed frames broke the protocol
-            # contract and must never become a retryable value the planner can
-            # iterate on. The corruption is detectable here exactly as in
-            # `raise_classified_transport` (RequestHandlerError wrapping a
-            # JSON::ParserError); the classification is the fix.
-            if corruption?(error)
-              supervisor.record_failure(kind: :corruption)
-              raise ToolPolicyError.new(
-                "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-                "malformed frames during the protocol handshake; the protocol " \
-                "contract was broken",
-                **stderr_metadata(supervisor)
-              )
-            end
+            raise handle_handshake_failure(descriptor, supervisor, error)
+          end
+          nil
+        end
 
-            supervisor.record_failure(kind: :connect)
-            raise UnavailableError.new(
-              "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed to connect",
+        def handle_handshake_failure(descriptor, supervisor, error)
+          # §6's corruption row applies to the handshake too: a server that
+          # answers initialize with malformed frames broke the protocol
+          # contract and must never become a retryable value the planner can
+          # iterate on. The corruption is detectable here exactly as in
+          # `raise_classified_transport` (RequestHandlerError wrapping a
+          # JSON::ParserError); the classification is the fix.
+          if corruption?(error)
+            supervisor.record_failure(kind: :corruption)
+            return ToolPolicyError.new(
+              "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
+              "malformed frames during the protocol handshake; the protocol " \
+              "contract was broken",
               **stderr_metadata(supervisor)
             )
           end
-          nil
+
+          supervisor.record_failure(kind: :connect)
+          UnavailableError.new(
+            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed to connect",
+            **stderr_metadata(supervisor)
+          )
         end
 
         # --- the wire round-trip ----------------------------------------------
@@ -348,8 +360,7 @@ module Tamoz
             # Read-only calls may retry through the supervisor's restart budget;
             # corruption is terminal and never retried. The restart spawns a
             # fresh process, so the transport must be reconnected before retry.
-            if attempts < max_attempts && descriptor.read_only? && !supervisor.open? &&
-               !corruption?(error)
+            if retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
               supervisor.restart
               ensure_connected!(descriptor, client, supervisor)
               retry
@@ -374,24 +385,32 @@ module Tamoz
           classify_response(response, descriptor: descriptor, supervisor: supervisor, effect_key: effect_key)
         end
 
+        def retry_eligible?(attempts, max_attempts, descriptor, supervisor, error)
+          attempts < max_attempts && descriptor.read_only? && !supervisor.open? && !corruption?(error)
+        end
+
         def call_with_deadline(client, descriptor, arguments, supervisor, input)
           ::Timeout.timeout(supervisor.config.budgets.request_timeout) do
-            if input.nil?
-              client.call_tool(name: descriptor.name, arguments: arguments)
-            else
-              params = {
-                name: descriptor.name,
-                arguments: arguments,
-                inputResponses: input.fetch("inputResponses")
-              }
-              state = input["requestState"]
-              params[:requestState] = state unless state.nil?
-              # The SDK's private `request` pipeline: JSON-RPC error raising,
-              # `_meta` handling, and `input_required` detection all stay in the
-              # official client (P10 §1: never reimplement the protocol).
-              client.send(:request, method: "tools/call", params: params)
-            end
+            input.nil? ? call_tool(client, descriptor, arguments) : resume_tool(client, descriptor, arguments, input)
           end
+        end
+
+        def call_tool(client, descriptor, arguments)
+          client.call_tool(name: descriptor.name, arguments: arguments)
+        end
+
+        def resume_tool(client, descriptor, arguments, input)
+          params = {
+            name: descriptor.name,
+            arguments: arguments,
+            inputResponses: input.fetch("inputResponses")
+          }
+          state = input["requestState"]
+          params[:requestState] = state unless state.nil?
+          # The SDK's private `request` pipeline: JSON-RPC error raising,
+          # `_meta` handling, and `input_required` detection all stay in the
+          # official client (P10 §1: never reimplement the protocol).
+          client.send(:request, method: "tools/call", params: params)
         end
 
         # Records the failure and returns whether the request was fully written
@@ -431,31 +450,45 @@ module Tamoz
 
         # The exact §6 taxonomy rows for transport outcomes.
         def raise_classified_transport(descriptor, supervisor, error, sent:)
-          if corruption?(error)
-            raise ToolPolicyError.new(
-              "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
-              "malformed frames for #{descriptor.id}; the protocol contract was broken",
-              **stderr_metadata(supervisor)
-            )
-          end
-          if sent
-            if descriptor.read_only?
-              raise UnavailableError.new(
-                "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
-                "after the request to #{descriptor.id} was sent; the call is read-only " \
-                "and may be retried by the caller",
-                **stderr_metadata(supervisor)
-              )
-            end
+          raise corruption_error(descriptor, supervisor) if corruption?(error)
+          raise post_send_transport_error(descriptor, supervisor, sent: sent) if sent
 
-            raise AmbiguousOutcomeError.new(
-              "the MCP server #{descriptor.source_id} failed after the request to " \
-              "#{descriptor.id} was sent; the effect is unknown and must not be guessed",
-              **stderr_metadata(supervisor)
-            )
-          end
+          raise pre_send_unavailable_error(descriptor, supervisor)
+        end
 
-          raise ToolArgumentError.new(
+        def corruption_error(descriptor, supervisor)
+          ToolPolicyError.new(
+            "#{WIRE_PREFIX}: the MCP server #{descriptor.source_id} returned " \
+            "malformed frames for #{descriptor.id}; the protocol contract was broken",
+            **stderr_metadata(supervisor)
+          )
+        end
+
+        def post_send_transport_error(descriptor, supervisor, sent:)
+          return read_only_unavailable_error(descriptor, supervisor) if descriptor.read_only?
+
+          ambiguous_outcome_error(descriptor, supervisor)
+        end
+
+        def read_only_unavailable_error(descriptor, supervisor)
+          UnavailableError.new(
+            "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
+            "after the request to #{descriptor.id} was sent; the call is read-only " \
+            "and may be retried by the caller",
+            **stderr_metadata(supervisor)
+          )
+        end
+
+        def ambiguous_outcome_error(descriptor, supervisor)
+          AmbiguousOutcomeError.new(
+            "the MCP server #{descriptor.source_id} failed after the request to " \
+            "#{descriptor.id} was sent; the effect is unknown and must not be guessed",
+            **stderr_metadata(supervisor)
+          )
+        end
+
+        def pre_send_unavailable_error(descriptor, supervisor)
+          ToolArgumentError.new(
             "#{UNAVAILABLE_PREFIX}: the MCP server #{descriptor.source_id} failed " \
             "before the request to #{descriptor.id} was sent; no effect occurred",
             **stderr_metadata(supervisor)
@@ -596,57 +629,73 @@ module Tamoz
           content.each do |block|
             break if remaining <= 0
 
-            unless block.is_a?(Hash)
-              raise ToolPolicyError,
-                    "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
-                    "block that is not an object"
-            end
-
-            type = block["type"]
-            attributed = { "attribution" => attribution, "type" => type }
-            case type
-            when "text"
-              text = scrub_text(block["text"].to_s)
-              if text.bytesize > remaining
-                text = truncate_bytes(text, remaining)
-                truncated = true
-              end
-              attributed["text"] = text
-              remaining -= text.bytesize
-            when "image"
-              data = block["data"].to_s
-              if data.bytesize > remaining
-                data = truncate_bytes(data, remaining)
-                truncated = true
-              end
-              attributed["data"] = data
-              attributed["mimeType"] = scrub_text(block["mimeType"].to_s)[0, 128]
-              remaining -= data.bytesize
-            when "resource"
-              resource = block["resource"]
-              unless resource.is_a?(Hash)
-                raise ToolPolicyError,
-                      "#{WIRE_PREFIX}: the MCP server #{source_id} returned a resource " \
-                      "content block without a resource object"
-              end
-              uri = scrub_text(resource["uri"].to_s)[0, MAX_STRUCTURED_FIELD_BYTES]
-              text = scrub_text(resource["text"].to_s)
-              if text.bytesize > remaining
-                text = truncate_bytes(text, remaining)
-                truncated = true
-              end
-              attributed["resource"] = { "uri" => uri, "text" => text }
-              remaining -= text.bytesize
-            else
-              raise ToolPolicyError,
-                    "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
-                    "block with an unknown type"
-            end
+            attributed, remaining, truncated = build_attributed_block(
+              block, attribution, source_id, remaining, truncated
+            )
             blocks << attributed.freeze
           end
 
           truncated = true if content.length > blocks.length
           [blocks.freeze, truncated]
+        end
+
+        def build_attributed_block(block, attribution, source_id, remaining, truncated)
+          unless block.is_a?(Hash)
+            raise ToolPolicyError,
+                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
+                  "block that is not an object"
+          end
+
+          type = block["type"]
+          attributed = { "attribution" => attribution, "type" => type }
+          case type
+          when "text"
+            build_text_block(attributed, block, remaining, truncated)
+          when "image"
+            build_image_block(attributed, block, remaining, truncated)
+          when "resource"
+            build_resource_block(attributed, block, source_id, remaining, truncated)
+          else
+            raise ToolPolicyError,
+                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a content " \
+                  "block with an unknown type"
+          end
+        end
+
+        def build_text_block(attributed, block, remaining, truncated)
+          text = scrub_text(block["text"].to_s)
+          text, remaining, truncated = fit_to_budget(text, remaining, truncated)
+          attributed["text"] = text
+          [attributed, remaining, truncated]
+        end
+
+        def build_image_block(attributed, block, remaining, truncated)
+          data = block["data"].to_s
+          data, remaining, truncated = fit_to_budget(data, remaining, truncated)
+          attributed["data"] = data
+          attributed["mimeType"] = scrub_text(block["mimeType"].to_s)[0, 128]
+          [attributed, remaining, truncated]
+        end
+
+        def build_resource_block(attributed, block, source_id, remaining, truncated)
+          resource = block["resource"]
+          unless resource.is_a?(Hash)
+            raise ToolPolicyError,
+                  "#{WIRE_PREFIX}: the MCP server #{source_id} returned a resource " \
+                  "content block without a resource object"
+          end
+
+          uri = scrub_text(resource["uri"].to_s)[0, MAX_STRUCTURED_FIELD_BYTES]
+          text = scrub_text(resource["text"].to_s)
+          text, remaining, truncated = fit_to_budget(text, remaining, truncated)
+          attributed["resource"] = { "uri" => uri, "text" => text }
+          [attributed, remaining, truncated]
+        end
+
+        def fit_to_budget(text, remaining, truncated)
+          return [text, remaining - text.bytesize, truncated] if text.bytesize <= remaining
+
+          [truncate_bytes(text, remaining), 0, true]
         end
 
         # Structured content is data, not prompt text, but it is still output:

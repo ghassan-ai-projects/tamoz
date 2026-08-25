@@ -69,19 +69,8 @@ module Tamoz
                   "the answer to an MCP elicitation must be a JSON object of field values"
           end
 
-          responses = {}
-          fields.each do |field|
-            id = field.fetch("id")
-            content = if fields.length == 1
-                        answers
-                      else
-                        answers[id] || raise(
-                          ToolArgumentError,
-                          "the answer to an MCP elicitation is missing the fields for request #{id}"
-                        )
-                      end
-            validate_answer_content!(field, content)
-            responses[id] = { "action" => "accept", "content" => content }
+          responses = fields.to_h do |field|
+            [field.fetch("id"), input_response(field, answers, single_field: fields.length == 1)]
           end
 
           merge = { "inputResponses" => responses.freeze }
@@ -91,6 +80,20 @@ module Tamoz
         end
 
         private
+
+        def input_response(field, answers, single_field:)
+          id = field.fetch("id")
+          content = single_field ? answers : answer_for_field(answers, id)
+          validate_answer_content!(field, content)
+          { "action" => "accept", "content" => content }
+        end
+
+        def answer_for_field(answers, id)
+          answers[id] || raise(
+            ToolArgumentError,
+            "the answer to an MCP elicitation is missing the fields for request #{id}"
+          )
+        end
 
         def validate_input_requests!(input_requests)
           unless input_requests.is_a?(Hash) && !input_requests.empty?
@@ -106,18 +109,8 @@ module Tamoz
         end
 
         def field_descriptor(id, params)
-          unless params.is_a?(Hash) && params["method"] == ELICITATION_METHOD &&
-                 params["params"].is_a?(Hash)
-            raise ToolPolicyError,
-                  "an MCP server returned an input request that is not a supported elicitation"
-          end
-
-          request = params["params"]
-          schema = request["requestedSchema"]
-          unless schema.is_a?(Hash)
-            raise ToolPolicyError,
-                  "an MCP server returned an elicitation request without a requested schema"
-          end
+          request = validate_input_request!(params)
+          schema = validate_schema_present!(request["requestedSchema"])
           # Schema content is server-controlled text that rides into the durable
           # interrupt: every string in it (property names, descriptions, enum
           # values, defaults, ...) gets the same control-strip + byte-bound
@@ -131,6 +124,25 @@ module Tamoz
             "message" => bounded_message(request["message"]),
             "schema" => CanonicalJSON.deep_freeze(CanonicalJSON.normalize(schema))
           }.freeze
+        end
+
+        def validate_input_request!(params)
+          unless params.is_a?(Hash) && params["method"] == ELICITATION_METHOD &&
+                 params["params"].is_a?(Hash)
+            raise ToolPolicyError,
+                  "an MCP server returned an input request that is not a supported elicitation"
+          end
+
+          params["params"]
+        end
+
+        def validate_schema_present!(schema)
+          unless schema.is_a?(Hash)
+            raise ToolPolicyError,
+                  "an MCP server returned an elicitation request without a requested schema"
+          end
+
+          schema
         end
 
         # Deep control-strip + byte-bound over every string in the requested
@@ -155,22 +167,27 @@ module Tamoz
         # and credential-shaped property names reject the whole interrupt: a
         # server asking for secrets never gets them auto-filled or surfaced.
         def validate_field_schema!(schema)
+          reject_credential_fields!(schema)
+          validate_schema_shape!(schema)
+        end
+
+        def reject_credential_fields!(schema)
           properties = schema["properties"]
-          if properties.is_a?(Hash)
-            properties.each_key do |name|
-              next unless ServerConfig.credential_env_name?(name.to_s)
+          return unless properties.is_a?(Hash)
 
-              raise ToolPolicyError,
-                    "an MCP server requested a credential-shaped field; the elicitation was rejected"
-            end
-          end
+          properties.each_key do |name|
+            next unless ServerConfig.credential_env_name?(name.to_s)
 
-          begin
-            MCP::Tool::InputSchema.new(schema)
-          rescue ArgumentError
             raise ToolPolicyError,
-                  "an MCP server returned an elicitation request with an invalid schema"
+                  "an MCP server requested a credential-shaped field; the elicitation was rejected"
           end
+        end
+
+        def validate_schema_shape!(schema)
+          MCP::Tool::InputSchema.new(schema)
+        rescue ArgumentError
+          raise ToolPolicyError,
+                "an MCP server returned an elicitation request with an invalid schema"
         end
 
         def validate_answer_content!(field, content)
@@ -231,10 +248,7 @@ module Tamoz
         # with a host and no embedded credentials. Broader SSRF/redirect policy
         # is P10-D2; an offered URL that fails this gate is simply omitted.
         def checked_url(requests, url_policy)
-          raw = requests.filter_map do |_id, params|
-            request = params.is_a?(Hash) ? params["params"] : nil
-            request["url"] if request.is_a?(Hash) && request["url"].is_a?(String)
-          end.first
+          raw = offered_url(requests)
           return nil if raw.nil?
 
           url = raw.dup.force_encoding(Encoding::UTF_8)
@@ -242,6 +256,13 @@ module Tamoz
           return nil if url_policy && !url_policy.call(url)
 
           url.freeze
+        end
+
+        def offered_url(requests)
+          requests.filter_map do |_id, params|
+            request = params.is_a?(Hash) ? params["params"] : nil
+            request["url"] if request.is_a?(Hash) && request["url"].is_a?(String)
+          end.first
         end
 
         def egress_ok?(url)
