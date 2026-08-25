@@ -78,9 +78,9 @@ module Tamoz
         if description.bytesize > MAX_DESCRIPTION_BYTES
           raise DiagnosisCatalogError, "diagnosis_catalog/description_too_large: #{code}"
         end
-        unless description.dup.force_encoding(Encoding::UTF_8).valid_encoding?
-          raise DiagnosisCatalogError, "diagnosis_catalog/description_invalid_utf8: #{code}"
-        end
+        return if description.dup.force_encoding(Encoding::UTF_8).valid_encoding?
+
+        raise DiagnosisCatalogError, "diagnosis_catalog/description_invalid_utf8: #{code}"
       end
       private_class_method :build_entry, :validate_description!
 
