@@ -60,11 +60,7 @@ module Tamoz
       def prepare_step_without_rescue(effects, state, step, tool, accepted, context)
         arguments = effects.resolved_effect_arguments(step.fetch('arguments'), tool)
         iteration = state.fetch(:step_cursor)
-        budget = effects.maximum_effect_output_bytes(tool)
-        if @services.evidence.observation_bytes(state) + budget > SessionNodes::MAX_OBSERVATION_BYTES
-          raise ToolError, "insufficient observation budget for #{tool}"
-        end
-
+        ensure_observation_headroom(effects, state, tool)
         intent = effects.build_intent(step, accepted, arguments, iteration:)
 
         # ADR §8: a replayed gate re-reads its journaled verdict instead of
@@ -94,23 +90,36 @@ module Tamoz
         )
       end
 
+      def ensure_observation_headroom(effects, state, tool)
+        budget = effects.maximum_effect_output_bytes(tool)
+        return if @services.evidence.observation_bytes(state) + budget <= SessionNodes::MAX_OBSERVATION_BYTES
+
+        raise ToolError, "insufficient observation budget for #{tool}"
+      end
+
       def no_approval_preparation(intent, arguments)
         Preparation.new(intent:, arguments:, preview: nil, approval_required: false, decision: nil)
+      end
+
+      def record_tool_failure(state, step:, tool:, error_class:, reason:)
+        @services.evidence.tool_failure_update(
+          state,
+          failure: SessionEvidence::ToolFailure.new(
+            step:, tool:, error_class:, reason:, effect_receipt: nil
+          )
+        )
       end
 
       # A deny is a structured tool result fed back to the model; the turn
       # continues (ADR §2.4) — the workspace was not touched.
       def denied_update(state, step, decision)
         reason = decision ? "#{decision.reason}, rule #{decision.rule_id}" : 'denied by operator'
-        @services.evidence.tool_failure_update(
+        record_tool_failure(
           state,
-          failure: SessionEvidence::ToolFailure.new(
-            step:,
-            tool: step['tool'],
-            error_class: 'ToolPolicyError',
-            reason: "denied: #{reason}",
-            effect_receipt: nil
-          )
+          step:,
+          tool: step['tool'],
+          error_class: 'ToolPolicyError',
+          reason: "denied: #{reason}"
         )
       end
 
@@ -122,15 +131,12 @@ module Tamoz
       end
 
       def argument_failure(state, step, tool, error)
-        @services.evidence.tool_failure_update(
+        record_tool_failure(
           state,
-          failure: SessionEvidence::ToolFailure.new(
-            step:,
-            tool:,
-            error_class: Tamoz::Core.serialized_tool_error_name(error.class.name),
-            reason: error.message,
-            effect_receipt: nil
-          )
+          step:,
+          tool:,
+          error_class: Tamoz::Core.serialized_tool_error_name(error.class.name),
+          reason: error.message
         )
       end
 
@@ -232,12 +238,12 @@ module Tamoz
             tool: step['tool'],
             error_class: evidence.tool_error_class(outcome),
             reason: evidence.tool_error_message(outcome),
-            effect_receipt: failed_receipt(step, intent, outcome)
+            effect_receipt: build_effect_receipt(step, intent, outcome, status: 'failed')
           )
         )
       end
 
-      def failed_receipt(step, intent, outcome)
+      def build_effect_receipt(step, intent, outcome, status:)
         SessionRecords.build(
           'effect_receipt',
           effect_key: outcome.effect_key,
@@ -246,7 +252,7 @@ module Tamoz
           step_id: step.fetch('id'),
           operation: intent.fetch('operation'),
           safety: intent.fetch('safety'),
-          status: 'failed',
+          status:,
           attempt_number: outcome.attempt_number,
           reconciliation: outcome.reconciliation,
           iteration: intent.fetch('iteration', 0),
@@ -261,7 +267,7 @@ module Tamoz
           step_cursor: state.fetch(:step_cursor) + 1,
           next_node: 'evaluate',
           observations: [successful_observation(state, step, intent, outcome)],
-          effect_receipts: [successful_receipt(step, intent, outcome)]
+          effect_receipts: [build_effect_receipt(step, intent, outcome, status: 'succeeded')]
         }
         update[:check_passed] = outcome.value.fetch('check').fetch('passed') if outcome.value.key?('check')
         update
@@ -293,23 +299,6 @@ module Tamoz
         fields[:source_id] = value.fetch('source_id') if value.key?('source_id')
         fields[:check] = outcome.value.fetch('check') if outcome.value.key?('check')
         SessionRecords.build('observation', **fields)
-      end
-
-      def successful_receipt(step, intent, outcome)
-        SessionRecords.build(
-          'effect_receipt',
-          effect_key: outcome.effect_key,
-          logical_key: outcome.effect_key,
-          attempt_identity: attempt_identity(outcome),
-          step_id: step.fetch('id'),
-          operation: intent.fetch('operation'),
-          safety: intent.fetch('safety'),
-          status: 'succeeded',
-          attempt_number: outcome.attempt_number,
-          reconciliation: outcome.reconciliation,
-          iteration: intent.fetch('iteration', 0),
-          sub_operation: intent.fetch('sub_operation', 0)
-        )
       end
 
       def attempt_identity(outcome)
