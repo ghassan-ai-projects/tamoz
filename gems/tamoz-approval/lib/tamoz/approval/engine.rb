@@ -90,11 +90,7 @@ module Tamoz
           # recorded, never a freshly minted duplicate.
           grant = mint_grant(decision_record.fetch(:decision), answer, scope, expires_at_ms)
           recorded_resolution = decision_log.record_resolution(
-            decision_id: decision_id,
-            answer: answer,
-            scope: scope,
-            actor_evidence: actor_evidence,
-            grant: grant
+            decision_id:, answer:, scope:, actor_evidence:, grant:
           )
           stored_grant = recorded_resolution.fetch(:grant)
           # A :once grant is already journaled on the decision row; only a
