@@ -120,7 +120,7 @@ module Tamoz
         require_approval_ports!
         data = tenant_data(event)
         approval_id = data.fetch("approval_id")
-        digest = Tamoz::Core.digest("tamoz/stream/approval-request/v1\n", data)
+        digest = approval_event_digest("request", data)
         @approval_receipts.reserve_requested(
           approval_id:, tenant_id: @tenant, payload_digest: digest,
           identity: approval_identity(data),
@@ -151,10 +151,10 @@ module Tamoz
         require_approval_ports!
         data = tenant_data(event)
         approval_id = data.fetch("approval_id")
-        event_digest = Tamoz::Core.digest("tamoz/stream/approval-withdraw/v1\n", data)
+        event_digest = approval_event_digest("withdraw", data)
         receipt = @approval_receipts.fetch(approval_id)
         raise StreamError, "approval delivery receipt is missing" unless receipt&.fetch("delivery_receipt")
-        return if receipt.fetch("state") == "withdrawn" && receipt.fetch("last_event_digest") == event_digest
+        return if already_withdrawn?(receipt, event_digest)
 
         message_id = receipt.fetch("delivery_receipt").fetch("message_id")
         @approval_relay.withdraw(message_id:)
@@ -168,7 +168,7 @@ module Tamoz
         data = tenant_data(event)
         require_approval_ports!
         approval_id = data.fetch("approval_id")
-        event_digest = Tamoz::Core.digest("tamoz/stream/approval-resolve/v1\n", data)
+        event_digest = approval_event_digest("resolve", data)
         @approval_receipts.transition(
           approval_id:, tenant_id: @tenant, state: "resolved", event_digest:,
           identity: approval_identity(data)
@@ -186,6 +186,14 @@ module Tamoz
         return if @approval_receipts && @approval_relay
 
         raise StreamError, "approval notifications require durable receipts and an injected relay"
+      end
+
+      def approval_event_digest(kind, data)
+        Tamoz::Core.digest("tamoz/stream/approval-#{kind}/v1\n", data)
+      end
+
+      def already_withdrawn?(receipt, event_digest)
+        receipt.fetch("state") == "withdrawn" && receipt.fetch("last_event_digest") == event_digest
       end
 
       def approval_identity(data)
