@@ -37,19 +37,7 @@ module Tamoz
         raw_steps = document.fetch("steps")
         raise ProtocolError, "plan steps must be an array" unless raw_steps.is_a?(Array)
 
-        steps = raw_steps.map do |entry|
-          unless entry.is_a?(Hash)
-            raise ProtocolError, "each plan step must be an object"
-          end
-
-          Step.new(
-            id: entry.fetch("id"),
-            purpose: entry.fetch("purpose"),
-            tool: entry["tool"],
-            arguments: entry.fetch("arguments", {}),
-            verification: entry.fetch("verification")
-          )
-        end
+        steps = raw_steps.map { |entry| parse_step(entry) }
         raise ProtocolError, "plan exceeds #{MAX_STEPS} steps" if steps.length > MAX_STEPS
 
         new(
@@ -60,6 +48,21 @@ module Tamoz
       rescue KeyError, TypeError => error
         raise ProtocolError, "invalid plan: #{error.message}"
       end
+
+      def self.parse_step(entry)
+        unless entry.is_a?(Hash)
+          raise ProtocolError, "each plan step must be an object"
+        end
+
+        Step.new(
+          id: entry.fetch("id"),
+          purpose: entry.fetch("purpose"),
+          tool: entry["tool"],
+          arguments: entry.fetch("arguments", {}),
+          verification: entry.fetch("verification")
+        )
+      end
+      private_class_method :parse_step
 
       def initialize(goal:, done_when:, steps:)
         super(
