@@ -162,7 +162,7 @@ module Tamoz
       end
 
       def numeric?(value)
-        value.is_a?(Numeric) && value != true && value != false
+        value.is_a?(Numeric)
       end
 
       def validate_type!(value, type, path)
@@ -177,7 +177,7 @@ module Tamoz
           when "object" then value.is_a?(Hash)
           when "array" then value.is_a?(Array)
           when "string" then value.is_a?(String)
-          when "integer" then value.is_a?(Integer) && !value.is_a?(TrueClass) && !value.is_a?(FalseClass)
+          when "integer" then value.is_a?(Integer)
           when "number" then numeric?(value)
           when "boolean" then value == true || value == false
           when "null" then value.nil?
