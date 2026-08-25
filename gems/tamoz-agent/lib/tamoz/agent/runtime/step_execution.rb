@@ -46,7 +46,7 @@ module Tamoz
               if denial
                 observations << denial
                 total_bytes += denial.fetch("output").bytesize
-                next unless %i[action repair].include?(phase)
+                next unless owns_repair_budget?(phase)
 
                 tool_failure = denial.fetch("failure")
                 break
@@ -70,7 +70,7 @@ module Tamoz
               total_bytes += observation.fetch("output").bytesize
               # Only the action and repair phases own a repair budget. Discovery and
               # read-only keep the rejection as evidence and continue with the next step.
-              next unless %i[action repair].include?(phase)
+              next unless owns_repair_budget?(phase)
 
               tool_failure = observation.fetch("failure")
               break
@@ -103,6 +103,10 @@ module Tamoz
             end
           end
           [Tamoz::Core.deep_freeze(observations), last_check_receipt, Tamoz::Core.deep_freeze(tool_failure)].freeze
+        end
+
+        def owns_repair_budget?(phase)
+          %i[action repair].include?(phase)
         end
 
         # Pipeline B's single call site: the SAME engine the durable sessions use
@@ -204,15 +208,8 @@ module Tamoz
               "tool" => tool,
               "error_class" => "ToolPolicyError",
               "reason" => reason,
-              "failure_signature" => Digest::SHA256.hexdigest(
-                JSON.generate(
-                  "kind" => "tool_error",
-                  "tool" => tool,
-                  "reason" => reason,
-                  "arguments_digest" => SessionRecords.digest(
-                    Deliberation.canonical(arguments)
-                  )
-                )
+              "failure_signature" => build_failure_signature(
+                tool, reason, arguments
               )
             }
           }
@@ -237,18 +234,24 @@ module Tamoz
               # `Tamoz::Agent::Tool*` spelling (see `Tamoz::Core::TOOL_ERROR_CLASS_NAMES`).
               "error_class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
               "reason" => error.message,
-              "failure_signature" => Digest::SHA256.hexdigest(
-                JSON.generate(
-                  "kind" => "tool_error",
-                  "tool" => step.tool,
-                  "reason" => error.message,
-                  "arguments_digest" => SessionRecords.digest(
-                    Deliberation.canonical(step.arguments)
-                  )
-                )
+              "failure_signature" => build_failure_signature(
+                step.tool, error.message, step.arguments
               )
             }
           }
+        end
+
+        def build_failure_signature(tool, reason, arguments)
+          Digest::SHA256.hexdigest(
+            JSON.generate(
+              "kind" => "tool_error",
+              "tool" => tool,
+              "reason" => reason,
+              "arguments_digest" => SessionRecords.digest(
+                Deliberation.canonical(arguments)
+              )
+            )
+          )
         end
 
         def observation_bytes(observations)
