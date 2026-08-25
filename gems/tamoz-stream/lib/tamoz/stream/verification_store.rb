@@ -98,17 +98,7 @@ module Tamoz
         row = fetch(tenant_id:, intent_id:)
         return nil unless row.learnable?
 
-        {
-          "outcome_id" => row.outcome_id,
-          "outcome_digest" => row.outcome_digest,
-          "command_id" => row.command_id,
-          "decision_id" => row.decision_id,
-          "source_authority" => row.source_authority,
-          "reconciliation_version" => row.reconciliation_version,
-          "observation_status" => row.verdict,
-          "episode_id" => row.episode_id,
-          "attempt_id" => row.attempt_id
-        }.freeze
+        reference_hash(row)
       end
 
       def fetch(tenant_id:, intent_id:)
@@ -187,6 +177,20 @@ module Tamoz
         return if reconciliation_version.is_a?(Integer) && reconciliation_version.positive?
 
         raise VerificationError, "reconciliation_version must be a positive integer"
+      end
+
+      def reference_hash(row)
+        {
+          "outcome_id" => row.outcome_id,
+          "outcome_digest" => row.outcome_digest,
+          "command_id" => row.command_id,
+          "decision_id" => row.decision_id,
+          "source_authority" => row.source_authority,
+          "reconciliation_version" => row.reconciliation_version,
+          "observation_status" => row.verdict,
+          "episode_id" => row.episode_id,
+          "attempt_id" => row.attempt_id
+        }.freeze
       end
 
       def fetch_locked(tenant_id, intent_id)
