@@ -77,8 +77,7 @@ module Tamoz
           when :eof
             break
           when :control
-            handle_control(frame, transport)
-            break if frame.control == "subscriber_too_slow"
+            break unless handle_control(frame, transport)
           when :event
             break unless handle_event(frame)
           end
@@ -100,6 +99,7 @@ module Tamoz
         raise SubscriptionError, "handlers must map event types to callables"
       end
 
+      # Returns false to end the pass (backpressure), true to continue.
       def handle_control(frame, transport)
         case frame.control
         when "cursor_expired"
@@ -108,11 +108,12 @@ module Tamoz
           fresh = transport.resnapshot(cursor: frame.cursor, credential: @credential)
           @cursor_store.write(fresh)
           record_audit(@resnapshots, from: frame.cursor, to: fresh)
+          true
         when "subscriber_too_slow"
           # Backpressure: the pass ends here; the next pass resumes from the
           # last acknowledged cursor. The stream never grows unbounded memory
           # for a slow reader.
-          nil
+          false
         else
           # An unknown control event is a protocol drift — recorded and
           # skipped, never a wedge: one bad frame does not halt the
@@ -120,6 +121,7 @@ module Tamoz
           record_audit(@skipped, cursor: frame.cursor, id: nil, type: nil,
                                  control: frame.control, reason: "unknown_control_event")
           @cursor_store.write(frame.cursor)
+          true
         end
       end
 
