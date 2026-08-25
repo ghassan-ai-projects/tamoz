@@ -187,14 +187,7 @@ module Tamoz
           "profile_version" => profile_version,
           "canonical_digest" => canonical_digest,
           "canonical_root" => canonical_root,
-          "model_roles" => model_roles.transform_values do |role|
-            ref = role["credential_ref"]
-            if ref
-              role.merge("credential_ref" => {"kind" => "env", "name" => ref.fetch("name")})
-            else
-              role
-            end
-          end,
+          "model_roles" => pinned_model_roles,
           "checks" => checks,
           "tools" => {
             "allowed" => tools_allowed
@@ -209,22 +202,36 @@ module Tamoz
         Profile.deep_freeze(snapshot)
       end
 
+      def pinned_model_roles
+        model_roles.transform_values do |role|
+          ref = role["credential_ref"]
+          if ref
+            role.merge("credential_ref" => {"kind" => "env", "name" => ref.fetch("name")})
+          else
+            role
+          end
+        end
+      end
+
       def self.load(path, env: ENV, adoption_registry: nil, confirm_adoption: nil)
         expanded = File.expand_path(File.path(path))
         document = load_document(expanded, suggestion: false, env:)
         registry = adoption_registry || AdoptionRegistry.new(env:)
-        unless registry.activated?(document.profile_id, document.canonical_digest)
-          confirmed = confirm_adoption&.call(document)
-          unless confirmed
-            raise AdoptionError,
-                  "profile #{document.profile_id.inspect} digest " \
-                  "#{document.canonical_digest} is not activated in #{registry.path}"
-          end
+        enforce_activated!(document, registry:, confirm_adoption:)
+        document
+      end
 
-          registry.activate(document.profile_id, document.canonical_digest)
+      def self.enforce_activated!(document, registry:, confirm_adoption:)
+        return if registry.activated?(document.profile_id, document.canonical_digest)
+
+        confirmed = confirm_adoption&.call(document)
+        unless confirmed
+          raise AdoptionError,
+                "profile #{document.profile_id.inspect} digest " \
+                "#{document.canonical_digest} is not activated in #{registry.path}"
         end
 
-        document
+        registry.activate(document.profile_id, document.canonical_digest)
       end
 
       # Validation-only load used by `tamoz profile preview`. The suggestion flag
@@ -262,6 +269,22 @@ module Tamoz
         end
 
         hash = normalize_keys(snapshot)
+        digest = enforce_authority_shape!(hash, source)
+        synthetic = build_synthetic_document(hash)
+        validate_profile_fields!(synthetic.fetch("profile"), source)
+        validate_roots!(synthetic, synthetic.fetch("profile"), source)
+        validate_model_roles!(synthetic, source)
+        validate_checks!(synthetic, source)
+        tools = validate_tools!(synthetic, source)
+        validate_policy!(synthetic, tools, source)
+        validate_egress!(synthetic, source)
+        new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
+      end
+
+      # The refusal point for a tampered checkpoint: every field of the untrusted
+      # snapshot is shape-checked before anything is rebuilt from it. Returns the
+      # canonical digest the rebuilt profile is re-pinned to.
+      def self.enforce_authority_shape!(hash, source)
         unknown = hash.keys - AUTHORITY_KEYS
         unless unknown.empty?
           raise ValidationError, "#{source}: unknown pinned authority fields #{unknown.sort.inspect}"
@@ -277,6 +300,10 @@ module Tamoz
         end
 
         validate_strings!(hash.reject { |key, _| key == "canonical_digest" }, source)
+        digest
+      end
+
+      def self.build_synthetic_document(hash)
         synthetic = {
           "profile" => {
             "schema_version" => SCHEMA_VERSION,
@@ -290,18 +317,11 @@ module Tamoz
           "tools" => hash.fetch("tools"),
           "policy" => hash.fetch("policy")
         }
-        # P17 (correction 5): the pinned egress declaration is replayed through
-        # the same fail-closed validator a profile file passes, so a tampered
-        # checkpoint can only narrow or fail, never widen.
+        # P17 (correction 5): the pinned egress declaration joins the document
+        # when the checkpoint carries one; absence stays "no egress", and the
+        # fail-closed validator below replays it either way.
         synthetic["egress"] = hash["egress"] if hash.key?("egress")
-        validate_profile_fields!(synthetic.fetch("profile"), source)
-        validate_roots!(synthetic, synthetic.fetch("profile"), source)
-        validate_model_roles!(synthetic, source)
-        validate_checks!(synthetic, source)
-        tools = validate_tools!(synthetic, source)
-        validate_policy!(synthetic, tools, source)
-        validate_egress!(synthetic, source)
-        new(build_fields(synthetic, digest:, suggestion: false, pinned: true))
+        synthetic
       end
 
       # P8-E: macOS and Windows resolve `.Tamoz/suggested-profile.yaml` to the very
@@ -374,13 +394,7 @@ module Tamoz
       end
 
       def self.load_document(expanded_path, suggestion:, env: ENV)
-        unless suggestion
-          if suggestion_path?(expanded_path, env:)
-            raise ValidationError,
-                  "#{expanded_path} is inside #{SUGGESTION_DIRECTORY}/ and is evidence " \
-                  "only; preview or import it instead of activating it"
-          end
-        end
+        refuse_evidence_only_activation!(expanded_path, env:) unless suggestion
         # P8-E: the same open file description is permission-checked and read, so
         # replacing the path with a symlink between the two cannot be exploited.
         bytes = open_verified(expanded_path, permissions: !suggestion) do |handle|
@@ -402,6 +416,14 @@ module Tamoz
         new(fields)
       end
 
+      def self.refuse_evidence_only_activation!(path, env: ENV)
+        return unless suggestion_path?(path, env:)
+
+        raise ValidationError,
+              "#{path} is inside #{SUGGESTION_DIRECTORY}/ and is evidence " \
+              "only; preview or import it instead of activating it"
+      end
+
       # Opening and reading an operator-owned file safely — O_NOFOLLOW, fstat on
       # the open descriptor, size and encoding limits, and the parent-directory
       # permission walk — is SecureFile's. These stay as class methods because
@@ -418,10 +440,8 @@ module Tamoz
         SecureFile.verify_permissions!(path)
       end
 
-      # Single parser pass that rejects load-time code execution vectors before
-      # the data model is materialized: tags, excess aliases, duplicate keys.
-      # Key/value position inside a mapping is tracked by alternating a flag;
-      # containers and aliases also consume a slot in the enclosing mapping.
+      # Refuses object deserialization only (classes, symbols); the YAML
+      # event-stream scan — tags, alias budget, duplicate keys — is YamlScanner's.
       def self.safe_parse(text, path)
         Psych.safe_load(text, permitted_classes: [], permitted_symbols: [], aliases: true)
       rescue Psych::Exception => error
@@ -448,17 +468,7 @@ module Tamoz
         end
 
         profile = required_hash(hash, "profile", path)
-        version = profile["schema_version"]
-        unless version.is_a?(Integer)
-          raise ValidationError, "#{path}: profile.schema_version must be an integer"
-        end
-        if version > SCHEMA_VERSION
-          raise ValidationError,
-                "#{path}: profile schema version #{version} is newer than supported #{SCHEMA_VERSION}"
-        end
-        unless version == SCHEMA_VERSION
-          raise ValidationError, "#{path}: no migration registered from schema version #{version}"
-        end
+        enforce_schema_version!(profile, path)
 
         unknown_profile = profile.keys - PROFILE_KEYS
         unless unknown_profile.empty?
@@ -475,6 +485,20 @@ module Tamoz
         validate_policy!(hash, tools, path)
         validate_egress!(hash, path)
         hash
+      end
+
+      def self.enforce_schema_version!(profile, path)
+        version = profile["schema_version"]
+        unless version.is_a?(Integer)
+          raise ValidationError, "#{path}: profile.schema_version must be an integer"
+        end
+        if version > SCHEMA_VERSION
+          raise ValidationError,
+                "#{path}: profile schema version #{version} is newer than supported #{SCHEMA_VERSION}"
+        end
+        return if version == SCHEMA_VERSION
+
+        raise ValidationError, "#{path}: no migration registered from schema version #{version}"
       end
 
       def self.required_hash(hash, key, path)
