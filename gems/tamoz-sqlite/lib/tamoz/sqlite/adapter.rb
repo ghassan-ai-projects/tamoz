@@ -90,22 +90,15 @@ module Tamoz
         @database_file = DatabaseFile.new(path:)
         @path = @database_file.path
         @limits = limits
-        unless limits.is_a?(Limits)
-          raise ConfigurationError, "limits must be a Tamoz::SQLite::Limits value"
-        end
-        unless repair_permissions == true || repair_permissions == false
-          raise ConfigurationError, "repair_permissions must be true or false"
-        end
-        unless notifier.respond_to?(:instrument)
-          raise ConfigurationError, "notifier must respond to instrument"
-        end
-
         @notifier = notifier
         @pid = Process.pid
         @fault_injector = fault_injector || ->(_point, _metadata) {}
-        unless @fault_injector.respond_to?(:call)
-          raise ConfigurationError, "fault_injector must respond to call"
-        end
+        enforce_configuration!(
+          limits:,
+          repair_permissions:,
+          notifier:,
+          fault_injector: @fault_injector
+        )
 
         @database_file.prepare!(repair_permissions:)
         Migrator.new(
@@ -174,9 +167,7 @@ module Tamoz
             "schema_version" => schema_version
           }
         end
-        unless result.fetch("integrity") == ["ok"] &&
-               result.fetch("foreign_key_violations").empty? &&
-               result.fetch("schema_version") == Migrator::CURRENT_VERSION
+        unless integrity_clean?(result)
           raise IntegrityError, "SQLite integrity check failed"
         end
 
@@ -210,6 +201,23 @@ module Tamoz
       private
 
       attr_reader :fault_injector
+
+      def enforce_configuration!(limits:, repair_permissions:, notifier:, fault_injector:)
+        unless limits.is_a?(Limits)
+          raise ConfigurationError, "limits must be a Tamoz::SQLite::Limits value"
+        end
+        unless repair_permissions == true || repair_permissions == false
+          raise ConfigurationError, "repair_permissions must be true or false"
+        end
+        raise ConfigurationError, "notifier must respond to instrument" unless notifier.respond_to?(:instrument)
+        raise ConfigurationError, "fault_injector must respond to call" unless fault_injector.respond_to?(:call)
+      end
+
+      def integrity_clean?(result)
+        result.fetch("integrity") == ["ok"] &&
+          result.fetch("foreign_key_violations").empty? &&
+          result.fetch("schema_version") == Migrator::CURRENT_VERSION
+      end
 
       def transaction(**arguments, &block)
         ensure_process!
