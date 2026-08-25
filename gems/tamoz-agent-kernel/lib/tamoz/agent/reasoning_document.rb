@@ -128,17 +128,7 @@ module Tamoz
         def parse_probabilities(root, codes)
           entries = fetch_array(root, "diagnosis_probabilities", codes.length)
           seen = {}
-          probabilities = entries.map do |entry|
-            raise ProtocolError, "reasoning_document/probability_not_object" unless entry.is_a?(Hash)
-
-            reject_unknown_keys(entry, %w[diagnosis_code probability], "probability")
-            code = fetch_bounded_string(entry, "diagnosis_code", MAX_CODE_BYTES)
-            raise ProtocolError, "reasoning_document/unknown_diagnosis_code: #{code}" unless codes.include?(code)
-            raise ProtocolError, "reasoning_document/duplicate_diagnosis_code: #{code}" if seen[code]
-
-            seen[code] = true
-            Probability.new(code: code, probability: fetch_probability(entry))
-          end
+          probabilities = entries.map { |entry| parse_probability_entry(entry, codes, seen) }
 
           missing = codes - seen.keys
           raise ProtocolError, "reasoning_document/missing_diagnosis_codes: #{missing.join(",")}" unless missing.empty?
@@ -149,6 +139,18 @@ module Tamoz
           end
 
           probabilities
+        end
+
+        def parse_probability_entry(entry, codes, seen)
+          raise ProtocolError, "reasoning_document/probability_not_object" unless entry.is_a?(Hash)
+
+          reject_unknown_keys(entry, %w[diagnosis_code probability], "probability")
+          code = fetch_bounded_string(entry, "diagnosis_code", MAX_CODE_BYTES)
+          raise ProtocolError, "reasoning_document/unknown_diagnosis_code: #{code}" unless codes.include?(code)
+          raise ProtocolError, "reasoning_document/duplicate_diagnosis_code: #{code}" if seen[code]
+
+          seen[code] = true
+          Probability.new(code: code, probability: fetch_probability(entry))
         end
 
         # Argmax with catalog order as the deterministic tie-break, so identical
@@ -176,22 +178,24 @@ module Tamoz
           return [] unless root.key?("recommended_intents")
 
           intents = fetch_array(root, "recommended_intents", MAX_RECOMMENDED_INTENTS)
-          intents.map do |intent|
-            raise ProtocolError, "reasoning_document/intent_not_object" unless intent.is_a?(Hash)
+          intents.map { |intent| parse_recommended_intent(intent) }
+        end
 
-            reject_unknown_keys(intent, %w[type parameter_preset parameters], "recommended_intent")
-            type = fetch_bounded_string(intent, "type", MAX_CODE_BYTES)
-            preset = optional_bounded_string(intent, "parameter_preset", MAX_PRESET_BYTES)
-            parameters = intent["parameters"]
-            if preset && parameters
-              raise ProtocolError, "reasoning_document/intent_preset_and_parameters: #{type}"
-            end
-            if parameters && !parameters.is_a?(Hash)
-              raise ProtocolError, "reasoning_document/intent_parameters_not_object: #{type}"
-            end
+        def parse_recommended_intent(intent)
+          raise ProtocolError, "reasoning_document/intent_not_object" unless intent.is_a?(Hash)
 
-            RecommendedIntent.new(type: type, parameter_preset: preset, parameters: parameters)
+          reject_unknown_keys(intent, %w[type parameter_preset parameters], "recommended_intent")
+          type = fetch_bounded_string(intent, "type", MAX_CODE_BYTES)
+          preset = optional_bounded_string(intent, "parameter_preset", MAX_PRESET_BYTES)
+          parameters = intent["parameters"]
+          if preset && parameters
+            raise ProtocolError, "reasoning_document/intent_preset_and_parameters: #{type}"
           end
+          if parameters && !parameters.is_a?(Hash)
+            raise ProtocolError, "reasoning_document/intent_parameters_not_object: #{type}"
+          end
+
+          RecommendedIntent.new(type: type, parameter_preset: preset, parameters: parameters)
         end
 
         def parse_tool_request(request)

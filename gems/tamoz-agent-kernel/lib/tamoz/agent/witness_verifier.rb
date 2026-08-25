@@ -33,49 +33,64 @@ module Tamoz
 
       # Returns the verified gateway record or raises a typed error.
       def verify(receipt:, gateway_record:)
-        payload = gateway_record.to_payload
-        expected = OpenSSL::HMAC.hexdigest("sha256", @signing_key, JSON.generate(payload))
-        unless expected == gateway_record.signature
-          raise ProtocolError, "witness_gateway/signature_invalid"
-        end
-
-        request_digest = field(receipt, :request_digest)
-        response_digest = field(receipt, :response_digest)
-        frame_digest = field(receipt, :frame_digest)
-        settings_digest = field(receipt, :settings_digest)
-        logical_call_id = if receipt.is_a?(Hash)
-                            receipt.fetch("effect_id")
-                          elsif receipt.respond_to?(:logical_call_key)
-                            receipt.logical_call_key.to_key
-                          else
-                            raise ProtocolError, "witness_gateway/receipt_unreadable"
-                          end
-        provider = field(receipt, :provider)
-        model = field(receipt, :model)
-
-        if request_digest != gateway_record.request_digest
-          raise ProtocolError, "witness_gateway/request_digest_mismatch"
-        end
-        if response_digest != gateway_record.response_digest
-          raise ProtocolError, "witness_gateway/response_digest_mismatch"
-        end
-        if frame_digest != gateway_record.frame_digest
-          raise ProtocolError, "witness_gateway/frame_digest_mismatch"
-        end
-        if settings_digest != gateway_record.settings_digest
-          raise ProtocolError, "witness_gateway/settings_digest_mismatch"
-        end
-        if logical_call_id != gateway_record.logical_call_id
-          raise ProtocolError, "witness_gateway/logical_call_id_mismatch"
-        end
-        if provider != gateway_record.provider || model != gateway_record.model
-          raise ProtocolError, "witness_gateway/identity_mismatch"
-        end
-
+        verify_signature(gateway_record)
+        receipt_fields = extract_receipt_fields(receipt)
+        verify_receipt_binding(receipt_fields, gateway_record)
         gateway_record
       end
 
       private
+
+      def verify_signature(gateway_record)
+        payload = gateway_record.to_payload
+        expected = OpenSSL::HMAC.hexdigest("sha256", @signing_key, JSON.generate(payload))
+        return if expected == gateway_record.signature
+
+        raise ProtocolError, "witness_gateway/signature_invalid"
+      end
+
+      def extract_receipt_fields(receipt)
+        {
+          request_digest: field(receipt, :request_digest),
+          response_digest: field(receipt, :response_digest),
+          frame_digest: field(receipt, :frame_digest),
+          settings_digest: field(receipt, :settings_digest),
+          logical_call_id: extract_logical_call_id(receipt),
+          provider: field(receipt, :provider),
+          model: field(receipt, :model)
+        }
+      end
+
+      def extract_logical_call_id(receipt)
+        if receipt.is_a?(Hash)
+          receipt.fetch("effect_id")
+        elsif receipt.respond_to?(:logical_call_key)
+          receipt.logical_call_key.to_key
+        else
+          raise ProtocolError, "witness_gateway/receipt_unreadable"
+        end
+      end
+
+      def verify_receipt_binding(fields, gateway_record)
+        if fields[:request_digest] != gateway_record.request_digest
+          raise ProtocolError, "witness_gateway/request_digest_mismatch"
+        end
+        if fields[:response_digest] != gateway_record.response_digest
+          raise ProtocolError, "witness_gateway/response_digest_mismatch"
+        end
+        if fields[:frame_digest] != gateway_record.frame_digest
+          raise ProtocolError, "witness_gateway/frame_digest_mismatch"
+        end
+        if fields[:settings_digest] != gateway_record.settings_digest
+          raise ProtocolError, "witness_gateway/settings_digest_mismatch"
+        end
+        if fields[:logical_call_id] != gateway_record.logical_call_id
+          raise ProtocolError, "witness_gateway/logical_call_id_mismatch"
+        end
+        return unless fields[:provider] != gateway_record.provider || fields[:model] != gateway_record.model
+
+        raise ProtocolError, "witness_gateway/identity_mismatch"
+      end
 
       def field(receipt, name)
         if receipt.is_a?(Hash)

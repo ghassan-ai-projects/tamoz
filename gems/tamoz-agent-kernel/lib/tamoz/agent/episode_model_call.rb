@@ -51,7 +51,20 @@ module Tamoz
         logical = ModelCall::LogicalCallKey.new(
           episode_id:, stage: invocation.stage, slot:, request_digest:
         )
-        outcome = EffectDispatcher.run(
+        outcome = journal_episode_model_call(
+          context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
+        )
+        result_for_effect_outcome(
+          outcome, logical:, invocation:, request_bytes:, frame_digest:
+        )
+      end
+
+      private
+
+      def journal_episode_model_call(
+        context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
+      )
+        EffectDispatcher.run(
           context:,
           operation: OPERATION,
           safety: :unsafe,
@@ -67,7 +80,9 @@ module Tamoz
         ) do
           perform_call(request_bytes, logical:, frame_digest:)
         end
+      end
 
+      def result_for_effect_outcome(outcome, logical:, invocation:, request_bytes:, frame_digest:)
         case outcome.status
         when :succeeded
           projection = codec_projection(outcome)
@@ -88,8 +103,6 @@ module Tamoz
           raise ProtocolError, "unexpected episode model effect status: #{outcome.status.inspect}"
         end
       end
-
-      private
 
       # The journaled result is the full call projection — the transport
       # request digest, content, the digest of the exact response envelope,

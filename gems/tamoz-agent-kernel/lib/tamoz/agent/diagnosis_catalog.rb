@@ -69,27 +69,36 @@ module Tamoz
         unless CODE_PATTERN.match?(code)
           raise DiagnosisCatalogError, "diagnosis_catalog/bad_code: #{code.inspect}"
         end
-        if description.bytesize > MAX_DESCRIPTION_BYTES
-          raise DiagnosisCatalogError, "diagnosis_catalog/description_too_large: #{code}"
-        end
-        unless description.dup.force_encoding(Encoding::UTF_8).valid_encoding?
-          raise DiagnosisCatalogError, "diagnosis_catalog/description_invalid_utf8: #{code}"
-        end
+        validate_description!(code, description)
 
         Entry.new(code: code, description: description)
       end
-      private_class_method :build_entry
+
+      def self.validate_description!(code, description)
+        if description.bytesize > MAX_DESCRIPTION_BYTES
+          raise DiagnosisCatalogError, "diagnosis_catalog/description_too_large: #{code}"
+        end
+        return if description.dup.force_encoding(Encoding::UTF_8).valid_encoding?
+
+        raise DiagnosisCatalogError, "diagnosis_catalog/description_invalid_utf8: #{code}"
+      end
+      private_class_method :build_entry, :validate_description!
 
       def initialize(entries)
+        validate_catalog_invariants!(entries)
+
+        @entries = entries.freeze
+        @by_code = entries.to_h { |e| [e.code, e] }.freeze
+      end
+
+      def validate_catalog_invariants!(entries)
         codes = entries.map(&:code)
         unless codes.uniq.length == codes.length
           raise DiagnosisCatalogError, "diagnosis_catalog/duplicate_code"
         end
         raise DiagnosisCatalogError, "diagnosis_catalog/missing_unknown" unless codes.include?(UNKNOWN)
-
-        @entries = entries.freeze
-        @by_code = entries.to_h { |e| [e.code, e] }.freeze
       end
+      private :validate_catalog_invariants!
 
       def codes = @entries.map(&:code)
 

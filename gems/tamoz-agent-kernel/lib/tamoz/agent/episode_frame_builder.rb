@@ -125,23 +125,45 @@ module Tamoz
       # memory, snapshot facts, tool results, and corrections are all data
       # with stable evidence ids, never raw prompt text.
       def build_user(facts, skills, memory, tool_results, repair_directive)
-        situation = facts.map do |entry|
+        situation = build_situation_entries(facts)
+        skill_entries = build_skill_entries(skills)
+        memory_entries = build_memory_entries(memory)
+        tools = build_tool_entries(tool_results)
+        user = {"situation" => situation}
+        user["skills"] = skill_entries unless skill_entries.empty?
+        user["memory"] = memory_entries unless memory_entries.empty?
+        user["tool_results"] = tools unless tools.empty?
+        user["repair_directive"] = repair_directive if repair_directive
+        Tamoz::Core.jcs(user)
+      end
+
+      def build_situation_entries(facts)
+        facts.map do |entry|
           {"id" => "fact:#{entry.fetch("id")}", "value" => entry.fetch("value")}
         end
-        skill_entries = Array(skills).map do |entry|
+      end
+
+      def build_skill_entries(skills)
+        Array(skills).map do |entry|
           {
             "id" => "skill:#{entry.name}",
             "tree_sha256" => entry.tree_digest,
             "text" => entry.text
           }
         end
-        memory_entries = Array(memory).map do |entry|
+      end
+
+      def build_memory_entries(memory)
+        Array(memory).map do |entry|
           {
             "id" => "memory:#{entry.fetch("digest")}",
             "statement" => entry.fetch("statement")
           }
         end
-        tools = Array(tool_results).map.with_index do |result, index|
+      end
+
+      def build_tool_entries(tool_results)
+        Array(tool_results).map.with_index do |result, index|
           {
             "id" => "tool:#{index}",
             "name" => result.fetch("tool"),
@@ -151,12 +173,6 @@ module Tamoz
             "result_bytes" => result.fetch("result_bytes", 0)
           }
         end
-        user = {"situation" => situation}
-        user["skills"] = skill_entries unless skill_entries.empty?
-        user["memory"] = memory_entries unless memory_entries.empty?
-        user["tool_results"] = tools unless tools.empty?
-        user["repair_directive"] = repair_directive if repair_directive
-        Tamoz::Core.jcs(user)
       end
     end
   end
