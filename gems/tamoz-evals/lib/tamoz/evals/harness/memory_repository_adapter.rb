@@ -44,6 +44,8 @@ module Tamoz
           "graph_version" => "1",
           "behavior_version" => "tamoz.agent.session/1"
         }.freeze
+        KLASS_BY_LAYER = {experience: :procedure, knowledge: :procedure, wisdom: :strategy}.freeze
+        EPISTEMIC_KIND_BY_LAYER = {experience: :observed, knowledge: :reported, wisdom: :inferred}.freeze
 
         attr_reader :path, :decrypt_reads, :absorb_refusals, :absorbed_count,
                     :seed_digest, :engine, :adapter
@@ -150,7 +152,7 @@ module Tamoz
         def scan(query)
           terms = vocabulary_terms(query)
           recall = @engine.retrieval.recall(
-            caller:,
+            caller: retrieval_caller,
             query: {terms:},
             automatic: true
           )
@@ -243,7 +245,7 @@ module Tamoz
           terms.empty? ? ["__no_match__"] : terms
         end
 
-        def caller
+        def retrieval_caller
           {
             tenant: TENANT,
             user: USER,
@@ -255,17 +257,27 @@ module Tamoz
         end
 
         def append_fixture(fixture)
+          record = build_memory_record(fixture)
+          @engine.repository.append(
+            record:,
+            index: @engine.index_for(record),
+            expected_version: nil,
+            sensitive: record.sensitive?
+          )
+        end
+
+        def build_memory_record(fixture)
           layer_sym = layer(fixture).to_sym
           sensitive = restricted?(fixture)
           statement = build_statement(fixture)
-          record = Tamoz::Agent::Memory::MemoryRecord.new(
+          Tamoz::Agent::Memory::MemoryRecord.new(
             memory_id: fixture.fetch("memory_id"),
             record_version: fixture.fetch("record_version", 1),
             layer: layer_sym,
-            klass: klass_for(layer_sym),
+            klass: KLASS_BY_LAYER[layer_sym],
             state: :active,
             statement:,
-            epistemic_kind: epistemic_kind_for(layer_sym),
+            epistemic_kind: EPISTEMIC_KIND_BY_LAYER[layer_sym],
             source_refs: [{
               "identity" => "eval-seed",
               "digest" => seed_digest_for(fixture),
@@ -291,12 +303,6 @@ module Tamoz
             },
             created_at_ms: SEED_EPOCH * 1000
           )
-          @engine.repository.append(
-            record:,
-            index: @engine.index_for(record),
-            expected_version: nil,
-            sensitive: record.sensitive?
-          )
         end
 
         # The searchable statement: the fixture vocabulary + the rendered
@@ -305,22 +311,6 @@ module Tamoz
         def build_statement(fixture)
           prefix = fixture.fetch("match_keys").join(" ")
           "#{prefix}: #{CanonicalJSON.dump(fixture.fetch("content"))}"
-        end
-
-        def klass_for(layer)
-          case layer
-          when :experience then :procedure
-          when :knowledge then :procedure
-          when :wisdom then :strategy
-          end
-        end
-
-        def epistemic_kind_for(layer)
-          case layer
-          when :experience then :observed
-          when :knowledge then :reported
-          when :wisdom then :inferred
-          end
         end
 
         def seed_digest_for(fixture)
