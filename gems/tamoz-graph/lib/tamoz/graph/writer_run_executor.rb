@@ -91,8 +91,8 @@ module Tamoz
         mark_request_running: true
       )
         run_existing(
-          :failed,
-          'latest checkpoint is not failed',
+          expected_status: :failed,
+          error_message: 'latest checkpoint is not failed',
           thread:,
           namespace:,
           request_id:,
@@ -115,8 +115,8 @@ module Tamoz
         mark_request_running: true
       )
         run_existing(
-          :running,
-          'latest checkpoint has no runnable frontier',
+          expected_status: :running,
+          error_message: 'latest checkpoint has no runnable frontier',
           thread:,
           namespace:,
           request_id:,
@@ -132,8 +132,8 @@ module Tamoz
 
       attr_reader :compiled
 
-      def run_existing(expected_status, error_message, thread:, namespace:, request_id:, concurrency:, context:,
-                       writer:, durable_request_id:, mark_request_running:)
+      def run_existing(expected_status:, error_message:, thread:, namespace:, request_id:, concurrency:,
+                       context:, writer:, durable_request_id:, mark_request_running:)
         checkpoint = compatible_latest(thread, namespace:, writer:)
         raise StaleRequestError, error_message unless checkpoint.status == expected_status
 
