@@ -174,26 +174,34 @@ module Tamoz
           allow_changes: options[:allow_changes],
           checks: options[:checks],
           ask: method(:approve_one_shot),
-          routing: if options[:experimental_routing]
-                     :experimental
-                   elsif options[:shadow_routing]
-                     :shadow
-                   else
-                     :legacy
-                   end
+          routing: one_shot_routing(options)
         )
         result = runtime.run(task) { |event| render_runtime_event(event, json: options[:json]) }
-        unless options[:json]
-          @out.puts
-          @out.puts result.answer
-          label = if result.responded?
-                    "Response: not verified task completion"
-                  else
-                    "Verification: #{result.satisfied ? "satisfied" : "not satisfied"}"
-                  end
-          @out.puts("\n#{label}")
-        end
+        print_one_shot_result(result) unless options[:json]
         result.exit_status
+      end
+
+      def print_one_shot_result(result)
+        @out.puts
+        @out.puts result.answer
+        label = if result.responded?
+                  "Response: not verified task completion"
+                else
+                  "Verification: #{result.satisfied ? "satisfied" : "not satisfied"}"
+                end
+        @out.puts("\n#{label}")
+      end
+
+      # Kept apart from durable_routing on purpose: only this path honors
+      # --shadow-routing today (unification is an owner decision).
+      def one_shot_routing(options)
+        if options[:experimental_routing]
+          :experimental
+        elsif options[:shadow_routing]
+          :shadow
+        else
+          :legacy
+        end
       end
 
       def drive_turn(session, task, thread_id:, request_id:, owner_id:, options:)
@@ -220,13 +228,7 @@ module Tamoz
             session.continue(thread: thread_id, request_id:, owner_id:, context:)
           end
         when :blocked
-          blocked = view.blocked || {}
-          if options[:json]
-            emit_cli_event("cli.paused", {"reason" => "blocked", "thread_id" => thread_id, "blocked" => blocked})
-          else
-            @err.puts "Thread is blocked on effect #{blocked.fetch("effect_key", "unknown")}."
-            @err.puts "Resolve it with: tamoz resolve #{thread_id} EFFECT_KEY {succeeded|failed|abandoned}"
-          end
+          report_blocked_thread(thread_id, view.blocked || {}, json: options[:json])
           return EXIT_PAUSED
         else
           render_show(view, thread_id:, transcript: 50, json: options[:json])
@@ -235,6 +237,15 @@ module Tamoz
 
         view = drain_to_terminal(session, thread_id:, owner_id:, options:, resume_options:)
         exit_for_view(view)
+      end
+
+      def report_blocked_thread(thread_id, blocked, json:)
+        if json
+          emit_cli_event("cli.paused", {"reason" => "blocked", "thread_id" => thread_id, "blocked" => blocked})
+        else
+          @err.puts "Thread is blocked on effect #{blocked.fetch("effect_key", "unknown")}."
+          @err.puts "Resolve it with: tamoz resolve #{thread_id} EFFECT_KEY {succeeded|failed|abandoned}"
+        end
       end
 
       def drive_continue(session, thread_id:, request_id:, owner_id:, options:)
@@ -264,14 +275,7 @@ module Tamoz
           # request is terminal-failed by run_next; render its typed reason once and
           # keep draining — the failed request is terminal, so it is never re-claimed
           # and never re-resumed (DR-4 D3 / DR4-29).
-          request_id = SecureRandom.uuid
-          advanced = run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
-            session.app.durable_runner.run_next(thread: thread_id, owner_id:, context:)
-          end
-          if advanced
-            render_request_terminal_failure(advanced, options:) if stale_request_failure?(advanced)
-            next
-          end
+          next if advance_queued_request(session, thread_id:, owner_id:, options:)
 
           view = session.view(thread: thread_id)
           case view.status
@@ -281,15 +285,9 @@ module Tamoz
             answers = collect_answers(session, thread_id:, options:, resume_options:)
             return session.view(thread: thread_id) if answers.nil?
 
-            request_id = SecureRandom.uuid
-            run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
-              session.resume(answers, thread: thread_id, request_id:, owner_id:, context:)
-            end
+            deliver_resume(session, answers, thread_id:, owner_id:, options:)
           when :running
-            request_id = SecureRandom.uuid
-            run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
-              session.continue(thread: thread_id, request_id:, owner_id:, context:)
-            end
+            deliver_continue(session, thread_id:, owner_id:, options:)
           else
             break
           end
@@ -298,6 +296,29 @@ module Tamoz
         view = session.view(thread: thread_id)
         render_final_view(view, options:)
         view
+      end
+
+      def advance_queued_request(session, thread_id:, owner_id:, options:)
+        request_id = SecureRandom.uuid
+        advanced = run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
+          session.app.durable_runner.run_next(thread: thread_id, owner_id:, context:)
+        end
+        render_request_terminal_failure(advanced, options:) if advanced && stale_request_failure?(advanced)
+        advanced
+      end
+
+      def deliver_resume(session, answers, thread_id:, owner_id:, options:)
+        request_id = SecureRandom.uuid
+        run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
+          session.resume(answers, thread: thread_id, request_id:, owner_id:, context:)
+        end
+      end
+
+      def deliver_continue(session, thread_id:, owner_id:, options:)
+        request_id = SecureRandom.uuid
+        run_with_stream(session, thread_id:, request_id:, owner_id:, options:) do |context|
+          session.continue(thread: thread_id, request_id:, owner_id:, context:)
+        end
       end
 
       def tracked_request_queued?(session, tracked_request)
@@ -553,13 +574,7 @@ module Tamoz
         # (dependency isolation), only when a durable subcommand actually runs.
         require "tamoz/sqlite"
 
-        session_dir = resolve_session_dir(options)
-        FileUtils.mkdir_p(session_dir, mode: 0o700)
-        stat = File.stat(session_dir)
-        unless (stat.mode & 0o077).zero?
-          raise ArgumentError, "session directory #{session_dir} is accessible to group or others"
-        end
-
+        session_dir = provision_private_session_dir!(options)
         model = build_model(options, profile:)
         toolbox = build_toolbox(options, profile:)
         adapter = Tamoz::SQLite::Adapter.new(
@@ -569,38 +584,59 @@ module Tamoz
         mcp = nil
         begin
           mcp = build_mcp_source(options, profile:)
-          # DR-5 D1 (RC5): the post-override resolution and the profile budgets are
-          # computed HERE, in cli.rb, and folded into the session record at intake
-          # via the extra constructor parameters — the same shared resolution
-          # function build_model used, so the record never disagrees with the run.
           # Interactive default gates mutations behind a confirm: the
           # operator opts into autonomy by naming a looser profile.
           @approval_engine = Tamoz::Agent.build_approval_engine(profile_name: options[:approval_profile] || 'review')
           @approval_engine.bind_session('interactive')
-          session = Tamoz::Agent::Session.new(
-            model:,
-            toolbox:,
-            checkpointer: adapter,
-            profile:,
-            approval_engine: @approval_engine,
-            approval_session_id: 'interactive',
-            profile_roles: resolve_profile_roles(profile, options),
-            profile_budgets: profile && profile.budgets,
-            mcp:,
-            artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
-            artifact_tenant: "session:#{thread_id}",
-            routing: if options[:adaptive_routing]
-                       :adaptive
-                     else
-                       (options[:experimental_routing] ? :experimental : :legacy)
-                     end
-          )
+          session = build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:)
           install_signal_handlers do
             yield session, request_id || SecureRandom.uuid, SecureRandom.uuid
           end
         ensure
           mcp&.close
           adapter.close unless read_only
+        end
+      end
+
+      def provision_private_session_dir!(options)
+        session_dir = resolve_session_dir(options)
+        FileUtils.mkdir_p(session_dir, mode: 0o700)
+        stat = File.stat(session_dir)
+        return session_dir if (stat.mode & 0o077).zero?
+
+        raise ArgumentError, "session directory #{session_dir} is accessible to group or others"
+      end
+
+      # DR-5 D1 (RC5): the post-override resolution and the profile budgets are
+      # folded into the session record at intake via the extra constructor
+      # parameters — the same shared resolution function build_model used, so the
+      # record never disagrees with the run.
+      def build_durable_session(model:, toolbox:, adapter:, mcp:, profile:, options:, thread_id:)
+        Tamoz::Agent::Session.new(
+          model:,
+          toolbox:,
+          checkpointer: adapter,
+          profile:,
+          approval_engine: @approval_engine,
+          approval_session_id: 'interactive',
+          profile_roles: resolve_profile_roles(profile, options),
+          profile_budgets: profile && profile.budgets,
+          mcp:,
+          artifact_store: adapter.bind_artifact_store(tenant: "session:#{thread_id}"),
+          artifact_tenant: "session:#{thread_id}",
+          routing: durable_routing(options)
+        )
+      end
+
+      # Kept apart from one_shot_routing on purpose: a durable session ignores
+      # --shadow-routing today (unification is an owner decision).
+      def durable_routing(options)
+        if options[:adaptive_routing]
+          :adaptive
+        elsif options[:experimental_routing]
+          :experimental
+        else
+          :legacy
         end
       end
 
@@ -787,24 +823,8 @@ module Tamoz
         primary = resolve_profile_roles(profile, options)["primary"]
         model_name ||= primary && primary.fetch("model")
         provider ||= primary && primary.fetch("provider")
-        api_key = nil
-        role = profile && profile.model_roles["primary"]
-        if role
-          ref = role["credential_ref"]
-          if ref
-            api_key = @env[ref.fetch("name")]
-            # DR-5 critic: a referenced credential that is not set must fail
-            # TYPED at session start — never silently fall back to the generic
-            # provider key (the divergence class RC-4 fixes at replay must not
-            # be re-introduced at resolution). The existing rescue below stays
-            # as the backstop for other constructor failures.
-            if api_key.to_s.empty?
-              raise ProfileRoleUnavailableError,
-                    "profile role \"primary\" references credential " \
-                    "#{ref.fetch("name").inspect} which is not set in the environment"
-            end
-          end
-        end
+        credential_ref = primary_credential_ref(profile)
+        api_key = enforce_role_credential!(credential_ref)
         raise OptionParser::MissingArgument, "--model or TAMOZ_MODEL" if model_name.to_s.empty?
 
         provider = provider.to_s.empty? ? "openai" : provider
@@ -817,27 +837,44 @@ module Tamoz
         provider_key = RubyLLMModel::ENV_KEYS[provider.downcase.to_sym]
         api_key ||= provider_key && @env[provider_key]
         api_base = @env["#{provider.upcase}_API_BASE"]
-        begin
-          RubyLLMModel.new(
-            model: model_name,
-            provider:,
-            api_key:,
-            api_base:,
-            assume_model_exists: options[:assume_model_exists]
-          )
-        rescue ArgumentError => error
-          # DR-5 D1: a role that references a credential name absent from the
-          # environment surfaces as the typed ProfileRoleUnavailableError at
-          # session start (before any model I/O or checkpoint), naming the role
-          # and the failing reference — never a leaked untyped ArgumentError.
-          if role && role["credential_ref"]
-            raise ProfileRoleUnavailableError,
-                  "profile role \"primary\" cannot resolve credential reference " \
-                  "#{role.fetch("credential_ref").fetch("name").inspect}: #{error.message}"
-          end
+        build_provider_model(options, model_name:, provider:, api_key:, api_base:, credential_ref:)
+      end
 
-          raise
+      def primary_credential_ref(profile)
+        role = profile && profile.model_roles["primary"]
+        role && role["credential_ref"]
+      end
+
+      # DR-5 critic: a referenced credential that is not set must fail TYPED at
+      # session start — never silently fall back to the generic provider key.
+      def enforce_role_credential!(credential_ref)
+        return nil unless credential_ref
+
+        api_key = @env[credential_ref.fetch("name")]
+        if api_key.to_s.empty?
+          raise ProfileRoleUnavailableError,
+                "profile role \"primary\" references credential " \
+                "#{credential_ref.fetch("name").inspect} which is not set in the environment"
         end
+        api_key
+      end
+
+      def build_provider_model(options, model_name:, provider:, api_key:, api_base:, credential_ref:)
+        RubyLLMModel.new(
+          model: model_name,
+          provider:,
+          api_key:,
+          api_base:,
+          assume_model_exists: options[:assume_model_exists]
+        )
+      rescue ArgumentError => error
+        if credential_ref
+          raise ProfileRoleUnavailableError,
+                "profile role \"primary\" cannot resolve credential reference " \
+                "#{credential_ref.fetch("name").inspect}: #{error.message}"
+        end
+
+        raise
       end
 
       def render_runtime_event(event, json:)
