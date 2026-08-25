@@ -124,20 +124,6 @@ module Tamoz
         )
       end
 
-      # A tool is governed when the current policy does not simply allow it;
-      # simulate keeps this side-effect free.
-      def governed?(tool)
-        request = @configuration.approval_engine.build_request(
-          tool: tool,
-          argv: [],
-          targets: [],
-          effect_class: @configuration.capabilities.effect_class(tool),
-          session_id: @configuration.approval_session_id,
-          workspace_root: @configuration.toolbox.root.to_s
-        )
-        @configuration.approval_engine.simulate(request).verdict != :allow
-      end
-
       def accepted_plan(details)
         SessionRecords.build(
           'accepted_plan',
