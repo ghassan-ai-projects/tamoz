@@ -40,7 +40,7 @@ module Tamoz
       attr_reader :database_file, :pool, :limits, :fault_injector
 
       def normalize_destination(destination)
-        destination_path = database_file_path(destination)
+        destination_path = resolve_destination_path(destination)
         raise ConfigurationError, 'backup destination must differ from source' if destination_path == database_file.path
         if File.exist?(destination_path) || File.symlink?(destination_path)
           raise PermissionError, 'backup destination already exists'
@@ -52,7 +52,7 @@ module Tamoz
         destination_path
       end
 
-      def database_file_path(destination)
+      def resolve_destination_path(destination)
         text = SafeText.normalize(
           destination.respond_to?(:to_path) ? destination.to_path : destination,
           name: 'SQLite path',
