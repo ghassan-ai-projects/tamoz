@@ -352,11 +352,11 @@ module Tamoz
       end
 
       def diagnose?
-        KIND_NAMES[@wire.kind] == :diagnose
+        kind == :diagnose
       end
 
       def reconsider?
-        KIND_NAMES[@wire.kind] == :reconsider
+        kind == :reconsider
       end
     end
 
