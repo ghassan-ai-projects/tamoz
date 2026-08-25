@@ -85,7 +85,7 @@ module Tamoz
         address = @store.normalize_address(thread_id, namespace)
         normalized_limit = history_limit(limit)
         if before_sequence &&
-           !(before_sequence.is_a?(Integer) && !before_sequence.negative?)
+           (!before_sequence.is_a?(Integer) || before_sequence.negative?)
           raise ConfigurationError,
                 'before_sequence must be a non-negative integer'
         end
@@ -189,8 +189,9 @@ module Tamoz
             )
           end
           writes = write_rows.map do |write|
+            payload = write.fetch(3)
             Wire.verify_digest!(
-              write.fetch(3),
+              payload,
               write.fetch(4),
               domain: 'tamoz.sqlite.pending_write'
             )
@@ -198,7 +199,7 @@ module Tamoz
               'write_index' => write.fetch(0),
               'kind' => write.fetch(1),
               'channel' => write.fetch(2),
-              'payload' => write.fetch(3)
+              'payload' => payload
             }.freeze
           end
           metadata = {
