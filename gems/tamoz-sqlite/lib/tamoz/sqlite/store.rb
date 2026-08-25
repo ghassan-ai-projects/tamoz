@@ -33,9 +33,7 @@ module Tamoz
       def put(namespace, key, value, if_version: nil, sensitive: false)
         address = normalize_address(namespace, key)
         expected = normalize_expected_version(if_version)
-        unless sensitive == true || sensitive == false
-          raise ConfigurationError, "sensitive must be true or false"
-        end
+        validate_sensitive!(sensitive)
 
         bytes = state_codec.dump(value)
         stored = sensitive ? protect(bytes, address:) : bytes
@@ -136,14 +134,14 @@ module Tamoz
         namespace_text = normalize_name(namespace, "Store namespace")
         prefix_text = prefix.nil? ? nil : normalize_name(prefix, "Store prefix", allow_empty: true)
         normalized_limit = normalize_limit(limit)
+        key_filter = prefix_text ? "AND h.key >= ? AND h.key < ?" : ""
+        binds = [namespace_text]
+        if prefix_text
+          binds << prefix_text
+          binds << prefix_upper_bound(prefix_text)
+        end
+        binds << normalized_limit
         rows = adapter.__send__(:read, operation: "store.each") do |tx|
-          predicate = prefix_text ? "AND h.key >= ? AND h.key < ?" : ""
-          binds = [namespace_text]
-          if prefix_text
-            binds << prefix_text
-            binds << prefix_upper_bound(prefix_text)
-          end
-          binds << normalized_limit
           tx.rows(
             "store.each",
             <<~SQL,
@@ -154,7 +152,7 @@ module Tamoz
                 ON v.namespace = h.namespace
                AND v.key = h.key
                AND v.version = h.current_version
-              WHERE h.namespace = ? AND h.deleted = 0 #{predicate}
+              WHERE h.namespace = ? AND h.deleted = 0 #{key_filter}
               ORDER BY h.key COLLATE BINARY
               LIMIT ?
             SQL
@@ -287,15 +285,7 @@ module Tamoz
           end
           value = nil
         else
-          raise CheckpointCorruptionError, "Store payload is missing" unless payload && digest
-          Wire.verify_digest!(payload, digest, domain: "tamoz.sqlite.store_value")
-          clear = bytes_for_decode(payload, sensitive, [address.fetch(0), key])
-          value = state_codec.load(clear)
-          # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
-          # EffectJournal#decode_receipt).
-          unless state_codec.dump(value).b == clear.b
-            raise CheckpointCorruptionError, "Store value is not canonical"
-          end
+          value = decode_canonical_value(payload, digest, sensitive, [address.fetch(0), key])
         end
         Tamoz::StoreEntry.new(
           namespace: address.fetch(0),
@@ -306,6 +296,19 @@ module Tamoz
           deleted:,
           created_at_ms: created_at
         )
+      end
+
+      def decode_canonical_value(payload, digest, sensitive, address)
+        raise CheckpointCorruptionError, "Store payload is missing" unless payload && digest
+        Wire.verify_digest!(payload, digest, domain: "tamoz.sqlite.store_value")
+        clear = bytes_for_decode(payload, sensitive, address)
+        value = state_codec.load(clear)
+        # Byte comparison: stored BLOBs decode as ASCII-8BIT (see
+        # EffectJournal#decode_receipt).
+        unless state_codec.dump(value).b == clear.b
+          raise CheckpointCorruptionError, "Store value is not canonical"
+        end
+        value
       end
 
       def protect(bytes, address:)
@@ -371,6 +374,12 @@ module Tamoz
                 "Store protection must provide name, encrypt, and decrypt"
         end
         normalize_name(value.name, "Store protection name")
+      end
+
+      def validate_sensitive!(value)
+        return if value == true || value == false
+
+        raise ConfigurationError, "sensitive must be true or false"
       end
 
       def normalize_address(namespace, key)
