@@ -150,8 +150,8 @@ module Tamoz
         )
       end
 
-      def compatible_latest(thread, writer:, namespace: [])
-        compiled.__send__(:compatible_latest!, thread, namespace:, writer:)
+      def compatible_latest(thread, writer:)
+        compiled.__send__(:compatible_latest!, thread, namespace: [], writer:)
       end
 
       def compatible!(checkpoint)
