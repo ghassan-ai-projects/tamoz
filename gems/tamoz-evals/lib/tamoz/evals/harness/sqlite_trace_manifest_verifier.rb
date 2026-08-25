@@ -49,7 +49,7 @@ module Tamoz
             recorder = SQLiteTraceRecorder.new(
               scenario: normalized.fetch("scenario"),
               operation: first.fetch("operation"),
-              subject: subject.reject { |key, _value| key == "digest" },
+              subject: subject.except("digest"),
               registry: @registry
             )
             recorder.arm!
@@ -113,7 +113,6 @@ module Tamoz
             events = bounded_array!(
               @manifest.fetch("events"),
               maximum: MAX_EVENTS,
-              allow_empty: false,
               name: "trace events"
             )
             events.each do |event|
@@ -122,7 +121,6 @@ module Tamoz
             selectors = bounded_array!(
               @manifest.fetch("selectors"),
               maximum: MAX_SELECTORS,
-              allow_empty: false,
               name: "trace selectors"
             )
             selectors.each do |selector|
@@ -135,10 +133,10 @@ module Tamoz
             value.each_value { |entry| scalar!(entry, name) }
           end
 
-          def bounded_array!(value, maximum:, allow_empty:, name:)
+          def bounded_array!(value, maximum:, name:)
             unless value.is_a?(Array) &&
                    value.length <= maximum &&
-                   (allow_empty || value.any?)
+                   value.any?
               raise ExecutionError, "#{name} are invalid"
             end
             value
