@@ -50,7 +50,7 @@ module Tamoz
         # job.
         def candidates(thread_id)
           thread = String(thread_id)
-          document.fetch('transitions').fetch(thread, []).map do |entry|
+          read_document.fetch('transitions').fetch(thread, []).map do |entry|
             Transition.new(
               thread_id: thread,
               profile_id: entry.fetch('profile_id'),
@@ -99,7 +99,7 @@ module Tamoz
           validate!(transition)
           with_registry_lock do
             thread = transition.thread_id
-            current = document
+            current = read_document
             transitions = current.fetch('transitions')
             list = transitions.fetch(thread, [])
             entry = transition.to_h_document
@@ -133,7 +133,7 @@ module Tamoz
           thread = String(thread_id)
           burner = String(consumed_by)
           with_registry_lock do
-            current = document
+            current = read_document
             transitions = current.fetch('transitions')
             list = transitions.fetch(thread, [])
             index = list.index do |entry|
@@ -234,7 +234,7 @@ module Tamoz
         # :reek:UncommunicativeVariableName — rubocop's
         # Naming/RescuedExceptionsVariableName requires `e`; the toolchain wins
         # over reek's preference here (CODING_STANDARD §1).
-        def document
+        def read_document
           return TransitionDocument.empty unless File.exist?(@path)
 
           Profile.verify_permissions!(@path)
