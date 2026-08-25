@@ -21,10 +21,6 @@ module Tamoz
     # per-field rule set; splitting either would fragment the row the store
     # persists.
     # rubocop:disable Metrics/ParameterLists, Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity, Metrics/MethodLength
-    # The prompt is one validated value; the smells below are the
-    # per-field rule set and the fifteen facts one single-use prompt binds
-    # (design §9, ADR-043, ADR-049 INV-C) — splitting them would fragment the
-    # prompt row.
     # :reek:LongParameterList, :reek:MissingSafeMethod, :reek:TooManyInstanceVariables
     # :reek:TooManyStatements, :reek:NilCheck, :reek:DataClump
     class ApprovalPrompt
