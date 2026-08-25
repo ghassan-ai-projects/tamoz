@@ -66,10 +66,6 @@ module Tamoz
           validate_scenarios!
         end
 
-        def failed?
-          @failed == true
-        end
-
         def run
           @failed = false
           directory = @artifact_base.join(@artifact_root)
@@ -275,8 +271,8 @@ module Tamoz
           fixture&.close
         end
 
-        def drive_c1
-          factory = OpenclawCommsFixture.model_factory(
+        def build_parity_answer_factory
+          OpenclawCommsFixture.model_factory(
             plan: [{ 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
                      'steps' => [{ 'id' => 's1', 'purpose' => 'gather evidence', 'tool' => 'read_file',
                                    'arguments' => { 'path' => 'note.txt' },
@@ -288,7 +284,10 @@ module Tamoz
                 'evidence' => ['note.txt'] }
             ]
           )
-          with_fixture(model_factory: factory) do |fixture|
+        end
+
+        def drive_c1
+          with_fixture(model_factory: build_parity_answer_factory) do |fixture|
             conversation = OpenclawCommsFixture::CONVERSATION_A
             thread = fixture.thread_for(conversation)
             telegram_base = delivery_baseline(fixture)
@@ -321,6 +320,10 @@ module Tamoz
           fixture.outbox.map { |row| row.fetch('delivery_id') }
         end
 
+        def fresh_outbox_rows(fixture, baseline_ids)
+          fixture.outbox.reject { |row| baseline_ids.include?(row.fetch('delivery_id')) }
+        end
+
         # One surface's expression of one request's outcome: the durable
         # request row (agent side), its reference, terminal reason, and the
         # delivery axis derived from the outbox rows that leg produced.
@@ -339,8 +342,8 @@ module Tamoz
         end
 
         def leg_delivery_state(fixture, baseline_ids)
-          fresh = fixture.outbox.reject { |row| baseline_ids.include?(row.fetch('delivery_id')) }
-                                .select { |row| OpenclawCommsOracles::TERMINAL_KINDS.include?(row['kind']) }
+          fresh = fresh_outbox_rows(fixture, baseline_ids)
+                  .select { |row| OpenclawCommsOracles::TERMINAL_KINDS.include?(row['kind']) }
           return 'none' if fresh.empty?
 
           statuses = fresh.map { |row| row['status'] }.uniq
@@ -360,19 +363,7 @@ module Tamoz
         # queued work. Cancellation issued from each path must record the same
         # durable payload contract.
         def drive_c6
-          factory = OpenclawCommsFixture.model_factory(
-            plan: [{ 'goal' => 'answer the task', 'done_when' => ['the tool returned evidence'],
-                     'steps' => [{ 'id' => 's1', 'purpose' => 'gather evidence', 'tool' => 'read_file',
-                                   'arguments' => { 'path' => 'note.txt' },
-                                   'verification' => 'the output is present' } ] }],
-            review: [OpenclawCommsFixture::ACCEPTED_REVIEW],
-            verify: [
-              OpenclawCommsFixture::VERIFY_OK.first,
-              { 'answer' => 'operator answer: two plus two is four.', 'satisfied' => true,
-                'evidence' => ['note.txt'] }
-            ]
-          )
-          with_fixture(model_factory: factory) do |fixture|
+          with_fixture(model_factory: build_parity_answer_factory) do |fixture|
             conversation = OpenclawCommsFixture::CONVERSATION_A
             thread = fixture.thread_for(conversation)
             telegram_base = delivery_baseline(fixture)
@@ -487,7 +478,7 @@ module Tamoz
                                 transport.sends.length == sends_after_unknown
 
             complete_turn(fixture, 303, 'note three please')
-            stale_mark_refused = stale_owner_refused(fixture)
+            stale_mark_refused = stale_owner_refused?(fixture)
 
             complete_turn(fixture, 304, 'note four please')
             transport.send_script = [Tamoz::Comms::AuthenticationError.new('bot token revoked')]
@@ -511,9 +502,12 @@ module Tamoz
           )
         end
 
+        def latest_pending_answer_row(fixture)
+          fixture.outbox(statuses: %w[pending]).reverse.find { |candidate| candidate['kind'] == 'answer' }
+        end
+
         def pending_answer(fixture)
-          row = fixture.outbox(statuses: %w[pending]).reverse.find { |candidate| candidate['kind'] == 'answer' }
-          row && row.fetch('delivery_id')
+          latest_pending_answer_row(fixture)&.fetch('delivery_id')
         end
 
         def delivered?(fixture, delivery_id)
@@ -528,8 +522,8 @@ module Tamoz
                  .map { |row| [row['delivery_id'], row['status'], row['receipt']] }
         end
 
-        def stale_owner_refused(fixture)
-          row = fixture.outbox(statuses: %w[pending]).reverse.find { |candidate| candidate['kind'] == 'answer' }
+        def stale_owner_refused?(fixture)
+          row = latest_pending_answer_row(fixture)
           return false unless row
 
           now = fixture.now
@@ -698,11 +692,7 @@ module Tamoz
         end
 
         def status_probe_words(fixture, thread, update_id:)
-          before = fixture.outbox.map { |row| row.fetch('delivery_id') }
-          fixture.submit([raw_update(update_id, '/status')])
-          reply = fixture.outbox.reject { |row| before.include?(row.fetch('delivery_id')) }
-                                .find { |row| row['kind'] == 'control' }
-          { 'reply_word' => reply && reply['text'][/\btask=([a-z]+)/, 1],
+          { 'reply_word' => control_reply_text(fixture, update_id, '/status')[/\btask=([a-z]+)/, 1],
             'view_word' => inbox_task_word(fixture, thread) }
         end
 
@@ -753,10 +743,9 @@ module Tamoz
           update_id = 550
           commands.each do |name, text|
             update_id += 1
-            before = fixture.outbox.map { |row| row.fetch('delivery_id') }
+            baseline = delivery_baseline(fixture)
             fixture.submit([raw_update(update_id, text)])
-            fresh_rows = fixture.outbox.reject { |row| before.include?(row.fetch('delivery_id')) }
-            reply = fresh_rows.find { |row| row['kind'] == 'control' }
+            reply = fresh_outbox_rows(fixture, baseline).find { |row| row['kind'] == 'control' }
             sweep[name] = [reply ? reply['text'] : '']
             fixture.work
           end
@@ -994,10 +983,9 @@ module Tamoz
         end
 
         def control_reply_text(fixture, update_id, text)
-          before = fixture.outbox.map { |row| row.fetch('delivery_id') }
+          baseline = delivery_baseline(fixture)
           fixture.submit([raw_update(update_id, text)])
-          reply = fixture.outbox.reject { |row| before.include?(row.fetch('delivery_id')) }
-                                .find { |row| row['kind'] == 'control' }
+          reply = fresh_outbox_rows(fixture, baseline).find { |row| row['kind'] == 'control' }
           reply ? reply.fetch('text').to_s : ''
         end
 
