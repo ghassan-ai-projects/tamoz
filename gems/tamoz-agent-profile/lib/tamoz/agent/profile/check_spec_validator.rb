@@ -104,9 +104,9 @@ module Tamoz
             raise ValidationError, "#{problem} argv[0] must be a program name"
           end
 
-          named = program_problem(program)
-          raise ValidationError, "#{named} must not start with '-'" if program.start_with?('-')
-          raise ValidationError, "#{named} must not be a directory" if program.end_with?(File::SEPARATOR)
+          prefix = program_problem(program)
+          raise ValidationError, "#{prefix} must not start with '-'" if program.start_with?('-')
+          raise ValidationError, "#{prefix} must not be a directory" if program.end_with?(File::SEPARATOR)
 
           refuse_workspace_relative!(program)
           refuse_wrapper!(program)
@@ -129,8 +129,8 @@ module Tamoz
 
         def refuse_wrapper!(program)
           basename = File.basename(program).downcase.sub(/\.(exe|bat|cmd|com)\z/, '')
-          named = program_problem(program)
-          raise ValidationError, "#{named} is not a program" if ['.', '..'].include?(basename)
+          prefix = program_problem(program)
+          raise ValidationError, "#{prefix} is not a program" if ['.', '..'].include?(basename)
           return unless ARGV0_DENYLIST.include?(basename)
 
           raise ValidationError,
