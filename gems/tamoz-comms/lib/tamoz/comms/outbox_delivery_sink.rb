@@ -83,11 +83,11 @@ module Tamoz
           return push_approval_prompt(event, route, surface)
         end
 
-        rendering = surface.fetch('rendering')
+        render_limits = surface.fetch('rendering')
         parts = @rendering.plain(event.fetch(:text).to_s,
-                                 max_parts: rendering.fetch('max_parts'),
-                                 part_characters: rendering.fetch('part_characters'),
-                                 overflow: rendering.fetch('overflow'))
+                                 max_parts: render_limits.fetch('max_parts'),
+                                 part_characters: render_limits.fetch('part_characters'),
+                                 overflow: render_limits.fetch('overflow'))
         reserved_request_id = event[:request_id] if TERMINAL_KINDS.include?(kind)
         parts.each do |part|
           @store.append_delivery(
@@ -113,7 +113,7 @@ module Tamoz
         # it so the status wording follows the task axis, never a guess.
         if reserved_request_id
           @store.complete_request(thread_id: event.fetch(:thread_id), request_id: reserved_request_id,
-                                             settle_kind: kind)
+                                  settle_kind: kind)
         end
         :accepted
       end
@@ -190,9 +190,9 @@ module Tamoz
       # descriptor (INV-C) — never synthesized here, never taken from wire
       # input.
       def push_approval_prompt(event, route, surface)
-        binding = @store.binding_by_conversation(surface_id: route.fetch('surface_id'),
-                                                 conversation_id: route.fetch('conversation_id'))
-        return nil unless binding
+        conversation_binding = @store.binding_by_conversation(surface_id: route.fetch('surface_id'),
+                                                              conversation_id: route.fetch('conversation_id'))
+        return nil unless conversation_binding
 
         evidence = decision_evidence(event.fetch(:interrupts))
         reference, prompt = Comms::ApprovalPrompt.build(
@@ -200,7 +200,7 @@ module Tamoz
           thread_id: event.fetch(:thread_id), occurrence_id: event.fetch(:request_id),
           interrupts: event.fetch(:interrupts),
           required_evidence: evidence,
-          correspondent_id: binding.fetch('correspondent_id'),
+          correspondent_id: conversation_binding.fetch('correspondent_id'),
           conversation_id: route.fetch('conversation_id'),
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
