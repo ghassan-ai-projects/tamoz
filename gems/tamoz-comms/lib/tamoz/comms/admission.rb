@@ -38,7 +38,7 @@ module Tamoz
         return ignore(:unsupported_kind) unless %w[text command callback].include?(envelope.fetch('kind'))
         return reject(:group_chat, 'group chats are refused in v1') if group_chat?(envelope.fetch('conversation_id'))
         return reject(:unbound, 'the correspondent is not bound') if binding && binding.fetch('status') != 'active'
-        return decision_disposition if envelope.fetch('kind') == 'callback'
+        return callback_disposition if envelope.fetch('kind') == 'callback'
 
         if envelope.fetch('kind') == 'command'
           command_admission(envelope, surface:, binding:, bot_username:)
@@ -121,7 +121,7 @@ module Tamoz
         end
       end
 
-      def decision_disposition
+      def callback_disposition
         Decision.new(:decision, :callback, nil, nil, nil)
       end
 
