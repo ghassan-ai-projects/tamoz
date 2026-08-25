@@ -5,8 +5,6 @@ require "securerandom"
 module Tamoz
   module Graph
     class Compiled
-      DEFAULT_WRITER_TTL = 30.0
-
       attr_reader :definition, :definition_digest, :codec, :checkpointer, :limits,
                   :checkpoint_codec
 
@@ -29,17 +27,10 @@ module Tamoz
           definition_digest: @definition_digest,
           state_codec: codec
         )
-        @checkpointer = if checkpointer.respond_to?(:bind_graph)
-                          checkpointer.bind_graph(checkpoint_codec: @checkpoint_codec)
-                        else
-                          checkpointer
-                        end
+        @checkpointer = resolve_checkpointer(checkpointer)
         @planner = Planner.new(definition_digest:)
         @route_planner = RoutePlanner.new(definition:)
-        @pools = pools || {
-          inline: Pool.for(:inline, max_tasks: limits.max_tasks_per_step),
-          threads: Pool.for(:threads, max_tasks: limits.max_tasks_per_step)
-        }.freeze
+        @pools = build_pools(pools)
         freeze
       end
 
@@ -190,6 +181,21 @@ module Tamoz
 
       private
 
+      def resolve_checkpointer(value)
+        return value unless value.respond_to?(:bind_graph)
+
+        value.bind_graph(checkpoint_codec: @checkpoint_codec)
+      end
+
+      def build_pools(pools)
+        return pools if pools
+
+        {
+          inline: Pool.for(:inline, max_tasks: limits.max_tasks_per_step),
+          threads: Pool.for(:threads, max_tasks: limits.max_tasks_per_step)
+        }.freeze
+      end
+
       def resume_answers = @resume_answers
       def invoke_at(...) = RunCoordinator.new(self).invoke(...)
       def resume_at(...) = RunCoordinator.new(self).resume(...)
@@ -239,8 +245,6 @@ module Tamoz
       def ensure_ephemeral_public!(...) = ExecutionSupport.new(self).ensure_ephemeral_public!(...)
       def stream_error_data(...) = ExecutionSupport.new(self).stream_error_data(...)
       def validate_concurrency!(...) = ExecutionSupport.new(self).validate_concurrency!(...)
-
-      private_constant :DEFAULT_WRITER_TTL
     end
   end
 end
