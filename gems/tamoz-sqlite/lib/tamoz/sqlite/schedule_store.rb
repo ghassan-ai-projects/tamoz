@@ -26,6 +26,8 @@ module Tamoz
       REQUEST_DELIVERY = "queue"
       REQUEST_NAMESPACE = [].freeze
       ENQUEUE_CONTEXT_DOMAIN = "tamoz.sqlite.scheduler.enqueue.v1\n"
+      # Durable in-flight state for one schedule, from the occurrence rows.
+      OccurrenceState = Data.define(:non_terminal, :pending)
 
       def initialize(adapter:, checkpoints:)
         @adapter = adapter
@@ -40,7 +42,7 @@ module Tamoz
         now = now_ms
         payload = schedule.to_h
         bytes = Tamoz::Core.jcs(payload)
-        digest = Digest::SHA256.hexdigest(ENQUEUE_CONTEXT_DOMAIN + bytes)
+        digest = schedule_definition_digest(bytes)
         row = nil
         @adapter.__send__(:transaction, operation: "schedule.put") do |tx|
           current = tx.scalar(
@@ -59,20 +61,7 @@ module Tamoz
           # `enabled` is lifecycle STATE, not definition: an edit preserves the
           # current enabled flag unless the new definition explicitly sets it,
           # so a paused schedule stays paused across edits (critic repro J).
-          enabled = if schedule.enabled == false
-                      false
-                    elsif current
-                      tx.scalar(
-                        "schedule.put.enabled",
-                        <<~SQL,
-                          SELECT enabled FROM tamoz_schedules
-                          WHERE schedule_id = ? AND revision = ?
-                        SQL
-                        [schedule.id, current]
-                      ) == 1
-                    else
-                      true
-                    end
+          enabled = preserved_enabled?(schedule, current, tx)
           next_revision = (current || 0) + 1
           tx.execute(
             "schedule.put.insert",
@@ -140,61 +129,11 @@ module Tamoz
       # flag across edits (so an edit cannot silently un-pause a schedule), which
       # is exactly why resuming needs its own path rather than a re-put.
       def enable_schedule(id, expected_revision:)
-        now = now_ms
-        @adapter.__send__(:transaction, operation: "schedule.enable") do |tx|
-          current = tx.scalar(
-            "schedule.enable.revision",
-            <<~SQL,
-              SELECT revision FROM tamoz_schedules
-              WHERE schedule_id = ? AND deleted = 0
-              ORDER BY revision DESC LIMIT 1
-            SQL
-            [id]
-          )
-          unless current == expected_revision
-            raise Tamoz::Scheduler::StoreConflictError,
-                  "schedule #{id} is at revision #{current}, expected #{expected_revision}"
-          end
-          tx.execute(
-            "schedule.enable.update",
-            <<~SQL,
-              UPDATE tamoz_schedules
-              SET enabled = 1, updated_at_ms = ?
-              WHERE schedule_id = ? AND revision = ?
-            SQL
-            [now, id, current]
-          )
-        end
-        nil
+        update_schedule_enabled(id, expected_revision:, enabled_value: 1, operation: "schedule.enable")
       end
 
       def disable_schedule(id, expected_revision:, reason:)
-        now = now_ms
-        @adapter.__send__(:transaction, operation: "schedule.disable") do |tx|
-          current = tx.scalar(
-            "schedule.disable.revision",
-            <<~SQL,
-              SELECT revision FROM tamoz_schedules
-              WHERE schedule_id = ? AND deleted = 0
-              ORDER BY revision DESC LIMIT 1
-            SQL
-            [id]
-          )
-          unless current == expected_revision
-            raise Tamoz::Scheduler::StoreConflictError,
-                  "schedule #{id} is at revision #{current}, expected #{expected_revision}"
-          end
-          tx.execute(
-            "schedule.disable.update",
-            <<~SQL,
-              UPDATE tamoz_schedules
-              SET enabled = 0, updated_at_ms = ?
-              WHERE schedule_id = ? AND revision = ?
-            SQL
-            [now, id, current]
-          )
-        end
-        nil
+        update_schedule_enabled(id, expected_revision:, enabled_value: 0, operation: "schedule.disable")
       end
 
       # --- occurrences ------------------------------------------------------
@@ -250,19 +189,29 @@ module Tamoz
             )
             next unless schedule
 
-            begin
-              claim_one_schedule(
-                schedule, now:, owner:, limit:, request_template:,
-                current_grant:, tx:, include_provenance:
-              ).each { |value| claimed << value }
-            rescue Tamoz::Scheduler::StoreConflictError, Tamoz::CheckpointConflictError => error
-              # Plan §11: one schedule's conflict never crashes the poller.
-              # Record the conflict as a skipped reason and continue the scan.
-              record_scan_conflict(schedule, now, error.message, tx)
-            end
+            claim_with_conflict_record(
+              schedule, claimed,
+              now:, owner:, limit:, request_template:, current_grant:, tx:,
+              include_provenance:
+            )
           end
         end
         claimed
+      end
+
+      private
+
+      # Plan §11: one schedule's conflict never crashes the poller. Record the
+      # conflict as a skipped reason and continue the scan.
+      def claim_with_conflict_record(schedule, claimed, now:, owner:, limit:,
+                                     request_template:, current_grant:, tx:,
+                                     include_provenance:)
+        claim_one_schedule(
+          schedule, now:, owner:, limit:, request_template:,
+          current_grant:, tx:, include_provenance:
+        ).each { |value| claimed << value }
+      rescue Tamoz::Scheduler::StoreConflictError, Tamoz::CheckpointConflictError => error
+        record_scan_conflict(schedule, now, error.message, tx)
       end
 
       # The per-schedule claim body: grant intersection, due window, misfire
@@ -271,23 +220,10 @@ module Tamoz
       def claim_one_schedule(schedule, now:, owner:, limit:, request_template:,
                              current_grant:, tx:, include_provenance: true)
         claimed = []
-        # P13-C (invariant 40, claim-time): the stored maximum grant is a
-        # ceiling. `nil` current policy fails closed (nothing survives).
-        effective = Tamoz::Scheduler::GrantIntersector.effective_grant(
-          schedule.capability_grant, current_grant
-        )
-        if effective.nil?
-          record_grant_denied(schedule, now, tx)
-          return claimed
-        end
-        # Resolve a callable template ONCE per schedule, before it is merged or
-        # enqueued, so one scan can carry a different task per schedule.
-        resolved_template =
-          request_template.respond_to?(:call) ? request_template.call(schedule) : request_template
-        unless resolved_template.is_a?(Hash)
-          raise Tamoz::Scheduler::SchedulerError,
-                "request_template must be a Hash or return one, got #{resolved_template.class}"
-        end
+        effective = enforce_claim_grant(schedule, current_grant, now, tx)
+        return claimed unless effective
+
+        resolved_template = resolve_request_template(request_template, schedule)
 
         # The claim-time grant intersection rides in the payload for consumers
         # with an open payload schema. For a closed-schema consumer it is left
@@ -308,23 +244,60 @@ module Tamoz
         # P13-B (design §6): misfire policy decides what this scan
         # materializes vs. records as skipped. Deterministic, bounded.
         selection = schedule.misfire_selection(due)
-        non_terminal, pending = occurrence_state(schedule.id, tx)
+        inflight = occurrence_state(schedule.id, tx)
 
-        # P13-B (design §7): `forbid`/`queue_one` gate running-ahead against
-        # the DURABLE pre-scan state (a prior poll's in-flight occurrence
-        # blocks/coalesces THIS scan); `allow` re-evaluates per occurrence.
-        overlap = schedule.overlap_policy == :allow ? nil :
-                  schedule.overlap_decision(non_terminal:, pending:)
+        record_misfire_skips(schedule, selection, now:, tx:)
+        deliver_due(
+          schedule, due, selection:, claimed:, inflight:, now:, owner:,
+          claim_template:, tx:, include_provenance:
+        )
+        claimed
+      end
 
-        # Misfire-skipped instants are recorded as skipped history (never
-        # enqueued), per the policy's selection.
+      # P13-C (invariant 40, claim-time): the stored maximum grant is a
+      # ceiling. `nil` current policy fails closed (nothing survives); the
+      # denial is recorded and nil refuses the claim.
+      def enforce_claim_grant(schedule, current_grant, now, tx)
+        effective = Tamoz::Scheduler::GrantIntersector.effective_grant(
+          schedule.capability_grant, current_grant
+        )
+        record_grant_denied(schedule, now, tx) if effective.nil?
+        effective
+      end
+
+      # Resolve a callable template ONCE per schedule, before it is merged or
+      # enqueued, so one scan can carry a different task per schedule.
+      def resolve_request_template(request_template, schedule)
+        resolved =
+          request_template.respond_to?(:call) ? request_template.call(schedule) : request_template
+        unless resolved.is_a?(Hash)
+          raise Tamoz::Scheduler::SchedulerError,
+                "request_template must be a Hash or return one, got #{resolved.class}"
+        end
+        resolved
+      end
+
+      # Misfire-skipped instants are recorded as skipped history (never
+      # enqueued), per the policy's selection.
+      def record_misfire_skips(schedule, selection, now:, tx:)
         selection.fetch(:skipped).each do |fire_at|
           occurrence = build_occurrence(schedule, fire_at, now)
           next if occurrence_exists?(occurrence, tx)
 
-          record_terminal(schedule, occurrence, :skipped, "misfire", now, tx)
+          record_terminal(schedule, occurrence, state: :skipped, reason: "misfire", now:, tx:)
         end
+      end
 
+      # P13-B (design §7): `forbid`/`queue_one` gate running-ahead against the
+      # DURABLE pre-scan state (a prior poll's in-flight occurrence blocks/
+      # coalesces THIS scan); `allow` re-evaluates per occurrence so same-scan
+      # materializations count toward max_concurrency.
+      def deliver_due(schedule, due, selection:, claimed:, inflight:, now:, owner:,
+                      claim_template:, tx:, include_provenance:)
+        overlap = schedule.overlap_policy == :allow ? nil :
+                  schedule.overlap_decision(
+                    non_terminal: inflight.non_terminal, pending: inflight.pending
+                  )
         due.each do |fire_at|
           occurrence = build_occurrence(schedule, fire_at, now)
           next if occurrence_exists?(occurrence, tx)
@@ -334,45 +307,55 @@ module Tamoz
           # `not_before` (nominal instant + deterministic jitter) has passed.
           next if now < occurrence.not_before
 
-          # P13-B (design §7): overlap from DURABLE occurrence state — never
-          # a process-local mutex. `forbid`/`queue_one` gate running-ahead
-          # (evaluated against the pre-scan state once, so replay catch-up is
-          # not blocked by its own same-scan materializations); `allow` is
-          # re-evaluated per occurrence so same-scan materializations count
-          # toward max_concurrency.
           if schedule.overlap_policy == :allow
-            overlap = schedule.overlap_decision(non_terminal:, pending:)
-          end
-          case overlap
-          when :skip
-            if schedule.overlap_policy == :allow
-              # Backpressure, not a skip: the occurrence stays eligible for a
-              # later scan once concurrency frees (design §7 "exhaustion
-              # delays with a reason"). It is NOT recorded as terminal.
-              next
-            end
-            record_terminal(schedule, occurrence, :skipped, "overlap", now, tx)
-          when :coalesce
-            record_terminal(
-              schedule, occurrence, :coalesced,
-              "into pending occurrence", now, tx
+            overlap = schedule.overlap_decision(
+              non_terminal: inflight.non_terminal, pending: inflight.pending
             )
-          when :materialize
-            enqueue_occurrence(
-              schedule, occurrence, now, owner, claim_template, tx, include_provenance:
-            ).then { |value| claimed << value }
-            non_terminal += 1
-            pending += 1
           end
+          inflight = apply_overlap_decision(
+            schedule, occurrence, overlap, inflight, claimed,
+            now:, owner:, claim_template:, tx:, include_provenance:
+          )
         end
-        claimed
+        nil
+      end
+
+      # One due instant under the overlap decision. Returns the durable-state
+      # view after the instant — counters advance only on materialize.
+      def apply_overlap_decision(schedule, occurrence, overlap, inflight, claimed,
+                                 now:, owner:, claim_template:, tx:,
+                                 include_provenance:)
+        case overlap
+        when :skip
+          if schedule.overlap_policy == :allow
+            # Backpressure, not a skip: the occurrence stays eligible for a
+            # later scan once concurrency frees (design §7 "exhaustion
+            # delays with a reason"). It is NOT recorded as terminal.
+            return inflight
+          end
+          record_terminal(schedule, occurrence, state: :skipped, reason: "overlap", now:, tx:)
+        when :coalesce
+          record_terminal(
+            schedule, occurrence, state: :coalesced,
+            reason: "into pending occurrence", now:, tx:
+          )
+        when :materialize
+          enqueue_occurrence(
+            schedule, occurrence, now:, owner:, request_template: claim_template,
+            tx:, include_provenance:
+          ).then { |value| claimed << value }
+          inflight = inflight.with(
+            non_terminal: inflight.non_terminal + 1, pending: inflight.pending + 1
+          )
+        end
+        inflight
       end
 
       # P13-B internals ------------------------------------------------------
 
-      # Durable in-flight state for one schedule: [non_terminal, pending].
-      # `non_terminal` = claimed + enqueued + running; `pending` = enqueued
-      # only. Computed from the occurrence rows, never a process-local mutex.
+      # Durable in-flight state for one schedule. `non_terminal` = claimed +
+      # enqueued + running; `pending` = enqueued only. Computed from the
+      # occurrence rows, never a process-local mutex.
       def occurrence_state(schedule_id, tx)
         row = tx.first(
           "schedule.materialize.state",
@@ -385,7 +368,7 @@ module Tamoz
           SQL
           [schedule_id]
         )
-        [row.fetch(0).to_i, row.fetch(1).to_i]
+        OccurrenceState.new(non_terminal: row.fetch(0).to_i, pending: row.fetch(1).to_i)
       end
 
       def occurrence_exists?(occurrence, tx)
@@ -406,7 +389,7 @@ module Tamoz
           occurrence = build_occurrence(schedule, fire_at, now)
           next if occurrence_exists?(occurrence, tx)
 
-          record_terminal(schedule, occurrence, :skipped, "grant_revoked", now, tx)
+          record_terminal(schedule, occurrence, state: :skipped, reason: "grant_revoked", now:, tx:)
         end
       end
 
@@ -421,18 +404,18 @@ module Tamoz
         return if occurrence_exists?(occurrence, tx)
 
         record_terminal(
-          schedule, occurrence, :skipped,
-          "scan_conflict:#{message.to_s.byteslice(0, 128)}", now, tx
+          schedule, occurrence, state: :skipped,
+          reason: "scan_conflict:#{message.to_s.byteslice(0, 128)}", now:, tx:
         )
       end
 
       # Enqueue ONE occurrence: the deterministic request id is the dedup key
       # (invariant 38), so a retried delivery re-enqueues the same request row.
-      def enqueue_occurrence(schedule, occurrence, now, owner, request_template, tx,
-                             include_provenance: true)
+      def enqueue_occurrence(schedule, occurrence, now:, owner:, request_template:,
+                             tx:, include_provenance: true)
         thread, encoded_namespace = normalize_request_address(schedule)
         request_id = occurrence.request_id
-        payload = build_request_payload(schedule, occurrence, request_template, include_provenance)
+        payload = build_request_payload(schedule, occurrence, request_template, include_provenance:)
         payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
           REQUEST_OPERATION, payload
         )
@@ -473,7 +456,7 @@ module Tamoz
       # so history is queryable by request, but no request is enqueued. The
       # payload_digest column is NOT NULL, so the terminal reason digest fills
       # it (no request payload exists for a non-delivered occurrence).
-      def record_terminal(schedule, occurrence, state, reason, now, tx)
+      def record_terminal(schedule, occurrence, state:, reason:, now:, tx:)
         digest = "sha256:#{Digest::SHA256.hexdigest(
           ENQUEUE_CONTEXT_DOMAIN + "#{state}:#{reason}:#{occurrence.occurrence_id}"
         )}"
@@ -495,6 +478,8 @@ module Tamoz
         )
         nil
       end
+
+      public
 
       def renew_occurrence_lease(id, fence:, lease_for:)
         now = now_ms
@@ -635,8 +620,63 @@ module Tamoz
 
       # --- internals --------------------------------------------------------
 
+      private
+
       def now_ms
         (Time.now.to_r * 1000).to_i
+      end
+
+      # Shared write path behind the enable/disable twins: CAS on the latest
+      # revision, flip `enabled` in place; labels and SQL bytes are unchanged
+      # from the split twins this replaces.
+      def update_schedule_enabled(id, expected_revision:, enabled_value:, operation:)
+        now = now_ms
+        @adapter.__send__(:transaction, operation:) do |tx|
+          current = tx.scalar(
+            "#{operation}.revision",
+            <<~SQL,
+              SELECT revision FROM tamoz_schedules
+              WHERE schedule_id = ? AND deleted = 0
+              ORDER BY revision DESC LIMIT 1
+            SQL
+            [id]
+          )
+          unless current == expected_revision
+            raise Tamoz::Scheduler::StoreConflictError,
+                  "schedule #{id} is at revision #{current}, expected #{expected_revision}"
+          end
+          tx.execute(
+            "#{operation}.update",
+            <<~SQL,
+              UPDATE tamoz_schedules
+              SET enabled = #{Integer(enabled_value)}, updated_at_ms = ?
+              WHERE schedule_id = ? AND revision = ?
+            SQL
+            [now, id, current]
+          )
+        end
+        nil
+      end
+
+      # `enabled` is lifecycle STATE, not definition: an edit preserves the
+      # current enabled flag unless the new definition explicitly sets it, so
+      # a paused schedule stays paused across edits (critic repro J).
+      def preserved_enabled?(schedule, current_revision, tx)
+        return false if schedule.enabled == false
+        return true unless current_revision
+
+        tx.scalar(
+          "schedule.put.enabled",
+          <<~SQL,
+            SELECT enabled FROM tamoz_schedules
+            WHERE schedule_id = ? AND revision = ?
+          SQL
+          [schedule.id, current_revision]
+        ) == 1
+      end
+
+      def schedule_definition_digest(payload_bytes)
+        Digest::SHA256.hexdigest(ENQUEUE_CONTEXT_DOMAIN + payload_bytes)
       end
 
       def build_occurrence(schedule, fire_at, now)
@@ -656,7 +696,7 @@ module Tamoz
         [thread, Wire.namespace(REQUEST_NAMESPACE)].freeze
       end
 
-      def build_request_payload(schedule, occurrence, template, include_provenance = true)
+      def build_request_payload(schedule, occurrence, template, include_provenance:)
         base = template.dup
         return base unless include_provenance
 
