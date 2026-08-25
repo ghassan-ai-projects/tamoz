@@ -10,6 +10,8 @@ module Tamoz
       class SituationRecaller
         MAX_RECORDS = 64
         MAX_BYTES = 32 * 1024
+        SEARCH_OVERFETCH_FACTOR = 8
+        SEARCH_RESULT_CAP = 512
         CALLER = {
           user: "stream",
           project: "stream",
@@ -31,7 +33,7 @@ module Tamoz
           search = @engine.repository.search(
             caller: situation_caller(caller, snapshot),
             query: normalized_query(query),
-            limit: [normalized_limit * 8, 512].min
+            limit: [normalized_limit * SEARCH_OVERFETCH_FACTOR, SEARCH_RESULT_CAP].min
           )
           build_result(search, snapshot, normalized_limit)
         end
@@ -132,8 +134,8 @@ module Tamoz
 
         def episode_provenance(record)
           record.source_refs.find do |ref|
-            ref["identity"].to_s.start_with?("episode:") &&
-              !ref["identity"].to_s.delete_prefix("episode:").empty?
+            identity = ref["identity"].to_s
+            identity.start_with?("episode:") && !identity.delete_prefix("episode:").empty?
           end
         end
 
