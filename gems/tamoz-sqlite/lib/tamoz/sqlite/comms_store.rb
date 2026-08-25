@@ -923,28 +923,49 @@ module Tamoz
 
       # All pairing challenge rows, optionally filtered by status. The digest
       # is stored, never the plaintext code. Pending scans exclude expired
-      # challenges so they stop accumulating under the read path.
-      def pairing_challenges(status: nil, now: nil)
+      # challenges so they stop accumulating under the read path; the
+      # surface/correspondent filters run in SQL so per-sender scans stay
+      # bounded by that sender's own rows.
+      def pairing_challenges(status: nil, surface_id: nil, correspondent_id: nil, now: nil)
         read('comms.pairing.list') do |txn|
-          sql = "SELECT #{PAIRING_COLUMNS.join(', ')} FROM tamoz_comms_pairing_challenges"
+          clauses = []
           binds = []
-          unless status.nil?
-            sql << ' WHERE status = ?'
+          if status
+            clauses << 'status = ?'
             binds << status
             if status == 'pending'
-              sql << ' AND expires_at_ms > ?'
+              clauses << 'expires_at_ms > ?'
               binds << backend_now_ms(txn, now)
             end
           end
+          if surface_id
+            clauses << 'surface_id = ?'
+            binds << surface_id
+          end
+          if correspondent_id
+            clauses << 'correspondent_id = ?'
+            binds << correspondent_id
+          end
+          sql = "SELECT #{PAIRING_COLUMNS.join(', ')} FROM tamoz_comms_pairing_challenges"
+          sql << " WHERE #{clauses.join(' AND ')}" unless clauses.empty?
           sql << ' ORDER BY created_at_ms DESC'
           txn.rows('comms.pairing.list', sql, binds).map { |row| PAIRING_COLUMNS.zip(row).to_h }
         end
       end
 
       # Store the challenge digest for one unbound sender (idempotent on the
-      # digest; the plaintext code travels to the sender exactly once).
+      # digest; the plaintext code travels to the sender exactly once). Older
+      # LIVE pending challenges for the same (surface, correspondent,
+      # conversation) are superseded in the same transaction — one live code
+      # per triple — while consumed/expired rows stay for the audit trail.
       def insert_pairing_challenge(digest:, surface_id:, correspondent_id:, conversation_id:, expires_at:, now:)
         transaction('comms.pairing.insert') do |txn|
+          supersede_binds = [surface_id, correspondent_id, conversation_id, backend_now_ms(txn, now), digest]
+          txn.execute('comms.pairing.insert.supersede', <<~SQL, supersede_binds)
+            DELETE FROM tamoz_comms_pairing_challenges
+            WHERE surface_id = ? AND correspondent_id = ? AND conversation_id = ?
+              AND status = 'pending' AND expires_at_ms > ? AND challenge_digest != ?
+          SQL
           binds = [digest, surface_id, correspondent_id, conversation_id, now_ms(expires_at), now_ms(now)]
           txn.execute('comms.pairing.insert', <<~SQL, binds)
             INSERT OR IGNORE INTO tamoz_comms_pairing_challenges (
@@ -959,12 +980,14 @@ module Tamoz
       # Consume ONE pending challenge and write its binding in one transaction
       # (design §7): a crash between the two would leave a consumed challenge
       # that grants nothing. The caller verifies the code against the digest
-      # and builds the binding wire; this method is the atomic commit.
+      # and builds the binding wire; this method is the atomic commit. Expiry
+      # is re-checked HERE — where authority is actually granted — so an
+      # expired-but-still-pending row can never be approved.
       def approve_pairing(challenge_digest:, binding_wire:, now:)
         transaction('comms.pairing.approve') do |txn|
-          txn.execute('comms.pairing.approve.consume', <<~SQL, [challenge_digest])
+          txn.execute('comms.pairing.approve.consume', <<~SQL, [challenge_digest, backend_now_ms(txn, now)])
             UPDATE tamoz_comms_pairing_challenges SET status = 'consumed'
-            WHERE challenge_digest = ? AND status = 'pending'
+            WHERE challenge_digest = ? AND status = 'pending' AND expires_at_ms > ?
           SQL
           next :missing unless txn.changes == 1
 

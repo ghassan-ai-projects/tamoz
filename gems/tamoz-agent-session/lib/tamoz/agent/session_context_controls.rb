@@ -170,7 +170,7 @@ module Tamoz
           source = control_base(app, writer)
           observations = verbose_input(source, conversation)
           before_digest = SessionRecords.digest('input' => observations)
-          summarized = summarize_conversation(writer, source, observations)
+          summarized = summarize_conversation(writer, source, observations, request_id)
           record = compact_record(
             thread, request_id, before_digest, summarized,
             conversation.length, pinned_reference(observations)
@@ -373,7 +373,7 @@ module Tamoz
           end
       end
 
-      def summarize_conversation(writer, source, observations)
+      def summarize_conversation(writer, source, observations, request_id)
         compactor = SessionPlanningContext::BoundedCompactor.new(
           artifact_store: @artifact_store, tenant: @artifact_tenant
         )
@@ -382,7 +382,7 @@ module Tamoz
 
         compactor.summarize(
           result, effects: SessionEffects.new(configuration: compaction_configuration),
-                  durable_context: control_context(writer, source), phase: :read_only, iteration: 0
+                  durable_context: control_context(writer, source, request_id), phase: :read_only, iteration: 0
         )
       end
 
@@ -430,11 +430,15 @@ module Tamoz
         )
       end
 
-      def control_context(writer, source)
+      # The compact replay identity is the DETERMINISTIC control request id:
+      # a replay of the same control request resolves to the same effect
+      # logical identity and hits the recorded receipt instead of re-calling
+      # the model.
+      def control_context(writer, source, request_id)
         Tamoz::Context.new(
-          run_id: SecureRandom.uuid,
+          run_id: "context.compact/#{request_id}",
           execution_id: source.execution_id,
-          request_id: SecureRandom.uuid,
+          request_id: String(request_id),
           task_id: 'context.compact',
           effects: writer.effects
         )

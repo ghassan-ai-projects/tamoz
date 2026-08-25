@@ -1035,6 +1035,160 @@ class SQLiteCommsStoreTest < Minitest::Test
       end
     end
   end
+  # Expiry is enforced where authority is granted: a challenge that is still
+  # status-pending but past its expires_at_ms consumes zero rows, so the
+  # approve refuses typed instead of writing a binding.
+  def test_an_expired_pending_challenge_cannot_be_approved
+    with_engine do |store|
+      expired = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200
+      )
+      store.insert_pairing_challenge(
+        digest: expired.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: expired.expires_at, now: now - 7200
+      )
+      binding_wire = Comms::Binding.new(
+        surface_id: 'telegram-ops', surface_revision: 1,
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        bound_at: now, bound_by: 'operator:test'
+      ).wire
+
+      assert_equal :missing,
+                   store.approve_pairing(
+                     challenge_digest: expired.digest, binding_wire: binding_wire, now:
+                   ),
+                   'the consume UPDATE affects zero rows for an expired challenge'
+      assert_nil store.binding(correspondent_id: 'telegram:user:11111111', surface_id: 'telegram-ops')
+    end
+  end
+
+  def test_a_live_challenge_still_approves_and_consumes
+    with_engine do |store|
+      live = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:
+      )
+      store.insert_pairing_challenge(
+        digest: live.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: live.expires_at, now:
+      )
+      outcome = store.approve_pairing(
+        challenge_digest: live.digest,
+        binding_wire: Comms::Binding.new(
+          surface_id: 'telegram-ops', surface_revision: 1,
+          correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+          bound_at: now + 1, bound_by: 'operator:test'
+        ).wire,
+        now: now + 1
+      )
+
+      assert_equal :approved, outcome
+      assert_equal 'active',
+                   store.binding(correspondent_id: 'telegram:user:11111111',
+                                 surface_id: 'telegram-ops').fetch('status')
+    end
+  end
+
+  def test_retain_refuses_a_payload_above_the_artifact_ceiling
+    with_engine do |_store, adapter|
+      artifacts = adapter.bind_artifact_store(tenant: 'tenant.ceiling')
+      oversized = 'x' * (Tamoz::SQLite::ArtifactStore::MAX_ARTIFACT_BYTES + 1)
+      digest = "sha256:#{Digest::SHA256.hexdigest(oversized)}"
+
+      error = assert_raises(Tamoz::SQLite::ArtifactStore::ArtifactStoreError) do
+        artifacts.retain(digest:, bytes: oversized)
+      end
+
+      assert_match(/ceiling/, error.message)
+      assert_equal 0, artifacts.size, 'the refused payload is stored nowhere'
+    end
+  end
+
+  def test_retain_still_accepts_a_normal_compaction_envelope
+    with_engine do |_store, adapter|
+      artifacts = adapter.bind_artifact_store(tenant: 'tenant.ceiling')
+      envelope = 'p' * 60_000
+      retained = artifacts.retain(
+        digest: "sha256:#{Digest::SHA256.hexdigest(envelope)}", bytes: envelope
+      )
+
+      assert_match(/\Asha256:[0-9a-f]{64}\z/, retained.fetch('digest'))
+      assert_equal envelope.bytesize, artifacts.resolve("sha256:#{Digest::SHA256.hexdigest(envelope)}")
+                                          .fetch('bytes').bytesize
+    end
+  end
+
+  # One LIVE pending challenge per (surface, correspondent, conversation):
+  # issuing over older live rows supersedes them in the same transaction;
+  # other correspondents are untouched and consumed/expired rows stay for
+  # the audit trail.
+  def test_issue_supersedes_older_live_pending_challenges_for_the_same_triple
+    with_engine do |store|
+      expired = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now: now - 7200, code: 'EEEE5555'
+      )
+      store.insert_pairing_challenge(
+        digest: expired.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: expired.expires_at, now: now - 7200
+      )
+      other = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:99999999',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'DDDD4444'
+      )
+      store.insert_pairing_challenge(
+        digest: other.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:99999999', conversation_id: 'telegram:chat:22222222',
+        expires_at: other.expires_at, now:
+      )
+      codes = %w[AAAA1111 BBBB2222 CCCC3333].map do |code|
+        Tamoz::Comms::PairingChallenge.build(
+          surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+          conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code:
+        )
+      end
+      codes.each do |challenge|
+        store.insert_pairing_challenge(
+          digest: challenge.digest, surface_id: 'telegram-ops',
+          correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+          expires_at: challenge.expires_at, now:
+        )
+      end
+
+      pending = store.pairing_challenges(status: 'pending', surface_id: 'telegram-ops',
+                                         correspondent_id: 'telegram:user:11111111', now:)
+      all_rows = store.pairing_challenges
+
+      assert_equal [codes.last.digest], pending.map { |row| row.fetch('challenge_digest') },
+                   'three contacts leave exactly one live pending row for that correspondent'
+      assert_equal 3, all_rows.length,
+                   'the superseded rows are gone; the expired row and both survivors stay'
+    end
+  end
+
+  def test_pairing_challenges_filters_run_in_sql
+    with_engine do |store|
+      challenge = Tamoz::Comms::PairingChallenge.build(
+        surface_id: 'telegram-ops', correspondent_id: 'telegram:user:11111111',
+        conversation_id: 'telegram:chat:22222222', ttl_s: 3600, now:, code: 'FFFF6666'
+      )
+      store.insert_pairing_challenge(
+        digest: challenge.digest, surface_id: 'telegram-ops',
+        correspondent_id: 'telegram:user:11111111', conversation_id: 'telegram:chat:22222222',
+        expires_at: challenge.expires_at, now:
+      )
+
+      assert_empty store.pairing_challenges(status: 'pending', surface_id: 'telegram-other', now:)
+      assert_empty store.pairing_challenges(status: 'pending',
+                                            correspondent_id: 'telegram:user:22222222', now:)
+      assert_equal 1, store.pairing_challenges(surface_id: 'telegram-ops',
+                                               correspondent_id: 'telegram:user:11111111', now:).length
+    end
+  end
 end
 # rubocop:enable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 # rubocop:enable Metrics/BlockLength, Metrics/ClassLength

@@ -19,6 +19,10 @@ module Tamoz
         CATEGORY = "stream_artifact_store"
       end
 
+      # Generous above any real compaction envelope; a payload beyond it is
+      # refused at retention instead of landing unbounded in the database.
+      MAX_ARTIFACT_BYTES = 4 * 1024 * 1024
+
       def initialize(adapter:, tenant:)
         @adapter = adapter
         @tenant = String(tenant)
@@ -32,6 +36,10 @@ module Tamoz
         end
         unless bytes.is_a?(String) && !bytes.empty?
           raise ArtifactStoreError, "artifact retention requires a String document"
+        end
+        if bytes.bytesize > MAX_ARTIFACT_BYTES
+          raise ArtifactStoreError,
+                "artifact exceeds the #{MAX_ARTIFACT_BYTES} byte ceiling"
         end
         # The STRICT bytes column is TEXT: wire documents arrive as binary
         # (ASCII-8BIT) strings — tag them UTF-8 without altering the bytes, so

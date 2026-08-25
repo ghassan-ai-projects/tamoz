@@ -156,7 +156,46 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
+  # A controls builder that crashes (a missing credential, a boot failure)
+  # costs one bounded unavailable reply — the serve loop answers again on
+  # the next pass instead of dying.
+  def test_a_crashing_controls_builder_answers_unavailable_and_the_loop_survives
+    with_dual_surface do |surface|
+      crashing = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
+        workspace_root: surface.workspace,
+        adapter: surface.adapter,
+        artifact_store: surface.adapter.bind_artifact_store(tenant: 'channel:controls'),
+        model_builder: -> { raise StandardError, 'model boot failed' }
+      )
+      gateway = Comms::Gateway.new(
+        adapter: surface.adapter, checkpoints: surface.checkpoints, transport: surface.transport,
+        descriptor:, poller_owner: 'exposure:crash', controls: crashing
+      )
+      surface.admit(101, TURN_TEXT)
+
+      assert_equal Comms::Gateway::CONTROLS_UNAVAILABLE_REPLY,
+                   drive(gateway, surface.transport, '/think high', 400)
+      assert_equal Comms::Gateway::CONTROLS_UNAVAILABLE_REPLY,
+                   drive(gateway, surface.transport, '/usage', 401),
+                   'the loop survives and keeps answering bounded replies'
+    end
+  end
+
   private
+
+  def drive(gateway, transport, text, id)
+    transport.batch([ExposureUpdate.message(id, text)])
+    unless gateway.serve_once(now: NOW + id, drain: false) == :served
+      raise "command #{id} did not serve"
+    end
+
+    row = nil
+    gateway.instance_variable_get(:@store).outbox_rows(surface_id: SURFACE_ID,
+                                                       statuses: %w[pending claimed succeeded]).each do |candidate|
+      row = candidate if candidate.fetch('reply_to') == id + 10_000
+    end
+    row && row.fetch('text')
+  end
 
   def meaning(document)
     document.except(*VOLATILE_FIELDS)
@@ -164,14 +203,16 @@ class ContextControlExposureTest < Minitest::Test
 
   def bad_values(surface, thread)
     {
-      '/think maximum' => 'reasoning_depth must be one of low, medium, high (got "maximum")',
-      '/think' => 'reasoning_depth must be one of low, medium, high (got nil)',
-      '/verbose loud' => 'answer_verbosity must be one of quiet, normal, detailed (got "loud")'
+      '/think maximum' => 'Reasoning depth must be low, medium, or high.',
+      '/think' => 'Reasoning depth must be low, medium, or high.',
+      '/verbose loud' => 'Answer verbosity must be quiet, normal, or detailed.'
     }.each do |text, expected|
       reply = surface.command(text, 300 + text.length)
 
       assert_equal expected, reply
       refute_includes reply, "\n", 'the failure must stay one bounded line'
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES,
+                      'the fixed refusal never reflects the rejected argument bytes'
     end
     assert_equal 1, control_count(surface.session, thread)
   end
@@ -241,7 +282,7 @@ class ContextControlExposureTest < Minitest::Test
   # ===== harness =====
 
   Surface = Struct.new(:gateway, :transport, :store, :session, :recorded, :checkpoints,
-                       :workspace, :session_dir, keyword_init: true) do
+                       :workspace, :session_dir, :adapter, keyword_init: true) do
     def admit(id, text)
       transport.batch([ExposureUpdate.message(id, text)])
       raise "admission returned #{outcome}" unless gateway.serve_once(now: NOW + id, drain: false) == :served
@@ -316,7 +357,7 @@ class ContextControlExposureTest < Minitest::Test
           controls: ->(_thread) { recorded }
         )
         yield Surface.new(gateway:, transport:, store:, session: recorded, recorded:,
-                          checkpoints:, workspace:, session_dir:)
+                          checkpoints:, workspace:, session_dir:, adapter:)
       ensure
         adapter&.close
       end

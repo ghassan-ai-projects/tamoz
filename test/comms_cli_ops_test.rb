@@ -237,6 +237,28 @@ class CommsCliOpsTest < Minitest::Test
     end
   end
 
+  # The gateway's controls seam is crash-safe: a builder that raises (a
+  # missing model credential, a boot failure) answers nil — the bounded
+  # CONTROLS_UNAVAILABLE_REPLY path — and keeps answering on later calls.
+  def test_a_raising_controls_builder_answers_nil_and_stays_safe
+    Dir.mktmpdir('tamoz-controls-source') do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
+      begin
+        source = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
+          workspace_root: File.join(directory, 'workspace'),
+          adapter:,
+          artifact_store: adapter.bind_artifact_store(tenant: 'channel:controls'),
+          model_builder: -> { raise StandardError, 'model boot failed' }
+        )
+
+        assert_nil source.call('thread.controls'), 'the raising builder maps to nil'
+        assert_nil source.call('thread.controls'), 'the seam survives and answers again'
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
   private
 
   def with_store(rt)

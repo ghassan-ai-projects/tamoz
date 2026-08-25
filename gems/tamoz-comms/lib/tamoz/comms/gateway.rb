@@ -63,6 +63,14 @@ module Tamoz
       CONTROLS_NO_SESSION_REPLY =
         'No session state exists for this conversation yet; send a task first.'.freeze
 
+      # Fixed bounded refusals for the typed preference controls. The session
+      # layer's ArgumentError message can echo the raw argument bytes, so it
+      # never reaches a reply — these constants are the whole answer.
+      CONTROL_ARGUMENT_REFUSALS = {
+        'think' => 'Reasoning depth must be low, medium, or high.',
+        'verbose' => 'Answer verbosity must be quiet, normal, or detailed.'
+      }.freeze
+
       # Store-projection states the Lifecycle tables do not name resolve here
       # first: the checkpoint inbox statuses and the admitted-but-unclaimed
       # sentinel. The Lifecycle translation after this still fails closed.
@@ -242,12 +250,17 @@ module Tamoz
                                             reason: decision.reason.to_s, now:)
           append_control(decision.control_reply, envelope, now:) if decision.control_reply
         when :control
-          @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
-                                            now:)
-          if decision.command_intent
-            handle_command(envelope, decision, now:)
-          elsif decision.control_reply
-            append_control(decision.control_reply, envelope, now:)
+          if control_inbound_too_large?(envelope)
+            refuse_admission(envelope, :inbound_too_large, now:)
+          else
+            @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored',
+                                              reason: decision.reason.to_s,
+                                              now:)
+            if decision.command_intent
+              handle_command(envelope, decision, now:)
+            elsif decision.control_reply
+              append_control(decision.control_reply, envelope, now:)
+            end
           end
         else
           @store.disposition_only(envelope, surface_id:, bot_id:, disposition: 'ignored', reason: decision.reason.to_s,
@@ -389,9 +402,30 @@ module Tamoz
         # state changed between the original attempt and the replay.
         return if outcome == :duplicate
 
+        refuse_admission(envelope, outcome, now:)
+      end
+
+      # One typed admission refusal: the durable disposition plus exactly one
+      # bounded reply; nothing is enqueued.
+      def refuse_admission(envelope, outcome, now:)
         disposition, reply = ADMISSION_REFUSALS.fetch(outcome)
         @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason: outcome.to_s, now:)
         append_control(reply, envelope, now:)
+      end
+
+      # Commands are bounded by the same declared intake limit as task text.
+      # The DEPLOYED surface row is the authority — read through the same
+      # store seam admission enforces from — never the caller's descriptor
+      # copy, which can drift from the durable deployment.
+      def control_inbound_too_large?(envelope)
+        text = envelope.fetch('text')
+        return false unless text
+
+        text.bytesize > deployed_max_inbound_bytes
+      end
+
+      def deployed_max_inbound_bytes
+        @store.surface(surface_id:).fetch('limits').fetch('max_inbound_bytes')
       end
 
       # A bound conversation admits onto the thread its DURABLE GENERATION
@@ -481,8 +515,8 @@ module Tamoz
         return CONTROLS_UNAVAILABLE_REPLY unless controls
 
         Comms::ControlReply.line(intent.name, run_context_control(controls, thread, envelope, intent))
-      rescue ArgumentError => e
-        e.message
+      rescue ArgumentError
+        CONTROL_ARGUMENT_REFUSALS.fetch(intent.name, CONTROLS_UNAVAILABLE_REPLY)
       rescue Tamoz::CheckpointConflictError
         CONTROLS_NO_SESSION_REPLY
       end
@@ -539,11 +573,9 @@ module Tamoz
       end
 
       def pending_pairing_rows(envelope, now)
-        @store.pairing_challenges(status: 'pending', now:).select do |row|
-          row.fetch('surface_id') == surface_id &&
-            row.fetch('correspondent_id') == envelope.fetch('correspondent_id') &&
-            row.fetch('expires_at_ms') > pairing_ms(now)
-        end
+        @store.pairing_challenges(status: 'pending', surface_id:,
+                                  correspondent_id: envelope.fetch('correspondent_id'), now:)
+                  .select { |row| row.fetch('conversation_id') == envelope.fetch('conversation_id') }
       end
 
       # Reuses this conversation's live pending row when its plaintext is
@@ -581,10 +613,6 @@ module Tamoz
         )
         @issued_pairing_codes[challenge.digest] = code
         code
-      end
-
-      def pairing_ms(now)
-        (now.utc.to_r * 1000).to_i
       end
 
       # `/status` with no argument renders the conversation aggregate from
@@ -802,11 +830,14 @@ module Tamoz
       end
 
       def append_control(reply_text, envelope, now:, kind: 'control')
+        # Belt-and-braces: a control reply can never fail the delivery build
+        # on length, whatever an upstream layer produced.
+        text = String(reply_text).scrub.byteslice(0, Comms::Delivery::MAX_TEXT_BYTES)
         delivery = Comms::Delivery.build(
           conversation_id: envelope.fetch('conversation_id'), reply_to: reply_target(envelope), kind:,
-          text: reply_text, part_index: 0, part_count: 1, journaled: false,
+          text:, part_index: 0, part_count: 1, journaled: false,
           render_version: Comms::Rendering::RENDER_VERSION,
-          content_digest: Comms::Rendering.content_digest(reply_text)
+          content_digest: Comms::Rendering.content_digest(text)
         )
         @store.append_delivery(delivery.wire, surface_id:, capacity: control_capacity, now:)
       end

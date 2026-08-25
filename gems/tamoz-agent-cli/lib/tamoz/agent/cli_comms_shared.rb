@@ -36,8 +36,13 @@ module Tamoz
           @monitor = Monitor.new
         end
 
+        # A crashing builder (a missing model credential, a boot failure)
+        # answers nil — the gateway's bounded CONTROLS_UNAVAILABLE_REPLY —
+        # instead of taking the serve loop down.
         def call(_thread_id)
           @monitor.synchronize { @session ||= build }
+        rescue StandardError
+          nil
         end
 
         private

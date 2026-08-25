@@ -11,7 +11,7 @@ require_relative 'test_helper'
 class CommsGatewayTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  def with_gateway(limits: {})
+  def with_gateway(limits: {}, controls: nil)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -39,7 +39,7 @@ class CommsGatewayTest < Minitest::Test
         transport = ScriptedTransport.new
         gateway = Tamoz::Comms::Gateway.new(
           adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
-          poller_owner: 'gateway:test'
+          poller_owner: 'gateway:test', controls:
         )
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
@@ -650,6 +650,107 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  # The poison-argument surface is frozen: a /think argument of ~1400 CJK
+  # characters gets the FIXED short refusal — never the session layer's
+  # ArgumentError text, which would echo the raw argument bytes back.
+  def test_an_oversized_cjk_think_argument_gets_the_fixed_bounded_refusal
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(2, text: "/think #{'思' * 1400}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal 'Reasoning depth must be low, medium, or high.', reply
+      refute_includes(reply, '思')
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES
+      assert_empty controls.calls, 'the refused preference executes no control'
+    end
+  end
+
+  def test_a_bad_verbose_argument_gets_its_own_fixed_bounded_refusal
+    controls = ScriptedControls.new
+    with_gateway(controls: ->(_thread) { controls }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(1, text: 'work')])
+      gateway.serve_once(drain: false)
+      transport.batch([update(2, text: "/verbose #{'大' * 1400}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+
+      assert_equal 'Answer verbosity must be quiet, normal, or detailed.', reply
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES
+    end
+  end
+
+  # Belt-and-braces at the single choke point: whatever a control handler
+  # produced, the delivery build can never raise on reply length.
+  def test_append_control_clamps_oversized_reply_text_to_the_delivery_ceiling
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      envelope = transport.normalize(update(1, text: '/help'))
+
+      gateway.send(:append_control, '字' * 5000, envelope, now: Time.utc(2026, 8, 10, 12, 0, 0))
+
+      reply = appended.last.fetch('text')
+
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES,
+                      'a delivery build can never raise from control-reply length'
+    end
+  end
+
+  def test_every_fixed_control_reply_constant_fits_the_delivery_ceiling
+    replies = Tamoz::Comms::Gateway.constants.sort
+                                         .filter_map { |name| Tamoz::Comms::Gateway.const_get(name) }
+                                         .select { |value| value.is_a?(String) }
+
+    refute_empty replies
+    replies.each do |reply|
+      assert_operator reply.bytesize, :<=, Comms::Delivery::MAX_TEXT_BYTES,
+                      "#{reply.inspect} exceeds Delivery::MAX_TEXT_BYTES"
+    end
+  end
+
+  # The declared inbound limit covers COMMAND/control-kind updates too: an
+  # oversized command refuses typed with the same bounded wording as an
+  # oversized message and creates no request row.
+  def test_an_oversized_command_refuses_with_the_bounded_reply_and_no_request_row
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      transport.batch([update(330, text: "/status #{'x' * 40}")])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+
+      assert_equal [%w[rejected inbound_too_large]], inbound_dispositions(store, 330)
+      assert_equal 0, request_row_count(store), 'the oversized command creates no request row'
+      assert_empty checkpoints.request_history(thread_id: thread)
+      replies = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                     .select { |row| row.fetch('kind') == 'control' }
+
+      assert_equal ["That message exceeds this channel's size limit."], replies.map { |row| row.fetch('text') }
+    end
+  end
+
+  def test_a_within_limit_command_still_passes_the_size_gate
+    with_gateway(limits: { max_inbound_bytes: 32 }) do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(331, text: '/help')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal [%w[ignored command]], inbound_dispositions(store, 331)
+      assert_equal Tamoz::Comms::Gateway::HELP_REPLY, appended.last.fetch('text')
+    end
+  end
+
   private
 
   def build_checkpoints(adapter)
@@ -660,6 +761,40 @@ class CommsGatewayTest < Minitest::Test
       edge :finish, Tamoz::END
     end
     definition.compile(checkpointer: adapter).checkpointer
+  end
+
+  # A scripted session-controls seam for gateway-level control tests: the
+  # real SessionContextControls validation semantics (typed ArgumentError on
+  # a bad preference) without constructing a Session.
+  class ScriptedControls
+    attr_reader :calls
+
+    def initialize
+      @calls = []
+    end
+
+    def set_reasoning_depth(thread:, request_id:, depth:)
+      unless %w[low medium high].include?(depth)
+        raise ArgumentError, "reasoning_depth must be one of low, medium, high (got #{depth.inspect})"
+      end
+
+      @calls << [:think, depth]
+      projection('think')
+    end
+
+    def set_answer_verbosity(thread:, request_id:, verbosity:)
+      unless %w[quiet normal detailed].include?(verbosity)
+        raise ArgumentError, "answer_verbosity must be one of quiet, normal, detailed (got #{verbosity.inspect})"
+      end
+
+      @calls << [:verbose, verbosity]
+      projection('verbose')
+    end
+
+    def projection(control)
+      Struct.new(:document).new('control' => control, 'generation' => 1,
+                                'preferences' => {}, 'truncated_fragments' => 0)
+    end
   end
 
   # A scripted Transport for the loop: batches of raw updates, optional

@@ -271,6 +271,56 @@ class SessionContextControlsTest < Minitest::Test
     end
   end
 
+  # The compact's effect identity derives from the DETERMINISTIC control
+  # request id: replaying the same control request resolves to the recorded
+  # receipt instead of calling the model a second time.
+  def test_a_replayed_compact_request_id_resolves_the_recorded_receipt
+    summary_text = "The user asked to change the value; it is done."
+    Dir.mktmpdir("tamoz-context-compact-replay") do |directory|
+      workspace = File.join(directory, "workspace")
+      FileUtils.mkdir_p(workspace)
+      initial = ("#{'p' * 60}\n" * 300) + "value = 1\n"
+      File.write(File.join(workspace, "app.rb"), initial)
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.sqlite3"))
+      store = adapter.bind_artifact_store(tenant: "tenant.replay")
+      begin
+        model = ScriptedModel.new(Digest::SHA256.hexdigest(initial), JSON.generate("summary" => summary_text))
+        session = Tamoz::Agent::Session.new(
+          model:,
+          toolbox: Tamoz::Agent::Toolbox.new(
+            root: File.realpath(workspace),
+            allow_changes: true,
+            checks: {
+              "answer" => [RbConfig.ruby, "-e",
+                           %q{abort("wrong") unless File.read("app.rb") == "value = 2\n"}]
+            }
+          ),
+          checkpointer: adapter,
+          artifact_store: store,
+          artifact_tenant: "tenant.replay"
+        )
+        complete_turn(session)
+        compact_calls = lambda do
+          model.calls.count { |call| call.start_with?("context_compact") }
+        end
+        baseline = compact_calls.call
+
+        first = session.compact_transcript(thread: THREAD, request_id: "r.compact.replay")
+
+        assert_equal baseline + 1, compact_calls.call
+
+        second = session.compact_transcript(thread: THREAD, request_id: "r.compact.replay")
+
+        assert_equal baseline + 1, compact_calls.call,
+                     'the replay hit the recorded receipt instead of the model'
+        assert_equal first.record.fetch("summary_digest"), second.record.fetch("summary_digest")
+        assert_equal 2, control_count(session)
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
   def test_read_only_controls_change_no_durable_state
     with_session do |session, workspace|
       complete_turn(session)
