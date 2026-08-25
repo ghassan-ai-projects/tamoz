@@ -142,3 +142,28 @@
 ### stream.rb
 - Bar: gem entry manifest (requires + module doc).
 - Status: left alone
+
+## Post-review cleanups
+
+### live_learning_handlers.rb
+- Extracted `approval_event_digest(kind, data)` to remove the repeated
+  `Tamoz::Core.digest("tamoz/stream/approval-<kind>/v1\n", data)` pattern.
+- Extracted `already_withdrawn?(receipt, event_digest)` predicate.
+
+### verification_store.rb
+- Extracted `reference_hash(row)` from `reference` to remove inline wire-hash
+  plumbing.
+
+### decision_builder.rb
+- Extracted `DecisionBuilder.with_digest(decision)` shared by `build` and
+  `build_decision` so document construction no longer mixes with digest
+  computation.
+- Extracted `intent_with_digest(intent)` from `build_intent`.
+- Extracted `ensure_watch_allowlisted!` and `evidence_ids` helpers.
+
+### situation_request.rb
+- Fixed behavior-preserving bugs discovered during test run:
+  - `fail_stream` now returns the stream so rescue blocks can yield events.
+  - `model_started` event data restored `provider` and `model_id` fields.
+- Refactored `diagnose?`/`reconsider?` to compare against the already-mapped
+  `kind` instead of re-looking up `KIND_NAMES`.
