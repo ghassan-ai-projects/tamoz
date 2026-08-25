@@ -177,10 +177,11 @@ module Tamoz
           "#{label}.row"
         )
         guard_backend_clock!(row.fetch(3), now)
+        current_expiry = row.fetch(2)
         unless row.fetch(0) == lease.owner_id &&
                row.fetch(1) == lease.fence &&
-               row.fetch(2) &&
-               row.fetch(2) > now
+               current_expiry &&
+               current_expiry > now
           raise LeaseLostError, "lease is expired or fenced by another owner"
         end
 
@@ -205,7 +206,7 @@ module Tamoz
 
       def backend_time(tx, label)
         value = tx.scalar(label, Wire::BACKEND_TIME_SQL)
-        unless value.is_a?(Integer) && !value.negative?
+        unless value.is_a?(Integer) && value >= 0
           raise ClockRollbackError, "SQLite backend time is invalid"
         end
 
