@@ -80,7 +80,7 @@ module Tamoz
         version = document.dig("runtime", "schema_version")
         return [:already_current, directory] if version == SCHEMA_VERSION
 
-        ensure_legacy_schema!(version)
+        validate_schema_version!(document)
 
         migrated = migrated_document(document)
         # The whole migrated document must validate before anything is written:
@@ -251,13 +251,6 @@ module Tamoz
 
         def read_config_document(config_path)
           Psych.safe_load_file(config_path, permitted_classes: [], aliases: false)
-        end
-
-        def ensure_legacy_schema!(version)
-          return if version == LEGACY_SCHEMA_VERSION
-
-          raise Error, "runtime configuration schema_version #{version.inspect} " \
-                       "is not supported (expected #{SCHEMA_VERSION} or #{LEGACY_SCHEMA_VERSION})"
         end
 
         def migrated_document(document)
