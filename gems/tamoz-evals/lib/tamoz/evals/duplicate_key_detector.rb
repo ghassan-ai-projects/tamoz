@@ -8,6 +8,9 @@ module Tamoz
     class DuplicateKeyDetector
       MAX_NESTING = 100
       WHITESPACE = [" ", "\t", "\r", "\n"].freeze
+      SCALAR_TERMINATORS = (WHITESPACE + [",", "]", "}"]).freeze
+      BACKSLASH_BYTE = 0x5c
+      QUOTE_BYTE = 0x22
 
       def self.validate!(text)
         new(text).validate!
@@ -94,9 +97,9 @@ module Tamoz
 
           if escaped
             escaped = false
-          elsif byte == 0x5c
+          elsif byte == BACKSLASH_BYTE
             escaped = true
-          elsif byte == 0x22
+          elsif byte == QUOTE_BYTE
             literal = @text.byteslice(start...@index)
             return JSON.parse(literal)
           elsif byte < 0x20
@@ -109,7 +112,7 @@ module Tamoz
 
       def parse_scalar
         start = @index
-        @index += 1 until eof? || WHITESPACE.include?(current) || [",", "]", "}"].include?(current)
+        @index += 1 until eof? || SCALAR_TERMINATORS.include?(current)
         token = @text.byteslice(start...@index)
         JSON.parse(token)
       end
