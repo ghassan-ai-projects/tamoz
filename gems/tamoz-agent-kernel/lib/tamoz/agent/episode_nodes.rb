@@ -66,18 +66,7 @@ module Tamoz
           raise EpisodeFrameError, "episode_recall/tenant_mismatch"
         end
 
-        identity = {
-          "situation_id" => snapshot.fetch("situation_id"),
-          "situation_version" => snapshot.fetch("situation_version"),
-          "tenant" => tenant,
-          "limit" => 64
-        }
-        logical = ModelCall::LogicalCallKey.new(
-          episode_id: String(episode.fetch("episode_id")),
-          stage: "recall",
-          slot: 0,
-          request_digest: "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(identity))}"
-        )
+        logical = recall_logical_key(episode, recall_identity(snapshot, tenant))
         outcome = EffectDispatcher.run(
           context:,
           operation: RECALL_OPERATION,
@@ -87,34 +76,12 @@ module Tamoz
           actor: "tamoz.agent.episode.recall",
           logical_key: logical
         ) do
-          result = @situation_recaller.recall(
-            caller: @recall_caller, snapshot:, query: {terms: []}, limit: 64
+          validated_recall_payload(
+            @situation_recaller.recall(
+              caller: @recall_caller, snapshot:, query: {terms: []}, limit: 64
+            ),
+            tenant:
           )
-          unless result.respond_to?(:projections) && result.respond_to?(:record_digests)
-            raise EpisodeFrameError, "episode_recall/result_invalid"
-          end
-
-          projections = Array(result.projections).map do |projection|
-            unless projection.is_a?(Hash)
-              raise EpisodeFrameError, "episode_recall/projection_not_object"
-            end
-            # P5: a misbehaving recaller returning ANOTHER tenant's memory is
-            # refused — the projections are cross-checked against the episode
-            # tenant (the situation identity is the recall key, not a scope
-            # field).
-            scopes = projection["scopes"]
-            unless scopes.is_a?(Hash) && scopes["tenant"].to_s == tenant
-              raise EpisodeFrameError, "episode_recall/projection_scope_mismatch"
-            end
-
-            projection
-          end
-          record_digests = Array(result.record_digests).map(&:to_s)
-          unless record_digests == projections.map { |projection| projection["digest"] }
-            raise EpisodeFrameError, "episode_recall/digests_mismatch"
-          end
-
-          {"situation_memory" => projections, "memory_record_digests" => record_digests}
         end
 
         case outcome.status
@@ -205,22 +172,7 @@ module Tamoz
         parsed = state.fetch(:reconsideration)
         commands = Array(parsed["commands"]).first(MAX_COMMANDS)
         invalidated = invalidated_command_ids(parsed, commands)
-        judgements = commands.map do |command|
-          command_id = String(command.fetch("command_id", "")).byteslice(0, 256)
-          intent_type = String(command.fetch("intent_type", "")).byteslice(0, 256)
-          if invalidated.include?(command_id)
-            if %w[pending queued scheduled].include?(String(command.fetch("status", "")))
-              {"command_id" => command_id, "intent_type" => intent_type,
-               "decision" => "withdraw", "reason" => "corrected before dispatch"}
-            else
-              {"command_id" => command_id, "intent_type" => intent_type,
-               "decision" => "downgrade", "reason" => "effect exists; correction explains the initial signal"}
-            end
-          else
-            {"command_id" => command_id, "intent_type" => intent_type,
-             "decision" => "let_stand", "reason" => "correction does not reference this command"}
-          end
-        end
+        judgements = commands.map { |command| judgement_for(command, invalidated) }
         {"judgements" => judgements}
       end
 
@@ -250,7 +202,7 @@ module Tamoz
         decision, digest = @decision_builder.build_decision(
           intents:, episode:, snapshot:,
           snapshot_digest: episode.fetch("snapshot_sha256", ""),
-          summary: compensation_summary(intents, compensations, judgements),
+          summary: compensation_summary(compensations, judgements),
           now:
         )
         {"decision" => decision, "decision_digest" => digest}
@@ -319,6 +271,23 @@ module Tamoz
           Array(correction["explains"]).map(&:to_s) + referenced
       end
 
+      def judgement_for(command, invalidated)
+        command_id = String(command.fetch("command_id", "")).byteslice(0, 256)
+        intent_type = String(command.fetch("intent_type", "")).byteslice(0, 256)
+        if invalidated.include?(command_id)
+          if %w[pending queued scheduled].include?(String(command.fetch("status", "")))
+            {"command_id" => command_id, "intent_type" => intent_type,
+             "decision" => "withdraw", "reason" => "corrected before dispatch"}
+          else
+            {"command_id" => command_id, "intent_type" => intent_type,
+             "decision" => "downgrade", "reason" => "effect exists; correction explains the initial signal"}
+          end
+        else
+          {"command_id" => command_id, "intent_type" => intent_type,
+           "decision" => "let_stand", "reason" => "correction does not reference this command"}
+        end
+      end
+
       # Assembles the frame: verifies the diagnosis catalog bytes against the
       # wire digest, verifies the prompt digest, resolves the digest-pinned
       # skill refs, and builds the trusted policy section + untrusted
@@ -331,17 +300,12 @@ module Tamoz
       def build_frame(state, _context)
         wire = state.fetch(:wire)
         snapshot = state.fetch(:snapshot)
-        catalog = DiagnosisCatalog.verify_wire(
-          wire.fetch("diagnosis_catalog_json"),
-          wire.fetch("diagnosis_catalog_sha256")
-        )
+        catalog = verified_diagnosis_catalog(wire)
         IntentCatalog.verify_wire(
           wire.fetch("intent_catalog_json"),
           wire.fetch("intent_catalog_sha256")
         )
-        skills = SkillSet.verify_wire(
-          wire.fetch("skill_refs_json", ""), source: @skills_source
-        )
+        skills = verified_skills(wire)
         memory = memory_entries(state)
         frame = @frame_builder_factory.call(
           catalog, wire.fetch("objective", "")
@@ -361,7 +325,7 @@ module Tamoz
       # RUNNER turns the journal-verified receipt into wire model events.
       def reason(state, context)
         episode = state.fetch(:episode)
-        frame = frame_from(state.fetch(:frame))
+        frame = required_frame(state.fetch(:frame))
         role = state.fetch(:role)
         budget = budget_controller(state)
         # P2: the budget check is PRE-DISPATCH — exhaustion raises typed
@@ -371,28 +335,16 @@ module Tamoz
         # P2: the wire ordinal is the model call's position in THIS episode —
         # a loop episode emits distinct ordinals (0, 1, ...), never a collision.
         ordinal = Array(state.fetch(:model_receipts, [])).length
-        invocation = ModelCall::InvocationIdentity.new(
-          attempt_id: episode.fetch("attempt_id"),
-          fence: Integer(episode.fetch("fence")),
-          graph_task: "reason",
-          stage: "reason",
-          global_ordinal: ordinal
-        )
         result = model_call.call(
           context:,
           episode_id: episode.fetch("episode_id"),
-          invocation:,
+          invocation: invocation_identity(episode, ordinal),
           slot: 0,
           system: frame.fetch("system"),
           prompt: frame.fetch("user"),
           frame_digest: frame["digest"]
         )
-        if result.unknown?
-          raise ProtocolError, "episode model call is unknown (no blind retry)"
-        end
-        if result.failed?
-          raise ProtocolError, "episode model call failed"
-        end
+        enforce_successful_outcome!(result, subject: "model")
 
         budget_state = budget.reconcile_model(
           state.fetch(:budget_state, nil), result.receipt.usage
@@ -435,7 +387,9 @@ module Tamoz
         request = document.fetch("tool_requests").first
         tool_name = request.fetch("name")
         arguments = request.fetch("arguments") || {}
-        validate_tool_request!(state, tool_name, arguments)
+        validate_tool_request!(
+          state.fetch(:wire).fetch("tool_catalog_json", "").to_s, tool_name, arguments
+        )
 
         episode = state.fetch(:episode)
         budget = budget_controller(state)
@@ -448,12 +402,7 @@ module Tamoz
           tool_name:,
           arguments:
         )
-        if result.unknown?
-          raise ProtocolError, "episode tool call is unknown (no blind retry)"
-        end
-        if result.failed?
-          raise ProtocolError, "episode tool call failed"
-        end
+        enforce_successful_outcome!(result, subject: "tool")
 
         {
           "tool_results" => [result.projection],
@@ -470,13 +419,8 @@ module Tamoz
       def rebuild_frame(state, _context)
         wire = state.fetch(:wire)
         snapshot = state.fetch(:snapshot)
-        catalog = DiagnosisCatalog.verify_wire(
-          wire.fetch("diagnosis_catalog_json"),
-          wire.fetch("diagnosis_catalog_sha256")
-        )
-        skills = SkillSet.verify_wire(
-          wire.fetch("skill_refs_json", ""), source: @skills_source
-        )
+        catalog = verified_diagnosis_catalog(wire)
+        skills = verified_skills(wire)
         frame = @frame_builder_factory.call(
           catalog, wire.fetch("objective", "")
         ).build(
@@ -530,8 +474,58 @@ module Tamoz
 
       private
 
+      def recall_identity(snapshot, tenant)
+        {
+          "situation_id" => snapshot.fetch("situation_id"),
+          "situation_version" => snapshot.fetch("situation_version"),
+          "tenant" => tenant,
+          "limit" => 64
+        }
+      end
+
+      def recall_logical_key(episode, identity)
+        ModelCall::LogicalCallKey.new(
+          episode_id: String(episode.fetch("episode_id")),
+          stage: "recall",
+          slot: 0,
+          request_digest: "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(identity))}"
+        )
+      end
+
+      def validated_recall_payload(result, tenant:)
+        unless result.respond_to?(:projections) && result.respond_to?(:record_digests)
+          raise EpisodeFrameError, "episode_recall/result_invalid"
+        end
+
+        projections = scoped_projections(result.projections, tenant)
+        record_digests = Array(result.record_digests).map(&:to_s)
+        unless record_digests == projections.map { |projection| projection["digest"] }
+          raise EpisodeFrameError, "episode_recall/digests_mismatch"
+        end
+
+        {"situation_memory" => projections, "memory_record_digests" => record_digests}
+      end
+
+      def scoped_projections(projections, tenant)
+        Array(projections).map do |projection|
+          unless projection.is_a?(Hash)
+            raise EpisodeFrameError, "episode_recall/projection_not_object"
+          end
+          # P5: a misbehaving recaller returning ANOTHER tenant's memory is
+          # refused — the projections are cross-checked against the episode
+          # tenant (the situation identity is the recall key, not a scope
+          # field).
+          scopes = projection["scopes"]
+          unless scopes.is_a?(Hash) && scopes["tenant"].to_s == tenant
+            raise EpisodeFrameError, "episode_recall/projection_scope_mismatch"
+          end
+
+          projection
+        end
+      end
+
       def validated_document(state)
-        frame = frame_from(state.fetch(:frame))
+        frame = required_frame(state.fetch(:frame))
         raw = state.fetch(:raw_response)
         if raw.nil? || raw.empty?
           raise ProtocolError, "episode has no model response to validate"
@@ -574,8 +568,8 @@ module Tamoz
         end
       end
 
-      def compensation_summary(intents, compensations, judgements)
-        return "reconsideration: #{judgements.length} compensation(s) proposed" if intents == compensations
+      def compensation_summary(compensations, judgements)
+        return "reconsideration: #{judgements.length} compensation(s) proposed" unless compensations.empty?
 
         "reconsideration: no compensation within the ceiling"
       end
@@ -586,12 +580,30 @@ module Tamoz
         ReceiptBudgetController.new(state.fetch(:wire).fetch("budget", nil))
       end
 
+      def invocation_identity(episode, ordinal)
+        ModelCall::InvocationIdentity.new(
+          attempt_id: episode.fetch("attempt_id"),
+          fence: Integer(episode.fetch("fence")),
+          graph_task: "reason",
+          stage: "reason",
+          global_ordinal: ordinal
+        )
+      end
+
+      def enforce_successful_outcome!(result, subject:)
+        if result.unknown?
+          raise ProtocolError, "episode #{subject} call is unknown (no blind retry)"
+        end
+        if result.failed?
+          raise ProtocolError, "episode #{subject} call failed"
+        end
+      end
+
       # Fail closed: the requested tool must be named in the wire's tool
       # catalog and the arguments must be a bounded mapping.
-      def validate_tool_request!(state, tool_name, arguments)
-        catalog = state.fetch(:wire).fetch("tool_catalog_json", "").to_s
-        unless catalog.empty?
-          parsed = Tamoz::Core.parse_json_strict(catalog)
+      def validate_tool_request!(tool_catalog_json, tool_name, arguments)
+        unless tool_catalog_json.empty?
+          parsed = Tamoz::Core.parse_json_strict(tool_catalog_json)
           names = Array(parsed).map { |entry| entry.fetch("name", nil) }
           unless names.include?(tool_name)
             raise ProtocolError, "episode_tool/not_in_catalog: #{tool_name}"
@@ -612,6 +624,19 @@ module Tamoz
         ""
       end
 
+      def verified_diagnosis_catalog(wire)
+        DiagnosisCatalog.verify_wire(
+          wire.fetch("diagnosis_catalog_json"),
+          wire.fetch("diagnosis_catalog_sha256")
+        )
+      end
+
+      def verified_skills(wire)
+        SkillSet.verify_wire(
+          wire.fetch("skill_refs_json", ""), source: @skills_source
+        )
+      end
+
       def frame_projection(frame)
         {
           "system" => frame.system,
@@ -623,7 +648,7 @@ module Tamoz
         }
       end
 
-      def frame_from(projection)
+      def required_frame(projection)
         projection || raise(EpisodeFrameError, "episode_frame/missing")
       end
 
