@@ -46,25 +46,25 @@
 
 ## Must-pass criteria
 
-- [ ] B1 Scope: only owned production/docs paths changed; forbidden interfaces and tests
+- [x] B1 Scope: only owned production/docs paths changed; forbidden interfaces and tests
       are untouched.
-- [ ] B2 File assessment: every gem file has a candidate decision recorded in `TODO.md`;
+- [x] B2 File assessment: every gem file has a candidate decision recorded in `TODO.md`;
       changed files name the reading-order defect there and unchanged files have a reason.
-- [ ] B3 Story: each changed public/top-level function states its workflow in domain
+- [x] B3 Story: each changed public/top-level function states its workflow in domain
       order without lower-level parsing, collection, serialization, or byte mechanics.
-- [ ] B4 Abstraction: each changed function stays at one coherent level and calls named
+- [x] B4 Abstraction: each changed function stays at one coherent level and calls named
       operations one level below it.
-- [ ] B5 Names: every extracted or renamed function states intent or a domain concept;
+- [x] B5 Names: every extracted or renamed function states intent or a domain concept;
       no `process_*`, `handle_*`, `do_*`, or wrapper-only helpers are introduced.
-- [ ] B6 Restraint: no duplicated capability, speculative handling, compatibility shim,
+- [x] B6 Restraint: no duplicated capability, speculative handling, compatibility shim,
       narrative comment, or unrelated cleanup is introduced.
-- [ ] B7 Preservation: the final focused and required repository checks pass, and the
+- [x] B7 Preservation: the final focused and required repository checks pass, and the
       diff plus tests provide evidence for the listed behavior contract.
-- [ ] B8 Architecture: the post-change Enola snapshot is comparable to the pinned
+- [x] B8 Architecture: the post-change Enola snapshot is comparable to the pinned
       baseline and introduces no unexpected cycle, layer violation, coupling, or spillover.
-- [ ] B9 Hygiene: created files are mode `0644`; no scratch files or unrelated changes
+- [x] B9 Hygiene: created files are mode `0644`; no scratch files or unrelated changes
       remain; the final commit contains only this task.
-- [ ] B10 Review: the independent read-only reviewer returns `PASS` against this exact
+- [x] B10 Review: the independent read-only reviewer returns `PASS` against this exact
        bar after all corrections.
 
 ## Deferred gates
