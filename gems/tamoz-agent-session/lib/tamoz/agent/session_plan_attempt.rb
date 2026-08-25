@@ -30,7 +30,7 @@ module Tamoz
         call = plan_call(context, details)
         return blocked_result(call, details) unless call.status == :succeeded
 
-        details = details.with(ambiguity: increment(details.ambiguity, call))
+        details = details.with(ambiguity: next_ambiguity(details.ambiguity, call))
         plan, feedback = parse_plan(call, details)
         return result(details, feedback:) unless plan
 
@@ -67,7 +67,7 @@ module Tamoz
         )
       end
 
-      def increment(ambiguity, call)
+      def next_ambiguity(ambiguity, call)
         ambiguity + (call.attempt_number > 1 ? 1 : 0)
       end
 
@@ -90,7 +90,7 @@ module Tamoz
       def record_plan(plan, details)
         plan_hash = Tamoz::Agent::Deliberation.canonical(plan.to_h)
         plan_digest = SessionRecords.digest(plan_hash)
-        details.plans << plan_record(details, plan_hash, plan_digest)
+        details.plans << build_plan_record(details, plan_hash, plan_digest)
         [PlanData.new(plan:, plan_hash:, plan_digest:, plan_id: details.plan_id), details.feedback]
       rescue Tamoz::SensitiveValueError => e
         details.reviews << SessionRecords.build(
@@ -106,7 +106,7 @@ module Tamoz
         [nil, [e.message]]
       end
 
-      def plan_record(details, plan_hash, plan_digest)
+      def build_plan_record(details, plan_hash, plan_digest)
         SessionRecords.build(
           'plan',
           plan_id: details.plan_id,
@@ -145,7 +145,7 @@ module Tamoz
         call = semantic_call(context, details, plan_data)
         return blocked_result(call, details) unless call.status == :succeeded
 
-        details = details.with(ambiguity: increment(details.ambiguity, call))
+        details = details.with(ambiguity: next_ambiguity(details.ambiguity, call))
         review, feedback = parse_review(call, details)
         return result(details, feedback:) unless review
 
@@ -154,7 +154,6 @@ module Tamoz
         result(details, feedback: review.fetch('issues'), update:)
       end
 
-      # rubocop:disable Metrics/AbcSize -- the review prompt intentionally binds every visible capability surface.
       def semantic_call(context, details, plan_data)
         @services.effects.model_call(
           context,
@@ -166,18 +165,21 @@ module Tamoz
             phase: details.phase,
             evidence: details.evidence,
             planning_context: details.planning_context,
-            tool_descriptions: Tamoz::Agent::Deliberation.merge_tool_surfaces(
-              @services.configuration.toolbox.descriptions.merge(
-                @services.configuration.capabilities.descriptions
-              ),
-              details.allowed_tools,
-              details.mcp_tools
-            )
+            tool_descriptions: visible_tool_descriptions(details)
           ),
           call_index: (details.attempt * 2) + 1
         )
       end
-      # rubocop:enable Metrics/AbcSize
+
+      def visible_tool_descriptions(details)
+        Tamoz::Agent::Deliberation.merge_tool_surfaces(
+          @services.configuration.toolbox.descriptions.merge(
+            @services.configuration.capabilities.descriptions
+          ),
+          details.allowed_tools,
+          details.mcp_tools
+        )
+      end
 
       def semantic_record(plan_data, review)
         SessionRecords.build(
