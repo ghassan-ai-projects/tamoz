@@ -98,8 +98,8 @@ module Tamoz
           result = runtime.action!
           gate.finish!
           result
-        rescue ExecutionError
-          primary_error = $!
+        rescue ExecutionError => error
+          primary_error = error
           raise
         rescue StandardError => error
           primary_error = error
@@ -117,21 +117,13 @@ module Tamoz
         private
 
         def validate_path!(value)
-          unless value.is_a?(String) &&
-                 value.valid_encoding? &&
-                 !value.empty? &&
-                 value.bytesize <= MAX_PATH_BYTES &&
-                 File.absolute_path(value) == value
+          unless valid_path_shape?(value)
             raise ExecutionError, "SQLite scenario path is invalid"
           end
           if File.exist?(value) || File.symlink?(value)
             raise ExecutionError, "SQLite scenario path must be absent"
           end
-          parent = File.dirname(value)
-          stat = File.lstat(parent)
-          unless stat.directory? &&
-                 stat.uid == Process.euid &&
-                 (stat.mode & 0o077).zero?
+          unless private_parent?(File.dirname(value))
             raise ExecutionError,
                   "SQLite scenario parent must be private and owned"
           end
@@ -140,6 +132,21 @@ module Tamoz
           raise ExecutionError.new(
             "SQLite scenario parent is invalid"
           ), cause: error
+        end
+
+        def valid_path_shape?(value)
+          value.is_a?(String) &&
+            value.valid_encoding? &&
+            !value.empty? &&
+            value.bytesize <= MAX_PATH_BYTES &&
+            File.absolute_path(value) == value
+        end
+
+        def private_parent?(parent)
+          stat = File.lstat(parent)
+          stat.directory? &&
+            stat.uid == Process.euid &&
+            (stat.mode & 0o077).zero?
         end
 
         private_constant :DEFINITION, :DEFINITION_DIGEST, :MAX_PATH_BYTES
