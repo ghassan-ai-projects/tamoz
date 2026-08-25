@@ -39,35 +39,79 @@ module Tamoz
       # construction-time port is the test-injection fallback. Neither → a
       # typed ConfigurationError, never a nil crash.
       def call(context:, episode_id:, slot:, tool_name:, arguments:)
-        tool_port = (context && context.episode_tools) || @tool_port
-        unless tool_port&.respond_to?(:execute)
-          raise ConfigurationError,
-                "episode tool call requires a capability host (episode_tools)"
-        end
+        tool_port = resolve_tool_port(context)
+        request_digest = digest_request(tool_name:, arguments:)
+        logical = build_logical_call_key(episode_id:, slot:, request_digest:)
+        outcome = dispatch_tool_call(
+          context:, tool_port:, slot:, tool_name:, arguments:, logical:
+        )
+        map_outcome(outcome, logical:, request_digest:)
+      end
 
+      private
+
+      def resolve_tool_port(context)
+        tool_port = (context && context.episode_tools) || @tool_port
+        return tool_port if tool_port&.respond_to?(:execute)
+
+        raise ConfigurationError,
+              "episode tool call requires a capability host (episode_tools)"
+      end
+
+      def digest_request(tool_name:, arguments:)
         request_bytes = Tamoz::Core.jcs(
           {"tool" => tool_name, "arguments" => arguments}
         )
-        request_digest = "sha256:#{Digest::SHA256.hexdigest(request_bytes)}"
-        logical = ModelCall::LogicalCallKey.new(
+        "sha256:#{Digest::SHA256.hexdigest(request_bytes)}"
+      end
+
+      def build_logical_call_key(episode_id:, slot:, request_digest:)
+        ModelCall::LogicalCallKey.new(
           episode_id:, stage: "tool", slot:, request_digest:
         )
-        outcome = EffectDispatcher.run(
+      end
+
+      def dispatch_tool_call(context:, tool_port:, slot:, tool_name:, arguments:, logical:)
+        call_index = Integer(slot)
+        request = dispatch_request(slot:, tool_name:, arguments:, logical:)
+        EffectDispatcher.run(
           context:,
           operation: OPERATION,
           safety: :unsafe,
-          call_index: Integer(slot),
-          request: {
-            "stage" => "tool", "slot" => Integer(slot),
-            "tool" => tool_name, "arguments" => arguments,
-            "logical_call_key" => logical.to_key
-          },
+          call_index:,
+          request:,
           actor: "tamoz.agent.episode.execute_tool",
           logical_key: logical
         ) do
-          perform_call(tool_port, tool_name, arguments)
+          execute_tool(tool_port, tool_name, arguments)
         end
+      end
 
+      def dispatch_request(slot:, tool_name:, arguments:, logical:)
+        {
+          "stage" => "tool", "slot" => Integer(slot),
+          "tool" => tool_name, "arguments" => arguments,
+          "logical_call_key" => logical.to_key
+        }
+      end
+
+      def execute_tool(tool_port, tool_name, arguments)
+        result = tool_port.execute(tool_name, arguments)
+        build_effect_value(tool_name:, result:)
+      end
+
+      def build_effect_value(tool_name:, result:)
+        {
+          "tool" => tool_name,
+          "is_error" => result.fetch("is_error", false),
+          "error_code" => result["error_code"],
+          "result_json" => result.fetch("json").to_s,
+          "result_sha256" => "sha256:#{Digest::SHA256.hexdigest(result.fetch('json').to_s)}",
+          "result_bytes" => result.fetch("json").to_s.bytesize
+        }
+      end
+
+      def map_outcome(outcome, logical:, request_digest:)
         case outcome.status
         when :succeeded
           Result.new(
@@ -81,20 +125,6 @@ module Tamoz
         else
           raise ProtocolError, "unexpected episode tool effect status: #{outcome.status.inspect}"
         end
-      end
-
-      private
-
-      def perform_call(tool_port, tool_name, arguments)
-        result = tool_port.execute(tool_name, arguments)
-        {
-          "tool" => tool_name,
-          "is_error" => result.fetch("is_error", false),
-          "error_code" => result["error_code"],
-          "result_json" => result.fetch("json").to_s,
-          "result_sha256" => "sha256:#{Digest::SHA256.hexdigest(result.fetch('json').to_s)}",
-          "result_bytes" => result.fetch("json").to_s.bytesize
-        }
       end
 
       def codec_projection(outcome, logical:, request_digest:)
