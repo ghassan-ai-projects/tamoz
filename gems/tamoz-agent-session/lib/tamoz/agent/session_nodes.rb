@@ -87,19 +87,13 @@ module Tamoz
         transcript_reader: nil,
         graph_version: GraphVersions::GRAPH_VERSION
       )
-        @model = model
+        graph_version = String(graph_version).freeze
         @toolbox = toolbox
         @max_plan_attempts = max_plan_attempts
         @max_repair_attempts = max_repair_attempts
         @model_call_safety = model_call_safety
         @profile = profile
         @mcp = mcp
-        @memory = memory
-        @memory_owner = memory_owner
-        @graph_version = String(graph_version).freeze
-        @profile_roles = profile_roles
-        @profile_budgets = profile_budgets
-        @profile_narrowed = profile_narrowed
         verify_profile_roles!(profile_roles)
         @capabilities = CapabilityBinding.build(toolbox:, mcp:, child_task_runtime:, profile:)
 
@@ -122,13 +116,13 @@ module Tamoz
           artifact_tenant:,
           child_task_runtime:,
           capabilities: @capabilities,
-          graph_version: @graph_version
+          graph_version:
         )
         @memory_nodes = SessionMemory.new(configuration:)
         @bindings = SessionBindings.new(
           configuration:,
           memory: @memory_nodes,
-          graph_version: @graph_version
+          graph_version:
         )
         @planning_context = SessionPlanningContext.new(
           configuration:,
@@ -137,17 +131,17 @@ module Tamoz
           artifact_store:,
           tenant: artifact_tenant
         )
-        @plan_outcomes = SessionPlanOutcomes.new(configuration:)
-        @effects = SessionEffects.new(configuration:)
-        @evidence = SessionEvidence.new(configuration:)
+        plan_outcomes = SessionPlanOutcomes.new(configuration:)
+        effects = SessionEffects.new(configuration:)
+        evidence = SessionEvidence.new(configuration:)
         services = NodeServices.new(
           configuration:,
           memory: @memory_nodes,
           bindings: @bindings,
           planning_context: @planning_context,
-          plan_outcomes: @plan_outcomes,
-          effects: @effects,
-          evidence: @evidence
+          plan_outcomes:,
+          effects:,
+          evidence:
         )
         @routing = SessionRouting.new(services:)
         @adaptive = SessionAdaptive.new(services:)
