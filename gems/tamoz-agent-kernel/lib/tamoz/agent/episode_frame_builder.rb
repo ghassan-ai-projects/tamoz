@@ -51,22 +51,14 @@ module Tamoz
         facts = build_facts(snapshot)
         system = build_system(prompt)
         user = build_user(facts, skills, memory, tool_results, repair_directive)
-        bytes = Tamoz::Core.jcs(
-          {"system" => system, "user" => user, "catalog" => @catalog.canonical}
-        )
-        evidence_ids = (
-          facts.map { |entry| "fact:#{entry.fetch("id")}" } +
-          Array(skills).map { |entry| "skill:#{entry.name}" } +
-          Array(memory).map { |entry| "memory:#{entry.fetch("digest")}" } +
-          Array(tool_results).each_index.map { |index| "tool:#{index}" }
-        )
+        canonical = {"system" => system, "user" => user, "catalog" => @catalog.canonical}
+        evidence_ids = build_evidence_ids(facts, skills, memory, tool_results)
         Frame.new(
           system:,
           user:,
           facts:,
           evidence_ids: evidence_ids.freeze,
-          digest: Tamoz::Core.digest(FRAME_DOMAIN,
-                                    {"system" => system, "user" => user, "catalog" => @catalog.canonical}),
+          digest: Tamoz::Core.digest(FRAME_DOMAIN, canonical),
           catalog: @catalog
         )
       end
@@ -173,6 +165,15 @@ module Tamoz
             "result_bytes" => result.fetch("result_bytes", 0)
           }
         end
+      end
+
+      def build_evidence_ids(facts, skills, memory, tool_results)
+        (
+          facts.map { |entry| "fact:#{entry.fetch("id")}" } +
+          Array(skills).map { |entry| "skill:#{entry.name}" } +
+          Array(memory).map { |entry| "memory:#{entry.fetch("digest")}" } +
+          Array(tool_results).each_index.map { |index| "tool:#{index}" }
+        )
       end
     end
   end
