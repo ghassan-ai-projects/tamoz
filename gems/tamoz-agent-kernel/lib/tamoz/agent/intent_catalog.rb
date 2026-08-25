@@ -109,16 +109,13 @@ module Tamoz
       def self.validated_parameter_schema(raw, type)
         schema = raw[:parameter_schema] || raw["parameter_schema"]
         schema_digest = raw[:parameter_schema_digest] || raw["parameter_schema_digest"]
-        schema_bytes = Tamoz::Core.jcs(schema) if schema
-        if schema.nil?
-          raise IntentCatalogError, "intent_catalog/missing_schema: #{type}"
-        end
+        raise IntentCatalogError, "intent_catalog/missing_schema: #{type}" if schema.nil?
+
         unless schema.is_a?(Hash) && schema["type"] == "object"
           raise IntentCatalogError, "intent_catalog/schema_not_object: #{type}"
         end
-        if schema_digest &&
-           Tamoz::Core.normalize_digest(schema_digest.to_s) !=
-           "sha256:#{Digest::SHA256.hexdigest(schema_bytes)}"
+        computed = "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(schema))}"
+        if schema_digest && Tamoz::Core.normalize_digest(schema_digest.to_s) != computed
           raise IntentCatalogError, "intent_catalog/schema_digest_mismatch: #{type}"
         end
 
@@ -145,12 +142,12 @@ module Tamoz
         end
 
         rate_limit = raw[:rate_limit] || raw["rate_limit"]
-        unless rate_limit.nil?
-          unless rate_limit.is_a?(Hash) &&
-                 rate_limit["per_hour"].is_a?(Integer) && rate_limit["per_hour"].positive?
-            raise IntentCatalogError,
-                  "intent_catalog/bad_rate_limit: #{type} (per_hour must be a positive integer)"
-          end
+        unless rate_limit.nil? ||
+               (rate_limit.is_a?(Hash) &&
+                rate_limit["per_hour"].is_a?(Integer) &&
+                rate_limit["per_hour"].positive?)
+          raise IntentCatalogError,
+                "intent_catalog/bad_rate_limit: #{type} (per_hour must be a positive integer)"
         end
 
         [description, rate_limit]
