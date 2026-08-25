@@ -67,6 +67,7 @@ module Tamoz
         @checkpoints = checkpoints
         @outbox = CommsOutbox.new(adapter:)
         @routes = CommsRoutes.new(adapter:)
+        @decisions = CommsDecisionStore.new(adapter:)
       end
 
       # ===== surfaces =====
@@ -136,24 +137,11 @@ module Tamoz
 
           insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'request', reason: 'accepted', now:)
           request_id = request_id_for(envelope_wire, bot_id)
-          request_binds = [request_id, surface_id, envelope_wire.fetch('surface_revision'),
-                           envelope_wire.fetch('conversation_id'), thread, profile_id,
-                           reservation, now_ms(now), now_ms(now)]
-          txn.execute('comms.admit.request.upsert', <<~SQL, request_binds)
-            INSERT OR IGNORE INTO tamoz_comms_requests (
-              request_id, surface_id, surface_revision, conversation_id,
-              thread_id, profile_id, reservation, projection_state,
-              created_at_ms, updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?)
-          SQL
-          payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(
-            REQUEST_OPERATION,
+          insert_admitted_request!(txn, request_id, envelope_wire,
+                                   surface_id:, thread:, profile_id:, reservation:, now:)
+          payload_bytes, payload_digest, input_digest = encode_request(
+            REQUEST_OPERATION, REQUEST_DELIVERY,
             turn_payload(envelope_wire.fetch('text'), history, thread:, request_id:)
-          )
-          payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
-          input_digest = Wire.digest(
-            JSON.generate([REQUEST_OPERATION, REQUEST_DELIVERY, payload_bytes]),
-            domain: 'tamoz.sqlite.request'
           )
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
@@ -305,12 +293,7 @@ module Tamoz
       # leaves neither. Every still-admitted request on the thread is stamped —
       # the user asked to stop this conversation's open work.
       def request_cancellation(thread_id:, request_id:, payload:, now:)
-        payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(CANCEL_OPERATION, payload)
-        payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
-        input_digest = Wire.digest(
-          JSON.generate([CANCEL_OPERATION, CANCEL_DELIVERY, payload_bytes]),
-          domain: 'tamoz.sqlite.request'
-        )
+        payload_bytes, payload_digest, input_digest = encode_request(CANCEL_OPERATION, CANCEL_DELIVERY, payload)
         transaction('comms.request.cancel') do |txn|
           stamp_cancellation_requested!(txn, thread_id:, now:)
           @checkpoints.enqueue_request_in_transaction!(
@@ -375,9 +358,9 @@ module Tamoz
           active = active_request_row(txn, surface_id, conversation_id)
           # The active request projects on the thread it was ADMITTED to: after
           # /new rotates the generation, the route row's thread no longer names it.
-          status_projection(txn, surface_id, conversation_id,
-                            (active && active.fetch(2)) || route.fetch(0),
-                            active && active.fetch(0), now:)
+          thread_id = active&.fetch(2) || route.fetch(0)
+          request_id = active&.fetch(0)
+          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
         end
       end
 
@@ -444,7 +427,7 @@ module Tamoz
         }
         base.merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
             .merge(cancellation_document(txn, request_id, now))
-            .merge(conversation_runtime_status(base, surface_id, conversation_id))
+            .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
       end
 
       # The durable cancellation timeline of one request (plan 03, work item
@@ -536,9 +519,7 @@ module Tamoz
         txn.scalar('comms.conversation.status.backend_time', BACKEND_TIME_SQL)
       end
 
-      def conversation_runtime_status(route_status, surface_id, conversation_id)
-        thread_id = route_status.fetch('thread_id')
-        request_id = route_status.fetch('request_id')
+      def conversation_runtime_status(thread_id, request_id, surface_id, conversation_id)
         {
           'task_state' => task_state_for(thread_id, request_id),
           'effect_state' => effect_state_for(thread_id, request_id),
@@ -638,7 +619,7 @@ module Tamoz
       end
 
       def effect_statuses(thread_id)
-        state = @checkpoints.latest(thread_id:, namespace: [], validate_identity: false)&.state
+        state = session_checkpoint(thread_id)&.state
         statuses = Array(state&.fetch(:effect_receipts, nil)).filter_map do |row|
           row.fetch('status', nil).to_s
         end
@@ -662,7 +643,7 @@ module Tamoz
         return 'not_started' unless @checkpoints
         return 'not_started' unless request_id
 
-        checkpoint = @checkpoints.latest(thread_id:, namespace: [], validate_identity: false)
+        checkpoint = session_checkpoint(thread_id)
         session = checkpoint&.state&.fetch(:session, nil)
         events = lifecycle_events_for(checkpoint, request_id)
         return 'invoked' if capability_invoked?(events)
@@ -672,12 +653,12 @@ module Tamoz
       end
 
       def terminal_reason_for(thread_id, request_id)
-        checkpoint = @checkpoints&.latest(thread_id:, namespace: [], validate_identity: false)
+        checkpoint = session_checkpoint(thread_id)
         lifecycle_events_for(checkpoint, request_id).last&.fetch('terminal_reason', nil)
       end
 
       def lifecycle_status_for(thread_id, request_id)
-        checkpoint = @checkpoints&.latest(thread_id:, namespace: [], validate_identity: false)
+        checkpoint = session_checkpoint(thread_id)
         event = lifecycle_events_for(checkpoint, request_id).last
         unless event
           return {
@@ -843,7 +824,7 @@ module Tamoz
           SQL
           next :not_consumable unless txn.changes == 1
 
-          CommsDecisionStore.new(adapter: @adapter).insert_decision_in_transaction!(txn, decision_wire)
+          @decisions.insert_decision_in_transaction!(txn, decision_wire)
           :consumed
         end
       end
@@ -949,24 +930,7 @@ module Tamoz
       # bounded by that sender's own rows.
       def pairing_challenges(status: nil, surface_id: nil, correspondent_id: nil, now: nil)
         read('comms.pairing.list') do |txn|
-          clauses = []
-          binds = []
-          if status
-            clauses << 'status = ?'
-            binds << status
-            if status == 'pending'
-              clauses << 'expires_at_ms > ?'
-              binds << backend_now_ms(txn, now)
-            end
-          end
-          if surface_id
-            clauses << 'surface_id = ?'
-            binds << surface_id
-          end
-          if correspondent_id
-            clauses << 'correspondent_id = ?'
-            binds << correspondent_id
-          end
+          clauses, binds = pairing_filters(txn, status:, surface_id:, correspondent_id:, now:)
           sql = "SELECT #{PAIRING_COLUMNS.join(', ')} FROM tamoz_comms_pairing_challenges"
           sql << " WHERE #{clauses.join(' AND ')}" unless clauses.empty?
           sql << ' ORDER BY created_at_ms DESC'
@@ -1037,6 +1001,58 @@ module Tamoz
           WHERE thread_id = ? AND cancellation_requested_at_ms IS NOT NULL
             AND cancellation_observed_at_ms IS NULL
         SQL
+      end
+
+      def encode_request(operation_text, delivery_text, payload)
+        payload_bytes = @checkpoints.checkpoint_codec.dump_request_payload(operation_text, payload)
+        payload_digest = Wire.digest(payload_bytes, domain: 'tamoz.sqlite.request_payload')
+        input_digest = Wire.digest(
+          JSON.generate([operation_text, delivery_text, payload_bytes]),
+          domain: 'tamoz.sqlite.request'
+        )
+        [payload_bytes, payload_digest, input_digest]
+      end
+
+      def insert_admitted_request!(txn, request_id, envelope_wire, surface_id:, thread:, profile_id:,
+                                   reservation:, now:)
+        binds = [request_id, surface_id, envelope_wire.fetch('surface_revision'),
+                 envelope_wire.fetch('conversation_id'), thread, profile_id,
+                 reservation, now_ms(now), now_ms(now)]
+        txn.execute('comms.admit.request.upsert', <<~SQL, binds)
+          INSERT OR IGNORE INTO tamoz_comms_requests (
+            request_id, surface_id, surface_revision, conversation_id,
+            thread_id, profile_id, reservation, projection_state,
+            created_at_ms, updated_at_ms
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'admitted', ?, ?)
+        SQL
+      end
+
+      # validate_identity: false -- the latest row belongs to the session graph;
+      # this checkpointer compiles against the channel-gateway graph.
+      def session_checkpoint(thread_id)
+        @checkpoints&.latest(thread_id:, namespace: [], validate_identity: false)
+      end
+
+      def pairing_filters(txn, status:, surface_id:, correspondent_id:, now:)
+        clauses = []
+        binds = []
+        if status
+          clauses << 'status = ?'
+          binds << status
+          if status == 'pending'
+            clauses << 'expires_at_ms > ?'
+            binds << backend_now_ms(txn, now)
+          end
+        end
+        if surface_id
+          clauses << 'surface_id = ?'
+          binds << surface_id
+        end
+        if correspondent_id
+          clauses << 'correspondent_id = ?'
+          binds << correspondent_id
+        end
+        [clauses, binds]
       end
 
       # Declared intake limits read from the DEPLOYED surface row inside the
