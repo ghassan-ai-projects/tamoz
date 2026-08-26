@@ -23,9 +23,7 @@ require_relative 'comms/rendering'
 require_relative 'comms/transport'
 require_relative 'comms/delivery_sink'
 require_relative 'comms/comms_store'
-require_relative 'comms/gateway'
 require_relative 'comms/outbox_delivery_sink'
-require_relative 'comms/delivery_drainer'
 
 module Tamoz
   # Communication channels (ADR-041): one contract gem owning the channel

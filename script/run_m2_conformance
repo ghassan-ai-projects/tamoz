@@ -3,12 +3,14 @@
 
 require "fileutils"
 require "json"
+require "optparse"
 require "rbconfig"
 require "time"
 
-$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
 require "tamoz/graph"
-require "tamoz/evals"
+require "tamoz/evals/runner"
 
 ROOT = File.expand_path("..", __dir__).freeze
 CASE_ROOT = File.join(ROOT, "gems", "tamoz-evals", "suites", "m2", "graph").freeze
@@ -139,10 +141,19 @@ def verify_execution_isolation!
   sandbox_name
 end
 
-unless ARGV.length == 1
-  warn "Usage: run_m2_conformance OUTPUT_DIRECTORY"
+manifest_path = nil
+OptionParser.new do |parser|
+  parser.on("--input-manifest PATH", "external runner input manifest") { |path| manifest_path = path }
+end.parse!(ARGV)
+manifest_path ||= ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+unless ARGV.length == 1 && manifest_path
+  warn "Usage: run_m2_conformance OUTPUT_DIRECTORY --input-manifest PATH"
   exit 64
 end
+Tamoz::Evals::Runner::InputManifest.from_path(
+  manifest_path,
+  package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+)
 
 dirty = !git("status", "--porcelain", "--untracked-files=normal").empty?
 unless !dirty || ENV["TAMOZ_ALLOW_DIRTY_EVIDENCE"] == "1"

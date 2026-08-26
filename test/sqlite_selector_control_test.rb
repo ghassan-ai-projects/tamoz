@@ -757,7 +757,7 @@ class SQLiteSelectorControlTest < Minitest::Test
   def child_command(layout, scenario, selector, calls: 1)
     descriptor = layout.descriptor
     script = <<~RUBY
-      require "tamoz/evals"
+      require "tamoz/evals/runner"
       require "tamoz/sqlite"
       control = Tamoz::Evals::Harness.const_get(:SQLiteSelectorControl, false)
       registry = Tamoz::SQLite.const_get(:BoundaryRegistry, false)

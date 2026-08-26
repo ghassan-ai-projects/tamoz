@@ -126,20 +126,17 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  # GB-02/EU-004: tamoz-evals is a development/release harness whose verifier and
-  # scorecard subtree reference Tamoz::Agent/SQLite/Mcp/Graph/Scheduler directly.
-  # It is deliberately runtime-coupled — NOT stdlib-only. The architectural rule
-  # is the INVERSE edge: no production gem depends on evals
-  # (test_no_production_gemspec_depends_on_evals). Here we pin that the coupling
-  # is real and declared, so an accidental future decoupling is visible.
-  def test_evals_is_a_runtime_coupled_release_harness
+  # GB-02/EU-004: tamoz-evals is the verifier and artifact package. The
+  # scorecard subtree now lives in tamoz-evals-runner.
+  # The architectural rule remains one-way: production gems do not depend on
+  # either evaluation package.
+  def test_evals_loads_the_verifier_boundary_only
     features = loaded_features_after("tamoz/evals")
 
     assert_includes features, "tamoz/evals.rb"
-    %w[tamoz/core.rb tamoz/agent.rb tamoz/sqlite.rb tamoz/mcp.rb].each do |declared|
-      assert_includes features, declared,
-                      "tamoz/evals must load its declared runtime harness dependency #{declared}"
-    end
+    assert_includes features, "tamoz/core.rb"
+    refute features.any? { |path| path.match?(%r{tamoz/(?:agent|sqlite|mcp|graph|scheduler|comms|evals/runner)}) },
+           features.inspect
   end
 
   def test_mcp_loads_only_core_and_the_official_sdk
@@ -150,6 +147,40 @@ class DependencyIsolationTest < Minitest::Test
     refute(
       features.any? { |path| path.match?(%r{ruby_llm|tamoz/(?:graph|sqlite|agent|evals)}) },
       features.inspect
+    )
+  end
+
+  def test_mcp_loads_without_websearch_http_or_resolv
+    state = loaded_state_after("tamoz/mcp")
+    features = state.fetch("features")
+
+    refute features.any? { |path| path.end_with?("/tamoz/mcp/websearch.rb") }, features.inspect
+    refute features.any? { |path| path.match?(%r{(?:net/http|resolv)}) }, features.inspect
+    assert_nil state.fetch("websearch_defined")
+  end
+
+  def test_websearch_loads_only_its_declared_tamoz_closure
+    allowed = %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/mcp/websearch")
+
+    assert_includes features, "tamoz/mcp/websearch.rb"
+    assert_includes features, "tamoz/mcp/websearch/version.rb"
+    unexpected = features.reject { |path| allowed.include?(path) || path.match?(%r{\A(?:mcp|net/http|resolv|uri|ipaddr)}) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
+  def test_websearch_gemspec_declares_exactly_mcp_and_core
+    spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-mcp-websearch").join("tamoz-mcp-websearch.gemspec").to_s)
+
+    assert_equal(
+      {
+        "tamoz-core" => "= 0.1.0.alpha.1",
+        "tamoz-mcp" => "= 0.1.0.alpha.1"
+      },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
     )
   end
 
@@ -187,7 +218,9 @@ class DependencyIsolationTest < Minitest::Test
         "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
         "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
         "evals" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/evals") },
-        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") },
+        "gateway_defined" => defined?(Tamoz::Comms::Gateway),
+        "drainer_defined" => defined?(Tamoz::Comms::DeliveryDrainer)
       )
     RUBY
     stdout, stderr, status = Open3.capture3(
@@ -203,6 +236,35 @@ class DependencyIsolationTest < Minitest::Test
     %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
       refute result.fetch(feature), "#{feature} must not be in the load graph"
     end
+    assert_nil result.fetch("gateway_defined")
+    assert_nil result.fetch("drainer_defined")
+  end
+
+  def test_comms_gateway_loads_only_comms_core_and_gateway
+    allowed = %w[tamoz-core tamoz-comms tamoz-comms-gateway].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/comms/gateway")
+
+    assert_includes features, "tamoz/comms/gateway.rb"
+    assert_includes features, "tamoz/comms/delivery_drainer.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
+  def test_comms_gateway_gemspec_declares_only_its_contract_dependencies
+    spec = Gem::Specification.load(
+      GEM_ROOTS.fetch("tamoz-comms-gateway").join("tamoz-comms-gateway.gemspec").to_s
+    )
+
+    assert_equal(
+      {
+        "tamoz-comms" => "= 0.1.0.alpha.1",
+        "tamoz-core" => "= 0.1.0.alpha.1"
+      },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
+    )
   end
 
   # tamoz-observability is the signal-plane contract gem: core only, no HTTP
@@ -240,7 +302,7 @@ class DependencyIsolationTest < Minitest::Test
   end
 
   def test_no_production_gemspec_depends_on_evals
-    production = GEM_ROOTS.except("tamoz-evals")
+    production = GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner")
 
     production.each do |name, root|
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
@@ -251,13 +313,12 @@ class DependencyIsolationTest < Minitest::Test
   # Audit F2: the injected-port boundary at the PACKAGE level too — no
   # production gemspec may depend on tamoz-agent except tamoz-agent's own
   # dependents (agent, tools). The tamoz-stream gemspec must stay
-  # core/grpc/protobuf only. tamoz-evals is excluded because it is a
-  # development/release harness, not a production gem (GB-02) — it exercises
-  # every public boundary, including agent, and nothing depends on it in turn.
+  # core/grpc/protobuf only. Evaluation packages are excluded because they are
+  # development/release companions, not production gems.
   def test_no_production_gemspec_depends_on_agent_except_agents_own_dependents
     allowed = %w[tamoz-agent tamoz-tools tamoz-agent-cli]
 
-    GEM_ROOTS.except("tamoz-evals").each do |name, root|
+    GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner").each do |name, root|
       next if allowed.include?(name)
 
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
@@ -315,6 +376,26 @@ class DependencyIsolationTest < Minitest::Test
           .select { |path| path.include?("/tamoz/") || path.include?("ruby_llm") }
           .map { |path| path.sub(%r{.*?/lib/}, "") }
           .sort
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    JSON.parse(stdout)
+  end
+
+  def loaded_state_after(require_path)
+    script = <<~RUBY
+      require "json"
+      require #{require_path.inspect}
+      puts JSON.generate(
+        "features" => $LOADED_FEATURES,
+        "websearch_defined" => defined?(Tamoz::Mcp::Websearch)
       )
     RUBY
     stdout, stderr, status = Open3.capture3(

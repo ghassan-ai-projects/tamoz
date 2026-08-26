@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
-require 'tamoz/evals/benchmark/openclaw_comms_fixture'
+require_relative 'support/openclaw_comms_fixture'
 require 'tamoz/evals/benchmark/openclaw_comms_oracles'
 
 # Phase 3 work item 4 (docs/openclaw-chat-study/implementation-plan/

@@ -30,19 +30,41 @@
 # ephemeral `Runtime` and the durable `Session`.
 #
 # Usage:
-#   script/benchmark_release             # measure, compare against the pin
-#   script/benchmark_release --accept    # re-pin the gated counters
+#   script/benchmark_release --input-manifest PATH
+#   script/benchmark_release --input-manifest PATH --accept
 
 require "json"
 require "fileutils"
 require "tmpdir"
 require "time"
 require "digest"
+require "optparse"
 
 ROOT = File.expand_path("..", __dir__)
-$LOAD_PATH.unshift(*Dir[File.join(ROOT, "gems", "*", "lib")].sort)
+$LOAD_PATH.unshift(File.join(ROOT, "gems", "tamoz-evals-runner", "lib"))
+$LOAD_PATH.unshift(File.join(ROOT, "gems", "tamoz-evals", "lib"))
+$LOAD_PATH.unshift(*%w[
+  tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-tools
+  tamoz-observability tamoz-comms tamoz-approval tamoz-agent-kernel
+  tamoz-agent-capabilities tamoz-agent-session tamoz-agent-memory
+  tamoz-agent-healing tamoz-agent-improvement tamoz-agent-profile tamoz-agent
+  tamoz-sqlite
+].map { |name| File.join(ROOT, "gems", name, "lib") })
+require "tamoz/evals/runner"
 require "tamoz/sqlite"
 require "tamoz/agent"
+
+input_manifest = nil
+OptionParser.new do |parser|
+  parser.banner = "Usage: script/benchmark_release --input-manifest PATH [--accept]"
+  parser.on("--input-manifest PATH", "external runner input manifest") { |path| input_manifest = path }
+end.parse!(ARGV)
+input_manifest ||= ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+abort "missing required option: --input-manifest PATH" unless input_manifest
+Tamoz::Evals::Runner::InputManifest.from_path(
+  input_manifest,
+  package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+)
 
 REPORT_JSON = File.join(ROOT, "docs", "benchmark.json")
 REPORT_MD = File.join(ROOT, "docs", "BENCHMARK.md")

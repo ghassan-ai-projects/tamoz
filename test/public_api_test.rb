@@ -120,8 +120,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Cancellation.interruptible_sleep" => {}
         },
         "tamoz-comms" => {
-          "Tamoz::Comms::DeliveryDrainer" => {},
-          "Tamoz::Comms::Gateway" => {},
           "Tamoz::Comms::OutboxDeliverySink" => {},
 
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
@@ -141,12 +139,17 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::InboundEnvelope" => {},
           "Tamoz::Comms::InterruptDigest" => {},
           "Tamoz::Comms::PollerConflictError" => {},
+          "Tamoz::Comms::ResponseTooLargeError" => {},
           "Tamoz::Comms::Shapes" => {},
           "Tamoz::Comms::SurfaceDescriptor" => {},
           "Tamoz::Comms::ThrottledError" => {},
           "Tamoz::Comms::Transport" => {},
           "Tamoz::Comms::ValidationError" => {},
           "Tamoz::Comms::VERSION" => {}
+        },
+        "tamoz-comms-gateway" => {
+          "Tamoz::Comms::DeliveryDrainer" => {},
+          "Tamoz::Comms::Gateway" => {}
         },
         "tamoz-concurrency" => {
           "Tamoz::Concurrency::Drain" => {},
@@ -221,6 +224,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Evals::VERSION" => {},
           "Tamoz::Evals.verify" => {}
         },
+        "tamoz-evals-runner" => {
+          "Tamoz::Evals::Runner::InputManifest" => {},
+          "Tamoz::Evals::Runner::ScorecardSummaryConsumer" => {}
+        },
         "tamoz-graph" => {
           "Tamoz.graph" => {},
           "Tamoz.interrupt" => {},
@@ -277,6 +284,19 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Mcp::VERSION" => {},
           "Tamoz::Mcp::ValidationError" => {}
         },
+        "tamoz-mcp-websearch" => {
+          "Tamoz::Mcp::Websearch::EgressClient" => {},
+          "Tamoz::Mcp::Websearch::EgressClient::Result" => {},
+          "Tamoz::Mcp::Websearch::EgressCircuit" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicy" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicy::ValidationError" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicyError" => {},
+          "Tamoz::Mcp::Websearch::RedirectHopLimitError" => {},
+          "Tamoz::Mcp::Websearch::VERSION" => {},
+          "Tamoz::Mcp::Websearch.credential_shaped_query?" => {},
+          "Tamoz::Mcp::Websearch.egress_budgets" => {},
+          "Tamoz::Mcp::Websearch.sanitize_result" => {}
+        },
         "tamoz-observability" => {
           "Tamoz::Observability::Catalog" => {},
           "Tamoz::Observability::ContentPolicy" => {},
@@ -324,7 +344,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Scheduler::Schedule" => {},
           "Tamoz::Scheduler::ScheduleStore" => {},
           "Tamoz::Scheduler::SchedulerError" => {},
-          "Tamoz::Scheduler::ScorecardSummaryConsumer" => {},
           "Tamoz::Scheduler::StoreConflictError" => {},
           "Tamoz::Scheduler::TERMINAL" => {},
           "Tamoz::Scheduler::VERSION" => {}
@@ -432,6 +451,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Concurrency::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
+      Tamoz::Mcp::Websearch::VERSION,
       Tamoz::Comms::VERSION,
       Tamoz::Telegram::VERSION,
       Tamoz::Observability::VERSION,

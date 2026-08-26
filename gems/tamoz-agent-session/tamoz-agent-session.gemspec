@@ -18,6 +18,7 @@ TamozGemspec.build(
     ["tamoz-agent-healing", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-core", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-cancellation", "= #{Tamoz::Agent::SessionGem::VERSION}"],
+    ["tamoz-graph", "= #{Tamoz::Agent::SessionGem::VERSION}"],
     ["tamoz-tools", "= #{Tamoz::Agent::SessionGem::VERSION}"]
   ]
 )

@@ -1,11 +1,12 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
 
-require 'json'
+require "tamoz/evals/runner"
 require 'optparse'
-require 'tamoz/evals'
 
 options = { artifact_base: Dir.pwd }
 OptionParser.new do |parser|
@@ -13,10 +14,16 @@ OptionParser.new do |parser|
   parser.on('--scoreboard PATH') { |value| options[:scoreboard] = value }
   parser.on('--manifest PATH') { |value| options[:manifest] = value }
   parser.on('--artifact-base PATH') { |value| options[:artifact_base] = value }
+  parser.on('--input-manifest PATH') { |value| options[:input_manifest] = value }
 end.parse!
 
-missing = %i[scoreboard manifest].reject { |key| options.key?(key) }
+missing = %i[scoreboard manifest input_manifest].reject { |key| options.key?(key) }
 abort "missing required options: #{missing.join(', ')}" unless missing.empty?
+
+Tamoz::Evals::Runner::InputManifest.from_path(
+  options.fetch(:input_manifest),
+  package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+)
 
 begin
   manifest = JSON.parse(File.read(options.fetch(:manifest), encoding: Encoding::UTF_8))

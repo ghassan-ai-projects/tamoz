@@ -4,6 +4,7 @@
 # over the tamoz-agent runtime. The only member of the family that ships an
 # executable and the only one that depends on the runtime gem itself.
 require "tamoz/agent"
+require "tamoz/comms/gateway"
 
 require_relative "agent/cli/version"
 require_relative "agent/cli_worker_commands"

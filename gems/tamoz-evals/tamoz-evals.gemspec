@@ -3,11 +3,6 @@
 require_relative "../gemspec_helper"
 require_relative "lib/tamoz/evals/version"
 require_relative "../tamoz-core/lib/tamoz/core/version"
-require_relative "../tamoz-agent/lib/tamoz/agent/version"
-require_relative "../tamoz-sqlite/lib/tamoz/sqlite/version"
-require_relative "../tamoz-mcp/lib/tamoz/mcp/version"
-require_relative "../tamoz-graph/lib/tamoz/graph/version"
-require_relative "../tamoz-scheduler/lib/tamoz/scheduler/version"
 
 TamozGemspec.build(
   name: "tamoz-evals",
@@ -15,19 +10,7 @@ TamozGemspec.build(
   summary: "Evaluation and release evidence for Tamoz",
   description: "Canonical artifacts, conformance suites, comparison, and release gates.",
   executable: "tamoz-eval",
-  # tamoz-evals is a development/release harness, not a runtime dependency of
-  # any production gem. Its verifier/harness subtree imports these gems'
-  # constants directly, so they are declared here rather than arriving
-  # transitively (GB-03): graph and scheduler are used by the SQLite scenario
-  # runtime and the agent-smoke corpus.
   dependencies: [
-    ["tamoz-core", "= #{Tamoz::Core::VERSION}"],
-    ["tamoz-agent", "= #{Tamoz::Agent::VERSION}"],
-    ["tamoz-agent-capabilities", "= #{Tamoz::Agent::VERSION}"],
-    ["tamoz-agent-session", "= #{Tamoz::Agent::VERSION}"],
-    ["tamoz-sqlite", "= #{Tamoz::SQLite::VERSION}"],
-    ["tamoz-mcp", "= #{Tamoz::Mcp::VERSION}"],
-    ["tamoz-graph", "= #{Tamoz::Graph::VERSION}"],
-    ["tamoz-scheduler", "= #{Tamoz::Scheduler::VERSION}"]
+    ["tamoz-core", "= #{Tamoz::Core::VERSION}"]
   ]
 )

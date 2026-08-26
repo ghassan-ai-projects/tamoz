@@ -16,6 +16,9 @@ user-facing — installing, running, operating, or understanding Tamoz.
 | Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md`, `WORKING_SLICE_*.md` |
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
 | Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `ux-latency-investigation/`, `GAUNTLET_PROGRESS.md` |
+| Gem-boundary scans | `gem-boundary-scan-2026-08-25/` |
+| Gem-boundary audits | `gem-boundary-audit-2026-08-25/` |
+| Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
 | Authoritative design package | `design-v0.1/` (CI-validated, see `rake design:validate`) |
 | Quality program records | `QUALITY_PROGRAM.md`, `QUALITY_PROGRAM_STATE.md`, `CODING_STANDARD.md` |

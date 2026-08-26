@@ -3,7 +3,7 @@
 require_relative "test_helper"
 
 class MemoryTreatmentProfileTest < Minitest::Test
-  CORPUS = Tamoz::Evals::Harness::AgentMemoryCorpus.new
+  CORPUS = RunnerInputs.memory_corpus
   PROFILE = Tamoz::Evals::Harness::MemoryTreatmentProfile
   STORE = Tamoz::Evals::Harness::MemoryStore
   MEMORY_EVENT = Tamoz::Evals::Harness::MemoryEnvelope::MEMORY_EVENT
@@ -50,7 +50,7 @@ class MemoryTreatmentProfileTest < Minitest::Test
   end
 
   def self.shared_report
-    @shared_report ||= PROFILE.new.run
+    @shared_report ||= PROFILE.new(corpus: CORPUS).run
   end
 
   def shared_report = self.class.shared_report
@@ -250,7 +250,10 @@ class MemoryTreatmentProfileTest < Minitest::Test
     # E2: the injection was decided (records in the prompt) but the
     # `:memory_recalled` mark never reached the event stream — the cell is
     # attribution_incomplete, never a credited reuse.
-    corpus = StrippingCorpus.new
+    corpus = StrippingCorpus.new(
+      case_root: CORPUS.instance_variable_get(:@case_root),
+      scripted_model_factory: RunnerInputs.method(:scripted_model)
+    )
     artifact = corpus.cases.find { |entry| entry["case_id"] == "agent.memory.recall-requirement" }
     Dir.mktmpdir("tamoz-mark") do |root|
       cell = Tamoz::Evals::Harness::MemoryCell.new(
@@ -269,8 +272,8 @@ class MemoryTreatmentProfileTest < Minitest::Test
     # E5: artifact digest stability with the declared exempt set (duration_ms).
     # Everything else — per-cell store digests, injected-record lists, model
     # call counts — is pinned and byte-identical across runs.
-    first = PROFILE.new.run
-    second = PROFILE.new.run
+    first = PROFILE.new(corpus: CORPUS).run
+    second = PROFILE.new(corpus: CORPUS).run
 
     assert_equal first.to_h.fetch("content_digest"), second.to_h.fetch("content_digest")
     assert_equal(
@@ -290,16 +293,16 @@ class MemoryTreatmentProfileTest < Minitest::Test
     # (no attribution claim) and live mode cannot run without the operator's
     # adapter.
     error = assert_raises(Tamoz::Evals::ExecutionError) do
-      PROFILE.new(mode: :live)
+      PROFILE.new(corpus: CORPUS, mode: :live)
     end
     assert_includes error.message, "live_adapter"
 
     error = assert_raises(Tamoz::Evals::ExecutionError) do
-      PROFILE.new(mode: :ci, live_adapter: LiveAdapterStub.new)
+      PROFILE.new(corpus: CORPUS, mode: :ci, live_adapter: LiveAdapterStub.new)
     end
     assert_includes error.message, "cannot carry a live adapter"
 
-    report = PROFILE.new(mode: :live, live_adapter: LiveAdapterStub.new).run
+    report = PROFILE.new(corpus: CORPUS, mode: :live, live_adapter: LiveAdapterStub.new).run
     assert_equal "attributable_reuse", report.to_h.fetch("decisive_metric")
     assert_equal true, report.to_h.fetch("attribution_claimed")
     # 5 cases x 4 treatments, one attributed reuse per cell (operator stub).
@@ -367,7 +370,7 @@ class MemoryTreatmentProfileTest < Minitest::Test
     # that the run is controller-scripted and claims no attribution, and P17
     # keeps network_enforcement "not_claimed" with the live-network run as a
     # recorded deferral. No gate logic changes; the 18/15/pass pins hold.
-    report = Tamoz::Evals::Harness::AgentSmokeScorecard.new.run
+    report = Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: RunnerInputs.smoke_corpus).run
     assert report.passed?
     document = report.to_h
     assert_equal "not_claimed", document.dig("environment", "attribution_claim")
@@ -383,20 +386,30 @@ class MemoryTreatmentProfileTest < Minitest::Test
   end
 
   def test_treatment_cli_runs_ci_and_refuses_live
-    out = StringIO.new
-    err = StringIO.new
-    status = Tamoz::Evals::CLI.run(["treatment", "memory"], out:, err:)
-    assert_equal Tamoz::Evals::CLI::SUCCESS, status
-    report = JSON.parse(out.string)
-    assert_equal "injection_correctness", report.fetch("decisive_metric")
-    assert_equal false, report.fetch("attribution_claimed")
-    assert_empty err.string
+    RunnerInputs.with_manifest do |manifest|
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Evals::Runner::CLI.run(
+        ["treatment", "memory", "--input-manifest", manifest],
+        out:, err:,
+        treatment_factory: -> {
+          Tamoz::Evals::Harness::MemoryTreatmentProfile.new(
+            corpus: RunnerInputs.memory_corpus
+          )
+        }
+      )
+      assert_equal Tamoz::Evals::CLI::SUCCESS, status
+      report = JSON.parse(out.string)
+      assert_equal "injection_correctness", report.fetch("decisive_metric")
+      assert_equal false, report.fetch("attribution_claimed")
+      assert_empty err.string
+    end
 
     out = StringIO.new
     err = StringIO.new
-    status = Tamoz::Evals::CLI.run(["treatment", "memory", "--mode", "live"], out:, err:)
+    status = Tamoz::Evals::Runner::CLI.run(["treatment", "memory", "--mode", "live"], out:, err:)
     assert_equal Tamoz::Evals::CLI::USAGE_ERROR, status
-    assert_includes err.string, "operator-run"
+    assert_includes err.string, "input-manifest"
   end
 
   private

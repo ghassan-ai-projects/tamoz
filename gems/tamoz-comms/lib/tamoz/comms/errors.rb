@@ -31,6 +31,14 @@ module Tamoz
       SAFE_MESSAGE = "The delivery outcome is ambiguous."
     end
 
+    # The transport response exceeded its configured byte cap before a
+    # complete result was observed. The adapter maps this to the operation's
+    # outcome semantics: poll is transient, send is ambiguous.
+    class ResponseTooLargeError < CommsError
+      CATEGORY = "comms_response_too_large"
+      SAFE_MESSAGE = "The communications response exceeded its configured limit."
+    end
+
     # An IDEMPOTENT read did not complete — a long poll that timed out, a
     # dropped connection. Nothing was observed and nothing was persisted, so
     # the caller retries from unchanged durable state. This is the normal

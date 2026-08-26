@@ -1,0 +1,531 @@
+{
+  "schema_version": "phase-2-baseline-v1",
+  "source": {
+    "git_revision": "5ad6d8ac66cc6673911c0dc4ce312b3d600e8911",
+    "gem_digests": {
+      "tamoz-evals": "97410255236f81ea7c6b6d1b4c6bddc15625dcd841dce9851d9031199f508852",
+      "tamoz-scheduler": "b81987f3dae85d434d2ce9686d9a81360c2083641ce631f85b0bdbfe704daa2a"
+    },
+    "lockfile_digest": "8d9e8d30f5469675b69afa6723841ca5574b7a6cfc7b3e462cd8beb5a63512f0"
+  },
+  "artifacts": [
+    {
+      "path": "gems/tamoz-evals/baselines/m0/baseline.result.json",
+      "sha256": "880fdde1cfa7e5e5285e5c471bf008ffe8e316381504c4295f9c9ea4d40deba2",
+      "bytes": 2092
+    },
+    {
+      "path": "gems/tamoz-evals/baselines/m0/evidence/baseline-summary.json",
+      "sha256": "73a3e046f81828a7c6608e24edb4ebfc11ba50f9db17c232f2ca40631b4f86be",
+      "bytes": 120
+    },
+    {
+      "path": "gems/tamoz-evals/schemas/case.schema.json",
+      "sha256": "5ef649233a492db23a02da219ba8b2caef8d116310acd52f2929f8c59994cb31",
+      "bytes": 10904
+    },
+    {
+      "path": "gems/tamoz-evals/schemas/evidence.schema.json",
+      "sha256": "e5a2e61a97f47e63eb484a9068b495fdb41007d012796a01e86a85fbc2de6b96",
+      "bytes": 12617
+    },
+    {
+      "path": "gems/tamoz-evals/schemas/result.schema.json",
+      "sha256": "6226a537c35b6165db573d7c193e65861f85e50670b797f1e068b6b41347103c",
+      "bytes": 12197
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory/01_memory.recall_requirement.case.json",
+      "sha256": "d950190993194590edcedcf929270efc6986f3f6e66f234d64c2c8b91d04646a",
+      "bytes": 2454
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory/02_memory.sensitive_guard.case.json",
+      "sha256": "f9f56b7c28b67efbf643f8500ef692718a07e421c30e03ce4a2b62fab94f4ad3",
+      "bytes": 2169
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory/03_memory.prompt_injection_defense.case.json",
+      "sha256": "03004320c703865ef1b1f58ee6a93a1dae86e453f729db19b3ad0e13a9463b6d",
+      "bytes": 1979
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory/04_memory.no_flip_under_scripted.case.json",
+      "sha256": "85df5db34a9e35eeb3c6af714b41642d38d67a8151bdc4f243271f6118d7e44a",
+      "bytes": 1965
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory/05_memory.holdout_isolation.case.json",
+      "sha256": "b02dca2eaa2acdb4f4d9b14f691f4c95543287731bbb011e8927e7ba40fa1ef3",
+      "bytes": 2013
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory_repository/01_memory.real_recall_ladder.case.json",
+      "sha256": "c909005925d45130b18f1075fbb56d485acb6a7e386d8cb3ebc3649fd81f3953",
+      "bytes": 2901
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/memory_repository/02_memory.real_sensitive_guard.case.json",
+      "sha256": "4115f629bad10f15a3d0cbbc609817b44edfe08c5783b3516175edbbd919f316",
+      "bytes": 2218
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/01_read_only_explanation.case.json",
+      "sha256": "70c551b7edd38cae362edfe76f019bc062886dcb111dd3cac5f0d98a063bf9ed",
+      "bytes": 1366
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/02_one_pass_repair.case.json",
+      "sha256": "93f157856ce2e1931f512752de4e96a8a75814608d471bcf18fd7ce79f3c03be",
+      "bytes": 1403
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/03_two_pass_repair.case.json",
+      "sha256": "e6fffaaa0bd7c855011923b39cdcc32da7dbcde273273bb44bb7940d6471f206",
+      "bytes": 1406
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/04_multi_location_edit.case.json",
+      "sha256": "fcaf49fd0e01b2041f37e63dc0654705acc99d580b6a250a8180e3ed70af82a6",
+      "bytes": 1416
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/05_new_file_need.case.json",
+      "sha256": "9b311ac01f89338e4738ca3ef9c133567369db7b591a6dd349ae0be5ed7300d5",
+      "bytes": 1409
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/06_stale_digest.case.json",
+      "sha256": "0a32c3114f05aaa80045385388b2450e44c8f9e7be33bf11197febba8c8e2310",
+      "bytes": 1385
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/07_denied_approval.case.json",
+      "sha256": "db6ad54ce9cfc4e0c1ab98e5141ac0335135e10b9b566a06a94ebdb6b079014d",
+      "bytes": 1345
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/08_failed_check.case.json",
+      "sha256": "b9c6f7b91cd681b5471bcbb4949c9acf028553c95032bb3ac7875f36a7c6990d",
+      "bytes": 1409
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/09_timeout.case.json",
+      "sha256": "a7ad98620f362dfb539e024180dc150bdadcfadda1b9742987ddc03dba265a79",
+      "bytes": 1391
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/10_malformed_plan.case.json",
+      "sha256": "cc16a67508b62cf3f4e9e4cb5da8e9b4c18dc92d138f22db4f425bf36fc944f8",
+      "bytes": 1360
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/11_unnecessary_action.case.json",
+      "sha256": "dce584d8696ab56c90818cf65d70d4501c796744eb3f9802e5f5fe01dd275fac",
+      "bytes": 1433
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/12_root_escape.case.json",
+      "sha256": "3c8e4c9fa2e4b04f33aa683a69670bd2d965f0add6689695859eec96ffdf5b1c",
+      "bytes": 1368
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/13_resume_after_kill.case.json",
+      "sha256": "382bac697cb2335b4c3cfd8d0077935764bc3db842ca0ee433befaec0bf70b9a",
+      "bytes": 1557
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/14_profile_trusted_boundary.case.json",
+      "sha256": "eab907abe582a742dcf39a83b3c0587f3a8a03315f718d490ea0b9e3d2135cf5",
+      "bytes": 1660
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/15_skill_no_authority.case.json",
+      "sha256": "7044b5f15a9adf671e885e6c015a6262ee1a7d623a55a5b5c867e0954b6a013d",
+      "bytes": 1755
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/16_mcp_governed_call.case.json",
+      "sha256": "2e7f5e76170a625da0678f7201598fc335315d9040307bc8b2ff54800a2dc9bf",
+      "bytes": 2032
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/17_absent_digest_patch.case.json",
+      "sha256": "666972f3c460e8b53d10dec91f21d80635e04b7557574b39443be96dc9adf497",
+      "bytes": 1937
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/18_websearch_governed.case.json",
+      "sha256": "50536c624ff7ffd2061a8cffe59185b01476b9e5d57edf9c5682d3a3680c9a0d",
+      "bytes": 2749
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/19_memory_attributable_recall.case.json",
+      "sha256": "119ed8e67fd4d471d06b994f9de77bdc834f0a1a196b8dd6516cda97977e4331",
+      "bytes": 2264
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/20_self_healing_observation.case.json",
+      "sha256": "4d39647596df5d5f96d44117e227d80b40c69d468a69b024fb7377ee14fe8216",
+      "bytes": 2739
+    },
+    {
+      "path": "gems/tamoz-evals/suites/agent/smoke/21_schedule_materialization.case.json",
+      "sha256": "c8bf2bfae389090758d1fbbb2972305f52672d75ae0686d22c47560e0ff87179",
+      "bytes": 2494
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/01_barrier-atomicity.case.json",
+      "sha256": "08c1fbbc822af0f4e7873c3202d3efd70b4a022b1303790a7725c94f63fb0e4f",
+      "bytes": 1258
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/02_activation-attempt-identity.case.json",
+      "sha256": "5667825c8e46e0317c0d51a6738b5a74927c47703dc9bb1271ac1a35e2880347",
+      "bytes": 1445
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/03_request-inbox-recovery.case.json",
+      "sha256": "9dd1b6fa44d92a7ed0a2aae916eeea91c64da96cb24b6d054d39cb6234032aa8",
+      "bytes": 1337
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/04_reviewed-action-plan.case.json",
+      "sha256": "09fcfa4133e0a9c84341d5f24ccc0595d11eec839c87b9afa9b2a9f9f28f350a",
+      "bytes": 1262
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/05_discovery-containment.case.json",
+      "sha256": "84292eead5de7d13af7631a0b18dc34493e67e104feb537cafedfa1c6e4abcbc",
+      "bytes": 1326
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/06_memory-authorization.case.json",
+      "sha256": "5b041d4e31c4c7cc6bdcfd33e336e9057a43097d1dd9861585acd291dde57bd5",
+      "bytes": 1309
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/07_memory-deletion-proof.case.json",
+      "sha256": "79d3651cab5a3acd6e70446e66e3148d2bbe45866d1926473cecc6135cf00d7f",
+      "bytes": 1408
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/08_healing-unknown-effect.case.json",
+      "sha256": "ba8b937b05a6103df4ba69d39f52fe5592023fb6d76a1d035c72a463e9dff84d",
+      "bytes": 1300
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/09_skill-capability-containment.case.json",
+      "sha256": "340b7237c37b36e27012c27e1b8e5ed1693d0c5ddc876646c1f8618e27c4e36b",
+      "bytes": 1282
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/10_stream-event-admission.case.json",
+      "sha256": "877d5d10692662813d0079f6fe43a8ca65122953f011dd6545729b604837cca3",
+      "bytes": 1333
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/11_physical-evidence-gate.case.json",
+      "sha256": "d6dde11d3082e47ce5ee892169ba046907d11313488278937f59824cd8352323",
+      "bytes": 1316
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m0/golden/12_completion-evidence.case.json",
+      "sha256": "2264a718c053b313d019bdb6f7d185288280b8fd8eebeede0b9d7f446ccf99c1",
+      "bytes": 1303
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m1/core/01_state-codec-boundary.case.json",
+      "sha256": "bace22299561f3aea38cfb83bc378e61ac4f134c99767efe0cd9b3df29e5f8e8",
+      "bytes": 1406
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m1/core/02_context-isolation.case.json",
+      "sha256": "75e11e8f13fd3c1bbd7d62779a0893d316d1abe367b408cdcae243410c9c5870",
+      "bytes": 1457
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m1/core/03_ordered-pool.case.json",
+      "sha256": "42407c28fd55cd176647d8affa32e5903403c0c82316a88492affcaf34849006",
+      "bytes": 1370
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m1/core/04_bounded-stream-shutdown.case.json",
+      "sha256": "1f1713a455d3760dbcf940bab52f96d8d119d05e2859a7403677e85f08f9b796",
+      "bytes": 1378
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/01_definition-boundary.case.json",
+      "sha256": "d41bbfeef28582559382eae36532c5d53d37a6e03d0303e36f77f1b9a1b8672e",
+      "bytes": 1400
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/02_barrier-determinism.case.json",
+      "sha256": "3737ae846466add55dfbc8270ae3e77697667a8725634134ba36a60253dab577",
+      "bytes": 1457
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/03_interrupt-identity.case.json",
+      "sha256": "a2254d2719c2b0f7225f936a7192e23527f9b0ff4e816cb09ae22c55e48bd6d2",
+      "bytes": 1438
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/04_history-fork.case.json",
+      "sha256": "c80a7a21e76183d72093b96572756cfb502b6df5bb05129b57bc149881ed574b",
+      "bytes": 1400
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/05_subgraph-inheritance.case.json",
+      "sha256": "366f929b121d552795ecf2a8cc4856277718666ec23d80942f0e8e212d1b2bff",
+      "bytes": 1417
+    },
+    {
+      "path": "gems/tamoz-evals/suites/m2/graph/06_stream-cancellation.case.json",
+      "sha256": "0c90dd9fa5beb32242ff69e37213ea32942d06c58ced56745b53c3a30ffe352f",
+      "bytes": 1404
+    }
+  ],
+  "cases": [
+    {
+      "stdout_b64": "MC4xLjAuYWxwaGEuMQo=",
+      "stderr_b64": "",
+      "exit": 0,
+      "name": "base-version",
+      "argv": [
+        "tamoz-eval",
+        "--version"
+      ]
+    },
+    {
+      "stdout_b64": "eyJhcnRpZmFjdF90eXBlIjoicmVzdWx0IiwiZGVjaXNpb24iOiJpbnN1ZmZpY2llbnRfZXZpZGVuY2UiLCJkaWdlc3QiOiJzaGEyNTY6Y2U5MjNjZjNmOWY3YjQyZTdjNDQ2OTA4ZGQ1YmVlMTM1MzA0M2M0NDI3Y2EwNDZkMmE2NzM0YWM5YWI0MGVlOSIsInBhdGgiOiIvcHJpdmF0ZS90bXAvdGFtb3otcGhhc2UyLWJhc2VsaW5lLkQxOGk1aS9nZW1zL3RhbW96LWV2YWxzL2Jhc2VsaW5lcy9tMC9iYXNlbGluZS5yZXN1bHQuanNvbiJ9Cg==",
+      "stderr_b64": "",
+      "exit": 4,
+      "name": "base-verify-baseline",
+      "argv": [
+        "tamoz-eval",
+        "verify",
+        "/private/tmp/tamoz-phase2-baseline.D18i5i/gems/tamoz-evals/baselines/m0/baseline.result.json"
+      ]
+    },
+    {
+      "stdout_b64": "",
+      "stderr_b64": "ZXhwZWN0ZWQ6IHRhbW96LWV2YWwgdmVyaWZ5IEFSVElGQUNULi4uCg==",
+      "exit": 64,
+      "name": "base-usage",
+      "argv": [
+        "tamoz-eval"
+      ]
+    },
+    {
+      "stdout_b64": "eyJhcnRpZmFjdF90eXBlIjoicmVzdWx0IiwiZGVjaXNpb24iOiJpbnN1ZmZpY2llbnRfZXZpZGVuY2UiLCJkaWdlc3QiOiJzaGEyNTY6Y2U5MjNjZjNmOWY3YjQyZTdjNDQ2OTA4ZGQ1YmVlMTM1MzA0M2M0NDI3Y2EwNDZkMmE2NzM0YWM5YWI0MGVlOSIsInBhdGgiOiIvcHJpdmF0ZS90bXAvdGFtb3otcGhhc2UyLWJhc2VsaW5lLkQxOGk1aS9nZW1zL3RhbW96LWV2YWxzL2Jhc2VsaW5lcy9tMC9iYXNlbGluZS5yZXN1bHQuanNvbiJ9CnsiYXJ0aWZhY3RfdHlwZSI6InJlc3VsdCIsImRlY2lzaW9uIjoiaW5zdWZmaWNpZW50X2V2aWRlbmNlIiwiZGlnZXN0Ijoic2hhMjU2OmNlOTIzY2YzZjlmN2I0MmU3YzQ0NjkwOGRkNWJlZTEzNTMwNDNjNDQyN2NhMDQ2ZDJhNjczNGFjOWFiNDBlZTkiLCJwYXRoIjoiL3ByaXZhdGUvdG1wL3RhbW96LXBoYXNlMi1iYXNlbGluZS5EMThpNWkvZ2Vtcy90YW1vei1ldmFscy9iYXNlbGluZXMvbTAvYmFzZWxpbmUucmVzdWx0Lmpzb24ifQo=",
+      "stderr_b64": "",
+      "exit": 4,
+      "name": "base-multi-verify",
+      "argv": [
+        "tamoz-eval",
+        "verify",
+        "/private/tmp/tamoz-phase2-baseline.D18i5i/gems/tamoz-evals/baselines/m0/baseline.result.json",
+        "/private/tmp/tamoz-phase2-baseline.D18i5i/gems/tamoz-evals/baselines/m0/baseline.result.json"
+      ]
+    },
+    {
+      "stdout_b64": "eyJvayI6ZmFsc2UsInJlYXNvbiI6InNjb3JlY2FyZCByZXBvcnQgaXMgbWlzc2luZyByZXF1aXJlZCBmaWVsZHMifQ==",
+      "stderr_b64": "",
+      "exit": 0,
+      "name": "scheduler-valid",
+      "argv": [
+        "tamoz-eval",
+        "scorecard",
+        "agent-smoke"
+      ]
+    }
+  ],
+  "public_api": {
+    "requires": [
+      "tamoz/evals",
+      "tamoz/scheduler"
+    ],
+    "constants": [
+      "Tamoz::Evals",
+      "Tamoz::Evals::CLI",
+      "Tamoz::Evals::Case",
+      "Tamoz::Evals::Evidence",
+      "Tamoz::Evals::Result",
+      "Tamoz::Evals::Harness",
+      "Tamoz::Evals::Benchmark",
+      "Tamoz::Scheduler::ScorecardSummaryConsumer"
+    ]
+  },
+  "load_graph": {
+    "base": [
+      "gems/tamoz-core/lib/tamoz/core.rb",
+      "gems/tamoz-core/lib/tamoz/core/capability.rb",
+      "gems/tamoz-core/lib/tamoz/core/capability/descriptor.rb",
+      "gems/tamoz-core/lib/tamoz/core/capability/descriptor_conflict_error.rb",
+      "gems/tamoz-core/lib/tamoz/core/capability/registry.rb",
+      "gems/tamoz-core/lib/tamoz/core/capability/source.rb",
+      "gems/tamoz-core/lib/tamoz/core/jcs.rb",
+      "gems/tamoz-core/lib/tamoz/core/protocol_error.rb",
+      "gems/tamoz-core/lib/tamoz/core/raw_http.rb",
+      "gems/tamoz-core/lib/tamoz/core/request_identity.rb",
+      "gems/tamoz-core/lib/tamoz/core/situation_recall.rb",
+      "gems/tamoz-core/lib/tamoz/core/tool_error.rb",
+      "gems/tamoz-core/lib/tamoz/core/turn_context.rb",
+      "gems/tamoz-core/lib/tamoz/core/version.rb",
+      "gems/tamoz-evals/lib/tamoz/evals.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/artifact.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/cell_extractor.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison_executor.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/environment_loader.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/leak_scan.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_fixture.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_runner.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_publisher.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/readiness.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/scenario_driver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/scoreboard.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/canonical_json.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/case.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/cli.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/deep_freeze.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/duplicate_key_detector.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/errors.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/evidence.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_repository_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_run_audit.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_scorecard.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_envelope.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_holdout.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_repository_adapter.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_retrieval.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_store.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_treatment_profile.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_fault_gate.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_registry.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_intervention.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_stopper.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_manifest_verifier.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_selector_deriver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/subprocess_runner.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/result.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/schema.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/verifier.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/version.rb"
+    ],
+    "runner": [
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/baselines.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/cell_extractor.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/comparison_executor.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/environment_loader.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/leak_scan.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_fixture.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_comms_runner.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_publisher.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/readiness.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/scenario_driver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/benchmark/scoreboard.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_repository_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_run_audit.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_scorecard.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_corpus.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/heuristic_paired_evaluation.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_envelope.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_holdout.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_repository_adapter.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_retrieval.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_store.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/memory_treatment_profile.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_convergence_probe.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_driver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_fault_gate.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_registry.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_intervention.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control_stopper.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_manifest_verifier.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_selector_deriver.rb",
+      "gems/tamoz-evals/lib/tamoz/evals/harness/subprocess_runner.rb",
+      "gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_result.rb",
+      "gems/tamoz-scheduler/lib/tamoz/scheduler/scorecard_summary_consumer.rb"
+    ]
+  },
+  "intentional_changes": [
+    {
+      "surface": "tamoz-eval scorecard/treatment",
+      "before": "base CLI dispatched harness commands",
+      "after": "base CLI returns usage 64; runner CLI owns commands",
+      "reason": "verifier-only base package"
+    },
+    {
+      "surface": "scheduler scorecard consumer",
+      "before": "Tamoz::Scheduler::ScorecardSummaryConsumer",
+      "after": "Tamoz::Evals::Runner::ScorecardSummaryConsumer",
+      "reason": "scheduler remains generic"
+    }
+  ],
+  "manifest_failure_cases": [
+    {
+      "name": "missing",
+      "exit": 3,
+      "stdout_b64": "",
+      "stderr_b64": "cnVubmVyIGlucHV0IG1hbmlmZXN0IGlzIHJlcXVpcmVkCg==",
+      "side_effects": []
+    },
+    {
+      "name": "malformed",
+      "exit": 64,
+      "stdout_b64": "",
+      "stderr_b64": "cnVubmVyIGlucHV0IG1hbmlmZXN0IGlzIGludmFsaWQK",
+      "side_effects": []
+    },
+    {
+      "name": "incomplete",
+      "exit": 64,
+      "stdout_b64": "",
+      "stderr_b64": "cnVubmVyIGlucHV0IG1hbmlmZXN0IGlzIGluY29tcGxldGUK",
+      "side_effects": []
+    },
+    {
+      "name": "repository_relative",
+      "exit": 64,
+      "stdout_b64": "",
+      "stderr_b64": "cnVubmVyIGlucHV0IHBhdGhzIG11c3QgYmUgZXhwbGljaXQgYW5kIGV4dGVybmFsCg==",
+      "side_effects": []
+    },
+    {
+      "name": "missing_openclaw_factory",
+      "exit": 3,
+      "stdout_b64": "",
+      "stderr_b64": "b3BlbmNsYXcgYmVuY2htYXJrIHJlcXVpcmVzIGFuIGV4dGVybmFsIGZpeHR1cmUgZmFjdG9yeQo=",
+      "side_effects": []
+    }
+  ]
+}

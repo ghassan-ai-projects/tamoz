@@ -19,7 +19,7 @@ class ImprovementCandidateTest < Minitest::Test
   PROMOTER = "principal.operator.p12i"
 
   def with_corpus
-    Harness::HeuristicCorpus.create { |corpus| yield corpus }
+    Harness::HeuristicCorpus.create(inputs: RunnerInputs.heuristic) { |corpus| yield corpus }
   end
 
   def generator_for(corpus, principal: GENERATOR)
@@ -36,7 +36,8 @@ class ImprovementCandidateTest < Minitest::Test
 
   def evaluation_for(corpus, candidate, regression: false)
     Harness::HeuristicPairedEvaluation.new(
-      corpus:, evaluator_principal: EVALUATOR, generator_principal: GENERATOR
+      corpus:, evaluator_principal: EVALUATOR, generator_principal: GENERATOR,
+      regression_tasks: RunnerInputs.regression_tasks
     ).evaluate(candidate, regression:)
   end
 
@@ -448,7 +449,8 @@ class ImprovementCandidateTest < Minitest::Test
       # the generator.
       error = assert_raises(Tamoz::Evals::ExecutionError) do
         Harness::HeuristicPairedEvaluation.new(
-          corpus:, evaluator_principal: GENERATOR, generator_principal: GENERATOR
+          corpus:, evaluator_principal: GENERATOR, generator_principal: GENERATOR,
+          regression_tasks: RunnerInputs.regression_tasks
         )
       end
       assert_includes error.message, "must differ"

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'test_helper'
+require 'digest'
 
 # The CLI fixture assembles a complete mission catalog manifest before spawning
 # the script entry point.
@@ -68,12 +69,26 @@ class OpenclawBenchmarkReadinessCLITest < Minitest::Test
   def test_publish_refuses_fixture_manifest
     Dir.mktmpdir('openclaw-readiness') do |directory|
       root = Pathname.new(directory)
-      command = [RbConfig.ruby, SCRIPT.to_s, '--protocol', protocol_path(root).to_s,
-                 '--manifest', manifest_path(root).to_s, '--missions', MISSIONS.to_s, '--publish']
-      _stdout, stderr, status = Open3.capture3(*command, chdir: ROOT.to_s)
+      RunnerInputs.with_manifest do |input_manifest|
+        external_root = Pathname.new(File.dirname(input_manifest))
+        protocol = protocol_path(external_root)
+        catalog = external_root.join('catalog.json')
+        FileUtils.cp(MISSIONS, catalog)
+        input_document = JSON.parse(File.read(input_manifest))
+        descriptor = lambda do |path|
+          { 'path' => path.to_s, 'sha256' => Digest::SHA256.file(path).hexdigest }
+        end
+        input_document['openclaw']['protocol'] = descriptor.call(protocol)
+        input_document['openclaw']['catalog'] = descriptor.call(catalog)
+        File.write(input_manifest, JSON.generate(input_document))
+        command = [RbConfig.ruby, SCRIPT.to_s,
+                   '--manifest', manifest_path(root).to_s,
+                   '--input-manifest', input_manifest, '--publish']
+        _stdout, stderr, status = Open3.capture3(*command, chdir: ROOT.to_s)
 
-      refute_predicate status, :success?
-      assert_includes stderr, 'fixture_or_fake_provider'
+        refute_predicate status, :success?
+        assert_includes stderr, 'fixture_or_fake_provider'
+      end
     end
   end
 end

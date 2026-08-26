@@ -1,13 +1,14 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
 
-require 'json'
+require "tamoz/evals/runner"
 require 'optparse'
 require 'open3'
 require 'pathname'
-require 'tamoz/evals'
 
 root = File.expand_path('..', __dir__)
 options = {
@@ -15,15 +16,42 @@ options = {
                             'scenarios', 'SCENARIO_INDEX.json'),
   artifact_base: Dir.pwd,
   artifact_root: nil,
-  scenarios: nil
+  scenarios: nil,
+  input_manifest: nil
 }
 OptionParser.new do |parser|
-  parser.banner = 'Usage: script/benchmark_comms_run --out DIR [--scenarios C1,C2]'
+  parser.banner = 'Usage: script/benchmark_comms_run --input-manifest PATH --out DIR [--scenarios C1,C2]'
   parser.on('--scenario-index PATH') { |value| options[:scenario_index] = value }
   parser.on('--scenarios IDS') { |value| options[:scenarios] = value.split(',').map(&:strip) }
   parser.on('--artifact-root PATH') { |value| options[:artifact_root] = value }
   parser.on('--out DIR') { |value| options[:artifact_base] = value }
+  parser.on('--input-manifest PATH') { |value| options[:input_manifest] = value }
 end.parse!
+
+abort 'missing required option: --input-manifest PATH' unless options[:input_manifest]
+
+begin
+  input_manifest = Tamoz::Evals::Runner::InputManifest.from_path(
+    options.fetch(:input_manifest),
+    package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+  )
+  factory_descriptor = input_manifest.openclaw.fetch('fixture_factory_loader')
+  Tamoz::Evals::Runner::InputAdapters.load_openclaw_fixture_factory!(
+    path: factory_descriptor.fetch('path'), sha256: factory_descriptor.fetch('sha256'),
+    package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+  )
+  external_adapter = Tamoz::Evals::Runner::InputAdapters.openclaw_fixture!
+  runner_factory = Tamoz::Evals::Runner::InputAdapters.comms_runner_factory
+  unless runner_factory.respond_to?(:call)
+    raise Tamoz::Evals::ExecutionError, "openclaw benchmark requires an external comms runner"
+  end
+rescue Tamoz::Evals::Runner::InputManifest::Invalid => error
+  warn error.message
+  exit Tamoz::Evals::CLI::USAGE_ERROR
+rescue Tamoz::Evals::ExecutionError => error
+  warn error.message
+  exit Tamoz::Evals::CLI::INFRASTRUCTURE_FAILURE
+end
 
 artifact_root = options[:artifact_root]
 if artifact_root.nil?
@@ -43,12 +71,13 @@ git_revision, status = Open3.capture2('git', '-C', root, 'rev-parse', 'HEAD')
 abort 'could not resolve git revision' unless status.success?
 git_revision = git_revision.strip
 
-runner = Tamoz::Evals::Benchmark::OpenclawCommsRunner.new(
+runner = runner_factory.call.new(
   artifact_base: options.fetch(:artifact_base),
   artifact_root:,
   git_revision:,
   command: "script/benchmark_comms_run #{ARGV.join(' ')}",
   scenario_index_path: options.fetch(:scenario_index),
+  external_adapter:,
   scenarios: options[:scenarios]
 )
 run = runner.run

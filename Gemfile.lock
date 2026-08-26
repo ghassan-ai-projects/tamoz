@@ -15,6 +15,7 @@ PATH
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-comms-gateway (= 0.1.0.alpha.1)
       tamoz-concurrency (= 0.1.0.alpha.1)
 
 PATH
@@ -66,6 +67,7 @@ PATH
       tamoz-agent-profile (= 0.1.0.alpha.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
+      tamoz-graph (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 
 PATH
@@ -102,6 +104,13 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
+  remote: gems/tamoz-comms-gateway
+  specs:
+    tamoz-comms-gateway (0.1.0.alpha.1)
+      tamoz-comms (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-comms
   specs:
     tamoz-comms (0.1.0.alpha.1)
@@ -121,17 +130,31 @@ PATH
       zeitwerk (~> 2.6)
 
 PATH
+  remote: gems/tamoz-evals-runner
+  specs:
+    tamoz-evals-runner (0.1.0.alpha.1)
+      tamoz-agent (= 0.1.0.alpha.1)
+      tamoz-agent-capabilities (= 0.1.0.alpha.1)
+      tamoz-agent-cli (= 0.1.0.alpha.1)
+      tamoz-agent-healing (= 0.1.0.alpha.1)
+      tamoz-agent-improvement (= 0.1.0.alpha.1)
+      tamoz-agent-kernel (= 0.1.0.alpha.1)
+      tamoz-agent-memory (= 0.1.0.alpha.1)
+      tamoz-agent-profile (= 0.1.0.alpha.1)
+      tamoz-agent-session (= 0.1.0.alpha.1)
+      tamoz-comms (= 0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-evals (= 0.1.0.alpha.1)
+      tamoz-graph (= 0.1.0.alpha.1)
+      tamoz-mcp (= 0.1.0.alpha.1)
+      tamoz-sqlite (= 0.1.0.alpha.1)
+      tamoz-tools (= 0.1.0.alpha.1)
+
+PATH
   remote: gems/tamoz-evals
   specs:
     tamoz-evals (0.1.0.alpha.1)
-      tamoz-agent (= 0.1.0.alpha.1)
-      tamoz-agent-capabilities (= 0.1.0.alpha.1)
-      tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
-      tamoz-graph (= 0.1.0.alpha.1)
-      tamoz-mcp (= 0.1.0.alpha.1)
-      tamoz-scheduler (= 0.1.0.alpha.1)
-      tamoz-sqlite (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-graph
@@ -141,6 +164,13 @@ PATH
       tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       zeitwerk (~> 2.6)
+
+PATH
+  remote: gems/tamoz-mcp-websearch
+  specs:
+    tamoz-mcp-websearch (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-mcp (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-mcp
@@ -378,11 +408,14 @@ DEPENDENCIES
   tamoz-approval!
   tamoz-cancellation!
   tamoz-comms!
+  tamoz-comms-gateway!
   tamoz-concurrency!
   tamoz-core!
   tamoz-evals!
+  tamoz-evals-runner!
   tamoz-graph!
   tamoz-mcp!
+  tamoz-mcp-websearch!
   tamoz-observability!
   tamoz-otel!
   tamoz-scheduler!
@@ -464,11 +497,14 @@ CHECKSUMS
   tamoz-approval (0.1.0.alpha.1)
   tamoz-cancellation (0.1.0.alpha.1)
   tamoz-comms (0.1.0.alpha.1)
+  tamoz-comms-gateway (0.1.0.alpha.1)
   tamoz-concurrency (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)
+  tamoz-evals-runner (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
   tamoz-mcp (0.1.0.alpha.1)
+  tamoz-mcp-websearch (0.1.0.alpha.1)
   tamoz-observability (0.1.0.alpha.1)
   tamoz-otel (0.1.0.alpha.1)
   tamoz-scheduler (0.1.0.alpha.1)

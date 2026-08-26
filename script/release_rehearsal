@@ -18,7 +18,7 @@
 #                       with the source worktree verified clean first
 #   3. dependencies     `bundle install --local` inside the clone
 #   4. full gate        `rake ci` under BOTH `LC_ALL=C` and `LC_ALL=en_US.UTF-8`
-#   5. scorecard        `tamoz-eval scorecard agent-smoke`, with the decision,
+#   5. scorecard        `tamoz-eval-runner scorecard agent-smoke --input-manifest PATH`, with the decision,
 #                       the four hard gates and the hard-zero safety counters
 #                       asserted, and the content digest recorded
 #   6. packaged gems    each gem built, installed into its own GEM_HOME and
@@ -42,12 +42,21 @@
 
 require "json"
 require "open3"
+require "optparse"
 require "rbconfig"
 require "time"
 require "tmpdir"
 require "fileutils"
 
 ROOT = File.expand_path("..", __dir__)
+
+options = {}
+OptionParser.new do |parser|
+  parser.banner = "Usage: script/release_rehearsal --input-manifest PATH [--keep]"
+  parser.on("--input-manifest PATH", "external runner input manifest") { |path| options[:input_manifest] = path }
+  parser.on("--keep", "keep the clean clone") { options[:keep] = true }
+end.parse!(ARGV)
+RUNNER_INPUT_MANIFEST = options[:input_manifest] || ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
 
 # The steps this rehearsal performs, declared once. The run asserts that the
 # steps it actually recorded equal this list, so a step that stops running —
@@ -110,7 +119,7 @@ candidate = Open3.capture2("git", "-C", ROOT, "rev-parse", "HEAD").first.strip
 dirty = Open3.capture2("git", "-C", ROOT, "status", "--porcelain").first
        .lines.reject { |line| line.include?("agenteval/") }.join
 
-keep = ARGV.include?("--keep")
+keep = options[:keep]
 workdir = Dir.mktmpdir("tamoz-rehearsal")
 clone = File.join(workdir, "tamoz")
 
@@ -164,8 +173,11 @@ end
 
 scorecard_digest = nil
 record(steps, failures, "scorecard") do
+  next [false, "runner input manifest is required"] unless RUNNER_INPUT_MANIFEST
+
   ok, stdout, stderr, = run(
-    [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "scorecard", "agent-smoke"],
+    [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke",
+     "--input-manifest", RUNNER_INPUT_MANIFEST],
     chdir: clone, env: bundle_env.merge("LC_ALL" => UTF8_LOCALE, "LANG" => UTF8_LOCALE)
   )
   next [false, stderr.lines.last(3).join.strip] unless ok
@@ -219,9 +231,11 @@ end
 # --- 7b. the release evaluation pin -----------------------------------------
 
 record(steps, failures, "release-evaluation-pin") do
+  next [false, "runner input manifest is required"] unless RUNNER_INPUT_MANIFEST
+
   ok, stdout, stderr, = run(
     [RbConfig.ruby, "-S", "bundle", "exec", "ruby",
-     "script/generate_release_evaluation_manifest"],
+     "script/generate_release_evaluation_manifest", "--input-manifest", RUNNER_INPUT_MANIFEST],
     chdir: clone, env: bundle_env.merge("LC_ALL" => UTF8_LOCALE, "LANG" => UTF8_LOCALE)
   )
   # The generator RE-RUNS the harness and compares; without `--accept` it
@@ -233,8 +247,11 @@ end
 # --- 7c. the performance benchmark -------------------------------------------
 
 record(steps, failures, "benchmark") do
+  next [false, "runner input manifest is required"] unless RUNNER_INPUT_MANIFEST
+
   ok, stdout, stderr, = run(
-    [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "script/benchmark_release"],
+    [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "script/benchmark_release",
+     "--input-manifest", RUNNER_INPUT_MANIFEST],
     chdir: clone, env: bundle_env.merge("LC_ALL" => UTF8_LOCALE, "LANG" => UTF8_LOCALE)
   )
   # Only the GATED counters can fail here; latency is measured and published,

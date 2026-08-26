@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Tamoz evals runner external input manifest",
+  "type": "object",
+  "required": ["manifest_version", "external_root", "corpus_definitions", "scripted_model", "mcp_server", "openclaw", "scenarios"],
+  "properties": {
+    "manifest_version": {"const": "runner-input-v1"},
+    "external_root": {"type": "string", "pattern": "^/"},
+    "corpus_definitions": {
+      "type": "object",
+      "required": ["agent_smoke", "agent_memory", "agent_memory_repository"],
+      "properties": {
+        "agent_smoke": {"$ref": "#/$defs/external_document"},
+        "agent_memory": {"$ref": "#/$defs/external_document"},
+        "agent_memory_repository": {"$ref": "#/$defs/external_document"}
+      },
+      "additionalProperties": false
+    },
+    "scripted_model": {
+      "type": "object",
+      "required": ["adapter", "responses"],
+      "properties": {
+        "adapter": {"$ref": "#/$defs/external_document"},
+        "responses": {"$ref": "#/$defs/external_document"}
+      },
+      "additionalProperties": false
+    },
+    "mcp_server": {
+      "type": "object",
+      "required": ["path", "args", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/external_path"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    },
+    "openclaw": {
+      "type": "object",
+      "required": ["fixture_factory_loader", "protocol", "catalog", "mission"],
+      "properties": {
+        "fixture_factory_loader": {"$ref": "#/$defs/external_document"},
+        "protocol": {"$ref": "#/$defs/external_document"},
+        "catalog": {"$ref": "#/$defs/external_document"},
+        "mission": {"$ref": "#/$defs/external_document"}
+      },
+      "additionalProperties": false
+    },
+    "scenarios": {
+      "type": "object",
+      "required": ["scenario_definitions", "sqlite_graph", "limits", "registry"],
+      "properties": {
+        "scenario_definitions": {"$ref": "#/$defs/external_document"},
+        "sqlite_graph": {"$ref": "#/$defs/external_document"},
+        "limits": {"$ref": "#/$defs/external_document"},
+        "registry": {"$ref": "#/$defs/external_document"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "external_path": {"type": "string", "pattern": "^/"},
+    "external_document": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/external_path"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "class_field_map": {
+    "Tamoz::Evals::Harness::AgentSmokeCorpus": ["corpus_definitions.agent_smoke", "scripted_model.adapter", "scripted_model.responses", "mcp_server"],
+    "Tamoz::Evals::Harness::AgentSmokeCorpus::SessionModelAdapter": ["scripted_model.responses"],
+    "Tamoz::Evals::Harness::AgentSmokeCorpus::CliSubprocessHarness": ["mcp_server", "external_root"],
+    "Tamoz::Evals::Harness::AgentMemoryCorpus": ["corpus_definitions.agent_memory", "scripted_model.responses"],
+    "Tamoz::Evals::Harness::AgentMemoryRepositoryCorpus": ["corpus_definitions.agent_memory_repository", "scripted_model.responses"],
+    "Tamoz::Evals::Harness::SQLiteScenarioDriver": ["scenarios.sqlite_graph", "scenarios.limits"],
+    "Tamoz::Evals::Harness::SQLiteScenarioRuntime": ["scenarios.sqlite_graph", "scenarios.limits"],
+    "Tamoz::Evals::Harness::SQLiteScenarioRegistry": ["scenarios.registry"],
+    "Tamoz::Evals::Harness::SQLiteConvergenceProbe": ["scenarios.sqlite_graph", "scenarios.limits"],
+    "Tamoz::Evals::Benchmark::OpenclawMissionRunner": ["openclaw.fixture_factory_loader", "openclaw.protocol", "openclaw.catalog", "openclaw.mission"]
+  },
+  "registration": {
+    "factory_loader": "load the explicit external path; it must define Tamoz::Evals::Runner::InputAdapters.openclaw_fixture_factory and, for benchmark_comms_run, the caller-owned comms scenario runner factory",
+    "path_rule": "every path must be absolute, exist, hash-match, and resolve outside the installed base and runner gem roots",
+    "missing_factory": "exit 3, empty stdout, exact infrastructure stderr, no benchmark side effect"
+  }
+}

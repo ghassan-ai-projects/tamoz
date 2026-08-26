@@ -22,11 +22,12 @@
 # re-reading a recorded number.
 #
 # Usage:
-#   script/generate_release_evaluation_manifest            # verify, or write if absent
-#   script/generate_release_evaluation_manifest --accept   # re-pin deliberately
+#   script/generate_release_evaluation_manifest --input-manifest PATH
+#   script/generate_release_evaluation_manifest --input-manifest PATH --accept
 
 require "json"
 require "open3"
+require "optparse"
 require "rbconfig"
 
 ROOT = File.expand_path("..", __dir__)
@@ -34,6 +35,15 @@ MANIFEST = File.join(ROOT, "docs", "release-evaluation-manifest.json")
 SUITE = File.join(ROOT, "gems", "tamoz-evals", "suites", "agent", "smoke")
 
 class ManifestMismatchError < StandardError; end
+
+options = {}
+OptionParser.new do |parser|
+  parser.banner = "Usage: script/generate_release_evaluation_manifest --input-manifest PATH [--accept]"
+  parser.on("--input-manifest PATH", "external runner input manifest") { |path| options[:input_manifest] = path }
+  parser.on("--accept", "deliberately replace the committed pin") { options[:accept] = true }
+end.parse!(ARGV)
+input_manifest = options[:input_manifest] || ENV["TAMOZ_RUNNER_INPUT_MANIFEST"]
+raise ManifestMismatchError, "runner input manifest is required" unless input_manifest
 
 def read_utf8(path) = File.read(path, encoding: Encoding::UTF_8)
 
@@ -51,7 +61,8 @@ raise ManifestMismatchError, "no cases found in #{SUITE}" if cases.empty?
 # The decision comes from RUNNING the harness, never from a recorded number.
 stdout, stderr, status = Open3.capture3(
   {"LC_ALL" => "en_US.UTF-8", "LANG" => "en_US.UTF-8"},
-  RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "scorecard", "agent-smoke",
+  RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke",
+  "--input-manifest", input_manifest,
   chdir: ROOT
 )
 raise ManifestMismatchError, "scorecard failed: #{stderr.lines.last(3).join}" unless status.success?
@@ -88,7 +99,7 @@ document = {
 }
 
 content = "#{JSON.pretty_generate(document)}\n"
-accepted = ARGV.include?("--accept")
+accepted = options[:accept]
 
 if File.exist?(MANIFEST) && !accepted
   committed = JSON.parse(read_utf8(MANIFEST))

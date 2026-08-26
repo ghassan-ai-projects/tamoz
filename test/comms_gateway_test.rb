@@ -11,6 +11,26 @@ require_relative 'test_helper'
 class CommsGatewayTest < Minitest::Test
   Comms = Tamoz::Comms
 
+  def test_start_authenticates_the_transport_before_polling
+    with_gateway do |gateway, transport, *|
+      assert_equal :started, gateway.start
+      assert_equal 1, transport.authentication_calls
+    ensure
+      gateway&.stop
+    end
+  end
+
+  def test_start_rejects_a_transport_identity_mismatch
+    with_gateway do |gateway, transport, *|
+      transport.authenticated_id = 99
+
+      assert_equal :auth_failed, gateway.start
+      assert_equal 1, transport.authentication_calls
+    ensure
+      gateway&.stop
+    end
+  end
+
   def with_gateway(limits: {}, controls: nil)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
@@ -894,13 +914,22 @@ class CommsGatewayTest < Minitest::Test
   # A scripted Transport for the loop: batches of raw updates, optional
   # receipt, optional ambiguity.
   class ScriptedTransport
-    attr_accessor :receipt, :raise_ambiguous, :transient_polls, :comms_errors
+    attr_accessor :receipt, :raise_ambiguous, :transient_polls, :comms_errors, :authenticated_id
 
     def initialize
       @updates = []
       @transient_polls = 0
       @comms_errors = 0
       @poll_calls = 0
+      @authenticated_id = nil
+      @authentication_calls = 0
+    end
+
+    attr_reader :authentication_calls, :poll_calls
+
+    def authenticate(descriptor, _credential)
+      @authentication_calls += 1
+      { 'id' => @authenticated_id || descriptor.identity.fetch(:expected_bot_id) }
     end
 
     def batch(updates)
@@ -926,7 +955,6 @@ class CommsGatewayTest < Minitest::Test
       }
     end
 
-    attr_reader :poll_calls
     # rubocop:enable Lint/UnusedMethodArgument
 
     def deliver(delivery)

@@ -221,21 +221,36 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
-  # The transport cap (plan 01, work item 4): a body beyond the configured
-  # max_response_bytes is abandoned mid-read with the typed error — never
-  # buffered unbounded.
-  def test_a_response_beyond_the_transport_cap_raises_response_too_large
+  # An oversized poll is a failed idempotent read; the caller can repeat it
+  # from the unchanged durable offset.
+  def test_an_oversized_poll_response_is_transient
     with_transport(max_response_bytes: 1024) do |transport, server|
       server.script('getUpdates', body: {
         'ok' => true,
         'result' => [update(101, text: 'x' * 4096)]
       }, times: 1)
 
-      error = assert_raises(Tamoz::Telegram::ResponseTooLargeError) do
+      error = assert_raises(Comms::TransientTransportError) do
         transport.poll(next_offset: nil, limit: 50, timeout_s: 30)
       end
 
-      assert error.retryable? == false
+      assert_predicate error, :retryable?
+    end
+  end
+
+  def test_an_oversized_send_response_is_ambiguous
+    with_transport(max_response_bytes: 1024) do |transport, server|
+      server.script('sendMessage', body: {
+        'ok' => true,
+        'result' => { 'message_id' => 17, 'date' => 1, 'text' => 'x' * 4096 }
+      }, times: 1)
+      delivery = Comms::Delivery.build(
+        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'x',
+        part_index: 0, part_count: 1, journaled: true, render_version: 1,
+        content_digest: 'f' * 64
+      )
+
+      assert_raises(Comms::AmbiguousDeliveryError) { transport.deliver(delivery) }
     end
   end
 

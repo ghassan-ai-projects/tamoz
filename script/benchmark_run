@@ -1,16 +1,23 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+$LOAD_PATH.unshift(*%w[
+  tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-tools
+  tamoz-observability tamoz-comms tamoz-approval tamoz-agent-kernel
+  tamoz-agent-capabilities tamoz-agent-session tamoz-agent-memory
+  tamoz-agent-healing tamoz-agent-improvement tamoz-agent-profile tamoz-agent
+  tamoz-sqlite tamoz-stream
+].map { |name| File.expand_path("../gems/#{name}/lib", __dir__) })
 $LOAD_PATH.unshift(File.expand_path("../test", __dir__))
-require "json"
+require "tamoz/evals/runner"
 require "digest"
 require "fileutils"
 require "optparse"
 require "tamoz/agent"
 require "tamoz/stream/episode_worker"
 require "tamoz/stream/decision_node_builder"
-require "tamoz/evals"
 require "support/benchmark_families"
 require "support/local_model_endpoint"
 require "support/episode_composition"
@@ -29,7 +36,7 @@ class BenchmarkRun
   PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
   BASE_TIME = "2026-08-15T00:00:00Z"
 
-  def initialize(protocol_path: PROTOCOL_PATH, cases: nil, out: nil, seed: 11, label: "pilot")
+  def initialize(protocol_path: PROTOCOL_PATH, cases: nil, out: nil, seed: 11, label: "pilot", input_manifest: nil)
     @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
     @cases_per_family = cases || @protocol.dig("case_matrix", "min_cases_per_cell")
     @out = out || File.expand_path(
@@ -37,6 +44,7 @@ class BenchmarkRun
     )
     @seed = seed
     @label = label
+    @input_manifest = input_manifest
     # Control 2 (fixture/fake provider stop): this harness runs a FIXTURE
     # provider. A fixture run can never be an intelligence (holdout) run — the
     # label is frozen to pilot. Anything else is a stop.
@@ -47,6 +55,8 @@ class BenchmarkRun
   end
 
   def run
+    raise ArgumentError, "runner input manifest is required" unless @input_manifest
+
     cells = build_cells
     scored = cells.map { |cell| score_cell(cell) }
     report = Tamoz::Evals::Benchmark::Report.build(
@@ -209,6 +219,12 @@ end
 if $PROGRAM_NAME == __FILE__
   options = {}
   OptionParser.new do |opts|
+    opts.on("--input-manifest PATH") do |value|
+      options[:input_manifest] = Tamoz::Evals::Runner::InputManifest.from_path(
+        value,
+        package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+      )
+    end
     opts.on("--cases N", Integer) { |value| options[:cases] = value }
     opts.on("--out PATH") { |value| options[:out] = value }
     opts.on("--seed N", Integer) { |value| options[:seed] = value }

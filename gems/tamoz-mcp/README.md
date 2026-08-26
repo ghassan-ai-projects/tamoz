@@ -23,5 +23,6 @@ construction with typed `Tamoz::Mcp::ValidationError` rejections; nothing is spa
 here. Catalog compilation, invocation, supervision, and elicitation arrive in later
 P10 slices per `docs/P10_MCP_PLAN.md`.
 
-This package depends on `tamoz-core` and the official `mcp` gem only. It never
+This package depends on `tamoz-core`, `tamoz-cancellation`, and the official
+`mcp` gem. It never
 requires `tamoz-agent`, `tamoz-sqlite`, or a model provider.

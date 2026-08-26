@@ -25,8 +25,10 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
-| `tamoz-mcp` | Governed MCP client/host and governed websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
+| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
+| `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms transport/store seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Closed signal catalog, correlation, bounded recorders, metrics and trace projection | `tamoz-core` |
@@ -36,15 +38,18 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` — admission, retrieval, lifecycle with deletion receipts, consolidation into wisdom, behavior transitions | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
 | `tamoz-agent-healing` | Bounded self-healing: typed failure model, classification with abstention, immutable rules, reviewed remediation protocol | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core` |
-| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
-| `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
+| `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
+| `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, runtime gems used by the selected runner |
 
 Each gem installs and runs with only its declared dependencies, proven per gem
-by an isolated install into its own `GEM_HOME`. `tamoz-evals` is a non-runtime
-gem: no production gemspec may depend on it.
+by an isolated install into its own `GEM_HOME`. `tamoz-evals` verifies evidence;
+`tamoz-evals-runner` owns executable evaluation runtime and receives its
+corpora, scripted inputs, and benchmark adapters from explicit external inputs.
+No production gemspec may depend on either evaluation gem.
 
 Tamoz Agent is the reference application under `apps/tamoz-agent`.
 
@@ -145,7 +150,7 @@ rbenv exec bundle exec rake ci
 ```
 
 ```bash
-rbenv exec bundle exec tamoz-eval scorecard agent-smoke
+rbenv exec bundle exec tamoz-eval-runner scorecard agent-smoke --input-manifest PATH
 ```
 
 The scorecard runs a fixed deterministic corpus and reports task success,

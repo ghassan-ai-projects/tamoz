@@ -31,18 +31,14 @@ module Tamoz
       def self.run(
         argv,
         out: $stdout,
-        err: $stderr,
-        scorecard_factory: -> { Harness::AgentSmokeScorecard.new },
-        treatment_factory: nil
+        err: $stderr
       )
-        new(out:, err:, scorecard_factory:, treatment_factory:).run(argv)
+        new(out: out, err: err).run(argv)
       end
 
-      def initialize(out:, err:, scorecard_factory:, treatment_factory: nil)
+      def initialize(out:, err:)
         @out = out
         @err = err
-        @scorecard_factory = scorecard_factory
-        @treatment_factory = treatment_factory
       end
 
       def run(argv)
@@ -50,8 +46,6 @@ module Tamoz
         return version if argv == ["--version"]
 
         command, *paths = argv
-        return scorecard(paths) if command == "scorecard"
-        return treatment(paths) if command == "treatment"
         return usage("expected: tamoz-eval verify ARTIFACT...") unless command == "verify" && !paths.empty?
 
         codes = paths.map { |path| verify_path(path) }
@@ -59,39 +53,6 @@ module Tamoz
       end
 
       private
-
-      # DR-3: the treatment profile evaluator. CI mode is the reproducible gate
-      # (injection correctness). Live mode is an operator-run (`TAMOZ_MEMORY_LIVE`)
-      # with a library-supplied adapter; the CLI refuses to fake it.
-      def treatment(arguments)
-        unless arguments == ["memory"] || arguments == ["memory", "--mode", "ci"]
-          return usage(
-            "expected: tamoz-eval treatment memory (live attribution is an " \
-            "operator-run via MemoryTreatmentProfile with a live_adapter)"
-          )
-        end
-
-        factory = @treatment_factory || -> { Harness::MemoryTreatmentProfile.new(mode: :ci) }
-        run_gate("treatment memory") { factory.call.run }
-      end
-
-      def scorecard(arguments)
-        return usage("expected: tamoz-eval scorecard agent-smoke") unless arguments == ["agent-smoke"]
-
-        run_gate("agent-smoke") { @scorecard_factory.call.run }
-      end
-
-      def run_gate(label)
-        report = yield
-        @out.puts(report.to_json)
-        report.passed? ? SUCCESS : GATE_FAILURE
-      rescue InvalidArtifactError => error
-        @err.puts("#{label}: invalid evidence: #{error.message}")
-        INVALID_EVIDENCE
-      rescue ExecutionError => error
-        @err.puts("#{label}: infrastructure failure: #{error.message}")
-        INFRASTRUCTURE_FAILURE
-      end
 
       def verify_path(path)
         verification = Verifier.new.verify(path)
@@ -114,8 +75,6 @@ module Tamoz
 
       def help
         @out.puts("Usage: tamoz-eval verify ARTIFACT...")
-        @out.puts("       tamoz-eval scorecard agent-smoke")
-        @out.puts("       tamoz-eval treatment memory")
         @out.puts("       tamoz-eval --version")
         SUCCESS
       end

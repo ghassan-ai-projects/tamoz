@@ -7,21 +7,23 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 512 | 277 | 15 | **no** |
+| 525 | 277 | 19 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
+| failing | 4 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 482 |
+| pass | 491 |
 
 ## Release-blocking gaps (the DoD list)
 
 | Requirement | Status | Why |
 |---|---|---|
+| `ADR-039` — Tamoz is supervisory; certified safety and real-time control stay external | failing | no direct evidence names this requirement |
 | `ADR-041` — Communication channels are a contract gem plus per-transport adapter gems | missing | Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves. |
 | `ADR-042` — The channel gateway is a separate process in the connector zone | missing | Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice. |
 | `ADR-043` — Telegram v1 is deny-only and reference-bound | missing | Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence. |
@@ -36,7 +38,17 @@ generating run.
 | `INV-59` — Observation cannot change execution, and its surface is bounded and versioned | missing | The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual. |
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
+| `MIG-15` — MIGRATION_15 | failing | no direct evidence names this requirement |
+| `NG-real-actuator` — No real physical actuator; the simulator is the only effector | failing | no direct evidence names this requirement |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
+| `PHASE-P14` — Streaming physical-world input — tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval) | failing | no direct evidence names this requirement |
+
+## Failing evidence (release stopper)
+
+- `ADR-039` — test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only
+- `MIG-15` — test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store
+- `NG-real-actuator` — test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only
+- `PHASE-P14` — test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal
 
 ## Full audit
 
@@ -80,7 +92,7 @@ generating run.
 | `ADR-036` | adr | yes | pass | `test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused` |
 | `ADR-037` | adr | yes | pass | `test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts` |
 | `ADR-038` | adr | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
-| `ADR-039` | adr | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
+| `ADR-039` | adr | yes | failing | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `ADR-040` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
 | `ADR-041` | adr | yes | missing | `—` |
 | `ADR-042` | adr | yes | missing | `—` |
@@ -187,19 +199,20 @@ generating run.
 | `API-tamoz-comms-Tamoz::Comms::DecisionRecord` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::DecisionStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Delivery` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-comms-Tamoz::Comms::DeliveryDrainer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::DeliverySink` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-comms-Tamoz::Comms::Gateway` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::InboundEnvelope` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::InterruptDigest` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::OutboxDeliverySink` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::PollerConflictError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-Tamoz::Comms::ResponseTooLargeError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Shapes` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::SurfaceDescriptor` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::ThrottledError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::Transport` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-comms-Tamoz::Comms::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-gateway-Tamoz::Comms::DeliveryDrainer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-comms-gateway-Tamoz::Comms::Gateway` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency.join_all` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency::Drain` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-concurrency-Tamoz::Concurrency::EventStream` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -267,6 +280,8 @@ generating run.
 | `API-tamoz-evals-Tamoz::Evals::Evidence.load` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-evals-Tamoz::Evals::Result.load` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-evals-Tamoz::Evals::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-evals-runner-Tamoz::Evals::Runner::InputManifest` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-evals-runner-Tamoz::Evals::Runner::ScorecardSummaryConsumer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-graph-Tamoz.graph` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-graph-Tamoz.interrupt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-graph-Tamoz.send_to` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -319,6 +334,17 @@ generating run.
 | `API-tamoz-mcp-Tamoz::Mcp::UnavailableError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.credential_shaped_query?` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.egress_budgets` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.sanitize_result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressCircuit` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressClient` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressClient::Result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicy::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::RedirectHopLimitError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::Catalog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::ContentPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::Correlation` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -361,7 +387,6 @@ generating run.
 | `API-tamoz-scheduler-Tamoz::Scheduler::Schedule` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::ScheduleStore` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::SchedulerError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-scheduler-Tamoz::Scheduler::ScorecardSummaryConsumer` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::StoreConflictError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::TERMINAL` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-scheduler-Tamoz::Scheduler::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -504,7 +529,7 @@ generating run.
 | `MIG-12` | migration | yes | pass | `test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
 | `MIG-13` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
 | `MIG-14` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
-| `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
+| `MIG-15` | migration | yes | failing | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
 | `MIG-16` | migration | yes | pass | `test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it` |
 | `MIG-17` | migration | yes | pass | `test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies` |
 | `MIG-18` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
@@ -522,7 +547,7 @@ generating run.
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
-| `NG-real-actuator` | non_goal | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
+| `NG-real-actuator` | non_goal | yes | failing | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `NG-second-ui` | non_goal | no | indirect | `—` |
 | `NG-self-promotion` | non_goal | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `OBJ-1` | objective | no | indirect | `—` |
@@ -542,7 +567,7 @@ generating run.
 | `PHASE-P11` | phase_exit_criterion | yes | pass | `test/memory_session_integration_test.rb#test_memory_enabled_session_records_epoch_and_writes_episode_memory` |
 | `PHASE-P12` | phase_exit_criterion | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
 | `PHASE-P13` | phase_exit_criterion | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
-| `PHASE-P14` | phase_exit_criterion | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
+| `PHASE-P14` | phase_exit_criterion | yes | failing | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
 | `PHASE-P16` | phase_exit_criterion | yes | pass | `test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent` |
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
 | `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |

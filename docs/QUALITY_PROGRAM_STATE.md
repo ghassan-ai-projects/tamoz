@@ -8,27 +8,27 @@ every slice and whenever the phase table changes.
 
 ## Checkpoint
 
-- **Date:** 2026-08-24
-- **HEAD:** `bdce18e` (branch `decomposition/session-capabilities-concurrency`) —
-  "Review fixes: PB lens pair + C lens pair"
-- **Tree:** clean after the Z commit of this branch
-- **Branch:** `decomposition/session-capabilities-concurrency`, ready to merge to
-  main. Never push/tag/release/rewrite.
-- **What this branch did:** four gem extractions per
-  `docs/gem-splits-2026-08-24/EXECUTION.md` (capabilities, session,
-  cancellation, concurrency — the monorepo is seventeen gems), each with full
-  shipped-convention wiring, lens-pair reviews, and review-fix commits. The
-  outcome section of EXECUTION.md is the authoritative summary; the corrected
-  pre-existing-red parity list lives in its ground-truth section.
+- **Date:** 2026-08-26
+- **HEAD:** `codex/implement-gem-boundary-audit-2026-08-25` — Phase 1 gem-boundary
+  implementation slice (`tamoz-mcp-websearch`)
+- **Tree:** contains the pre-existing audit/scan working files plus this
+  implementation slice; no unrelated files were rewritten.
+- **Branch:** `codex/implement-gem-boundary-audit-2026-08-25`. Never
+  push/tag/release/rewrite.
+- **What this branch did:** extracted the governed websearch adapter into the
+  twenty-fifth package with lockstep metadata, hermetic parent/child/eval
+  packaging proofs, generated inventory updates, and five-lens review evidence.
+  The phase correction record distinguishes the verbatim boundary move from
+  deferred live-provider hardening.
 - **Resume point for the quality program:**
   1. The global reek ratchet is still red repo-wide (stale baseline; regen
      blocked where `RUN_COVERAGE=1 rake test` fails) — per-file reek parity was
      enforced on every touched file this branch instead.
-  2. The requirements-audit needs one unsandboxed regeneration (kill-scenario
-     evidence cases cannot run here); manifest + audit rows are otherwise
-     consistent at HEAD.
-  3. enola baseline re-pinned at `bdce18e`; next structural change grades
-     against it.
+  2. The requirements-audit has been regenerated with loopback access; its
+     remaining release-blocking gaps are the existing documented missing
+     evidence rows.
+  3. Enola is pinned to the pre-slice baseline and reports no structural
+     regression for the extracted package.
   4. The stale test drifts recorded in the audit doc (`approval_required` /
      `approval:` / `policy_rev`) are good small first slices back.
 

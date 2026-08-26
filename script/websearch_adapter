@@ -34,7 +34,23 @@
 
 # The operator-side adapter is a repo script (like script/mcp_test_server), so
 # it resolves the gem libs itself instead of relying on the caller's load path.
-$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+WEBSEARCH_GEM_LIB = ENV.fetch(
+  "TAMOZ_WEBSEARCH_GEM_LIB",
+  File.expand_path("../gems/tamoz-mcp-websearch/lib", __dir__)
+).freeze
+MCP_GEM_LIB = ENV.fetch(
+  "TAMOZ_MCP_GEM_LIB",
+  File.expand_path("../gems/tamoz-mcp/lib", __dir__)
+).freeze
+CORE_GEM_LIB = ENV.fetch(
+  "TAMOZ_CORE_GEM_LIB",
+  File.expand_path("../gems/tamoz-core/lib", __dir__)
+).freeze
+CANCELLATION_GEM_LIB = ENV.fetch(
+  "TAMOZ_CANCELLATION_GEM_LIB",
+  File.expand_path("../gems/tamoz-cancellation/lib", __dir__)
+).freeze
+$LOAD_PATH.unshift(WEBSEARCH_GEM_LIB, MCP_GEM_LIB, CORE_GEM_LIB, CANCELLATION_GEM_LIB)
 
 require "json"
 require "mcp"
@@ -179,11 +195,13 @@ module WebsearchAdapter
   end
 end
 
-configuration = MCP::Configuration.new
-server = MCP::Server.new(
-  name: "tamoz-websearch-adapter",
-  version: "0.1.0",
-  tools: [WebsearchAdapter.build_search_tool],
-  configuration: configuration
-)
-MCP::Server::Transports::StdioTransport.new(server).open
+if $PROGRAM_NAME == __FILE__
+  configuration = MCP::Configuration.new
+  server = MCP::Server.new(
+    name: "tamoz-websearch-adapter",
+    version: "0.1.0",
+    tools: [WebsearchAdapter.build_search_tool],
+    configuration: configuration
+  )
+  MCP::Server::Transports::StdioTransport.new(server).open
+end

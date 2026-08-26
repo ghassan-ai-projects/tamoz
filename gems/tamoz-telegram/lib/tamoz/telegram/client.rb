@@ -8,8 +8,8 @@ module Tamoz
   module Telegram
     # A minimal Bot API HTTP client over net/http (ADR-041: stdlib only).
     # Every request is a bounded JSON call; the response body is streamed and
-    # abandoned past `max_response_bytes` (typed ResponseTooLargeError, never
-    # buffered unbounded); a 429 carries the server's authoritative
+    # abandoned past `max_response_bytes` (typed Comms::ResponseTooLargeError;
+    # never buffered unbounded); a 429 carries the server's authoritative
     # retry_after, a network timeout on a send is AmbiguousDeliveryError
     # (genuinely irreconcilable, design §10), and an auth failure is
     # AuthenticationError (never a retry).
@@ -52,7 +52,7 @@ module Tamoz
           response = partial
           partial.read_body do |chunk|
             body << chunk
-            raise ResponseTooLargeError if body.bytesize > @max_response_bytes
+            raise Comms::ResponseTooLargeError if body.bytesize > @max_response_bytes
           end
         end
 

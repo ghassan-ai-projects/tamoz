@@ -6,14 +6,15 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ## 1. Decision
 
-Communication channels ship as **two gems**:
+Communication channels ship as **three gems**:
 
 | Gem | Responsibility | Runtime dependencies |
 |---|---|---|
 | `tamoz-comms` | Surface/message/delivery/decision values, identity and admission policy, transport/rendering seams, structural `CommsStore` contract | `tamoz-core` |
+| `tamoz-comms-gateway` | Long-running `Gateway` and `DeliveryDrainer` process boundary over injected Comms seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-telegram` | One conforming transport: Telegram Bot API over long polling | `tamoz-comms`, stdlib |
 
-A **channel** is a *user surface*: it submits requests and renders results — the same category as the CLI, and explicitly not a stream channel, not a scheduler occurrence, and not an execution stream. The kind list is a closed set owned by `tamoz-comms`; adding a transport is a release, not a plugin (ADR-014 stands). `tamoz-telegram` is the only package that loads `net/http`; an installation without the adapter still runs the agent and reports a typed missing-adapter error for `tamoz comms serve`.
+A **channel** is a *user surface*: it submits requests and renders results — the same category as the CLI, and explicitly not a stream channel, not a scheduler occurrence, and not an execution stream. The kind list is a closed set owned by `tamoz-comms`; adding a transport is a release, not a plugin (ADR-014 stands). `tamoz-comms-gateway` owns only the long-running process boundary and receives its transport and durable seams from the caller. `tamoz-telegram` is the only package that loads `net/http`; an installation without the adapter still runs the agent and reports a typed missing-adapter error for `tamoz comms serve`.
 
 The execution machinery already exists — inbox requests, turns on bound profiles, durable interrupts, and journaled effects. This design adds a transport, admission/rendering contracts, a delivery sink, and a stronger exact decision record shared with the local CLI. It adds no second execution engine.
 

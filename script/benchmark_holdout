@@ -1,13 +1,20 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
+$LOAD_PATH.unshift(*%w[
+  tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-tools
+  tamoz-observability tamoz-comms tamoz-approval tamoz-agent-kernel
+  tamoz-agent-capabilities tamoz-agent-session tamoz-agent-memory
+  tamoz-agent-healing tamoz-agent-improvement tamoz-agent-profile tamoz-agent
+  tamoz-sqlite
+].map { |name| File.expand_path("../gems/#{name}/lib", __dir__) })
 $LOAD_PATH.unshift(File.expand_path("../test", __dir__))
-require "json"
+require "tamoz/evals/runner"
 require "digest"
 require "fileutils"
 require "optparse"
-require "tamoz/evals"
 require "support/benchmark_families"
 
 # P7 (docs/new-design/PHASE_P7_BENCHMARK.md): holdout isolation. Generates the
@@ -26,7 +33,7 @@ class BenchmarkHoldout
   PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
   CUTOFF = "2026-09-01T00:00:00Z"
 
-  def initialize(protocol_path: PROTOCOL_PATH, cases: 30, seed: 23, out_dir: nil, force: false)
+  def initialize(protocol_path: PROTOCOL_PATH, cases: 30, seed: 23, out_dir: nil, force: false, input_manifest: nil)
     @protocol = JSON.parse(File.read(protocol_path, encoding: Encoding::UTF_8))
     @cases = cases
     @seed = seed
@@ -34,9 +41,12 @@ class BenchmarkHoldout
       "../documentation/benchmark/holdout-#{Time.now.utc.strftime("%Y%m%d-%H%M%S")}", __dir__
     )
     @force = force
+    @input_manifest = input_manifest
   end
 
   def run
+    raise ArgumentError, "runner input manifest is required" unless @input_manifest
+
     if File.exist?(File.join(@out_dir, "holdout-manifest.json")) && !@force
       raise ArgumentError,
             "holdout already exists at #{@out_dir} — pass --force to regenerate (a frozen holdout must never be silently overwritten)"
@@ -131,6 +141,12 @@ end
 if $PROGRAM_NAME == __FILE__
   options = {}
   OptionParser.new do |opts|
+    opts.on("--input-manifest PATH") do |value|
+      options[:input_manifest] = Tamoz::Evals::Runner::InputManifest.from_path(
+        value,
+        package_roots: [Tamoz::Evals::Runner::PACKAGE_ROOT, Tamoz::Evals::DATA_ROOT]
+      )
+    end
     opts.on("--cases N", Integer) { |value| options[:cases] = value }
     opts.on("--seed N", Integer) { |value| options[:seed] = value }
     opts.on("--out DIR") { |value| options[:out_dir] = value }

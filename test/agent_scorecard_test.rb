@@ -3,12 +3,12 @@
 require_relative "test_helper"
 
 class AgentScorecardTest < Minitest::Test
-  CORPUS = Tamoz::Evals::Harness::AgentSmokeCorpus.new
+  CORPUS = RunnerInputs.smoke_corpus
   AUDITOR = Tamoz::Evals::Harness::AgentRunAudit.new
 
   class MutatingCorpus
     def initialize(&mutation)
-      @delegate = Tamoz::Evals::Harness::AgentSmokeCorpus.new
+      @delegate = RunnerInputs.smoke_corpus
       @mutation = mutation
     end
 
@@ -91,8 +91,8 @@ class AgentScorecardTest < Minitest::Test
   end
 
   def test_honest_baseline_is_deterministic_digest_bound_and_exposes_current_gaps
-    first = Tamoz::Evals::Harness::AgentSmokeScorecard.new.run
-    second = Tamoz::Evals::Harness::AgentSmokeScorecard.new.run
+    first = Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS).run
+    second = Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS).run
 
     assert_equal first.to_json, second.to_json
     assert first.passed?
@@ -125,8 +125,8 @@ class AgentScorecardTest < Minitest::Test
         "approvals_denied" => 1,
         "tool_calls" => 38,
         "model_calls" => 95,
-        "model_input_bytes" => 286_783,
-        "model_output_bytes" => 21_515,
+        "model_input_bytes" => 286_652,
+        "model_output_bytes" => 21_441,
         "tool_output_bytes" => 5_122,
         "mutations" => 11,
         "unnecessary_mutations" => 1,
@@ -355,7 +355,7 @@ class AgentScorecardTest < Minitest::Test
   end
 
   def test_report_retains_metadata_without_raw_workspace_or_host_content
-    json = Tamoz::Evals::Harness::AgentSmokeScorecard.new.run.to_json
+    json = Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS).run.to_json
 
     refute_includes json, Dir.tmpdir
     refute_includes json, "/etc/passwd"
@@ -408,43 +408,48 @@ class AgentScorecardTest < Minitest::Test
   end
 
   def test_scorecard_cli_exit_codes_are_distinct_and_output_is_one_json_line
-    out = StringIO.new
-    err = StringIO.new
-    status = Tamoz::Evals::CLI.run(["scorecard", "agent-smoke"], out:, err:)
-    assert_equal Tamoz::Evals::CLI::SUCCESS, status
-    assert_equal 1, out.string.lines.length
-    assert_equal "pass", JSON.parse(out.string).fetch("decision")
-    assert_empty err.string
+    RunnerInputs.with_manifest do |manifest|
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Evals::Runner::CLI.run(
+        ["scorecard", "agent-smoke", "--input-manifest", manifest],
+        out:, err:, scorecard_factory: -> { Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: CORPUS) }
+      )
+      assert_equal Tamoz::Evals::CLI::SUCCESS, status
+      assert_equal 1, out.string.lines.length
+      assert_equal "pass", JSON.parse(out.string).fetch("decision")
+      assert_empty err.string
 
-    out = StringIO.new
-    err = StringIO.new
-    status = Tamoz::Evals::CLI.run(
-      ["scorecard", "agent-smoke"],
-      out:,
-      err:,
-      scorecard_factory: -> { StaticRunner.new(report: StaticReport.new(passed: false)) }
-    )
-    assert_equal Tamoz::Evals::CLI::GATE_FAILURE, status
-    assert_equal "{\"report_type\":\"test\"}\n", out.string
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Evals::Runner::CLI.run(
+        ["scorecard", "agent-smoke", "--input-manifest", manifest],
+        out:,
+        err:,
+        scorecard_factory: -> { StaticRunner.new(report: StaticReport.new(passed: false)) }
+      )
+      assert_equal Tamoz::Evals::CLI::GATE_FAILURE, status
+      assert_equal "{\"report_type\":\"test\"}\n", out.string
 
-    out = StringIO.new
-    err = StringIO.new
-    status = Tamoz::Evals::CLI.run(
-      ["scorecard", "agent-smoke"],
-      out:,
-      err:,
-      scorecard_factory: lambda do
-        StaticRunner.new(error: Tamoz::Evals::ExecutionError.new("subject unavailable"))
-      end
-    )
-    assert_equal Tamoz::Evals::CLI::INFRASTRUCTURE_FAILURE, status
-    assert_empty out.string
-    assert_includes err.string, "infrastructure failure"
+      out = StringIO.new
+      err = StringIO.new
+      status = Tamoz::Evals::Runner::CLI.run(
+        ["scorecard", "agent-smoke", "--input-manifest", manifest],
+        out:,
+        err:,
+        scorecard_factory: lambda do
+          StaticRunner.new(error: Tamoz::Evals::ExecutionError.new("subject unavailable"))
+        end
+      )
+      assert_equal Tamoz::Evals::CLI::INFRASTRUCTURE_FAILURE, status
+      assert_empty out.string
+      assert_includes err.string, "infrastructure failure"
+    end
 
     out = StringIO.new
     err = StringIO.new
     assert_equal Tamoz::Evals::CLI::USAGE_ERROR,
-                 Tamoz::Evals::CLI.run(["scorecard", "unknown"], out:, err:)
+                 Tamoz::Evals::Runner::CLI.run(["scorecard", "unknown"], out:, err:)
   end
 
   private
@@ -457,4 +462,5 @@ class AgentScorecardTest < Minitest::Test
   def gate(report, id)
     report.to_h.fetch("hard_gates").find { |entry| entry.fetch("id") == id }.fetch("status")
   end
+
 end

@@ -255,7 +255,7 @@ class AgentNonAsciiSessionTest < Minitest::Test
   # The last four are defence in depth. They are named here so the boundary is
   # a recorded decision rather than an accident.
   CANONICALITY_SITES = {
-    "tamoz-evals/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
+    "tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb" => 1,
     "tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb" => 2,
     "tamoz-sqlite/lib/tamoz/sqlite/wire.rb" => 1,
     "tamoz-sqlite/lib/tamoz/sqlite/effect_record_reader.rb" => 1,
