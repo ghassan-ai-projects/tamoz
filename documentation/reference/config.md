@@ -11,8 +11,8 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 | Variable | Meaning |
 |---|---|
-| `TAMOZ_MODEL` | RubyLLM model identifier (e.g. `gpt-5-mini`) |
-| `TAMOZ_PROVIDER` | RubyLLM provider (default: `openai`) |
+| `TAMOZ_MODEL` | OpenAI-compatible model identifier (e.g. `gpt-5-mini`) |
+| `TAMOZ_PROVIDER` | Model provider (default: `openai`) |
 | `OPENAI_API_KEY` | Credential for the default provider |
 | `ANTHROPIC_API_KEY`, `DEEPSEEK_API_KEY`, ... | Credentials for other providers — the provider's own standard variable |
 | `TAMOZ_TELEGRAM_BOT_TOKEN` | Telegram bot token, referenced by NAME in channel config |
@@ -114,7 +114,7 @@ profile:
 roots:
   workspace: /path/to/project
 model_roles:
-  primary: {provider: openai, model: gpt-5-mini, credential_ref: {kind: env, name: OPENAI_API_KEY}}
+  primary: {provider: openai, model: gpt-5-mini, credential_ref: {kind: env, name: TAMOZ_OPENAI_API_KEY}}
 budgets:
   model_calls: 40
   wall_clock_seconds: 900

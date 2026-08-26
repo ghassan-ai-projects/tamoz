@@ -6,6 +6,8 @@ require "securerandom"
 
 require_relative "runtime/plan_review"
 require_relative "runtime/step_execution"
+require_relative "runtime/effects_journal"
+require "tamoz/agent/model_call_projection"
 
 module Tamoz
   module Agent
@@ -34,10 +36,27 @@ module Tamoz
       include PlanReview
       include StepExecution
 
-      attr_reader :model, :toolbox, :max_plan_attempts, :ask, :routing, :approval_engine
+      EMPTY_CATALOG_REVISION = Tamoz::Core.digest("tamoz.agent.runtime.catalog.v1\n", {}).freeze
+
+      # Inverse of Tamoz::Core.serialized_tool_error_name: the dispatcher
+      # journals a model failure as a detail hash, and the caller-facing error
+      # must keep its typed identity and message bytes.
+      JOURNALED_ERROR_CLASSES = {
+        "Tamoz::Agent::ToolError" => Tamoz::Core::ToolError,
+        "Tamoz::Agent::ToolArgumentError" => Tamoz::Core::ToolArgumentError,
+        "Tamoz::Agent::ToolPolicyError" => Tamoz::Core::ToolPolicyError,
+        "Tamoz::Agent::ModelCallError" => Tamoz::Agent::ModelCallError
+      }.freeze
+
+      # The four values EffectDispatcher reads off a graph Context; the
+      # ephemeral runtime supplies its turn correlation instead.
+      EffectContext = Data.define(:effects, :execution_id, :task_id, :request_id)
+
+      attr_reader :model, :toolbox, :max_plan_attempts, :ask, :routing, :approval_engine, :effects
 
       def initialize(model:, toolbox:, max_plan_attempts: 3, ask: nil, routing: :legacy,
-                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil)
+                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil,
+                     effects: nil)
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
           raise ArgumentError, "max_plan_attempts must be between 1 and 10"
@@ -54,6 +73,7 @@ module Tamoz
         @observability = Tamoz::Observability::Producer.new(recorder:)
         @correlation = nil
         @model_call_count = 0
+        @effects = effects || EffectsJournal.new
         @capabilities = CapabilityBinding.build(toolbox:)
       end
 
@@ -598,11 +618,121 @@ module Tamoz
 
       def model_generate(stage:, system:, prompt:)
         @model_call_count += 1
+        ordinal = @model_call_count
+        request = model_request(system:, prompt:)
+        configuration_digest = model_configuration_digest
         @observability.around(
           "tamoz.model.call",
           correlation: @correlation,
           attributes: {provider: model_identity(:provider), model: model_identity(:model)}
-        ) { model.generate(stage:, system:, prompt:) }
+        ) do
+          outcome = EffectDispatcher.run(
+            context: effect_context,
+            operation: "model.generate.#{stage}",
+            safety: model_safety,
+            call_index: ordinal,
+            request: request.merge(
+              "stage" => stage.to_s,
+              "provider_configuration_digest" => configuration_digest
+            ),
+            actor: "tamoz.agent.runtime",
+            logical_identity: {
+              operation: "model.generate.#{stage}",
+              capability_id: "model:#{stage}",
+              arguments: request.merge(
+                "stage" => stage.to_s,
+                "provider_configuration_digest" => configuration_digest
+              ),
+              authority_revision: toolbox.catalog_digest,
+              catalog_revision: EMPTY_CATALOG_REVISION,
+              iteration: ordinal,
+              sub_operation: 0
+            }
+          ) do
+            response = model.generate(stage:, system:, prompt:)
+            if response.respond_to?(:content)
+              ModelCallProjection.from_response(
+                response,
+                request_digest: request["request_digest"],
+                settings_digest: model_settings_digest,
+                provider_configuration_digest: configuration_digest
+              )
+            else
+              response
+            end
+          end
+          case outcome.status
+          when :succeeded
+            model_content(outcome.value, request:, configuration_digest:)
+          when :failed then raise journaled_model_failure(outcome)
+          when :unknown then raise EffectUnknownError, "model call outcome is unknown"
+          else raise ProtocolError, "model receipt #{outcome.status}"
+          end
+        end
+      end
+
+      def journaled_model_failure(outcome)
+        detail = outcome.error || {}
+        klass = JOURNALED_ERROR_CLASSES.fetch(String(detail["class"]), ProtocolError)
+        return model_call_error_from_detail(detail) if klass == ModelCallError
+
+        klass.new(String(detail["message"]))
+      end
+
+      def model_call_error_from_detail(detail)
+        ModelCallError.new(
+          code: detail["code"], status: detail["status"],
+          body_digest: detail["body_digest"], body_bytes: detail["body_bytes"]
+        )
+      end
+
+      def model_content(value, request:, configuration_digest:)
+        return ModelCallProjection.validate!(
+          value,
+          request_digest: request["request_digest"],
+          settings_digest: model_settings_digest,
+          provider_configuration_digest: configuration_digest
+        ).fetch("content") if value.is_a?(Hash) && value.key?("content")
+
+        value.is_a?(Hash) ? value.fetch("output") : String(value)
+      end
+
+      def model_safety
+        return model.safety if model.respond_to?(:safety)
+
+        :idempotent
+      end
+
+      def model_configuration_digest
+        return unless model.respond_to?(:provider_configuration_digest)
+
+        model.provider_configuration_digest
+      end
+
+      def model_settings_digest
+        return unless model.respond_to?(:settings_digest)
+
+        model.settings_digest
+      end
+
+      def model_request(system:, prompt:)
+        return {"system" => system, "prompt" => prompt} unless model.respond_to?(:build_request)
+
+        bytes = model.build_request(system:, prompt:)
+        {
+          "system" => system,
+          "prompt" => prompt,
+          "request_digest" => model.request_digest(bytes)
+        }
+      end
+
+      def effect_context
+        EffectContext.new(
+          effects: @effects,
+          execution_id: @correlation.fetch(:execution_id),
+          task_id: @correlation.fetch(:task_id),
+          request_id: @correlation.fetch(:request_id)
+        )
       end
 
       def model_identity(method)

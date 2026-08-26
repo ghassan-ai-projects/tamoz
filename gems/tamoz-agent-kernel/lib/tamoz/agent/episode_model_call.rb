@@ -5,6 +5,7 @@ require "time"
 require "tamoz/core"
 require "tamoz/agent/errors"
 require "tamoz/agent/model_receipt"
+require "tamoz/agent/model_call_projection"
 require "tamoz/agent/reasoning_document"
 require "tamoz/agent/episode_model_transport"
 
@@ -21,7 +22,8 @@ module Tamoz
     #     request digest IS the digest of those bytes, so an independent
     #     endpoint-side digest log equals the receipt by construction.
     #   - The journaled result is the full codec-safe call projection
-    #     {content, response_digest, usage}, so replay reconstructs the same
+    #     {request_digest, content, response_digest, usage, settings_digest,
+    #     provider_configuration_digest}, so replay reconstructs the same
     #     receipt without calling the provider.
     #   - The RUNNER turns the journal-verified receipt into wire model
     #     events; the graph's Context emitter rejects model event types, so a
@@ -49,7 +51,8 @@ module Tamoz
         request_bytes = @transport.build_request(system:, prompt:)
         request_digest = @transport.request_digest(request_bytes)
         logical = ModelCall::LogicalCallKey.new(
-          episode_id:, stage: invocation.stage, slot:, request_digest:
+          episode_id:, stage: invocation.stage, slot:, request_digest:,
+          provider_configuration_digest: @transport.provider_configuration_digest
         )
         outcome = journal_episode_model_call(
           context:, invocation:, slot:, system:, prompt:, request_bytes:, logical:, frame_digest:
@@ -73,6 +76,7 @@ module Tamoz
             "stage" => invocation.stage.to_s,
             "system" => system,
             "prompt" => prompt,
+            "provider_configuration_digest" => logical.provider_configuration_digest,
             "logical_call_key" => logical.to_key
           },
           actor: "tamoz.agent.episode.reason",
@@ -85,7 +89,7 @@ module Tamoz
       def map_outcome(outcome, logical:, invocation:, request_bytes:, frame_digest:)
         case outcome.status
         when :succeeded
-          projection = codec_projection(outcome)
+          projection = codec_projection(outcome, request_digest: @transport.request_digest(request_bytes))
           receipt = build_receipt(
             logical:, invocation:, projection:, request_bytes:, outcome:, frame_digest:
           )
@@ -113,32 +117,22 @@ module Tamoz
         response = @transport.call(
           request_bytes, logical_call_id: logical.to_key, frame_digest:
         )
-        {
-          "request_digest" => @transport.request_digest(request_bytes),
-          "content" => response.content,
-          "response_digest" => response.response_digest,
-          "usage" => usage_projection(response)
-        }
+        ModelCallProjection.from_response(
+          response,
+          request_digest: @transport.request_digest(request_bytes),
+          settings_digest: @transport.settings_digest,
+          provider_configuration_digest: @transport.provider_configuration_digest
+        )
       end
 
-      def usage_projection(response)
-        return nil unless response.usage.available
-
-        {
-          "input_tokens" => response.usage.input_tokens,
-          "output_tokens" => response.usage.output_tokens,
-          "cost_microunits" => response.usage.cost_microunits
-        }
-      end
-
-      def codec_projection(outcome)
+      def codec_projection(outcome, request_digest:)
         value = outcome.value
-        value.is_a?(Hash) ? value : {
-          "request_digest" => "sha256:#{Digest::SHA256.hexdigest(String(value))}",
-          "content" => String(value),
-          "response_digest" => "sha256:#{Digest::SHA256.hexdigest(String(value))}",
-          "usage" => nil
-        }
+        ModelCallProjection.validate!(
+          value,
+          request_digest:,
+          settings_digest: @transport.settings_digest,
+          provider_configuration_digest: @transport.provider_configuration_digest
+        )
       end
 
       def build_receipt(logical:, invocation:, projection:, request_bytes:, outcome:, frame_digest:)
@@ -159,6 +153,7 @@ module Tamoz
           model: @transport.model,
           revision: nil,
           settings_digest: @transport.settings_digest,
+          provider_configuration_digest: @transport.provider_configuration_digest,
           frame_digest: frame_digest,
           request_digest: @transport.request_digest(request_bytes),
           response_digest: projection.fetch("response_digest"),

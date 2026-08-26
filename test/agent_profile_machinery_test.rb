@@ -60,7 +60,7 @@ class AgentProfileMachineryTest < Minitest::Test
     ]
 
     capture = []
-    stub_ruby_llm_new(capture) do
+    stub_model_factory(capture) do
       matrix.each do |cli_model, cli_provider, env_model, env_provider, expected|
         options = {model: cli_model, provider: cli_provider}
         env = {"TAMOZ_MODEL" => env_model, "TAMOZ_PROVIDER" => env_provider}.compact
@@ -82,7 +82,7 @@ class AgentProfileMachineryTest < Minitest::Test
       end
     end
     # The model that was actually constructed matches the recorded tuples for
-    # every cell (the stub recorded every RubyLLMModel.new call).
+    # every cell.
     assert_equal 7, capture.length
   end
 
@@ -817,7 +817,7 @@ class AgentProfileMachineryTest < Minitest::Test
 
       pinned = Profile.from_authority(snapshot)
       captured = []
-      stub_ruby_llm_new_into(captured) do
+      stub_model_factory_into(captured) do
         cli = new_cli(env: {"TAMOZ_OPENAI_API_KEY" => "sk-ref-value",
                             "OPENAI_API_KEY" => "sk-generic-value"})
         built = cli.send(:build_model, {assume_model_exists: true}, profile: pinned)
@@ -940,30 +940,31 @@ class AgentProfileMachineryTest < Minitest::Test
     Tamoz::Agent::CLI.new(out:, err:, input: StringIO.new, env:)
   end
 
-  # Replaces RubyLLMModel.new for the duration of the block, recording every
+  # Replaces the factory for the duration of the block, recording every
   # call's kwargs into `capture` (an Array) and returning a plain struct that
   # answers model/provider like the real class.
-  def stub_ruby_llm_new(capture)
-    original = Tamoz::Agent::RubyLLMModel.method(:new)
-    Tamoz::Agent::RubyLLMModel.singleton_class.define_method(:new) do |**kwargs|
+  def stub_model_factory(capture)
+    original = Tamoz::Agent::ModelClientFactory.method(:build)
+    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build) do |**kwargs|
       capture << kwargs
       Struct.new(:model, :provider).new(kwargs[:model], kwargs[:provider].to_sym)
     end
     yield
   ensure
-    Tamoz::Agent::RubyLLMModel.singleton_class.define_method(:new, original)
+    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build, original)
   end
 
-  # Single-value variant for DR5-14: captures the api_key into `captured[0]`.
-  def stub_ruby_llm_new_into(captured)
-    original = Tamoz::Agent::RubyLLMModel.method(:new)
-    Tamoz::Agent::RubyLLMModel.singleton_class.define_method(:new) do |**kwargs|
-      captured[0] = kwargs[:api_key]
+  # Single-value variant for DR5-14: captures the selected environment value
+  # passed to the factory into `captured[0]`.
+  def stub_model_factory_into(captured)
+    original = Tamoz::Agent::ModelClientFactory.method(:build)
+    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build) do |**kwargs|
+      captured[0] = kwargs.fetch(:environment).fetch("TAMOZ_OPENAI_API_KEY")
       Struct.new(:model, :provider).new(kwargs[:model], kwargs[:provider].to_sym)
     end
     yield
   ensure
-    Tamoz::Agent::RubyLLMModel.singleton_class.define_method(:new, original)
+    Tamoz::Agent::ModelClientFactory.singleton_class.define_method(:build, original)
   end
 
   def build_session_record(extra)

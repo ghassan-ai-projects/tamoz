@@ -1,5 +1,8 @@
 # Iteration 1 — Simple CLI conversation
 
+> Historical measurement from the pre-Phase-3 provider boundary. References to
+> RubyLLM describe the measured implementation and are not current support.
+
 ## Journey analyzed
 
 Input: `tamoz --root <dir> "What is the capital of France? Answer in one word."`

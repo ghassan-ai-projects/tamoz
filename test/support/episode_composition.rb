@@ -56,19 +56,14 @@ module EpisodeComposition
         Tamoz::Agent::EpisodeFrameBuilder.new(catalog:, objective:)
       end,
       model_call_factory: lambda do |role|
-        credential_ref = role["credential_ref"]
-        api_key = if credential_ref
-                    name = credential_ref.fetch("name")
-                    value = ENV[name]
-                    if value.to_s.empty?
-                      raise Tamoz::ConfigurationError,
-                            "model role credential_ref #{name.inspect} is not set in the environment"
-                    end
-                    value
-                  end
-        transport = Tamoz::Agent::EpisodeModelTransport.new(
-          endpoint: role.fetch("endpoint"), model: role.fetch("model"),
-          provider: role.fetch("provider"), api_key:, gateway: gateway
+        resolved_role = Tamoz::Agent::ModelCall.resolve_role(profile, role.fetch("name"))
+        transport = Tamoz::Agent::ModelClientFactory.build(
+          provider: resolved_role.provider,
+          model: resolved_role.model,
+          profile_role: resolved_role,
+          environment: ENV,
+          explicit_api_base: role.fetch("endpoint").to_s.empty? ? nil : role.fetch("endpoint"),
+          gateway:
         )
         Tamoz::Agent::EpisodeModelCall.new(transport:)
       end,

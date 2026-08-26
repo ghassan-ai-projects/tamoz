@@ -23,7 +23,7 @@
 # seed-controlled and is not claimed.
 #
 # What is NOT attempted, stated rather than faked: a comparison against a plain
-# RubyLLM script or an external job queue. Those are different products with
+# provider-client script or an external job queue. Those are different products with
 # different guarantees, and a synthetic race between them would measure the
 # harness, not the systems. The value number this DOES produce is the honest
 # one: what durability costs, measured as the same scripted turn through the
@@ -223,7 +223,7 @@ document = {
     "measured_at" => Time.now.utc.iso8601
   },
   "not_attempted" => [
-    "plain RubyLLM script comparison",
+    "plain provider-client script comparison",
     "external job-queue comparison",
     "live-provider latency (not seed-controlled; would not be reproducible)"
   ]
@@ -309,7 +309,7 @@ lines << "## Not attempted"
 lines << ""
 document.fetch("not_attempted").each { |item| lines << "- #{item}" }
 lines << ""
-lines << "A synthetic race against a plain RubyLLM script or an external job queue would"
+lines << "A synthetic race against a plain provider-client script or an external job queue would"
 lines << "measure the harness rather than the systems: they are different products with"
 lines << "different guarantees. Claiming such a number would be worse than omitting it."
 lines << ""

@@ -18,7 +18,7 @@ must exist, and the gem list must match what the repository actually packages.
 | Ruby | `>= 3.3, < 5.0` (the repository pins `3.3.11` in `.ruby-version`) |
 | Bundler | the version in `Gemfile.lock`'s `BUNDLED WITH` |
 | SQLite | via the `sqlite3` gem (`~> 2.9`); no server to run |
-| Model access | any provider RubyLLM supports, through its own API key |
+| Model access | the explicit provider matrix in [model-providers.md](../reference/model-providers.md) |
 | Locale | either a UTF-8 locale or `LC_ALL=C` — both are gated in CI |
 
 The documented commands assume `rbenv exec` (the repository pins Ruby `3.3.11`
@@ -77,7 +77,7 @@ named example task in a clean subprocess.
 | `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
-| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, selected runtime gems |
 

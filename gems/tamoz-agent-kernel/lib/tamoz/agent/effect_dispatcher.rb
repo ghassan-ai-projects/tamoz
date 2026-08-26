@@ -249,11 +249,20 @@ module Tamoz
       # the repair-loop dedup keys never include the class name, so the mapping
       # cannot churn dedup.
       def tool_error_detail(error)
-        {
+        detail = {
           "class" => Tamoz::Core.serialized_tool_error_name(error.class.name),
           "message" => error.message,
           "repairable" => error.repairable?
-        }.freeze
+        }
+        if error.is_a?(Tamoz::Agent::ModelCallError)
+          detail.merge!(
+            "code" => error.code,
+            "status" => error.status,
+            "body_digest" => error.body_digest,
+            "body_bytes" => error.body_bytes
+          )
+        end
+        detail.freeze
       end
 
       # Bounded evidence for a terminal :unknown attempt. An unknown outcome is

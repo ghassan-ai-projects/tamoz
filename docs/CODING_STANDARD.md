@@ -12,10 +12,10 @@ monorepo, not a Rails application: Rails conventions apply where the *principle*
 transfers (naming, layout, test structure, convention-over-configuration), never where
 the framework would (no ActiveRecord, no Rails middleware, no service-object framework).
 
-Three practices are adapted from **RubyLLM**, the library this agent talks to models
-through, because it solves the same problems at the same scale: architecture rules
-declared as an executable spec rather than prose (§6), a wire vocabulary enforced by
-name (§3.1), and a public surface that is documented and marked (§11).
+Three practices are adapted from the model-transport boundary because it solves the
+same problems at the same scale: architecture rules declared as an executable spec
+rather than prose (§6), a wire vocabulary enforced by name (§3.1), and a public
+surface that is documented and marked (§11).
 
 It is the contract for every refactoring slice in the quality program
 (`docs/QUALITY_PROGRAM.md`). Where a rule here and a static-analysis preference

@@ -1,5 +1,8 @@
 # Implementation plan — `tamoz-agent-capabilities` then `tamoz-agent-session`
 
+> Historical assessment. Superseded on 2026-08-26 by the current gem-boundary and
+> model-call plans. Retained for provenance; its RubyLLM references are not current support.
+
 Companion to [FINDINGS.md](FINDINGS.md). Scope chosen by owner: **both gems,
 capabilities first, session on top.** This continues the six-gem decomposition
 (`docs/agent-gem-decomposition-2026-08-23`) and picks up two moves that study

@@ -1,5 +1,10 @@
 # Tamoz — Ruby agent framework, design v0.1
 
+> Historical archive. The RubyLLM model boundary described by this package was
+> superseded on 2026-08-26 by ADR-048 and the kernel-owned
+> ModelClientFactory/EpisodeModelTransport seam. The archive is retained for
+> provenance; its provider integration is not current support.
+
 Status: architecture-reviewed candidate · Date: 2026-07-30 · No runtime code in this folder
 
 A Ruby-native durable agent runtime, integrated with

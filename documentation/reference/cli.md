@@ -27,8 +27,8 @@ on that thread.
 | Flag | Meaning |
 |---|---|
 | `--profile PROFILE` | Trusted profile path or id (durable sessions) |
-| `--model MODEL` | RubyLLM model identifier |
-| `--provider PROVIDER` | RubyLLM provider (default: `openai`) |
+| `--model MODEL` | OpenAI-compatible model identifier |
+| `--provider PROVIDER` | Model provider (default: `openai`) |
 | `--root PATH` | Workspace root (default: current directory) |
 | `--session-dir PATH` | Durable session directory |
 | `--runtime-dir PATH` | Operator runtime directory (worker, queue, schedule) |
@@ -37,7 +37,6 @@ on that thread.
 | `--experimental-routing` | Use the experimental fused request router |
 | `--shadow-routing` | Record routing decisions while using the standard workflow |
 | `--check NAME=COMMAND` | Configure a named verification command |
-| `--assume-model-exists` | Allow an unlisted model at a custom endpoint |
 | `--json` | Emit newline-delimited JSON events |
 | `--non-interactive` | Fail instead of prompting |
 | `--version` | Print the Tamoz version |

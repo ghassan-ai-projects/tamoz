@@ -2010,8 +2010,8 @@ counters 0**, `content_digest sha256:08a7a526…` — the same digest as Round 2
 the proof that the capability-host wiring changed nothing observable.
 
 A real-model smoke is cheap and catches what the corpus structurally cannot (D-7, D-8 and
-D-10 were all found this way, never by the gate). `.env` carries a DeepSeek key; a UTF-8
-locale is required or `ruby_llm` dies decoding its own model catalogue:
+D-10 were all found this way, never by the gate). `.env` carries a DeepSeek key; use a
+UTF-8 locale when the task or prompt contains non-ASCII text:
 
 ```sh
 export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY[[:space:]]*=[[:space:]]*//p' .env)"

@@ -83,7 +83,7 @@ domain-separated digests. Dependency:
 
 **Exit:** bounds/round-trip/conflict tests, digest goldens, and a clean-subprocess proof
 that `require "tamoz/comms"` opens no socket and loads none of `net/http`, `tamoz-graph`,
-`tamoz-agent`, or RubyLLM.
+`tamoz-agent`, or the model transport.
 
 ### Slice C — `CommsStore` in `tamoz-sqlite`
 

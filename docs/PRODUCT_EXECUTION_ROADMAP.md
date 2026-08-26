@@ -253,7 +253,7 @@ When work resumes after context compaction or in a new task:
 
 - P0–P18 and their required DR implementations are complete, or a documented promotion
   gate explicitly defers a non-security extension;
-- the CLI completes, repairs, resumes, and verifies real tasks without private RubyLLM APIs;
+- the CLI completes, repairs, resumes, and verifies real tasks without private provider APIs;
 - evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned
   baselines;
 - durable effects stop or reconcile ambiguity without guessing;

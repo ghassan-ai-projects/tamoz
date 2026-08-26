@@ -1,5 +1,8 @@
 # Execution — session/capabilities + cancellation/concurrency gem splits
 
+> Historical execution record from 2026-08-24. Provider-boundary references
+> describe that earlier checkout and are not current support claims.
+
 Branch: `decomposition/session-capabilities-concurrency` · Started: 2026-08-24
 Implements [`docs/session-gem-assessment-2026-08-24/PLAN.md`](../session-gem-assessment-2026-08-24/PLAN.md)
 (K1 → PA → PB) and [`docs/concurrency-signals-gems/FINDINGS.md`](../concurrency-signals-gems/FINDINGS.md)

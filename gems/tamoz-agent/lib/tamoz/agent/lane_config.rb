@@ -8,7 +8,7 @@ module Tamoz
     # model refuses to run.
     #
     # "fast uses the cheap tier, deep the strong tier" is the operator's
-    # declaration: the config maps each lane to a RubyLLM model identifier, and
+    # declaration: the config maps each lane to a provider model identifier, and
     # the worker uses exactly what was declared.
     class LaneConfig
       LANES = %w[fast deep batch].freeze

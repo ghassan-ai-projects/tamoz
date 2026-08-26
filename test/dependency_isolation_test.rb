@@ -16,6 +16,38 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  # Clause 11's prose claims more than package isolation: requiring tamoz/graph
+  # must not pull an HTTP client or socket support into the process either —
+  # that is what lets the architecture docs say "opens no socket" without
+  # over-claiming. Same one-load-graph subprocess proof the comms case uses,
+  # except this case refuses to load socket at all, where comms pre-requires it.
+  def test_graph_loads_no_http_client_or_socket_support
+    script = <<~RUBY
+      require "json"
+      require "tamoz/graph"
+      puts JSON.generate(
+        "graph" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/graph") },
+        "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+        "socket" => $LOADED_FEATURES.any? { |path| path.match?(%r{/socket\.(rb|so|bundle)\z}) },
+        "openssl" => $LOADED_FEATURES.any? { |path| path.include?("openssl") },
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    result = JSON.parse(stdout)
+    assert result.fetch("graph")
+    %w[net_http socket openssl ruby_llm].each do |feature|
+      refute result.fetch(feature), "#{feature} must not be in the graph load graph"
+    end
+  end
+
   def test_core_loads_only_its_declared_runtime_boundary
     features = loaded_features_after("tamoz/core")
 

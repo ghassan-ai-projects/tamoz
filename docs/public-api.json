@@ -32,7 +32,6 @@
         "deprecated": true
       },
       "Tamoz::Agent::Result": {},
-      "Tamoz::Agent::RubyLLMModel": {},
       "Tamoz::Agent::Runtime": {},
       "Tamoz::Agent::SkillSnapshotUnavailableError": {
         "deprecated": true

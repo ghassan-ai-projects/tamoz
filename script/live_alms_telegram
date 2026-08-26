@@ -189,12 +189,16 @@ class LiveAlmsTelegram
   end
 
   def validate_model_credentials
+    require 'tamoz/agent'
     provider = @env.fetch('TAMOZ_PROVIDER')
     model = @env['TAMOZ_MODEL']
     raise ArgumentError, 'TAMOZ_MODEL is not set' if model.to_s.empty?
 
-    credential_name = @env.fetch('TAMOZ_MODEL_CREDENTIAL_ENV', "#{provider.upcase}_API_KEY")
-    raise ArgumentError, "#{credential_name} is not set" if @env[credential_name].to_s.empty?
+    Tamoz::Agent::ModelClientFactory.credential_reference(
+      provider:, profile_role: nil, environment: @env
+    )
+  rescue Tamoz::Agent::ModelCallError => error
+    raise ArgumentError, "model configuration unavailable: #{error.code}"
   end
 
   def validate_mcp_catalog

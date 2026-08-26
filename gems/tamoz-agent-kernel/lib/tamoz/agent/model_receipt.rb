@@ -22,17 +22,28 @@ module Tamoz
 
       # episode + logical stage/slot + canonical request digest. `slot`
       # distinguishes several calls at the same stage (e.g. tool continuations).
-      LogicalCallKey = Data.define(:episode_id, :stage, :slot, :request_digest) do
-        def initialize(episode_id:, stage:, slot:, request_digest:)
+      LogicalCallKey = Data.define(
+        :episode_id, :stage, :slot, :request_digest, :provider_configuration_digest
+      ) do
+        def initialize(episode_id:, stage:, slot:, request_digest:, provider_configuration_digest: nil)
           ModelCall.require_present!("logical_call_key.episode_id", episode_id)
           ModelCall.require_present!("logical_call_key.stage", stage)
           ModelCall.require_digest!("logical_call_key.request_digest", request_digest)
-          super(episode_id:, stage:, slot: Integer(slot), request_digest:)
+          if provider_configuration_digest
+            ModelCall.require_digest!(
+              "logical_call_key.provider_configuration_digest", provider_configuration_digest
+            )
+          end
+          super(episode_id:, stage:, slot: Integer(slot), request_digest:, provider_configuration_digest:)
         end
 
         # A stable string identity for journal dedup/lookup. Independent of
         # attempt/fence by construction.
-        def to_key = "#{episode_id}\x00#{stage}\x00#{slot}\x00#{request_digest}"
+        def to_key
+          fields = [episode_id, stage, slot, request_digest]
+          fields << provider_configuration_digest if provider_configuration_digest
+          fields.join("\x00")
+        end
       end
 
       InvocationIdentity = Data.define(:attempt_id, :fence, :graph_task, :stage, :global_ordinal) do
@@ -72,7 +83,9 @@ module Tamoz
       # authority; the request names the role and the worker resolves it here
       # before a model call. revision/normalized_settings are optional until a
       # concrete model revision is pinned (§4.2 "minimally extend Profile").
-      ModelRole = Data.define(:name, :provider, :model, :revision, :normalized_settings, :credential_ref)
+      ModelRole = Data.define(
+        :name, :provider, :model, :revision, :normalized_settings, :credential_ref, :profile_digest
+      )
 
       # The immutable typed view of a completed/failed/unknown model call (§4.3).
       # `effect_key` is the journal storage key (logical-mode digest), so a
@@ -80,23 +93,25 @@ module Tamoz
       # receipt against it — node-authored projections are never trusted alone.
       ModelReceipt = Data.define(
         :logical_call_key, :invocation, :effect_id, :effect_key, :status,
-        :provider, :model, :revision, :settings_digest, :frame_digest,
+        :provider, :model, :revision, :settings_digest, :provider_configuration_digest, :frame_digest,
         :request_digest, :response_digest, :artifact_refs,
         :usage, :provider_request_id, :retry_count, :started_at, :completed_at, :error_category
       ) do
         def initialize(logical_call_key:, invocation:, effect_id:, status:, provider:, model:,
                        request_digest:, usage:, retry_count:, started_at:,
-                       revision: nil, settings_digest: nil, frame_digest: nil, response_digest: nil,
+                       revision: nil, settings_digest: nil, provider_configuration_digest: nil,
+                       frame_digest: nil, response_digest: nil,
                        effect_key: nil, artifact_refs: [], provider_request_id: nil,
                        completed_at: nil, error_category: nil)
           validate_receipt!(
             logical_call_key:, invocation:, effect_id:, status:, provider:, model:,
-            request_digest:, usage:, response_digest:
+            request_digest:, usage:, settings_digest:, response_digest:, provider_configuration_digest:
           )
 
           super(
             logical_call_key:, invocation:, effect_id:, effect_key:, status:, provider:, model:, revision:,
-            settings_digest:, frame_digest:, request_digest:, response_digest:, artifact_refs: artifact_refs.freeze,
+            settings_digest:, provider_configuration_digest:, frame_digest:, request_digest:, response_digest:,
+            artifact_refs: artifact_refs.freeze,
             usage:, provider_request_id:, retry_count: Integer(retry_count), started_at:, completed_at:,
             error_category:
           )
@@ -108,7 +123,8 @@ module Tamoz
         private
 
         def validate_receipt!(logical_call_key:, invocation:, effect_id:, status:, provider:, model:,
-                              request_digest:, usage:, response_digest:)
+                              request_digest:, usage:, settings_digest:, response_digest:,
+                              provider_configuration_digest:)
           raise ModelReceiptError, "receipt/bad_status: #{status.inspect}" unless STATUSES.include?(status)
           raise ModelReceiptError, "receipt/logical_call_key_type" unless logical_call_key.is_a?(LogicalCallKey)
           raise ModelReceiptError, "receipt/invocation_type" unless invocation.is_a?(InvocationIdentity)
@@ -117,6 +133,14 @@ module Tamoz
           ModelCall.require_present!("receipt.provider", provider)
           ModelCall.require_present!("receipt.model", model)
           ModelCall.require_digest!("receipt.request_digest", request_digest)
+          if status == :succeeded
+            ModelCall.require_digest!("receipt.settings_digest", settings_digest)
+            ModelCall.require_digest!(
+              "receipt.provider_configuration_digest", provider_configuration_digest
+            )
+          elsif settings_digest
+            ModelCall.require_digest!("receipt.settings_digest", settings_digest)
+          end
           # A succeeded call must carry the exact response digest it settled on; a
           # failed/unknown call may have none.
           return unless status == :succeeded || response_digest
@@ -140,7 +164,8 @@ module Tamoz
             name: model_policy.to_s, provider: provider, model: model,
             revision: role_field(role, "revision"),
             normalized_settings: role_field(role, "normalized_settings") || {},
-            credential_ref: role_field(role, "credential_ref")
+            credential_ref: role_field(role, "credential_ref"),
+            profile_digest: profile.canonical_digest
           )
         end
 

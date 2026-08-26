@@ -148,10 +148,11 @@ script/benchmark_openclaw_run \
 ```
 
 For the current real-intelligence run, keep `OPENROUTER_API_KEY` in the ignored
-`.env` file and use the OpenRouter provider/model pair shown above. RubyLLM
-supplies the default `https://openrouter.ai/api/v1` base; an empty or missing
-key is an external blocker. The `--controls-passed --publish` form is the full
-target command, not a bypass for missing receipts, parity, or scenario oracles.
+`.env` file and use the OpenRouter provider/model pair shown above. Tamoz's
+`ModelClientFactory` supplies the default `https://openrouter.ai/api/v1` base;
+an empty or missing key is an external blocker. The `--controls-passed --publish`
+form is the full target command, not a bypass for missing receipts, parity, or
+scenario oracles.
 
 Until the plan's phases land, this command fails closed with a typed reason,
 which is the correct behavior — it never emits a fabricated verdict.

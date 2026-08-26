@@ -20,7 +20,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-core` | Shared values, context, secrets, canonical digests, the durable-circuit engine, legacy sentinels | stdlib, Zeitwerk |
 | `tamoz-cancellation` | The cancellation token plus OS-signal traps, process-group primitives, interruptible sleep | `tamoz-core` |
 | `tamoz-concurrency` | Bounded pools, stream sink, event stream, the shared-budget drain base class | `tamoz-cancellation`, `tamoz-core` |
-| `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-core` |
+| `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-core`, Zeitwerk |
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
@@ -41,7 +41,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
-| `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
+| `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, runtime gems used by the selected runner |
 

@@ -282,11 +282,8 @@ end
 def live_report
   provider = ENV.fetch("TAMOZ_PROVIDER")
   model_name = ENV.fetch("TAMOZ_MODEL")
-  model = Tamoz::Agent::RubyLLMModel.new(
-    model: model_name,
-    provider:,
-    api_key: ENV["TAMOZ_API_KEY"],
-    api_base: ENV["TAMOZ_API_BASE"]
+  model = Tamoz::Agent::ModelClientFactory.build(
+    provider:, model: model_name, profile_role: nil, environment: ENV, safety: :unsafe
   )
   cases = LIVE_PROMPTS.map do |task|
     control_started = monotonic_ms

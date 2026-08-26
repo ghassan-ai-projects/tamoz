@@ -101,12 +101,12 @@
       "status": "unverified",
       "named_test": "test/core_state_codec_test.rb#test_registered_value_round_trip_and_legacy_decoder",
       "supporting_tests": [
-        "test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation"
+        "test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"
       ],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "adr_status": "accepted"
+      "adr_status": "superseded by ADR-048; retained as a historical decision"
     },
     {
       "id": "ADR-004",
@@ -764,6 +764,22 @@
       "adr_status": "accepted 2026-08-10"
     },
     {
+      "id": "ADR-048",
+      "category": "adr",
+      "source": "docs/design-v0.1/DECISIONS.md",
+      "title": "One digest-bound OpenAI-compatible model transport",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix",
+      "supporting_tests": [
+        "test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"
+      ],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "adr_status": "accepted 2026-08-26"
+    },
+    {
       "id": "API-tamoz-agent-Tamoz::Agent.build",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -922,20 +938,6 @@
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Agent::Result",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-agent"
-    },
-    {
-      "id": "API-tamoz-agent-Tamoz::Agent::RubyLLMModel",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Agent::RubyLLMModel",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -7187,12 +7189,12 @@
       "id": "OBJ-2",
       "category": "objective",
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
-      "title": "the CLI completes, repairs, resumes, and verifies real tasks without private RubyLLM APIs",
+      "title": "the CLI completes, repairs, resumes, and verifies real tasks without private provider APIs",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
       "supporting_tests": [
-        "test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation",
+        "test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection",
         "test/agent_cli_test.rb#test_resume_collects_interrupt_answers"
       ],
       "classification": "direct",

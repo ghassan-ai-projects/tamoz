@@ -41,9 +41,13 @@ Ruby monorepo (see README.md for the component map: tamoz-core, tamoz-approval, 
 - **Non-deterministic and external calls go through the durable effect journal.** A
   model or tool call is non-deterministic and a durable graph replays its nodes.
   Never call one raw inside a node and let downstream state depend on the result —
-  route it through `EffectDispatcher.run` (see `SessionEffects#model_call`) so a
-  replay returns the recorded receipt, not a fresh, different answer. Key identity
-  and dedup on the request, never on the answer.
+  route it through `EffectDispatcher.run` (see `SessionEffects#model_call`, and
+  `Runtime#model_generate` for the ephemeral one-shot runtime) so a replay
+  returns the recorded receipt, not a fresh, different answer. Key identity
+  and dedup on the request, never on the answer. Terminal receipts are immutable;
+  an unanswered call is resolved by its safety class (`:idempotent` grants a fresh
+  attempt, `:unsafe` stops as unknown). The one-shot ephemeral runtime journals
+  through the same dispatcher over in-memory stores by design.
 - **Approval policy is data too.** Whether an action needs approval, and under
   what evidence, lives only in `gems/tamoz-approval/policy/*.yaml` (base +
   digest-pinned profiles); the engine in `gems/tamoz-approval` interprets it.

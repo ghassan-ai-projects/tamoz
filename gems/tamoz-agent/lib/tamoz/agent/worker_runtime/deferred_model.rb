@@ -21,6 +21,8 @@ module Tamoz
           model.generate(...)
         end
 
+        # Forwards to the scorecard's kill-after-effect-started injection when
+        # present; production models deliberately do not implement the hook.
         def after_effect_started(operation:)
           model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
         end
@@ -33,6 +35,17 @@ module Tamoz
         def model_identifier
           value = model
           value.respond_to?(:model) ? value.model : value.class.name
+        end
+
+        def method_missing(name, ...)
+          value = model
+          return super unless value.respond_to?(name)
+
+          value.public_send(name, ...)
+        end
+
+        def respond_to_missing?(name, include_private = false)
+          model.respond_to?(name, include_private) || super
         end
 
         private

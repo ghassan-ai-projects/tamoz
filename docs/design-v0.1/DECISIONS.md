@@ -50,7 +50,7 @@ package designs and must pass their promotion gates. `tamoz-graph` remains LLM-i
 packages and conflicted with the plan's own consumer-driven rule.
 
 ### ADR-003 — Reuse RubyLLM public values at runtime; define a lossless durable codec
-**Status:** accepted.
+**Status:** superseded by ADR-048; retained as a historical decision.
 `tamoz-core` defines *protocols* (duck types) and ships plain defaults; `tamoz-agent` passes
 `RubyLLM::Message` and `RubyLLM::Tool` through public APIs. Durable state still needs a
 versioned codec and immutable snapshot; fixtures prove it preserves tool-call ids, content
@@ -465,6 +465,20 @@ Safety-bearing signals are never sampled.
 *Alternative rejected:* sampling at record time against an in-memory window. A paused or
 resumed turn outlives any such window, and dropping safety-bearing evidence at record
 time would make the durable record lie about what happened.
+
+### ADR-048 — One digest-bound OpenAI-compatible model transport
+**Status:** accepted 2026-08-26.
+The kernel-owned `ModelClientFactory` is the sole runtime credential resolver and
+constructs the existing `EpisodeModelTransport`. Session, ephemeral runtime, and
+episode model calls use the same canonical request/response projection and durable
+effect boundary. The provider configuration digest binds provider, model, endpoint,
+protocol, settings, profile digest, and safety posture, never credential values.
+Native Anthropic and Gemini protocols are rejected in this phase; operators using
+those model families select the `openrouter` provider explicitly. No runtime
+compatibility alias preserves the retired `RubyLLMModel`.
+*Alternative rejected:* retaining a second SDK adapter. It cannot expose the exact
+wire bytes needed by the durable receipt contract and would keep two credential,
+failure, and projection paths in production.
 
 ## Rejected, with reasons
 

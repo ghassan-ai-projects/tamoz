@@ -25,7 +25,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Agent::PlanRejectedError" => {"deprecated" => true},
           "Tamoz::Agent::ProtocolError" => { "deprecated" => true },
           "Tamoz::Agent::Result" => {},
-          "Tamoz::Agent::RubyLLMModel" => {},
           "Tamoz::Agent::Runtime" => {},
           "Tamoz::Agent::SkillSnapshotUnavailableError" => {"deprecated" => true},
           "Tamoz::Agent::Skills" => {"deprecated" => true},

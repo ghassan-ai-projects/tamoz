@@ -1,5 +1,9 @@
 # `tamoz-agent` — durable execution over RubyLLM
 
+> Historical design record. Superseded on 2026-08-26 by ADR-048 and the
+> kernel-owned model transport boundary. Retained for provenance; the RubyLLM
+> integration described here is not current support.
+
 RubyLLM owns provider normalization, messages, tools, chat configuration, and its
 `RubyLLM::Agent` class. Tamoz owns durable execution. `tamoz-agent` is the adapter and recipe
 layer between them.

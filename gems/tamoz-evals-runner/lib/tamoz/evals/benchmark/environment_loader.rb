@@ -13,8 +13,7 @@ module Tamoz
         end
 
         def self.safe_process_environment(provider)
-          provider_key = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(String(provider).downcase.to_sym)
-          keys = RUNTIME_ENVIRONMENT_KEYS + [provider_key, "#{String(provider).upcase}_API_BASE"]
+          keys = RUNTIME_ENVIRONMENT_KEYS + Tamoz::Agent::ModelClientFactory.environment_names(provider:)
           ENV.slice(*keys)
         end
         private_class_method :safe_process_environment
@@ -62,10 +61,9 @@ module Tamoz
         end
 
         def provider_environment_names
-          key_name = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(@provider) do
-            raise ArgumentError, "unsupported benchmark provider #{@provider.inspect}"
-          end
-          [key_name, "#{@provider.to_s.upcase}_API_BASE"]
+          Tamoz::Agent::ModelClientFactory.environment_names(provider: @provider)
+        rescue Tamoz::Agent::ModelCallError
+          raise ArgumentError, "unsupported benchmark provider #{@provider.inspect}"
         end
       end
     end

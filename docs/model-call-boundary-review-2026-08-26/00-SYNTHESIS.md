@@ -43,8 +43,9 @@ verdicts against the full written-law inventory (ten rules, [01] §2):
 The real finding of this review: **the file complies with the boundaries while the model
 seam itself is smeared across four gems** — adapter in tamoz-agent, credential vocabulary in
 kernel `Providers`, resolution policy in the CLI, consumers in evals-runner — with no owner
-below profile/CLI. Plus one genuinely new boundary defect nobody had catalogued (D1 below),
-found because we went looking where the law is enforced least.
+below profile/CLI. (An earlier draft also reported a "genuinely new boundary defect" here —
+an undeclared session→graph gemspec edge, D1 — but a re-review verification pass proved it
+false: the dependency is declared. D1 is retracted; see the defect register and the appendix.)
 
 ### 3. Are our assumptions correct?
 
@@ -117,7 +118,7 @@ list.
 
 | # | Finding | Evidence | Severity |
 |---|---|---|---|
-| D1 | `tamoz-agent-session` calls `Tamoz.graph` without declaring `tamoz-graph` — works only via load-order luck (`agent.rb:5` requires the graph before line 17 loads the session) | `session.rb:440`; gemspec deps at `tamoz-agent-session.gemspec:13-22`; `Tamoz.graph` defined at `tamoz-graph/lib/tamoz/graph.rb:24` | **High** — undeclared, load-order-dependent edge in a core gem |
+| ~~D1~~ | **RETRACTED (false positive).** Claimed `tamoz-agent-session` calls `Tamoz.graph` without declaring `tamoz-graph`. It declares it: `tamoz-agent-session.gemspec:21` lists `tamoz-graph`, and `gemspec_helper.rb:56-57` turns each `dependencies:` entry into a real `add_runtime_dependency`. The claim came from grepping for `add_runtime_dependency` (hidden by `TamozGemspec.build`). No defect. | `tamoz-agent-session.gemspec:21`; `gems/gemspec_helper.rb:56-57` | ~~High~~ → **none** |
 | D2 | Provider failures never complete into the journal; stale sweep classifies them by safety class alone | `ruby_llm_model.rb:62-67`; `effect_dispatcher.rb:183-203` | Medium — latent bookkeeping gap, safe behavior today |
 | D3 | Replay promise overstated: default `:idempotent` re-executes unanswered calls | `session.rb:56,79`; `effect_preparation.rb:206-216` | Medium — contract-honesty issue |
 | D4 | Dead emitter machinery whose only strict consumer raises on those exact event types as forged | `ruby_llm_model.rb:44,51-60,72-76`; `episode_stream.rb:190-194` | Low hygiene, high confusion cost |
@@ -133,9 +134,9 @@ list.
 
 Each step independently shippable; steps 1–3 touch zero graph-gem files.
 
-1. **Declare the missing edge and fix the prose** (D1, D9): add `tamoz-graph` to
-   `tamoz-agent-session.gemspec`; rewrite gems.md:77 to bind SDK-declaration; correct the
+1. **Fix the prose** (D9): rewrite gems.md:77 to bind SDK-declaration; correct the
    README graph-deps sentence; add the load-time/run-time wording to clause 11's docs.
+   (The former "declare the missing edge" half of this step was dropped — see the retracted D1.)
 2. **Close the unjournaled hole**: wrap `Runtime#model_generate` in `EffectDispatcher.run`
    with a logical identity (an in-memory journal suffices for the ephemeral runtime), and
    write the ephemeral carve-out into AGENTS.md's rule text (D6).
@@ -174,16 +175,26 @@ Each step independently shippable; steps 1–3 touch zero graph-gem files.
 
 - Deliverables: [01-boundary-law-and-provenance.md](01-boundary-law-and-provenance.md),
   [02-runtime-and-journal-audit.md](02-runtime-and-journal-audit.md),
-  [03-graph-solidity-and-target-topology.md](03-graph-solidity-and-target-topology.md).
+  [03-graph-solidity-and-target-topology.md](03-graph-solidity-and-target-topology.md),
+  [04-IMPLEMENTATION-ASSESSMENT.md](04-IMPLEMENTATION-ASSESSMENT.md) (re-review buy/no-buy
+  verdict, sequencing, and the D1 retraction).
   All three passed the bar: file:line citations throughout, explicit verdict tables, prior
   settled decisions engaged by name (04-E deferral, audit-2026-08-25 assessment, P1/B3,
   P6 rows, ARCH-2/COUP-8, repo-quality P1), steelman sections, self-checks.
 - Citation spot-checks by the orchestrator: 13/13 anchors on lens C, 9/9 new anchors plus
-  prior ground truth on lens B, 12+ on lens A including reproduction of its new finding
-  (D1). Three grounding facts were corrected *by the agents against the brief* and all
-  three corrections verified true (graph gemspec deps include cancellation/concurrency;
-  `deprecated:true` exists only in manifests/tests, not gems code; `episode_nodes.rb:70` is
-  the recall node).
+  prior ground truth on lens B, 12+ on lens A. Three grounding facts were corrected *by the
+  agents against the brief* and all three corrections verified true (graph gemspec deps include
+  cancellation/concurrency; `deprecated:true` exists only in manifests/tests, not gems code;
+  `episode_nodes.rb:70` is the recall node).
+- **Correction (re-review, 2026-08-26):** the orchestrator's original appendix claimed it had
+  independently *reproduced* lens A's new finding D1. That "reproduction" repeated lens A's
+  mistake rather than catching it — both missed that `tamoz-agent-session.gemspec:21` declares
+  `tamoz-graph` via the `TamozGemspec.build` helper (`gemspec_helper.rb:56-57`). D1 is a false
+  positive and is retracted throughout. This is the one substantive error the re-review found;
+  every other load-bearing anchor spot-checked (ruby_llm_model.rb:20-25/31-32/62-67,
+  runtime.rb:600-606, session.rb `MODEL_CALL_SAFETIES`/`:idempotent`, providers.rb ENV_KEYS,
+  episode_model_transport.rb) held. Net reliability of the review remains high; the lesson is
+  that gemspec-declaration claims here need checking against `gemspec_helper.rb`.
 - Known blemishes, recorded rather than hidden: lens B/C self-checks understate their line
   counts (~200 vs 253; ~230 vs 306); lens A cites the evals-runner gemspec edge at :37,
   actual current-tree line :34 — substance unaffected in both cases.

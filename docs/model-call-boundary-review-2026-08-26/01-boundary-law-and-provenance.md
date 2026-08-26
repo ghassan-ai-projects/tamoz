@@ -112,13 +112,18 @@ nothing and would recouple the deepest, most stable layer to the most volatile o
 provider-free test substrate for the durability core, and any future non-LLM consumer is
 upside, not justification.
 
-The adversarial find that complicates this narrative: `tamoz-agent-session` calls
-`Tamoz.graph(...)` (session.rb:440) yet does **not declare tamoz-graph** in
-`gems/tamoz-agent-session/tamoz-agent-session.gemspec:13-22` — it works only because
-`gems/tamoz-agent/lib/tamoz/agent.rb:5` requires `tamoz/graph` before line 17 requires
-`tamoz/agent_session`. The one place the boundary story could claim "the engine serves a
-model-free gem" rests on an undeclared, load-order-dependent edge. That is a real defect
-adjacent to this debate, worth fixing regardless of where RubyLLMModel goes.
+**CORRECTION (2026-08-26 re-review): the adversarial find below was a false positive and is
+retracted.** The original text claimed `tamoz-agent-session` calls `Tamoz.graph(...)`
+(session.rb:440) yet does not declare `tamoz-graph` in its gemspec. It does:
+`gems/tamoz-agent-session/tamoz-agent-session.gemspec:21` lists
+`["tamoz-graph", "= #{...VERSION}"]`, and `gems/gemspec_helper.rb:56-57` turns every entry
+of that `dependencies:` array into a real `spec.add_runtime_dependency`. The edge is declared;
+there is no load-order-luck defect. The error came from grepping the gemspec for
+`add_runtime_dependency`/`add_dependency` (which this repo's `TamozGemspec.build` helper hides)
+and concluding "undeclared." This tracked as review defect **D1**, rated High and called the
+review's one genuinely new finding; it is withdrawn. Lesson worth keeping: gemspec-declaration
+claims in this repo must be checked against `gemspec_helper.rb`, not against raw
+`add_*_dependency` greps.
 
 **(b) Dual transport: principled or drift?** Principled at birth, drift-prone in operation.
 The split was created deliberately with a written reason — exact wire bytes for digest-bound
@@ -162,8 +167,9 @@ residue of a split nobody finished.
 - **04-non-obvious-moves.md §E + priority table :141 (extract `tamoz-model`, Med-High)** —
   **Upheld, strengthened.** New evidence since 2026-08-23: (i) the 175485a incident proves
   the adapter already functioned as a de-facto provider catalog strong enough to create a
-  real upward layering inversion from tamoz-agent-profile; (ii) the undeclared session→graph
-  edge shows topology edges around this cluster are exactly where bugs live.
+  real upward layering inversion from tamoz-agent-profile. (The original second leg here — an
+  "undeclared session→graph edge" — was retracted; see the §4a correction. The extraction case
+  stands on the 175485a inversion alone, which is real.)
 - **08-remaining-work.md:82 (deferral: "load-bearing in worker model_factory, evals
   benchmark adapter, Profile::KNOWN_PROVIDERS")** — **Recommend overturning the deferral.**
   Two of its three legs have since been cut: profile now reads `Providers::ENV_KEYS`
@@ -188,9 +194,8 @@ residue of a split nobody finished.
 
 **Recommend:** execute the twice-deferred extraction (04-E / audit-02) of the adapter into a
 small gem below profile and CLI, moving consumers in the same slice; reword gems.md:77 to
-bind SDK-declaration rather than "knowledge"; declare tamoz-graph in
-tamoz-agent-session's gemspec; resolve ARCH-2 by giving the seam one credential resolver;
-retire the C7 global mutation via explicit encoding configuration. **Reject:** relocating
+bind SDK-declaration rather than "knowledge"; resolve ARCH-2 by giving the seam one credential
+resolver; retire the C7 global mutation via explicit encoding configuration. **Reject:** relocating
 model calls into tamoz-graph — it contradicts the tested core of the written contract and
 buys nothing the effect journal doesn't already provide.
 
@@ -204,9 +209,10 @@ buys nothing the effect journal doesn't already provide.
    recommend/reject in §6; no neutral description where a ruling was owed.
 3. **Prior decisions engaged by name** — all five, each upheld/overturned with new evidence
    (§5); none silently ignored.
-4. **Adversarial honesty** — two findings complicate the expected "boundaries are fine"
-   narrative: the undeclared session→graph gemspec dependency (§4a), and the concession
-   that clause 11's headline rationale is currently insurance rather than usage, argued
-   against my own inclination to defend it (§4a).
+4. **Adversarial honesty** — the concession that clause 11's headline rationale is currently
+   insurance rather than usage, argued against my own inclination to defend it (§4a). (A second
+   adversarial finding — an undeclared session→graph gemspec dependency — was claimed here but
+   proved false on re-review and is retracted in §4a; the retraction is left visible rather than
+   deleted.)
 5. **Format** — dense prose within the 150–350 line band, no restatement of the brief;
    house style followed (real files, seams, plain terms).

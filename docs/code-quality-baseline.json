@@ -431,7 +431,6 @@
       "gems/tamoz-core/lib/tamoz/task_result.rb": 8,
       "gems/tamoz-stream/lib/tamoz/stream/action_boundary.rb": 8,
       "gems/tamoz-agent/lib/tamoz/agent/healing/classification.rb": 8,
-      "gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb": 8,
       "gems/tamoz-core/lib/tamoz/instrumentation.rb": 8,
       "gems/tamoz-agent/lib/tamoz/agent/healing/preflight.rb": 8,
       "gems/tamoz-sqlite/lib/tamoz/sqlite/circuit_store.rb": 8,

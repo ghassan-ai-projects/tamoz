@@ -1,5 +1,9 @@
 # M4 plan — RubyLLM vertical slice
 
+> Historical plan. Superseded on 2026-08-26 by ADR-048 and the kernel-owned
+> OpenAI-compatible model transport. Retained for provenance; this RubyLLM
+> implementation is not current support.
+
 Status: conditionally accepted; implementation blocked on released upstream seam
 
 Depends on: reviewed M3 commit `ae27b96`
