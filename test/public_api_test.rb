@@ -120,8 +120,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Cancellation.interruptible_sleep" => {}
         },
         "tamoz-comms" => {
-          "Tamoz::Comms::DeliveryDrainer" => {},
-          "Tamoz::Comms::Gateway" => {},
           "Tamoz::Comms::OutboxDeliverySink" => {},
 
           "Tamoz::Comms::AmbiguousDeliveryError" => {},
@@ -141,12 +139,17 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Comms::InboundEnvelope" => {},
           "Tamoz::Comms::InterruptDigest" => {},
           "Tamoz::Comms::PollerConflictError" => {},
+          "Tamoz::Comms::ResponseTooLargeError" => {},
           "Tamoz::Comms::Shapes" => {},
           "Tamoz::Comms::SurfaceDescriptor" => {},
           "Tamoz::Comms::ThrottledError" => {},
           "Tamoz::Comms::Transport" => {},
           "Tamoz::Comms::ValidationError" => {},
           "Tamoz::Comms::VERSION" => {}
+        },
+        "tamoz-comms-gateway" => {
+          "Tamoz::Comms::DeliveryDrainer" => {},
+          "Tamoz::Comms::Gateway" => {}
         },
         "tamoz-concurrency" => {
           "Tamoz::Concurrency::Drain" => {},

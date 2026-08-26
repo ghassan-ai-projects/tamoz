@@ -20,7 +20,7 @@ flowchart TB
     end
 
     subgraph Contracts["contract + adapter gems"]
-        C["tamoz-comms + tamoz-telegram"]
+        C["tamoz-comms + tamoz-comms-gateway + tamoz-telegram"]
         O["tamoz-observability + tamoz-otel"]
         M["tamoz-mcp"]
         MW["tamoz-mcp-websearch"]
@@ -129,12 +129,12 @@ The contracts stay separate because they have different failure semantics:
 - **`tamoz-graph`** — deterministic execution semantics: definition digest, state schema, reducers, super-steps, deterministic task identity, checkpoint/lease/store contracts, interrupt/resume, replay, fork, subgraphs. It guarantees atomic committed state; it does not claim exactly-once external effects.
 - **`tamoz-sqlite`** — one production adapter: append-only checkpoints, atomic compare-and-append commit, fenced leases, the effect journal, the request inbox, schedules, the comms store, circuits and the memory index, plus backup/restore and 13 checksummed migrations.
 - **`tamoz-agent`** — recipes over the graph: the durable model↔tools loop, RubyLLM binding, approval, effect classification, plan/review/verify gates, memory, healing, and the CLI.
-- **Contract gems** — `tamoz-comms` (channels), `tamoz-observability` (signals), `tamoz-scheduler` (durable time), `tamoz-stream` (the episode worker), and `tamoz-mcp` (governed MCP), each with a structural store contract implemented by `tamoz-sqlite`.
+- **Contract and process gems** — `tamoz-comms` (channel values and contracts), `tamoz-comms-gateway` (the injected gateway/drainer process boundary), `tamoz-observability` (signals), `tamoz-scheduler` (durable time), `tamoz-stream` (the episode worker), and `tamoz-mcp` (governed MCP), each with a structural store contract implemented by `tamoz-sqlite` where applicable.
 - **Adapter gems** — `tamoz-mcp-websearch` (operator-side websearch egress), `tamoz-telegram` (transport), and `tamoz-otel` (export). None is required for a minimal boot.
 
 ## Next reads
 
-- [gems.md](gems.md) — the 26-gem map and dependency chain
+- [gems.md](gems.md) — the 27-gem map and dependency chain
 - [data-model.md](data-model.md) — checkpoints, inbox, effects, leases in SQLite
 - [security-model.md](security-model.md) — the authority boundary
 - [../design/README.md](../design/README.md) — the design documents behind this stack

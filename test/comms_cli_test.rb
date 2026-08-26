@@ -163,7 +163,8 @@ class CommsCliTest < Minitest::Test
       rt.client.webhook_url = 'https://example.com/hook'
       rt.client.updates = []
 
-      assert_equal 0, rt.cli(%w[comms serve --once], env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }).first
+      assert_equal 1, rt.cli(%w[comms serve --once], env: { 'TAMOZ_TELEGRAM_BOT_TOKEN' => '12345:secret' }).first,
+                   'serving must stop when getMe identifies the wrong configured bot'
       rt.client.updates = []
       # Re-acquire a live poller lease the doctor must see as foreign.
       with_store(rt) do |store|

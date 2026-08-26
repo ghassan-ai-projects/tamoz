@@ -15,6 +15,7 @@ PATH
       tamoz-agent-capabilities (= 0.1.0.alpha.1)
       tamoz-agent-session (= 0.1.0.alpha.1)
       tamoz-cancellation (= 0.1.0.alpha.1)
+      tamoz-comms-gateway (= 0.1.0.alpha.1)
       tamoz-concurrency (= 0.1.0.alpha.1)
 
 PATH
@@ -100,6 +101,13 @@ PATH
   remote: gems/tamoz-cancellation
   specs:
     tamoz-cancellation (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+
+PATH
+  remote: gems/tamoz-comms-gateway
+  specs:
+    tamoz-comms-gateway (0.1.0.alpha.1)
+      tamoz-comms (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
 
 PATH
@@ -400,6 +408,7 @@ DEPENDENCIES
   tamoz-approval!
   tamoz-cancellation!
   tamoz-comms!
+  tamoz-comms-gateway!
   tamoz-concurrency!
   tamoz-core!
   tamoz-evals!
@@ -488,6 +497,7 @@ CHECKSUMS
   tamoz-approval (0.1.0.alpha.1)
   tamoz-cancellation (0.1.0.alpha.1)
   tamoz-comms (0.1.0.alpha.1)
+  tamoz-comms-gateway (0.1.0.alpha.1)
   tamoz-concurrency (0.1.0.alpha.1)
   tamoz-core (0.1.0.alpha.1)
   tamoz-evals (0.1.0.alpha.1)

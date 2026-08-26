@@ -88,7 +88,7 @@ not choose a profile, model, root, tool, budget, or schedule.
 Evidence:
 
 - `gems/tamoz-comms/lib/tamoz/comms/admission.rb`;
-- `gems/tamoz-comms/lib/tamoz/comms/gateway.rb`;
+- `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb`;
 - `test/comms_admission_test.rb`;
 - `test/autonomy_scorecard_test.rb` (`test_case_14_an_unbound_sender_never_reaches_a_turn`).
 
@@ -124,7 +124,7 @@ answer.
 Evidence:
 
 - `gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb`;
-- `gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb`;
+- `gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb`;
 - `test/delivery_drainer_test.rb`;
 - `test/tamoz_telegram_transport_test.rb`;
 - `test/comms_cli_ops_test.rb`.
@@ -267,7 +267,7 @@ UX polish:
   carries owner and fence and returns `:not_claimable` when the claim was lost
   (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:112-122`); the defect is
   that `send_row` ignores that result and proceeds to the external send
-  (`gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb:84-87`). A stale drainer
+  (`gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:87-92`). A stale drainer
   takeover test is missing.
 - `mark_delivery` should carry owner/fence/attempt identity rather than allowing
   a stale caller to mark another owner's row; it currently takes no owner or
@@ -278,9 +278,9 @@ UX polish:
   (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_outbox.rb:44`) with
   `CommsStore#capacity_saturated?`
   (`gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:150-152`),
-  `control_capacity` at `gems/tamoz-comms/lib/tamoz/comms/gateway.rb:416` and
+  `control_capacity` at `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb:285` and
   `:445`, and the denial prompts folded into reservation slots
-  (`gems/tamoz-comms/lib/tamoz/comms/gateway.rb:451-454`) — while
+  (`gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb:288-290`) — while
   `max_open_requests`, `max_inbound_bytes`, and `max_response_bytes` are only
   validated in `SurfaceDescriptor` configuration
   (`gems/tamoz-comms/lib/tamoz/comms/surface_descriptor.rb:184-186`,

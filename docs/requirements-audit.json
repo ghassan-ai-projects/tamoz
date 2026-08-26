@@ -1,15 +1,15 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-26T07:51:21Z",
-  "manifest_requirements": 524,
+  "generated_at": "2026-08-26T10:00:06Z",
+  "manifest_requirements": 525,
   "named_cases_run": 277,
   "counts": {
     "deferred-by-contract": 11,
-    "failing": 7,
+    "failing": 4,
     "indirect": 4,
     "missing": 15,
-    "pass": 487
+    "pass": 491
   },
   "release_blocking_gaps": [
     "ADR-039",
@@ -20,7 +20,6 @@
     "ADR-045",
     "ADR-046",
     "ADR-047",
-    "INV-18",
     "INV-39",
     "INV-56",
     "INV-57",
@@ -30,18 +29,13 @@
     "INV-61",
     "MIG-15",
     "NG-real-actuator",
-    "OBJ-3",
     "OBJ-7",
-    "PHASE-DR-3",
     "PHASE-P14"
   ],
   "failing": [
     "ADR-039",
-    "INV-18",
     "MIG-15",
     "NG-real-actuator",
-    "OBJ-3",
-    "PHASE-DR-3",
     "PHASE-P14"
   ],
   "definition_of_done_met": false,
@@ -2410,42 +2404,10 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-comms-Tamoz::Comms::DeliveryDrainer",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Comms::DeliveryDrainer",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-comms",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
       "id": "API-tamoz-comms-Tamoz::Comms::DeliverySink",
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Comms::DeliverySink",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-comms",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
-      "id": "API-tamoz-comms-Tamoz::Comms::Gateway",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Comms::Gateway",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -2510,6 +2472,22 @@
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Comms::PollerConflictError",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-comms",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-comms-Tamoz::Comms::ResponseTooLargeError",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Comms::ResponseTooLargeError",
       "release_blocking": true,
       "status": "pass",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
@@ -2614,6 +2592,38 @@
       "rationale": null,
       "promotion_exclusion": null,
       "package": "tamoz-comms",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-comms-gateway-Tamoz::Comms::DeliveryDrainer",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Comms::DeliveryDrainer",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-comms-gateway",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-comms-gateway-Tamoz::Comms::Gateway",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Comms::Gateway",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-comms-gateway",
       "evidence_result": "pass",
       "owner_signature": null
     },
@@ -7041,7 +7051,7 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Versioned, allowlisted records",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
       "supporting_tests": [
         "test/core_state_codec_test.rb#test_unknown_registration_is_rejected_before_any_decoder_runs",
@@ -7053,7 +7063,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -8169,7 +8179,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
         "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
@@ -8180,7 +8190,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {
@@ -8283,13 +8293,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Memory evaluation substrate — isolated four-treatment CI substrate makes injection-correctness-only claims",
       "release_blocking": true,
-      "status": "failing",
+      "status": "pass",
       "named_test": "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "failing",
+      "evidence_result": "pass",
       "owner_signature": null
     },
     {

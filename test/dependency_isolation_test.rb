@@ -218,7 +218,9 @@ class DependencyIsolationTest < Minitest::Test
         "sqlite" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/sqlite") },
         "agent" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
         "evals" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/evals") },
-        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
+        "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") },
+        "gateway_defined" => defined?(Tamoz::Comms::Gateway),
+        "drainer_defined" => defined?(Tamoz::Comms::DeliveryDrainer)
       )
     RUBY
     stdout, stderr, status = Open3.capture3(
@@ -234,6 +236,35 @@ class DependencyIsolationTest < Minitest::Test
     %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
       refute result.fetch(feature), "#{feature} must not be in the load graph"
     end
+    assert_nil result.fetch("gateway_defined")
+    assert_nil result.fetch("drainer_defined")
+  end
+
+  def test_comms_gateway_loads_only_comms_core_and_gateway
+    allowed = %w[tamoz-core tamoz-comms tamoz-comms-gateway].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/comms/gateway")
+
+    assert_includes features, "tamoz/comms/gateway.rb"
+    assert_includes features, "tamoz/comms/delivery_drainer.rb"
+    unexpected = features.reject { |path| allowed.include?(path) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
+  def test_comms_gateway_gemspec_declares_only_its_contract_dependencies
+    spec = Gem::Specification.load(
+      GEM_ROOTS.fetch("tamoz-comms-gateway").join("tamoz-comms-gateway.gemspec").to_s
+    )
+
+    assert_equal(
+      {
+        "tamoz-comms" => "= 0.1.0.alpha.1",
+        "tamoz-core" => "= 0.1.0.alpha.1"
+      },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
+    )
   end
 
   # tamoz-observability is the signal-plane contract gem: core only, no HTTP

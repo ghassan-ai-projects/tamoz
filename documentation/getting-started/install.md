@@ -44,7 +44,7 @@ rbenv exec bundle exec rake ci
 file, and the whole test suite. It must be green before you trust anything else
 on this page.
 
-## The twenty-six gems
+## The twenty-seven gems
 
 Tamoz is a monorepo of independently publishable gems. Each one installs and
 runs with only its declared dependencies — proven per gem by
@@ -60,6 +60,7 @@ named example task in a clean subprocess.
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract | `tamoz-core` |
 | `tamoz-stream` | Channels, envelopes, Situations, action boundary | `tamoz-core`, `tamoz-cancellation`, gRPC, protobuf |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport and store contracts | `tamoz-core` |
+| `tamoz-comms-gateway` | Long-running gateway and delivery drainer over injected Comms seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Approval/permission policy owner: decisions, grants, policy-as-data | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
 | `tamoz-observability` | Signal catalog, derived correlation, Signal value, Recorder contract | `tamoz-core`, `tamoz-concurrency` |
@@ -75,7 +76,7 @@ named example task in a clean subprocess.
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validation, secure files, adoption/transition registries | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
 | `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
 | `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, selected runtime gems |

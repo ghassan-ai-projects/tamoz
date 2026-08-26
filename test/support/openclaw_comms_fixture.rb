@@ -8,6 +8,7 @@ require 'tmpdir'
 
 require 'tamoz/agent'
 require 'tamoz/comms'
+require 'tamoz/comms/gateway'
 require 'tamoz/sqlite'
 require 'tamoz/telegram'
 

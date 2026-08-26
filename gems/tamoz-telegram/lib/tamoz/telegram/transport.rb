@@ -27,6 +27,8 @@ module Tamoz
       # @return [Hash] the authenticated surface identity (getMe result).
       def authenticate(_descriptor, _credential)
         @client.call('getMe', {}, idempotent: true)
+      rescue Comms::ResponseTooLargeError => e
+        raise Comms::TransientTransportError, "getMe response did not complete (#{e.class})"
       end
 
       # @return [Hash] `{updates: [wire envelopes], next_offset: Integer}`
@@ -40,6 +42,8 @@ module Tamoz
         updates = result.map { |update| @normalizer.normalize(update).wire }
         candidate = result.map { |update| update.fetch('update_id') }.max
         { updates:, next_offset: candidate && (candidate + 1) }
+      rescue Comms::ResponseTooLargeError => e
+        raise Comms::TransientTransportError, "getUpdates response did not complete (#{e.class})"
       end
 
       # @return [Hash] `{message_id:, platform_time:}`
@@ -62,6 +66,9 @@ module Tamoz
           'message_id' => result.fetch('message_id'),
           'platform_time' => Time.at(result.fetch('date')).utc.iso8601(6)
         }
+      rescue Comms::ResponseTooLargeError => e
+        raise Comms::AmbiguousDeliveryError,
+              "send may or may not have happened (response exceeded the configured limit: #{e.class})"
       end
 
       def signal(kind, **fields)

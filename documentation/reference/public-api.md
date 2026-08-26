@@ -42,6 +42,7 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-sqlite` | The durable adapter package exposes a deliberately minimal surface: `Tamoz::SQLite::VERSION` (the adapter class itself is the entry point used in code, not a JSON-registered namespace) |
 | `tamoz-tools` | The workspace toolbox and the skills compiler: `Tamoz::Tools::Toolbox`, the `Skills` namespace (`Compiler`, `Catalog`, `Snapshot`, digest helpers, resource rendering), and the tool-error taxonomy |
 | `tamoz-comms` | Channel values, admission and decisions: `Canonical`, `Binding`, `Conversation`, `Delivery`, `InboundEnvelope`, `DecisionRecord`, `DecisionStore`, `CommsStore`, `SurfaceDescriptor`, and the channel error taxonomy |
+| `tamoz-comms-gateway` | The long-running `Gateway` and `DeliveryDrainer` process boundary over injected Comms transport, store, checkpoint, controls, and effect-binding seams |
 | `tamoz-telegram` | The Telegram Bot API adapter: `Client`, `Transport`, `Normalizer` |
 | `tamoz-observability` | The closed signal catalog: `SignalCatalog`, `Signal`, `Correlation`, `ContentPolicy`, the `Recorder` implementations, `Metrics`, `ModelCall`, `Cost`, `PricingTable`, `Trace`, and the schema-version/evolution errors |
 | `tamoz-otel` | The optional governed exporter: `HTTPExporter`, `AsyncExporter`, `EgressPolicy` |

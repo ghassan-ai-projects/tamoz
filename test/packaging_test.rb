@@ -67,6 +67,18 @@ class PackagingTest < Minitest::Test
               contents.grep(%r{\Alib/}).any? { |path| root.join(path).binread.include?(term) }
             end
             assert_empty forbidden_source, "#{name} packaged fixture source: #{forbidden_source.inspect}"
+          elsif name == "tamoz-comms-gateway"
+            assert_includes contents, "lib/tamoz/comms/gateway.rb"
+            assert_includes contents, "lib/tamoz/comms/delivery_drainer.rb"
+            forbidden_paths = contents.grep(%r{(?:^|/)(?:fixtures?|spec|test)/|openclaw_comms_fixture|mcp_test_server})
+            assert_empty forbidden_paths, "#{name} packaged fixture paths: #{forbidden_paths.inspect}"
+
+            forbidden_source = contents.grep(%r{\Alib/}).select do |path|
+              root.join(path).binread.match?(
+                /(?:OpenclawCommsFixture|(?:^|\W)(?:fixture|fake(?:_transport)?|mock(?:_transport)?|stub(?:_transport)?|test server)(?:\W|$))/i
+              )
+            end
+            assert_empty forbidden_source, "#{name} packaged fixture source: #{forbidden_source.inspect}"
           end
 
           next unless name == "tamoz-evals"
@@ -154,7 +166,7 @@ class PackagingTest < Minitest::Test
   # and every case from an external index. No repository load path or package
   # fixture is available to this subprocess.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-comms-gateway tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -313,6 +325,174 @@ class PackagingTest < Minitest::Test
       assert_equal false, result.fetch("agent_loaded")
       assert_equal false, result.fetch("evals_loaded")
       assert_equal %w[tamoz-core tamoz-mcp], result.fetch("dependencies")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_comms_gateway_runs_with_injected_transport_and_store
+    with_isolated_install(%w[tamoz-core tamoz-comms tamoz-comms-gateway], "comms-gateway") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/comms/gateway"
+
+        Descriptor = Struct.new(:surface_id, :identity, :transport, :limits, keyword_init: true)
+        class Store
+          attr_reader :calls
+
+          def initialize
+            @calls = []
+            @rows = []
+          end
+
+          def acquire_poller_lease(**kwargs)
+            @calls << [:acquire, kwargs]
+            :acquired
+          end
+
+          def poll_offset(**kwargs)
+            @calls << [:offset, kwargs]
+            nil
+          end
+
+          def persist_next_offset(**kwargs)
+            @calls << [:persist, kwargs]
+            :persisted
+          end
+
+          def release_poller_lease(**kwargs)
+            @calls << [:release, kwargs]
+            :released
+          end
+
+          def add_delivery(row)
+            @rows << row
+          end
+
+          def reconcile_expired_deliveries(now:)
+            @calls << [:reconcile, now]
+            :reconciled
+          end
+
+          def outbox_rows(**kwargs)
+            @calls << [:rows, kwargs]
+            @rows
+          end
+
+          def claim_delivery(**kwargs)
+            @calls << [:claim, kwargs]
+            :claimed
+          end
+
+          def reserve_delivery_slot(**kwargs)
+            @calls << [:reserve, kwargs]
+            0.0
+          end
+
+          def bind_journal_effect(**kwargs)
+            @calls << [:bind, kwargs]
+            :bound
+          end
+
+          def mark_delivery_send_started(**kwargs)
+            @calls << [:send_started, kwargs]
+            :marked
+          end
+
+          def mark_delivery(**kwargs)
+            @calls << [:mark, kwargs]
+            @rows.clear
+            :marked
+          end
+        end
+
+        class Adapter
+          def initialize(store)
+            @store = store
+          end
+
+          def bind_comms_store(*)
+            @store
+          end
+        end
+
+        class Transport
+          attr_reader :polls, :deliveries, :authentications
+
+          def initialize
+            @polls = []
+            @deliveries = []
+            @authentications = []
+          end
+
+          def authenticate(descriptor, _credential)
+            @authentications << descriptor.surface_id
+            {"id" => descriptor.identity.fetch(:expected_bot_id)}
+          end
+
+          def poll(**kwargs)
+            @polls << kwargs
+            {updates: [], next_offset: nil}
+          end
+
+          def deliver(delivery)
+            @deliveries << delivery
+            {"message_id" => 42, "date" => 1}
+          end
+        end
+
+        store = Store.new
+        transport = Transport.new
+        descriptor = Descriptor.new(
+          surface_id: "injected",
+          identity: {expected_bot_id: 7},
+          transport: {poll_timeout_s: 0},
+          limits: {
+            control_capacity: 1, per_chat_messages_per_s: 1.0,
+            global_messages_per_s: 25.0
+          }
+        )
+        gateway = Tamoz::Comms::Gateway.new(
+          adapter: Adapter.new(store), checkpoints: Object.new, transport:, descriptor:,
+          poller_owner: "installed"
+        )
+        raise "start failed" unless gateway.start == :started
+        raise "serve failed" unless gateway.serve_once(drain: false) == :served
+        gateway.stop
+
+        delivery = Tamoz::Comms::Delivery.build(
+          conversation_id: "telegram:chat:1", kind: "answer", text: "hello",
+          render_version: 1, content_digest: "a" * 64
+        ).wire.merge("journaled" => 1)
+        store.add_delivery(delivery)
+        drainer = Tamoz::Comms::DeliveryDrainer.new(
+          store:, transport:, descriptor:, owner: "installed:drainer", sleeper: ->(_seconds) {}
+        )
+        raise "drain failed" unless drainer.drain_once(now: Time.utc(2026, 8, 26, 12, 0, 0)) == :drained
+
+        puts JSON.generate(
+          "gateway" => defined?(Tamoz::Comms::Gateway),
+          "drainer" => defined?(Tamoz::Comms::DeliveryDrainer),
+          "telegram" => $LOADED_FEATURES.any? { |path| path.include?("tamoz/telegram") },
+          "authenticated" => transport.authentications.length == 1,
+          "polls" => transport.polls.length,
+          "deliveries" => transport.deliveries.length,
+          "store_calls" => store.calls.map(&:first)
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+      assert status.success?, stderr
+      assert_equal(
+        {
+          "gateway" => "constant",
+          "drainer" => "constant",
+          "telegram" => false,
+          "authenticated" => true,
+          "polls" => 1,
+          "deliveries" => 1,
+          "store_calls" => %w[acquire acquire offset persist release reconcile rows claim reserve bind send_started mark]
+        },
+        JSON.parse(stdout)
+      )
       assert_empty stderr
     end
   end

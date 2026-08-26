@@ -61,16 +61,18 @@ module Tamoz
           controls_source = comms_controls_source(directory, adapter, options)
           with_delivery_drainers(directory, descriptors) do |drainers|
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
-              transport = build_transport(descriptor, credential(descriptor))
+              token = credential(descriptor)
+              transport = build_transport(descriptor, token)
               Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
                 poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
-                controls: controls_source
+                controls: controls_source, credential: token
               )
             end
             if once
               outcomes = gateways.map do |gateway|
-                next :poller_busy unless gateway.start == :started
+                start_outcome = gateway.start
+                next start_outcome unless start_outcome == :started
 
                 gateway.serve_once
               ensure

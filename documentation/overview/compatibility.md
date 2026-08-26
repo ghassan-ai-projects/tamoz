@@ -21,7 +21,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ### Gems and their runtime dependencies
 
-All twenty-six gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
+All twenty-seven gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
 
 | Gem | Depends on |
 |---|---|
@@ -36,6 +36,7 @@ All twenty-six gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_
 | `tamoz-mcp` | `tamoz-core`, `tamoz-cancellation`, `mcp` |
 | `tamoz-mcp-websearch` | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | `tamoz-core` |
+| `tamoz-comms-gateway` | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | `tamoz-core` |
 | `tamoz-observability` | `tamoz-core` |
 | `tamoz-otel` | `tamoz-observability` |
@@ -48,7 +49,7 @@ All twenty-six gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_
 | `tamoz-agent-profile` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
 | `tamoz-agent-session` | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-improvement` | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | `tamoz-agent` |
+| `tamoz-agent-cli` | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-evals` | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-mcp-websearch`, `tamoz-graph`, `tamoz-scheduler` (development/release only); **no production gem may depend on it** (enforced by test) |
 | `tamoz-evals-runner` | `tamoz-evals` and the selected runtime gems; caller-owned evaluation inputs are supplied explicitly |
 

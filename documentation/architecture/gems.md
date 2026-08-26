@@ -1,6 +1,6 @@
 # Gem map
 
-Tamoz is a monorepo of twenty-six independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
+Tamoz is a monorepo of twenty-seven independently publishable gems, all at `0.1.0.alpha.1` (pre-release), MIT-licensed, and pinned to `required_ruby_version >= 3.3 < 5.0`. This page maps each gem's responsibility, its runtime dependencies, and the bottom-up dependency chain.
 
 ## The dependency chain
 
@@ -20,6 +20,7 @@ flowchart BT
     M["tamoz-mcp<br/>governed MCP"]
     MW["tamoz-mcp-websearch<br/>governed websearch egress"]
     C["tamoz-comms<br/>channel contract"]
+    CG["tamoz-comms-gateway<br/>gateway · drainer"]
     O["tamoz-observability<br/>signal catalog · journal"]
 
     SQL["tamoz-sqlite<br/>SQLite persistence"]
@@ -44,6 +45,8 @@ flowchart BT
     MW --> M
     MW --> CORE
     C --> CORE
+    CG --> C
+    CG --> CORE
     O --> CORE
 
     CAN --> CORE
@@ -92,6 +95,7 @@ Two edges deserve emphasis:
 | `tamoz-mcp` | Governed MCP client/host over the official Ruby SDK | `tamoz-core`, `tamoz-cancellation`, `mcp ~> 1.1` |
 | `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter; preserves `Tamoz::Mcp::Websearch` | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | Channel contract gem: values, identity/admission policy, rendering, the `Transport` seam, and the structural `CommsStore` contract. Never opens a socket | `tamoz-core` |
+| `tamoz-comms-gateway` | Long-running `Gateway` and `DeliveryDrainer` process boundary over caller-injected transport, store, checkpoint, control, and effect-binding seams | `tamoz-comms`, `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: requests, decisions, grants, policy documents, and durable decision log | `tamoz-core` |
 | `tamoz-observability` | Closed versioned signal catalog, correlation identity, immutable signals, bounded recorders, local journal, content/secret policy, metrics and trace projection. `SCHEMA_VERSION = 1` | `tamoz-core` |
 | `tamoz-otel` | Bounded OTLP/HTTP exporter for observability signals | `tamoz-observability` |
@@ -103,7 +107,7 @@ Two edges deserve emphasis:
 | `tamoz-agent-profile` | Trusted profiles: document/authority/egress/check-spec validators, secure files, adoption and transition registries | `tamoz-agent-kernel`, `tamoz-core` |
 | `tamoz-agent-session` | Durable deliberation session: versioned records, planning context, graph nodes, effects, routing, and adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
-| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent` |
+| `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent`, `tamoz-comms-gateway` |
 | `tamoz-agent` | The deliberative agent runtime as a library: session state machine over the graph, worker/durable execution, capability and model wiring (`RubyLLMModel`) | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-improvement`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
 | `tamoz-evals` | Artifact schemas, canonical JSON, evidence values, verifier decisions and release evidence. Development/release gem; nothing depends on it | `tamoz-core` |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks. Inputs are caller-owned and supplied through an explicit manifest or adapter | `tamoz-evals`, selected runtime gems |

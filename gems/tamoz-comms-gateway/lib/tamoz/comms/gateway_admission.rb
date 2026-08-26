@@ -1,0 +1,122 @@
+# frozen_string_literal: true
+
+module Tamoz
+  module Comms
+    class Gateway
+      # Admits normalized inbound updates and records their durable outcomes.
+      module Admission
+        # Resolves one normalized update to its durable disposition (design
+        # §5): request, control reply, ignored, rejected, or callback decision.
+        def admit(envelope, now:)
+          route_admission(envelope, admission_decision(envelope), now:)
+        end
+
+        private
+
+        def admission_decision(envelope)
+          Comms::Admission.decide(
+            envelope, surface: @descriptor,
+                      binding: latest_binding(envelope),
+                      conversation: conversation_for(envelope),
+                      bot_username: bot_username
+          )
+        end
+
+        def conversation_for(envelope)
+          @store.conversation(
+            surface_id:, conversation_id: envelope.fetch('conversation_id')
+          )
+        end
+
+        def route_admission(envelope, decision, now:)
+          case decision.disposition
+          when :request
+            admit_request(envelope, now:)
+          when :decision
+            resolve_callback(envelope, now:)
+            acknowledge_callback(envelope)
+          when :rejected
+            record_disposition(envelope, disposition: 'rejected', reason: decision.reason.to_s, now:)
+            append_control(decision.control_reply, envelope, now:) if decision.control_reply
+          when :control
+            admit_control(envelope, decision, now:)
+          else
+            record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
+            handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
+          end
+        end
+
+        def admit_request(envelope, now:)
+          conversation = @store.conversation(surface_id:, conversation_id: envelope.fetch('conversation_id'))
+          thread = admission_thread(envelope, conversation)
+          bind_admission(envelope, thread, conversation, now:)
+          history = @store.conversation_history(
+            surface_id:, conversation_id: envelope.fetch('conversation_id')
+          )
+          outcome = @store.admit_and_enqueue(
+            envelope, surface_id:, bot_id:, thread:, profile_id: @descriptor.profile_id,
+                      reservation: reservation_slots, now:, history:
+          )
+          if outcome == :enqueued
+            append_control(accepted_reply(envelope), envelope, now:, kind: 'accepted')
+            return
+          end
+
+          # A replayed update already has its admission durable. Re-rendering
+          # it can create a second control row when queue state has changed.
+          return if outcome == :duplicate
+
+          refuse_admission(envelope, outcome, now:)
+        end
+
+        # One typed admission refusal: durable disposition plus one bounded reply.
+        def refuse_admission(envelope, outcome, now:)
+          disposition, reply = ADMISSION_REFUSALS.fetch(outcome)
+          record_disposition(envelope, disposition:, reason: outcome.to_s, now:)
+          append_control(reply, envelope, now:)
+        end
+
+        def admit_control(envelope, decision, now:)
+          if control_inbound_too_large?(envelope)
+            refuse_admission(envelope, :inbound_too_large, now:)
+          else
+            outcome = record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
+            return if outcome == :duplicate
+
+            if decision.command_intent
+              handle_command(envelope, decision, now:)
+            elsif decision.control_reply
+              append_control(decision.control_reply, envelope, now:)
+            end
+          end
+        end
+
+        def record_disposition(envelope, disposition:, reason:, now:)
+          @store.disposition_only(envelope, surface_id:, bot_id:, disposition:, reason:, now:)
+        end
+
+        def control_inbound_too_large?(envelope)
+          text = envelope.fetch('text')
+          return false unless text
+
+          text.bytesize > deployed_max_inbound_bytes
+        end
+
+        def deployed_max_inbound_bytes
+          @store.surface(surface_id:).fetch('limits').fetch('max_inbound_bytes')
+        end
+
+        # A bound conversation admits onto the thread its durable generation derives.
+        def admission_thread(envelope, conversation)
+          conversation_id = envelope.fetch('conversation_id')
+          return Comms::Admission.thread_id(surface_id, conversation_id) unless conversation
+
+          Comms::Admission.thread_id(
+            surface_id, conversation_id,
+            generation: @store.conversation_generation(surface_id:, conversation_id:)
+          )
+        end
+      end
+    end
+  end
+end

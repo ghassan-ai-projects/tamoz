@@ -95,8 +95,9 @@ digest. You place skill trees on disk yourself, out of band.
 
 ### Channel communications (invariants 56–58, ADR-041–043)
 
-The channel contract gem (`tamoz-comms`), Telegram adapter (`tamoz-telegram`),
-durable admission/outbox, gateway process, pairing, and worker turn projection
+The channel contract gem (`tamoz-comms`), gateway process gem
+(`tamoz-comms-gateway`), Telegram adapter (`tamoz-telegram`), durable
+admission/outbox, pairing, and worker turn projection
 are shipped and covered by focused tests and autonomy cases. Telegram is
 therefore a real, configured operator surface; it is not accurate to describe
 it as absent.

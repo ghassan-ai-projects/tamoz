@@ -343,7 +343,7 @@ class DeliveryDrainerTest < Minitest::Test
     def deliver(delivery)
       @attempts << delivery
       raise Comms::AuthenticationError, 'bot credential refused' if @raise_auth
-      raise Tamoz::Telegram::ResponseTooLargeError, 'response beyond the declared cap' if @raise_too_large
+      raise Comms::AmbiguousDeliveryError, 'response beyond the declared cap' if @raise_too_large
 
       @deliveries << delivery
       { 'message_id' => @deliveries.length, 'date' => 1 }

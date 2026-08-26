@@ -23,7 +23,7 @@ tests at each claim.
 
 ## High-impact Tamoz evidence
 
-- `gems/tamoz-comms/lib/tamoz/comms/gateway.rb` — Telegram admission,
+- `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway.rb` — gateway admission,
   command handling, status text, control delivery, and the Gateway/worker
   boundary.
 - `gems/tamoz-telegram/lib/tamoz/telegram/normalizer.rb` — update normalization,
@@ -39,7 +39,7 @@ tests at each claim.
   `gems/tamoz-graph/lib/tamoz/graph/durable_runner.rb` — durable model/tool
   effects and checkpointed request execution.
 - `gems/tamoz-comms/lib/tamoz/comms/outbox_delivery_sink.rb` and
-  `gems/tamoz-comms/lib/tamoz/comms/delivery_drainer.rb` — terminal projection,
+  `gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb` — terminal projection,
   bounded rendering, send boundary, retry classification, and unknown delivery.
 - `gems/tamoz-agent/lib/tamoz/agent/worker.rb` — worker claim, lifecycle
   emission, settlement, and notification seams.

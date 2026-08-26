@@ -28,6 +28,7 @@ Gemspec/RequiredRubyVersion:
     - 'gems/tamoz-approval/tamoz-approval.gemspec'
     - 'gems/tamoz-cancellation/tamoz-cancellation.gemspec'
     - 'gems/tamoz-comms/tamoz-comms.gemspec'
+    - 'gems/tamoz-comms-gateway/tamoz-comms-gateway.gemspec'
     - 'gems/tamoz-concurrency/tamoz-concurrency.gemspec'
     - 'gems/tamoz-core/tamoz-core.gemspec'
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
