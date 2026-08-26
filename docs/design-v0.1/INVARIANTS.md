@@ -29,7 +29,7 @@ optional packages are promoted. An unavailable feature never pretends to pass it
 |---|---|---|---|
 | 9 | **Strict checkpoint sequence** | Each `(thread_id, ns)` has a backend-assigned, gap-tolerant, strictly increasing integer sequence; opaque ids are never used as order | Clock/UUID ordering mistakes |
 | 10 | **Top-level persistence ownership** | Subgraphs inherit one backend under deterministic namespaces; no nested backend is created implicitly | Split history and collisions |
-| 11 | **LLM-independent engine** | Requiring core/graph loads no RubyLLM, HTTP client, provider, or adapter | Vendor coupling and offline-test failure |
+| 11 | **LLM-independent engine** | Requiring core/graph loads no RubyLLM, HTTP client, provider, or adapter — a load-time invariant; run-time capability injection via node callables and `context.effects` is by design | Vendor coupling and offline-test failure |
 | 12 | **Worker-local interrupt capture** | `throw :tamoz_interrupt` is caught inside the same task execution stack and returned as a typed result; ordinary `rescue` cannot swallow it | `UncaughtThrowError` in thread pools or bypassed approval |
 | 13 | **Immutable isolated input** | Hashes, arrays, strings, and framework values are copied/frozen at commit; unsupported mutable state is rejected before execution | Sibling state mutation |
 | 14 | **No ambient tenant state** | Runtime context is explicit; no `Thread.current`, fiber-local tenant data, or mutable global after boot | Cross-run data leakage |

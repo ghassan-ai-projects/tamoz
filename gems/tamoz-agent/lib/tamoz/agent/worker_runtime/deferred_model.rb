@@ -21,6 +21,8 @@ module Tamoz
           model.generate(...)
         end
 
+        # Forwards to the scorecard's kill-after-effect-started injection when
+        # present; production models deliberately do not implement the hook.
         def after_effect_started(operation:)
           model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
         end

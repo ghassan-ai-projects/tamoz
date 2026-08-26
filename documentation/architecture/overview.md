@@ -102,7 +102,7 @@ A durable graph returns from a barrier only after its checkpoint commits (ADR-01
 
 ### Two load-bearing rules
 
-1. **`tamoz-graph` never loads an LLM client.** Requiring `tamoz/graph` in a clean process loads no RubyLLM, no HTTP client, no provider, and no adapter — and opens no socket (invariant 11). The graph engine is a general durable-execution runtime: testable offline, and reusable for durable workflows that have nothing to do with language models.
+1. **`tamoz-graph` never loads an LLM client.** Requiring `tamoz/graph` in a clean process loads no RubyLLM, no HTTP client, no provider, and no adapter — and opens no socket (invariant 11). This is a load-time invariant, enforced by `test/dependency_isolation_test.rb`; at run time the engine executes whatever model objects an embedding injected through node callables and `context.effects` — by design. The graph engine is a general durable-execution runtime: testable offline, and reusable for durable workflows that have nothing to do with language models.
 2. **Checkpoints make state durable, not external effects exactly-once.** Every side effect has a stable key, a safety class, and an attempt token (invariant 21). Idempotent or reconcilable effects may converge; an ambiguous non-idempotent effect becomes `:unknown` and requires human reconciliation. It is never retried blindly.
 
 Everything else — reviewed plans, approvals, verification, healing — is policy layered on top of these two facts.

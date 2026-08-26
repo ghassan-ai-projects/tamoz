@@ -77,7 +77,7 @@ flowchart BT
 
 Two edges deserve emphasis:
 
-- **`tamoz-agent` is the only layer that knows RubyLLM** (`ruby_llm ~> 1.16.0`). It accepts a `RubyLLM::Agent`, `RubyLLM::Chat`, or a callable that produces a chat, and reuses their public messages and tools.
+- **`tamoz-agent` is the only gem that declares the `ruby_llm` SDK** (`ruby_llm ~> 1.16.0`). It accepts a `RubyLLM::Agent`, `RubyLLM::Chat`, or a callable that produces a chat, and reuses their public messages and tools. Sibling gems construct `RubyLLMModel` through their declared `tamoz-agent` dependency; the SDK dependency itself ships only here.
 - **Nothing in the product runtime depends on the evaluation gems.** `tamoz-evals` verifies artifacts and `tamoz-evals-runner` executes explicitly supplied evaluation inputs; both are development/release companions. `test/dependency_isolation_test.rb` enforces that one-way boundary.
 
 ## The gem-by-gem map
@@ -87,7 +87,7 @@ Two edges deserve emphasis:
 | `tamoz-core` | Shared values, context, secrets, canonical/JCS digesting, the worker pool, and the DR-2 durable-circuit engine | stdlib, Zeitwerk |
 | `tamoz-cancellation` | Cancellation token, signal traps, process-group primitives, interruptible sleep | `tamoz-core` |
 | `tamoz-concurrency` | Bounded pools, stream sink, event stream, shared-budget drain base class | `tamoz-cancellation`, `tamoz-core` |
-| `tamoz-graph` | Deterministic checkpointed graph runtime: BSP super-steps, interrupts, replay, subgraphs, durable-runner contracts. Never loads an LLM client (invariant 11) | `tamoz-core` |
+| `tamoz-graph` | Deterministic checkpointed graph runtime: BSP super-steps, interrupts, replay, subgraphs, durable-runner contracts. Never loads an LLM client (invariant 11) | `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-core`, Zeitwerk |
 | `tamoz-scheduler` | Durable scheduling values and the `ScheduleStore` contract (the SQLite implementation lives in `tamoz-sqlite`). Never executes work itself | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC `EpisodeWorker`: containment host, snapshot verification, typed Decision builder, reverse channel for evidence/outcomes/approvals, artifact manifest. One sealed, digest-verified Situation snapshot per episode (the old streaming-input engine was retired by `MIGRATION_13`) | `tamoz-core`, `grpc ~> 1.83`, `google-protobuf ~> 4.35` |
 | `tamoz-sqlite` | SQLite persistence: checkpoints, request inbox, effect journal, leases, schedules, comms, circuit, memory index, backup/restore. Migrator `CURRENT_VERSION = 13` | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3 ~> 2.9` |

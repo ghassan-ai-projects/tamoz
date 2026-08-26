@@ -151,6 +151,8 @@ module Tamoz
         result_payload(result)
       end
 
+      # Sole counterparty: the autonomy scorecard's kill-after-effect-started
+      # crash injector; production models deliberately do not implement the hook.
       def after_effect_started(operation)
         model = @configuration.model
         model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)

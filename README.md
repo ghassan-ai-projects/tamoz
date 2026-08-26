@@ -20,7 +20,7 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-core` | Shared values, context, secrets, canonical digests, the durable-circuit engine, legacy sentinels | stdlib, Zeitwerk |
 | `tamoz-cancellation` | The cancellation token plus OS-signal traps, process-group primitives, interruptible sleep | `tamoz-core` |
 | `tamoz-concurrency` | Bounded pools, stream sink, event stream, the shared-budget drain base class | `tamoz-cancellation`, `tamoz-core` |
-| `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-core` |
+| `tamoz-graph` | Deterministic checkpointed graph execution and durability contracts | `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-core`, Zeitwerk |
 | `tamoz-scheduler` | Schedule and occurrence values, the store contract (never executes work) | `tamoz-core` |
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |

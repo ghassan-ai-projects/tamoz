@@ -12,7 +12,7 @@ Barrier atomicity, write visibility at N+1, deterministic task and commit order,
 
 ### Runtime isolation and control flow (clauses 9–15)
 
-Strict backend-assigned checkpoint sequence, top-level persistence ownership (subgraphs share one backend), **LLM-independent engine** (clause 11 — requiring `tamoz/graph` loads no RubyLLM, HTTP client, provider, or adapter), worker-local interrupt capture via `throw`, immutable isolated input, no ambient tenant state, and streaming as one bounded projection that commits identical bytes.
+Strict backend-assigned checkpoint sequence, top-level persistence ownership (subgraphs share one backend), **LLM-independent engine** (clause 11 — a load-time invariant: requiring `tamoz/graph` loads no RubyLLM, HTTP client, provider, or adapter; run-time capability injection via node callables and `context.effects` is by design), worker-local interrupt capture via `throw`, immutable isolated input, no ambient tenant state, and streaming as one bounded projection that commits identical bytes.
 
 ### Durability and compatibility (clauses 16–22)
 
