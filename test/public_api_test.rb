@@ -277,6 +277,19 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Mcp::VERSION" => {},
           "Tamoz::Mcp::ValidationError" => {}
         },
+        "tamoz-mcp-websearch" => {
+          "Tamoz::Mcp::Websearch::EgressClient" => {},
+          "Tamoz::Mcp::Websearch::EgressClient::Result" => {},
+          "Tamoz::Mcp::Websearch::EgressCircuit" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicy" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicy::ValidationError" => {},
+          "Tamoz::Mcp::Websearch::EgressPolicyError" => {},
+          "Tamoz::Mcp::Websearch::RedirectHopLimitError" => {},
+          "Tamoz::Mcp::Websearch::VERSION" => {},
+          "Tamoz::Mcp::Websearch.credential_shaped_query?" => {},
+          "Tamoz::Mcp::Websearch.egress_budgets" => {},
+          "Tamoz::Mcp::Websearch.sanitize_result" => {}
+        },
         "tamoz-observability" => {
           "Tamoz::Observability::Catalog" => {},
           "Tamoz::Observability::ContentPolicy" => {},
@@ -432,6 +445,7 @@ class PublicAPITest < Minitest::Test
       Tamoz::Concurrency::VERSION,
       Tamoz::Evals::VERSION,
       Tamoz::Mcp::VERSION,
+      Tamoz::Mcp::Websearch::VERSION,
       Tamoz::Comms::VERSION,
       Tamoz::Telegram::VERSION,
       Tamoz::Observability::VERSION,

@@ -19,6 +19,7 @@
     "tamoz-evals",
     "tamoz-graph",
     "tamoz-mcp",
+    "tamoz-mcp-websearch",
     "tamoz-observability",
     "tamoz-otel",
     "tamoz-scheduler",

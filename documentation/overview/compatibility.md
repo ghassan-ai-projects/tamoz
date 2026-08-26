@@ -21,23 +21,35 @@ Current version: `0.1.0.alpha.1` (pre-release).
 
 ### Gems and their runtime dependencies
 
-All thirteen gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
+All twenty-five gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `required_ruby_version >= 3.3 < 5.0`. Each installs and runs with only its declared dependencies, proven per gem by an isolated install into its own `GEM_HOME`.
 
 | Gem | Depends on |
 |---|---|
 | `tamoz-core` | stdlib, Zeitwerk |
+| `tamoz-cancellation` | `tamoz-core` |
+| `tamoz-concurrency` | `tamoz-cancellation`, `tamoz-core` |
 | `tamoz-graph` | `tamoz-core` |
 | `tamoz-scheduler` | `tamoz-core` |
 | `tamoz-stream` | `tamoz-core`, `grpc`, `google-protobuf` |
 | `tamoz-sqlite` | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `sqlite3` |
 | `tamoz-tools` | `tamoz-core` |
-| `tamoz-mcp` | `tamoz-core`, `mcp` |
+| `tamoz-mcp` | `tamoz-core`, `tamoz-cancellation`, `mcp` |
+| `tamoz-mcp-websearch` | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | `tamoz-core` |
+| `tamoz-approval` | `tamoz-core` |
 | `tamoz-observability` | `tamoz-core` |
 | `tamoz-otel` | `tamoz-observability` |
 | `tamoz-telegram` | `tamoz-comms` |
 | `tamoz-agent` | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm` `~> 1.16.0` |
-| `tamoz-evals` | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-graph`, `tamoz-scheduler` (development/release only); **no production gem may depend on it** (enforced by test) |
+| `tamoz-agent-kernel` | `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-capabilities` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
+| `tamoz-agent-memory` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |
+| `tamoz-agent-healing` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-profile` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite` |
+| `tamoz-agent-session` | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-tools` |
+| `tamoz-agent-improvement` | `tamoz-agent-kernel`, `tamoz-agent-memory` |
+| `tamoz-agent-cli` | `tamoz-agent` |
+| `tamoz-evals` | `tamoz-core`, `tamoz-agent`, `tamoz-sqlite`, `tamoz-mcp`, `tamoz-mcp-websearch`, `tamoz-graph`, `tamoz-scheduler` (development/release only); **no production gem may depend on it** (enforced by test) |
 
 ## Not yet supported
 

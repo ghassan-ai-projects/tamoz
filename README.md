@@ -25,7 +25,8 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-stream` | The supervised gRPC episode worker and the Situation boundary | `tamoz-core`, gRPC, protobuf |
 | `tamoz-sqlite` | The durable adapter: checkpoints, request inbox, effect journal, leases, schedules, comms | `tamoz-graph`, `tamoz-scheduler`, `tamoz-stream`, `tamoz-approval`, `sqlite3` |
 | `tamoz-tools` | The workspace toolbox, the skills compiler, the capability host | `tamoz-core` |
-| `tamoz-mcp` | Governed MCP client/host and governed websearch | `tamoz-core`, the official MCP SDK |
+| `tamoz-mcp` | Governed MCP client/host | `tamoz-core`, `tamoz-cancellation`, the official MCP SDK |
+| `tamoz-mcp-websearch` | Governed operator-side websearch egress adapter | `tamoz-mcp`, `tamoz-core` |
 | `tamoz-comms` | Channel values, admission policy, rendering, transport seam, store contract | `tamoz-core` |
 | `tamoz-approval` | Policy-as-data approval engine: digest-pinned YAML documents, ask/park/deny ladder, scoped grants, durable decision log | `tamoz-core` |
 | `tamoz-telegram` | Telegram Bot API transport adapter | `tamoz-comms` |
@@ -40,11 +41,12 @@ on it — it lists, with evidence, what Tamoz does not do.
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
 | `tamoz-agent` | The deliberative agent runtime (library): worker and durable execution, capability/model wiring, the bundled approval default | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
-| `tamoz-evals` | Conformance, artifact verification, release evidence | stdlib only |
+| `tamoz-evals` | Conformance, artifact verification, release evidence | core, agent, sqlite, mcp, mcp-websearch, graph, scheduler (development/release only) |
 
 Each gem installs and runs with only its declared dependencies, proven per gem
-by an isolated install into its own `GEM_HOME`. `tamoz-evals` is a non-runtime
-gem: no production gemspec may depend on it.
+by an isolated install into its own `GEM_HOME`. `tamoz-evals` is a
+development/release gem that directly exercises the runtime, including the
+websearch package; no production gemspec may depend on it.
 
 Tamoz Agent is the reference application under `apps/tamoz-agent`.
 

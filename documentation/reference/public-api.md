@@ -34,6 +34,8 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | Package | What the surface is |
 |---|---|
 | `tamoz-core` | The largest inventory: configuration (`Tamoz.configuration`, `Tamoz.configure`, `Tamoz.finalize_configuration!`), the checkpoint/store error taxonomy (`CheckpointConflictError`, `StoreError`, `LeaseLostError`, ...), context and pool (`Tamoz::Context`, `Tamoz::Pool.for`), secrets (`Tamoz::Secret`, `SensitiveValueError`), stream primitives (`StreamPart`, `StreamSink`), task results, and instrumentation (`Tamoz.instrument`) |
+| `tamoz-cancellation` | Cancellation primitives: `Token`, signal/process-group handling, and interruptible sleep |
+| `tamoz-concurrency` | Bounded execution primitives: `Pool`, `StreamSink`, event streams, and drain contracts |
 | `tamoz-graph` | Graph construction and execution: `Tamoz.graph`, `Tamoz::START`, `Tamoz::END`, `Tamoz.interrupt`, `Tamoz.send_to`, `Graph::Definition`, `Compiled`, `Checkpoint`, `Snapshot`, the reducers, and `MemoryCheckpointer` |
 | `tamoz-scheduler` | Schedule/occurrence values and the store contract: `Schedule`, `Occurrence`, `ScheduleStore`, `KINDS`, `STATES`, misfire/overlap policies, `GrantIntersector` |
 | `tamoz-stream` | The episode/stream boundary: `EpisodeWorker`, `EpisodeRunner`, `SituationMemory`, `ApprovalRelay`, `EvidenceClient`, `VerificationStore`, `ArtifactStore`, `Reconsideration`, and the sealed snapshot/identity errors |
@@ -44,14 +46,17 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-observability` | The closed signal catalog: `SignalCatalog`, `Signal`, `Correlation`, `ContentPolicy`, the `Recorder` implementations, `Metrics`, `ModelCall`, `Cost`, `PricingTable`, `Trace`, and the schema-version/evolution errors |
 | `tamoz-otel` | The optional governed exporter: `HTTPExporter`, `AsyncExporter`, `EgressPolicy` |
 | `tamoz-agent-kernel` | The deliberation substrate: `Deliberation`, `EffectDispatcher`, `Plan`, `Step`, `Event`, `Providers`, `Error`, `GraphVersions` |
+| `tamoz-agent-capabilities` | The sealed capability catalog: bindings and child-task dispatch over toolbox, skills, MCP, browser, and database sources |
 | `tamoz-agent-memory` | Durable memory: `Memory::Engine` and its sub-services, `MemoryRecord`, `VerifiedOutcomeReference` |
 | `tamoz-agent-healing` | Self-healing: `Healing::Remediation.run`, rules and registry, classification, preflight/oracle/promotion gate, seams |
 | `tamoz-agent-profile` | Trusted profiles: the `Profile` facade — preview/load/from_authority — validators, secure files, registries |
+| `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, and adaptive machinery |
 | `tamoz-agent-improvement` | Self-improvement: `Improvement::CandidateLifecycle`, generator, heuristic, evaluation reports, promotion |
 | `tamoz-agent-cli` | The command line: `CLI.run` and every command group |
 | `tamoz-agent` | The runtime library: `Tamoz::Agent.build`, `Runtime`, `Session`, `SessionRecords`, `RubyLLMModel`, `McpCapabilitySource` |
 | `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, `Answer.parse`, `PolicyDocument`, the `Engine` with its `GrantStore`/`DecisionLog` ports and memory implementations, and `bundled_policy_path` for the shipped policy data |
 | `tamoz-mcp` | The governed MCP client/host: `Catalog`, `Entry`, `ServerConfig`, `Supervisor`, `Invocation`, `Elicitation`, and the MCP error taxonomy |
+| `tamoz-mcp-websearch` | The governed operator-side websearch boundary: `EgressPolicy`, `EgressClient`, `EgressCircuit`, `Result`, `VERSION`, and typed egress/redirect/validation errors |
 | `tamoz-evals` | The evaluation harness surface: `Tamoz::Evals.verify`, `Case.load`, `Evidence.load`, `Result.load` — a development/release gem no production gemspec may depend on |
 
 The packages form a dependency ladder — `tamoz-core` at the base, the value

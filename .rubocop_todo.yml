@@ -33,6 +33,7 @@ Gemspec/RequiredRubyVersion:
     - 'gems/tamoz-evals/tamoz-evals.gemspec'
     - 'gems/tamoz-graph/tamoz-graph.gemspec'
     - 'gems/tamoz-mcp/tamoz-mcp.gemspec'
+    - 'gems/tamoz-mcp-websearch/tamoz-mcp-websearch.gemspec'
     - 'gems/tamoz-observability/tamoz-observability.gemspec'
     - 'gems/tamoz-otel/tamoz-otel.gemspec'
     - 'gems/tamoz-scheduler/tamoz-scheduler.gemspec'
@@ -148,7 +149,7 @@ Layout/EmptyLineAfterGuardClause:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
@@ -386,7 +387,7 @@ Layout/LineLength:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_memory_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -505,7 +506,7 @@ Layout/MultilineOperationIndentation:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/memory_cell.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/compiler.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/node_spec.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/trace.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/verification_store.rb'
     - 'gems/tamoz-stream/lib/tamoz/stream/verification_store.rb'
@@ -607,8 +608,8 @@ Layout/SpaceInsideHashLiteralBraces:
     - 'gems/tamoz-graph/lib/tamoz/graph/outcome.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/state_manager.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/subgraph_runtime.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -1056,7 +1057,7 @@ Lint/ShadowedException:
     - 'gems/tamoz-core/lib/tamoz/state_codec.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/checkpoint_codec.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/wire.rb'
     - 'script/generate_dependency_review'
     - 'script/tamoz_sqlite_oracle'
@@ -1218,6 +1219,7 @@ Lint/UselessMethodDefinition:
 # Configuration parameters: AllowedMethods, AllowedPatterns, CountRepeatedAttributes, Max.
 Metrics/AbcSize:
   Exclude:
+    - 'test/websearch_contract_test.rb'
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
@@ -1333,8 +1335,8 @@ Metrics/AbcSize:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -1636,6 +1638,7 @@ Metrics/BlockLength:
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ClassLength:
   Exclude:
+    - 'test/dependency_isolation_test.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
@@ -1827,7 +1830,7 @@ Metrics/CyclomaticComplexity:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
@@ -1880,6 +1883,7 @@ Metrics/CyclomaticComplexity:
 # Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
 Metrics/MethodLength:
   Exclude:
+    - 'test/websearch_contract_test.rb'
     - 'gems/gemspec_helper.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/capability_binding.rb'
     - 'gems/tamoz-agent-capabilities/lib/tamoz/agent/mcp_capability_source.rb'
@@ -1986,8 +1990,8 @@ Metrics/MethodLength:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/catalog.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/recorders.rb'
@@ -2423,7 +2427,7 @@ Metrics/PerceivedComplexity:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/notifier.rb'
@@ -2647,6 +2651,7 @@ Minitest/AssertSame:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/AssertTruthy:
   Exclude:
+    - 'test/websearch_contract_test.rb'
     - 'test/agent_latency_smoke_test.rb'
     - 'test/agent_scorecard_test.rb'
     - 'test/approval_flow_test.rb'
@@ -2860,6 +2865,7 @@ Minitest/LiteralAsActualArgument:
 # Configuration parameters: Max.
 Minitest/MultipleAssertions:
   Exclude:
+    - 'test/websearch_contract_test.rb'
     - 'gems/tamoz-evals/test/scenario_driver_test.rb'
     - 'test/agent_acceptance_workflow_test.rb'
     - 'test/agent_approval_boot_test.rb'
@@ -3038,6 +3044,7 @@ Minitest/RefuteEqual:
 # This cop supports unsafe autocorrection (--autocorrect-all).
 Minitest/RefuteFalse:
   Exclude:
+    - 'test/websearch_contract_test.rb'
     - 'test/agent_scorecard_test.rb'
     - 'test/approval_flow_test.rb'
     - 'test/capability_closed_world_test.rb'
@@ -3205,7 +3212,7 @@ Naming/PredicateMethod:
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_selector_control.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/schema.rb'
     - 'gems/tamoz-graph/lib/tamoz/graph/stream_emitter.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/boundary_registry.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/connection_pool.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/lease.rb'
@@ -3326,6 +3333,7 @@ Naming/VariableNumber:
 # Configuration parameters: MinSize.
 Performance/CollectionLiteralInLoop:
   Exclude:
+    - 'test/packaging_test.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb'
     - 'gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb'
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/rule.rb'
@@ -3417,7 +3425,7 @@ Performance/RedundantEqualityComparisonBlock:
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-graph/lib/tamoz/reducers.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'test/core_pool_test.rb'
     - 'test/public_api_test.rb'
@@ -3746,7 +3754,7 @@ Style/EmptyClassDefinition:
   Exclude:
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
     - 'gems/tamoz-core/lib/tamoz/core/jcs.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-otel/lib/tamoz/otel/http_exporter.rb'
 
 # Offense count: 3
@@ -4035,8 +4043,8 @@ Style/IfUnlessModifier:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/invocation.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/content_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/metrics.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal.rb'
@@ -4275,8 +4283,8 @@ Style/MultipleComparison:
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/report.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/cli.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_trace_recorder.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_circuit.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_circuit.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-observability/lib/tamoz/observability/signal_catalog.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/adapter.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/store.rb'
@@ -4365,7 +4373,7 @@ Style/NumericPredicate:
     - 'gems/tamoz-evals/lib/tamoz/evals/benchmark/metrics.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/agent_smoke_corpus.rb'
     - 'gems/tamoz-evals/lib/tamoz/evals/harness/subprocess_runner.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-sqlite/lib/tamoz/sqlite/circuit_store.rb'
     - 'script/benchmark_release'
     - 'script/tamoz_sqlite_oracle'
@@ -4393,7 +4401,7 @@ Style/ParallelAssignment:
 # This cop supports safe autocorrection (--autocorrect).
 Style/PerlBackrefs:
   Exclude:
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb'
 
 # Offense count: 14
 # This cop supports unsafe autocorrection (--autocorrect-all).
@@ -4403,7 +4411,7 @@ Style/PredicateWithKind:
     - 'gems/tamoz-core/lib/tamoz/core/capability/registry.rb'
     - 'gems/tamoz-core/lib/tamoz/core/capability/source.rb'
     - 'gems/tamoz-graph/lib/tamoz/reducers.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'script/tamoz_sqlite_oracle'
     - 'test/core_pool_test.rb'
     - 'test/sqlite_request_inbox_test.rb'
@@ -4427,7 +4435,7 @@ Style/ReduceToHash:
 # Configuration parameters: Methods.
 Style/RedundantArgument:
   Exclude:
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
 
 # Offense count: 5
 # This cop supports safe autocorrection (--autocorrect).
@@ -4582,7 +4590,7 @@ Style/RegexpLiteral:
   Exclude:
     - 'gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb'
     - 'gems/tamoz-agent-profile/lib/tamoz/agent/profile.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb'
     - 'test/agent_mcp_capability_source_test.rb'
     - 'test/agent_skills_test.rb'
     - 'test/ci_configuration_test.rb'
@@ -4923,10 +4931,10 @@ Style/StringLiterals:
     - 'gems/tamoz-mcp/lib/tamoz/mcp/server_config.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/supervisor.rb'
     - 'gems/tamoz-mcp/lib/tamoz/mcp/version.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_circuit.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_client.rb'
-    - 'gems/tamoz-mcp/lib/tamoz/mcp/websearch/egress_policy.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_circuit.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_client.rb'
+    - 'gems/tamoz-mcp-websearch/lib/tamoz/mcp/websearch/egress_policy.rb'
     - 'gems/tamoz-mcp/tamoz-mcp.gemspec'
     - 'gems/tamoz-observability/lib/tamoz/observability/errors.rb'
     - 'gems/tamoz-scheduler/lib/tamoz/scheduler.rb'

@@ -2,7 +2,7 @@
 
 Tamoz's development and release quality system. It is a runtime-coupled development/release
 gem: its verifier and scorecard/treatment harness reference `Tamoz::Agent`, `Tamoz::SQLite`,
-`Tamoz::Mcp`, `Tamoz::Graph`, and `Tamoz::Scheduler` directly, so it declares those gems as
+`Tamoz::Mcp`, `Tamoz::Mcp::Websearch`, `Tamoz::Graph`, and `Tamoz::Scheduler` directly, so it declares those gems as
 dependencies. The one-way rule is the inverse edge — no production Tamoz gem depends on
 `tamoz-evals` — enforced by `test/dependency_isolation_test.rb`.
 

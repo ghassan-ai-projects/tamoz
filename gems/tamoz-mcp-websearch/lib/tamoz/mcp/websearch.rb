@@ -5,6 +5,7 @@
 # (`script/websearch_adapter`) and the test suite load this file — Tamoz's own
 # core load path never pulls in a socket-capable dependency.
 require "tamoz/mcp"
+require_relative "websearch/version"
 require_relative "websearch/egress_policy"
 require_relative "websearch/egress_client"
 require_relative "websearch/egress_circuit"

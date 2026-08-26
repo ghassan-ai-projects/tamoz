@@ -130,6 +130,7 @@ PATH
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-graph (= 0.1.0.alpha.1)
       tamoz-mcp (= 0.1.0.alpha.1)
+      tamoz-mcp-websearch (= 0.1.0.alpha.1)
       tamoz-scheduler (= 0.1.0.alpha.1)
       tamoz-sqlite (= 0.1.0.alpha.1)
 
@@ -141,6 +142,13 @@ PATH
       tamoz-concurrency (= 0.1.0.alpha.1)
       tamoz-core (= 0.1.0.alpha.1)
       zeitwerk (~> 2.6)
+
+PATH
+  remote: gems/tamoz-mcp-websearch
+  specs:
+    tamoz-mcp-websearch (0.1.0.alpha.1)
+      tamoz-core (= 0.1.0.alpha.1)
+      tamoz-mcp (= 0.1.0.alpha.1)
 
 PATH
   remote: gems/tamoz-mcp
@@ -383,6 +391,7 @@ DEPENDENCIES
   tamoz-evals!
   tamoz-graph!
   tamoz-mcp!
+  tamoz-mcp-websearch!
   tamoz-observability!
   tamoz-otel!
   tamoz-scheduler!
@@ -469,6 +478,7 @@ CHECKSUMS
   tamoz-evals (0.1.0.alpha.1)
   tamoz-graph (0.1.0.alpha.1)
   tamoz-mcp (0.1.0.alpha.1)
+  tamoz-mcp-websearch (0.1.0.alpha.1)
   tamoz-observability (0.1.0.alpha.1)
   tamoz-otel (0.1.0.alpha.1)
   tamoz-scheduler (0.1.0.alpha.1)

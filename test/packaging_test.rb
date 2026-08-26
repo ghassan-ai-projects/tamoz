@@ -41,6 +41,18 @@ class PackagingTest < Minitest::Test
             refute(contents.any? { |path| path.end_with?(".proto") }, name)
           end
 
+          if name == "tamoz-mcp-websearch"
+            %w[
+              lib/tamoz/mcp/websearch.rb
+              lib/tamoz/mcp/websearch/version.rb
+              lib/tamoz/mcp/websearch/egress_policy.rb
+              lib/tamoz/mcp/websearch/egress_client.rb
+              lib/tamoz/mcp/websearch/egress_circuit.rb
+            ].each { |path| assert_includes contents, path, name }
+          elsif name == "tamoz-mcp"
+            refute contents.any? { |path| path.start_with?("lib/tamoz/mcp/websearch") }, name
+          end
+
           next unless name == "tamoz-evals"
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
@@ -72,7 +84,7 @@ class PackagingTest < Minitest::Test
   # than asking `gem install` to resolve them from a registry.
   def test_packaged_evals_executable_runs_without_repository_load_paths
     names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
-               tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+               tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
     with_isolated_install(names, "evals") do |environment|
       install_root = environment.fetch("GEM_HOME")
       spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-evals").join("tamoz-evals.gemspec").to_s)
@@ -124,7 +136,7 @@ class PackagingTest < Minitest::Test
   # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
   # ScheduleStore over the scheduler gem's contract.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -135,20 +147,22 @@ class PackagingTest < Minitest::Test
         Dir.chdir(root) { Gem::Package.build(specification, false, true, package) }
         package
       end
+      packages.concat(external_dependency_packages(names))
+      fixture_script = File.join(directory, "mcp_test_server.rb")
+      FileUtils.cp(ROOT.join("script", "mcp_test_server"), fixture_script)
       clean_environment = ENV.each_key
                              .grep(/\A(?:BUNDLE|BUNDLER)/)
                              .to_h { |key| [key, nil] }
                              .merge(
                                "GEM_HOME" => install_root,
-                               "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+                               "GEM_PATH" => install_root,
                                "RUBYLIB" => nil,
                                "RUBYOPT" => nil,
-                               # Case `agent.mcp-governed-call` drives the real SDK
-                               # test server; the script lives outside every gem
-                               # directory, so the packaged scorecard is pointed at
-                               # the workspace copy.
+                               # Case `agent.mcp-governed-call` drives the SDK
+                               # against this copied test fixture. The subprocess
+                               # still loads production code only from GEM_HOME.
                                "TAMOZ_MCP_SERVER_SCRIPT" =>
-                                 File.join(ROOT, "script", "mcp_test_server").to_s
+                                 fixture_script
                              )
       packages.each do |package|
         _stdout, stderr, status = Open3.capture3(
@@ -260,6 +274,97 @@ class PackagingTest < Minitest::Test
       assert_equal "inspect", result.fetch("result")
       assert_equal "ok", result.fetch("stream")
       assert_equal false, result.fetch("graph_loaded")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_websearch_runs_with_only_declared_tamoz_closure
+    with_hermetic_websearch_install("websearch") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "rubygems"
+        require "tamoz/mcp/websearch"
+        puts JSON.generate(
+          "version" => Tamoz::Mcp::Websearch::VERSION,
+          "feature" => $LOADED_FEATURES.find { |path| path.end_with?("/tamoz/mcp/websearch.rb") },
+          "agent_loaded" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/agent") },
+          "evals_loaded" => $LOADED_FEATURES.any? { |path| path.include?("/tamoz/evals") },
+          "dependencies" => Gem.loaded_specs.fetch("tamoz-mcp-websearch").dependencies.map(&:name).sort
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+      assert_equal "0.1.0.alpha.1", result.fetch("version")
+      assert Pathname.new(result.fetch("feature")).realpath.to_s.start_with?(Pathname.new(environment.fetch("GEM_HOME")).realpath.to_s)
+      assert_equal false, result.fetch("agent_loaded")
+      assert_equal false, result.fetch("evals_loaded")
+      assert_equal %w[tamoz-core tamoz-mcp], result.fetch("dependencies")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_mcp_parent_has_no_websearch_http_or_resolv_closure
+    with_hermetic_websearch_install(
+      "mcp-parent",
+      tamoz_names: %w[tamoz-cancellation tamoz-core tamoz-mcp]
+    ) do |environment|
+      script = <<~'RUBY'
+        require "json"
+        require "tamoz/mcp"
+        puts JSON.generate(
+          "websearch_file" => $LOADED_FEATURES.find { |path| path.end_with?("/tamoz/mcp/websearch.rb") },
+          "websearch_defined" => defined?(Tamoz::Mcp::Websearch),
+          "net_http" => $LOADED_FEATURES.any? { |path| path.include?("net/http") },
+          "resolv" => $LOADED_FEATURES.any? { |path| path.include?("resolv") }
+        )
+      RUBY
+      stdout, stderr, status = Open3.capture3(environment, RbConfig.ruby, "-e", script)
+      assert status.success?, stderr
+      result = JSON.parse(stdout)
+      assert_nil result.fetch("websearch_file")
+      assert_nil result.fetch("websearch_defined")
+      assert_equal false, result.fetch("net_http")
+      assert_equal false, result.fetch("resolv")
+      assert_empty stderr
+    end
+  end
+
+  def test_packaged_websearch_operator_gate_and_fixture_provider_are_hermetic
+    with_hermetic_websearch_install("websearch-operator") do |environment|
+      script = <<~'RUBY'
+        require "json"
+        load ENV.fetch("TAMOZ_OPERATOR_SCRIPT")
+        policy = {
+          "allowlisted_hosts" => ["api.search.example"],
+          "schemes" => ["https"],
+          "deny_private_ranges" => true,
+          "max_request_bytes" => 2048,
+          "max_response_bytes" => 4096,
+          "connect_timeout_s" => 10,
+          "redirect_max_hops" => 3,
+          "circuit" => {"threshold" => 3, "scope_type" => "egress", "budget_breach" => true},
+          "credential_refs" => []
+        }
+        ENV["TAMOZ_WEBSEARCH_EGRESS"] = JSON.generate(policy)
+        ENV.delete("TAMOZ_SEARCH_API_TOKEN")
+        refused = WebsearchAdapter.search_response("answer", 1)
+        raise "grant gate did not refuse" unless refused.error? && refused.content.first.fetch(:text).include?("operator grant")
+        ENV["TAMOZ_WEBSEARCH_GRANT"] = "1"
+        ENV["TAMOZ_WEBSEARCH_PROVIDER"] = JSON.generate("provider" => "fixture")
+        served = WebsearchAdapter.search_response("answer", 1)
+        raise "fixture provider was not served" if served.error?
+        raise "fixture result was not returned" unless served.content.first.fetch(:text).include?("42")
+        puts JSON.generate("fixture" => true, "network" => false, "credential" => ENV.key?("TAMOZ_SEARCH_API_TOKEN"))
+      RUBY
+      stdout, stderr, status = Open3.capture3(
+        environment.merge("TAMOZ_OPERATOR_SCRIPT" => ROOT.join("script", "websearch_adapter").to_s),
+        RbConfig.ruby,
+        "-e",
+        script
+      )
+      assert status.success?, stderr
+      assert_equal({"fixture" => true, "network" => false, "credential" => false}, JSON.parse(stdout))
       assert_empty stderr
     end
   end
@@ -598,6 +703,47 @@ class PackagingTest < Minitest::Test
 
   private
 
+  def with_hermetic_websearch_install(label, tamoz_names: %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch])
+    external_names = %w[mcp json_schemer bigdecimal hana regexp_parser simpleidn zeitwerk]
+
+    Dir.mktmpdir("tamoz-hermetic-#{label}") do |directory|
+      install_root = File.join(directory, "install")
+      environment = ENV.each_key
+                       .grep(/\A(?:BUNDLE|BUNDLER)/)
+                       .to_h { |key| [key, nil] }
+                       .merge(
+                         "GEM_HOME" => install_root,
+                         "GEM_PATH" => install_root,
+                         "RUBYLIB" => nil,
+                         "RUBYOPT" => nil
+                       )
+      packages = tamoz_names.map do |name|
+        root = GEM_ROOTS.fetch(name)
+        specification = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+        package = File.join(directory, "#{name}.gem")
+        Dir.chdir(root) { Gem::Package.build(specification, false, true, package) }
+        package
+      end
+      packages.concat(external_names.map { |name| Gem::Specification.find_by_name(name).cache_file })
+      packages.each do |package|
+        _stdout, stderr, status = Open3.capture3(
+          environment,
+          RbConfig.ruby,
+          "-S", "gem", "install", "--no-document", "--ignore-dependencies",
+          "--install-dir", install_root, package
+        )
+        assert status.success?, stderr
+      end
+
+      yield environment.merge(
+        "TAMOZ_WEBSEARCH_GEM_LIB" => File.join(install_root, "gems", "tamoz-mcp-websearch-0.1.0.alpha.1", "lib"),
+        "TAMOZ_MCP_GEM_LIB" => File.join(install_root, "gems", "tamoz-mcp-0.1.0.alpha.1", "lib"),
+        "TAMOZ_CORE_GEM_LIB" => File.join(install_root, "gems", "tamoz-core-0.1.0.alpha.1", "lib"),
+        "TAMOZ_CANCELLATION_GEM_LIB" => File.join(install_root, "gems", "tamoz-cancellation-0.1.0.alpha.1", "lib")
+      )
+    end
+  end
+
   # Build the named gems, install them into their OWN GEM_HOME with
   # `--ignore-dependencies` (so a missing gemspec dependency shows up as a load
   # failure rather than being satisfied by a sibling), and yield an environment
@@ -617,6 +763,14 @@ class PackagingTest < Minitest::Test
         )
         assert status.success?, "#{name}: #{stderr}"
       end
+      external_dependency_packages(names).each do |package|
+        _stdout, stderr, status = Open3.capture3(
+          ENV.each_key.grep(/\A(?:BUNDLE|BUNDLER)/).to_h { |key| [key, nil] },
+          RbConfig.ruby, "-S", "gem", "install", "--no-document",
+          "--ignore-dependencies", "--install-dir", install_root, package
+        )
+        assert status.success?, "#{package}: #{stderr}"
+      end
 
       yield(
         ENV.each_key
@@ -624,11 +778,44 @@ class PackagingTest < Minitest::Test
            .to_h { |key| [key, nil] }
            .merge(
              "GEM_HOME" => install_root,
-             "GEM_PATH" => ([install_root] + Gem.path).uniq.join(File::PATH_SEPARATOR),
+             "GEM_PATH" => install_root,
              "RUBYLIB" => nil,
              "RUBYOPT" => nil
            )
       )
     end
+  end
+
+  def external_dependency_packages(names)
+    pending = names.dup
+    visited = []
+    packages = []
+
+    until pending.empty?
+      name = pending.shift
+      next if visited.include?(name)
+
+      visited << name
+      specification = if name.start_with?("tamoz-")
+                        root = GEM_ROOTS.fetch(name)
+                        Gem::Specification.load(root.join("#{name}.gemspec").to_s)
+                      else
+                        Gem::Specification.find_by_name(name)
+                      end
+      specification.runtime_dependencies.each do |dependency|
+        dependency_name = dependency.name
+        next if dependency_name.start_with?("tamoz-")
+
+        resolved = Gem::Specification.find_all_by_name(dependency_name).find do |candidate|
+          dependency.requirement.satisfied_by?(candidate.version)
+        end
+        raise Gem::LoadError, "no installed #{dependency.requirement} for #{dependency_name}" unless resolved
+
+        packages << resolved.cache_file
+        pending << dependency_name
+      end
+    end
+
+    packages.uniq
   end
 end

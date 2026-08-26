@@ -497,7 +497,7 @@ module Tamoz
           LOAD_PATHS = %w[
             tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-scheduler
             tamoz-stream tamoz-approval tamoz-sqlite tamoz-tools tamoz-observability
-            tamoz-comms tamoz-mcp tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing
+            tamoz-comms tamoz-mcp tamoz-mcp-websearch tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing
             tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session
             tamoz-agent-improvement tamoz-agent-cli
             tamoz-agent

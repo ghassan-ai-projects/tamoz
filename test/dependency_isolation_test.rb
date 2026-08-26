@@ -153,6 +153,40 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
+  def test_mcp_loads_without_websearch_http_or_resolv
+    state = loaded_state_after("tamoz/mcp")
+    features = state.fetch("features")
+
+    refute features.any? { |path| path.end_with?("/tamoz/mcp/websearch.rb") }, features.inspect
+    refute features.any? { |path| path.match?(%r{(?:net/http|resolv)}) }, features.inspect
+    assert_nil state.fetch("websearch_defined")
+  end
+
+  def test_websearch_loads_only_its_declared_tamoz_closure
+    allowed = %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch].flat_map { |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    }.uniq.sort
+    features = loaded_features_after("tamoz/mcp/websearch")
+
+    assert_includes features, "tamoz/mcp/websearch.rb"
+    assert_includes features, "tamoz/mcp/websearch/version.rb"
+    unexpected = features.reject { |path| allowed.include?(path) || path.match?(%r{\A(?:mcp|net/http|resolv|uri|ipaddr)}) }
+    assert_empty unexpected, unexpected.inspect
+  end
+
+  def test_websearch_gemspec_declares_exactly_mcp_and_core
+    spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-mcp-websearch").join("tamoz-mcp-websearch.gemspec").to_s)
+
+    assert_equal(
+      {
+        "tamoz-core" => "= 0.1.0.alpha.1",
+        "tamoz-mcp" => "= 0.1.0.alpha.1"
+      },
+      spec.runtime_dependencies.to_h { |dependency| [dependency.name, dependency.requirement.to_s] }
+    )
+  end
+
   # Audit F2: the decision builder is the tamoz-stream injected-port boundary —
   # it must load without tamoz-agent (the P4 edge, reintroduced by 747d350 and
   # now homed in tamoz-core). This pins the no-edge property at the source
@@ -315,6 +349,26 @@ class DependencyIsolationTest < Minitest::Test
           .select { |path| path.include?("/tamoz/") || path.include?("ruby_llm") }
           .map { |path| path.sub(%r{.*?/lib/}, "") }
           .sort
+      )
+    RUBY
+    stdout, stderr, status = Open3.capture3(
+      clean_environment,
+      RbConfig.ruby,
+      *LOAD_PATH_ARGUMENTS,
+      "-e",
+      script
+    )
+    assert status.success?, stderr
+    JSON.parse(stdout)
+  end
+
+  def loaded_state_after(require_path)
+    script = <<~RUBY
+      require "json"
+      require #{require_path.inspect}
+      puts JSON.generate(
+        "features" => $LOADED_FEATURES,
+        "websearch_defined" => defined?(Tamoz::Mcp::Websearch)
       )
     RUBY
     stdout, stderr, status = Open3.capture3(

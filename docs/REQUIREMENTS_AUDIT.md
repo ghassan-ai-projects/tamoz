@@ -7,7 +7,7 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 512 | 277 | 15 | **no** |
+| 523 | 277 | 15 | **no** |
 
 ## Status counts
 
@@ -16,7 +16,7 @@ generating run.
 | deferred-by-contract | 11 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 482 |
+| pass | 493 |
 
 ## Release-blocking gaps (the DoD list)
 
@@ -319,6 +319,17 @@ generating run.
 | `API-tamoz-mcp-Tamoz::Mcp::UnavailableError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-mcp-Tamoz::Mcp::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.credential_shaped_query?` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.egress_budgets` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch.sanitize_result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressCircuit` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressClient` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressClient::Result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicy::ValidationError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::EgressPolicyError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::RedirectHopLimitError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
+| `API-tamoz-mcp-websearch-Tamoz::Mcp::Websearch::VERSION` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::Catalog` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::ContentPolicy` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-observability-Tamoz::Observability::Correlation` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |

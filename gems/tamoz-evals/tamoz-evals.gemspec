@@ -6,6 +6,7 @@ require_relative "../tamoz-core/lib/tamoz/core/version"
 require_relative "../tamoz-agent/lib/tamoz/agent/version"
 require_relative "../tamoz-sqlite/lib/tamoz/sqlite/version"
 require_relative "../tamoz-mcp/lib/tamoz/mcp/version"
+require_relative "../tamoz-mcp-websearch/lib/tamoz/mcp/websearch/version"
 require_relative "../tamoz-graph/lib/tamoz/graph/version"
 require_relative "../tamoz-scheduler/lib/tamoz/scheduler/version"
 
@@ -27,6 +28,7 @@ TamozGemspec.build(
     ["tamoz-agent-session", "= #{Tamoz::Agent::VERSION}"],
     ["tamoz-sqlite", "= #{Tamoz::SQLite::VERSION}"],
     ["tamoz-mcp", "= #{Tamoz::Mcp::VERSION}"],
+    ["tamoz-mcp-websearch", "= #{Tamoz::Mcp::Websearch::VERSION}"],
     ["tamoz-graph", "= #{Tamoz::Graph::VERSION}"],
     ["tamoz-scheduler", "= #{Tamoz::Scheduler::VERSION}"]
   ]
