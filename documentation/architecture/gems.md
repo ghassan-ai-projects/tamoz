@@ -116,6 +116,7 @@ Two edges deserve emphasis:
 
 - `tamoz-core` has no runtime dependency beyond the standard library and Zeitwerk.
 - `tamoz-graph` never references RubyLLM, an HTTP client, a provider SDK, or an adapter — a clean process requiring `tamoz/graph` loads none of them and opens no socket.
+- Graph nodes never call a model or transport directly: they receive journaled call objects, and every model execution crosses `EffectDispatcher.run` behind the doors enforced by `test/model_call_node_contract_test.rb` (`SessionEffects#model_call`, `Memory::Consolidation`, `Runtime#model_generate`, and `DeferredModel` forwarding behind SessionEffects' perform block). Model lifecycle events stay runner-emitted.
 - Adapters implement published contracts and depend on contracts, never on runner internals.
 - Optional dependencies load only when their feature is selected. Fiber execution, OTLP export, and Telegram transport must not affect a minimal boot.
 - No mutable process-global runtime state: boot-time registries freeze after configuration; per-run state travels through `Context`; per-thread durable state travels through the checkpointer.

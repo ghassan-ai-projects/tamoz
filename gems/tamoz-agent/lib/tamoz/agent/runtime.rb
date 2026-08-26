@@ -6,6 +6,7 @@ require "securerandom"
 
 require_relative "runtime/plan_review"
 require_relative "runtime/step_execution"
+require_relative "runtime/effects_journal"
 
 module Tamoz
   module Agent
@@ -34,10 +35,26 @@ module Tamoz
       include PlanReview
       include StepExecution
 
-      attr_reader :model, :toolbox, :max_plan_attempts, :ask, :routing, :approval_engine
+      EMPTY_CATALOG_REVISION = Tamoz::Core.digest("tamoz.agent.runtime.catalog.v1\n", {}).freeze
+
+      # Inverse of Tamoz::Core.serialized_tool_error_name: the dispatcher
+      # journals a model failure as a detail hash, and the caller-facing error
+      # must keep its typed identity and message bytes.
+      JOURNALED_ERROR_CLASSES = {
+        "Tamoz::Agent::ToolError" => Tamoz::Core::ToolError,
+        "Tamoz::Agent::ToolArgumentError" => Tamoz::Core::ToolArgumentError,
+        "Tamoz::Agent::ToolPolicyError" => Tamoz::Core::ToolPolicyError
+      }.freeze
+
+      # The four values EffectDispatcher reads off a graph Context; the
+      # ephemeral runtime supplies its turn correlation instead.
+      EffectContext = Data.define(:effects, :execution_id, :task_id, :request_id)
+
+      attr_reader :model, :toolbox, :max_plan_attempts, :ask, :routing, :approval_engine, :effects
 
       def initialize(model:, toolbox:, max_plan_attempts: 3, ask: nil, routing: :legacy,
-                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil)
+                     recorder: Tamoz::Observability::Recorder::Null::INSTANCE, approval_engine: nil,
+                     effects: nil)
         raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
         unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
           raise ArgumentError, "max_plan_attempts must be between 1 and 10"
@@ -54,6 +71,7 @@ module Tamoz
         @observability = Tamoz::Observability::Producer.new(recorder:)
         @correlation = nil
         @model_call_count = 0
+        @effects = effects || EffectsJournal.new
         @capabilities = CapabilityBinding.build(toolbox:)
       end
 
@@ -598,11 +616,50 @@ module Tamoz
 
       def model_generate(stage:, system:, prompt:)
         @model_call_count += 1
+        ordinal = @model_call_count
         @observability.around(
           "tamoz.model.call",
           correlation: @correlation,
           attributes: {provider: model_identity(:provider), model: model_identity(:model)}
-        ) { model.generate(stage:, system:, prompt:) }
+        ) do
+          outcome = EffectDispatcher.run(
+            context: effect_context,
+            operation: "model.generate.#{stage}",
+            safety: :idempotent,
+            call_index: ordinal,
+            request: {"stage" => stage.to_s, "system" => system, "prompt" => prompt},
+            actor: "tamoz.agent.runtime",
+            logical_identity: {
+              operation: "model.generate.#{stage}",
+              capability_id: "model:#{stage}",
+              arguments: {"stage" => stage.to_s, "system" => system, "prompt" => prompt},
+              authority_revision: toolbox.catalog_digest,
+              catalog_revision: EMPTY_CATALOG_REVISION,
+              iteration: ordinal,
+              sub_operation: 0
+            }
+          ) { model.generate(stage:, system:, prompt:) }
+          case outcome.status
+          when :succeeded then outcome.value
+          when :failed then raise journaled_model_failure(outcome)
+          else raise ProtocolError, "model receipt #{outcome.status}"
+          end
+        end
+      end
+
+      def journaled_model_failure(outcome)
+        detail = outcome.error || {}
+        klass = JOURNALED_ERROR_CLASSES.fetch(String(detail["class"]), ProtocolError)
+        klass.new(String(detail["message"]))
+      end
+
+      def effect_context
+        EffectContext.new(
+          effects: @effects,
+          execution_id: @correlation.fetch(:execution_id),
+          task_id: @correlation.fetch(:task_id),
+          request_id: @correlation.fetch(:request_id)
+        )
       end
 
       def model_identity(method)
