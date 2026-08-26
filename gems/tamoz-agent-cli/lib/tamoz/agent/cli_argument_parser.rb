@@ -36,7 +36,6 @@ module Tamoz
           {
             root: Dir.pwd,
             json: false,
-            assume_model_exists: false,
             allow_changes: false,
             experimental_routing: false,
             adaptive_routing: false,
@@ -66,8 +65,8 @@ module Tamoz
             value.on('--profile PROFILE', 'Trusted profile path or id (durable sessions)') do |entry|
               options[:profile] = entry
             end
-            value.on('--model MODEL', 'RubyLLM model identifier') { |entry| options[:model] = entry }
-            value.on('--provider PROVIDER', 'RubyLLM provider (default: openai)') do |entry|
+            value.on('--model MODEL', 'OpenAI-compatible model identifier') { |entry| options[:model] = entry }
+            value.on('--provider PROVIDER', 'Model provider (default: openai)') do |entry|
               options[:provider] = entry
             end
             value.on('--root PATH', 'Workspace root (default: current directory)') do |entry|
@@ -96,9 +95,6 @@ module Tamoz
             end
             value.on('--check NAME=COMMAND', 'Configure a named verification command') do |entry|
               register_check(options, entry)
-            end
-            value.on('--assume-model-exists', 'Allow an unlisted model at a custom endpoint') do
-              options[:assume_model_exists] = true
             end
             value.on('--json', 'Emit newline-delimited JSON events') { options[:json] = true }
             value.on('--non-interactive', 'Fail instead of prompting') { options[:non_interactive] = true }

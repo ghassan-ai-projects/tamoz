@@ -118,6 +118,50 @@ class AgentRuntimeEffectsTest < Minitest::Test
     end
   end
 
+  def test_a_replayed_model_failure_keeps_the_model_error_class
+    journal = Tamoz::Agent::Runtime::EffectsJournal.new
+    error = Tamoz::Agent::ModelCallError.new(
+      code: 'http_failure', status: 503,
+      body_digest: "sha256:#{'d' * 64}", body_bytes: 19
+    )
+    first = dispatch(journal, 'model-failure') { raise error }
+    second = dispatch(journal, 'model-failure') { flunk 'replayed model failure called the model' }
+    Dir.mktmpdir('tamoz-agent') do |root|
+      runtime = Tamoz::Agent.build(
+        model: Class.new { def generate(**) = 'unused' }.new, root:
+      )
+
+      assert_equal :failed, first.status
+      assert_equal :failed, second.status
+      replayed = runtime.send(:journaled_model_failure, second)
+      assert_instance_of Tamoz::Agent::ModelCallError, replayed
+      assert_equal error.message, replayed.message
+      assert_equal error.code, replayed.code
+      assert_equal error.status, replayed.status
+      assert_equal error.body_digest, replayed.body_digest
+      assert_equal error.body_bytes, replayed.body_bytes
+    end
+  end
+
+  def test_runtime_preserves_an_unknown_model_outcome
+    Dir.mktmpdir('tamoz-agent') do |root|
+      model = Class.new do
+        def generate(**)
+          raise Tamoz::EffectUnknownError, 'provider outcome is unknown'
+        end
+      end.new
+      runtime = Tamoz::Agent.build(model:, root:)
+
+      runtime.send(:start_turn)
+      error = assert_raises(Tamoz::EffectUnknownError) do
+        runtime.send(:model_generate, stage: :plan, system: 'system', prompt: 'prompt')
+      end
+
+      assert_equal 'provider outcome is unknown', error.message
+      assert_equal :unknown, runtime.effects.records.last.status
+    end
+  end
+
   def test_a_journaled_runtime_turn_records_every_model_call
     Dir.mktmpdir('tamoz-agent') do |root|
       File.write(File.join(root, 'note.txt'), "Tamoz is awake.\n")

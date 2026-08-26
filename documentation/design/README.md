@@ -21,7 +21,7 @@ The authoritative package defines a reading order from goals to evaluation. Summ
 2. **Architecture and translation** — gem boundaries, dependency rules, and every Python-idiom-to-Ruby answer.
 3. **Core and graph** — `Context`, streaming, instrumentation, errors, concurrency; then the durable engine: state, super-steps, interrupts, effects, leases.
 4. **Persistence** — the atomic checkpointer, effect journal, Store, records, and migration.
-5. **Agent** — durable ReAct over RubyLLM, tools, approval, subagents, compaction; the reference application and end-to-end traceability.
+5. **Agent** — durable model/tool execution, approval, subagents, compaction; the reference application and end-to-end traceability. The historical RubyLLM design is retained in the archive with an explicit supersession notice.
 6. **The capability subsystems** — memory, self-healing, MCP, scheduling, skills, streaming input.
 7. **Invariants and plan** — the executable contract, risk-first milestones, evaluation, and the decision record.
 

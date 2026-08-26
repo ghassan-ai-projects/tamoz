@@ -37,6 +37,17 @@ module Tamoz
           value.respond_to?(:model) ? value.model : value.class.name
         end
 
+        def method_missing(name, ...)
+          value = model
+          return super unless value.respond_to?(name)
+
+          value.public_send(name, ...)
+        end
+
+        def respond_to_missing?(name, include_private = false)
+          model.respond_to?(name, include_private) || super
+        end
+
         private
 
         def model

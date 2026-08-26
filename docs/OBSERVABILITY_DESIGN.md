@@ -593,34 +593,13 @@ two ([`worker_runtime.rb:213`](../gems/tamoz-agent/lib/tamoz/agent/worker_runtim
 `Profile::BUDGET_KEYS` also declares `cost_usd`, `input_tokens`, `output_tokens` and `steps`.
 Closing that gap is the largest concrete win available here.
 
-Revision 1 claimed observability could close it "with no new table". That was wrong twice
-over, and v2 states the real shape.
-
-**Usage capture is a persistence prerequisite, not observability work.** It requires:
-
-1. **A `Model` protocol change.** The contract is `generate(stage:, system:, prompt:) → String`,
-   and [`ruby_llm_model.rb:49-53`](../gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb) ends
-   in `.ask(prompt).content` — the `RubyLLM::Message` carrying `input_tokens` and
-   `output_tokens` is discarded at `.content`. Returning usage means changing the protocol and
-   every implementation: `RubyLLMModel`, `WorkerRuntime::DeferredModel`,
-   `Memory::Consolidation`, the CLI's dummy models, and four in the evals harness. This is a
-   real cross-gem interface change, not the "call sites only" §1 promises for the rest.
-2. **A migration.** Neither `tamoz_effects` nor `tamoz_effect_attempts` has a metadata column,
-   so usage needs the **next migration ordinal** and a `CURRENT_VERSION` bump. That ordinal is
-   7 as of writing — `CURRENT_VERSION = 6` after comms landed `MIGRATION_6` during this
-   design's review — and the plan resolves it at implementation time rather than reserving a
-   number. The priced consequence:
-   `Migrator.verify_connection!` raises unless `PRAGMA user_version` matches, so an older Tamoz
-   binary **hard-refuses** a migrated database. That is a real compatibility break and belongs
-   in release notes under invariant 22's change-control rules.
-3. **Not the attempt `result` blob.** Folding usage there would change the receipt's
-   `result_digest` — observation altering a durable record, which is exactly what clause 59
-   forbids. Rejected.
-
-**If the prerequisite is refused**, the honest outcome is that spend is lossy telemetry: it
-appears in traces and metrics, it does not survive `kill -9`, budgets stay as
-`LIMITATIONS.md:126` describes them, and criterion D1 is not met. That is a legitimate choice;
-it must be made rather than discovered.
+Revision 3 records the accepted model-call boundary. The kernel-owned
+`ModelClientFactory` constructs the single `EpisodeModelTransport`, whose response is
+projected into `{request_digest, content, response_digest, usage, settings_digest,
+provider_configuration_digest}` before it enters a session or episode effect journal.
+Usage therefore travels with the authoritative effect result and survives replay without a
+second telemetry writer or a separate migration. Providers that do not report usage remain
+unmeasured; the projection never fabricates zero values.
 
 **What observability owns regardless:**
 

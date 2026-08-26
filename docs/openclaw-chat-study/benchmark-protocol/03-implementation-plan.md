@@ -1,5 +1,9 @@
 # 03 — Implementation plan
 
+> Historical benchmark study. Provider and RubyLLM references describe the
+> implementation under evaluation at the time; they are not current Tamoz
+> production support.
+
 Phased, buildable, and mapped to real comms/agent seams. Each phase names the seam
 it extends, the durable facts it asserts on, the plumbing test plus the
 real-provider/real-transport proof, and the committed evidence with the command

@@ -58,10 +58,10 @@ different machine are expected to differ and are not a regression.
 
 ## Not attempted
 
-- plain RubyLLM script comparison
+- plain provider-client script comparison
 - external job-queue comparison
 - live-provider latency (not seed-controlled; would not be reproducible)
 
-A synthetic race against a plain RubyLLM script or an external job queue would
+A synthetic race against a plain provider-client script or an external job queue would
 measure the harness rather than the systems: they are different products with
 different guarantees. Claiming such a number would be worse than omitting it.

@@ -14,7 +14,7 @@ module Tamoz
     module Benchmark
       # Runs one OpenClaw mission through the operator CLI's durable queue and
       # worker path. The adapter never calls a provider itself: the CLI builds
-      # RubyLLMModel and Session, while this class only joins their durable
+      # the model transport and Session, while this class only joins their durable
       # receipt view with the separately recorded observability trace.
       # rubocop:disable Metrics/ClassLength -- the adapter keeps the durable evidence join together.
       class OpenclawDurableCliAdapter
@@ -270,14 +270,11 @@ module Tamoz
         end
 
         def enforce_credential_availability!(provider)
-          key = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(provider.downcase.to_sym) do
-            raise CredentialUnavailable, "provider_credential_unavailable:#{provider}"
-          end
-          return { 'kind' => 'api_key', 'name' => key } unless @env[key].to_s.empty?
-          return { 'kind' => 'api_base', 'name' => 'OLLAMA_API_BASE' } if
-            provider.casecmp('ollama').zero? && !@env['OLLAMA_API_BASE'].to_s.empty?
-
-          raise CredentialUnavailable, "provider_credential_unavailable:#{key}"
+          Tamoz::Agent::ModelClientFactory.credential_reference(
+            provider:, profile_role: nil, environment: @env
+          )
+        rescue Tamoz::Agent::ModelCallError
+          raise CredentialUnavailable, "provider_credential_unavailable:#{provider}"
         end
 
         def initialize_runtime!
@@ -903,9 +900,8 @@ module Tamoz
         end
 
         def build_model(provider:, model:)
-          key = Tamoz::Agent::RubyLLMModel::ENV_KEYS.fetch(provider.downcase.to_sym)
-          Tamoz::Agent::RubyLLMModel.new(
-            provider:, model:, api_key: @env[key], api_base: @env["#{provider.upcase}_API_BASE"]
+          Tamoz::Agent::ModelClientFactory.build(
+            provider:, model:, profile_role: nil, environment: @env, safety: :unsafe
           )
         end
 

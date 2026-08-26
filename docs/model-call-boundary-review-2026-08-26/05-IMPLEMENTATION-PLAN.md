@@ -505,11 +505,11 @@ matrix to check in and test is:
 | Provider | Phase-3 protocol | Default base | Credential | API-base override | Model rule |
 |---|---|---|---|---|---|
 | `openai` | direct OpenAI-compatible | `https://api.openai.com/v1` | `OPENAI_API_KEY` | `OPENAI_API_BASE` | non-empty provider model id |
-| `deepseek` | direct OpenAI-compatible | `https://api.deepseek.com/v1` | `DEEPSEEK_API_KEY` | `DEEPSEEK_API_BASE` | non-empty provider model id |
+| `deepseek` | direct OpenAI-compatible | `https://api.deepseek.com` | `DEEPSEEK_API_KEY` | `DEEPSEEK_API_BASE` | non-empty provider model id |
 | `openrouter` | gateway, OpenAI-compatible | `https://openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `OPENROUTER_API_BASE` | provider-qualified model id |
 | `ollama` | direct local OpenAI-compatible | `http://localhost:11434/v1` | optional `OLLAMA_API_KEY` | `OLLAMA_API_BASE` | non-empty local model id |
 | `xai` | direct OpenAI-compatible | `https://api.x.ai/v1` | `XAI_API_KEY` | `XAI_API_BASE` | non-empty provider model id |
-| `perplexity` | direct OpenAI-compatible | `https://api.perplexity.ai` | `PERPLEXITY_API_KEY` | `PERPLEXITY_API_BASE` | non-empty provider model id |
+| `perplexity` | direct OpenAI-compatible | `https://api.perplexity.ai/v1` | `PERPLEXITY_API_KEY` | `PERPLEXITY_API_BASE` | non-empty provider model id |
 | `mistral` | direct OpenAI-compatible | `https://api.mistral.ai/v1` | `MISTRAL_API_KEY` | `MISTRAL_API_BASE` | non-empty provider model id |
 | `anthropic` | rejected native protocol | none | `ANTHROPIC_API_KEY` | `ANTHROPIC_API_BASE` | fail closed; use `openrouter` explicitly |
 | `gemini` | rejected native protocol | none | `GEMINI_API_KEY` | `GEMINI_API_BASE` | fail closed; use `openrouter` explicitly |
@@ -521,6 +521,12 @@ profile canonical digest, and safety posture, never credential values.
 - The production model object passed into `Session` and `Runtime` must be the transport-backed
   client produced by that kernel seam. Test doubles remain test-only and must not be described
   as real-provider evidence.
+
+Factory construction is deterministic profile/provider preflight. The CLI and `WorkerRuntime`
+perform it before constructing `Session`; a missing credential, unsupported provider, or rejected
+native protocol is therefore a typed request-start failure, not an external model effect. Provider
+I/O, received response validation, and projection failures occur inside the model effect and are
+journaled as `:failed` or `:unknown` according to the transport taxonomy.
 
 ### 6.3 Ordered implementation slices
 
@@ -632,7 +638,9 @@ qualification.
   `test/agent_profile_machinery_test.rb`, and remove the RubyLLM allowlist entry from
   `test/model_call_node_contract_test.rb`.
 - Remove `ruby_llm` from `gems/tamoz-agent/tamoz-agent.gemspec`, regenerate the lockfile,
-  and verify no transitive RubyLLM dependency remains.
+  and verify no transitive RubyLLM dependency remains. Because the surviving kernel
+  transport uses `Net::HTTP` directly, its gemspec must declare the `net-http` runtime
+  dependency rather than relying on the retired SDK's transitive closure.
 - Rewrite `test/model_transport_parity_test.rb` so it no longer loads RubyLLM; retain the
   meaningful content, usage, error, retry, request-byte, and response-digest assertions for
   the canonical transport.

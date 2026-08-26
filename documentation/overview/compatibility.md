@@ -10,7 +10,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 |---|---|---|
 | Ruby | `>= 3.3, < 5.0` | The repository pins `3.3.11` in `.ruby-version`; CI runs 3.3, 3.4, and 4.0 on Ubuntu |
 | SQLite | via the `sqlite3` gem `~> 2.9` | Single-file database, no server to run; WAL enabled, one fenced writer |
-| Model providers | any provider RubyLLM supports | Model access uses RubyLLM with the provider's own API key, e.g. `OPENAI_API_KEY` + `TAMOZ_MODEL=gpt-5-mini`; provider selected with `TAMOZ_PROVIDER` |
+| Model providers | nine explicit OpenAI-compatible/native-rejection rows | Model access uses the kernel transport; Anthropic and Gemini require an explicit OpenRouter selection |
 | Locales | UTF-8 or `LC_ALL=C` | Both are gated in CI; the same assertion totals must pass under both |
 | Platforms | macOS and Linux | Development toolchain and CI; no Docker image yet (see below) |
 | MCP | official Ruby SDK (`mcp` `~> 1.1`) | Governed client/host: immutable server admission, pinned catalogs, invocation supervision |
@@ -41,7 +41,7 @@ All twenty-seven gems are at `0.1.0.alpha.1`, MIT-licensed, and declare `require
 | `tamoz-observability` | `tamoz-core` |
 | `tamoz-otel` | `tamoz-observability` |
 | `tamoz-telegram` | `tamoz-comms` |
-| `tamoz-agent` | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability`, `ruby_llm` `~> 1.16.0` |
+| `tamoz-agent` | `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-observability` |
 | `tamoz-agent-kernel` | `tamoz-core`, `tamoz-tools` |
 | `tamoz-agent-capabilities` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-mcp`, `tamoz-tools` |
 | `tamoz-agent-memory` | `tamoz-agent-kernel`, `tamoz-core`, `tamoz-sqlite`, `tamoz-tools` |

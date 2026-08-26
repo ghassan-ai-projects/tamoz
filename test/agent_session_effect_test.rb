@@ -202,6 +202,55 @@ class AgentSessionEffectTest < Minitest::Test
     end
   end
 
+  def test_model_call_replays_the_digest_bound_projection_without_recalling
+    Dir.mktmpdir("tamoz-model-effect") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        toolbox = Tamoz::Agent::Toolbox.new(root: directory)
+        transport = Tamoz::Agent::EpisodeModelTransport.new(
+          endpoint: "http://127.0.0.1:1/v1", model: "local-model", provider: "openai"
+        )
+        model = replayable_model(transport)
+        effects = Tamoz::Agent::SessionEffects.new(
+          configuration: SessionModelConfiguration.new(
+            model:, model_call_safety: :unsafe, profile: nil, toolbox:, mcp: nil
+          )
+        )
+
+        with_writer(adapter, "owner.model") do |writer|
+          context = Tamoz::Context.new(
+            run_id: "owner.model", execution_id: request.execution_id,
+            request_id: "request.model", task_id: "task.model", effects: writer.effects
+          )
+          first = effects.model_call(
+            context, stage: :plan, system: "system", prompt: "prompt",
+            call_index: 0, iteration: 0, sub_operation: 0
+          )
+          second = effects.model_call(
+            context, stage: :plan, system: "system", prompt: "prompt",
+            call_index: 0, iteration: 0, sub_operation: 0
+          )
+
+          assert_equal "model answer", first
+          assert_equal first, second
+          assert_equal 1, model.calls
+          record = writer.effects.prepare(
+            execution_id: request.execution_id, task_id: "task.model", call_index: 0,
+            operation: "model.generate.plan", safety: "unsafe",
+            request: model_request_for(transport)
+          ).record
+          assert_equal :succeeded, record.status
+          assert_equal transport.provider_configuration_digest,
+                       record.attempts.last.result.fetch("provider_configuration_digest")
+        end
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
   # The production McpSourceBuilder mapping is the one that feeds the dispatcher:
   # an MCP ambiguous outcome becomes Tamoz::EffectUnknownError (not a repairable
   # ToolError), so the terminal-unknown completion above is reached in production.
@@ -404,6 +453,49 @@ class AgentSessionEffectTest < Minitest::Test
   end
 
   private
+
+  SessionModelConfiguration = Data.define(:model, :model_call_safety, :profile, :toolbox, :mcp)
+
+  def replayable_model(transport)
+    Class.new do
+      attr_reader :calls
+
+      define_method(:initialize) do
+        @calls = 0
+      end
+
+      define_method(:build_request) { |system:, prompt:| transport.build_request(system:, prompt:) }
+      define_method(:request_digest) { |bytes| transport.request_digest(bytes) }
+      define_method(:settings_digest) { transport.settings_digest }
+      define_method(:provider_configuration_digest) { transport.provider_configuration_digest }
+      define_method(:safety) { :unsafe }
+
+      define_method(:generate) do |stage:, system:, prompt:|
+        @calls += 1
+        request_bytes = transport.build_request(system:, prompt:)
+        Tamoz::Agent::EpisodeModelTransport::Response.new(
+          content: "model answer",
+          request_digest: transport.request_digest(request_bytes),
+          response_digest: "sha256:#{'e' * 64}",
+          usage: Tamoz::Agent::ModelCall::Usage.unavailable,
+          settings_digest: transport.settings_digest,
+          provider_configuration_digest: transport.provider_configuration_digest
+        )
+      end
+    end.new
+  end
+
+  def model_request_for(transport)
+    {
+      "system" => "system",
+      "prompt" => "prompt",
+      "request_digest" => transport.request_digest(
+        transport.build_request(system: "system", prompt: "prompt")
+      ),
+      "stage" => "plan",
+      "provider_configuration_digest" => transport.provider_configuration_digest
+    }
+  end
 
   def reconcile_fs(toolbox, intent)
     Tamoz::Agent::EffectDispatcher.reconcile_filesystem(

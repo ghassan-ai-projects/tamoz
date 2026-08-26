@@ -675,9 +675,13 @@ module Tamoz
       def verify_receipt_against_journal!(receipt, record)
         stored_response = journal_attempt_digest(record, key: "response_digest")
         stored_request = journal_attempt_digest(record, key: "request_digest")
+        stored_configuration = journal_attempt_digest(
+          record, key: "provider_configuration_digest"
+        )
         if record.nil? || record.status != :succeeded ||
            stored_response != receipt.fetch("response_digest") ||
-           stored_request != receipt.fetch("request_digest")
+           stored_request != receipt.fetch("request_digest") ||
+           stored_configuration != receipt.fetch("provider_configuration_digest")
           raise StreamError,
                 "wire_refused_model_event/receipt_not_journal_verified"
         end

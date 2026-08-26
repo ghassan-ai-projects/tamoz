@@ -4,7 +4,7 @@ Tamoz records its architecture decisions as numbered ADRs. This index is the pub
 
 ## Where the decisions live
 
-ADR-001 through ADR-047 are sections of the authoritative design record, [`docs/design-v0.1/DECISIONS.md`](../../docs/design-v0.1/DECISIONS.md) (repository-internal archive), which remains the source of truth for their full text — each row above deep-links to its decision's section. ADR-044 through ADR-048 are additionally stated in the observability design ([`docs/OBSERVABILITY_DESIGN.md`](../../docs/OBSERVABILITY_DESIGN.md), contract-changes section), and ADR-041 through ADR-043 plus ADR-049 appear in the channel design ([`../design/comms.md`](../design/comms.md)). ADR-049 is the only decision with a standalone public page: [`./adr-049-telegram-approval.md`](./adr-049-telegram-approval.md).
+ADR-001 through ADR-048 are sections of the authoritative design record, [`docs/design-v0.1/DECISIONS.md`](../../docs/design-v0.1/DECISIONS.md) (repository-internal archive), which remains the source of truth for their full text — each row above deep-links to its decision's section. ADR-044 through ADR-048 are additionally stated in the observability design ([`docs/OBSERVABILITY_DESIGN.md`](../../docs/OBSERVABILITY_DESIGN.md), contract-changes section), and ADR-041 through ADR-043 plus ADR-049 appear in the channel design ([`../design/comms.md`](../design/comms.md)). ADR-049 is the only decision with a standalone public page: [`./adr-049-telegram-approval.md`](./adr-049-telegram-approval.md).
 
 Current version: `0.1.0.alpha.1` (pre-release).
 
@@ -14,7 +14,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 |---|---|---|
 | [001](../../docs/design-v0.1/DECISIONS.md#adr-001--tamoz-framework-and-tamoz-agent-reference-application) | Tamoz framework and Tamoz Agent reference application | Accepted 2026-07-30 |
 | [002](../../docs/design-v0.1/DECISIONS.md#adr-002--four-v01-runtime-gems-optional-packages-earn-promotion) | Four v0.1 runtime gems; optional packages earn promotion | Revised |
-| [003](../../docs/design-v0.1/DECISIONS.md#adr-003--reuse-rubyllm-public-values-at-runtime-define-a-lossless-durable-codec) | Reuse RubyLLM public values at runtime; define a lossless durable codec | Accepted |
+| [003](../../docs/design-v0.1/DECISIONS.md#adr-003--reuse-rubyllm-public-values-at-runtime-define-a-lossless-durable-codec) | Reuse RubyLLM public values at runtime; define a lossless durable codec | Superseded by ADR-048 |
 | [004](../../docs/design-v0.1/DECISIONS.md#adr-004--explicit-tamozseq-no-native-proc) | Explicit `Tamoz.seq`; no native `Proc#>>` | Revised |
 | [005](../../docs/design-v0.1/DECISIONS.md#adr-005--interrupt-by-throw-not-by-exception) | Interrupt by `throw`, not by exception | Accepted |
 | [006](../../docs/design-v0.1/DECISIONS.md#adr-006--plain-hash-state-with-an-explicit-reducer-registry) | Plain Hash state with an explicit reducer registry | Accepted |
@@ -59,12 +59,14 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | [045](../../docs/design-v0.1/DECISIONS.md#adr-045--the-observability-gems-add-no-durable-table-and-no-second-source-of-truth) | The observability gems add no durable table and no second source of truth | Accepted 2026-08-10 |
 | [046](../../docs/design-v0.1/DECISIONS.md#adr-046--content-capture-is-off-by-default-per-class-and-refused-for-restricted-classifications) | Content capture is off by default, per class, and refused for restricted classifications | Accepted 2026-08-10 |
 | [047](../../docs/design-v0.1/DECISIONS.md#adr-047--sampling-applies-to-export-only-and-never-to-safety-bearing-signals) | Sampling applies to export only and never to safety-bearing signals | Accepted 2026-08-10 |
+| [048](../../docs/design-v0.1/DECISIONS.md#adr-048--one-digest-bound-openai-compatible-model-transport) | One digest-bound OpenAI-compatible model transport | Accepted 2026-08-26 |
 | 048 | Automated responses act only on durable evidence under an owning subsystem | Proposed — observability phase 5 |
 | [049](./adr-049-telegram-approval.md) | Telegram approval is evidence-gated, not transport-gated | Accepted 2026-08-12 |
 
 ## Notes
 
 - **Superseded.** ADR-012 (MCP as a deferred integration strategy) is superseded in detail by ADR-029 (MCP native at the edge); its post-v0.1 timing is retained.
+- **Superseded.** ADR-003 is retained as historical provenance; ADR-048 is the current model transport decision.
 - **Revised.** ADR-002, ADR-004, ADR-010, and ADR-013 were revised after review or counterexample; their entries in `DECISIONS.md` record what changed.
 - **Standalone page.** ADR-049 is published as a standalone public page because it amends the shipped channel approval path; it also appears in the [`../design/comms.md`](../design/comms.md) decision list.
 - The `DECISIONS.md` file also carries open product questions (the first physical environment for Tamoz Agent) that are not ADRs.

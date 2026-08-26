@@ -30,7 +30,7 @@
     "measured_at": "2026-08-06T07:07:59Z"
   },
   "not_attempted": [
-    "plain RubyLLM script comparison",
+    "plain provider-client script comparison",
     "external job-queue comparison",
     "live-provider latency (not seed-controlled; would not be reproducible)"
   ]

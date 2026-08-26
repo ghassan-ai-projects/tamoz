@@ -22,6 +22,8 @@ class AgentModelReceiptTest < Minitest::Test
     MC::ModelReceipt.new(**{
       logical_call_key: logical, invocation: invocation, effect_id: "eff-1", status: :succeeded,
       provider: "deepseek", model: "chat", request_digest: DIGEST, response_digest: DIGEST2,
+      settings_digest: DIGEST2,
+      provider_configuration_digest: DIGEST2,
       usage: MC::Usage.of(input_tokens: 10, output_tokens: 3, cost_microunits: 5),
       retry_count: 0, started_at: "2026-08-15T00:00:00Z", completed_at: "2026-08-15T00:00:01Z"
     }.merge(over))
@@ -43,6 +45,10 @@ class AgentModelReceiptTest < Minitest::Test
 
   def test_logical_key_changes_with_request_digest
     refute_equal logical.to_key, logical(request_digest: DIGEST2).to_key
+  end
+
+  def test_logical_key_changes_with_provider_configuration
+    refute_equal logical.to_key, logical(provider_configuration_digest: DIGEST2).to_key
   end
 
   def test_logical_key_rejects_blank_and_bad_digest
@@ -84,6 +90,10 @@ class AgentModelReceiptTest < Minitest::Test
     assert_rejected("receipt.response_digest/bad_digest") { receipt(response_digest: nil) }
   end
 
+  def test_succeeded_requires_settings_digest
+    assert_rejected("receipt.settings_digest/bad_digest") { receipt(settings_digest: nil) }
+  end
+
   def test_unknown_receipt_allows_no_response_and_unavailable_usage
     r = receipt(status: :unknown, response_digest: nil, usage: MC::Usage.unavailable, completed_at: nil)
     assert r.unknown?
@@ -115,6 +125,7 @@ class AgentModelReceiptTest < Minitest::Test
     assert_equal "deepseek", role.provider
     assert_equal "chat", role.model
     assert_equal "TAMOZ_DEEPSEEK", role.credential_ref
+    assert_equal profile.canonical_digest, role.profile_digest
   end
 
   def test_resolve_role_unknown_fails_closed

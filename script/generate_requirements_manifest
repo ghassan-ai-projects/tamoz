@@ -497,7 +497,7 @@ EVIDENCE = {
   "ADR-002" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
                 supporting: ["test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals"]},
   "ADR-003" => {test: "test/core_state_codec_test.rb#test_registered_value_round_trip_and_legacy_decoder",
-                supporting: ["test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation"]},
+                supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]},
   "ADR-004" => {test: "test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order",
                 classification: "indirect",
                 rationale: "Composition style decision. No `Proc#>>` surface exists to " \
@@ -613,6 +613,10 @@ EVIDENCE = {
     rationale: "Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-" \
                "first retention proof lands with the sampling slice."
   },
+  "ADR-048" => {
+    test: "test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix",
+    supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]
+  },
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
   "OBJ-1" => {
@@ -625,7 +629,7 @@ EVIDENCE = {
   "OBJ-2" => {
     test: "test/agent_acceptance_workflow_test.rb#test_the_full_workflow_survives_a_kill_and_ends_evidence_bound",
     supporting: [
-      "test/agent_ruby_llm_model_test.rb#test_uses_an_isolated_ruby_llm_context_for_one_generation",
+      "test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection",
       "test/agent_cli_test.rb#test_resume_collects_interrupt_answers"
     ]
   },

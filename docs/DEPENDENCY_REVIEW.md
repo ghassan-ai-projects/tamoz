@@ -10,29 +10,17 @@ until this file is regenerated.
 
 | Gem | Version | Licence | Direct | Required by | Provenance |
 |---|---|---|---|---|---|
-| `base64` | 0.3.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/base64 |
 | `bigdecimal` | 4.1.2 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/bigdecimal |
-| `event_stream_parser` | 1.0.0 | MIT | transitive |  | https://github.com/Shopify/event_stream_parser |
-| `faraday` | 2.14.3 | MIT | transitive |  | https://lostisland.github.io/faraday |
-| `faraday-multipart` | 1.2.0 | MIT | transitive |  | https://github.com/lostisland/faraday-multipart |
-| `faraday-net_http` | 3.4.4 | MIT | transitive |  | https://github.com/lostisland/faraday-net_http |
-| `faraday-retry` | 2.4.0 | MIT | transitive |  | https://github.com/lostisland/faraday-retry |
 | `google-protobuf` | 4.35.1 | BSD-3-Clause | yes | tamoz-stream ~> 4.35 | https://developers.google.com/protocol-buffers |
 | `googleapis-common-protos-types` | 1.23.0 | Apache-2.0 | transitive |  | https://github.com/googleapis/common-protos-ruby |
 | `grpc` | 1.83.0 | Apache-2.0 | yes | tamoz-stream ~> 1.83 | https://github.com/google/grpc/tree/master/src/ruby |
 | `hana` | 1.3.7 | MIT | transitive |  | http://github.com/tenderlove/hana |
-| `json` | 2.21.2 | Ruby | transitive |  | https://github.com/ruby/json |
 | `json_schemer` | 2.5.0 | MIT | transitive |  | https://github.com/davishmcclurg/json_schemer |
-| `logger` | 1.7.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/logger |
-| `marcel` | 1.2.1 | MIT, Apache-2.0 | transitive |  | https://github.com/rails/marcel |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
 | `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
-| `multipart-post` | 2.4.1 | MIT | transitive |  | https://github.com/socketry/multipart-post |
-| `net-http` | 0.9.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/net-http |
+| `net-http` | 0.9.1 | Ruby, BSD-2-Clause | yes | tamoz-agent-kernel >= 0.5 | https://github.com/ruby/net-http |
 | `rake` | 13.4.2 | MIT | transitive |  | https://github.com/ruby/rake |
 | `regexp_parser` | 2.12.0 | MIT | transitive |  | https://github.com/ammar/regexp_parser |
-| `ruby_llm` | 1.16.0 | MIT | yes | tamoz-agent ~> 1.16.0 | https://rubyllm.com |
-| `ruby_llm-schema` | 0.4.0 | MIT | transitive |  | https://github.com/crmne/ruby_llm-schema#readme |
 | `simpleidn` | 0.2.3 | MIT | transitive |  | https://github.com/mmriis/simpleidn |
 | `sqlite3` | 2.9.5 | BSD-3-Clause | yes | tamoz-sqlite ~> 2.9 | https://github.com/sparklemotion/sqlite3-ruby |
 | `uri` | 1.1.1 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/uri |
@@ -61,8 +49,10 @@ arriving silently.
 | `dry-schema` | 1.16.0 | MIT |
 | `dry-types` | 1.9.1 | MIT |
 | `grpc-tools` | 1.83.0 | Apache-2.0 |
+| `json` | 2.21.2 | Ruby |
 | `language_server-protocol` | 3.17.0.5 | MIT |
 | `lint_roller` | 1.1.0 | MIT |
+| `logger` | 1.7.0 | Ruby, BSD-2-Clause |
 | `minitest` | 6.0.6 | MIT |
 | `parallel` | 2.1.0 | MIT |
 | `parser` | 3.3.11.1 | MIT |

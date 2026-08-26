@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'tamoz/agent/model_call_projection'
 
 module Tamoz
   module Agent
@@ -16,29 +17,58 @@ module Tamoz
       end
 
       def model_call(context, stage:, system:, prompt:, call_index:, iteration: call_index, sub_operation: 0)
+        request = model_request(system:, prompt:)
+        configuration_digest = model_configuration_digest
         outcome = EffectDispatcher.run(
           context:,
           operation: "model.generate.#{stage}",
-          safety: @configuration.model_call_safety,
+          safety: model_safety,
           call_index:,
-          request: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
+          request: request.merge(
+            'stage' => stage.to_s,
+            'provider_configuration_digest' => configuration_digest
+          ),
           actor: 'tamoz.agent.session',
           logical_identity: logical_identity(
             context:, operation: "model.generate.#{stage}", capability_id: "model:#{stage}",
-            arguments: { 'stage' => stage.to_s, 'system' => system, 'prompt' => prompt },
+            arguments: request.merge(
+              'stage' => stage.to_s,
+              'provider_configuration_digest' => configuration_digest
+            ),
             iteration:, sub_operation:
           )
         ) do
-          { 'output' => String(@configuration.model.generate(stage:, system:, prompt:)) }
+          response = @configuration.model.generate(stage:, system:, prompt:)
+          if response.respond_to?(:content)
+            ModelCallProjection.from_response(
+              response,
+              request_digest: request['request_digest'],
+              settings_digest: model_settings_digest,
+              provider_configuration_digest: configuration_digest
+            )
+          else
+            response
+          end
         end
-        unwrap_model(outcome)
+        unwrap_model(outcome, request:, configuration_digest:)
       end
 
-      def unwrap_model(outcome)
+      def unwrap_model(outcome, request:, configuration_digest:)
         return outcome unless outcome.status == :succeeded
 
         value = outcome.value
-        text = value.is_a?(Hash) ? value.fetch('output') : String(value)
+        text = if value.is_a?(Hash) && value.key?('content')
+                 ModelCallProjection.validate!(
+                   value,
+                   request_digest: request['request_digest'],
+                   settings_digest: model_settings_digest,
+                   provider_configuration_digest: configuration_digest
+                 ).fetch('content')
+               elsif value.is_a?(Hash)
+                 value.fetch('output')
+               else
+                 String(value)
+               end
         outcome.with(value: text)
       end
 
@@ -156,6 +186,35 @@ module Tamoz
       def after_effect_started(operation)
         model = @configuration.model
         model.after_effect_started(operation:) if model.respond_to?(:after_effect_started)
+      end
+
+      def model_safety
+        return @configuration.model.safety if @configuration.model.respond_to?(:safety)
+
+        @configuration.model_call_safety
+      end
+
+      def model_configuration_digest
+        return unless @configuration.model.respond_to?(:provider_configuration_digest)
+
+        @configuration.model.provider_configuration_digest
+      end
+
+      def model_settings_digest
+        return unless @configuration.model.respond_to?(:settings_digest)
+
+        @configuration.model.settings_digest
+      end
+
+      def model_request(system:, prompt:)
+        return { 'system' => system, 'prompt' => prompt } unless @configuration.model.respond_to?(:build_request)
+
+        bytes = @configuration.model.build_request(system:, prompt:)
+        {
+          'system' => system,
+          'prompt' => prompt,
+          'request_digest' => @configuration.model.request_digest(bytes)
+        }
       end
 
       def result_payload(result)

@@ -44,18 +44,6 @@
   },
   "runtime": [
     {
-      "name": "base64",
-      "version": "0.3.0",
-      "licenses": [
-        "Ruby",
-        "BSD-2-Clause"
-      ],
-      "homepage": "https://github.com/ruby/base64",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
       "name": "bigdecimal",
       "version": "4.1.2",
       "licenses": [
@@ -63,61 +51,6 @@
         "BSD-2-Clause"
       ],
       "homepage": "https://github.com/ruby/bigdecimal",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "event_stream_parser",
-      "version": "1.0.0",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/Shopify/event_stream_parser",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "faraday",
-      "version": "2.14.3",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://lostisland.github.io/faraday",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "faraday-multipart",
-      "version": "1.2.0",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/lostisland/faraday-multipart",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "faraday-net_http",
-      "version": "3.4.4",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/lostisland/faraday-net_http",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "faraday-retry",
-      "version": "2.4.0",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/lostisland/faraday-retry",
       "required_by": [],
       "direct": false,
       "exception": null
@@ -171,47 +104,12 @@
       "exception": null
     },
     {
-      "name": "json",
-      "version": "2.21.2",
-      "licenses": [
-        "Ruby"
-      ],
-      "homepage": "https://github.com/ruby/json",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
       "name": "json_schemer",
       "version": "2.5.0",
       "licenses": [
         "MIT"
       ],
       "homepage": "https://github.com/davishmcclurg/json_schemer",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "logger",
-      "version": "1.7.0",
-      "licenses": [
-        "Ruby",
-        "BSD-2-Clause"
-      ],
-      "homepage": "https://github.com/ruby/logger",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "marcel",
-      "version": "1.2.1",
-      "licenses": [
-        "MIT",
-        "Apache-2.0"
-      ],
-      "homepage": "https://github.com/rails/marcel",
       "required_by": [],
       "direct": false,
       "exception": null
@@ -241,17 +139,6 @@
       "exception": null
     },
     {
-      "name": "multipart-post",
-      "version": "2.4.1",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/socketry/multipart-post",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
       "name": "net-http",
       "version": "0.9.1",
       "licenses": [
@@ -259,8 +146,10 @@
         "BSD-2-Clause"
       ],
       "homepage": "https://github.com/ruby/net-http",
-      "required_by": [],
-      "direct": false,
+      "required_by": [
+        "tamoz-agent-kernel >= 0.5"
+      ],
+      "direct": true,
       "exception": null
     },
     {
@@ -281,30 +170,6 @@
         "MIT"
       ],
       "homepage": "https://github.com/ammar/regexp_parser",
-      "required_by": [],
-      "direct": false,
-      "exception": null
-    },
-    {
-      "name": "ruby_llm",
-      "version": "1.16.0",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://rubyllm.com",
-      "required_by": [
-        "tamoz-agent ~> 1.16.0"
-      ],
-      "direct": true,
-      "exception": null
-    },
-    {
-      "name": "ruby_llm-schema",
-      "version": "0.4.0",
-      "licenses": [
-        "MIT"
-      ],
-      "homepage": "https://github.com/crmne/ruby_llm-schema#readme",
       "required_by": [],
       "direct": false,
       "exception": null
@@ -495,6 +360,17 @@
       "exception": null
     },
     {
+      "name": "json",
+      "version": "2.21.2",
+      "licenses": [
+        "Ruby"
+      ],
+      "homepage": "https://github.com/ruby/json",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
       "name": "language_server-protocol",
       "version": "3.17.0.5",
       "licenses": [
@@ -512,6 +388,18 @@
         "MIT"
       ],
       "homepage": "https://github.com/standardrb/lint_roller",
+      "required_by": [],
+      "direct": false,
+      "exception": null
+    },
+    {
+      "name": "logger",
+      "version": "1.7.0",
+      "licenses": [
+        "Ruby",
+        "BSD-2-Clause"
+      ],
+      "homepage": "https://github.com/ruby/logger",
       "required_by": [],
       "direct": false,
       "exception": null

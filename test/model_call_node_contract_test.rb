@@ -6,8 +6,7 @@ require 'ripper'
 # Phase 2 of the model-call boundary review: the node-call contract is enforced,
 # not just documented. Production libs of the four node-bearing gems may reach a
 # model only behind the journaled doors, keep raw HTTP confined to the two
-# declared seams, and touch the RubyLLM SDK only inside the sanctioned adapter
-# (whose phase-3 retirement collapses this door to zero).
+# declared seams.
 class ModelCallNodeContractTest < Minitest::Test
   ROOT = File.expand_path('..', __dir__).freeze
 
@@ -30,11 +29,6 @@ class ModelCallNodeContractTest < Minitest::Test
     'gems/tamoz-agent-kernel/lib/tamoz/agent/episode_model_transport.rb' =>
       'the canonical OpenAI-compatible transport',
     'gems/tamoz-agent-kernel/lib/tamoz/agent/witness_gateway.rb' => 'the P3 witness egress seam'
-  }.freeze
-
-  RUBYLLM_DOORS = {
-    'gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb' =>
-      'the SDK adapter slated for phase-3 retirement'
   }.freeze
 
   def test_local_receiver_generate_calls_sit_behind_journaled_doors
@@ -96,31 +90,6 @@ class ModelCallNodeContractTest < Minitest::Test
     MESSAGE
   end
 
-  def test_rubyllm_references_are_confined_to_the_sanctioned_adapter
-    violations = scan_violations do |path|
-      path if rubyllm_constant?(path) && !door?(RUBYLLM_DOORS, path)
-    end
-
-    assert_empty Array(violations), <<~MESSAGE
-      The RubyLLM SDK leaked outside its adapter. Nodes and effects never talk
-      to a provider SDK directly; the adapter itself is scheduled for removal
-      in phase 3.
-      #{Array(violations).join("\n")}
-    MESSAGE
-  end
-
-  def test_rubyllm_requires_are_confined_to_the_sanctioned_adapter
-    violations = scan_violations do |path|
-      path if rubyllm_require?(path) && !door?(RUBYLLM_DOORS, path)
-    end
-
-    assert_empty Array(violations), <<~MESSAGE
-      The RubyLLM SDK was required outside its adapter. Model seams stay behind
-      the sanctioned adapter until phase 3 retires it.
-      #{Array(violations).join("\n")}
-    MESSAGE
-  end
-
   private
 
   def scan_violations
@@ -172,23 +141,6 @@ class ModelCallNodeContractTest < Minitest::Test
   def net_http_require?(path)
     source_lines(path).any? do |line|
       line.match?(%r{^\s*require(_relative)?\s+["']net/http["']})
-    end
-  end
-
-  def rubyllm_constant?(path)
-    tree = Ripper.sexp(source_for_ast(path))
-    raise "unparsable source under audit: #{path}" unless tree
-
-    found = false
-    walk(tree) do |leaf|
-      found = true if leaf.is_a?(Array) && leaf[0] == :@const && leaf[1] == 'RubyLLM'
-    end
-    found
-  end
-
-  def rubyllm_require?(path)
-    source_lines(path).any? do |line|
-      line.match?(/^\s*require(_relative)?\s+["']ruby_llm["']/)
     end
   end
 

@@ -200,7 +200,13 @@ module Tamoz
             actor: "tamoz.agent.memory.consolidation",
             logical_key: consolidation_logical_key(owner, scopes, candidate, request.fetch("prompt_digest"))
           ) do
-            {"output" => model.generate(stage: :consolidate, system: CONSOLIDATION_SYSTEM, prompt:)}
+            response = model.generate(stage: :consolidate, system: CONSOLIDATION_SYSTEM, prompt:)
+            content = if response.respond_to?(:content)
+                        Tamoz::Agent::ModelCallProjection.from_response(response).fetch("content")
+                      else
+                        String(response)
+                      end
+            {"output" => content}
           end
           unless outcome.status == :succeeded
             raise MemoryConsolidationError, "consolidation model effect did not complete (#{outcome.status})"

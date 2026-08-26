@@ -77,7 +77,7 @@ flowchart BT
 
 Two edges deserve emphasis:
 
-- **`tamoz-agent` is the only gem that declares the `ruby_llm` SDK** (`ruby_llm ~> 1.16.0`). It accepts a `RubyLLM::Agent`, `RubyLLM::Chat`, or a callable that produces a chat, and reuses their public messages and tools. Sibling gems construct `RubyLLMModel` through their declared `tamoz-agent` dependency; the SDK dependency itself ships only here.
+- **`tamoz-agent-kernel` owns the model transport boundary.** It validates the provider matrix, resolves credentials inside `ModelClientFactory`, and constructs `EpisodeModelTransport`. Sibling gems use the injected model protocol or the factory seam; no provider SDK dependency is declared.
 - **Nothing in the product runtime depends on the evaluation gems.** `tamoz-evals` verifies artifacts and `tamoz-evals-runner` executes explicitly supplied evaluation inputs; both are development/release companions. `test/dependency_isolation_test.rb` enforces that one-way boundary.
 
 ## The gem-by-gem map
@@ -108,14 +108,14 @@ Two edges deserve emphasis:
 | `tamoz-agent-session` | Durable deliberation session: versioned records, planning context, graph nodes, effects, routing, and adaptive machinery | `tamoz-agent-kernel`, `tamoz-agent-capabilities`, `tamoz-agent-memory`, `tamoz-agent-profile`, `tamoz-agent-healing`, `tamoz-cancellation`, `tamoz-core`, `tamoz-graph`, `tamoz-tools` |
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime; the family's only executable | `tamoz-agent`, `tamoz-comms-gateway` |
-| `tamoz-agent` | The deliberative agent runtime as a library: session state machine over the graph, worker/durable execution, capability and model wiring (`RubyLLMModel`) | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-improvement`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, `ruby_llm ~> 1.16.0` |
+| `tamoz-agent` | The deliberative agent runtime as a library: session state machine over the graph, worker/durable execution, capability and transport wiring | `tamoz-agent-kernel`, `tamoz-agent-memory`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-improvement`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability` |
 | `tamoz-evals` | Artifact schemas, canonical JSON, evidence values, verifier decisions and release evidence. Development/release gem; nothing depends on it | `tamoz-core` |
 | `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks. Inputs are caller-owned and supplied through an explicit manifest or adapter | `tamoz-evals`, selected runtime gems |
 
 ## Dependency rules that are enforced, not suggested
 
 - `tamoz-core` has no runtime dependency beyond the standard library and Zeitwerk.
-- `tamoz-graph` never references RubyLLM, an HTTP client, a provider SDK, or an adapter — a clean process requiring `tamoz/graph` loads none of them and opens no socket.
+- `tamoz-graph` never references a model transport, an HTTP client, a provider SDK, or an adapter — a clean process requiring `tamoz/graph` loads none of them and opens no socket.
 - Graph nodes never call a model or transport directly: they receive journaled call objects, and every model execution crosses `EffectDispatcher.run` behind the doors enforced by `test/model_call_node_contract_test.rb` (`SessionEffects#model_call`, `Memory::Consolidation`, `Runtime#model_generate`, and `DeferredModel` forwarding behind SessionEffects' perform block). Model lifecycle events stay runner-emitted.
 - Adapters implement published contracts and depend on contracts, never on runner internals.
 - Optional dependencies load only when their feature is selected. Fiber execution, OTLP export, and Telegram transport must not affect a minimal boot.

@@ -54,7 +54,7 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-agent-session` | The durable deliberation session: versioned records, planning context, graph nodes, effects, routing, and adaptive machinery |
 | `tamoz-agent-improvement` | Self-improvement: `Improvement::CandidateLifecycle`, generator, heuristic, evaluation reports, promotion |
 | `tamoz-agent-cli` | The command line: `CLI.run` and every command group |
-| `tamoz-agent` | The runtime library: `Tamoz::Agent.build`, `Runtime`, `Session`, `SessionRecords`, `RubyLLMModel`, `McpCapabilitySource` |
+| `tamoz-agent` | The runtime library: `Tamoz::Agent.build`, `Runtime`, `Session`, `SessionRecords`, `McpCapabilitySource` |
 | `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, `Answer.parse`, `PolicyDocument`, the `Engine` with its `GrantStore`/`DecisionLog` ports and memory implementations, and `bundled_policy_path` for the shipped policy data |
 | `tamoz-mcp` | The governed MCP client/host: `Catalog`, `Entry`, `ServerConfig`, `Supervisor`, `Invocation`, `Elicitation`, and the MCP error taxonomy |
 | `tamoz-mcp-websearch` | The governed operator-side websearch boundary: `EgressPolicy`, `EgressClient`, `EgressCircuit`, `Result`, `VERSION`, and typed egress/redirect/validation errors |

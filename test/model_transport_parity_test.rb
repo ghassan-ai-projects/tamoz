@@ -2,174 +2,138 @@
 
 require_relative 'test_helper'
 require_relative 'support/local_model_endpoint'
-require 'ruby_llm'
 
-# Phase 2 D7: the canonical episode transport and the RubyLLM adapter must
-# agree on what matters today (extracted content, usage tokens against one real
-# HTTP envelope), and their known divergences stay pinned as named assertions —
-# connection-error taxonomy, retry posture, and request bytes (the phase-3
-# convergence target).
 class ModelTransportParityTest < Minitest::Test
   SYSTEM = 'You are terse.'
   PROMPT = 'Reply with compact JSON.'
   CONTENT = '{"ok":true}'
+  SECOND_CONTENT = '{"ok":false}'
 
-  def test_identical_envelope_extracts_equal_content_through_both_transports
-    Dir.mktmpdir('tamoz-parity') do |dir|
-      endpoint = LocalModelEndpoint.new(
-        mode: :fixture, responses: [CONTENT], log_path: File.join(dir, 'boundary.jsonl')
-      ).start
-
-      transport = Tamoz::Agent::EpisodeModelTransport.new(
-        endpoint: endpoint.base_url, model: 'local-model', api_key: 'test-key'
-      )
-      response = transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-
-      via_adapter = Tamoz::Agent::RubyLLMModel.new(
-        model: 'local-model', provider: :openai, api_key: 'test-key',
-        api_base: endpoint.base_url, assume_model_exists: true
-      ).generate(stage: :plan, system: SYSTEM, prompt: PROMPT)
+  def test_generate_returns_the_complete_digest_bound_projection
+    with_endpoint([CONTENT]) do |endpoint|
+      transport = transport_for(endpoint)
+      response = transport.generate(stage: :plan, system: SYSTEM, prompt: PROMPT)
+      observed = endpoint.observed.fetch(0)
+      projection = Tamoz::Agent::ModelCallProjection.from_response(response)
 
       assert_equal CONTENT, response.content
-      assert_equal CONTENT, via_adapter
-    ensure
-      endpoint&.stop
-    end
-  end
-
-  # Usage is observed at the SDK message object because the adapter returns
-  # content only (post-D4 narrowing); both projections must read the same
-  # envelope constants.
-  def test_usage_tokens_agree_across_both_projections_of_one_envelope
-    Dir.mktmpdir('tamoz-parity') do |dir|
-      endpoint = LocalModelEndpoint.new(
-        mode: :fixture, responses: [CONTENT, CONTENT], log_path: File.join(dir, 'boundary.jsonl')
-      ).start
-
-      transport = Tamoz::Agent::EpisodeModelTransport.new(
-        endpoint: endpoint.base_url, model: 'local-model', api_key: 'test-key'
-      )
-      response = transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-
-      Encoding.default_external = Encoding::UTF_8 unless
-        Encoding.default_external == Encoding::UTF_8
-      context = RubyLLM.context do |config|
-        config.openai_api_key = 'test-key'
-        config.openai_api_base = endpoint.base_url
-      end
-      message = context.chat(model: 'local-model', provider: :openai, assume_model_exists: true)
-                       .with_instructions(SYSTEM).ask(PROMPT)
-
       assert_equal [42, 21], [response.usage.input_tokens, response.usage.output_tokens]
-      assert_equal [42, 21], [message.input_tokens, message.output_tokens]
-    ensure
-      endpoint&.stop
+      assert_equal observed.fetch('request_digest'), response.request_digest
+      assert_equal observed.fetch('response_digest'), response.response_digest
+      assert_equal transport.settings_digest, response.settings_digest
+      assert_equal transport.provider_configuration_digest, response.provider_configuration_digest
+      assert_equal %w[
+        content provider_configuration_digest request_digest response_digest settings_digest usage
+      ], projection.keys.sort
     end
   end
 
-  def test_connection_refused_surfaces_divergent_classes_and_retry_counts
-    refused = TCPServer.new('127.0.0.1', 0)
-    port = refused.addr[1]
-    refused.close
+  def test_same_request_bytes_are_stable_while_response_digests_track_envelopes
+    with_endpoint([CONTENT, SECOND_CONTENT]) do |endpoint|
+      transport = transport_for(endpoint)
+      request = transport.build_request(system: SYSTEM, prompt: PROMPT)
+      first = transport.call(request)
+      second = transport.call(request)
+      observations = endpoint.observed
 
+      assert_equal first.request_digest, second.request_digest
+      assert_equal observations.map { |row| row.fetch('request_digest') }.uniq.length, 1
+      assert_equal first.response_digest, observations.fetch(0).fetch('response_digest')
+      assert_equal second.response_digest, observations.fetch(1).fetch('response_digest')
+      refute_equal first.response_digest, second.response_digest
+    end
+  end
+
+  def test_received_http_failure_is_typed_and_redacted
+    body = '{"error":"provider-secret-sentinel"}'
+    response = Net::HTTPInternalServerError.new('1.1', '503', 'Service Unavailable')
+    response.instance_variable_set(:@body, body)
     transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: "http://127.0.0.1:#{port}", model: 'local-model', api_key: 'test-key'
+      endpoint: 'https://example.test/v1', model: 'model', provider: 'openai',
+      api_key: 'provider-secret-sentinel'
     )
-    transport_error = assert_raises(StandardError) do
-      transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-    end
 
-    Encoding.default_external = Encoding::UTF_8 unless
-      Encoding.default_external == Encoding::UTF_8
-    require 'faraday'
-    context = RubyLLM.context do |config|
-      config.openai_api_key = 'test-key'
-      config.openai_api_base = "http://127.0.0.1:#{port}"
-    end
-    sdk_error = assert_raises(StandardError) do
-      context.chat(model: 'local-model', provider: :openai, assume_model_exists: true)
-             .with_instructions(SYSTEM).ask(PROMPT)
-    end
-
-    assert_instance_of Errno::ECONNREFUSED, transport_error
-    assert_equal 'Faraday::ConnectionFailed', sdk_error.class.name
-  ensure
-    refused&.close
-  end
-
-  def test_retry_posture_differs_between_single_shot_and_faraday
-    server = TCPServer.new('127.0.0.1', 0)
-    port = server.addr[1]
-    hits = Queue.new
-    acceptor = Thread.new do
-      loop do
-        socket = server.accept
-        hits << 1
-        socket.close
-      rescue IOError, Errno::EBADF
-        break
+    error = assert_raises(Tamoz::Agent::ModelCallError) do
+      transport.stub(:post_completion_request, response) do
+        transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
       end
     end
 
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: "http://127.0.0.1:#{port}", model: 'local-model', api_key: 'test-key'
-    )
-    assert_raises(StandardError) do
-      transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-    end
-    transport_hits = drain(hits)
-
-    Encoding.default_external = Encoding::UTF_8 unless
-      Encoding.default_external == Encoding::UTF_8
-    require 'faraday'
-    context = RubyLLM.context do |config|
-      config.openai_api_key = 'test-key'
-      config.openai_api_base = "http://127.0.0.1:#{port}"
-    end
-    assert_raises(StandardError) do
-      context.chat(model: 'local-model', provider: :openai, assume_model_exists: true)
-             .with_instructions(SYSTEM).ask(PROMPT)
-    end
-    sdk_hits = drain(hits)
-
-    assert_equal 1, transport_hits
-    assert_operator sdk_hits, :>, 1, 'faraday should retry connection failures'
-  ensure
-    server&.close
-    acceptor&.join(1)
+    assert_equal 'http_failure', error.code
+    assert_equal 503, error.status
+    assert_equal body.bytesize, error.body_bytes
+    refute_includes error.message, 'provider-secret-sentinel'
   end
 
-  def test_request_bytes_never_agree_across_the_transports
-    Dir.mktmpdir('tamoz-parity') do |dir|
-      endpoint = LocalModelEndpoint.new(
-        mode: :fixture, responses: [CONTENT, CONTENT], log_path: File.join(dir, 'boundary.jsonl')
-      ).start
+  def test_transport_does_not_retry_a_received_failure
+    response = Net::HTTPBadGateway.new('1.1', '502', 'Bad Gateway')
+    response.instance_variable_set(:@body, '{}')
+    calls = 0
+    transport = Tamoz::Agent::EpisodeModelTransport.new(
+      endpoint: 'https://example.test/v1', model: 'model', provider: 'openai'
+    )
 
-      transport = Tamoz::Agent::EpisodeModelTransport.new(
-        endpoint: endpoint.base_url, model: 'local-model', api_key: 'test-key'
-      )
-      transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
-
-      Tamoz::Agent::RubyLLMModel.new(
-        model: 'local-model', provider: :openai, api_key: 'test-key',
-        api_base: endpoint.base_url, assume_model_exists: true
-      ).generate(stage: :plan, system: SYSTEM, prompt: PROMPT)
-
-      digests = endpoint.observed.map { |row| row.fetch('request_digest') }
-
-      assert_equal 2, digests.length
-      refute_equal digests.fetch(0), digests.fetch(1),
-                   'frozen SETTINGS bytes vs provider defaults must not converge here'
-    ensure
-      endpoint&.stop
+    assert_raises(Tamoz::Agent::ModelCallError) do
+      transport.stub(:post_completion_request, lambda { |_body, headers:|
+        calls += 1
+        response
+      }) do
+        transport.call(transport.build_request(system: SYSTEM, prompt: PROMPT))
+      end
     end
+
+    assert_equal 1, calls
+  end
+
+  def test_malformed_response_projection_becomes_a_typed_failed_model_call
+    response = Tamoz::Agent::EpisodeModelTransport::Response.new(
+      content: CONTENT, request_digest: 'bad', response_digest: digest,
+      usage: Tamoz::Agent::ModelCall::Usage.unavailable,
+      settings_digest: digest, provider_configuration_digest: digest
+    )
+
+    error = assert_raises(Tamoz::Agent::ModelCallError) do
+      Tamoz::Agent::ModelCallProjection.from_response(response)
+    end
+
+    assert_equal 'invalid_projection', error.code
+    refute_includes error.message, 'bad'
+  end
+
+  def test_partial_or_malformed_usage_is_unavailable
+    transport = Tamoz::Agent::EpisodeModelTransport.new(
+      endpoint: 'http://example.test/v1', model: 'model', provider: 'openai'
+    )
+
+    partial = transport.send(:usage_from, {'prompt_tokens' => 42})
+    malformed = transport.send(:usage_from, nil)
+
+    refute partial.available
+    refute malformed.available
+    assert_nil partial.input_tokens
+    assert_nil malformed.output_tokens
   end
 
   private
 
-  def drain(queue)
-    count = 0
-    count += queue.pop until queue.empty?
-    count
+  def with_endpoint(responses)
+    Dir.mktmpdir('tamoz-transport') do |dir|
+      endpoint = LocalModelEndpoint.new(
+        mode: :fixture, responses:, log_path: File.join(dir, 'boundary.jsonl')
+      ).start
+      yield endpoint
+    ensure
+      endpoint&.stop
+    end
+  end
+
+  def transport_for(endpoint)
+    Tamoz::Agent::EpisodeModelTransport.new(
+      endpoint: endpoint.base_url, model: 'local-model', provider: 'openai', api_key: 'test-key'
+    )
+  end
+
+  def digest
+    "sha256:#{"a" * 64}"
   end
 end

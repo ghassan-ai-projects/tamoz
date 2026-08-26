@@ -37,6 +37,34 @@ module Tamoz
     # a malformed receipt can never enter the durable journal.
     class ModelReceiptError < Error; end
 
+    class ModelCallError < Tamoz::Core::ToolError
+      attr_reader :code, :status, :body_digest, :body_bytes
+
+      def initialize(message = nil, code: nil, status: nil, body_digest: nil, body_bytes: nil)
+        if code.nil?
+          @code = "replayed"
+          super(String(message))
+          return
+        end
+
+        @code = String(code).freeze
+        @status = status&.to_i
+        @body_digest = body_digest&.to_s&.freeze
+        @body_bytes = body_bytes&.to_i
+        super(error_message)
+      end
+
+      private
+
+      def error_message
+        details = ["model_call/#{code}"]
+        details << "status=#{status}" if status
+        details << "body_digest=#{body_digest}" if body_digest
+        details << "body_bytes=#{body_bytes}" if body_bytes
+        details.join(" ")
+      end
+    end
+
     # Raised when every plan attempt failed review. D-8 Fix C (RC-3): the raise site
     # authors the message — either a bounded summary of the last attempt's
     # STRUCTURAL-layer issues (Tamoz-generated validation text) or a generic phrase —

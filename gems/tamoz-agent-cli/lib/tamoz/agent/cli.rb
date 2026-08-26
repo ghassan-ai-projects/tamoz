@@ -823,58 +823,24 @@ module Tamoz
         primary = resolve_profile_roles(profile, options)["primary"]
         model_name ||= primary && primary.fetch("model")
         provider ||= primary && primary.fetch("provider")
-        credential_ref = primary_credential_ref(profile)
-        api_key = enforce_role_credential!(credential_ref)
         raise OptionParser::MissingArgument, "--model or TAMOZ_MODEL" if model_name.to_s.empty?
 
         provider = provider.to_s.empty? ? "openai" : provider
-        if provider == "assume_model_exists"
-          # §5.3: custom endpoints are out of scope for P8 v1.
-          raise Profile::ValidationError,
-                "profile model role provider \"assume_model_exists\" requires a custom " \
-                "endpoint, which P8 v1 does not support"
-        end
-        provider_key = RubyLLMModel::ENV_KEYS[provider.downcase.to_sym]
-        api_key ||= provider_key && @env[provider_key]
-        api_base = @env["#{provider.upcase}_API_BASE"]
-        build_provider_model(options, model_name:, provider:, api_key:, api_base:, credential_ref:)
-      end
-
-      def primary_credential_ref(profile)
-        role = profile && profile.model_roles["primary"]
-        role && role["credential_ref"]
-      end
-
-      # DR-5 critic: a referenced credential that is not set must fail TYPED at
-      # session start — never silently fall back to the generic provider key.
-      def enforce_role_credential!(credential_ref)
-        return nil unless credential_ref
-
-        api_key = @env[credential_ref.fetch("name")]
-        if api_key.to_s.empty?
-          raise ProfileRoleUnavailableError,
-                "profile role \"primary\" references credential " \
-                "#{credential_ref.fetch("name").inspect} which is not set in the environment"
-        end
-        api_key
-      end
-
-      def build_provider_model(options, model_name:, provider:, api_key:, api_base:, credential_ref:)
-        RubyLLMModel.new(
-          model: model_name,
-          provider:,
-          api_key:,
-          api_base:,
-          assume_model_exists: options[:assume_model_exists]
+        profile_role = model_role_for(profile, primary)
+        ModelClientFactory.build(
+          provider:, model: model_name, profile_role:, environment: @env, safety: :unsafe
         )
-      rescue ArgumentError => error
-        if credential_ref
-          raise ProfileRoleUnavailableError,
-                "profile role \"primary\" cannot resolve credential reference " \
-                "#{credential_ref.fetch("name").inspect}: #{error.message}"
-        end
+      end
 
-        raise
+      def model_role_for(profile, primary)
+        return unless profile && primary
+
+        role = profile.model_roles.fetch("primary")
+        ModelCall::ModelRole.new(
+          name: "primary", provider: primary.fetch("provider"), model: primary.fetch("model"),
+          revision: role["revision"], normalized_settings: role["normalized_settings"] || {},
+          credential_ref: role["credential_ref"], profile_digest: profile.canonical_digest
+        )
       end
 
       def render_runtime_event(event, json:)

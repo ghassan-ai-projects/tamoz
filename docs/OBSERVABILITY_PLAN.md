@@ -138,21 +138,15 @@ Exit: B2, B3, B4 pass; enabling one class leaks exactly one class.
 
 ### Slice E — model usage and cost
 
-**Gated on prerequisite 3.** Two sub-slices with different owners, and the first is not
-observability work.
+**E1 — persistence (delivered by the model-call boundary phase):**
 
-**E1 — persistence (owned by `tamoz-agent` + `tamoz-sqlite`, separately reviewed):**
-
-- `Model` protocol change so `generate` returns text plus usage. Six implementations:
-  `RubyLLMModel` (currently ends `.ask(prompt).content`, discarding the `RubyLLM::Message`),
-  `WorkerRuntime::DeferredModel`, `Memory::Consolidation`, the CLI's dummy models, and the
-  evals harness fixtures.
-- The next migration ordinal adding a bounded usage column, plus the `CURRENT_VERSION` bump and
-  its release note: an older Tamoz binary refuses a migrated database. Read the ordinal from
-  `migrator.rb` when the slice starts — comms landed `MIGRATION_6` while this design was under
-  review, so it is not a number to reserve in advance.
-- **Not** the attempt `result` blob — that changes the receipt's `result_digest`, which is
-  observation altering a durable record.
+- The kernel-owned `ModelClientFactory` and `EpisodeModelTransport` return a typed response;
+  `ModelCallProjection` carries content, usage, and all request/configuration/response digests
+  through the existing effect result.
+- No migration or second telemetry writer is needed. The authoritative effect result is already
+  durable and replayable, and the observability layer consumes its projection.
+- Providers that do not report usage remain unmeasured; no zero or estimated token count is
+  invented at the model boundary.
 
 **E2 — observability (this plan):**
 

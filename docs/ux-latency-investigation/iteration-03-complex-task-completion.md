@@ -1,5 +1,8 @@
 # Iteration 3 — Complex multi-step task (completion failure)
 
+> Historical measurement from the pre-Phase-3 provider boundary. References to
+> RubyLLM describe the measured implementation and are not current support.
+
 ## Journey analyzed
 
 Input: `tamoz --root <dir> --json "Read every file in this workspace, explain

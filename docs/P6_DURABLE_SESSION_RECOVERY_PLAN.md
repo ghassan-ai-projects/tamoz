@@ -1,5 +1,9 @@
 # P6 plan — durable session and effect recovery
 
+> Historical design record. Superseded by the shipped session and model-call
+> boundary implementation; references to RubyLLM and the former provider seam
+> describe the design state at the time of this plan.
+
 Status: design — ready for review
 
 ## 1. Authoritative inputs, scope, and non-goals

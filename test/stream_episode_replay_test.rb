@@ -191,7 +191,8 @@ class StreamEpisodeReplayTest < Minitest::Test
     request_bytes = transport.build_request(system: frame.system, prompt: frame.user)
     Tamoz::Agent::ModelCall::LogicalCallKey.new(
       episode_id: "replay-ambiguous", stage: "reason", slot: 0,
-      request_digest: transport.request_digest(request_bytes)
+      request_digest: transport.request_digest(request_bytes),
+      provider_configuration_digest: transport.provider_configuration_digest
     )
   end
 end

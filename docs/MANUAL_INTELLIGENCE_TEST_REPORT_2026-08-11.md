@@ -1,5 +1,8 @@
 # Manual Intelligence Test Report — 2026-08-11
 
+> Historical intelligence report. Its provider and adapter references describe
+> the implementation tested on 2026-08-11, not current Tamoz production support.
+
 Date: 2026-08-11 (Europe/Berlin)
 Run by: manual / OpenClaw orchestration against a local checkout
 Branch/HEAD: current working tree (commits through `4d7aff9` "Refresh autonomy scorecard evidence")

@@ -143,7 +143,10 @@ module Tamoz
             "provider" => role.provider,
             "model" => role.model,
             "endpoint" => endpoint_for(role),
-            "credential_ref" => role.credential_ref
+            "credential_ref" => role.credential_ref,
+            "revision" => role.revision,
+            "normalized_settings" => role.normalized_settings,
+            "profile_digest" => role.profile_digest
           },
           # The route is codec-safe (the graph branch reads it as a symbol).
           "route" => "recall"
@@ -592,7 +595,7 @@ module Tamoz
 
       def enforce_successful_outcome!(result, subject:)
         if result.unknown?
-          raise ProtocolError, "episode #{subject} call is unknown (no blind retry)"
+          raise EffectUnknownError, "episode #{subject} call outcome is unknown"
         end
         if result.failed?
           raise ProtocolError, "episode #{subject} call failed"
@@ -704,6 +707,7 @@ module Tamoz
           "provider" => receipt.provider,
           "model" => receipt.model,
           "settings_digest" => receipt.settings_digest,
+          "provider_configuration_digest" => receipt.provider_configuration_digest,
           "frame_digest" => receipt.frame_digest,
           "request_digest" => receipt.request_digest,
           "response_digest" => receipt.response_digest,

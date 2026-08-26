@@ -186,7 +186,7 @@ module Tamoz
 
         def validate_provider!(provider, role)
           return if provider.is_a?(String) &&
-                    (KNOWN_PROVIDERS.include?(provider) || provider == 'assume_model_exists')
+                    KNOWN_PROVIDERS.include?(provider)
 
           raise ValidationError, "#{@path}: unknown provider #{provider.inspect} for role #{role.inspect}"
         end

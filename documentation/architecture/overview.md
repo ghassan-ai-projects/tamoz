@@ -41,7 +41,7 @@ flowchart TB
     end
 
     subgraph Ext["external services"]
-        LLM["ruby_llm (providers / models)"]
+        LLM["EpisodeModelTransport (providers / models)"]
         SQL["SQLite3 (one file, WAL)"]
         TG["Telegram Bot API"]
         GRPC["gRPC stream runtime"]
@@ -102,7 +102,7 @@ A durable graph returns from a barrier only after its checkpoint commits (ADR-01
 
 ### Two load-bearing rules
 
-1. **`tamoz-graph` never loads an LLM client.** Requiring `tamoz/graph` in a clean process loads no RubyLLM, no HTTP client, no provider, and no adapter — and opens no socket (invariant 11). This is a load-time invariant, enforced by `test/dependency_isolation_test.rb`; at run time the engine executes whatever model objects an embedding injected through node callables and `context.effects` — by design. The graph engine is a general durable-execution runtime: testable offline, and reusable for durable workflows that have nothing to do with language models.
+1. **`tamoz-graph` never loads an LLM client.** Requiring `tamoz/graph` in a clean process loads no model transport, HTTP client, provider, or adapter — and opens no socket (invariant 11). This is a load-time invariant, enforced by `test/dependency_isolation_test.rb`; at run time the engine executes whatever model objects an embedding injected through node callables and `context.effects` — by design. The graph engine is a general durable-execution runtime: testable offline, and reusable for durable workflows that have nothing to do with language models.
 2. **Checkpoints make state durable, not external effects exactly-once.** Every side effect has a stable key, a safety class, and an attempt token (invariant 21). Idempotent or reconcilable effects may converge; an ambiguous non-idempotent effect becomes `:unknown` and requires human reconciliation. It is never retried blindly.
 
 Everything else — reviewed plans, approvals, verification, healing — is policy layered on top of these two facts.
@@ -128,7 +128,7 @@ The contracts stay separate because they have different failure semantics:
 - **`tamoz-core`** — values and dispatch shared across boundaries: context, secrets, the worker pool, canonical/JCS digesting, and the DR-2 circuit engine. It owns no graph state and no persistence.
 - **`tamoz-graph`** — deterministic execution semantics: definition digest, state schema, reducers, super-steps, deterministic task identity, checkpoint/lease/store contracts, interrupt/resume, replay, fork, subgraphs. It guarantees atomic committed state; it does not claim exactly-once external effects.
 - **`tamoz-sqlite`** — one production adapter: append-only checkpoints, atomic compare-and-append commit, fenced leases, the effect journal, the request inbox, schedules, the comms store, circuits and the memory index, plus backup/restore and 13 checksummed migrations.
-- **`tamoz-agent`** — recipes over the graph: the durable model↔tools loop, RubyLLM binding, approval, effect classification, plan/review/verify gates, memory, healing, and the CLI.
+- **`tamoz-agent`** — recipes over the graph: the durable model↔tools loop, transport binding, approval, effect classification, plan/review/verify gates, memory, healing, and the CLI.
 - **Contract and process gems** — `tamoz-comms` (channel values and contracts), `tamoz-comms-gateway` (the injected gateway/drainer process boundary), `tamoz-observability` (signals), `tamoz-scheduler` (durable time), `tamoz-stream` (the episode worker), and `tamoz-mcp` (governed MCP), each with a structural store contract implemented by `tamoz-sqlite` where applicable.
 - **Adapter gems** — `tamoz-mcp-websearch` (operator-side websearch egress), `tamoz-telegram` (transport), and `tamoz-otel` (export). None is required for a minimal boot.
 

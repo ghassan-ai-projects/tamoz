@@ -17,7 +17,7 @@ Nothing acts without a reviewed plan bound to its canonical digest, and nothing 
 ## What Tamoz is not
 
 - **Not an exactly-once distributed transaction system.** Tamoz cannot atomically commit an arbitrary remote side effect and its local receipt. It provides idempotency keys, journaling, reconciliation, and a safe `:unknown` state.
-- **Not a rewrite of `ruby_llm`.** RubyLLM supplies providers, messages, tools, and streaming; Tamoz supplies the durable execution runtime above it.
+- **Not a provider SDK wrapper.** Tamoz owns one digest-bound OpenAI-compatible transport and the durable execution runtime above it.
 - **Not a LangChain port.** The capabilities are the product, not the vocabulary — there is no `Runnable` matrix, no chain subclass zoo, no async twin APIs.
 - **Not a multi-tenant hosted platform.** Single operator, many sessions. No auth server, no billing, no team workspace.
 - **Not a certified or hard real-time controller.** Physical-world control is advisory and simulated; emergency stops and interlocks remain external and authoritative.
@@ -31,7 +31,7 @@ Nothing acts without a reviewed plan bound to its canonical digest, and nothing 
 
 ## Why it exists
 
-The design goal states it directly: build a small, readable, Ruby-native durable agent runtime over RubyLLM that is safe under crash, resume, concurrency, and human approval — and prove every guarantee with an executable conformance suite.
+The design goal states it directly: build a small, readable, Ruby-native durable agent runtime over a digest-bound model transport that is safe under crash, resume, concurrency, and human approval — and prove every guarantee with an executable conformance suite.
 
 The bet behind the project is that **LangGraph's invariants are the product, and its Python is an accident.** What is hard — barrier atomicity, deterministic task identity, resume-by-call-index, fenced ownership, effect ambiguity, compatible checkpoint history — is language-neutral semantics. Ruby's `throw`/`catch` makes interrupts structurally uncatchable by `rescue`; `Data.define` and plain Hash state keep the runtime small. The reference application, Tamoz Agent, is the honest specification of the framework: every framework primitive exists because the agent needs it.
 

@@ -242,7 +242,7 @@ resumes the same accepted exact plan, never applies a filesystem effect twice, a
 truly unknown check/effect for reconciliation. Read-only and ephemeral construction remain
 available where documented.
 
-Stop/redesign if agent durability needs private RubyLLM APIs, bypasses graph barriers,
+Stop/redesign if agent durability needs private provider APIs, bypasses graph barriers,
 creates a second checkpoint/effect model, or retries unknown work.
 
 ### P7 — interactive and resumable CLI
@@ -530,7 +530,7 @@ Work packages:
 - [ ] **P15-A — requirements audit:** map every objective, invariant, ADR, phase exit,
   capability, API, command, migration, and non-goal to direct evidence. Missing/indirect
   evidence is incomplete, not pass.
-- [ ] **P15-B — compatibility:** supported Ruby matrix, RubyLLM/MCP/fugit ranges, event/API
+- [ ] **P15-B — compatibility:** supported Ruby matrix, provider/MCP/fugit ranges, event/API
   schemas, graph/behavior/catalog/profile versions, migrations, old-session resume/stop.
 - [ ] **P15-C — operations:** SQLite backup/restore/corruption/disk-full, retention/deletion,
   observability/redaction, resource leak/soak, crash recovery runbooks.
@@ -538,7 +538,7 @@ Work packages:
   filesystem/command/content injection, MCP/skill/memory/scheduler/stream boundaries,
   zero unresolved high/critical findings.
 - [ ] **P15-E — performance/value:** documented hardware/Ruby/dataset, p50/p95/p99,
-  memory/FD/thread/cost/token/cache metrics, plain RubyLLM + job queue baseline, honest
+  memory/FD/thread/cost/token/cache metrics, plain provider-client + job queue baseline, honest
   regressions and denominators.
 - [ ] **P15-F — evaluation:** canonical case/evidence/result artifacts, pinned public and
   protected corpora, paired baseline, hard gates, insufficient/invalid separation, signed
@@ -614,7 +614,7 @@ unchanged from the P18-start baseline, safety 0.
 - Every durable record is versioned, allowlisted, bounded, immutable at commit, and rejects
   sensitive values unless an explicit protection policy exists.
 - No production gem depends on `tamoz-evals`; evals may lazily load selected subjects.
-- No private RubyLLM API, generic shell supplied by model text, plugin framework, hidden
+- No private provider API, generic shell supplied by model text, plugin framework, hidden
   scheduler, hidden retry loop, or direct physical actuation.
 - Preserve existing user changes and stop on overlapping dirty work; never reset them away.
 

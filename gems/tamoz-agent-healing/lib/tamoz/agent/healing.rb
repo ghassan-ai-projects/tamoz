@@ -12,8 +12,8 @@ module Tamoz
     #
     # Load-time note: `healing` is required by `tamoz/agent`, which already loads
     # `tamoz/tools` (the configured-check machinery the oracle reuses). Nothing
-    # here loads RubyLLM or `tamoz-evals`, so the dependency-isolation test stays
-    # green — the semantic critic is an INJECTED callable, never a model client.
+    # here loads a provider SDK or `tamoz-evals`, so the dependency-isolation test
+    # stays green — the semantic critic is an INJECTED callable, never a model client.
     module Healing
       # Invariant 18 allowlist. Only these record kinds are revivable, and each
       # one's `from_h` checks its `format_version` before reading any other field.

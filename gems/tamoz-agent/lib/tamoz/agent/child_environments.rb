@@ -32,14 +32,14 @@ module Tamoz
 
       # The worker alone validates provider credential selection; the
       # credential is named from the provider, never passed as a free string.
-      def self.worker_env(base, runtime_dir:)
+      def self.worker_env(base, runtime_dir:, profile_role: nil)
         provider = base.fetch('TAMOZ_PROVIDER')
-        credential = "#{provider.upcase}_API_KEY"
         standard_env(base).merge(
           'TAMOZ_RUNTIME_DIR' => runtime_dir,
           'TAMOZ_PROVIDER' => provider,
-          'TAMOZ_MODEL' => base.fetch('TAMOZ_MODEL'),
-          credential => base.fetch(credential)
+          'TAMOZ_MODEL' => base.fetch('TAMOZ_MODEL')
+        ).merge(
+          ModelClientFactory.worker_environment(provider:, profile_role:, environment: base)
         )
       end
 

@@ -28,8 +28,7 @@ rbenv exec bundle install
 Use the credential and model names for the provider you actually selected. Do
 not put API-key values in YAML, profiles, tasks, prompts, or MCP arguments.
 
-RubyLLM loads a non-ASCII model registry. Tamoz normalizes this boundary, but
-UTF-8 locales remain the safest operator default:
+Use a UTF-8 locale when tasks or prompts contain non-ASCII text:
 
 ```bash
 export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
