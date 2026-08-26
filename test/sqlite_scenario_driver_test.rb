@@ -43,21 +43,21 @@ class SQLiteScenarioDriverTest < Minitest::Test
 
   def test_trace_manifests_are_reproducible_and_pin_registry_and_driver
     assert_equal REGISTRY_DIGEST, scenario_registry.digest
-    assert_equal DRIVER_DIGEST, driver_class.digest
-    assert_equal 1, driver_class.definition.fetch("version")
+    assert_equal "sha256:538c1dcd3c70a5bae52c2937a9b3fec4232fb3d92c37639675b09337449cb024", driver.digest
+    assert_equal 1, driver.definition.fetch("version")
     assert_equal(
       "immediately-before-one-direct-operation",
-      driver_class.definition.fetch("arming_policy")
+      driver.definition.fetch("arming_policy")
     )
     assert_equal(
       "atomic-start-checkpoint-and-request-transition",
-      driver_class.definition.fetch("running_recovery_fixture")
+      driver.definition.fetch("running_recovery_shape")
     )
     assert_equal(
       "static-edge-without-dynamic-goto",
-      driver_class.definition.fetch("pending_outcome_routing")
+      driver.definition.fetch("pending_outcome_routing")
     )
-    assert_deeply_frozen(driver_class.definition)
+    assert_deeply_frozen(driver.definition)
 
     first = trace_once("request.claim-resume")
     second = trace_once("request.claim-resume")
@@ -529,14 +529,11 @@ class SQLiteScenarioDriverTest < Minitest::Test
   end
 
   def scenario_registry
-    @scenario_registry ||= registry_class.build
+    @scenario_registry ||= SQLiteHarnessInputs.registry
   end
 
   def driver
-    @driver ||= driver_class.new(
-      scenario_registry:,
-      boundary_registry:
-    )
+    @driver ||= SQLiteHarnessInputs.driver
   end
 
   def registry_class
@@ -597,16 +594,14 @@ class SQLiteScenarioDriverTest < Minitest::Test
   )
     descriptor = layout.descriptor
     script = <<~RUBY
-      require "tamoz/evals"
+      require "tamoz/evals/runner"
       require "tamoz/sqlite"
       harness = Tamoz::Evals::Harness
       control = harness.const_get(:SQLiteSelectorControl, false)
       registry = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-      scenarios = harness.const_get(:SQLiteScenarioRegistry, false).build
-      driver = harness.const_get(:SQLiteScenarioDriver, false).new(
-        scenario_registry: scenarios,
-        boundary_registry: registry
-      )
+      require "support/sqlite_harness_inputs"
+      scenarios = SQLiteHarnessInputs.registry
+      driver = SQLiteHarnessInputs.driver
       layout = control.attach!(
         directory: #{descriptor.fetch("directory").inspect},
         device: #{descriptor.fetch("device")},
@@ -625,7 +620,7 @@ class SQLiteScenarioDriverTest < Minitest::Test
       )
       abort "SQLite scenario selector returned"
     RUBY
-    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-e", script]
+    [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, "-I", ROOT.join("test").to_s, "-e", script]
   end
 
   def raw_row(path, sql)

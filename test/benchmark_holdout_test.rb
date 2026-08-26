@@ -14,10 +14,13 @@ class BenchmarkHoldoutTest < Minitest::Test
 
   def run_holdout(cases: 12, seed: 23)
     dir = Dir.mktmpdir("tamoz-holdout")
-    stdout, stderr, status = Open3.capture3(
-      RbConfig.ruby, HOLD_OUT_SCRIPT.to_s, "--cases", cases.to_s, "--seed", seed.to_s,
-      "--out", dir, chdir: ROOT.to_s
-    )
+    stdout = stderr = status = nil
+    RunnerInputs.with_manifest do |input_manifest|
+      stdout, stderr, status = Open3.capture3(
+        RbConfig.ruby, HOLD_OUT_SCRIPT.to_s, "--cases", cases.to_s, "--seed", seed.to_s,
+        "--out", dir, "--input-manifest", input_manifest, chdir: ROOT.to_s
+      )
+    end
     assert status.success?, "holdout generation failed:\n#{stderr}#{stdout}"
     {
       "manifest" => read_json(File.join(dir, "holdout-manifest.json")),

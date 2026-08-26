@@ -1,0 +1,200 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "base64"
+require "digest"
+require "json"
+require "open3"
+require "rbconfig"
+require "tmpdir"
+
+ROOT = File.expand_path("..", __dir__)
+EVIDENCE_ROOT = File.join(ROOT, "docs", "gem-boundary-implementation-2026-08-26")
+BASELINE_PATH = File.join(EVIDENCE_ROOT, "09-phase-2-baseline.json")
+OUTPUT_PATH = File.join(EVIDENCE_ROOT, "09-phase-2-after.json")
+
+def digest_tree(root)
+  digest = Digest::SHA256.new
+  Dir.glob(File.join(root, "**", "*")).select { |path| File.file?(path) }.sort.each do |path|
+    relative = path.delete_prefix("#{root}/")
+    digest.update(relative)
+    digest.update("\0")
+    digest.update(File.binread(path))
+  end
+  digest.hexdigest
+end
+
+def encoded(value)
+  Base64.strict_encode64(value)
+end
+
+def command_result(name, command, side_effects: [])
+  stdout, stderr, status = Open3.capture3(*command, chdir: ROOT)
+  parsed = parse_json_output(stdout)
+  effects = side_effects.dup
+  if parsed.is_a?(Hash) && parsed["report_type"]
+    effects.concat(
+      ["report_type=#{parsed.fetch("report_type")}",
+       "corpus_id=#{parsed.dig("corpus", "id")}",
+       "corpus_version=#{parsed.dig("corpus", "version")}",
+       "content_digest=#{parsed["content_digest"]}"].compact
+    )
+  end
+  {
+    "name" => name,
+    "argv" => command.map(&:to_s),
+    "stdout_b64" => encoded(stdout),
+    "stderr_b64" => encoded(stderr),
+    "exit" => status.exitstatus || 255,
+    "side_effects" => effects,
+    "decision" => parsed.is_a?(Hash) && parsed.key?("decision") ? parsed["decision"] : nil,
+    "exception_class" => nil
+  }.compact
+end
+
+def parse_json_output(stdout)
+  return if stdout.empty?
+
+  JSON.parse(stdout)
+rescue JSON::ParserError
+  stdout.each_line do |line|
+    next if line.strip.empty?
+
+    begin
+      return JSON.parse(line)
+    rescue JSON::ParserError
+      next
+    end
+  end
+  nil
+end
+
+def manifest_descriptor(path)
+  {"path" => path, "sha256" => Digest::SHA256.file(path).hexdigest}
+end
+
+def write_manifest(directory, relative_path: nil)
+  input = File.join(directory, "input.json")
+  File.write(input, "{}")
+  descriptor = manifest_descriptor(input)
+  manifest = {
+    "manifest_version" => "runner-input-v1",
+    "external_root" => directory,
+    "corpus_definitions" => {
+      "agent_smoke" => descriptor,
+      "agent_memory" => descriptor,
+      "agent_memory_repository" => descriptor
+    },
+    "scripted_model" => {"adapter" => descriptor, "responses" => descriptor},
+    "mcp_server" => {"path" => input, "sha256" => descriptor.fetch("sha256"), "args" => []},
+    "openclaw" => {
+      "fixture_factory_loader" => descriptor,
+      "protocol" => descriptor,
+      "catalog" => descriptor,
+      "mission" => descriptor
+    },
+    "scenarios" => {
+      "scenario_definitions" => descriptor,
+      "sqlite_graph" => descriptor,
+      "limits" => descriptor,
+      "registry" => descriptor
+    }
+  }
+  if relative_path
+    manifest.fetch("corpus_definitions").fetch("agent_smoke")["path"] = relative_path
+  end
+  path = File.join(directory, "manifest.json")
+  File.write(path, JSON.generate(manifest))
+  path
+end
+
+baseline = JSON.parse(File.read(BASELINE_PATH))
+baseline_path = File.join(ROOT, "gems", "tamoz-evals", "baselines", "m0", "baseline.result.json")
+missing_path = File.join(Dir.tmpdir, "tamoz-phase2-missing-#{Process.pid}.json")
+
+cases = [
+  command_result("base-version", [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "--version"]),
+  command_result("base-verify-baseline", [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "verify", baseline_path]),
+  command_result("base-usage", [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval"]),
+  command_result("base-multi-verify", [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "verify", baseline_path, baseline_path]),
+  command_result("base-scorecard-removed", [RbConfig.ruby, "-S", "bundle", "exec", "tamoz-eval", "scorecard", "agent-smoke"]),
+  command_result("runner-missing-manifest", [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke", "--input-manifest", missing_path]),
+  command_result(
+    "runner-scorecard-report",
+    [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "-Itest", "-e",
+     'require "test_helper"; RunnerInputs.with_manifest { |manifest| status = Tamoz::Evals::Runner::CLI.run(["scorecard", "agent-smoke", "--input-manifest", manifest], scorecard_factory: -> { Tamoz::Evals::Harness::AgentSmokeScorecard.new(corpus: RunnerInputs.smoke_corpus) }); exit(status) }']
+  ),
+  command_result(
+    "runner-consumer-summary",
+    [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "-Itest", "-e",
+     'require "test_helper"; report = %q!{"decision":"pass","corpus":{"case_count":21},"aggregate":{"task_successes":19,"unsafe_or_bypassed_actions":0},"hard_gates":[{"status":"pass"},{"status":"pass"},{"status":"pass"},{"status":"pass"}]}!; puts JSON.generate(Tamoz::Evals::Runner::ScorecardSummaryConsumer.new(executor: ->(_command) { [true, report, ""] }).run(input_manifest: "/tmp/manifest.json"))']
+  )
+]
+
+manifest_failure_cases = Dir.mktmpdir("tamoz-phase2-receipt") do |directory|
+  malformed = File.join(directory, "malformed.json")
+  File.write(malformed, "not-json")
+  incomplete = File.join(directory, "incomplete.json")
+  File.write(incomplete, JSON.generate("manifest_version" => "runner-input-v1"))
+  relative = write_manifest(
+    Dir.mktmpdir("relative", directory),
+    relative_path: "test/support/runner_inputs.rb"
+  )
+  missing_factory = write_manifest(Dir.mktmpdir("missing-factory", directory))
+  [
+    command_result("missing", [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke", "--input-manifest", missing_path]),
+    command_result("malformed", [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke", "--input-manifest", malformed]),
+    command_result("incomplete", [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke", "--input-manifest", incomplete]),
+    command_result("repository_relative", [RbConfig.ruby, "-S", "bundle", "exec", "bin/tamoz-eval-runner", "scorecard", "agent-smoke", "--input-manifest", relative]),
+    command_result("missing_openclaw_factory", [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "script/benchmark_comms_run", "--input-manifest", missing_factory, "--out", directory, "--artifact-root", "receipt-output", "--scenarios", "C1"])
+  ].map do |entry|
+    entry.slice("name", "exit", "stdout_b64", "stderr_b64", "side_effects")
+  end
+end
+
+public_api = command_result(
+  "public-api-inventory",
+  [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "-e",
+   'require "json"; require "tamoz/evals"; require "tamoz/evals/runner"; puts JSON.generate("requires" => ["tamoz/evals", "tamoz/evals/runner"], "constants" => ["Tamoz::Evals::CLI", "Tamoz::Evals::Runner::CLI", "Tamoz::Evals::Runner::InputManifest", "Tamoz::Evals::Runner::ScorecardSummaryConsumer"])']
+)
+public_api_document = JSON.parse(Base64.decode64(public_api.fetch("stdout_b64")))
+
+load_graph = %w[tamoz/evals tamoz/evals/runner].to_h do |library|
+  command = [RbConfig.ruby, "-S", "bundle", "exec", "ruby", "-e",
+             "require #{library.inspect}; puts JSON.generate($LOADED_FEATURES.select { |path| path.include?('/tamoz/') }.sort)"]
+  result = command_result(library, command)
+  [library == "tamoz/evals" ? "base" : "runner",
+   JSON.parse(Base64.decode64(result.fetch("stdout_b64")))]
+end
+
+gem_digests = %w[tamoz-evals tamoz-evals-runner tamoz-scheduler].to_h do |name|
+  [name, digest_tree(File.join(ROOT, "gems", name))]
+end
+
+artifacts = baseline.fetch("artifacts").map do |artifact|
+  path = File.join(ROOT, artifact.fetch("path"))
+  actual = File.binread(path)
+  artifact.merge("sha256" => Digest::SHA256.hexdigest(actual), "bytes" => actual.bytesize)
+end
+
+receipt = {
+  "schema_version" => baseline.fetch("schema_version"),
+  "source" => {
+    "git_revision" => Open3.capture2("git", "-C", ROOT, "rev-parse", "HEAD").first.strip,
+    "gem_digests" => gem_digests,
+    "lockfile_digest" => Digest::SHA256.file(File.join(ROOT, "Gemfile.lock")).hexdigest
+  },
+  "artifacts" => artifacts,
+  "cases" => cases,
+  "public_api" => public_api_document,
+  "load_graph" => load_graph,
+  "intentional_changes" => [
+    {"surface" => "tamoz-eval scorecard/treatment", "before" => "base CLI dispatched harness commands", "after" => "base CLI returns usage 64; runner CLI owns commands", "reason" => "verifier-only base package"},
+    {"surface" => "scheduler scorecard consumer", "before" => "Tamoz::Scheduler::ScorecardSummaryConsumer", "after" => "Tamoz::Evals::Runner::ScorecardSummaryConsumer", "reason" => "scheduler remains generic"},
+    {"surface" => "runner inputs", "before" => "repository-relative and package-local harness inputs", "after" => "digest-pinned caller-owned manifest and adapter", "reason" => "no fixture source or data in either package"}
+  ],
+  "manifest_failure_cases" => manifest_failure_cases
+}
+
+File.write(OUTPUT_PATH, JSON.pretty_generate(receipt) + "\n")
+puts "wrote #{OUTPUT_PATH}"

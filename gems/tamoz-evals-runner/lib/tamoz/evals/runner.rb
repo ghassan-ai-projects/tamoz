@@ -1,0 +1,55 @@
+# frozen_string_literal: true
+
+require "tamoz/evals"
+require "tamoz/core"
+require_relative "runner/input_adapters"
+require_relative "runner/input_manifest"
+require_relative "harness/external_inputs"
+require_relative "runner/scorecard_summary_consumer"
+require_relative "runner/scorecard_result"
+require_relative "harness/sqlite_scenario_registry"
+require_relative "harness/sqlite_scenario_fault_gate"
+require_relative "harness/sqlite_scenario_runtime"
+require_relative "harness/sqlite_scenario_driver"
+require_relative "harness/sqlite_convergence_probe"
+require_relative "harness/sqlite_trace_recorder"
+require_relative "harness/sqlite_trace_selector_deriver"
+require_relative "harness/sqlite_trace_manifest_verifier"
+require_relative "harness/subprocess_runner"
+require_relative "harness/sqlite_selector_control"
+require_relative "harness/sqlite_selector_control_stopper"
+require_relative "harness/sqlite_selector_control_intervention"
+require_relative "harness/agent_run_audit"
+require_relative "harness/agent_smoke_scorecard"
+require_relative "harness/memory_store"
+require_relative "harness/memory_retrieval"
+require_relative "harness/memory_envelope"
+require_relative "harness/memory_holdout"
+require_relative "harness/memory_cell"
+require_relative "harness/memory_treatment_profile"
+require_relative "harness/memory_repository_adapter"
+require_relative "harness/heuristic_corpus"
+require_relative "harness/heuristic_paired_evaluation"
+require_relative "benchmark/metrics"
+require_relative "benchmark/baselines"
+require_relative "benchmark/comparison"
+require_relative "benchmark/report"
+require_relative "benchmark/readiness"
+require_relative "benchmark/scoreboard"
+require_relative "benchmark/environment_loader"
+require_relative "benchmark/openclaw_durable_cli_adapter"
+require_relative "benchmark/openclaw_mission_runner"
+require_relative "benchmark/cell_extractor"
+require_relative "benchmark/comparison_executor"
+require_relative "benchmark/openclaw_publisher"
+require_relative "benchmark/leak_scan"
+require_relative "benchmark/openclaw_comms_oracles"
+require_relative "runner/cli"
+
+module Tamoz
+  module Evals
+    module Runner
+      PACKAGE_ROOT = Pathname.new(File.expand_path("../../..", __dir__)).freeze
+    end
+  end
+end

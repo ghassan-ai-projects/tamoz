@@ -466,13 +466,15 @@ class SQLiteRawOracleTest < Minitest::Test
   end
 
   def scenario_registry
-    @scenario_registry ||= registry_class.build
+    @scenario_registry ||= SQLiteHarnessInputs.registry
   end
 
   def driver
     @driver ||= driver_class.new(
       scenario_registry:,
-      boundary_registry:
+      boundary_registry:,
+      definition: SQLiteHarnessInputs.driver_definition,
+      runtime_inputs: SQLiteHarnessInputs.runtime_inputs
     )
   end
 
@@ -622,15 +624,18 @@ class SQLiteRawOracleTest < Minitest::Test
   )
     descriptor = layout.descriptor
     script = <<~RUBY
-      require "tamoz/evals"
+      require "tamoz/evals/runner"
       require "tamoz/sqlite"
+      require "support/sqlite_harness_inputs"
       harness = Tamoz::Evals::Harness
       control = harness.const_get(:SQLiteSelectorControl, false)
       registry = Tamoz::SQLite.const_get(:BoundaryRegistry, false)
-      scenarios = harness.const_get(:SQLiteScenarioRegistry, false).build
+      scenarios = SQLiteHarnessInputs.registry
       driver = harness.const_get(:SQLiteScenarioDriver, false).new(
         scenario_registry: scenarios,
-        boundary_registry: registry
+        boundary_registry: registry,
+        definition: SQLiteHarnessInputs.driver_definition,
+        runtime_inputs: SQLiteHarnessInputs.runtime_inputs
       )
       layout = control.attach!(
         directory: #{descriptor.fetch("directory").inspect},

@@ -39,6 +39,20 @@ environment — the same failure exists at the pre-extraction baseline. Audits
 generated here therefore mark the objective unproven. Regenerate the audit
 where signal delivery to children is authorized before treating this as closed.
 
+### Tamoz is supervisory; certified safety and real-time control stay external (ADR-039)
+
+Tamoz is a supervisory cognition and orchestration system. It does not certify
+physical safety, replace a safety controller, or provide hard real-time motion
+control. Any deployment that can affect physical equipment must keep certified
+safety and real-time control in an independently authorized external system.
+
+### Versioned, allowlisted records (invariant 18)
+
+The release audit currently marks the version-refusal evidence as failing.
+Records must remain versioned and allowlisted; an unsupported record version is
+refused before its fields are interpreted. Regenerate the audit after the
+environment-bound resume evidence is repaired.
+
 ### Durable barrier timing remains partial (ADR-015)
 
 Tamoz commits durable graph barriers synchronously, but the release evidence does
@@ -53,6 +67,12 @@ The checkpoint store is designed around one fenced writer per thread namespace,
 but the current release audit still reports a failing takeover test. Treat a
 failed single-writer evidence gate as a release blocker until the expired-owner
 and concurrent-owner cases are green together.
+
+### MIGRATION_15 evidence remains partial (migration 15)
+
+The migration is present, but the release audit currently marks its named
+tamper/recovery evidence as failing. Do not treat the migration as release
+evidence until the verified-store case is green in an authorized environment.
 
 ### Cron and civil-time scheduling (invariant 39)
 
@@ -113,6 +133,12 @@ The evaluation contract keeps unauthorized effects, duplicate effects, unknown
 effect retries, and headless approvals at zero. The current committed evaluation
 evidence does not satisfy every release gate, so a passing feature test is not a
 release claim.
+
+### Memory evaluation evidence remains injection-correctness-only (phase DR-3)
+
+The memory treatment harness proves injected-input behavior and deliberately
+does not establish model attribution. The current release audit marks its named
+phase evidence as failing, so no attribution or release-green claim follows.
 
 ### Coding behavior scorecard remains incomplete (phase P3)
 

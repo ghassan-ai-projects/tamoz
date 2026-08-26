@@ -3,14 +3,13 @@
 
 require "fileutils"
 
-$LOAD_PATH.unshift(*Dir[File.expand_path("../gems/*/lib", __dir__)])
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-core/lib", __dir__))
+$LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
 require "tamoz/evals"
 
-root = ENV.fetch(
-  "TAMOZ_FIXTURE_ROOT",
-  File.expand_path("../gems/tamoz-evals", __dir__)
-)
+root = ENV.fetch("TAMOZ_FIXTURE_ROOT", File.expand_path("../gems/tamoz-evals", __dir__))
 case_root = File.join(root, "suites", "agent", "memory")
+source_root = File.expand_path("../gems/tamoz-evals/suites/agent/memory", __dir__)
 FileUtils.mkdir_p(case_root)
 
 def write_case(path, document)
@@ -96,12 +95,7 @@ def case_document(index, definition)
   }
 end
 
-Tamoz::Evals::Harness::AgentMemoryCorpus::CASE_DEFINITIONS.each_with_index do |definition, offset|
-  index = offset + 1
-  filename = format(
-    "%02d_%s.case.json",
-    index,
-    definition.fetch("case_id").delete_prefix("agent.").tr("-", "_")
-  )
-  write_case(File.join(case_root, filename), case_document(index, definition))
+unless File.expand_path(case_root) == File.expand_path(source_root)
+  FileUtils.rm_f(Dir[File.join(case_root, "*.case.json")])
+  FileUtils.cp(Dir[File.join(source_root, "*.case.json")], case_root)
 end

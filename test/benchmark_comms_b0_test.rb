@@ -11,6 +11,7 @@ require 'digest'
 # byte-identical scores. No provider, no real transport, no claim.
 class BenchmarkCommsB0Test < Minitest::Test
   Runner = Tamoz::Evals::Benchmark::OpenclawCommsRunner
+  Adapter = Tamoz::Evals::Benchmark::OpenclawCommsAdapter
   IndexPath = Pathname.new(ROOT).join('docs/openclaw-chat-study/benchmark-protocol/scenarios/SCENARIO_INDEX.json')
 
   def with_runner(**options)
@@ -18,9 +19,18 @@ class BenchmarkCommsB0Test < Minitest::Test
       runner = Runner.new(
         artifact_base: directory, artifact_root: 'fixtures/scenarios',
         git_revision: 'test-revision', command: 'test',
-        scenario_index_path: IndexPath, **options
+        scenario_index_path: IndexPath, external_adapter: Adapter.new, **options
       )
       yield runner, directory
+    end
+  end
+
+  def test_runner_requires_an_explicit_external_adapter
+    assert_raises(ArgumentError) do
+      Runner.new(
+        artifact_base: Dir.tmpdir, artifact_root: 'fixtures/scenarios',
+        git_revision: 'test-revision', command: 'test', scenario_index_path: IndexPath
+      )
     end
   end
 

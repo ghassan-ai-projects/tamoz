@@ -428,7 +428,7 @@
       "status": "unverified",
       "named_test": "test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals",
       "supporting_tests": [
-        "test/dependency_isolation_test.rb#test_evals_is_a_runtime_coupled_release_harness"
+        "test/dependency_isolation_test.rb#test_evals_loads_the_verifier_boundary_only"
       ],
       "classification": "direct",
       "rationale": null,
@@ -3256,6 +3256,34 @@
       "package": "tamoz-evals"
     },
     {
+      "id": "API-tamoz-evals-runner-Tamoz::Evals::Runner::InputManifest",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Evals::Runner::InputManifest",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-evals-runner"
+    },
+    {
+      "id": "API-tamoz-evals-runner-Tamoz::Evals::Runner::ScorecardSummaryConsumer",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Evals::Runner::ScorecardSummaryConsumer",
+      "release_blocking": true,
+      "status": "unverified",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-evals-runner"
+    },
+    {
       "id": "API-tamoz-graph-Tamoz.graph",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -4716,20 +4744,6 @@
       "category": "public_api",
       "source": "docs/public-api.json",
       "title": "Tamoz::Scheduler::SchedulerError",
-      "release_blocking": true,
-      "status": "unverified",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-scheduler"
-    },
-    {
-      "id": "API-tamoz-scheduler-Tamoz::Scheduler::ScorecardSummaryConsumer",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Scheduler::ScorecardSummaryConsumer",
       "release_blocking": true,
       "status": "unverified",
       "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",

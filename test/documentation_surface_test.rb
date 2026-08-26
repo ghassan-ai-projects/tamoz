@@ -115,6 +115,8 @@ class DocumentationSurfaceTest < Minitest::Test
   # Each measured gap has a human name on the page; the mapping is explicit
   # so a renamed requirement cannot silently drop its disclosure.
   GAP_DISCLOSURES = {
+    'ADR-039' => 'Tamoz is supervisory; certified safety and real-time control stay external (ADR-039)',
+    'INV-18' => 'Versioned, allowlisted records (invariant 18)',
     'INV-19' => 'Atomic compare-and-append commit evidence is environment-bound (invariant 19)',
     'ADR-015' => 'Durable barrier timing remains partial (ADR-015)',
     'INV-20' => 'Single-writer recovery evidence remains partial (invariant 20)',
@@ -136,6 +138,10 @@ class DocumentationSurfaceTest < Minitest::Test
     'OBJ-3' => 'Evaluation hard gates are not currently release-green (objective 3)',
     'OBJ-4' => 'Durable-effect ambiguity evidence is environment-bound (objective 4)',
     'PHASE-P3' => 'Coding behavior scorecard remains incomplete (phase P3)',
+    'PHASE-DR-3' => 'Memory evaluation evidence remains injection-correctness-only (phase DR-3)',
+    'PHASE-P14' => 'The P14 streaming-input engine is retired',
+    'MIG-15' => 'MIGRATION_15 evidence remains partial (migration 15)',
+    'NG-real-actuator' => 'Real physical actuation',
     'OBJ-7' => '## Release readiness'
   }.freeze
 

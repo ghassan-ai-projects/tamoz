@@ -57,12 +57,13 @@ flagged that way because the tool-error taxonomy moved to `tamoz-core`.
 | `tamoz-approval` | The approval/permission policy owner: immutable `Request`/`Decision`/`Grant`/`GrantOffer` values, the error taxonomy, `Answer.parse`, `PolicyDocument`, the `Engine` with its `GrantStore`/`DecisionLog` ports and memory implementations, and `bundled_policy_path` for the shipped policy data |
 | `tamoz-mcp` | The governed MCP client/host: `Catalog`, `Entry`, `ServerConfig`, `Supervisor`, `Invocation`, `Elicitation`, and the MCP error taxonomy |
 | `tamoz-mcp-websearch` | The governed operator-side websearch boundary: `EgressPolicy`, `EgressClient`, `EgressCircuit`, `Result`, `VERSION`, and typed egress/redirect/validation errors |
-| `tamoz-evals` | The evaluation harness surface: `Tamoz::Evals.verify`, `Case.load`, `Evidence.load`, `Result.load` — a development/release gem no production gemspec may depend on |
+| `tamoz-evals` | The evidence verifier surface: `Tamoz::Evals.verify`, `Case.load`, `Evidence.load`, `Result.load` — a development/release gem no production gemspec may depend on |
+| `tamoz-evals-runner` | The evaluation runtime surface: `Tamoz::Evals::Runner::InputManifest` and `ScorecardSummaryConsumer`; scorecards, treatments and benchmarks require explicit external inputs |
 
 The packages form a dependency ladder — `tamoz-core` at the base, the value
 gems above it, `tamoz-agent` and `tamoz-mcp` as the topmost consumers, and
-`tamoz-evals` as a development/release companion that depends on the runtime
-gems it exercises but that no production gem depends on. See
+`tamoz-evals` and `tamoz-evals-runner` as development/release companions that
+no production gem depends on. See
 [`../architecture/gems.md`](../architecture/gems.md) for the dependency
 structure.
 

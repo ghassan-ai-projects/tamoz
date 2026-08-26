@@ -5,7 +5,8 @@
 This branch implements the accepted extraction sequence from the 2026-08-25
 audit, one gem at a time. The first slice is `tamoz-mcp-websearch`; the next
 slice is `tamoz-evals-runner`. Each slice is independently reviewed and
-committed before the next slice starts.
+committed before the next slice starts. The next planned candidate after that
+is `tamoz-comms-gateway`.
 
 ## Phase bar: `tamoz-mcp-websearch`
 
@@ -30,6 +31,9 @@ The phase is complete only when every item below is true:
       invocation, and operator adapter behavior.
 - [x] New isolation/packaging assertions prove the parent/new-gem boundary in a
       clean subprocess or installed package, not only in the monorepo bundle.
+- [x] The new `tamoz-mcp-websearch` gem contains no test fixture, deterministic
+      MCP server, provider fixture, or fixture-only dependency. Existing MCP
+      tests may inject the repository fixture from outside the package.
 - [x] The focused test suite, targeted RuboCop, Enola architecture check, and
       relevant documentation/dependency gates are green, with pre-existing
       unrelated failures listed separately rather than hidden. Reek exits

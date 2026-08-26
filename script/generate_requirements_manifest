@@ -536,7 +536,7 @@ EVIDENCE = {
   "ADR-023" => {test: "test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself"},
   "ADR-024" => {test: "test/agent_scorecard_test.rb#test_auditor_rejects_missing_review_missing_approval_and_false_completion"},
   "ADR-025" => {test: "test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals",
-                supporting: ["test/dependency_isolation_test.rb#test_evals_is_a_runtime_coupled_release_harness"]},
+                supporting: ["test/dependency_isolation_test.rb#test_evals_loads_the_verifier_boundary_only"]},
   "ADR-026" => {test: "test/memory_engine_test.rb#test_lifecycle_transitions_and_eligible_state_set_are_exact"},
   "ADR-027" => {test: "test/memory_engine_test.rb#test_consolidation_preserves_preimage_and_failure_keeps_prior_knowledge",
                 supporting: ["test/memory_store_test.rb#test_search_authorizes_in_sql_before_any_materialization_or_decryption"]},

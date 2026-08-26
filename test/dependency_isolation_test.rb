@@ -126,20 +126,17 @@ class DependencyIsolationTest < Minitest::Test
     )
   end
 
-  # GB-02/EU-004: tamoz-evals is a development/release harness whose verifier and
-  # scorecard subtree reference Tamoz::Agent/SQLite/Mcp/Graph/Scheduler directly.
-  # It is deliberately runtime-coupled — NOT stdlib-only. The architectural rule
-  # is the INVERSE edge: no production gem depends on evals
-  # (test_no_production_gemspec_depends_on_evals). Here we pin that the coupling
-  # is real and declared, so an accidental future decoupling is visible.
-  def test_evals_is_a_runtime_coupled_release_harness
+  # GB-02/EU-004: tamoz-evals is the verifier and artifact package. The
+  # scorecard subtree now lives in tamoz-evals-runner.
+  # The architectural rule remains one-way: production gems do not depend on
+  # either evaluation package.
+  def test_evals_loads_the_verifier_boundary_only
     features = loaded_features_after("tamoz/evals")
 
     assert_includes features, "tamoz/evals.rb"
-    %w[tamoz/core.rb tamoz/agent.rb tamoz/sqlite.rb tamoz/mcp.rb].each do |declared|
-      assert_includes features, declared,
-                      "tamoz/evals must load its declared runtime harness dependency #{declared}"
-    end
+    assert_includes features, "tamoz/core.rb"
+    refute features.any? { |path| path.match?(%r{tamoz/(?:agent|sqlite|mcp|graph|scheduler|comms|evals/runner)}) },
+           features.inspect
   end
 
   def test_mcp_loads_only_core_and_the_official_sdk
@@ -274,7 +271,7 @@ class DependencyIsolationTest < Minitest::Test
   end
 
   def test_no_production_gemspec_depends_on_evals
-    production = GEM_ROOTS.except("tamoz-evals")
+    production = GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner")
 
     production.each do |name, root|
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)
@@ -285,13 +282,12 @@ class DependencyIsolationTest < Minitest::Test
   # Audit F2: the injected-port boundary at the PACKAGE level too — no
   # production gemspec may depend on tamoz-agent except tamoz-agent's own
   # dependents (agent, tools). The tamoz-stream gemspec must stay
-  # core/grpc/protobuf only. tamoz-evals is excluded because it is a
-  # development/release harness, not a production gem (GB-02) — it exercises
-  # every public boundary, including agent, and nothing depends on it in turn.
+  # core/grpc/protobuf only. Evaluation packages are excluded because they are
+  # development/release companions, not production gems.
   def test_no_production_gemspec_depends_on_agent_except_agents_own_dependents
     allowed = %w[tamoz-agent tamoz-tools tamoz-agent-cli]
 
-    GEM_ROOTS.except("tamoz-evals").each do |name, root|
+    GEM_ROOTS.except("tamoz-evals", "tamoz-evals-runner").each do |name, root|
       next if allowed.include?(name)
 
       spec = Gem::Specification.load(root.join("#{name}.gemspec").to_s)

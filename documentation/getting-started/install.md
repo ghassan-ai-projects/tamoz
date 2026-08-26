@@ -44,7 +44,7 @@ rbenv exec bundle exec rake ci
 file, and the whole test suite. It must be green before you trust anything else
 on this page.
 
-## The twenty-five gems
+## The twenty-six gems
 
 Tamoz is a monorepo of independently publishable gems. Each one installs and
 runs with only its declared dependencies — proven per gem by
@@ -77,11 +77,13 @@ named example task in a clean subprocess.
 | `tamoz-agent-improvement` | Bounded self-improvement: candidate provenance, heuristic generator, paired evaluation reports, human-gated lifecycle, promotion/rollback | `tamoz-agent-kernel`, `tamoz-agent-memory` |
 | `tamoz-agent-cli` | The `tamoz` executable: worker/schedule/profile/session/comms command groups over the runtime | `tamoz-agent` |
 | `tamoz-agent` | The deliberative agent runtime (library) | `tamoz-agent-session`, `tamoz-agent-improvement`, `tamoz-agent-healing`, `tamoz-agent-profile`, `tamoz-agent-capabilities`, `tamoz-agent-kernel`, `tamoz-cancellation`, `tamoz-concurrency`, `tamoz-tools`, `tamoz-graph`, `tamoz-sqlite`, `tamoz-comms`, `tamoz-approval`, `tamoz-observability`, RubyLLM |
-| `tamoz-evals` | Conformance, artifact verification, release evidence | core, agent, sqlite, mcp, mcp-websearch, graph, scheduler (development/release only) |
+| `tamoz-evals` | Artifact schemas, canonical digests, verification and release evidence | `tamoz-core` (development/release only) |
+| `tamoz-evals-runner` | Evaluation harnesses, scorecards, treatments and benchmarks with explicit external inputs | `tamoz-evals`, selected runtime gems |
 
-`tamoz-evals` is a development/release gem: it depends on the runtime gems it
-exercises, but no production gemspec may depend on it, and
-`test/dependency_isolation_test.rb` enforces that inverse edge.
+`tamoz-evals` is the verifier-only development/release gem. The
+`tamoz-evals-runner` gem owns scorecards, treatments, and benchmarks and accepts
+explicit external input manifests; no production gemspec may depend on either
+evaluation gem.
 
 ## Running the agent
 
@@ -403,7 +405,7 @@ reference.
 ## Verifying a release candidate
 
 ```bash
-rbenv exec ruby script/release_rehearsal
+rbenv exec ruby script/release_rehearsal --input-manifest /absolute/path/to/runner-input.json
 ```
 
 This clones the current commit into a temporary directory, provisions the

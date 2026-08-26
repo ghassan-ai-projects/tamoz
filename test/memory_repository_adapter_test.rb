@@ -34,9 +34,12 @@ class MemoryRepositoryAdapterTest < Minitest::Test
 
   def self.shared_report
     @shared_report ||= begin
-      corpus = CORPUS.new
+      corpus = RunnerInputs.repository_corpus
       factory = lambda do |cell_root, fixtures|
-        ADAPTER.seed(File.join(cell_root, "store", "memory.sqlite3"), fixtures)
+        ADAPTER.seed(
+          File.join(cell_root, "store", "memory.sqlite3"), fixtures,
+          config: RunnerInputs.memory_repository_config
+        )
       end
       PROFILE.new(corpus:, store_factory: factory).run
     end
@@ -46,7 +49,10 @@ class MemoryRepositoryAdapterTest < Minitest::Test
 
   def with_store(fixtures)
     Dir.mktmpdir("tamoz-real-adapter") do |directory|
-      store = ADAPTER.seed(File.join(directory, "store", "memory.sqlite3"), fixtures)
+      store = ADAPTER.seed(
+        File.join(directory, "store", "memory.sqlite3"), fixtures,
+        config: RunnerInputs.memory_repository_config
+      )
       begin
         yield store
       ensure
@@ -224,9 +230,12 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   def test_ci_profile_digest_is_reproducible_on_the_real_adapter
     # E5 over the real surface: two CI runs are digest-identical on the
     # non-exempt surface (per-cell real-store digests included).
-    corpus = CORPUS.new
+    corpus = RunnerInputs.repository_corpus
     factory = lambda do |cell_root, fixtures|
-      ADAPTER.seed(File.join(cell_root, "store", "memory.sqlite3"), fixtures)
+      ADAPTER.seed(
+        File.join(cell_root, "store", "memory.sqlite3"), fixtures,
+        config: RunnerInputs.memory_repository_config
+      )
     end
     first = PROFILE.new(corpus:, store_factory: factory).run
     second = PROFILE.new(corpus:, store_factory: factory).run
@@ -242,7 +251,7 @@ class MemoryRepositoryAdapterTest < Minitest::Test
   def test_expected_delta_is_mandatory_for_the_real_corpus
     # E8: the real corpus shares the memory suite id, so a case without
     # treatments.expected_delta is rejected by the Verifier.
-    path = CORPUS.new.cases.first.path
+    path = RunnerInputs.repository_corpus.cases.first.path
     Dir.mktmpdir("tamoz-real-delta") do |directory|
       document = read_json(path)
       document.delete("treatments")

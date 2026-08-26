@@ -17,13 +17,13 @@ root is the entry point; this folder contains the detailed reference material.
 - [overview/product.md](overview/product.md): what Tamoz is, what it is not, and who it is for
 - [overview/concepts.md](overview/concepts.md): the core mental model — a graph run, a checkpoint, a review
 - [getting-started/quickstart.md](getting-started/quickstart.md): install, ask, and try an approved change
-- [getting-started/install.md](getting-started/install.md): requirements, the 25 gems, and the full install surface
+- [getting-started/install.md](getting-started/install.md): requirements, the 26 gems, and the full install surface
 - [getting-started/sessions.md](getting-started/sessions.md): durable multi-turn sessions and crash recovery
 
 ## Architecture
 
 - [architecture/overview.md](architecture/overview.md): the layered stack and runtime model
-- [architecture/gems.md](architecture/gems.md): the 25-gem map and dependency rules
+- [architecture/gems.md](architecture/gems.md): the 26-gem map and dependency rules
 - [architecture/data-model.md](architecture/data-model.md): checkpoints, inbox, effect journal, leases, migrations
 - [architecture/security-model.md](architecture/security-model.md): authority intersection, sealing, secrets, no shell
 - [architecture/invariants.md](architecture/invariants.md): the 61-clause executable contract, by theme

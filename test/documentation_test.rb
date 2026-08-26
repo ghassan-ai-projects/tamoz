@@ -11,7 +11,7 @@ class DocumentationTest < Minitest::Test
       text.scan(MARKDOWN_LINK).flatten.each do |target|
         next if target.start_with?("http://", "https://", "#", "mailto:")
 
-        relative = target.split("#", 2).first
+        relative = target.split("#", 2).first.sub(/:\d+(?:-\d+)?\z/, "")
         next if relative.nil? || relative.empty?
 
         assert path.dirname.join(relative).exist?, "#{path}: broken local link #{target}"

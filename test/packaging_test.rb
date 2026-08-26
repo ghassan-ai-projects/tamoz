@@ -53,6 +53,22 @@ class PackagingTest < Minitest::Test
             refute contents.any? { |path| path.start_with?("lib/tamoz/mcp/websearch") }, name
           end
 
+          if name == "tamoz-evals-runner"
+            forbidden_paths = contents.grep(%r{(?:^|/)(?:fixtures?|spec|test)/|openclaw_comms_fixture|mcp_test_server})
+            assert_empty forbidden_paths, "#{name} packaged fixture paths: #{forbidden_paths.inspect}"
+
+            forbidden_source = %w[
+              OpenclawCommsFixture
+              TamozInputFileModel
+              CASE_DEFINITIONS
+              RESTART_FIXTURE_CONTENT
+              mcp_test_server
+            ].select do |term|
+              contents.grep(%r{\Alib/}).any? { |path| root.join(path).binread.include?(term) }
+            end
+            assert_empty forbidden_source, "#{name} packaged fixture source: #{forbidden_source.inspect}"
+          end
+
           next unless name == "tamoz-evals"
 
           assert_equal 12, contents.grep(%r{\Asuites/m0/golden/.+\.case\.json\z}).length
@@ -76,15 +92,10 @@ class PackagingTest < Minitest::Test
     end
   end
 
-  # tamoz-evals's harness subtree references Tamoz::Agent::*, Tamoz::SQLite::*,
-  # and Tamoz::Mcp::* directly, so its gemspec declares those as real
-  # dependencies (alongside tamoz-core). None of the four are published, so
-  # they're built and installed locally with `--ignore-dependencies` — the
-  # same pattern as `with_isolated_install`/the scorecard test below — rather
-  # than asking `gem install` to resolve them from a registry.
+  # The base verifier is intentionally installable without the runner or any
+  # product runtime package. Its package test is the proof of that closure.
   def test_packaged_evals_executable_runs_without_repository_load_paths
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools
-               tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-core tamoz-evals]
     with_isolated_install(names, "evals") do |environment|
       install_root = environment.fetch("GEM_HOME")
       spec = Gem::Specification.load(GEM_ROOTS.fetch("tamoz-evals").join("tamoz-evals.gemspec").to_s)
@@ -99,6 +110,16 @@ class PackagingTest < Minitest::Test
       )
       assert status.success?, stderr
       assert_equal "#{Tamoz::Evals::VERSION}\n", stdout
+      assert_empty stderr
+
+      stdout, stderr, status = Open3.capture3(
+        clean_environment,
+        RbConfig.ruby,
+        "-e",
+        'require "tamoz/evals"; abort "runner loaded" if defined?(Tamoz::Evals::Runner)'
+      )
+      assert status.success?, stderr
+      assert_empty stdout
       assert_empty stderr
 
       installed_root = File.join(install_root, "gems", spec.full_name)
@@ -129,14 +150,11 @@ class PackagingTest < Minitest::Test
     end
   end
 
-  # P10 slice 4: the governed-MCP gem joins the packaged scorecard, because case
-  # 16 (`agent.mcp-governed-call`) drives the real MCP test server through
-  # tamoz-mcp and the session. P16: tamoz-tools joins the packaged scorecard
-  # because the agent gem now depends on it for the Toolbox and Skills surface.
-  # P13: tamoz-scheduler joins because tamoz-sqlite implements the durable
-  # ScheduleStore over the scheduler gem's contract.
+  # The installed runner receives every scripted input from an external adapter
+  # and every case from an external index. No repository load path or package
+  # fixture is available to this subprocess.
   def test_packaged_agent_scorecard_runs_with_only_installed_tamoz_gems
-    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-comms tamoz-telegram tamoz-observability]
+    names = %w[tamoz-cancellation tamoz-concurrency tamoz-core tamoz-graph tamoz-sqlite tamoz-approval tamoz-scheduler tamoz-stream tamoz-tools tamoz-agent-kernel tamoz-agent-memory tamoz-agent-healing tamoz-agent-profile tamoz-agent-capabilities tamoz-agent-session tamoz-agent-improvement tamoz-agent-cli tamoz-agent tamoz-mcp tamoz-mcp-websearch tamoz-evals tamoz-evals-runner tamoz-comms tamoz-observability]
 
     Dir.mktmpdir("tamoz-installed-scorecard") do |directory|
       install_root = File.join(directory, "install")
@@ -150,6 +168,7 @@ class PackagingTest < Minitest::Test
       packages.concat(external_dependency_packages(names))
       fixture_script = File.join(directory, "mcp_test_server.rb")
       FileUtils.cp(ROOT.join("script", "mcp_test_server"), fixture_script)
+      manifest = build_runner_manifest(directory, fixture_script)
       clean_environment = ENV.each_key
                              .grep(/\A(?:BUNDLE|BUNDLER)/)
                              .to_h { |key| [key, nil] }
@@ -157,12 +176,7 @@ class PackagingTest < Minitest::Test
                                "GEM_HOME" => install_root,
                                "GEM_PATH" => install_root,
                                "RUBYLIB" => nil,
-                               "RUBYOPT" => nil,
-                               # Case `agent.mcp-governed-call` drives the SDK
-                               # against this copied test fixture. The subprocess
-                               # still loads production code only from GEM_HOME.
-                               "TAMOZ_MCP_SERVER_SCRIPT" =>
-                                 fixture_script
+                               "RUBYOPT" => nil
                              )
       packages.each do |package|
         _stdout, stderr, status = Open3.capture3(
@@ -180,13 +194,12 @@ class PackagingTest < Minitest::Test
         assert status.success?, stderr
       end
 
-      executable = File.join(install_root, "bin", "tamoz-eval")
+      executable = File.join(install_root, "bin", "tamoz-eval-runner")
       stdout, stderr, status = Open3.capture3(
         clean_environment,
         RbConfig.ruby,
         executable,
-        "scorecard",
-        "agent-smoke"
+        "scorecard", "agent-smoke", "--input-manifest", manifest
       )
       assert status.success?, stderr
       report = JSON.parse(stdout)
@@ -702,6 +715,203 @@ class PackagingTest < Minitest::Test
   end
 
   private
+
+  def build_runner_manifest(directory, fixture_script)
+    external_root = File.join(directory, "external-inputs")
+    cases_root = File.join(external_root, "cases")
+    FileUtils.mkdir_p(cases_root)
+    external_fixture_script = File.join(external_root, "mcp_test_server.rb")
+    FileUtils.cp(fixture_script, external_fixture_script)
+    cases = Dir[ROOT.join("gems", "tamoz-evals", "suites", "agent", "smoke", "*.case.json").to_s].sort.map do |source|
+      target = File.join(cases_root, File.basename(source))
+      FileUtils.cp(source, target)
+      target
+    end
+    cases_document = File.join(external_root, "agent-smoke.json")
+    File.write(cases_document, JSON.generate("cases" => cases))
+
+    corpus_source = File.join(external_root, "agent_smoke_corpus.rb")
+    FileUtils.cp(ROOT.join("test", "support", "agent_smoke_corpus.rb"), corpus_source)
+
+    empty_document = File.join(external_root, "empty.json")
+    File.write(empty_document, "{}")
+    adapter_path = File.join(external_root, "scripted-input-adapter.rb")
+    File.write(adapter_path, packaged_runner_adapter(external_fixture_script, corpus_source))
+
+    descriptor = lambda do |path|
+      {"path" => path, "sha256" => Digest::SHA256.file(path).hexdigest}
+    end
+    empty = descriptor.call(empty_document)
+    cases_descriptor = descriptor.call(cases_document)
+    adapter = descriptor.call(adapter_path)
+    server = descriptor.call(external_fixture_script)
+    manifest = {
+      "manifest_version" => Tamoz::Evals::Runner::InputManifest::VERSION,
+      "external_root" => external_root,
+      "corpus_definitions" => {
+        "agent_smoke" => cases_descriptor,
+        "agent_memory" => empty,
+        "agent_memory_repository" => empty
+      },
+      "scripted_model" => {"adapter" => adapter, "responses" => empty},
+      "mcp_server" => {"path" => server.fetch("path"), "sha256" => server.fetch("sha256"), "args" => []},
+      "openclaw" => {
+        "fixture_factory_loader" => empty,
+        "protocol" => empty,
+        "catalog" => empty,
+        "mission" => empty
+      },
+      "scenarios" => {
+        "scenario_definitions" => empty,
+        "sqlite_graph" => empty,
+        "limits" => empty,
+        "registry" => empty
+      }
+    }
+    path = File.join(external_root, "manifest.json")
+    File.write(path, JSON.generate(manifest))
+    path
+  end
+
+  def packaged_runner_adapter(fixture_script, corpus_source)
+    <<~RUBY
+      # frozen_string_literal: true
+
+      require "digest"
+      require "json"
+      require #{corpus_source.inspect}
+
+      module Tamoz
+        module Evals
+          module Runner
+            module InputAdapters
+              class PackageScriptedModel
+                attr_reader :calls
+
+                def initialize(plan:, review:, verify:)
+                  @responses = {"plan" => plan.dup, "review" => review.dup, "verify" => verify.dup}
+                  @calls = []
+                end
+
+                def generate(stage:, system:, prompt:)
+                  response = @responses.fetch(stage.to_s).shift
+                  raise "external scripted model queue exhausted" unless response
+
+                  @calls << {
+                    "stage" => stage.to_s,
+                    "input_bytes" => system.bytesize + prompt.bytesize,
+                    "output_bytes" => response.is_a?(String) ? response.bytesize : Tamoz::Evals::CanonicalJSON.dump(response).bytesize
+                  }
+                  response
+                end
+              end
+
+              def self.step(id, tool, arguments)
+                {
+                  "id" => id,
+                  "purpose" => "Perform the bounded \#{id} step.",
+                  "tool" => tool,
+                  "arguments" => arguments,
+                  "verification" => "Use the observed framework receipt."
+                }
+              end
+
+              def self.plan(*steps)
+                {
+                  "goal" => "Complete the requested task.",
+                  "done_when" => ["Controller-owned evidence satisfies the task oracle."],
+                  "steps" => steps
+                }
+              end
+
+              def self.read_step(path)
+                step("inspect", "read_file", "path" => path)
+              end
+
+              def self.action_plan(from:, to:)
+                plan(
+                  step(
+                    "patch-\#{from}-\#{to}", "apply_patch",
+                    "path" => "broken.rb",
+                    "before" => "def self.answer = \#{from}",
+                    "after" => "def self.answer = \#{to}",
+                    "expected_sha256" => Digest::SHA256.hexdigest("module Broken\\n  def self.answer = \#{from}\\nend\\n")
+                  ),
+                  step("check", "run_check", "name" => "answer")
+                )
+              end
+
+              def self.review
+                {"decision" => "accept", "issues" => [], "rationale" => "The plan is bounded and independently verifiable."}
+              end
+
+              def self.verified(answer, satisfied)
+                {"answer" => answer, "satisfied" => satisfied, "evidence" => ["controller-owned deterministic evidence"]}
+              end
+
+              def self.script_for(scenario:, root:)
+                responses = case scenario
+                            when "resume_after_kill"
+                              [
+                                {"stage" => "plan", "response" => plan(read_step("broken.rb"))},
+                                {"stage" => "review", "response" => review},
+                                {"stage" => "plan", "response" => action_plan(from: 40, to: 42)},
+                                {"stage" => "review", "response" => review},
+                                {"stage" => "verify", "response" => verified("Broken.answer is 42.", true)}
+                              ]
+                            when "profile_trusted_boundary"
+                              [
+                                {"stage" => "plan", "response" => plan(read_step("note.txt"))},
+                                {"stage" => "review", "response" => review},
+                                {"stage" => "verify", "response" => verified("Tamoz is awake.", true)}
+                              ]
+                            else
+                              raise "unknown external scripted model scenario \#{scenario}"
+                            end
+                path = File.join(root, "model_script.json")
+                File.write(path, JSON.generate("responses" => responses))
+                path
+              end
+
+              self.scripted_model_factory = lambda do |plans:, reviews:, verification:|
+                PackageScriptedModel.new(
+                  plan: plans,
+                  review: Array.new(reviews) { review },
+                  verify: [verification]
+                )
+              end
+              self.scorecard_factory = lambda do |input_manifest:|
+                Tamoz::Evals::Harness::AgentSmokeScorecard.new(
+                  corpus: Tamoz::Evals::Harness::AgentSmokeCorpus.new(input_manifest: input_manifest)
+                )
+              end
+              self.scripted_model_script_factory = method(:script_for)
+              self.scheduler_graph_factory = lambda do |adapter:|
+                Tamoz.graph(name: "scheduler", version: "1") do
+                  state :ready, default: true
+                  node(:finish, implementation_name: "scheduler.finish", version: "1") { |_s, _c| {ready: true} }
+                  edge Tamoz::START, :finish
+                  edge :finish, Tamoz::END
+                end.compile(checkpointer: adapter)
+              end
+              self.memory_records = #{RunnerInputs.memory_records.inspect}
+              self.memory_repository_config = #{RunnerInputs.memory_repository_config.inspect}
+              self.websearch_inputs = #{RunnerInputs.websearch_inputs.merge(server_script: fixture_script).inspect}
+              self.mcp_server_inputs = #{RunnerInputs.mcp_server_inputs.merge(server_script: fixture_script).inspect}
+              self.security_inputs = #{RunnerInputs.security_inputs.inspect}
+              self.skill_body = #{RunnerInputs.skill_body.inspect}
+              self.skill_impostor_body = #{RunnerInputs.skill_impostor_body.inspect}
+              self.scripted_model_child_source = #{RunnerInputs.scripted_model_child_source.inspect}
+              self.subprocess_lib_paths = Gem.loaded_specs.values.filter_map do |spec|
+                path = File.join(spec.full_gem_path, "lib")
+                path if File.directory?(path)
+              end
+            end
+          end
+        end
+      end
+    RUBY
+  end
 
   def with_hermetic_websearch_install(label, tamoz_names: %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch])
     external_names = %w[mcp json_schemer bigdecimal hana regexp_parser simpleidn zeitwerk]

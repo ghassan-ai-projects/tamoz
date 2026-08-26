@@ -19,6 +19,35 @@ class ScenarioDriverTest < Minitest::Test
 
     def prepare_changes!; end
 
+    def prepare_scenario!(scenario:, restart:)
+      return unless restart
+
+      path = File.join(workspace, scenario.fetch('setup').fetch('fixture').fetch('path'))
+      FileUtils.mkdir_p(File.dirname(path))
+      if File.file?(path) && !File.symlink?(path) &&
+         File.binread(path) == scenario.fetch('setup').fetch('fixture').fetch('content')
+        File.delete(path)
+      end
+      return unless File.exist?(path) || File.symlink?(path)
+
+      raise Tamoz::Evals::ExecutionError, 'restart_fixture_already_exists'
+    end
+
+    def prepare_step!(**); end
+
+    def post_contradiction_digest(**)
+      raise 'not used by the restart scenario'
+    end
+
+    def stale_value(**)
+      raise 'not used by the restart scenario'
+    end
+
+    def restart_task(scenario:, step:, goal:)
+      arguments = JSON.generate(scenario.fetch('setup').fetch('fixture'))
+      "#{goal}\n\n#{step.fetch('task')} Use these exact create_file arguments: #{arguments}."
+    end
+
     def result_for(**)
       { 'status' => 'ready' }
     end
@@ -58,8 +87,9 @@ class ScenarioDriverTest < Minitest::Test
 
     def worker_until_effect!(**)
       @worker_until_effect_calls += 1
-      path = File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
-      File.binwrite(path, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT)
+      path = File.join(workspace, ScenarioDriverInputs.restart_fixture_path)
+      FileUtils.mkdir_p(File.dirname(path))
+      File.binwrite(path, ScenarioDriverInputs.restart_fixture_content)
       'logical:create-file'
     end
 
@@ -99,6 +129,7 @@ class ScenarioDriverTest < Minitest::Test
   def test_false_success_is_unknown_when_terminal_evidence_is_insufficient
     result = Tamoz::Evals::Benchmark::ScenarioDriver.oracle(
       scenario_id: 'T3-m1m2',
+      scenario_definitions: ScenarioDriverInputs.definitions,
       evidence: { 'effect_receipts' => [], 'verification' => {} },
       post_contradiction_digest: 'f' * 64,
       stale_value: 'active',
@@ -115,6 +146,7 @@ class ScenarioDriverTest < Minitest::Test
       evidence = restart_evidence(restarted_receipts)
       result = Tamoz::Evals::Benchmark::ScenarioDriver.oracle(
         scenario_id: 'T3-m3m4',
+        scenario_definitions: ScenarioDriverInputs.definitions,
         evidence:,
         pre_kill_effect_key: 'logical:create-file',
         restarted: true
@@ -132,6 +164,7 @@ class ScenarioDriverTest < Minitest::Test
       evidence = restart_evidence(receipts + [receipts.fetch(1)])
       result = Tamoz::Evals::Benchmark::ScenarioDriver.oracle(
         scenario_id: 'T3-m3m4',
+        scenario_definitions: ScenarioDriverInputs.definitions,
         evidence:,
         pre_kill_effect_key: 'logical:create-file',
         restarted: true
@@ -153,7 +186,7 @@ class ScenarioDriverTest < Minitest::Test
 
       assert_equal(
         [%w[ready ready], 2, 2,
-         Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT],
+         ScenarioDriverInputs.restart_fixture_content],
         [statuses, adapter.worker_until_effect_calls,
          adapter.worker_subprocess_calls, File.binread(restart_fixture_path(workspace))]
       )
@@ -168,10 +201,10 @@ class ScenarioDriverTest < Minitest::Test
 
       task = adapter.enqueued_tasks.first
       arguments = JSON.generate(
-        'path' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH,
-        'content' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT,
-        'expected_sha256' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_DIGEST,
-        'mode' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_MODE
+        'path' => ScenarioDriverInputs.restart_fixture_path,
+        'content' => ScenarioDriverInputs.restart_fixture_content,
+        'expected_sha256' => ScenarioDriverInputs.restart_fixture_digest,
+        'mode' => ScenarioDriverInputs.restart_fixture_mode
       )
 
       assert_equal 1, task.scan(arguments).length
@@ -184,7 +217,9 @@ class ScenarioDriverTest < Minitest::Test
   end
 
   def test_compaction_restart_m4_task_describes_journaled_recovery
-    steps = Tamoz::Evals::Benchmark::ScenarioDriver.definition('T3-m3m4').fetch('steps')
+    steps = Tamoz::Evals::Benchmark::ScenarioDriver.definition(
+      'T3-m3m4', scenario_definitions: ScenarioDriverInputs.definitions
+    ).fetch('steps')
     task = steps.fetch(1).fetch('task')
 
     assert_includes task, 'durable checkpoint'
@@ -237,6 +272,7 @@ class ScenarioDriverTest < Minitest::Test
   def oracle(digest:, answer:, verification_refs:)
     Tamoz::Evals::Benchmark::ScenarioDriver.oracle(
       scenario_id: 'T3-m1m2',
+      scenario_definitions: ScenarioDriverInputs.definitions,
       evidence: {
         'effect_receipts' => [
           read_receipt('active'),
@@ -297,13 +333,15 @@ class ScenarioDriverTest < Minitest::Test
   end
 
   def restart_driver(adapter)
-    Tamoz::Evals::Benchmark::ScenarioDriver.new(adapter:, scenario: 'T3-m3m4')
+    Tamoz::Evals::Benchmark::ScenarioDriver.new(
+      adapter:, scenario: 'T3-m3m4', scenario_definitions: ScenarioDriverInputs.definitions
+    )
   end
 
   def restart_call_arguments
     {
       mission: {
-        'id' => Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_MISSION_ID,
+        'id' => ScenarioDriverInputs.restart_mission_id,
         'goal' => 'Complete the restart scenario.'
       },
       run_kind: 'real_provider',
@@ -313,7 +351,7 @@ class ScenarioDriverTest < Minitest::Test
   end
 
   def restart_fixture_path(workspace)
-    File.join(workspace, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_PATH)
+    File.join(workspace, ScenarioDriverInputs.restart_fixture_path)
   end
 
   def write_restart_fixture(workspace, content)
@@ -326,7 +364,7 @@ class ScenarioDriverTest < Minitest::Test
   def symlink_restart_fixture(workspace)
     path = restart_fixture_path(workspace)
     target = File.join(workspace, 'user-owned-restart-marker.json')
-    File.binwrite(target, Tamoz::Evals::Benchmark::ScenarioDriver::RESTART_FIXTURE_CONTENT)
+    File.binwrite(target, ScenarioDriverInputs.restart_fixture_content)
     FileUtils.mkdir_p(File.dirname(path))
     File.symlink(target, path)
     [path, target]

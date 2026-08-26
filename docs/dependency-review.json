@@ -17,6 +17,7 @@
     "tamoz-concurrency",
     "tamoz-core",
     "tamoz-evals",
+    "tamoz-evals-runner",
     "tamoz-graph",
     "tamoz-mcp",
     "tamoz-mcp-websearch",

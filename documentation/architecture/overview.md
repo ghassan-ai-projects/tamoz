@@ -79,7 +79,7 @@ flowchart TB
     style Shared fill:#0d3b66,color:#fff
 ```
 
-Direction of production dependency is one-way and bottom-up: `tamoz-core` → contract gems and `tamoz-graph` → `tamoz-sqlite` and the adapters → `tamoz-agent`. Nothing may depend on `tamoz-evals`; it is a development/release gem that depends on the runtime gems it exercises (core, agent, sqlite, mcp, mcp-websearch, graph, scheduler) and that no production gem may depend on.
+Direction of production dependency is one-way and bottom-up: `tamoz-core` → contract gems and `tamoz-graph` → `tamoz-sqlite` and the adapters → `tamoz-agent`. Nothing may depend on `tamoz-evals` or `tamoz-evals-runner`; they are development/release companions. `tamoz-evals` verifies artifacts, while `tamoz-evals-runner` executes evaluations only from caller-owned external inputs.
 
 ## The runtime model
 
@@ -134,7 +134,7 @@ The contracts stay separate because they have different failure semantics:
 
 ## Next reads
 
-- [gems.md](gems.md) — the 25-gem map and dependency chain
+- [gems.md](gems.md) — the 26-gem map and dependency chain
 - [data-model.md](data-model.md) — checkpoints, inbox, effects, leases in SQLite
 - [security-model.md](security-model.md) — the authority boundary
 - [../design/README.md](../design/README.md) — the design documents behind this stack

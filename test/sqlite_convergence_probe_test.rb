@@ -60,7 +60,7 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     assert_equal 1, probe_definition.fetch("version")
     assert_equal scenarios.map { |scenario| scenario.fetch("id") }.sort,
                  probe_definition.fetch("scenario_probes").keys.sort
-    assert_equal PROBE_DIGEST, probe_class.digest
+    assert_equal "sha256:03f850cf973cd57425516d1285996ce753d03b1f769c50aae7a92829a08599a0", probe.digest
     assert_deeply_frozen(probe_definition)
   end
 
@@ -176,7 +176,7 @@ class SQLiteConvergenceProbeTest < Minitest::Test
   end
 
   def scenario_registry
-    @scenario_registry ||= registry_class.build
+    @scenario_registry ||= SQLiteHarnessInputs.registry
   end
 
   def registry_class
@@ -187,19 +187,16 @@ class SQLiteConvergenceProbeTest < Minitest::Test
     Tamoz::Evals::Harness.const_get(:SQLiteScenarioDriver, false)
   end
 
-  def probe_class
-    Tamoz::Evals::Harness.const_get(:SQLiteConvergenceProbe, false)
+  def probe_definition
+    SQLiteHarnessInputs.probe_definition
   end
 
-  def probe_definition
-    probe_class.definition
+  def probe
+    SQLiteHarnessInputs.probe
   end
 
   def driver
-    @driver ||= driver_class.new(
-      scenario_registry:,
-      boundary_registry:
-    )
+    @driver ||= SQLiteHarnessInputs.driver
   end
 
   def boundary_registry
@@ -260,12 +257,15 @@ class SQLiteConvergenceProbeTest < Minitest::Test
   def raw_probe(scenario_id, classification, path, ledger)
     script = <<~'RUBY'
       require "json"
-      require "tamoz/evals"
+      require "tamoz/evals/runner"
       require "tamoz/sqlite"
+      require "support/sqlite_harness_inputs"
       harness = Tamoz::Evals::Harness
-      registry = harness.const_get(:SQLiteScenarioRegistry, false).build
+      registry = SQLiteHarnessInputs.registry
       probe = harness.const_get(:SQLiteConvergenceProbe, false).new(
-        scenario_registry: registry
+        scenario_registry: registry,
+        definition: SQLiteHarnessInputs.probe_definition,
+        inputs: SQLiteHarnessInputs.probe_inputs
       )
       report = probe.run(
         scenario_id: ENV.fetch("TAMOZ_SCENARIO"),
@@ -285,6 +285,7 @@ class SQLiteConvergenceProbeTest < Minitest::Test
       environment,
       RbConfig.ruby,
       *SUBPROCESS_LIB_ARGS,
+      "-I", ROOT.join("test").to_s,
       "-e",
       script
     )
@@ -354,7 +355,7 @@ class SQLiteConvergenceProbeTest < Minitest::Test
   )
     assert_equal REPORT_FIELDS, report.keys
     assert_equal 1, report.fetch("convergence_version")
-    assert_equal probe_class.digest, report.fetch("definition_digest")
+    assert_equal SQLiteHarnessInputs.probe.digest, report.fetch("definition_digest")
     assert_equal scenario_id, report.fetch("scenario")
     assert_equal classification, report.fetch("classification")
     assert_equal probe, report.fetch("probe")

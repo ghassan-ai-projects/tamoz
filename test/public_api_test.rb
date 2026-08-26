@@ -221,6 +221,10 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Evals::VERSION" => {},
           "Tamoz::Evals.verify" => {}
         },
+        "tamoz-evals-runner" => {
+          "Tamoz::Evals::Runner::InputManifest" => {},
+          "Tamoz::Evals::Runner::ScorecardSummaryConsumer" => {}
+        },
         "tamoz-graph" => {
           "Tamoz.graph" => {},
           "Tamoz.interrupt" => {},
@@ -337,7 +341,6 @@ class PublicAPITest < Minitest::Test
           "Tamoz::Scheduler::Schedule" => {},
           "Tamoz::Scheduler::ScheduleStore" => {},
           "Tamoz::Scheduler::SchedulerError" => {},
-          "Tamoz::Scheduler::ScorecardSummaryConsumer" => {},
           "Tamoz::Scheduler::StoreConflictError" => {},
           "Tamoz::Scheduler::TERMINAL" => {},
           "Tamoz::Scheduler::VERSION" => {}

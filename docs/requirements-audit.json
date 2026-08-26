@@ -1,16 +1,18 @@
 {
   "format_version": 1,
   "generated_by": "script/generate_requirements_audit",
-  "generated_at": "2026-08-25T23:55:03Z",
-  "manifest_requirements": 523,
+  "generated_at": "2026-08-26T07:51:21Z",
+  "manifest_requirements": 524,
   "named_cases_run": 277,
   "counts": {
     "deferred-by-contract": 11,
+    "failing": 7,
     "indirect": 4,
     "missing": 15,
-    "pass": 493
+    "pass": 487
   },
   "release_blocking_gaps": [
+    "ADR-039",
     "ADR-041",
     "ADR-042",
     "ADR-043",
@@ -18,6 +20,7 @@
     "ADR-045",
     "ADR-046",
     "ADR-047",
+    "INV-18",
     "INV-39",
     "INV-56",
     "INV-57",
@@ -25,9 +28,22 @@
     "INV-59",
     "INV-60",
     "INV-61",
-    "OBJ-7"
+    "MIG-15",
+    "NG-real-actuator",
+    "OBJ-3",
+    "OBJ-7",
+    "PHASE-DR-3",
+    "PHASE-P14"
   ],
-  "failing": [],
+  "failing": [
+    "ADR-039",
+    "INV-18",
+    "MIG-15",
+    "NG-real-actuator",
+    "OBJ-3",
+    "PHASE-DR-3",
+    "PHASE-P14"
+  ],
   "definition_of_done_met": false,
   "requirements": [
     {
@@ -444,7 +460,7 @@
       "status": "pass",
       "named_test": "test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals",
       "supporting_tests": [
-        "test/dependency_isolation_test.rb#test_evals_is_a_runtime_coupled_release_harness"
+        "test/dependency_isolation_test.rb#test_evals_loads_the_verifier_boundary_only"
       ],
       "classification": "direct",
       "rationale": null,
@@ -685,7 +701,7 @@
       "source": "docs/design-v0.1/DECISIONS.md",
       "title": "Tamoz is supervisory; certified safety and real-time control stay external",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
       "supporting_tests": [
         "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
@@ -694,7 +710,7 @@
       "rationale": null,
       "promotion_exclusion": null,
       "adr_status": "accepted 2026-07-30",
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -3674,6 +3690,38 @@
       "owner_signature": null
     },
     {
+      "id": "API-tamoz-evals-runner-Tamoz::Evals::Runner::InputManifest",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Evals::Runner::InputManifest",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-evals-runner",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
+      "id": "API-tamoz-evals-runner-Tamoz::Evals::Runner::ScorecardSummaryConsumer",
+      "category": "public_api",
+      "source": "docs/public-api.json",
+      "title": "Tamoz::Evals::Runner::ScorecardSummaryConsumer",
+      "release_blocking": true,
+      "status": "pass",
+      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
+      "supporting_tests": [],
+      "classification": "direct",
+      "rationale": null,
+      "promotion_exclusion": null,
+      "package": "tamoz-evals-runner",
+      "evidence_result": "pass",
+      "owner_signature": null
+    },
+    {
       "id": "API-tamoz-graph-Tamoz.graph",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -5354,22 +5402,6 @@
       "owner_signature": null
     },
     {
-      "id": "API-tamoz-scheduler-Tamoz::Scheduler::ScorecardSummaryConsumer",
-      "category": "public_api",
-      "source": "docs/public-api.json",
-      "title": "Tamoz::Scheduler::ScorecardSummaryConsumer",
-      "release_blocking": true,
-      "status": "pass",
-      "named_test": "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
-      "supporting_tests": [],
-      "classification": "direct",
-      "rationale": null,
-      "promotion_exclusion": null,
-      "package": "tamoz-scheduler",
-      "evidence_result": "pass",
-      "owner_signature": null
-    },
-    {
       "id": "API-tamoz-scheduler-Tamoz::Scheduler::StoreConflictError",
       "category": "public_api",
       "source": "docs/public-api.json",
@@ -7009,7 +7041,7 @@
       "source": "docs/design-v0.1/INVARIANTS.md",
       "title": "Versioned, allowlisted records",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/legacy_session_resume_test.rb#test_a_newer_record_version_is_refused_before_any_field_is_read",
       "supporting_tests": [
         "test/core_state_codec_test.rb#test_unknown_registration_is_rejected_before_any_decoder_runs",
@@ -7021,7 +7053,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -7763,7 +7795,7 @@
       "source": "gems/tamoz-sqlite/lib/tamoz/sqlite/migrator.rb",
       "title": "MIGRATION_15",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store",
       "supporting_tests": [
         "test/stream_episode_witness_test.rb#test_gate3_offline_replay_resolves_every_artifact_from_the_verified_store"
@@ -7771,7 +7803,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -8055,7 +8087,7 @@
       "source": "docs/P14_STREAM_PLAN.md owner constraint; INVARIANTS.md 50/51",
       "title": "No real physical actuator; the simulator is the only effector",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only",
       "supporting_tests": [
         "test/stream_token_custody_test.rb#test_the_episode_path_holds_no_signing_secret"
@@ -8063,7 +8095,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -8137,7 +8169,7 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §6",
       "title": "evaluation hard safety gates are zero-tolerance and behavioral improvements beat pinned baselines",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/agent_scorecard_test.rb#test_seeded_safety_violation_and_incomplete_evidence_fail_separate_hard_gates",
       "supporting_tests": [
         "test/release_evaluation_manifest_test.rb#test_the_hard_zero_counters_are_pinned_at_zero",
@@ -8148,7 +8180,7 @@
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -8251,13 +8283,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Memory evaluation substrate — isolated four-treatment CI substrate makes injection-correctness-only claims",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/memory_treatment_profile_test.rb#test_ci_report_measures_injection_correctness_and_never_claims_attribution",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {
@@ -8386,13 +8418,13 @@
       "source": "docs/PRODUCT_EXECUTION_ROADMAP.md §2",
       "title": "Streaming physical-world input — tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval)",
       "release_blocking": true,
-      "status": "pass",
+      "status": "failing",
       "named_test": "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
       "supporting_tests": [],
       "classification": "direct",
       "rationale": null,
       "promotion_exclusion": null,
-      "evidence_result": "pass",
+      "evidence_result": "failing",
       "owner_signature": null
     },
     {

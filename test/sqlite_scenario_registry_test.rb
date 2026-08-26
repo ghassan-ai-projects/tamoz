@@ -33,8 +33,8 @@ class SQLiteScenarioRegistryTest < Minitest::Test
   ].freeze
 
   def test_registry_is_bounded_versioned_deterministic_and_deeply_frozen
-    first = registry_class.build
-    second = registry_class.build
+    first = SQLiteHarnessInputs.registry
+    second = SQLiteHarnessInputs.registry
 
     assert_equal first.document, second.document
     assert_equal first.digest, second.digest
@@ -47,12 +47,12 @@ class SQLiteScenarioRegistryTest < Minitest::Test
     )
     assert_equal 26, first.document.fetch("scenarios").length
     assert_deeply_frozen(first.document)
-    assert_deeply_frozen(registry_class.const_get(:SCENARIOS, false))
+    assert_deeply_frozen(SQLiteHarnessInputs.scenarios)
     assert first.frozen?
   end
 
   def test_every_scenario_has_an_exact_branch_contract_and_reference
-    registry = registry_class.build
+    registry = SQLiteHarnessInputs.registry
 
     registry.document.fetch("scenarios").each do |scenario|
       assert_equal(
@@ -88,11 +88,11 @@ class SQLiteScenarioRegistryTest < Minitest::Test
   end
 
   def test_declared_union_exactly_matches_phase_two_kill_required_registry
-    assert registry_class.build.verify_boundary_registry!(boundary_registry)
+    assert SQLiteHarnessInputs.registry.verify_boundary_registry!(boundary_registry)
   end
 
   def test_unknown_or_malformed_definitions_fail_closed
-    registry = registry_class.build
+    registry = SQLiteHarnessInputs.registry
     assert_nil registry.scenario("request.unknown")
     assert_raises(Tamoz::Evals::ExecutionError) { registry.fetch("request.unknown") }
     assert_raises(Tamoz::Evals::ExecutionError) { registry.scenario("../escape") }
@@ -112,13 +112,18 @@ class SQLiteScenarioRegistryTest < Minitest::Test
 
     treatments.each do |definitions|
       assert_raises(Tamoz::Evals::ExecutionError) do
-        registry_class.new(definitions)
+        registry_class.new(
+          definitions,
+          maximum_scenarios: 32,
+          families: %w[lease request checkpoint],
+          state_classes: %w[old new stable]
+        )
       end
     end
   end
 
   def test_boundary_drift_and_unknown_declared_statement_fail_closed
-    registry = registry_class.build
+    registry = SQLiteHarnessInputs.registry
     bad_document = mutable_copy(boundary_registry.document)
     bad_document.fetch("operations").find do |operation|
       operation.fetch("operation") == "request.claim"
