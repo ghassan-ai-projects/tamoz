@@ -21,9 +21,9 @@ class CancellationVisibilityTest < Minitest::Test
   THREAD = 'tg.ops.abc'
   CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }.freeze
 
-  def test_migration_pins_schema_version_21
-    assert_equal 21, Tamoz::SQLite::Migrator::CURRENT_VERSION
-    assert_equal (1..21).to_a, Tamoz::SQLite::Migrator.migration_ordinals
+  def test_migration_pins_schema_version_22
+    assert_equal 22, Tamoz::SQLite::Migrator::CURRENT_VERSION
+    assert_equal (1..22).to_a, Tamoz::SQLite::Migrator.migration_ordinals
   end
 
   # Clean cancel: requested -> observed -> terminal stopped, all three points

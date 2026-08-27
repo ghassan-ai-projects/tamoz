@@ -377,7 +377,9 @@ module Tamoz
           # /new rotates the generation, the route row's thread no longer names it.
           thread_id = active&.fetch(2) || route.fetch(0)
           request_id = active&.fetch(0)
-          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          conversation_status_projection(
+            txn, surface_id, conversation_id, thread_id, request_id, now:
+          )
         end
       end
 
@@ -394,7 +396,9 @@ module Tamoz
           next resolved unless resolved.is_a?(Array)
 
           request_id, thread_id = resolved
-          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          request_status_projection(
+            txn, surface_id, conversation_id, thread_id, request_id, now:
+          )
             .merge('terminal_reason' => terminal_reason_for(thread_id, request_id))
         end
       end
@@ -434,17 +438,26 @@ module Tamoz
         matches.first
       end
 
-      def status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+      def base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
         open_requests = open_requests_for(txn, surface_id, conversation_id)
-        base = {
+        {
           'thread_id' => thread_id,
           'state' => open_requests.positive? ? 'accepted' : 'idle',
           'open_requests' => open_requests,
           'request_id' => request_id
         }
-        base.merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
-            .merge(cancellation_document(txn, request_id, now))
-            .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
+          .merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
+          .merge(cancellation_document(txn, request_id, now))
+      end
+
+      def conversation_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+        base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
+      end
+
+      def request_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+        base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          .merge(request_runtime_status(thread_id, request_id, surface_id, conversation_id))
       end
 
       # The durable cancellation timeline of one request (plan 03, work item
@@ -539,9 +552,18 @@ module Tamoz
       def conversation_runtime_status(thread_id, request_id, surface_id, conversation_id)
         {
           'task_state' => task_state_for(thread_id, request_id),
-          'effect_state' => effect_state_for(thread_id, request_id),
+          'effect_state' => conversation_effect_state_for(thread_id, request_id),
           'capability_state' => capability_state_for(thread_id, request_id),
-          'delivery_state' => delivery_state_for(surface_id, conversation_id)
+          'delivery_state' => conversation_delivery_state_for(surface_id, conversation_id)
+        }.merge(lifecycle_status_for(thread_id, request_id))
+      end
+
+      def request_runtime_status(thread_id, request_id, surface_id, conversation_id)
+        {
+          'task_state' => task_state_for(thread_id, request_id),
+          'effect_state' => request_effect_state_for(thread_id, request_id),
+          'capability_state' => capability_state_for(thread_id, request_id),
+          'delivery_state' => request_delivery_state_for(surface_id, conversation_id, request_id)
         }.merge(lifecycle_status_for(thread_id, request_id))
       end
 
@@ -625,17 +647,17 @@ module Tamoz
         request.status.to_s
       end
 
-      def effect_state_for(thread_id, request_id)
+      def conversation_effect_state_for(thread_id, request_id)
         return 'not_started' unless @checkpoints
         return 'not_started' unless request_id
 
         request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
         return 'not_started' unless request && %i[running completed failed].include?(request.status)
 
-        summarize_effect_statuses(effect_statuses(thread_id))
+        summarize_effect_statuses(conversation_effect_statuses(thread_id))
       end
 
-      def effect_statuses(thread_id)
+      def conversation_effect_statuses(thread_id)
         state = session_checkpoint(thread_id)&.state
         statuses = Array(state&.fetch(:effect_receipts, nil)).filter_map do |row|
           row.fetch('status', nil).to_s
@@ -644,6 +666,22 @@ module Tamoz
 
         @checkpoints.effect_census.filter_map do |row|
           row[:status].to_s if row[:thread_id] == thread_id
+        end
+      end
+
+      def request_effect_state_for(thread_id, request_id)
+        return 'not_started' unless @checkpoints
+        return 'not_started' unless request_id
+
+        request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
+        return 'not_started' unless request && %i[running completed failed].include?(request.status)
+
+        summarize_effect_statuses(request_effect_statuses(thread_id, request_id))
+      end
+
+      def request_effect_statuses(thread_id, request_id)
+        @checkpoints.effect_census.filter_map do |row|
+          row[:status].to_s if row[:thread_id] == thread_id && row[:request_id] == request_id
         end
       end
 
@@ -715,11 +753,26 @@ module Tamoz
         session&.key?('tool_catalog_digest') == true
       end
 
-      def delivery_state_for(surface_id, conversation_id)
+      def conversation_delivery_state_for(surface_id, conversation_id)
         statuses = @outbox.outbox_rows(
           surface_id:, statuses: %w[pending claimed succeeded failed unknown], limit: 500
         ).filter_map do |row|
           row.fetch('status') if row.fetch('conversation_id') == conversation_id
+        end
+        return 'none' if statuses.empty?
+        return 'unknown' if statuses.include?('unknown')
+        return 'pending' if statuses.intersect?(%w[pending claimed])
+        return 'failed' if statuses.include?('failed')
+
+        'succeeded'
+      end
+
+      def request_delivery_state_for(surface_id, conversation_id, request_id)
+        statuses = @outbox.outbox_rows(
+          surface_id:, statuses: %w[pending claimed succeeded failed unknown], limit: 500
+        ).filter_map do |row|
+          row.fetch('status') if row.fetch('conversation_id') == conversation_id &&
+                                 row.fetch('request_id') == request_id
         end
         return 'none' if statuses.empty?
         return 'unknown' if statuses.include?('unknown')

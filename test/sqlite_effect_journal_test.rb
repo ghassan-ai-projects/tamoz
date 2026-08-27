@@ -74,6 +74,30 @@ class SQLiteEffectJournalTest < Minitest::Test
     end
   end
 
+  def test_effect_census_preserves_request_association_separately_from_effect_identity
+    with_effect_store do |_adapter, _app, store, execution_id|
+      store.open_writer(
+        thread_id: "thread.effects",
+        namespace: [],
+        owner_id: "owner.association",
+        ttl: store.writer_ttl
+      ) do |writer|
+        first = prepare_effect(
+          writer.effects, execution_id:, task_id: "task.first", request_id: "request.first",
+          safety: :idempotent
+        )
+        second = prepare_effect(
+          writer.effects, execution_id:, task_id: "task.second", request_id: "request.second",
+          safety: :idempotent
+        )
+
+        census = store.effect_census
+        assert_equal "request.first", census.find { |row| row[:effect_key] == first.record.key }[:request_id]
+        assert_equal "request.second", census.find { |row| row[:effect_key] == second.record.key }[:request_id]
+      end
+    end
+  end
+
   # Canonicality is a byte property. SQLite hands BLOB columns back as
   # ASCII-8BIT while the state codec dumps UTF-8, so an encoding-sensitive
   # `==` forged a CheckpointCorruptionError for any receipt that was not
@@ -471,6 +495,7 @@ class SQLiteEffectJournalTest < Minitest::Test
     effects,
     execution_id:,
     task_id: "task.effect",
+    request_id: nil,
     safety:
   )
     effects.prepare(
@@ -479,7 +504,8 @@ class SQLiteEffectJournalTest < Minitest::Test
       call_index: 0,
       operation: "device.write",
       safety:,
-      request: {"value" => 1}
+      request: {"value" => 1},
+      request_id:
     )
   end
 

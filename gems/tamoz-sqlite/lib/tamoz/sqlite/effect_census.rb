@@ -32,7 +32,8 @@ module Tamoz
                          AND a.attempt_number > (
                            SELECT MIN(u.attempt_number) FROM tamoz_effect_attempts u
                             WHERE u.effect_key = e.effect_key AND u.status = 'unknown'
-                         ))
+                         )),
+                     e.request_id
               FROM tamoz_effects AS e
               ORDER BY e.created_at_ms ASC, e.effect_key ASC
               LIMIT ?
@@ -49,7 +50,8 @@ module Tamoz
             status: row.fetch(4).to_sym,
             requires_reconciliation: row.fetch(5) == 1,
             succeeded_attempts: row.fetch(6),
-            attempts_after_unknown: row.fetch(7).to_i
+            attempts_after_unknown: row.fetch(7).to_i,
+            request_id: row.fetch(8)
           }.freeze
         end.freeze
       end

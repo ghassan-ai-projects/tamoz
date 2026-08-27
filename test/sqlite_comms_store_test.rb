@@ -696,6 +696,40 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  def test_request_status_filters_delivery_by_request_and_aggregate_keeps_conversation_scope
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 52))
+      assert_equal :enqueued, admit(store, envelope(update_id: 53))
+      first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
+
+      unknown = delivery.merge('delivery_id' => 'delivery-request-first')
+      delivered = delivery.merge('delivery_id' => 'delivery-request-second')
+      assert_equal :appended, store.append_delivery(
+        unknown, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: first_id, now:
+      )
+      assert_equal :appended, store.append_delivery(
+        delivered, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: second_id,
+        now: now + 1
+      )
+      claim_and_mark!(store, unknown.fetch('delivery_id'), 'unknown')
+      claim_and_mark!(store, delivered.fetch('delivery_id'), 'succeeded')
+
+      assert_equal 'unknown', store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{first_id[0, 10]}", now:
+      ).fetch('delivery_state')
+      assert_equal 'succeeded', store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{second_id[0, 10]}", now:
+      ).fetch('delivery_state')
+      assert_equal 'unknown', store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      ).fetch('delivery_state')
+    end
+  end
+
   def test_a_reference_never_resolves_across_conversations
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)

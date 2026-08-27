@@ -96,6 +96,7 @@ module Tamoz
         operation:,
         safety:,
         request:,
+        request_id: nil,
         logical_key: nil
       )
         @preparation.prepare(
@@ -105,6 +106,7 @@ module Tamoz
           operation:,
           safety:,
           request:,
+          request_id:,
           logical_key:
         )
       end

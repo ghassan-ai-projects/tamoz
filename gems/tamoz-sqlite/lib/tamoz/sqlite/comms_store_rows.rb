@@ -43,7 +43,7 @@ module Tamoz
         part_count markup reply_to journaled content_digest render_version
         expires_at_ms status claim_owner claim_fence claim_expires_at_ms
         effect_key effect_execution_id receipt created_at_ms updated_at_ms
-        send_started_at_ms
+        send_started_at_ms request_id
       ].freeze
       PACING_GLOBAL_SCOPE = '__global__'
       REQUEST_REF_WIDTH = 10
@@ -241,7 +241,7 @@ module Tamoz
         SQL
       end
 
-      def outbox_binds(delivery_wire, surface_id, now)
+      def outbox_binds(delivery_wire, surface_id, now, request_id:)
         [
           delivery_wire.fetch('delivery_id'), surface_id, delivery_wire.fetch('conversation_id'),
           delivery_wire.fetch('kind'), delivery_wire.fetch('operation'), delivery_wire.fetch('text'),
@@ -250,7 +250,7 @@ module Tamoz
           delivery_wire.fetch('journaled') ? 1 : 0, delivery_wire.fetch('content_digest'),
           delivery_wire.fetch('render_version'),
           wire_time_ms(delivery_wire['expires_at']),
-          now_ms(now), now_ms(now)
+          now_ms(now), now_ms(now), request_id
         ]
       end
 

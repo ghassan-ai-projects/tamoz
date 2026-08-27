@@ -59,13 +59,14 @@ module Tamoz
                      end
           next :capacity_refused if pending + reserved + 1 > capacity
 
-          txn.execute('comms.outbox.append', <<~SQL, outbox_binds(delivery_wire, surface_id, now))
+          binds = outbox_binds(delivery_wire, surface_id, now, request_id: reserved_request_id)
+          txn.execute('comms.outbox.append', <<~SQL, binds)
             INSERT INTO tamoz_comms_outbox (
               delivery_id, surface_id, conversation_id, kind, operation, text,
               part_index, part_count, markup, reply_to, journaled,
               content_digest, render_version, expires_at_ms, status,
-              created_at_ms, updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+              created_at_ms, updated_at_ms, request_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
           SQL
           :appended
         end

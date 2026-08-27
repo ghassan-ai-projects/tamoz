@@ -32,6 +32,7 @@ module Tamoz
         operation:,
         safety:,
         request:,
+        request_id: nil,
         logical_key: nil
       )
         lease = @guard.lease
@@ -47,6 +48,7 @@ module Tamoz
           @safeties,
           'effect safety'
         )
+        effect_request_id = request_id && Wire.identity(request_id, name: 'effect request id')
         effect_key = if logical_key
                        EffectJournalKey.logical(logical_key)
                      else
@@ -99,13 +101,13 @@ module Tamoz
                   effect_key, logical_key, thread_id, namespace, execution_id, task_id,
                   call_index, operation, safety, request_digest, status,
                   current_attempt, requires_reconciliation,
-                  created_at_ms, updated_at_ms
+                  created_at_ms, updated_at_ms, request_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', 1, 0, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'prepared', 1, 0, ?, ?, ?)
               SQL
               [
                 effect_key, logical_key_text, lease.thread_id, lease.namespace, execution, task,
-                index, operation_text, safety_text, request_digest, now, now
+                index, operation_text, safety_text, request_digest, now, now, effect_request_id
               ]
             )
             EffectAttemptLedger.insert!(

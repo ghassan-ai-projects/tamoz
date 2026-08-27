@@ -169,4 +169,55 @@ class ExperienceHarnessTest < Minitest::Test
     assert_nil stamps.fetch(second_id).fetch('requested_at_ms'),
                "#{second_reference} must remain unstamped"
   end
+
+  def test_request_status_is_request_local_for_two_delivery_outcomes
+    @harness.admit('prepare the report')
+    @harness.admit('draft the email')
+    first_id, second_id = @harness.request_ids_for(Fixture::CONVERSATION_A)
+    first_reference = Tamoz::Comms::Lifecycle::RequestRef.for(first_id)
+    second_reference = Tamoz::Comms::Lifecycle::RequestRef.for(second_id)
+
+    record_delivery(first_id, status: 'unknown', content_digest: 'a' * 64)
+    record_delivery(second_id, status: 'succeeded', content_digest: 'b' * 64)
+
+    first_status = request_status_text(first_reference)
+    second_status = request_status_text(second_reference)
+
+    assert_match(/Request #{first_reference}:.*delivery=unknown/, first_status)
+    assert_match(/Request #{second_reference}:.*delivery=delivered/, second_status)
+  end
+
+  private
+
+  def request_status_text(reference)
+    cards = @harness.say("/status #{reference}")
+    cards.find { |card| card[:kind] == 'control' && card[:text].start_with?("Request #{reference}:") }.fetch(:text)
+  end
+
+  def record_delivery(request_id, status:, content_digest:)
+    store = @harness.store
+    now = @harness.now
+    delivery = Tamoz::Comms::Delivery.build(
+      conversation_id: Fixture::CONVERSATION_A, kind: 'answer', text: "delivery for #{request_id}",
+      journaled: true, render_version: 1, content_digest:, identity_key: request_id
+    ).wire
+
+    assert_equal :appended, store.append_delivery(
+      delivery, surface_id: Fixture::SURFACE_ID, capacity: 500,
+      reserved_request_id: request_id, now:
+    )
+    assert_equal :claimed, store.claim_delivery(
+      delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
+      claim_expires_at: now + 30, now:
+    )
+    if status == 'unknown'
+      assert_equal :marked, store.mark_delivery_send_started(
+        delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1, now: now + 1
+      )
+    end
+    assert_equal :marked, store.mark_delivery(
+      delivery_id: delivery.fetch('delivery_id'), owner: 'status-test', fence: 1,
+      status:, receipt: status == 'succeeded' ? { 'message_id' => 1 } : nil, now: now + 2
+    )
+  end
 end
