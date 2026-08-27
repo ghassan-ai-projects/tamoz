@@ -80,3 +80,66 @@ passed until Phase 1 lands.
 **Does not meet the bar.** Three High objections (B3 bundling, undefined
 heartbeat producer, worker-unavailable notification suppression) and three
 Medium objections. Revise to v2.
+
+---
+
+## Loop 2 — verification of plan v2
+
+### Objection resolution
+
+| Loop 1 objection | Severity | v2 resolution | Status |
+| --- | --- | --- | --- |
+| Phase 1 bundles CF-5/CF-6 (B3) | High | CF-5/CF-6 moved to a standalone **Phase 1b**; Phase 1 now closes only CF-2, CF-3, DG-1, DG-2. | Resolved |
+| Worker heartbeat producer undefined | High | Added the **DG-2 sub-decision**: default derives `queued-without-observed-claim` from existing claim facts with no new producer; the fuller heartbeat shape is gated on a named cross-gem contract and approval. | Resolved |
+| Worker-unavailable suppressible by budget (Fourier) | High | Phase 3 now lists worker-unavailable in the always-notify set, with an explicit anti-suppression note. | Resolved |
+| Phases 0–1 look like no progress (B10) | Medium | Added the sponsor honesty note to status framing. | Resolved |
+| MG-4 has no named test (B4) | Medium | Added `test_cli_human_stream_renders_task_and_update_parts` to Phase 2. | Resolved |
+| EG-3 depends on Phase 1 (B9) | Medium | Dependency graph now states EG-3 restart assertions cannot pass until Phase 1 lands. | Resolved |
+
+### Re-challenge from each lens (v2)
+
+- **Product / agent-vision** — Phase order still front-loads invisible
+  correctness, but the honesty note makes that a stated expectation rather than
+  a surprise. The first perceivable win (Phase 2) sits directly on
+  now-authoritative facts. No unresolved objection.
+- **Architecture / security / reliability** — Phase 1 is now the coherent
+  ownership/control/handle/health cluster; Phase 1b is genuinely independent.
+  The DG-2 default avoids inventing a supervision subsystem; the fuller shape is
+  correctly gated behind cross-gem approval. Hard-zeros are named per phase. No
+  unresolved objection.
+- **Implementation / evidence** — the DG-2 test now asserts the *chosen* shape,
+  not an undefined heartbeat. Subprocess, two-request, restart, and
+  independent-witness tests are named. Readiness is fail-closed (EG-1) and the
+  real run is a distinct gate (EG-5). No unresolved objection.
+- **Interaction / attention** — MG-4 is tested; the attention budget keeps
+  waiting/terminal/worker-unavailable non-suppressible; the budget is a measured
+  default (Phase 4), not an asserted good. No unresolved objection.
+- **Fourier / cross-scale** — the two reversals that v1 risked (worker-health
+  silence suppressed by the budget; CF-5 epoch corrupting latency telemetry) are
+  both now blocked by explicit sequencing/notification rules. No unresolved
+  objection.
+
+### Bar checklist (v2)
+
+| Criterion | v2 result |
+| --- | --- |
+| B1 finding coverage | Pass |
+| B2 dependency order | Pass |
+| B3 bounded briefs | Pass (Phase 1b split) |
+| B4 named tests | Pass (MG-4 test added) |
+| B5 hard-zero per phase | Pass |
+| B6 evidence separation | Pass |
+| B7 scope discipline | Pass |
+| B8 rollout/rollback/stop | Pass |
+| B9 sequencing | Pass (EG-3 dependency stated) |
+| B10 honest status | Pass (sponsor honesty note) |
+
+### Loop 2 verdict
+
+**Meets the bar.** All B1–B10 pass and every lens records no unresolved
+high-severity objection. The passing condition's requirement — at least one
+loop in which a lens objection forced a revision — is satisfied by Loop 1 → v2.
+
+The plan is ready to hand to an implementer. It remains a plan: the
+implementation-readiness verdict for the chat experience stays **NEEDS FIXES**
+until the phase gates and the evidence gate actually pass in code.

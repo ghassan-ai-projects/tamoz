@@ -42,6 +42,12 @@ Read in this order:
 15. [05-open-findings-ledger.md](05-open-findings-ledger.md) — every reviewer
     finding normalized into one de-duplicated, verification-labelled set with
     an owner seam and target slice; the authoritative implementation to-do.
+16. [implementation-plan/](implementation-plan/) — the phased implementation
+    plan built from the ledger, its acceptance bar, and the multi-lens review
+    loop that iterated the plan until it met the bar:
+    [00-plan-bar.md](implementation-plan/00-plan-bar.md),
+    [01-plan.md](implementation-plan/01-plan.md),
+    [02-plan-review-log.md](implementation-plan/02-plan-review-log.md).
 
 The package is concrete enough to drive bounded implementation slices, but the
 current product/evidence verdict remains NEEDS FIXES. A deterministic fixture

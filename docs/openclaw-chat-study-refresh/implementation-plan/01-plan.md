@@ -1,6 +1,6 @@
 # Chat experience refresh — phased implementation plan
 
-Version: draft under review (see `02-plan-review-log.md`).
+Version: v2 (revised after review loop 1; see `02-plan-review-log.md`).
 
 This plan operationalizes `../02-decision-roadmap.md` and closes the canonical
 findings in `../05-open-findings-ledger.md`. It is a plan, not evidence of a
@@ -22,6 +22,14 @@ authorize code changes by itself.
 - What this plan does: sequences the smallest corrections that make one
   truthful, controllable work session real on Telegram and the actual CLI,
   behind a fail-closed evidence gate.
+
+**Sponsor honesty note.** Phases 0–1 are correctness, not delight: they close
+crashes and false status and are largely invisible to a user. Perceived
+improvement is not claimable until Phase 2 renders the human card over those
+now-authoritative facts, and it is not *proven* until Phase 4 measures it on a
+real path. Progress will therefore look slow before Phase 2. This is
+deliberate: the study's central failure mode is shipping a convincing card over
+facts that are not yet true, and this plan refuses that trade.
 
 ## Global non-goals (rejected in writing)
 
@@ -97,13 +105,13 @@ do not fall back to routing them through approval.
 
 ---
 
-## Phase 1 — Request ownership, exact controls, worker health, portable handle
+## Phase 1 — Request ownership, exact controls, portable handle, worker health
 
-**Closes:** CF-2, CF-3, CF-5, CF-6, DG-1, DG-2.
+**Closes:** CF-2, CF-3, DG-1, DG-2.
 
 **Goal:** every operator-visible request has one caller-bound reference and one
 honest work state; status, cancel, and redirect target exactly one request;
-worker availability is a durable fact.
+worker availability is a durable, distinguishable fact.
 
 **Owner seams:**
 - Request-local status: `CommsStore#conversation_runtime_status`,
@@ -118,9 +126,6 @@ worker availability is a durable fact.
   `CommsStore#requests_by_reference`; CLI `queue add`/`ask`/`status`.
 - Worker health: gateway admission/status; worker claim/health;
   `scripts/start-tamoz-comms.sh`.
-- CF-5: `Telegram::Normalizer#normalize` timestamp extraction.
-- CF-6: `CLI#run` rescue scope; `CheckpointStore#open_writer`/
-  `lease_operations`.
 
 **Smallest correction:**
 - Persist the originating request/occurrence identity on request-owned outbox
@@ -133,21 +138,29 @@ worker availability is a durable fact.
 - Project one caller-bound short reference through Telegram, attached CLI,
   queued CLI, status, cancel, and redirect; keep thread/occurrence IDs as
   internal authority handles shown only in diagnostic/JSON output.
-- Expose accepted / queued-without-worker / working / waiting as distinct
-  facts, sourced from a worker heartbeat with a defined freshness window.
-  Choose queue-versus-refuse when worker health is stale (owner decision).
-- CF-5: use the callback message's own date when present; define an explicit
-  ingestion-time fallback when absent.
-- CF-6: reproduce the checkpoint conflict under a subprocess harness first,
-  then make unexpected worker-thread exceptions fail the command or emit a
-  typed terminal failure.
+
+**DG-2 worker-health design sub-decision (cross-gem; requires approval before
+code).** DG-2 has two admissible shapes; the owner picks one before
+implementation, because it is a cross-gem interface change under `AGENTS.md`:
+
+- *Default (smaller):* derive `queued-without-observed-claim` from facts that
+  already exist — an admitted request that no worker has claimed within a
+  bounded window — with no new heartbeat producer. This distinguishes
+  accepted / queued-unclaimed / working / waiting without new supervision.
+- *Fuller (only if the default proves insufficient):* add a durable worker
+  heartbeat. This requires naming the producer (which process writes it), the
+  persistence row, the freshness window, and stale semantics, plus the
+  queue-versus-refuse admission policy when health is stale. Do not build this
+  shape without that named contract and cross-gem approval.
+
+Either shape must never let "accepted" imply "working."
 
 **Entry criteria:** Phase 0 need not complete first; Phase 1 may proceed in
-parallel. Both gate Phase 2.
+parallel. Both gate Phase 2. The DG-2 sub-decision is recorded before code.
 
 **Exit criteria:** request-local truth, exact targeting, portable handle, and
-worker-health state are authoritative and covered by two-request and
-restart tests; CF-5/CF-6 fixed with regression tests.
+a distinguishable worker-availability state are authoritative and covered by
+two-request and restart tests.
 
 **Named tests:**
 - `test_request_status_is_request_local_for_two_open_requests` — admit A and B
@@ -159,10 +172,8 @@ restart tests; CF-5/CF-6 fixed with regression tests.
   `queue add` prints a handle; caller exits; `worker --once` advances; status
   resolves the handle after DB reopen; stderr free of unhandled exceptions.
 - `test_worker_unavailable_state_is_distinct_from_working` — admit while worker
-  stopped; assert accepted/queued-without-worker; start worker; same ref
-  advances exactly once, no duplicate effect.
-- `test_callback_observed_at_uses_callback_message_date` (CF-5).
-- `test_cli_command_fails_on_unhandled_worker_thread_exception` (CF-6).
+  stopped; assert accepted/queued-unclaimed; start worker; same ref advances
+  exactly once, no duplicate effect. (Asserts the chosen DG-2 shape.)
 
 **Hard-zeros touched:** refs are correspondent/conversation-bound, not
 authority tokens; no legacy-row compatibility; accepted never implies started;
@@ -171,6 +182,43 @@ no duplicate effect after restart.
 **Rollout / rollback:** fresh-schema outbox mapping; roll back to
 conversation-scoped read only if the request-local mapping fails tests, never
 by weakening ownership.
+
+---
+
+## Phase 1b — Independent correctness fixes
+
+**Closes:** CF-5, CF-6.
+
+**Goal:** two standalone reliability defects that couple to nothing in the
+ownership work but must land before their downstream consumers. Separated from
+Phase 1 so the ownership review surface stays small.
+
+**Owner seams:**
+- CF-5: `Telegram::Normalizer#normalize` timestamp extraction
+  (`gems/tamoz-telegram/lib/tamoz/telegram/normalizer.rb:34-48,69-80`).
+- CF-6: `CLI#run` rescue scope (`gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:105-123`);
+  `CheckpointStore#open_writer`/`lease_operations`.
+
+**Smallest correction:**
+- CF-5: use the callback message's own date when present; define an explicit
+  ingestion-time fallback when absent.
+- CF-6: reproduce the checkpoint conflict under a subprocess harness first,
+  then make unexpected worker-thread exceptions fail the command or emit a
+  typed terminal failure. If the race is test-only, prove it with an isolated
+  reproduction and document the boundary.
+
+**Sequencing:** independent; may land any time. **CF-5 is a strict predecessor
+of any callback-ack or latency telemetry in Phase 4 (EG-3/EG-5)** — an epoch
+timestamp would corrupt those measures.
+
+**Named tests:**
+- `test_callback_observed_at_uses_callback_message_date` (CF-5) — asserts the
+  value equals the embedded message date and is not epoch when a date exists.
+- `test_cli_command_fails_or_reports_typed_failure_on_worker_thread_exception`
+  (CF-6) — stderr free of unhandled exceptions; exit status reflects the
+  failure.
+
+**Hard-zeros touched:** none directly; CF-6 strengthens the CLI error contract.
 
 ---
 
@@ -217,6 +265,8 @@ history.
 - `test_safe_goal_label_is_framework_owned_and_redacted` (or documented
   omission).
 - `test_target_state_to_lifecycle_mapping` (MG-2).
+- `test_cli_human_stream_renders_task_and_update_parts` (MG-4) — the human CLI
+  stream no longer drops task/update parts; JSON/NDJSON remains lossless.
 
 **Hard-zeros touched:** pure projection, no store/state machine; no model
 narrator; no provider/tool call in any renderer; unknown never shown as
@@ -246,8 +296,11 @@ unknown resolution; CLI show/follow-up; gateway status.
 
 **Smallest correction:**
 - Default Telegram budget: one acceptance, one editable live card, at most two
-  meaningful edits, one terminal card; waiting and terminal always interrupt
-  quiet mode; no-visible-change heartbeats do not notify.
+  meaningful edits, one terminal card; **waiting, terminal, and
+  worker-unavailable transitions always interrupt quiet mode**; no-visible-change
+  heartbeats do not notify. The worker-unavailable signal introduced in Phase 1
+  must never be suppressible as a quiet heartbeat — that would re-create the
+  "is it alive?" silence this program targets.
 - One read-only "since you were away" card bounded by a last-seen cursor or
   snapshot boundary (MG-1); it never resends an unknown terminal answer.
 - Project `delivery: uncertain` explicitly with a safe operator-resolution
@@ -373,15 +426,20 @@ and human-comprehension gates.
 Phase 0 (interruption) ─┐
                         ├─> Phase 2 (projection) ─> Phase 3 (recovery) ─┐
 Phase 1 (ownership)  ───┘                                               ├─> Phase 5 decision
+Phase 1b (CF-5, CF-6) ── independent; CF-5 precedes Phase 4 telemetry    │
 Phase 4 harness (EG-7 -> EG-1/2/3/4 build) ────────────────────────────┘
         └─ readiness publication requires Phases 0–3 complete + EG-5/EG-6
 ```
 
 - Phases 0 and 1 may proceed in parallel; both are strict predecessors of
   Phase 2.
+- Phase 1b is independent and may land any time; CF-5 is a strict predecessor
+  of Phase 4's callback-ack/latency telemetry (EG-3/EG-5).
 - Phase 4's harness (EG-7 → EG-1/EG-2/EG-3/EG-4) may be built in parallel with
-  Phases 0–3, but **readiness publication** and the real run (EG-5/EG-6)
-  require Phases 0–3 to define what is measured.
+  Phases 0–3, but its **assertions cannot pass** until their subjects land:
+  EG-3's C4 process-restart assertions depend on Phase 1's worker-restart and
+  request-local semantics. **Readiness publication** and the real run
+  (EG-5/EG-6) require Phases 0–3 to define what is measured.
 - Phase 5 is a decision gate reached only after Phase 4 evidences a need.
 
 ## Cross-cutting sequencing rules
