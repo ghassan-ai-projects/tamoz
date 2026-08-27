@@ -94,3 +94,380 @@ run; a task over ~10s must produce at least one meaningful liveness update, and
 the accepted card must not over-promise (Decision 3).
 
 ---
+
+## OF-3 — Asking the agent a question crashes the turn; the question never arrives
+
+**Observed (deterministic; a review returning `needs_input`).**
+
+```
+👤 read the file and summarize it
+   [accepted] Accepted redb9fcd98f. I will report committed progress.
+   [control]  redb9fcd98f: waiting
+   request.failed  reason: KeyError: key not found: "decision"
+```
+
+The clarification is projected through the approval path; `decision_evidence`
+fetches `descriptor['decision']['required_evidence']`, which a clarify descriptor
+lacks, so the turn dies with `KeyError`. The user sees an acceptance, a "waiting"
+blip, then nothing — the actual question is never delivered.
+
+**Pain:** the moment the agent needs human judgment, the conversation breaks.
+Delegation fails exactly where interaction matters most.
+
+**Severity:** Blocker.
+
+**Root cause / maps to:** **CF-1** (worker/sink collapse clarify into approval),
+now reproduced live. Phase 0 / I1.
+
+**Fix:** split clarify from approval in the sink; project a bounded question with
+a durable, occurrence-bound answer path.
+
+**Benchmark:** drive a `needs_input` review; assert one bounded question card
+(no approval markup, no `decision_evidence` lookup), the occurrence stays paused,
+and no `KeyError`; a reply/`/answer` resumes the same occurrence.
+
+---
+
+## OF-4 — Normal chat is run like a job
+
+**Observed (deterministic).**
+
+```
+👤 hi
+   [accepted] Accepted r690f82106b. I will report committed progress.
+   [control]  r690f82106b: claimed
+   [answer]   the verified answer
+```
+
+A bare "hi" is admitted as a durable task, gets a reference, is planned and
+executed, and (on a real model, per OF-1/OF-2) would take ~100s and can fail.
+
+**Pain:** every trivial message pays the full task tax — acceptance ceremony,
+latency, and the failure surface. There is no "just chat."
+
+**Severity:** High.
+
+**Root cause / maps to:** **SD-1 / I4** — no chat-vs-task routing. Phase 0b.
+
+**Fix:** answer no-effect/conversational turns directly, with no acceptance/plan
+lifecycle and no path to `PlanRejectedError`.
+
+**Benchmark:** a conversational turn produces a direct answer with no accepted
+card, no plan/review effects, and cannot reach a plan-failure state.
+
+---
+
+## OF-5 — Progress updates are machine gibberish
+
+**Observed (deterministic).** The only progress card is:
+
+```
+   [control] r04530c054e: claimed
+      markup: {"request_ref":"r04530c054e","milestone":"running","phase":"claimed",
+               "sequence":1,"task_state":"running","delivery_state":"pending"}
+```
+
+The visible text is `r<ref>: claimed`; the markup carries raw internal lifecycle
+facts.
+
+**Pain:** "claimed / running / waiting" describe machinery, not progress toward
+the user's goal. The user cannot tell what is actually happening.
+
+**Severity:** High.
+
+**Root cause / maps to:** **DG-3** (no human projection). Phase 2.
+
+**Fix:** a goal-oriented card — state, ref, current safe action, next action —
+over framework-owned phase templates; no raw lifecycle vocabulary.
+
+**Benchmark:** golden card per state names a human-safe phase and next action;
+no `claimed/running/waiting` literal and no internal facts in the default card.
+
+---
+
+## OF-6 — `/status` answers in diagnostic vocabulary
+
+**Observed (deterministic, two open requests).**
+
+```
+👤 /status
+   [control] Work status: task=queued; phase=unknown; event=unknown#unknown;
+             effect=not_started; capability=not_inspected; delivery=delivered;
+             next=inspect; open requests=2. Reference re788e19630. Queue position 1.
+```
+
+**Pain:** the default status leaks `event=unknown#unknown`, `effect`,
+`capability`, and a confusing `delivery=delivered` — internal fields a person
+cannot act on. It also surfaces only one of the two open references.
+
+**Severity:** High.
+
+**Root cause / maps to:** diagnostic-first status (**DG-3**) plus request-scoping
+(**CF-2**). Phase 1–2.
+
+**Fix:** a bounded human `/status` (state, ref, now, next, delivery certainty)
+with diagnostics behind an explicit `--diagnostic`; list all open refs.
+
+**Benchmark:** default `/status` contains no `effect=`/`capability=`/
+`event=` and, with N open requests, names all N refs.
+
+---
+
+## OF-7 — Cancelling with several tasks open tells you nothing about which one
+
+**Observed (deterministic, two open requests).**
+
+```
+👤 /cancel
+   [control] Cancellation requested.
+```
+
+The reply names no reference; with two open requests the user cannot tell which
+was affected.
+
+**Pain:** the user fears cancelling the wrong work — the exact "controls hit the
+wrong thing" complaint.
+
+**Severity:** Blocker (trust) / High.
+
+**Root cause / maps to:** **CF-3** thread-wide cancel + no disambiguation. Phase 1
+/ I2.
+
+**Fix:** exact-ref cancel; a bare `/cancel` with several open lists the refs and
+asks which, stamping none.
+
+**Benchmark:** bare `/cancel` with two open lists both refs and cancels neither;
+`/cancel <ref>` cancels exactly that one and echoes it.
+
+---
+
+## OF-8 — The approval card is opaque and offers only "Deny"
+
+**Observed (deterministic, apply_patch under an ask policy).**
+
+```
+   [approval_request] An action needs your approval.
+      markup: {"reference":"093bc03b5a50c81baad0cae1aeb29727","actions":["deny"]}
+```
+
+**Pain:** the user is asked to approve "an action" with no idea what it would do,
+why it is waiting, or what deny means — and there is no approve button, so the
+task is a dead-end in the chat.
+
+**Severity:** High.
+
+**Root cause / maps to:** under-explained approval (Lane B #11) + policy deny-only
+(#12). Phase 2.
+
+**Fix:** a bounded, redacted explanation (what it would do, why waiting, what
+deny does, the safe operator route); keep authority a policy decision, never a
+UI button.
+
+**Benchmark:** approval card includes a bounded action description and a next
+action; still no approve button unless policy evidence permits; no secrets/raw
+args.
+
+---
+
+## OF-9 — The acceptance over-promises, then the turn can fail or go silent
+
+**Observed (every task).** `Accepted r… . I will report committed progress.` —
+followed (real model) by ~100s of silence and often a failure (OF-1), or (OF-3)
+a crash.
+
+**Pain:** the system promises progress it then does not keep — the "I got your
+request, then an error" whiplash.
+
+**Severity:** High.
+
+**Root cause / maps to:** acceptance coherence (**Decision 3 / I5 / SD-2**).
+Phase 0b.
+
+**Fix:** an immediate bare receipt that promises nothing; upgrade to "working"
+(by editing the same card) only once a plan passes review.
+
+**Benchmark:** the first acknowledgement makes no progress promise; a fast
+review failure never contradicts an earlier promise.
+
+---
+
+## OF-10 — The final answer carries no reference or orientation
+
+**Observed (deterministic).** The terminal card is just:
+
+```
+   [answer] the verified answer
+```
+
+No reference, no "for: <your task>", no completion/verification label in the
+default text.
+
+**Pain:** with more than one task in the transcript, the user cannot tell which
+request an answer belongs to.
+
+**Severity:** Medium.
+
+**Root cause / maps to:** reference-without-orientation (Lane B #1) / **DG-3**.
+Phase 2.
+
+**Fix:** terminal card carries the ref, a task echo, and a verification label
+(verified / response-only / not-verified).
+
+**Benchmark:** every terminal card includes its ref and verification class.
+
+---
+
+## OF-11 — A reply is swallowed as a brand-new task
+
+**Observed (deterministic).** After an answer, replying to the bot's message:
+
+```
+👤 (reply) thanks, also what about other.txt?
+   [accepted] Accepted r8c2e44b6a4. I will report committed progress.
+```
+
+The `reply_to` is ignored; the reply becomes a new request.
+
+**Pain:** there is no way to answer or follow up in context; replies never bind
+to anything — which is also why I1 (answer a question inline) cannot work today.
+
+**Severity:** Medium (High once clarifications exist).
+
+**Root cause / maps to:** **CF-4** no reply/answer ingress. Phase 0 / I1.
+
+**Fix:** bind a reply-to-the-question message to the paused occurrence; plain
+replies with no pending question stay new requests.
+
+**Benchmark:** a reply to a pending question resumes that occurrence; a reply
+with no pending question is a new request.
+
+---
+
+## OF-12 — Redirect does not say what replaced what, or what was kept
+
+**Observed (deterministic).**
+
+```
+👤 /redirect rcb1e6752af only compare the two candidates
+   [control] Redirecting rcb1e6752af; the replacement task is queued.
+```
+
+It names the old ref but not the new replacement ref, and says nothing about
+whether committed work is preserved.
+
+**Pain:** the user cannot follow the new work or trust what happened to the old.
+
+**Severity:** Medium.
+
+**Root cause / maps to:** control wording (I2 sibling). Phase 1.
+
+**Fix:** "Replacement queued as r<new>; r<old> remains recorded; committed work
+is not undone."
+
+**Benchmark:** redirect names both the superseded and the replacement ref and
+states preservation.
+
+---
+
+## OF-13 — Status for one request reports the conversation's delivery state
+
+**Observed (deterministic, two open).** `/status` for a queued request shows
+`delivery=delivered` — the delivery state is resolved at conversation scope, not
+for the referenced request (`conversation_runtime_status` →
+`delivery_state_for(surface_id, conversation_id)`).
+
+**Pain:** a queued/underway request can look delivered because another request's
+delivery bleeds into it — "did my task complete?" becomes unreliable.
+
+**Severity:** High.
+
+**Root cause / maps to:** **CF-2** request-scoped status aggregates conversation
+delivery/effect. Phase 1.
+
+**Fix:** resolve delivery/effect per request; keep conversation-wide as a
+separately named aggregate.
+
+**Benchmark:** with A `unknown` and B pending→succeeded, `/status rA` and
+`/status rB` each show only their own delivery/effect, after reopen and replay.
+
+---
+
+## OF-14 — "Accepted" does not mean anyone is working
+
+**Observed (topology).** The gateway admits and acknowledges independently of
+the worker; on a real run the accepted card is followed by ~100s of silence
+(OF-2) with no signal of whether a worker is running, queued, or absent.
+
+**Pain:** the user cannot distinguish "accepted but no worker" from "working
+slowly," so silence reads as dead — and invites duplicate resubmissions.
+
+**Severity:** High.
+
+**Root cause / maps to:** **DG-2** worker health not a user-facing fact. Phase 1.
+
+**Fix:** expose accepted / queued-unclaimed / working distinctly; worker-
+unavailable always notifies (never a quiet heartbeat).
+
+**Benchmark:** admit with no worker → accepted/queued-unclaimed; start worker →
+same ref advances once, no duplicate effect; the worker-unavailable state
+notifies.
+
+---
+
+## OF-15 — `/help` is a 14-command wall
+
+**Observed (deterministic).**
+
+```
+👤 /help
+   [control] Commands: /help, /status [r<reference>], /new, /cancel, /redirect
+   r<reference> <new task>, /whoami, /start <pairing code>, /reset, /compact,
+   /usage, /context, /think <low|medium|high>, /verbose <quiet|normal|detailed>.
+   Commands never become task text.
+```
+
+**Pain:** a new user gets a comma-separated list of 14 commands with no example
+of the basic loop (ask → get answer → check status → cancel).
+
+**Severity:** Medium.
+
+**Root cause / maps to:** onboarding copy (Lane B). Phase 2.
+
+**Fix:** lead with a one-line example of the core loop and the 3–4 primary
+controls; move the full list behind "more".
+
+**Benchmark:** `/help` shows a worked example and ≤4 primary controls by default.
+
+---
+
+## Priority summary
+
+| Finding | Severity | Maps to | Phase |
+| --- | --- | --- | --- |
+| OF-1 CheckpointConflictError kills a done task | Blocker | CF-6 | 0b/runtime |
+| OF-3 clarification crashes; question never arrives | Blocker | CF-1 | 0 |
+| OF-7 cancel gives no target with several open | Blocker/High | CF-3 | 1 |
+| OF-2 ~100s for a trivial task | High | latency | 3 |
+| OF-4 normal chat run like a job | High | SD-1 | 0b |
+| OF-5 milestone gibberish | High | DG-3 | 2 |
+| OF-6 diagnostic-vocabulary status | High | DG-3/CF-2 | 1-2 |
+| OF-8 opaque, deny-only approval | High | Lane B | 2 |
+| OF-9 acceptance over-promises | High | SD-2 | 0b |
+| OF-13 cross-request delivery bleed | High | CF-2 | 1 |
+| OF-14 accepted ≠ working | High | DG-2 | 1 |
+| OF-10 answer has no reference | Medium | DG-3 | 2 |
+| OF-11 reply swallowed as new task | Medium | CF-4 | 0 |
+| OF-12 redirect wording | Medium | I2 | 1 |
+| OF-15 /help wall | Medium | Lane B | 2 |
+
+Three Blockers (OF-1, OF-3, OF-7) prevent a working session at all; fix those
+first. The Highs then move it from "broken" to "usable"; the Mediums to "good".
+
+## Benchmark suite (for later)
+
+Every OF above carries a benchmark assertion. Harness A is the driver: the
+deterministic provider proves the interaction/UX assertions (OF-3..OF-15) fast
+and reliably; a guarded real-provider run proves the model-dependent ones
+(OF-1, OF-2). The suite becomes the regression gate — each fix must flip its
+assertion from red to green without regressing the others, and the same
+transcripts serve as before/after evidence for the sponsor.

@@ -62,7 +62,8 @@ module Tamoz
       # A real provider by default (real experience/answer evidence). Pass an
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
-      def initialize(provider: nil, model: nil, model_factory: nil)
+      def initialize(provider: nil, model: nil, model_factory: nil,
+                     admission_mode: :allowlist, approval_ask: nil)
         @provider = provider || ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('TAMOZ_MODEL', 'deepseek-chat')
         @update_seq = 1_000
@@ -70,15 +71,39 @@ module Tamoz
         @seen_out = 0
         @last_bot_message_id = nil
         super(model_factory: model_factory || real_model_factory,
-              admission_mode: :allowlist, approval_ask: nil)
-        bind_thread(Fixture::CONVERSATION_A)
+              admission_mode: admission_mode, approval_ask: approval_ask)
+        bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 
-      # Drive one user message and return the bot's new outbound cards.
-      def say(text) = push_message(text, reply_to: nil)
+      # Drive one user message fully (admit + run) and return the bot's new cards.
+      def say(text)
+        enqueue_message(text, reply_to: nil)
+        serve
+        work_off
+      end
+
+      # Admit a message WITHOUT running the worker (queues an open request); use
+      # to set up multiple concurrent open requests before running.
+      def admit(text)
+        enqueue_message(text, reply_to: nil)
+        serve
+        new_outbound
+      end
+
+      # Run one worker pass and drain; returns new cards.
+      def work_off
+        @worker.poll_once
+        now = Time.now.utc
+        3.times { drain(now: now) }
+        new_outbound
+      end
 
       # Reply to the bot's last message (I1 natural answer path).
-      def reply(text) = push_message(text, reply_to: @last_bot_message_id)
+      def reply(text)
+        enqueue_message(text, reply_to: @last_bot_message_id)
+        serve
+        work_off
+      end
 
       # Press an inline button (callback query).
       def tap(data)
@@ -88,7 +113,8 @@ module Tamoz
                          'message' => { 'message_id' => @last_bot_message_id || 1,
                                         'chat' => chat_hash }
                        })
-        pump
+        serve
+        work_off
       end
 
       # Worker events captured this session (worker.error carries swallowed
@@ -99,6 +125,9 @@ module Tamoz
         projection = status(Fixture::CONVERSATION_A)
         projection ? JSON.pretty_generate(projection) : '(no status)'
       end
+
+      def conversation_status = status(Fixture::CONVERSATION_A)
+      def ref_status(ref) = request_status(Fixture::CONVERSATION_A, ref)
 
       def provider_label = "#{@provider}/#{@model}"
 
@@ -141,29 +170,18 @@ module Tamoz
         )
       end
 
-      def push_message(text, reply_to:)
+      def enqueue_message(text, reply_to:)
         message = { 'message_id' => next_message_id, 'chat' => chat_hash,
                     'from' => { 'id' => Fixture::USER_BOUND }, 'text' => text,
                     'date' => Time.now.to_i }
         message['reply_to_message'] = { 'message_id' => reply_to } if reply_to
         enqueue_update('message' => message)
-        pump
       end
+
+      def serve = @gateway.serve_once(now: Time.now.utc, drain: true)
 
       def enqueue_update(fields)
         @transport.enqueue({ 'update_id' => next_update_id }.merge(fields))
-      end
-
-      # Admit + accept (serve drains the accepted card), run ONE worker pass
-      # (a claim carries the occurrence to terminal or a park), then drain the
-      # milestone/terminal rows it committed. One worker pass only: re-running
-      # poll_once could re-enter a settled occurrence. All synchronous.
-      def pump
-        now = Time.now.utc
-        @gateway.serve_once(now: now, drain: true)
-        @worker.poll_once
-        3.times { drain(now: now) }
-        new_outbound
       end
 
       def new_outbound
