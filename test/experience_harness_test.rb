@@ -136,4 +136,37 @@ class ExperienceHarnessTest < Minitest::Test
     assert_includes second.map { |card| card[:kind] }, 'accepted'
     assert_equal 2, @harness.request_ids_for(Fixture::CONVERSATION_A).length
   end
+
+  def test_bare_cancel_disambiguates_multiple_open_requests_without_mutating_them
+    first = @harness.admit('prepare the report')
+    second = @harness.admit('draft the email')
+    references = [first, second].map { |cards| cards.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/] }
+
+    cards = @harness.say('/cancel')
+    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?('Choose one') }
+
+    refute_nil reply, "expected a cancellation choice, got: #{cards.inspect}"
+    references.each { |reference| assert_includes reply.fetch(:text), reference }
+    assert @harness.cancellation_stamp_rows.all? { |row| row.fetch('requested_at_ms').nil? },
+           'ambiguous cancellation must not stamp any request'
+  end
+
+  def test_cancel_reference_targets_one_open_request
+    first = @harness.admit('prepare the report')
+    second = @harness.admit('draft the email')
+    first_reference = first.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/]
+    second_reference = second.fetch(0).fetch(:text)[/\br[0-9a-f]{10}\b/]
+
+    cards = @harness.say("/cancel #{first_reference}")
+    reply = cards.find { |card| card[:kind] == 'control' && card[:text].include?(first_reference) }
+
+    refute_nil reply, "expected a reference-addressed cancellation, got: #{cards.inspect}"
+    stamps = @harness.cancellation_stamp_rows.to_h { |row| [row.fetch('request_id'), row] }
+    requests = @harness.request_ids_for(Fixture::CONVERSATION_A)
+    first_id, second_id = requests
+
+    refute_nil stamps.fetch(first_id).fetch('requested_at_ms')
+    assert_nil stamps.fetch(second_id).fetch('requested_at_ms'),
+               "#{second_reference} must remain unstamped"
+  end
 end

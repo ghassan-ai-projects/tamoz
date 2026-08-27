@@ -35,7 +35,7 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
 
-      HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
+      HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel [r<reference>], ' \
                    '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
                    '/answer r<reference> <answer>, /reset, /compact, /usage, /context, /think <low|medium|high>, ' \
                    '/verbose <quiet|normal|detailed>. Commands never become task text.'
@@ -62,6 +62,8 @@ module Tamoz
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'
       FINISHED_REQUEST_REPLY = 'That request has already finished.'
       CANCEL_NO_WORK_REPLY = 'No running request to cancel on this conversation.'
+      CANCEL_USAGE_REPLY = 'Usage: /cancel [r<reference>]'
+      CANCEL_STALE_REF_REPLY = 'That request is no longer open on this conversation.'
 
       CONTEXT_CONTROL_COMMANDS = %w[reset compact usage context think verbose].freeze
       CONTROLS_UNAVAILABLE_REPLY = 'Context controls are not available on this channel.'

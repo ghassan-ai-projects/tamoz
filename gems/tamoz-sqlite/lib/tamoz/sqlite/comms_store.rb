@@ -287,15 +287,32 @@ module Tamoz
         end
       end
 
+      # The current-generation admitted requests available to a caller-bound
+      # cancellation command, in queue order.
+      def open_request_targets(surface_id:, conversation_id:, thread_id:)
+        read('comms.request.cancel.targets') do |txn|
+          rows = txn.rows('comms.request.cancel.targets', <<~SQL, [surface_id, conversation_id, thread_id])
+            SELECT request_id, thread_id FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ? AND thread_id = ?
+              AND projection_state = 'admitted'
+            ORDER BY created_at_ms ASC, request_id ASC
+          SQL
+          rows.map do |row|
+            request_id, row_thread_id = row
+            { 'request_id' => request_id, 'request_ref' => request_ref(request_id), 'thread_id' => row_thread_id }
+          end
+        end
+      end
+
       # The durable `requested` point of the cancellation timeline (plan 03,
       # work item 4): the stamp and the :cancel enqueue commit in ONE
       # transaction, so a rollback (a replayed cancel id, a tombstoned thread)
-      # leaves neither. Every still-admitted request on the thread is stamped —
-      # the user asked to stop this conversation's open work.
-      def request_cancellation(thread_id:, request_id:, payload:, now:)
+      # leaves neither. Without a target, every still-admitted request on the
+      # thread is stamped for the existing direct-store contract.
+      def request_cancellation(thread_id:, request_id:, payload:, now:, target_request_id: nil)
         payload_bytes, payload_digest, input_digest = encode_request(CANCEL_OPERATION, CANCEL_DELIVERY, payload)
         transaction('comms.request.cancel') do |txn|
-          stamp_cancellation_requested!(txn, thread_id:, now:)
+          stamp_cancellation_requested!(txn, thread_id:, target_request_id:, now:)
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread: thread_id, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
                  operation_text: CANCEL_OPERATION, delivery_text: CANCEL_DELIVERY,
@@ -985,13 +1002,24 @@ module Tamoz
 
       private
 
-      def stamp_cancellation_requested!(txn, thread_id:, now:)
-        txn.execute('comms.request.cancel.stamp', <<~SQL, [now_ms(now), now_ms(now), thread_id])
+      def stamp_cancellation_requested!(txn, thread_id:, target_request_id:, now:)
+        binds = [now_ms(now), now_ms(now), thread_id]
+        target_clause = if target_request_id
+                          binds << target_request_id
+                          ' AND request_id = ?'
+                        else
+                          ''
+                        end
+        txn.execute('comms.request.cancel.stamp', <<~SQL, binds)
           UPDATE tamoz_comms_requests
           SET cancellation_requested_at_ms = ?, updated_at_ms = ?
           WHERE thread_id = ? AND projection_state = 'admitted'
             AND cancellation_requested_at_ms IS NULL
+            #{target_clause}
         SQL
+        return unless target_request_id
+
+        raise Tamoz::CheckpointConflictError, 'the cancellation target is no longer admitted' unless txn.changes == 1
       end
 
       def stamp_cancellation_observed!(txn, thread_id:, now:)

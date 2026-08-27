@@ -419,7 +419,9 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([update(4, text: '/cancel')])
       assert_equal :served, gateway.serve_once(drain: false)
 
-      assert_equal 'Cancellation requested.', appended.last.fetch('text')
+      request = checkpoints.request_history(thread_id: new_thread).find { |entry| entry.operation == :turn }
+      expected_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request.request_id)
+      assert_equal "Cancellation requested for #{expected_ref}.", appended.last.fetch('text')
       assert_equal 1, cancellation_stamped_count(store, new_thread),
                    'the live request on the CURRENT generation is stamped'
       assert_equal 0, cancellation_stamped_count(store, old_thread),

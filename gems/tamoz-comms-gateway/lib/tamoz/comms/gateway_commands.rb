@@ -20,7 +20,7 @@ module Tamoz
           when 'new'
             append_control(new_conversation(envelope), envelope, now:)
           when 'cancel'
-            append_control(cancel_request(envelope, now:), envelope, now:)
+            append_control(cancel_request(envelope, intent.arguments, now:), envelope, now:)
           when 'redirect'
             append_control(redirect_request(envelope, intent.arguments), envelope, now:)
           when 'answer'
@@ -95,9 +95,12 @@ module Tamoz
           )
         end
 
-        # `/cancel` stamps the durable requested point and queues the cancel
-        # operation in one store transaction.
-        def cancel_request(envelope, now:)
+        # `/cancel` selects one current-generation request before the store
+        # atomically stamps and queues its cancellation.
+        def cancel_request(envelope, arguments, now:)
+          reference = cancel_reference(arguments)
+          return CANCEL_USAGE_REPLY if reference == :invalid
+
           conversation_id = envelope.fetch('conversation_id')
           return CANCEL_NO_WORK_REPLY unless @store.conversation(surface_id:, conversation_id:)
 
@@ -105,21 +108,55 @@ module Tamoz
             surface_id, conversation_id,
             generation: @store.conversation_generation(surface_id:, conversation_id:)
           )
-          status = @store.conversation_status(surface_id:, conversation_id:)
-          return CANCEL_NO_WORK_REPLY unless status &&
-                                             status.fetch('thread_id') == thread_id &&
-                                             status.fetch('open_requests').positive?
+          targets = @store.open_request_targets(surface_id:, conversation_id:, thread_id:)
+          target = reference ? referenced_cancel_target(envelope, reference, targets) : bare_cancel_target(targets)
+          return target if target.is_a?(String)
 
           request_id = command_request_id(envelope, %w[cancel])
           @store.request_cancellation(
             thread_id:,
             request_id:,
+            target_request_id: target.fetch('request_id'),
             payload: { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } },
             now:
           )
-          'Cancellation requested.'
+          "Cancellation requested for #{target.fetch('request_ref')}."
         rescue Tamoz::CheckpointConflictError
           'Cancellation could not be queued; no active checkpoint is available.'
+        end
+
+        def cancel_reference(arguments)
+          return nil if arguments.nil?
+
+          parts = arguments.split(/\s+/)
+          parts.length == 1 ? parts.first : :invalid
+        end
+
+        def bare_cancel_target(targets)
+          case targets.length
+          when 0 then CANCEL_NO_WORK_REPLY
+          when 1 then targets.first
+          else "Choose one request to cancel: #{targets.map { |target| target.fetch('request_ref') }.join(', ')}."
+          end
+        end
+
+        def referenced_cancel_target(envelope, reference, targets)
+          return CANCEL_USAGE_REPLY unless valid_reference?(reference)
+
+          resolved = @store.request_status(
+            surface_id:, conversation_id: envelope.fetch('conversation_id'), ref: reference
+          )
+          return cancel_refusal(resolved) if resolved.is_a?(Symbol)
+
+          target = targets.find { |candidate| candidate.fetch('request_id') == resolved.fetch('request_id') }
+          target || CANCEL_STALE_REF_REPLY
+        end
+
+        def cancel_refusal(outcome)
+          return UNKNOWN_REF_REPLY if outcome == :unknown_ref
+          return AMBIGUOUS_REF_REPLY if outcome == :ambiguous_ref
+
+          CANCEL_STALE_REF_REPLY
         end
       end
     end
