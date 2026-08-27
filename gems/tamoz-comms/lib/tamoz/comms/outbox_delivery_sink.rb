@@ -34,6 +34,7 @@ module Tamoz
         'request.stopped' => 'stopped',
         'request.blocked' => 'blocked',
         'request.approval_request' => 'approval_request',
+        'request.clarification_request' => 'clarification_request',
         'request.claimed' => 'running',
         'request.running' => 'running',
         'request.waiting' => 'waiting',
@@ -74,6 +75,7 @@ module Tamoz
         return nil unless surface
 
         return push_milestone(event, kind, route, surface) if MILESTONE_KINDS.include?(kind)
+        return push_clarification_question(event, route, surface) if kind == 'clarification_request'
 
         if kind == 'approval_request'
           unless surface.fetch('approvals').fetch('mode') == 'deny_only'
@@ -181,6 +183,54 @@ module Tamoz
         JSON.parse(row.fetch('receipt')).fetch('message_id')
       rescue JSON::ParserError
         nil
+      end
+
+      def push_clarification_question(event, route, surface)
+        request_id = event[:request_id]
+        return nil unless request_id
+
+        part = clarification_part(event, surface)
+        @store.append_delivery(
+          clarification_delivery(event, route, part).wire,
+          surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface), now: Time.now.utc
+        )
+        :accepted
+      end
+
+      def clarification_part(event, surface)
+        render_limits = surface.fetch('rendering')
+        question = clarification_question(event.fetch(:interrupts))
+        @rendering.plain(
+          question,
+          max_parts: 1,
+          part_characters: render_limits.fetch('part_characters'),
+          overflow: render_limits.fetch('overflow')
+        ).fetch(0)
+      end
+
+      def clarification_delivery(event, route, part)
+        request_id = event.fetch(:request_id)
+        Comms::Delivery.build(
+          conversation_id: route.fetch('conversation_id'), kind: 'control', text: part.fetch('text'),
+          part_index: 0, part_count: 1, journaled: false,
+          render_version: @rendering::RENDER_VERSION,
+          content_digest: part.fetch('content_digest'), identity_key: request_id,
+          markup: clarification_markup(request_id)
+        )
+      end
+
+      def clarification_markup(request_id)
+        JSON.generate(
+          'request_ref' => Lifecycle::RequestRef.for(request_id),
+          'milestone' => 'waiting', 'phase' => 'clarification_required', 'actions' => ['answer']
+        )
+      end
+
+      def clarification_question(interrupts)
+        descriptors = Array(interrupts).filter_map { |interrupt| interrupt[:descriptor] }
+        descriptor = descriptors.find { |candidate| candidate['kind'] == 'clarify' }
+        text = descriptor&.fetch('question', nil).to_s.gsub(/[[:cntrl:]]/, ' ').split.join(' ')
+        text.empty? ? 'Please answer the question to continue.' : text
       end
 
       # A fresh single-use prompt is stored inactive, and the control

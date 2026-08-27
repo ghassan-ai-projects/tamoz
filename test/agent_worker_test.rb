@@ -248,6 +248,29 @@ class AgentWorkerTest < Minitest::Test
     end
   end
 
+  def test_a_restart_reparks_a_clarification_with_its_typed_reason
+    runtime = Struct.new(:path) do
+      def pending_decision(*) = nil
+    end.new('/tmp/tamoz-worker-test')
+    interrupt = Struct.new(:task_id, :call_index, :descriptor).new(
+      'task', 0, { 'kind' => 'clarify' }
+    )
+    view = Struct.new(:status, :interrupts).new(:paused, [interrupt])
+    worker = Tamoz::Agent::Worker.new(
+      runtime:, session_builder: ->(_thread_id) {}, emitter: ->(_event) {}, once: true
+    )
+    entry = { thread_id: 'clarify-thread', head_request_id: 'clarify-occurrence' }
+
+    result = worker.send(
+      :resume_paused_entry, entry, nil,
+      thread_id: 'clarify-thread', occurrence_id: 'clarify-occurrence', view:
+    )
+
+    assert_equal Tamoz::Agent::Worker::PARKED, result
+    assert_equal 'clarification_required',
+                 worker.parked.fetch('clarify-thread').fetch(:signature).last
+  end
+
   def test_worker_emits_structured_json_events_for_a_completed_request
     with_runtime do |rt|
       File.write(File.join(rt.workspace, "note.txt"), "hello\n")

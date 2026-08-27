@@ -171,6 +171,28 @@ class TamozTelegramTransportTest < Minitest::Test
     end
   end
 
+  def test_deliver_clarification_markup_stays_text_only
+    calls = []
+    client = Object.new
+    client.define_singleton_method(:call) do |method, params|
+      calls << [method, params]
+      { 'message_id' => 42, 'date' => 1_752_700_800 }
+    end
+    transport = Tamoz::Telegram::Transport.new(client:, normalizer: nil)
+    delivery = Comms::Delivery.build(
+      conversation_id: 'telegram:chat:22222222', kind: 'control', text: 'Which file?',
+      part_index: 0, part_count: 1, journaled: false, render_version: 1,
+      content_digest: 'b' * 64,
+      markup: JSON.generate('request_ref' => 'r1234567890', 'actions' => ['answer'])
+    )
+
+    assert_equal 42, transport.deliver(delivery).fetch('message_id')
+
+    method, sent = calls.fetch(0)
+    assert_equal 'sendMessage', method
+    refute sent.key?('reply_markup'), 'clarification text must use reply or /answer ingress, not a callback'
+  end
+
   def test_deliver_edit_message_uses_edit_message_text
     with_transport do |transport, server|
       server.script('editMessageText', body: {

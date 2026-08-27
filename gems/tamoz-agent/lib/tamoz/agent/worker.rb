@@ -73,7 +73,7 @@ module Tamoz
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
-        # approval un-park it without the worker having to be told.
+        # response un-park it without the worker having to be told.
         @parked = {}
         @monitor = Mutex.new
       end
@@ -303,7 +303,7 @@ module Tamoz
         decision = @runtime.pending_decision(
           thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
         )
-        return park(entry, view) && PARKED if decision.nil?
+        return park(entry, view, reason: pause_reason(view)) && PARKED if decision.nil?
 
         apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
       end
@@ -718,20 +718,35 @@ module Tamoz
       end
 
       def settle_paused_view(view, thread_id, occurrence_id, duration_ms)
+        reason = pause_reason(view)
         if view.interrupts.empty?
           emit("request.paused",
                thread: thread_id, request_id: occurrence_id, reason: "paused",
                duration_ms:,
                status_projection: pending_status_projection(view, occurrence_id),
                observability: {execution_id: view.execution_id})
+        elsif reason == 'clarification_required'
+          notify_sink(thread_id, "request.clarification_request", nil,
+                      request_id: occurrence_id, interrupts: interrupt_facts(view))
+          emit_paused_request(thread_id, occurrence_id, view, reason:)
         else
           notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
           notify_sink(thread_id, "request.approval_request", "Approval requested.",
                       request_id: occurrence_id, interrupts: interrupt_facts(view))
-          emit_approval_request(thread_id, occurrence_id, view)
+          emit_paused_request(thread_id, occurrence_id, view, reason:)
         end
-        park({thread_id:, head_request_id: occurrence_id}, view)
+        park({thread_id:, head_request_id: occurrence_id}, view, reason:)
         PARKED
+      end
+
+      def clarification_pause?(view)
+        view.interrupts.any? do |interrupt|
+          interrupt.descriptor&.fetch('kind', nil) == 'clarify'
+        end
+      end
+
+      def pause_reason(view)
+        clarification_pause?(view) ? 'clarification_required' : 'approval_required'
       end
 
       def settle_child_task(thread_id, view)
@@ -756,13 +771,13 @@ module Tamoz
         emit('worker.error', reason: "child settlement failed: #{transition_error.message}")
       end
 
-      def emit_approval_request(thread_id, occurrence_id, view)
+      def emit_paused_request(thread_id, occurrence_id, view, reason:)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         emit("request.paused",
              thread: thread_id,
              request_id: occurrence_id,
              duration_ms:,
-             reason: "approval_required",
+             reason:,
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
@@ -770,9 +785,9 @@ module Tamoz
 
       # The channel projection: lifecycle events become outbox rows BEFORE the
       # occurrence closes (design §11), so a crash never loses the terminal
-      # answer. Nil-safe — an unconfigured worker delivers nothing. An
-      # approval pause carries the occurrence and its exact interrupt set so
-      # the rendered prompt answers THAT question (ADR-043).
+      # answer. Nil-safe — an unconfigured worker delivers nothing. A
+      # human-answer pause carries the occurrence and its exact interrupt set so
+      # the rendered question answers THAT question (ADR-043).
       def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil, sequence: nil, phase: nil)
         @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:,
                                      sequence:, phase:)
@@ -994,7 +1009,7 @@ module Tamoz
       # ----------------------------------------------------------------- parking
 
       # A parked thread is one whose next move belongs to a human. It is skipped
-      # until its head request changes, so an approval delivered by another
+      # until its head request changes, so a human response delivered by another
       # process un-parks it on the next pass with no signalling between them.
       def park(entry, view, reason: "approval_required")
         meta = {
