@@ -8,7 +8,8 @@ module Tamoz
         # Resolves one normalized update to its durable disposition (design
         # §5): request, control reply, ignored, rejected, or callback decision.
         def admit(envelope, now:)
-          route_admission(envelope, admission_decision(envelope), now:)
+          decision = admission_decision(envelope)
+          route_admission(envelope, decision, now:)
         end
 
         private
@@ -31,7 +32,12 @@ module Tamoz
         def route_admission(envelope, decision, now:)
           case decision.disposition
           when :request
-            admit_request(envelope, now:)
+            reference = clarification_reply_reference(envelope)
+            if reference
+              admit_answer(envelope, reference, envelope.fetch('text'), now:)
+            else
+              admit_request(envelope, now:)
+            end
           when :decision
             resolve_callback(envelope, now:)
             acknowledge_callback(envelope)

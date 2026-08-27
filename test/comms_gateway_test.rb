@@ -333,6 +333,41 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def test_clarification_reply_matching_requires_a_positive_integer_receipt_id
+    with_gateway do |gateway, transport, _store|
+      rows = []
+      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_rows) do |surface_id:, statuses:, limit: 500|
+        rows
+      end
+      envelope = transport.normalize(update(1, text: 'answer')).merge('reply_to' => 4242)
+      markup = JSON.generate(
+        'phase' => 'clarification_required', 'request_ref' => 'r0123456789', 'actions' => ['answer']
+      )
+
+      [
+        {},
+        { 'message_id' => 'not-a-number' },
+        { 'message_id' => '4242' },
+        { 'message_id' => {} },
+        { 'message_id' => [] }
+      ].each do |receipt|
+        rows.replace([
+          { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+            'markup' => markup, 'receipt' => JSON.generate(receipt) }
+        ])
+
+        assert_nil gateway.send(:clarification_reply_reference, envelope), receipt.inspect
+      end
+
+      rows.replace([
+        { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+          'markup' => markup, 'receipt' => JSON.generate('message_id' => 4242) }
+      ])
+
+      assert_equal 'r0123456789', gateway.send(:clarification_reply_reference, envelope)
+    end
+  end
+
   def test_cancel_is_a_typed_redirect_and_not_a_model_task
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)

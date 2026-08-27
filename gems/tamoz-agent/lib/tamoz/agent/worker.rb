@@ -201,7 +201,7 @@ module Tamoz
       end
 
       def actionable_entries
-        work_list.reject { |entry| parked?(entry) }
+        work_list.reject { |entry| parked?(entry) && !resume_queued?(entry) }
       rescue WorkerRuntime::StoreUnavailableError => error
         # The work list could not be read. That is reported and retried on the
         # next pass — it is NOT an empty inbox, and the difference has to be
@@ -299,6 +299,8 @@ module Tamoz
       end
 
       def resume_paused_entry(entry, session, thread_id:, occurrence_id:, view:)
+        return run_queued_resume(session, thread_id:, occurrence_id:) if queued_resume_request(thread_id)
+
         digest = interrupt_digest(view)
         decision = @runtime.pending_decision(
           thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
@@ -306,6 +308,25 @@ module Tamoz
         return park(entry, view, reason: pause_reason(view)) && PARKED if decision.nil?
 
         apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
+      end
+
+      def queued_resume_request(thread_id)
+        return unless @runtime.respond_to?(:checkpoints)
+
+        @runtime.checkpoints.request_history(thread_id:).find do |request|
+          request.status == :queued && request.operation == :resume
+        end
+      end
+
+      def resume_queued?(entry)
+        entry.fetch(:head_status) == :open && queued_resume_request(entry.fetch(:thread_id))
+      end
+
+      def run_queued_resume(session, thread_id:, occurrence_id:)
+        unpark(thread_id)
+        request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        settle(session, thread_id:, occurrence_id:, request:)
       end
 
       def advance_open_occurrence(session, thread_id:, occurrence_id:, view:)

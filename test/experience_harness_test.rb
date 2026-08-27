@@ -69,4 +69,71 @@ class ExperienceHarnessTest < Minitest::Test
   ensure
     harness&.close
   end
+
+  def test_clarification_answer_resumes_the_same_occurrence
+    review = [
+      { 'decision' => 'needs_input', 'layer' => 'semantic', 'review_id' => 'rv1',
+        'issues' => ['Which file did you mean — note.txt or other.txt?'],
+        'rationale' => 'ambiguous request' },
+      Fixture::ACCEPTED_REVIEW
+    ]
+    scripted = Fixture.model_factory(plan: Fixture::DEFAULT_PLAN, review:, verify: Fixture::VERIFY_OK)
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
+
+    initial = harness.say('read the file and summarize it')
+    accepted = initial.find { |card| card[:kind] == 'accepted' }
+    question = initial.find { |card| card[:kind] == 'control' }
+
+    resumed = harness.reply('note.txt')
+    request_ids = harness.request_ids_for(Fixture::CONVERSATION_A)
+
+    assert_equal 1, request_ids.length
+    expected_ref = accepted.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    actual_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request_ids.first)
+    assert_equal expected_ref, actual_ref
+    refute_includes resumed.map { |card| card[:kind] }, 'accepted'
+    assert resumed.any? { |card| TERMINAL_KINDS.include?(card[:kind]) },
+           "expected the clarification answer to finish the original occurrence; got: #{resumed.inspect}"
+    assert_match(/Which file did you mean/, question.fetch(:text))
+  ensure
+    harness&.close
+  end
+
+  def test_clarification_answer_command_skips_an_earlier_fresh_turn
+    review = [
+      { 'decision' => 'needs_input', 'layer' => 'semantic', 'review_id' => 'rv1',
+        'issues' => ['Which file did you mean — note.txt or other.txt?'],
+        'rationale' => 'ambiguous request' },
+      Fixture::ACCEPTED_REVIEW
+    ]
+    scripted = Fixture.model_factory(plan: Fixture::DEFAULT_PLAN, review:, verify: Fixture::VERIFY_OK)
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
+
+    initial = harness.say('read the file and summarize it')
+    accepted = initial.find { |card| card[:kind] == 'accepted' }
+    reference = accepted.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    harness.admit('also inspect other.txt')
+
+    resumed = harness.say("/answer #{reference} note.txt")
+    thread = harness.conversation_status.fetch('thread_id')
+    history = harness.instance_variable_get(:@runtime).checkpoints.request_history(thread_id: thread)
+
+    assert_equal %i[turn turn resume], history.map(&:operation)
+    assert_equal %i[completed queued completed], history.map(&:status)
+    refute_includes resumed.map { |card| card[:kind] }, 'accepted'
+    assert_includes resumed.map { |card| card[:kind] }, 'answer'
+    refute harness.events.any? { |event| event['event'] == 'request.failed' }
+  ensure
+    harness&.close
+  end
+
+  def test_reply_without_a_pending_question_remains_a_new_request
+    first = @harness.say('answer the task')
+    refute_empty first
+
+    second = @harness.reply('thanks, also what about other.txt?')
+
+    assert_includes second.map { |card| card[:kind] }, 'accepted'
+    assert_equal 2, @harness.request_ids_for(Fixture::CONVERSATION_A).length
+  end
 end

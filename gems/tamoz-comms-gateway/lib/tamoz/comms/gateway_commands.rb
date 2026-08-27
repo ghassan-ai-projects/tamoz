@@ -23,6 +23,8 @@ module Tamoz
             append_control(cancel_request(envelope, now:), envelope, now:)
           when 'redirect'
             append_control(redirect_request(envelope, intent.arguments), envelope, now:)
+          when 'answer'
+            append_control(answer_command(envelope, intent.arguments), envelope, now:)
           when 'whoami'
             append_control(whoami_text(envelope), envelope, now:)
           when 'start'

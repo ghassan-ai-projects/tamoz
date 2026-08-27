@@ -8,6 +8,7 @@ require_relative 'delivery_drainer'
 require_relative 'gateway_admission'
 require_relative 'gateway_admission_acknowledgement'
 require_relative 'gateway_admission_binding'
+require_relative 'gateway_answers'
 require_relative 'gateway_callbacks'
 require_relative 'gateway_commands'
 require_relative 'gateway_conversation_commands'
@@ -36,7 +37,7 @@ module Tamoz
 
       HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
                    '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
-                   '/reset, /compact, /usage, /context, /think <low|medium|high>, ' \
+                   '/answer r<reference> <answer>, /reset, /compact, /usage, /context, /think <low|medium|high>, ' \
                    '/verbose <quiet|normal|detailed>. Commands never become task text.'
       NO_WORK_REPLY = 'No work is admitted for this conversation.'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
@@ -45,6 +46,11 @@ module Tamoz
       NEW_CONVERSATION_UNBOUND_REPLY =
         'No conversation is bound for this channel yet; send a message first.'
       REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'
+      ANSWER_USAGE_REPLY = 'Usage: /answer r<reference> <answer>'
+      ANSWER_QUEUED_REPLY = 'Answer received; resuming the paused request.'
+      ANSWER_STALE_REPLY = 'That request is no longer waiting for a clarification answer.'
+      ANSWER_WRONG_CORRESPONDENT_REPLY = 'That clarification answer cannot be used from this correspondent.'
+      ANSWER_UNQUEUED_REPLY = 'Answer could not be queued; try again while the request is paused.'
       START_USAGE_REPLY = 'Usage: /start <pairing code>'
       START_WAITING_REPLY =
         'That code matches a pending pairing request. Waiting for operator approval.'
@@ -77,6 +83,7 @@ module Tamoz
       }.freeze
 
       REFERENCE_PATTERN = /\Ar[0-9a-f]{#{Lifecycle::REQUEST_REF_WIDTH}}\z/
+      FULL_REFERENCE_PATTERN = /\Ar?[0-9a-f]{64}\z/i
 
       ADMISSION_REFUSALS = {
         integrity_conflict: ['quarantined',
@@ -90,6 +97,7 @@ module Tamoz
       include Admission
       include AdmissionAcknowledgement
       include AdmissionBinding
+      include Answers
       include Callbacks
       include Commands
       include ConversationCommands
