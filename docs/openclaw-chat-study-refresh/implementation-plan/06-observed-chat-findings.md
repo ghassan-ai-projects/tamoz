@@ -471,3 +471,99 @@ and reliably; a guarded real-provider run proves the model-dependent ones
 (OF-1, OF-2). The suite becomes the regression gate — each fix must flip its
 assertion from red to green without regressing the others, and the same
 transcripts serve as before/after evidence for the sponsor.
+
+## How to run these (for the fixing agent)
+
+Everything runs against the real gateway/worker/outbox/drainer/store via
+Harness A (`test/support/experience_harness.rb`). Only the transport is
+simulated. Two entry points:
+
+- `bin/tamoz-chat-probe` — scripted reproductions of the interaction findings
+  (deterministic provider, no network).
+- `bin/tamoz-chat-sim` — an interactive REPL against a real provider.
+
+### Prerequisites
+
+Use the pinned Ruby and a UTF-8 locale (a `C` locale dies inside `ruby_llm`'s
+`models.json` parse before any Tamoz code runs):
+
+```bash
+export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+# commands below assume the repo root and `bundle exec` (rbenv Ruby 3.3.11)
+```
+
+### Reproduce the interaction findings (no API, fast, reliable)
+
+```bash
+bundle exec ruby bin/tamoz-chat-probe            # all interaction findings
+bundle exec ruby bin/tamoz-chat-probe OF-3 OF-7  # specific findings
+```
+
+Each probe prints the user action and the exact cards the bot produced, plus
+worker events for failures (e.g. OF-3 prints the `KeyError`). Re-run the same
+probe after a fix: the transcript should show the desired behavior from the
+finding's **Benchmark** line.
+
+### Regression guard (no API)
+
+```bash
+bundle exec ruby -Itest test/experience_harness_test.rb
+```
+
+Proves the harness itself drives a full turn to a terminal answer with the
+deterministic provider. Keep it green while changing the chat.
+
+### Reproduce the model-dependent findings (OF-1, OF-2 — real provider)
+
+DeepSeek:
+
+```bash
+export DEEPSEEK_API_KEY="$(sed -n 's/^DEEPSEEK_API_KEY[[:space:]]*=[[:space:]]*//p' .env)"
+export TAMOZ_PROVIDER=deepseek TAMOZ_MODEL=deepseek-chat
+printf '%s\n' 'what is written in note.txt?' '/quit' | bundle exec ruby bin/tamoz-chat-sim
+```
+
+OpenRouter (GLM):
+
+```bash
+export OPENROUTER_API_KEY="$(sed -n 's/^OPENROUTER_API_KEY[[:space:]]*=[[:space:]]*//p' .env)"
+export TAMOZ_PROVIDER=openrouter TAMOZ_MODEL='z-ai/glm-5.3-flash'
+printf '%s\n' 'what is written in note.txt?' '/quit' | bundle exec ruby bin/tamoz-chat-sim
+```
+
+`.env` is NOT auto-loaded by the REPL; export the key yourself as shown. A real
+run judges experience/answers; a deterministic run is plumbing/UX only.
+
+### Harness API (to write your own probe or a benchmark test)
+
+```ruby
+require 'experience_harness'         # with test/support on $LOAD_PATH
+F = Tamoz::Evals::Benchmark::OpenclawCommsFixture
+h = Tamoz::ExperienceSim::Harness.new(                    # real provider by default
+      model_factory: F.model_factory(**F::DEFAULT_MODEL_RESPONSES))  # or deterministic
+
+h.say('do X')          # admit + run one turn; returns the bot's new cards
+h.admit('do X')        # admit only (queue an open request); returns cards
+h.work_off             # run one worker pass + drain; returns cards
+h.reply('answer')      # reply to the bot's last message (I1 path)
+h.tap('deny:...')      # press an inline button (callback)
+h.conversation_status  # durable conversation status hash
+h.ref_status('r...')   # per-request status hash
+h.events               # captured worker events (worker.error carries reasons)
+h.effect_census        # journaled model/tool effects and their status
+h.close
+```
+
+Each card is `{ kind:, text:, markup:, message_id:, ... }`. To force a specific
+lifecycle, pass a `model_factory` with scripted `plan`/`review`/`verify`
+responses (see `bin/tamoz-chat-probe` OF-3 for the `needs_input` review that
+triggers a clarification, and OF-8 for an `apply_patch` plan that triggers an
+approval under `approval_ask:`).
+
+### Suggested fixing loop
+
+1. `bin/tamoz-chat-probe OF-N` — see the current (red) behavior.
+2. Apply the fix at the finding's mapped seam/phase.
+3. Re-run the probe — confirm the transcript matches the Benchmark line.
+4. Promote the probe into an asserting test (the benchmark suite), so it stays
+   green. Keep `test/experience_harness_test.rb` green throughout.
