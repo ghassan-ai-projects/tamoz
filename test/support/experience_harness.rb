@@ -91,6 +91,10 @@ module Tamoz
         pump
       end
 
+      # Worker events captured this session (worker.error carries swallowed
+      # exception reasons), useful when a turn fails opaquely.
+      attr_reader :events
+
       def status_text
         projection = status(Fixture::CONVERSATION_A)
         projection ? JSON.pretty_generate(projection) : '(no status)'
@@ -125,7 +129,16 @@ module Tamoz
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
         )
         @runtime.instance_variable_set(:@delivery_sink, sink)
-        @worker = new_worker
+        @worker = capturing_worker
+      end
+
+      def capturing_worker
+        @events ||= []
+        Tamoz::Agent::Worker.new(
+          runtime: @runtime,
+          session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
+          emitter: ->(event) { @events << event }, once: true
+        )
       end
 
       def push_message(text, reply_to:)
@@ -141,15 +154,15 @@ module Tamoz
         @transport.enqueue({ 'update_id' => next_update_id }.merge(fields))
       end
 
-      # Admit + accept, then run the worker turn and drain milestones/terminal.
-      # All synchronous: no long-poll, no background threads.
+      # Admit + accept (serve drains the accepted card), run ONE worker pass
+      # (a claim carries the occurrence to terminal or a park), then drain the
+      # milestone/terminal rows it committed. One worker pass only: re-running
+      # poll_once could re-enter a settled occurrence. All synchronous.
       def pump
         now = Time.now.utc
         @gateway.serve_once(now: now, drain: true)
-        4.times do
-          @worker.poll_once
-          drain(now: now)
-        end
+        @worker.poll_once
+        3.times { drain(now: now) }
         new_outbound
       end
 
