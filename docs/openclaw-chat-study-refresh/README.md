@@ -51,7 +51,10 @@ Read in this order:
     [03-open-decisions.md](implementation-plan/03-open-decisions.md) (the four
     behaviour-shaping decisions, planned and multi-lens reviewed), and
     [04-user-issue-discovery.md](implementation-plan/04-user-issue-discovery.md)
-    (15 chat issues from the user's perspective, each mapped to a fix).
+    (15 chat issues from the user's perspective, each mapped to a fix), and
+    [05-experience-harness.md](implementation-plan/05-experience-harness.md)
+    (two mock-Telegram harnesses — in-process and local Bot-API server — for
+    agent-driven chat sessions against the real runtime + real DeepSeek).
 
 The package is concrete enough to drive bounded implementation slices, but the
 current product/evidence verdict remains NEEDS FIXES. A deterministic fixture
