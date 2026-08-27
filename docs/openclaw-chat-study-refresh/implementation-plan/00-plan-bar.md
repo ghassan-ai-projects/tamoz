@@ -102,6 +102,31 @@ The review loop challenges the plan from each lens and records the result:
   gain at another scale (worker-health silence, notification feedback, proxy
   readiness)?
 
+## Outcome bar (north star: does executing this make the chat meet expectations?)
+
+B1–B10 grade the plan's *discipline*. They do not grade whether executing it
+changes how the chat *feels*. Three prior improvement rounds passed a
+discipline-style bar and still did not meet expectations, so the plan must also
+pass an outcome bar:
+
+- **O1 — Target experience is defined and user-judgable.** The plan states the
+  concrete end-to-end moments a person will judge ("I delegated and it felt
+  alive," "it asked me a question and I answered inline," "I came back and knew
+  exactly where things stood"), and the acceptance signal is the user trying it
+  on a real path — not a passing test.
+- **O2 — A felt improvement reaches the user early.** The plan does not defer
+  every perceptible change behind the full correctness-and-evidence stack. It
+  includes an early, guarded, real-path spike the user can actually try, so
+  expectations are checked against reality within the first round, not after
+  all phases land. (Invisible correctness rounds are exactly what fell short.)
+- **O3 — The right gap is targeted.** The plan distinguishes two failure modes
+  and does not assume: (a) *lifecycle communication* — the agent feels dead,
+  broken, noisy, or untrustworthy even when its answer is fine; and (b)
+  *answer competence* — the agent's actual answers are not useful/smart enough.
+  Phases 0–3 address (a) only. If the unmet expectation is (b), the plan says
+  so explicitly and names it as a separate program rather than silently hoping
+  lifecycle work fixes competence.
+
 ## Passing condition
 
 The plan meets the bar when B1–B10 are all satisfied and every review lens

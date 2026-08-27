@@ -1,6 +1,7 @@
 # Chat experience refresh — phased implementation plan
 
-Version: v2 (revised after review loop 1; see `02-plan-review-log.md`).
+Version: v3 (revised after review loop 3 — outcome/north-star lens; see
+`02-plan-review-log.md`).
 
 This plan operationalizes `../02-decision-roadmap.md` and closes the canonical
 findings in `../05-open-findings-ledger.md`. It is a plan, not evidence of a
@@ -8,6 +9,78 @@ working experience. The implementation-readiness verdict remains **NEEDS
 FIXES** until the phase gates and the evidence gate pass. Each phase enters
 through its own change brief, review, and gates; this document does not
 authorize code changes by itself.
+
+## Target experience (north star)
+
+The goal is not "passing tests"; it is a person saying "yes, this is what I
+wanted" after using it on a real path. Executing this plan is judged against
+these concrete moments:
+
+1. **Delegate and feel it's alive.** I send a task and get an immediate
+   acceptance with a reference. While it works, I see goal-oriented progress
+   ("checking the workspace," "applying the change") — not `r7f3: claimed` — and
+   I never wonder whether it died.
+2. **Be asked a question naturally.** When the agent needs input, it asks me a
+   plain question in the chat, I answer inline, and it continues — no crash, no
+   approve/deny confusion, no silence.
+3. **Stay in control.** With two tasks open I can cancel the right one by its
+   reference and redirect the other, and I trust what happened to each.
+4. **Trust completion and recovery.** I know when it's truly done versus when a
+   message might not have arrived; if I come back later, one card tells me
+   exactly where each task stands, and nothing is ever falsely "delivered."
+5. **Get a useful answer.** The agent's actual answer is correct and helpful —
+   the competence layer, which lifecycle communication cannot fake.
+
+Moments 1–4 are *lifecycle communication* (Phases 0–3). Moment 5 is *answer
+competence* — see the fork below; it is not delivered by Phases 0–3.
+
+**Acceptance signal:** the user (not a test) runs the experience spike below on
+real Telegram + real DeepSeek and confirms which moments now meet expectations
+and which do not. That confirmation, not a green suite, drives the next round.
+
+## Answer-competence fork (read before executing)
+
+Three prior rounds improved durability/lifecycle and did not meet expectations.
+Before spending a fourth round on more lifecycle work, the plan forces a
+decision the code cannot make for us:
+
+- If the unmet expectation is that the chat feels **dead, broken, noisy, or
+  untrustworthy** → this plan (Phases 0–3) is aimed correctly; proceed.
+- If the unmet expectation is that the agent's **answers aren't good/smart/
+  useful enough** → no card, reference, or notification budget fixes that. That
+  is a separate program (planning, tool use, prompts, retrieval, model choice,
+  evaluation of answer quality) and must be opened explicitly. Phases 0–3 would
+  again be correct-but-insufficient — the exact pattern that missed three times.
+
+The experience spike exists to settle this fork with evidence rather than
+assumption.
+
+## Round 0 — Experience spike (early learning gate, do first)
+
+**Purpose:** get a felt, real improvement — or a clear diagnosis — in front of
+the user within the first round, instead of after the whole stack lands. This is
+the study's sanctioned "first real happy path may run earlier as an
+evidence-discovery gate; it cannot publish broad readiness."
+
+**What it is:** one guarded, private run of the *current* system on real
+DeepSeek + a private Telegram bot, walking moments 1–5 above (a short real task,
+a clarification if one arises, a `/status`, a cancel/redirect, a completion).
+No new code is required to observe the current gap; the smallest safe Phase 0
+fix (the clarification crash) may be included if a clarification is needed to
+complete the walk.
+
+**Why first:** it (a) lets the user judge the real experience now and name which
+moments miss, resolving the competence fork; and (b) de-risks Phases 0–4 by
+grounding them in an observed gap rather than the study's inferences.
+
+**Guardrails:** private bot, bounded non-sensitive task, real-DeepSeek per the
+project's real-LLM rule, provenance recorded, credentials never in artifacts,
+explicit cleanup, cost limit. This spike is a *learning* run — it does not
+publish readiness and its result is not intelligence evidence.
+
+**Exit:** a written note of which north-star moments met expectations, which did
+not, and whether the gap is lifecycle (Phases 0–3) or competence (separate
+program). That note re-prioritizes everything below.
 
 ## Status framing
 

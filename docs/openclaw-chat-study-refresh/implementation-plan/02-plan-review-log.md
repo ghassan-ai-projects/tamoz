@@ -143,3 +143,52 @@ loop in which a lens objection forced a revision — is satisfied by Loop 1 → 
 The plan is ready to hand to an implementer. It remains a plan: the
 implementation-readiness verdict for the chat experience stays **NEEDS FIXES**
 until the phase gates and the evidence gate actually pass in code.
+
+---
+
+## Loop 3 — outcome / north-star lens (v2 → v3)
+
+**Reframe (from the sponsor):** the objective is the *actual chat experience
+meeting expectations*, not a well-formed study or plan. Three prior improvement
+rounds passed a discipline-style bar and still fell short. So the plan must be
+graded by outcome, not only discipline — a new outcome bar (O1–O3) was added to
+`00-plan-bar.md`.
+
+### Objections against v2 (outcome lens)
+
+**O1 — High. No target experience.** v2 has phase gates but never states the
+concrete moments a person will judge, or that the acceptance signal is a real
+try, not a passing test. A plan to improve an experience that never defines the
+experience can be executed perfectly and still miss — the observed pattern.
+→ Resolved: added "Target experience (north star)" with five judgable moments
+and a user-try acceptance signal.
+
+**O2 — High. Every felt change is deferred.** v2 gates all perceptible
+improvement behind Phases 0–1 (invisible correctness) and much of the proof
+behind Phase 4. That is precisely why prior rounds felt like no progress.
+→ Resolved: added "Round 0 — Experience spike," a guarded real-DeepSeek +
+private-Telegram walk done first, so a felt improvement or a clear diagnosis
+reaches the user within the first round.
+
+**O3 — High. The wrong gap may be targeted.** v2 (like the whole study) assumes
+the gap is lifecycle communication. If the real unmet expectation is *answer
+competence* — the agent isn't useful/smart enough — Phases 0–3 cannot fix it,
+and a fourth lifecycle round repeats the miss.
+→ Resolved: added the "Answer-competence fork," forcing an explicit decision,
+and made the experience spike the instrument that settles it with evidence.
+
+### What this loop deliberately did NOT do
+
+It did not keep polishing document structure. The three additions are all aimed
+at the outcome: define what "meets expectations" means, get something tryable in
+front of the user now, and refuse to spend another round on lifecycle work if
+the real gap is competence.
+
+### Loop 3 verdict
+
+**Meets the discipline bar (B1–B10) and the outcome bar (O1–O3).** But the
+outcome bar's O3 cannot be closed by me: which failure mode is real —
+lifecycle or competence — is the sponsor's call, and guessing it is what missed
+three times. The plan is therefore *aimed* correctly but not yet *pointed*: the
+next round must begin from the sponsor's answer / the spike's result, not from
+another assumption.
