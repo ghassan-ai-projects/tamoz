@@ -406,6 +406,16 @@ separately named aggregate.
 **Benchmark:** with A `unknown` and B pending→succeeded, `/status rA` and
 `/status rB` each show only their own delivery/effect, after reopen and replay.
 
+**Implemented (deterministic plumbing, `69c4a4d`).** Request-owned outbox and
+effect rows now persist `request_id` separately from delivery/effect identity.
+Request status filters both delivery and effect summaries by the exact request;
+conversation status retains its separately named conversation-wide aggregate.
+The Harness A benchmark passes with A `unknown` and B `delivered`, and focused
+SQLite migration/reopen, comms, effect-journal, gateway, cancellation,
+memory-store, and approval-store tests pass. This closes the verified
+cross-request bleed in the tested comms path; it is not provider or human-use
+evidence.
+
 ---
 
 ## OF-14 — "Accepted" does not mean anyone is working

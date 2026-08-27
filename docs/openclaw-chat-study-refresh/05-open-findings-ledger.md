@@ -42,7 +42,9 @@ hold exactly:
 - **CF-2** `conversation_runtime_status` takes a `request_id` but resolves
   delivery via `delivery_state_for(surface_id, conversation_id)`, dropping the
   request scope (gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:522-528).
-  **Verified.**
+  **Verified at study capture.** Fixed in `69c4a4d`: request-owned outbox and
+  effect rows persist `request_id`, request status uses request-local
+  projections, and conversation status retains its aggregate projection.
 - **CF-3** `cancel_request` derives a synthetic idempotency key from
   `(surface_id, update_id, 'cancel')` via `command_request_id` — not a
   user-supplied reference — and `stamp_cancellation_requested!` updates every
@@ -58,7 +60,7 @@ hold exactly:
 | ID | Finding | Reviewer IDs | Owner seam | Slice | Status |
 | --- | --- | --- | --- | --- | --- |
 | CF-1 | Clarification interrupts are projected through the approval-only evidence path and raise `KeyError` before channel delivery | G18, F1, HZ-1, H-01, P1, root-cause E | `Worker#settle_paused_view`; `OutboxDeliverySink#decision_evidence`; `clarification_descriptor` | 0 | Verified; open |
-| CF-2 | Request-scoped runtime status aggregates delivery/effect state across the whole conversation/thread | F2, H-03, HZ-2 | `CommsStore#conversation_runtime_status`, `delivery_state_for`, `effect_state_for`; outbox row schema lacks `request_id` | 1 | Verified; open |
+| CF-2 | Request-scoped runtime status aggregates delivery/effect state across the whole conversation/thread | F2, H-03, HZ-2 | `CommsStore#conversation_runtime_status`, `delivery_state_for`, `effect_state_for`; outbox row schema lacks `request_id` | 1 | Fixed in `69c4a4d`; deterministic comms/effect coverage passes |
 | CF-3 | `/cancel` and CLI cancel are thread-wide; no exact-reference target | F3 | `gateway_commands#cancel_request`; `CommsStore#stamp_cancellation_requested!`; `CLISessionCommands` cancel | 1 | Chat `/cancel` fixed in `7aaea8c`; CLI cancel remains open |
 | CF-4 | No durable ingress for a clarification answer; plain text is admitted as a new request and callbacks resolve approval only | H-02, consolidated correction 3 | `Comms::Commands`; `Comms::Admission`; `Gateway::Callbacks` | 0→1 | Sourced; open |
 | CF-5 | Callback `observed_at` is derived from top-level `message.date`, which is absent on callback-only updates, yielding epoch timestamps | F8 | `Telegram::Normalizer#normalize` | 1 | Sourced; open; **was not in consolidated study/index/roadmap** |
