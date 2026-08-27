@@ -1,7 +1,7 @@
 # Chat experience refresh — phased implementation plan
 
-Version: v4 (revised after review loop 4 — pointed at the interaction gap the
-sponsor named; see `02-plan-review-log.md`).
+Version: v5 (revised after review loop 5 — added routing, no-whiplash, and the
+per-round context contract from sponsor direction; see `02-plan-review-log.md`).
 
 **Sponsor direction (2026-08-27):** the unmet expectation is *broken/awkward
 interaction* — the agent can't ask a question and take an answer inline,
@@ -145,16 +145,116 @@ Design points:
 
 Owner: Phase 1 (minimal) → Phase 3 (polished card, MG-1).
 
+### I4 — Normal chat is answered like chat, not run like a job
+
+Not every message is a task. A conversational or read-only turn must be answered
+directly, without the accept-then-work lifecycle and without the deliberate
+plan/review machinery that can reject.
+
+```text
+Before (current): every admitted message gets "Accepted r… I will report
+committed progress," then runs the session. A turn that goes through deliberate
+planning can exhaust max_plan_attempts (3) and raise PlanRejectedError — so a
+simple ask can produce accept-then-failure (see I5).
+
+After (target):
+  User:  what did you change in the parser yesterday?
+  Tamoz: (answers directly — no "Accepted r…", no plan/review, no job card)
+
+  User:  refactor the parser to reject malformed input
+  Tamoz: Accepted r7f3 · working on it   (this one is a task: planned + durable)
+```
+
+Design points:
+- The routing decision is explicit and framework-owned. The lever already
+  exists in the session (`route` / `adaptive_read_only` / `deliberate`, and the
+  `routing` option). The work is to make the classification correct and its
+  user-facing behavior distinct: a turn that proposes no effect is answered
+  directly; a turn that would change the workspace is planned and durable.
+- **A directly-answered turn cannot reach `PlanRejectedError`** — it never
+  enters the plan/review loop, so it cannot produce the whiplash in I5.
+- *Open decision (recommended default, sponsor's call):* classify read-only /
+  no-effect turns as chat-answer and effect-proposing turns as planned. If the
+  current adaptive/deliberate split already does this, the work is to verify,
+  name, and test it; if not, add the split. The spike (deferred) is the fastest
+  way to confirm today's behavior.
+
+### I5 — No "accepted, then failed" whiplash
+
+An acknowledgement must never be followed seconds later by a raw planning
+failure. This is the single flow the sponsor called out.
+
+```text
+Before (current): "Accepted r7f3 · I will report committed progress" …then…
+"I could not form a plan for that request that passed my own review."
+(crashed_text after PlanRejectedError; max_plan_attempts exhausted.)
+
+After (target), whichever applies:
+  (a) chat turn      → answered directly; no acceptance was ever sent (I4).
+  (b) task, unclear  → "r7f3 · One quick question: to refactor the parser, should
+                        malformed input raise or be dropped?"  (converts a failed
+                        plan into a clarification via I1 — asks, does not dead-end)
+  (c) task, truly can't proceed → one honest, bounded terminal card with a next
+                        action, coherent with the acceptance — never an internal
+                        error string, never reviewer prose.
+```
+
+Design points:
+- Prefer **(b): convert a plan that cannot pass review into a bounded
+  clarification** using the I1 answer path, instead of terminating with
+  "couldn't form a plan." A missing decision is usually a question, not a
+  failure. (Owner: the `plan_rejected` path in `session_plan_outcomes.rb` and
+  the worker settle/notify seam.)
+- If it must fail (c), the acceptance and the failure must be coherent: don't
+  promise "I will report committed progress" for a turn that fails in review a
+  moment later. Consider deferring the richer acceptance until the plan passes
+  review, so the first user-visible commitment is one the system can keep.
+- Reviewer feedback stays untrusted and undisclosed (current
+  `crashed_text`/`plan_rejected_message` rule) — a clarification is
+  framework-owned and bounded, not raw model prose.
+- *Open decision (recommended default, sponsor's call):* always attempt the
+  clarification conversion (b) before a terminal fail (c); cap conversions so a
+  turn cannot loop between plan and question forever.
+
+### Request and per-round context contract (the sponsor's second question)
+
+"What we send in each request, and what the context has each round" is owned by
+the model-call boundary — see `docs/model-call-boundary-review-2026-08-26/`
+(esp. `05-IMPLEMENTATION-PLAN.md`). This plan does not redefine that boundary;
+it specifies the **comms per-round context** that rides on top, so the chat
+experience is coherent across turns:
+
+- **First turn of a task:** the user's request + the relevant conversation
+  history (confirmed terminal answers only, per the history invariant) + the
+  pinned summary if any + stored preferences + the route/workspace evidence the
+  chosen route needs. No secrets, no raw tool output beyond bounds.
+- **Resumed / clarified turn:** the prior turn's durable state + the
+  clarification answer **bound to the same occurrence** (I1) — it is context for
+  the paused work, not a fresh request. The model sees the question it asked and
+  the user's answer, not a new standalone message.
+- **Chat turn (I4):** conversation history for continuity; no plan/review state,
+  no effect authority, no job lifecycle.
+- **Redaction/bounds** are the existing renderer/zone rules; the context
+  contract cannot widen them.
+- *Open decision (recommended default, sponsor's call):* how much prior history
+  a chat turn sees (last N confirmed answers vs pinned summary vs full thread),
+  balanced against latency and the model-call-boundary budget. Specify one and
+  test it; do not leave it implicit.
+
 ### Interaction spine (primary path for this program)
 
 Given the named gap, the primary sequence is:
 
 ```text
-Phase 0 (I1: ask + answer inline)  ─┐
-                                    ├─> Phase 2 (card carries ref + next action)
-Phase 1 (I2: targeted controls,     │      └─> Phase 3 (I3: polished return card)
-         I3-minimal: honest status)─┘
+Phase 0  (I1: ask + answer inline)  ─┐
+Phase 0b (I4 routing, I5 no whiplash)├─> Phase 2 (card carries ref + next action)
+Phase 1  (I2: targeted controls,     │      └─> Phase 3 (I3: polished return card)
+          I3-minimal: honest status)─┘
 ```
+
+Phase 0b (I4/I5) is the sponsor's #1 named pain — the "accepted then failed"
+whiplash — so it is first-tier alongside Phase 0. It is owned by the session/
+worker route and settle seams, not the comms sink.
 
 One cross-phase dependency to hold in mind: I1's natural reply-to-message path
 shares Phase 1's outbox-row identity change (see the Phase 0 feasibility note),
@@ -463,6 +563,66 @@ timestamp would corrupt those measures.
 
 ---
 
+## Phase 0b — Routing and graceful planning failures
+
+**Closes:** I4 (chat-vs-task routing), I5 (no accept-then-fail whiplash). New
+requirements from sponsor direction, not in the original ledger.
+
+**Goal:** a conversational turn is answered directly; a task is planned; and a
+plan that cannot pass review becomes a question or an honest bounded card —
+never an acknowledgement followed seconds later by "I could not form a plan."
+
+**Owner seams:**
+- Routing: `SessionBindings#adaptive_route`; `Session` route/deliberate branches
+  (`gems/tamoz-agent-session/lib/tamoz/agent/session.rb:438-575`); the `routing`
+  option and `max_plan_attempts` (default 3, `session.rb:75`).
+- Graceful failure: `SessionPlanOutcomes#plan_rejected` /
+  `plan_rejected_message` (`session_plan_outcomes.rb:54-77`); worker settle/
+  notify and `crashed_text`/`failure_text`
+  (`gems/tamoz-agent/lib/tamoz/agent/worker.rb:313-336,695-699,818-876`).
+- Acknowledgement coherence: `gateway_admission_acknowledgement`.
+
+**Smallest correction:**
+- Make the chat-vs-task classification explicit and framework-owned: a turn
+  proposing no effect is answered directly and never enters the plan/review
+  loop; an effect-proposing turn is planned and durable. Verify how much of this
+  the current adaptive/deliberate split already does before adding anything.
+- Convert a plan that cannot pass review into a bounded clarification (I1 path)
+  when the blocker is missing information; only fall through to a terminal card
+  when it genuinely cannot proceed, capped so it cannot loop plan↔question.
+- Make the acceptance coherent with the outcome: do not promise progress for a
+  turn that fails in review moments later — consider deferring the richer
+  acknowledgement until a plan passes review.
+
+**Entry criteria:** none; first-tier with Phase 0. I5's clarification
+conversion depends on Phase 0's clarify path (CF-1/CF-4).
+
+**Exit criteria:** a chat turn is answered with no acceptance/plan lifecycle; a
+task that cannot plan asks a question or returns one honest bounded card; no
+path produces accept-then-raw-failure.
+
+**Named tests:**
+- `test_conversational_turn_is_answered_directly_without_plan_lifecycle` (I4).
+- `test_chat_turn_cannot_reach_plan_rejected_error` (I4).
+- `test_unplannable_task_converts_to_clarification_not_terminal_failure` (I5).
+- `test_clarification_conversion_is_capped_and_cannot_loop` (I5).
+- `test_acceptance_wording_is_coherent_with_a_fast_review_failure` (I5).
+
+**Hard-zeros touched:** reviewer feedback stays untrusted/undisclosed; a
+clarification is framework-owned and bounded, never raw model prose; routing
+does not let a chat turn acquire effect authority.
+
+**Rollout / rollback:** routing/classification behind a versioned choice; roll
+back to the current always-plan path if classification regresses, without
+weakening the clarification path.
+
+**Open decisions (recommended defaults; sponsor's call):** (1) classify
+read-only/no-effect as chat, effect-proposing as task; (2) always attempt
+clarification conversion before a terminal fail; (3) defer richer acceptance
+until plan passes review. See the Interaction contract I4/I5 notes.
+
+---
+
 ## Phase 2 — Bounded human projection
 
 **Closes:** DG-3, MG-2, MG-4.
@@ -664,16 +824,18 @@ and human-comprehension gates.
 ## Dependency graph
 
 ```text
-Phase 0 (interruption) ─┐
-                        ├─> Phase 2 (projection) ─> Phase 3 (recovery) ─┐
-Phase 1 (ownership)  ───┘                                               ├─> Phase 5 decision
-Phase 1b (CF-5, CF-6) ── independent; CF-5 precedes Phase 4 telemetry    │
-Phase 4 harness (EG-7 -> EG-1/2/3/4 build) ────────────────────────────┘
+Phase 0  (interruption)  ─┐
+Phase 0b (routing/no-whiplash; uses Phase 0 clarify) ─┐
+                          ├─> Phase 2 (projection) ─> Phase 3 (recovery) ─┐
+Phase 1  (ownership)  ────┘                                               ├─> Phase 5
+Phase 1b (CF-5, CF-6) ── independent; CF-5 precedes Phase 4 telemetry     │   decision
+Phase 4 harness (EG-7 -> EG-1/2/3/4 build) ──────────────────────────────┘
         └─ readiness publication requires Phases 0–3 complete + EG-5/EG-6
 ```
 
-- Phases 0 and 1 may proceed in parallel; both are strict predecessors of
-  Phase 2.
+- Phases 0, 0b, and 1 may proceed in parallel; all are predecessors of
+  Phase 2. Phase 0b's clarification conversion (I5) depends on Phase 0's
+  clarify path, so start Phase 0 first or together.
 - Phase 1b is independent and may land any time; CF-5 is a strict predecessor
   of Phase 4's callback-ack/latency telemetry (EG-3/EG-5).
 - Phase 4's harness (EG-7 → EG-1/EG-2/EG-3/EG-4) may be built in parallel with

@@ -260,3 +260,82 @@ discovered mid-build. The plan is now both aimed and pointed.
 **Next decision (sponsor's):** the plan is ready to implement I1–I3. Remaining
 choice is when to start code and when to run the deferred validation spike —
 both held per the sponsor's "refine before any code or real run."
+
+---
+
+## Loop 5 — routing, no-whiplash, and the context contract (v4 → v5)
+
+**Sponsor input:** three specific interaction problems — (1) distinguish
+planning from normal chat; (2) define what each request sends and what the
+context has each round; (3) stop the "I got your request, then seconds later an
+error that the plan failed/was rejected."
+
+**Grounded in source before planning (not guessed):**
+- The whiplash is real: gateway sends "Accepted r… I will report committed
+  progress," the worker retries the plan up to `max_plan_attempts: 3`, then
+  `plan_rejected` raises `PlanRejectedError` and the user gets
+  `crashed_text` ("I could not form a plan…"). Verified at
+  `session_plan_outcomes.rb:54-77`, `worker.rb:313-336,818-876`, `session.rb:75`.
+- A routing lever already exists (`route`/`adaptive_read_only`/`deliberate`,
+  the `routing` option) — so I4 is largely "verify, name, and make correct,"
+  not "invent."
+- The context question is owned by the existing model-call-boundary review
+  (`docs/model-call-boundary-review-2026-08-26/`); the chat plan specifies only
+  the comms per-round context on top, rather than redefining that boundary.
+
+### What v5 added
+
+- **I4** — normal chat is answered directly, no accept-then-work, and a
+  directly-answered turn cannot reach `PlanRejectedError`.
+- **I5** — no "accepted, then failed" whiplash: prefer converting an
+  unplannable task into a bounded clarification (I1 path), fall through to one
+  honest bounded card only when it truly cannot proceed, and keep the acceptance
+  wording coherent with the outcome.
+- **Request/per-round context contract** — first turn, resumed/clarified turn,
+  and chat turn each specified, deferring the model-call budget to the existing
+  boundary work.
+- **Phase 0b** — a new first-tier phase (with Phase 0) owning I4/I5 at the
+  session/worker route and settle seams; named tests; ledger entries SD-1..SD-3.
+
+### Lens objections (v4 → v5)
+
+**Product — High (forced this loop).** v4's spine (I1–I3) did not cover the
+sponsor's #1 stated pain, the accept-then-fail whiplash. A plan aimed at the
+interaction gap that omits the flow they explicitly named is mis-aimed.
+→ Resolved: I5 + Phase 0b make it first-tier.
+
+**Architecture — Medium.** Routing and graceful-failure are session/worker
+concerns, not comms-sink concerns; folding them into Phase 0 (a comms/worker
+interruption phase) would blur ownership.
+→ Resolved: separate Phase 0b with its own owner seams; the comms sink is
+untouched by it.
+
+**Reliability — Medium.** Converting plan-failure into a clarification could
+loop (plan → question → plan → question) and never terminate.
+→ Resolved: I5 and Phase 0b cap the conversion so it cannot loop.
+
+**Scope — Medium.** The context question could balloon into redefining the
+model-call boundary (out of scope, and already owned elsewhere).
+→ Resolved: the plan defers the boundary to
+`docs/model-call-boundary-review-2026-08-26/` and specifies only the comms
+per-round context.
+
+### Open decisions surfaced for the sponsor (recommended defaults set)
+
+1. Chat-vs-task classifier: read-only/no-effect = chat; effect-proposing = task.
+2. Failed plan: always try a clarification before a terminal fail (capped).
+3. Acceptance timing: defer the richer ack until a plan passes review.
+4. Chat-turn history depth: pick one (last N confirmed answers / pinned summary
+   / full thread) against the model-call budget.
+
+These change behavior the user will feel, so they are the sponsor's call; the
+plan carries recommended defaults so it is executable if the sponsor does not
+override.
+
+### Loop 5 verdict
+
+**Meets the bar, now covering all three sponsor-named problems.** The whiplash
+is traced to its exact source and given a first-tier phase; routing and the
+context contract are specified without redefining the model-call boundary. Four
+behavior-shaping decisions are surfaced with defaults rather than silently
+chosen.
