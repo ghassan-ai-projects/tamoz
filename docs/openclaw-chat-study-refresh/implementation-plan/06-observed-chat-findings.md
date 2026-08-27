@@ -126,7 +126,7 @@ a durable, occurrence-bound answer path.
 (no approval markup, no `decision_evidence` lookup), the occurrence stays paused,
 and no `KeyError`; a reply/`/answer` resumes the same occurrence.
 
-**Fixed (2026-08-28, commit `6bee882`):** the clarification projection benchmark
+**Fixed (2026-08-28, commit `9d57a2a`):** the clarification projection benchmark
 is green. Clarifications now deliver as bounded text-only control cards, remain
 outside approval evidence, and preserve `clarification_required` across restart;
 answer ingress remains the separate OF-11 cycle.
