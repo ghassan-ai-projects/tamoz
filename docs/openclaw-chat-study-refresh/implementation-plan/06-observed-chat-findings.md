@@ -346,6 +346,11 @@ replies with no pending question stay new requests.
 **Benchmark:** a reply to a pending question resumes that occurrence; a reply
 with no pending question is a new request.
 
+**Fixed (2026-08-28, commit `7e2df9d`):** clarification replies now bind to the
+delivered question by its durable Telegram receipt, and `/answer <ref> <text>`
+provides an explicit fallback. Both paths enqueue the existing durable resume
+operation for the same occurrence; ordinary replies remain new requests.
+
 ---
 
 ## OF-12 — Redirect does not say what replaced what, or what was kept
