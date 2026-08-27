@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Harness A driver — an in-process mock-Telegram chat REPL against the REAL
+# runtime + a REAL model provider. See
+# docs/openclaw-chat-study-refresh/implementation-plan/05-experience-harness.md.
+#
+# Usage:
+#   export DEEPSEEK_API_KEY=... TAMOZ_PROVIDER=deepseek TAMOZ_MODEL=deepseek-chat
+#   export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+#   bundle exec ruby bin/tamoz-chat-sim
+#
+# In the REPL, a line is a user message. Meta commands:
+#   /reply <text>   reply to the bot's last message (natural clarification answer)
+#   /tap <data>     press an inline button (callback query, e.g. /tap deny:...)
+#   /status         print the durable status projection
+#   /quit           exit
+#
+# Non-interactive: pipe messages on stdin, one per line.
+
+require 'bundler/setup'
+$LOAD_PATH.unshift(File.expand_path('../test/support', __dir__))
+
+require 'json'
+require 'experience_harness'
+
+def preflight!
+  provider = ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
+  cred = "#{provider.upcase}_API_KEY"
+  if ENV[cred].to_s.empty?
+    abort "Missing #{cred}. Export it (the repo keeps DEEPSEEK_API_KEY in .env):\n  " \
+          "export #{cred}=\"$(sed -n 's/^#{cred}[[:space:]]*=[[:space:]]*//p' .env)\""
+  end
+  return if /utf-?8/i.match?((ENV['LC_ALL'] || ENV.fetch('LANG', nil)).to_s)
+
+  warn 'WARN: no UTF-8 locale set; real-model runs need LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8'
+end
+
+def render(cards)
+  if cards.empty?
+    puts '   (no reply)'
+    return
+  end
+  cards.each do |card|
+    tag = card[:kind].sub('request.', '')
+    line = card[:text].to_s.strip
+    line = '(empty)' if line.empty?
+    puts "🤖 [#{tag}] #{line}"
+    puts "   buttons: #{button_labels(card[:markup])}" if card[:markup]
+  end
+end
+
+def button_labels(markup)
+  return markup.inspect unless markup.is_a?(Hash)
+
+  Array(markup['actions'] || markup[:actions] || markup['buttons'] || markup[:buttons]).inspect
+end
+
+preflight!
+harness = Tamoz::ExperienceSim::Harness.new
+puts "tamoz-chat-sim — mock Telegram, real runtime, provider=#{harness.provider_label}"
+puts 'Type a message. /reply <text>, /tap <data>, /status, /quit.'
+puts
+
+begin
+  while (line = $stdin.gets)
+    line = line.chomp
+    next if line.empty?
+
+    case line
+    when '/quit', '/exit' then break
+    when '/status' then puts harness.status_text
+    when %r{\A/reply\s+(.+)\z} then puts "👤 (reply) #{Regexp.last_match(1)}"
+
+                                    render(harness.reply(Regexp.last_match(1)))
+    when %r{\A/tap\s+(.+)\z} then puts "👤 (tap) #{Regexp.last_match(1)}"
+                                  render(harness.tap(Regexp.last_match(1)))
+    when %r{\A/} then warn "unknown command: #{line}"
+    else
+      puts "👤 #{line}"
+      render(harness.say(line))
+    end
+    puts
+  end
+ensure
+  harness.close
+end
