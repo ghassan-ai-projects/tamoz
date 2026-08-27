@@ -244,6 +244,12 @@ asks which, stamping none.
 **Benchmark:** bare `/cancel` with two open lists both refs and cancels neither;
 `/cancel <ref>` cancels exactly that one and echoes it.
 
+**Fixed (2026-08-28, commit `7aaea8c`):** chat cancellation now resolves the
+caller-bound open request before the durable stamp-and-redirect transaction. A
+bare command disambiguates when several requests are open; `/cancel <ref>`
+targets and echoes exactly one request. CLI cancellation remains tracked under
+CF-3 and is not covered by this fix.
+
 ---
 
 ## OF-8 — The approval card is opaque and offers only "Deny"
