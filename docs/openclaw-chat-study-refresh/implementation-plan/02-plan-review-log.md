@@ -192,3 +192,71 @@ lifecycle or competence — is the sponsor's call, and guessing it is what misse
 three times. The plan is therefore *aimed* correctly but not yet *pointed*: the
 next round must begin from the sponsor's answer / the spike's result, not from
 another assumption.
+
+---
+
+## Loop 4 — pointed at the interaction gap (v3 → v4)
+
+**Sponsor answer:** the gap is **broken/awkward interaction** — can't ask a
+question and take the answer inline; controls are confusing / hit the wrong
+request; returning later is disorienting. Not competence; noise secondary.
+Refine the plan before any code or real run.
+
+This closes O3 (right gap identified) and de-scopes the competence program for
+now. It also re-sequences O2: the experience spike is deferred until the sponsor
+chooses to validate, per their "plan before any real run."
+
+### What v4 added
+
+- **Interaction contract I1–I3**, the new spine, each written as a concrete
+  before/after transcript the sponsor judges against: I1 ask+answer inline, I2
+  controls hit the intended request (with disambiguation), I3 non-disorienting
+  return.
+- **I1 natural path**: prefer a Telegram reply-to-message binding over a
+  command+ref, with `/answer <ref>` as fallback. Threaded into Phase 0 with a
+  named test.
+- **I2 disambiguation**: a bare `/cancel` with multiple open requests lists refs
+  and acts on none, instead of stamping all. Threaded into Phase 1 with a named
+  test.
+- **Interaction spine** marks everything else (full attention budget, fuller
+  heartbeat, evidence breadth, channel decision) as secondary to I1–I3.
+
+### Lens objections against v3 → v4
+
+**Architecture / feasibility — High (forced a revision).** v3's answer ingress
+was `/answer <ref>` only, which is not the "inline/natural" the sponsor wants,
+and the natural reply path's feasibility was unverified. Source check:
+- the outbox row persists the delivered Telegram message-id in `receipt`
+  (`delivery_drainer.rb:139`) and inbound replies carry `reply_to`
+  (`normalizer.rb:64`), so reply-binding is feasible;
+- **but** resolving a reply to the occurrence needs the clarify row to carry
+  occurrence identity — the same change Phase 1 makes for CF-2.
+→ Resolved: added the natural reply path as preferred; documented the shared
+outbox-identity dependency; kept `/answer <ref>` fully within Phase 0 so I1 is
+not blocked, and noted Phase 0+1 are best executed together for full I1.
+
+**Security — Medium.** Reply-binding must not become an authority path (a reply
+from another correspondent to a copied message-id must not bind another's
+occurrence).
+→ Resolved: Phase 0 states reply-binding reuses the existing occurrence/
+correspondent/conversation/expiry fences and is only a ref-discovery convenience.
+
+**Interaction — Medium.** v3 controls were "exact-ref," but the sponsor's
+complaint is also the *ambiguous* case (bare `/cancel` with two open).
+→ Resolved: I2 disambiguation reply added to Phase 1 with a test.
+
+**Product — Low.** Return-after-gap relief should not wait for the full Phase 3
+card.
+→ Resolved: I3 split — minimal honest `/status <ref>` after reopen lands in
+Phase 1; polished "since you were away" card is Phase 3.
+
+### Loop 4 verdict
+
+**Meets the bar, pointed at the interaction gap.** The spine is I1–I3, each with
+a concrete acceptance transcript and named tests, and the one real feasibility
+dependency (reply-binding ↔ Phase 1 outbox identity) is stated rather than
+discovered mid-build. The plan is now both aimed and pointed.
+
+**Next decision (sponsor's):** the plan is ready to implement I1–I3. Remaining
+choice is when to start code and when to run the deferred validation spike —
+both held per the sponsor's "refine before any code or real run."

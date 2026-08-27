@@ -1,7 +1,15 @@
 # Chat experience refresh — phased implementation plan
 
-Version: v3 (revised after review loop 3 — outcome/north-star lens; see
-`02-plan-review-log.md`).
+Version: v4 (revised after review loop 4 — pointed at the interaction gap the
+sponsor named; see `02-plan-review-log.md`).
+
+**Sponsor direction (2026-08-27):** the unmet expectation is *broken/awkward
+interaction* — the agent can't ask a question and take an answer inline,
+controls are confusing or hit the wrong request, and returning later is
+disorienting. It is **not** answer competence, and noise is secondary. Refine
+the plan around interaction before any code or real run. This resolves the
+answer-competence fork below in favor of lifecycle/interaction, and defers the
+experience spike until the sponsor chooses to validate.
 
 This plan operationalizes `../02-decision-roadmap.md` and closes the canonical
 findings in `../05-open-findings-ledger.md`. It is a plan, not evidence of a
@@ -38,7 +46,135 @@ competence* — see the fork below; it is not delivered by Phases 0–3.
 real Telegram + real DeepSeek and confirms which moments now meet expectations
 and which do not. That confirmation, not a green suite, drives the next round.
 
-## Answer-competence fork (read before executing)
+## Interaction contract (the named gap, made concrete)
+
+The sponsor's gap is interaction, so the plan's spine is these three flows.
+Each is written as a before/after the implementer builds and the sponsor judges
+against. "Before" lines are current behaviour; "after" lines are the target.
+
+### I1 — Ask a question and take the answer inline
+
+The agent must be able to ask a plain question in the chat and accept the reply
+as an answer that resumes the same work — with no command syntax required in
+the common case.
+
+```text
+Before (current): a clarification pause crashes before the question is sent
+(CF-1); even if it were sent, plain text is admitted as a NEW request (CF-4),
+so the user cannot answer inline at all.
+
+After (target):
+  Tamoz: r7f3 · One quick question
+         To finish "tidy the release notes": include the 0.9.1 hotfix section?
+         Reply to this message, or /answer r7f3 <text>.
+  User:  (replies to that message) yes, keep it but trim it to 3 bullets
+  Tamoz: r7f3 · Working — got it, trimming the hotfix section to 3 bullets.
+```
+
+Design points that make it *natural*, not just *possible*:
+- **Preferred path is a Telegram reply-to-message binding**, not a command with
+  a ref. When the user replies to the agent's question message, the gateway
+  binds the answer to the occurrence that produced it. `/answer <ref> <text>`
+  is the fallback for clients/paths without reply context. (CLI: the existing
+  prompt loop already answers inline; keep parity.)
+- The question is one bounded sentence, framework-owned, redacted — never raw
+  model prose in an authority field.
+- A wrong-reply / stale / expired answer is rejected with a plain reason, not a
+  crash and not a silent new task.
+
+Owner: Phase 0 (CF-1, CF-4) plus the normalizer's existing reply identity in
+`Telegram::Normalizer`.
+
+### I2 — Controls hit the request the user means
+
+Every control names its target and, when ambiguous, asks rather than guessing.
+
+```text
+Before (current): /cancel has no ref and stamps EVERY admitted request on the
+thread (CF-3); /status can report another request's delivery state (CF-2); a
+CLI handle doesn't resolve on Telegram and vice versa (DG-1).
+
+After (target):
+  User:  /cancel
+  Tamoz: You have 2 open requests — which one?
+         r7f3 · Working · "tidy the release notes"
+         r9b2 · Queued  · "draft the changelog email"
+         Use /cancel r7f3 or /cancel r9b2.
+  User:  /cancel r9b2
+  Tamoz: Cancelling r9b2 (Queued). I'll confirm whether it stopped before it ran.
+         r7f3 is untouched.
+```
+
+Design points:
+- With exactly one open request, a bare `/cancel` acts and echoes the ref. With
+  more than one, it **disambiguates** by listing open refs — it never acts on
+  the wrong one and never fans out to all.
+- `/status`, `/cancel`, `/redirect` all resolve one caller-bound reference and
+  report request-local truth; the same short ref resolves on Telegram and the
+  actual CLI.
+- Every card carries its ref so the user always has something to target.
+
+Owner: Phase 1 (CF-2, CF-3, DG-1). The disambiguation reply is part of Phase 1's
+command adapter, not a new subsystem.
+
+### I3 — Coming back is not disorienting
+
+Returning after a gap yields one honest answer to "where does each of my tasks
+stand?" — no guessing, no resend, no false "delivered."
+
+```text
+Before (current): the system recovers durably, but the person must discover it
+via operator commands; there is no return summary; unknown delivery is silent.
+
+After (target):
+  User:  /status
+  Tamoz: Since you were away — 2 tasks:
+         r7f3 · Waiting for your answer · "tidy the release notes"
+         r9b2 · Completed · delivery uncertain — the final message may not have
+                arrived; I won't resend it automatically. Ask the operator to
+                check, then /status r9b2.
+```
+
+Design points:
+- A **minimal** honest return — `/status <ref>` resolving request-local state
+  after a reopen — is delivered by Phase 1 (stable handle + request-local
+  status). The polished "since you were away" card (bounded by a read cursor)
+  is Phase 3 (MG-1).
+- `delivery: uncertain` is explicit and never rendered as delivered or
+  auto-resent.
+
+Owner: Phase 1 (minimal) → Phase 3 (polished card, MG-1).
+
+### Interaction spine (primary path for this program)
+
+Given the named gap, the primary sequence is:
+
+```text
+Phase 0 (I1: ask + answer inline)  ─┐
+                                    ├─> Phase 2 (card carries ref + next action)
+Phase 1 (I2: targeted controls,     │      └─> Phase 3 (I3: polished return card)
+         I3-minimal: honest status)─┘
+```
+
+One cross-phase dependency to hold in mind: I1's natural reply-to-message path
+shares Phase 1's outbox-row identity change (see the Phase 0 feasibility note),
+so the `/answer <ref>` fallback is usable from Phase 0 while the reply path lands
+once Phase 1's row identity is in. This does not change the spine order; it means
+Phase 0 and Phase 1 are best executed together for the full I1 experience.
+
+Everything else in this plan — the full attention budget beyond the notify
+rules, the fuller worker-heartbeat shape, the breadth of the Phase 4 evidence
+apparatus, and the Phase 5 channel decision — is **secondary** to closing I1–I3
+and supports them; it must not delay them.
+
+## Answer-competence fork (resolved: interaction, not competence)
+
+The sponsor confirmed the gap is interaction, not answer quality, so this plan
+(Phases 0–3) is aimed correctly. The fork is retained for the record and as the
+stop rule: if, after I1–I3 land and are tried on a real path, the experience
+still misses because the agent's *answers* are weak, that is a separate program
+(planning, tool use, prompts, retrieval, model choice, answer-quality
+evaluation) and must be opened explicitly — Phases 0–3 cannot fix competence.
 
 Three prior rounds improved durability/lifecycle and did not meet expectations.
 Before spending a fourth round on more lifecycle work, the plan forces a
@@ -55,12 +191,18 @@ decision the code cannot make for us:
 The experience spike exists to settle this fork with evidence rather than
 assumption.
 
-## Round 0 — Experience spike (early learning gate, do first)
+## Experience spike (validation gate — on sponsor's go, not yet)
+
+**Sequencing:** the sponsor has chosen to refine the plan before any real run,
+so this spike is deferred, not first. It becomes the validation gate the moment
+they want to check the interaction fixes against reality — ideally right after
+Phase 0 (ask/answer inline) and Phase 1 (targeted controls) land, so the spike
+walks a *fixed* interaction rather than the current broken one.
 
 **Purpose:** get a felt, real improvement — or a clear diagnosis — in front of
-the user within the first round, instead of after the whole stack lands. This is
-the study's sanctioned "first real happy path may run earlier as an
-evidence-discovery gate; it cannot publish broad readiness."
+the user, instead of only after the whole stack lands. This is the study's
+sanctioned "first real happy path may run earlier as an evidence-discovery
+gate; it cannot publish broad readiness."
 
 **What it is:** one guarded, private run of the *current* system on real
 DeepSeek + a private Telegram bot, walking moments 1–5 above (a short real task,
@@ -146,11 +288,27 @@ contract.
   the existing approval prompt and evidence lookup unchanged.
 - Carry `kind`/`reason` into park + deadline metadata so a clarify pause has
   clarify (not approval) expiry/resume semantics.
-- Add one explicit durable answer ingress — `/answer <ref> <text>` (or a typed
-  reply action) — that binds occurrence, correspondent, conversation, expiry,
-  and replay, and resumes the same occurrence. Plain text stays a new request.
+- Add a durable answer ingress with a **natural preferred path (I1)**: a
+  Telegram reply to the agent's question message binds the answer to the
+  occurrence that produced it (via the normalizer's existing reply identity).
+  `/answer <ref> <text>` is the explicit fallback. Either path binds occurrence,
+  correspondent, conversation, expiry, and replay, and resumes the same
+  occurrence. Plain text that is not a reply to a question stays a new request.
 - If a bound surface has no text input, emit a typed durable/operator-visible
   unavailable notice; never raise, never route through approval.
+
+**Feasibility note (verified in source):** the outbox row persists the
+delivered Telegram message-id in its `receipt` column
+(`delivery_drainer.rb:139`), and inbound replies carry `reply_to` message-id
+(`normalizer.rb:64`). Resolving a reply back to the occurrence therefore needs
+the clarify question row to also carry its occurrence identity. That is the same
+outbox-row identity change Phase 1 makes for CF-2. **Consequence:** the
+`/answer <ref>` fallback lands fully within Phase 0; the natural reply-to-message
+preferred path shares Phase 1's outbox-identity change and lands when both are
+in. Reply-binding reuses the existing occurrence/correspondent/conversation/
+expiry fences — it is a convenience for discovering the ref, never a new
+authority path (a reply from another correspondent cannot bind another's
+occurrence).
 
 **Entry criteria:** none beyond current typed interrupt descriptors.
 
@@ -165,6 +323,9 @@ resume; unsupported-surface path emits a typed unavailable notice.
 - `test_clarification_answer_resumes_the_same_occurrence` — valid answer
   resumes; wrong-correspondent answer rejected; stale-occurrence answer
   rejected; duplicate answer deduplicated.
+- `test_reply_to_question_message_binds_answer_without_a_ref` (I1) — a Telegram
+  reply to the question message resumes the correct occurrence; a reply to an
+  unrelated message is not misbound; `/answer <ref>` fallback still works.
 - `test_approval_prompt_unchanged_for_approve_tool_descriptor` — approval
   evidence/keyboard path is byte-for-byte unchanged (regression guard).
 - `test_text_input_limited_surface_emits_typed_unavailable_notice`.
@@ -208,6 +369,10 @@ worker availability is a durable, distinguishable fact.
 - Make cancel resolve a supplied reference through the same
   surface/conversation binding as request status and stamp only that request
   row; reject foreign/malformed/ambiguous refs without mutation.
+- **Disambiguate ambiguous controls (I2):** a bare `/cancel` (or `/status`,
+  `/redirect`) with exactly one open request acts and echoes that ref; with more
+  than one open request it replies with the list of open refs and asks the user
+  to choose — it never acts on the wrong request and never fans out to all.
 - Project one caller-bound short reference through Telegram, attached CLI,
   queued CLI, status, cancel, and redirect; keep thread/occurrence IDs as
   internal authority handles shown only in diagnostic/JSON output.
@@ -241,6 +406,9 @@ two-request and restart tests.
   each ref shows only its own delivery/effect; holds after reopen and replay.
 - `test_cancel_targets_one_reference_only` — cancel older ref; other ref
   unstamped and can complete; foreign/malformed/ambiguous ref rejected.
+- `test_bare_cancel_disambiguates_when_multiple_open` (I2) — bare `/cancel` with
+  two open requests lists both refs and stamps neither; with one open request it
+  acts and echoes the ref.
 - `test_actual_cli_subprocess_handle_resolves_after_reopen` — real
   `queue add` prints a handle; caller exits; `worker --once` advances; status
   resolves the handle after DB reopen; stderr free of unhandled exceptions.
