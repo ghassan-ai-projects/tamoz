@@ -39,6 +39,9 @@ Read in this order:
     evidence-state index.
 14. [04-correction-log.md](04-correction-log.md) — review findings,
     corrections, orchestration observations, and unresolved gaps.
+15. [05-open-findings-ledger.md](05-open-findings-ledger.md) — every reviewer
+    finding normalized into one de-duplicated, verification-labelled set with
+    an owner seam and target slice; the authoritative implementation to-do.
 
 The package is concrete enough to drive bounded implementation slices, but the
 current product/evidence verdict remains NEEDS FIXES. A deterministic fixture

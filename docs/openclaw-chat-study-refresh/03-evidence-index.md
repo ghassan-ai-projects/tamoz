@@ -33,6 +33,9 @@ or usefulness observation.
 | Gateway cancellation is thread-oriented rather than exact-reference scoped | Fact | gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_commands.rb:96-121; gems/tamoz-sqlite/lib/tamoz/sqlite/comms_store.rb:988-994 | Confirmed high-severity control gap |
 | Proposed clarification answer has no durable comms ingress | Fact | gems/tamoz-comms/lib/tamoz/comms/commands.rb:7-20; gems/tamoz-comms/lib/tamoz/comms/admission.rb:36-47,89-121 | Confirmed contract gap |
 | Safe goal label has deterministic owner and redaction rules | Evidence gap | gems/tamoz-agent-session/lib/tamoz/agent/session_status_projection.rb:5-8,19-37,76-105 | Must be defined before human projection |
+| Callback observed_at is derived from top-level message.date, absent on callback-only updates | Fact | gems/tamoz-telegram/lib/tamoz/telegram/normalizer.rb:34-48,69-80; test/telegram_normalizer_test.rb:80-99 | Confirmed medium defect (CF-5); must precede callback/latency telemetry |
+| CLI test exits 0 despite an unhandled background CheckpointConflictError | Runtime observation | gems/tamoz-sqlite/lib/tamoz/sqlite/lease_operations.rb:50; gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:105-123 | Confirmed reliability defect (CF-6); reproduce before fixing |
+| Benchmark impl-plan cites nonexistent tamoz-evals paths; OpenclawDurableCliAdapter is the real owner | Fact | docs/openclaw-chat-study/benchmark-protocol/README.md:45-47; gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:15-25 | Confirmed doc/governance defect (EG-7); reconcile before Slice 4 |
 | Future channel should be deferred | Proposal | Consolidated study and facilitator/Fourier synthesis | Decision recommendation |
 | A local web or TUI is the candidate after gates | Proposal | Architecture report, Fourier challenge, roadmap Slice 5 | Candidate only; no implementation authorization |
 

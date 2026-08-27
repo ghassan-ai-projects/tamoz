@@ -133,6 +133,29 @@ The review loop added four corrections to the package:
 Final product-engineering conclusion: content is sufficient for bounded
 implementation planning, but implementation readiness remains NEEDS FIXES.
 
+## Post-package improvement pass (2026-08-27)
+
+A follow-up review re-verified the package's three spine defects against
+current source and hardened the record:
+
+- CF-1 (clarification/approval collapse), CF-2 (conversation-scoped runtime
+  status), and CF-3 (thread-wide cancellation) were independently
+  re-confirmed. CF-3's mechanism was made precise: `command_request_id`
+  derives a synthetic idempotency key from `(surface_id, update_id, 'cancel')`,
+  not a user-supplied reference, and `stamp_cancellation_requested!` updates
+  every admitted row on the thread.
+- Three findings that reviewers confirmed but that never reached the
+  consolidated study, evidence index, or roadmap were rescued and are now
+  tracked: CF-5 (callback `observed_at` epoch defect), CF-6 (swallowed async
+  `CheckpointConflictError`), and EG-7 (stale `tamoz-evals` benchmark paths;
+  the real owner is `OpenclawDurableCliAdapter`).
+- A normalized, de-duplicated finding ledger was added at
+  `05-open-findings-ledger.md`, mapping every reviewer finding ID to one
+  canonical finding with an owner seam and target slice.
+- One concrete factual error was fixed in place: the reconnect journey cited
+  `C4-restart-recovery-matrix.md`; the current file is
+  `C4-restart-boundary-matrix.md`.
+
 ## Final package verification
 
 - git diff --check passed.
