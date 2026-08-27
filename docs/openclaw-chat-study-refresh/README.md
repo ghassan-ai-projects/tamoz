@@ -47,7 +47,11 @@ Read in this order:
     loop that iterated the plan until it met the bar:
     [00-plan-bar.md](implementation-plan/00-plan-bar.md),
     [01-plan.md](implementation-plan/01-plan.md),
-    [02-plan-review-log.md](implementation-plan/02-plan-review-log.md).
+    [02-plan-review-log.md](implementation-plan/02-plan-review-log.md),
+    [03-open-decisions.md](implementation-plan/03-open-decisions.md) (the four
+    behaviour-shaping decisions, planned and multi-lens reviewed), and
+    [04-user-issue-discovery.md](implementation-plan/04-user-issue-discovery.md)
+    (15 chat issues from the user's perspective, each mapped to a fix).
 
 The package is concrete enough to drive bounded implementation slices, but the
 current product/evidence verdict remains NEEDS FIXES. A deterministic fixture
