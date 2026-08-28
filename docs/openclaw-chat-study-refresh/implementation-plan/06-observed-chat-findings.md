@@ -66,22 +66,23 @@ provider; assert the turn reaches a terminal `answer`/`completed` OR a bounded,
 user-safe failure card — never `CheckpointConflictError` reaching the user, and
 never "failed before it could finish" after a successful tool effect.
 
-**Fixed (2026-08-28, commits `3a833c1` and `0c9a057`).** The durable CLI now
-observes exceptions from its worker thread instead of allowing a background
-failure to look like success or leak an unhandled backtrace. The CLI and chat
-worker project checkpoint conflicts as bounded status-oriented failure cards;
-neither surface exposes the exception class, internal message, or the old
-"failed before it could finish" wording. A focused durable regression also
-proves that a successful read effect remains journaled before the safe failure
-is returned. The current effect-identity tests do not establish a new real-
-provider repair run, so this closes the exposed failure-card and async-error
-boundary without claiming model quality or latency evidence.
+**Fixed (2026-08-28, commits `3a833c1`, `0c9a057`, and `4bc028c`).** The
+durable CLI now observes exceptions from its worker thread instead of allowing a
+background failure to look like success or leak an unhandled backtrace. The CLI
+and chat worker project checkpoint conflicts as bounded status-oriented failure
+cards; neither surface exposes the exception class, internal message, or the old
+"failed before it could finish" wording. The durable tool dispatcher now keeps
+the request digest derived from tool semantics only; `plan_digest` remains
+provenance on the plan and intent records, but a repair re-plan of the same logical
+read reuses its recorded effect receipt instead of raising a logical-key
+conflict.
 
-**Evidence:** `test/agent_cli_test.rb` (34 runs, 764 assertions),
-`test/agent_worker_failure_reason_test.rb` (6 runs, 14 assertions), and the
-existing effect-identity/session suites pass under pinned Ruby. This is
-deterministic runtime/error-boundary evidence; it is not a current real-provider
-reproduction or human-usefulness result.
+**Evidence:** `test/agent_session_effect_test.rb` (20 runs, 79 assertions),
+`test/agent_session_kill_matrix_test.rb` (6 runs, 67 assertions),
+`test/agent_cli_test.rb` (34 runs, 764 assertions), and
+`test/agent_worker_failure_reason_test.rb` (6 runs, 14 assertions) pass under
+pinned Ruby. This is deterministic runtime/error-boundary evidence; it is not a
+current real-provider reproduction or human-usefulness result.
 
 ---
 

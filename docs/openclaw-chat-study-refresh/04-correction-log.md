@@ -187,6 +187,10 @@ evidence.
   returned as bounded failures without an unhandled background backtrace.
 - `0c9a057`: the chat worker's raised checkpoint-conflict projection uses the
   same bounded status-oriented failure language.
+- `4bc028c`: tool effect request identity excludes the repair plan digest, so
+  an identical repair re-plan reuses the durable effect receipt instead of
+  colliding with its logical key; the regression is covered by the session
+  effect suite.
 
 OF-2 remains a separate latency workstream. The implementation pass adds no
 false claim that sequential real-provider model calls are now fast; the

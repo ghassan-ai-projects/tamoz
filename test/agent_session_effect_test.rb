@@ -272,13 +272,13 @@ class AgentSessionEffectTest < Minitest::Test
         request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
         capabilities = CountingCapabilities.new
         configuration = ToolDispatchConfiguration.new(
-            model: nil,
-            model_call_safety: :idempotent,
-            profile: nil,
-            toolbox: Tamoz::Agent::Toolbox.new(root: directory),
-            mcp: nil,
-            capabilities:
-          )
+          model: nil,
+          model_call_safety: :idempotent,
+          profile: nil,
+          toolbox: Tamoz::Agent::Toolbox.new(root: directory),
+          mcp: nil,
+          capabilities:
+        )
         effects = Tamoz::Agent::SessionEffects.new(configuration:)
         with_writer(app.checkpointer, "owner.replanned") do |writer|
           context = Tamoz::Context.new(
@@ -547,18 +547,6 @@ class AgentSessionEffectTest < Minitest::Test
         )
       end
     end.new
-  end
-
-  def model_request_for(transport)
-    {
-      "system" => "system",
-      "prompt" => "prompt",
-      "request_digest" => transport.request_digest(
-        transport.build_request(system: "system", prompt: "prompt")
-      ),
-      "stage" => "plan",
-      "provider_configuration_digest" => transport.provider_configuration_digest
-    }
   end
 
   def reconcile_fs(toolbox, intent)

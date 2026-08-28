@@ -155,7 +155,7 @@ module Tamoz
         SessionRecords.digest(Tamoz::Agent::Deliberation.canonical(catalogs))
       end
 
-      # Plan digests remain provenance on the intent and receipt. They are not
+      # Plan digests remain provenance on plan and intent records. They are not
       # part of the tool request semantics, so a repair re-plan can replay the
       # same logical effect instead of colliding with its recorded receipt.
       def dispatch_request(tool, arguments)
