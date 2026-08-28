@@ -73,5 +73,5 @@ credential resolver per ADR-048). `Tamoz::StateCodec` carries the durable messag
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR index
-- [ADR-048 — digest-bound model transport](./core-decisions.md#adr-048--one-digest-bound-openai-compatible-model-transport)
+- [ADR-048 — digest-bound model transport](./adr-048-one-digest-bound-openai-compatible-model-transport.md)
 - [`../reference/model-providers.md`](../reference/model-providers.md) — provider configuration

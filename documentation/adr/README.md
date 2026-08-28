@@ -1,100 +1,115 @@
 # Architecture decision records
 
-Tamoz records its architecture decisions as numbered ADRs. This is the single authoritative
-catalog: every decision that exists appears here exactly once, with its current status and a
-link to its text. There are no RFC-style proposal documents in the repository.
+The authoritative catalog of Tamoz's architecture decisions. **One decision per file**,
+uniform structure, one index. This directory is the single home — there is no second copy.
 
 Current version: `0.1.0.alpha.1` (pre-release).
 
-## How this directory is organized
+## For agents (and humans) — how to work with these ADRs
 
-| File | What it holds |
+- **Find a decision by number:** open `adr-<NNN>-*.md` (e.g. `adr-017-*.md`). Every ADR is
+  its own file; the number is stable, the slug describes it.
+- **Find a decision by topic:** scan the [index](#adr-index) below, or `grep` the `# ADR-`
+  titles across `documentation/adr/adr-*.md`.
+- **Read one decision:** each file has the same sections in the same order —
+  `Status` / `Date` / `Tier` / `Relates to`, then `## Decision`, `## Consequences`
+  (where relevant), `## Rejected alternatives`, `## Verification`, `## Next reads`.
+  Safety/authority-bearing ADRs add `## Invariant linkage`, `## Threat model`, and a
+  change-bar. The `Verification` line names the gem/symbol/test that proves the decision
+  matches today's code.
+- **Check status quickly:** `grep -H '^\*\*Status:\*\*' documentation/adr/adr-*.md`.
+- **Add a new ADR:** take the next free number (below), copy the template in
+  [`ADR_QUALITY_BAR.md` §7](./ADR_QUALITY_BAR.md#7-authoring-template), write
+  `adr-<NNN>-<slug>.md`, and add one row to the index. The bar (§4) is the acceptance
+  rubric; retire a decision by moving its row to [`RETIRED.md`](./RETIRED.md) (numbers are
+  never reused).
+
+## Directory map
+
+| File | Purpose |
 |---|---|
-| [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) | The bar every ADR is held to: what an ADR is, the required structure, the grading rubric, and the end goal. Start here to author or judge an ADR. |
-| [`core-decisions.md`](./core-decisions.md) | The living log of **in-force foundational decisions** — stable runtime/agent/subsystem axioms stated as one rule. |
-| `adr-NNN-*.md` | **Standalone pages** for decisions that carry a threat model, a change-bar, or an amendment history. |
-| [`RETIRED.md`](./RETIRED.md) | Superseded and retired decisions, one line each. Numbers are never reused. |
-| [`AUDIT_2026-08-29.md`](./AUDIT_2026-08-29.md) | The deep audit that produced this structure, the per-ADR scorecard, and the loop that drives the corpus to the bar. |
-
-The former monolith `docs/design-v0.1/DECISIONS.md` was **removed** (2026-08-29) — its in-force
-decisions moved to `core-decisions.md` and the pages, its dead ones to `RETIRED.md`, and its two
-open product questions to the [roadmap](../roadmap.md#open-product-questions). One source of
-truth, not two.
+| `adr-<NNN>-*.md` | One decision each — the ADRs themselves. |
+| [`ADR_QUALITY_BAR.md`](./ADR_QUALITY_BAR.md) | The standard, grading rubric, tiers, and authoring template. |
+| [`RETIRED.md`](./RETIRED.md) | Superseded / renumbered decisions, one line each. |
+| [`AUDIT_2026-08-29.md`](./AUDIT_2026-08-29.md) | The deep audit that produced this structure + the scorecard. |
+| [`design-refusals.md`](./design-refusals.md) | Cross-cutting "things we refuse to build" digest, each pointing to its owning ADR. |
 
 ## ADR index
 
-Status legend: **Accepted** in force · **Proposed** ratified before implementation ·
-**Retired** superseded/withdrawn (see `RETIRED.md`).
+Status: **Accepted** in force · **Proposed** ratified before implementation ·
+**Retired** superseded (see `RETIRED.md`). An arrow (→ NNN) names the amending ADR.
 
-| ADR | Title | Status | Where |
-|---|---|---|---|
-| 001 | The framework is Tamoz; the reference app is Tamoz Agent | Accepted | [log](./core-decisions.md#adr-001--the-framework-is-tamoz-the-reference-application-is-tamoz-agent) |
-| 002 | ~~Four v0.1 runtime gems~~ | Retired → 052 | [retired](./RETIRED.md) |
-| 003 | ~~Reuse RubyLLM public values; durable codec~~ | Retired → 048 + 051 | [retired](./RETIRED.md) |
-| 004 | Explicit `Tamoz.seq`; no native `Proc#>>` | Accepted (revised) | [log](./core-decisions.md) |
-| 005 | Interrupt by `throw`, not by exception | Accepted | [log](./core-decisions.md) |
-| 006 | Plain Hash state with an explicit reducer registry | Accepted | [log](./core-decisions.md) |
-| 007 | Frozen state is handed to nodes | Accepted | [log](./core-decisions.md) |
-| 008 | `:threads` default pool; `:inline` in tests | Accepted | [log](./core-decisions.md) |
-| 009 | Prompt-cache stability is invariant 16 | Accepted | [log](./core-decisions.md) |
-| 010 | Ruby 3.3 floor; 3.4 and 4.0 primary targets | Accepted (revised) | [log](./core-decisions.md) |
-| 011 | SQLite is Tamoz Agent's default persistence | Accepted | [log](./core-decisions.md) |
-| 012 | ~~MCP is a deferred integration strategy~~ | Retired → 029 | [retired](./RETIRED.md) |
-| 013 | Public vocabulary is a budget, never a correctness cap | Accepted (revised) | [log](./core-decisions.md) |
-| 014 | No plugin API in v0.1 | Accepted | [log](./core-decisions.md) |
-| 015 | Durable means synchronous barrier commit | Accepted | [log](./core-decisions.md) |
-| 016 | External effects are at-least-once unless proven otherwise | Accepted | [log](./core-decisions.md) |
-| 017 | One fenced writer per thread namespace | Accepted | [log](./core-decisions.md) |
-| 018 | Strict sequence is separate from checkpoint identity | Accepted | [log](./core-decisions.md) |
-| 019 | Resume is graph-version checked | Accepted | [log](./core-decisions.md) |
-| 020 | Sensitive-data policy is explicit and lossless | Accepted | [log](./core-decisions.md) |
-| 021 | Resume preserves execution identity; fork changes it | Accepted | [log](./core-decisions.md) |
-| **022** | **Every task action requires a reviewed, digest-bound plan** | Accepted | [page](./adr-022-reviewed-plan-gate.md) |
-| **023** | **Self-improvement is candidate promotion, never live self-mutation** | Accepted | [page](./adr-023-self-improvement-promotion.md) |
-| 024 | "Smart" means evidence-based, proportional, and verified | Accepted | [log](./core-decisions.md) |
-| 025 | Evaluation is a first-class non-runtime gem | Accepted | [log](./core-decisions.md) |
-| 026 | Three durable memory layers: Experience, Knowledge, Wisdom | Accepted | [log](./core-decisions.md) |
-| 027 | Memory retrieval is authorization; consolidation preserves disagreement | Accepted | [log](./core-decisions.md) |
-| 028 | Self-healing is bounded remediation, not catch-and-retry | Accepted | [log](./core-decisions.md) |
-| 029 | MCP is native at the edge and uses the official Ruby SDK | Accepted (shipped) | [log](./core-decisions.md#adr-029--mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk) |
-| 030 | One local capability catalog governs all sources | Accepted (extended → 054) | [log](./core-decisions.md#adr-030--one-local-capability-catalog-governs-all-sources) |
-| 031 | Scheduling materializes occurrences; it does not run agents | Accepted (shipped) | [log](./core-decisions.md) |
-| 032 | Scheduled time and delayed authority are explicit | Accepted | [log](./core-decisions.md) |
-| 033 | Skills use the open Agent Skills format and stay an agent recipe | Accepted | [log](./core-decisions.md) |
-| 034 | Skill identity is a tree digest; activation is supply-chain promotion | Accepted | [log](./core-decisions.md) |
-| 035 | Streaming input is a distinct first-class runtime | Accepted (revised → 055) | [log](./core-decisions.md#adr-035--streaming-input-is-a-distinct-first-class-runtime) |
-| 036 | Situation is the boundary between continuous evidence and episodic cognition | Accepted | [log](./core-decisions.md) |
-| 037 | Event time, explicit backpressure, and effect-disabled replay are contracts | Accepted (revised → 055) | [log](./core-decisions.md) |
-| 038 | Physical action is typed intent plus current-state policy | Accepted | [log](./core-decisions.md) |
-| 039 | Tamoz is supervisory; certified safety and real-time control stay external | Accepted | [log](./core-decisions.md) |
-| 040 | One monorepo, multiple independently publishable gems | Accepted (→ 052) | [log](./core-decisions.md#adr-040--one-monorepo-multiple-independently-publishable-gems) |
-| 041 | Communication channels are a contract gem plus per-transport adapters | Accepted | [log](./core-decisions.md) |
-| 042 | The channel gateway is a separate process in the connector zone | Accepted | [log](./core-decisions.md) |
-| 043 | Telegram v1 is deny-only and reference-bound | Accepted (amended → 049) | [log](./core-decisions.md#adr-043--telegram-v1-is-deny-only-and-reference-bound) |
-| 044 | Observability is a contract gem plus per-exporter adapters | Accepted | [log](./core-decisions.md) |
-| 045 | The observability gems add no durable table | Accepted | [log](./core-decisions.md) |
-| 046 | Content capture is off by default, per class | Accepted | [log](./core-decisions.md) |
-| 047 | Sampling applies to export only, never to safety-bearing signals | Accepted | [log](./core-decisions.md) |
-| 048 | One digest-bound OpenAI-compatible model transport | Accepted (completed → 051) | [log](./core-decisions.md#adr-048--one-digest-bound-openai-compatible-model-transport) |
-| **049** | **Telegram approval is evidence-gated, not transport-gated** | Accepted | [page](./adr-049-telegram-approval.md) |
-| **050** | **Automated responses act only on durable evidence** | Proposed | [page](./adr-050-automated-response-durable-evidence.md) |
-| **051** | **RubyLLM is removed from the runtime** | Accepted | [page](./adr-051-rubyllm-removed.md) |
-| **052** | **`tamoz-agent` is decomposed into focused gems** | Accepted | [page](./adr-052-agent-gem-decomposition.md) |
-| **053** | **Approval policy is isolated into `tamoz-approval`** | Accepted | [page](./adr-053-approval-gem.md) |
-| **054** | **Websearch is the fourth capability source** | Accepted | [page](./adr-054-websearch-capability-source.md) |
-| **055** | **Continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker** | Accepted | [page](./adr-055-two-repo-authority-split.md) |
+| ADR | Title | Status |
+|---|---|---|
+| [001](./adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md) | The framework is Tamoz; the reference application is Tamoz Agent | Accepted |
+| [002](./RETIRED.md) | ~~Four v0.1 runtime gems~~ | Retired → 052 |
+| [003](./RETIRED.md) | ~~Reuse RubyLLM public values; durable codec~~ | Retired → 048+051 |
+| [004](./adr-004-explicit-tamoz-seq-no-native-proc.md) | Explicit `Tamoz.seq`; no native `Proc#>>` | Accepted |
+| [005](./adr-005-interrupt-by-throw-not-by-exception.md) | Interrupt by `throw`, not by exception | Accepted |
+| [006](./adr-006-plain-hash-state-with-an-explicit-reducer-registry.md) | Plain Hash state with an explicit reducer registry | Accepted |
+| [007](./adr-007-frozen-state-is-handed-to-nodes.md) | Frozen state is handed to nodes | Accepted |
+| [008](./adr-008-threads-is-the-default-pool-inline-in-tests.md) | `:threads` is the default pool; `:inline` in tests | Accepted |
+| [009](./adr-009-prompt-cache-stability-is-invariant-16.md) | Prompt-cache stability is invariant 16 | Accepted |
+| [010](./adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md) | Ruby 3.3 floor; 3.4 and 4.0 primary targets | Accepted |
+| [011](./adr-011-sqlite-is-tamoz-agent-s-default-persistence.md) | SQLite is Tamoz Agent's default persistence | Accepted |
+| [012](./RETIRED.md) | ~~MCP is a deferred integration strategy~~ | Retired → 029 |
+| [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | Accepted |
+| [014](./adr-014-no-plugin-api-in-v0-1.md) | No plugin API in v0.1 | Accepted |
+| [015](./adr-015-durable-means-synchronous-barrier-commit.md) | Durable means synchronous barrier commit | Accepted |
+| [016](./adr-016-external-effects-are-at-least-once-unless-proven-otherwise.md) | External effects are at-least-once unless proven otherwise | Accepted |
+| [017](./adr-017-one-fenced-writer-per-thread-namespace.md) | One fenced writer per thread namespace | Accepted |
+| [018](./adr-018-strict-sequence-is-separate-from-checkpoint-identity.md) | Strict sequence is separate from checkpoint identity | Accepted |
+| [019](./adr-019-resume-is-graph-version-checked.md) | Resume is graph-version checked | Accepted |
+| [020](./adr-020-sensitive-data-policy-is-explicit-and-lossless.md) | Sensitive-data policy is explicit and lossless | Accepted |
+| [021](./adr-021-resume-preserves-execution-identity-fork-changes.md) | Resume preserves execution identity; fork changes it | Accepted |
+| [022](./adr-022-reviewed-plan-gate.md) | **Every task action requires a reviewed, digest-bound plan** | Accepted |
+| [023](./adr-023-self-improvement-promotion.md) | **Self-improvement is candidate promotion, never live self-mutation** | Accepted |
+| [024](./adr-024-smart-means-evidence-based-proportional-and-verified.md) | "Smart" means evidence-based, proportional, and verified | Accepted |
+| [025](./adr-025-evaluation-is-a-first-class-non-runtime-gem.md) | Evaluation is a first-class non-runtime gem | Accepted |
+| [026](./adr-026-three-durable-memory-layers-experience-knowledge-wisdom.md) | Three durable memory layers: Experience, Knowledge, Wisdom | Accepted |
+| [027](./adr-027-memory-retrieval-is-authorization-consolidation-preserves-disagreement.md) | Memory retrieval is authorization; consolidation preserves disagreement | Accepted |
+| [028](./adr-028-self-healing-is-bounded-remediation-not-catch-and-retry.md) | Self-healing is bounded remediation, not catch-and-retry | Accepted |
+| [029](./adr-029-mcp-is-native-at-the-edge-and-uses-the-official-ruby-sdk.md) | MCP is native at the edge and uses the official Ruby SDK | Accepted (shipped) |
+| [030](./adr-030-one-local-capability-catalog-governs-all-sources.md) | One local capability catalog governs all sources | Accepted (extended → 054) |
+| [031](./adr-031-scheduling-materializes-occurrences-it-does-not-run-agents.md) | Scheduling materializes occurrences; it does not run agents | Accepted (shipped) |
+| [032](./adr-032-scheduled-time-and-delayed-authority-are-explicit.md) | Scheduled time and delayed authority are explicit | Accepted |
+| [033](./adr-033-skills-use-the-open-agent-skills-format-and-stay-an-agent-recipe.md) | Skills use the open Agent Skills format and stay an agent recipe | Accepted |
+| [034](./adr-034-skill-identity-is-a-tree-digest-activation-is-supply-chain-promotion.md) | Skill identity is a tree digest; activation is supply-chain promotion | Accepted |
+| [035](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md) | Streaming input is a distinct first-class runtime | Accepted |
+| [036](./adr-036-situation-is-the-boundary-between-continuous-evidence-and-episodic-cognition.md) | Situation is the boundary between continuous evidence and episodic cognition | Accepted |
+| [037](./adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) | Event time, explicit backpressure, and effect-disabled replay are contracts | Accepted |
+| [038](./adr-038-physical-action-is-typed-intent-plus-current-state-policy-never-model-effect.md) | Physical action is typed intent plus current-state policy, never model effect | Accepted |
+| [039](./adr-039-tamoz-is-supervisory-certified-safety-and-real-time-control-stay-external.md) | Tamoz is supervisory; certified safety and real-time control stay external | Accepted |
+| [040](./adr-040-one-monorepo-multiple-independently-publishable-gems.md) | One monorepo, multiple independently publishable gems | Accepted (instantiated → 052) |
+| [041](./adr-041-communication-channels-are-a-contract-gem-plus-per-transport-adapter-gems.md) | Communication channels are a contract gem plus per-transport adapter gems | Accepted |
+| [042](./adr-042-channel-gateway-is-a-separate-process-in-the-connector-zone.md) | The channel gateway is a separate process in the connector zone | Accepted |
+| [043](./adr-043-telegram-v1-is-deny-only-and-reference-bound.md) | Telegram v1 is deny-only and reference-bound | Accepted (amended → 049) |
+| [044](./adr-044-observability-is-a-contract-gem-plus-per-exporter-adapter-gems.md) | Observability is a contract gem plus per-exporter adapter gems | Accepted |
+| [045](./adr-045-observability-gems-add-no-durable-table-and-no-second-source-of-truth.md) | The observability gems add no durable table and no second source of truth | Accepted |
+| [046](./adr-046-content-capture-is-off-by-default-per-class-and-refused-for-restricted.md) | Content capture is off by default, per class, and refused for restricted classes | Accepted |
+| [047](./adr-047-sampling-applies-to-export-only-and-never-to-safety-bearing-signals.md) | Sampling applies to export only and never to safety-bearing signals | Accepted |
+| [048](./adr-048-one-digest-bound-openai-compatible-model-transport.md) | One digest-bound OpenAI-compatible model transport | Accepted (completed → 051) |
+| [049](./adr-049-telegram-approval.md) | **Telegram approval is evidence-gated, not transport-gated** | Accepted |
+| [050](./adr-050-automated-response-durable-evidence.md) | **Automated responses act only on durable evidence** | Proposed |
+| [051](./adr-051-rubyllm-removed.md) | **RubyLLM is removed from the runtime** | Accepted |
+| [052](./adr-052-agent-gem-decomposition.md) | **`tamoz-agent` is decomposed into focused gems** | Accepted |
+| [053](./adr-053-approval-gem.md) | **Approval policy is isolated into `tamoz-approval`** | Accepted |
+| [054](./adr-054-websearch-capability-source.md) | **Websearch is the fourth capability source** | Accepted |
+| [055](./adr-055-two-repo-authority-split.md) | **Continuous plane is a separate Go authority; Tamoz is its episode worker** | Accepted |
 
-Next number to assign: **056**.
+**Next number to assign: 056.**
 
 ## Notes
 
-- **The 048 collision is resolved.** The observability-automation decision that had also taken
-  048 is now ADR-050; the model-transport decision keeps 048.
-- **The record is reality-checked.** Every implemented decision carries a dated Verification
-  line (in its page or log entry) stating the gem/symbol/test that backs it. See the audit for
-  the method.
-- **Amendment chains:** 002→052, 003→048+051, 012→029, 043→049, 040→052, 030→054, 048→051,
-  035→055, 037→055, 040→055 (deliberate two-repo exception).
+- **One decision per number, never reused.** The former ADR-048 collision (model transport vs.
+  observability automation) is resolved: the observability decision is ADR-050.
+- **Amendment chains:** 002→052 · 003→048+051 · 012→029 · 030→054 · 035→055 · 037→055 ·
+  040→052 · 040→055 (deliberate two-repo exception) · 043→049 · 048→051.
+- **Reality-checked.** Every implemented ADR carries a dated `Verification` line naming the
+  gem/symbol/test that backs it (method: the [audit](./AUDIT_2026-08-29.md)).
+- The former monolith `docs/design-v0.1/DECISIONS.md` was removed 2026-08-29; its content is
+  here, its dead decisions in `RETIRED.md`, its open product questions in the
+  [roadmap](../roadmap.md#open-product-questions).
 
 ## Next reads
 

@@ -175,13 +175,13 @@ An ADR **meets the bar** when it has zero A failures and zero E failures at its 
   different decision. The next ADR takes `max(existing) + 1`. (The 048 collision this audit
   found — model-transport vs. observability-automation both claiming 048 — is exactly the
   failure this rule prevents.)
-- **One authoritative home.** The maintained source of truth for every in-force decision is
-  `documentation/adr/` — a standalone page per Tier-F/amended decision, plus the single
-  [`core-decisions.md`](./core-decisions.md) log for the stable foundational axioms. The former
-  monolith `docs/design-v0.1/DECISIONS.md` was **removed** (2026-08-29): its content migrated
-  here, its dead decisions to `RETIRED.md`, and its open product questions to the roadmap. The
-  CI-validated design archive (`rake design:validate`) was updated to stop requiring it. There
-  is no second copy to drift.
+- **One authoritative home, one file per decision.** The maintained source of truth is
+  `documentation/adr/`, with **one standalone page per ADR** (`adr-<NNN>-<slug>.md`, uniform
+  structure per §2). No monolith and no per-decision log: the former
+  `docs/design-v0.1/DECISIONS.md` was **removed** (2026-08-29) — its content migrated to the
+  per-ADR pages, its dead decisions to `RETIRED.md`, its open product questions to the roadmap
+  — and the CI-validated design archive (`rake design:validate`) was updated to stop requiring
+  it. There is no second copy to drift.
 - **Status vocabulary:**
   - **Proposed** — decided in a design but not yet ratified/implemented. Must name what
     would ratify it.

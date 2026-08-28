@@ -88,4 +88,4 @@ once confirmed in `tamoz-evals`.
 
 - [`README.md`](./README.md) — the ADR index
 - [`adr-022-reviewed-plan-gate.md`](./adr-022-reviewed-plan-gate.md) — the sibling action gate
-- [`core-decisions.md`](./core-decisions.md#adr-025--evaluation-is-a-first-class-non-runtime-gem) — ADR-025 (evaluation gem)
+- [ADR-025 — evaluation is a non-runtime gem](./adr-025-evaluation-is-a-first-class-non-runtime-gem.md)

@@ -130,5 +130,5 @@ this tree; its internals are cited from that repo's audited state, not re-verifi
 
 - [`README.md`](./README.md) — the ADR index
 - [`../design/streaming.md`](../design/streaming.md) — the episode-worker design (current)
-- [`core-decisions.md`](./core-decisions.md#adr-035--streaming-input-is-a-distinct-first-class-runtime) — ADR-035/037, revised by this ADR
+- [ADR-035 — streaming is a distinct runtime](./adr-035-streaming-input-is-a-distinct-first-class-runtime.md) and [ADR-037 — event-time contracts](./adr-037-event-time-explicit-backpressure-and-effect-disabled-replay-are-contracts.md) — revised by this ADR
 - [`../../docs/design-v0.1/STREAMING_INPUT_DESIGN.md`](../../docs/design-v0.1/STREAMING_INPUT_DESIGN.md) — the original architecture record
