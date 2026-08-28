@@ -245,6 +245,23 @@ with diagnostics behind an explicit `--diagnostic`; list all open refs.
 **Benchmark:** default `/status` contains no `effect=`/`capability=`/
 `event=` and, with N open requests, names all N refs.
 
+**Fixed (2026-08-28, commit `60923aa`).** Default `/status` now renders a
+bounded human summary with state, active reference, current worker orientation,
+next action, request-local delivery certainty, queue facts, and every open
+reference. The conversation-wide delivery aggregate remains available only in
+the explicit diagnostic projection, so one request cannot be described as
+delivered because another request completed. `/status --diagnostic` and
+`/status <ref> --diagnostic` retain the raw control-plane fields; extra
+arguments are refused with usage text.
+
+**Evidence:** `test/comms_command_parity_test.rb` (11 runs, 203 assertions),
+`test/experience_harness_test.rb` (11 runs, 72 assertions),
+`test/comms_gateway_test.rb` (40 runs, 243 assertions),
+`test/sqlite_comms_store_test.rb` (44 runs, 240 assertions),
+`test/cancellation_visibility_test.rb` (11 runs, 98 assertions), and the
+deterministic `bin/tamoz-chat-probe OF-6` pass. This is deterministic
+plumbing/projection evidence, not real-provider or human-usefulness evidence.
+
 ---
 
 ## OF-7 — Cancelling with several tasks open tells you nothing about which one
@@ -370,6 +387,18 @@ Phase 2.
 (verified / response-only / not-verified).
 
 **Benchmark:** every terminal card includes its ref and verification class.
+
+**Fixed (2026-08-28, commit `60923aa`).** Request-owned terminal deliveries
+now carry the short request reference and one bounded verification class:
+`Verified`, `Response only`, or `Not verified`. The wrapper is applied only to
+true terminal event kinds; accepted and milestone deliveries remain unchanged,
+and the original bounded answer text, identity, replay, and history behavior
+remain intact.
+
+**Evidence:** `test/agent_outbox_delivery_sink_test.rb` (14 runs, 69
+assertions), `test/progress_projection_test.rb` (13 runs, 223 assertions), and
+the status/experience suites listed for OF-6 pass. This is deterministic
+delivery-plumbing evidence, not real-provider or human-usefulness evidence.
 
 ---
 

@@ -59,10 +59,10 @@ hold exactly:
 
 | ID | Finding | Reviewer IDs | Owner seam | Slice | Status |
 | --- | --- | --- | --- | --- | --- |
-| CF-1 | Clarification interrupts are projected through the approval-only evidence path and raise `KeyError` before channel delivery | G18, F1, HZ-1, H-01, P1, root-cause E | `Worker#settle_paused_view`; `OutboxDeliverySink#decision_evidence`; `clarification_descriptor` | 0 | Verified; open |
+| CF-1 | Clarification interrupts are projected through the approval-only evidence path and raise `KeyError` before channel delivery | G18, F1, HZ-1, H-01, P1, root-cause E | `Worker#settle_paused_view`; `OutboxDeliverySink#decision_evidence`; `clarification_descriptor` | 0 | Fixed in `9d57a2a`; bounded clarification delivery and resume coverage pass |
 | CF-2 | Request-scoped runtime status aggregates delivery/effect state across the whole conversation/thread | F2, H-03, HZ-2 | `CommsStore#conversation_runtime_status`, `delivery_state_for`, `effect_state_for`; outbox row schema lacks `request_id` | 1 | Fixed in `69c4a4d`; deterministic comms/effect coverage passes |
 | CF-3 | `/cancel` and CLI cancel are thread-wide; no exact-reference target | F3 | `gateway_commands#cancel_request`; `CommsStore#stamp_cancellation_requested!`; `CLISessionCommands` cancel | 1 | Chat `/cancel` fixed in `7aaea8c`; CLI cancel remains open |
-| CF-4 | No durable ingress for a clarification answer; plain text is admitted as a new request and callbacks resolve approval only | H-02, consolidated correction 3 | `Comms::Commands`; `Comms::Admission`; `Gateway::Callbacks` | 0→1 | Sourced; open |
+| CF-4 | No durable ingress for a clarification answer; plain text is admitted as a new request and callbacks resolve approval only | H-02, consolidated correction 3 | `Comms::Commands`; `Comms::Admission`; `Gateway::Callbacks` | 0→1 | Fixed in `7e2df9d`; receipt-bound replies and `/answer` resume the same occurrence |
 | CF-5 | Callback `observed_at` is derived from top-level `message.date`, which is absent on callback-only updates, yielding epoch timestamps | F8 | `Telegram::Normalizer#normalize` | 1 | Sourced; open; **was not in consolidated study/index/roadmap** |
 | CF-6 | CLI test exits 0 while an unhandled background `CheckpointConflictError` is raised from a worker thread; the CLI rescue only covers the calling path | G16, F9 (impl) | `CLI#run` rescue scope; `CheckpointStore#open_writer`/`lease_operations` | 1 | Sourced; open; **was not in consolidated study/index/roadmap** |
 
@@ -84,7 +84,7 @@ hold exactly:
 | --- | --- | --- | --- | --- | --- |
 | DG-1 | Request handles diverge across surfaces (Telegram `r<ref>`, CLI UUID/thread, `comms request` `R<ref>`); no portable operator handle | G4, G5, F6, H-04, P2 | Gateway admission ack; `CommsStore#requests_by_reference`; CLI queue/ask/status | 1 | Sourced; open |
 | DG-2 | Worker availability is not a durable fact; "accepted" cannot be distinguished from "queued, no worker" | F5, F7, G4 (arch), M-01, P3 | Gateway admission/status; worker claim/health; launcher | 1 | Fixed in `f0ad6ba`; queue-age state covered; process liveness intentionally unclaimed |
-| DG-3 | The human projection (bounded card) has no frozen semantic payload; the "safe goal label" has no deterministic framework-owned producer or redaction contract | H-06, F8 (impl), consolidated correction 4 | `OutboxDeliverySink`; `Gateway::StatusProjection`; `SessionStatusProjection`; CLI rendering | 2 | Gap |
+| DG-3 | The human projection (bounded card) has no frozen semantic payload; the "safe goal label" has no deterministic framework-owned producer or redaction contract | H-06, F8 (impl), consolidated correction 4 | `OutboxDeliverySink`; `Gateway::StatusProjection`; `SessionStatusProjection`; CLI rendering | 2 | Partially fixed in `f50bd4c` and `60923aa`; progress/status/terminal templates are bounded and framework-owned; CLI projection remains open |
 | DG-4 | Core envelope validation and `SurfaceDescriptor` are Telegram-closed; `Comms::Transport` has no typed capability matrix | F7, G2/G3 (arch), scale-5 | `InboundEnvelope`; `SurfaceDescriptor`; `Comms::Transport` | 5 (prereq) | Sourced; deferred |
 
 ### Medium interaction gaps (kept as product hypotheses)
