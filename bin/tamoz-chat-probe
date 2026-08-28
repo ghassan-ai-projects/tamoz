@@ -71,9 +71,9 @@ PROBES = {
     h.close
   },
   'OF-5' => lambda {
-    puts '# OF-5 milestone card is gibberish with internal facts in markup'
+    puts '# OF-5 milestone card uses human-safe progress copy'
     h = deterministic
-    show(h.say('what is in note.txt?'))
+    show(h.say('read note.txt'))
     h.close
   },
   'OF-6' => lambda {

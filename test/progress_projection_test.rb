@@ -2,7 +2,6 @@
 
 # Phase 2 work items 1-2 (plan 03): lifecycle milestones projected from
 # committed worker facts onto the outbox, bounded and coalesced store-side.
-# Rendering is a later wave; everything here asserts the SEAM.
 #
 # rubocop:disable Minitest/MultipleAssertions, Metrics/AbcSize, Metrics/MethodLength
 
@@ -200,7 +199,7 @@ class ProgressProjectionTest < Minitest::Test
 
   # ---------------------------------------------------------------- the seam
 
-  def test_milestone_kinds_project_non_terminal_control_rows_with_the_full_projection
+  def test_milestone_kinds_project_a_human_safe_control_card
     with_engine do |sink, adapter, _checkpoints|
       store = adapter.bind_comms_store(_checkpoints)
       bind_thread_to_conversation(store)
@@ -219,8 +218,27 @@ class ProgressProjectionTest < Minitest::Test
       assert_equal 1, markup.fetch('sequence')
       assert_equal 'running', markup.fetch('task_state')
       assert_equal 'pending', markup.fetch('delivery_state')
-      assert_match(/\A#{Regexp.escape(REQUEST_REF)}: claimed\z/, row.fetch('text'))
+      text = row.fetch('text')
+      assert_match(/\A#{Regexp.escape(REQUEST_REF)} · /, text)
+      assert_includes text, 'Now:'
+      assert_includes text, 'Next:'
+      refute_match(/\b(?:claimed|running|waiting)\b/i, text)
+      refute_match(/(?:task_state|delivery_state|event_sequence|effect_state)/, text)
       assert_operator row.fetch('text').length, :<=, 200
+    end
+  end
+
+  def test_unknown_milestone_phase_uses_generic_human_safe_copy
+    with_engine do |sink, adapter, _checkpoints|
+      store = adapter.bind_comms_store(_checkpoints)
+      bind_thread_to_conversation(store)
+
+      sink.push(milestone_event('request.running', sequence: 1, phase: 'provider_secret'))
+      text = milestone_rows(store).first.fetch('text')
+
+      assert_equal "#{REQUEST_REF} · Now: Working on your request. Next: Share the result when ready.", text
+      refute_includes text, 'provider_secret'
+      refute_match(/(?:task_state|delivery_state|event_sequence|effect_state)/, text)
     end
   end
 
@@ -296,7 +314,7 @@ class ProgressProjectionTest < Minitest::Test
       assert_equal 1, rows.length, 'two milestones while pending are still ONE row'
       assert_equal first_id, rows.first.fetch('delivery_id'), 'the live row is updated, not replaced'
       assert_equal 2, JSON.parse(rows.first.fetch('markup')).fetch('sequence')
-      assert_match(/waiting/, rows.first.fetch('text'))
+      assert_includes rows.first.fetch('text'), 'Now:'
 
       drain_row(store, first_id)
 

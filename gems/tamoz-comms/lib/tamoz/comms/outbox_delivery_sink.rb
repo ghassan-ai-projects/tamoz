@@ -53,6 +53,18 @@ module Tamoz
       MILESTONE_KINDS = %w[running waiting progress].freeze
       MILESTONE_TASK_STATES = { 'running' => 'running', 'waiting' => 'waiting', 'progress' => 'running' }.freeze
       MILESTONE_TEXT_CHARACTERS = 200
+      MILESTONE_COPY = {
+        'claimed' => ['Starting work on your request.', 'Continue working.'],
+        'discovery' => ['Checking the request.', 'Continue working.'],
+        'read_only' => ['Reviewing the available information.', 'Prepare the response.'],
+        'action' => ['Preparing the requested change.', 'Check the result.'],
+        'repair' => ['Checking the requested change.', 'Check the result.'],
+        'waiting' => ['Paused for the next step.', 'Reply when ready.'],
+        'recovered' => ['Resuming work on your request.', 'Continue working.'],
+        'running' => ['Working on your request.', 'Share the result when ready.'],
+        'progress' => ['Continuing work on your request.', 'Share the result when ready.']
+      }.transform_values(&:freeze).freeze
+      GENERIC_MILESTONE_COPY = ['Working on your request.', 'Share the result when ready.'].freeze
 
       def initialize(adapter:, checkpoints:, rendering: Comms::Rendering)
         @store = adapter.bind_comms_store(checkpoints)
@@ -133,7 +145,7 @@ module Tamoz
 
         reference = Lifecycle::RequestRef.for(request_id)
         phase = event[:phase] ? event[:phase].to_s : kind
-        text = "#{reference}: #{phase}".byteslice(0, MILESTONE_TEXT_CHARACTERS)
+        text = milestone_text(reference, phase)
         markup = JSON.generate(
           'request_ref' => reference,
           'milestone' => kind,
@@ -161,6 +173,11 @@ module Tamoz
           now: Time.now.utc
         )
         :accepted
+      end
+
+      def milestone_text(reference, phase)
+        now, next_action = MILESTONE_COPY.fetch(phase, GENERIC_MILESTONE_COPY)
+        "#{reference} · Now: #{now} Next: #{next_action}".byteslice(0, MILESTONE_TEXT_CHARACTERS)
       end
 
       # The platform message id the request's live card is bound to: the
