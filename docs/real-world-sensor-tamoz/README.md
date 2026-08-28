@@ -1,6 +1,8 @@
 # Real-World Sensor — Tamoz implementation program
 
-Status: proposed, not started · Date: 2026-08-28 · Owner sign-off: **required at G-T0**
+Status: **implemented on branch `docs/real-world-sensor-tamoz`** (WP-T0…WP-T5 all
+gated green) · Date: 2026-08-28 · Owner sign-off: **still required** to ratify the
+vocabulary (Decision Log) and to run the real-DeepSeek headline tournament.
 
 This folder turns the `agent-research-lab/real-world-sensor` research (round 2)
 into a **tamoz-scoped, dependency-ordered, gated** implementation plan. It builds
@@ -12,7 +14,19 @@ and wire-level fault injection are **not** tamoz's job — see *Scope boundary*.
 | Document | What it is |
 |---|---|
 | [PLAN.md](PLAN.md) | The work: six gated packages (WP-T0…WP-T5), each with the seam it extends, deliverables, tests, gate, and the honest claim it licenses. |
-| [SELF_REVIEW.md](SELF_REVIEW.md) | The bar (below) applied to this plan, the loop that brought it to green, and the open decisions the owner must settle. |
+| [BAR.md](BAR.md) | The clean-code bar the implementation was held to, the per-phase loop log (one row per WP, how many iterations, the last red), and the final verdict. |
+| [SELF_REVIEW.md](SELF_REVIEW.md) | The bar applied to this plan, the loop that brought it to green, the open owner decisions, and (appended) the review of the delivered code. |
+
+## What shipped (branch `docs/real-world-sensor-tamoz`)
+
+14 files, +1147/−2. The **only** production Ruby change is
+[metrics.rb](../../gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/metrics.rb)
+(+44: two frozen metrics + helpers). Everything else is domain **data**
+([thermal-lab.json](../../test/fixtures/domains/thermal-lab.json)), test-support
+machinery, and tests — 34 runs / 100 assertions green, rubocop 0 offenses, enola 0
+structural regressions. The two intelligence-dependent claims (the T3 headline
+paired-win and the T5 real-model manifest verdict) are honestly deferred to the
+owner's real-DeepSeek run; the harness scores that run unchanged.
 
 ## Scope boundary — read first
 
