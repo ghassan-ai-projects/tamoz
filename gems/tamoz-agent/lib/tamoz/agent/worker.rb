@@ -906,6 +906,8 @@ module Tamoz
         if error.is_a?(PlanRejectedError)
           'I could not form a plan for that request that passed my own review. ' \
             'Try rephrasing it or adding more detail about what you want done.'
+        elsif error.is_a?(Tamoz::CheckpointConflictError)
+          'That request stopped safely. Check its status before retrying.'
         else
           'That request failed before it could finish. Please try sending it again.'
         end

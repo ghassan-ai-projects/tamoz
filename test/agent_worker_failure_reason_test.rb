@@ -9,6 +9,31 @@ require_relative 'test_helper'
 # prose (semantic/protocol feedback) stays hidden; model output is never
 # echoed, exactly like the raised PlanRejectedError disclosure.
 class AgentWorkerFailureReasonTest < Minitest::Test
+  class FailureDeliverySink
+    attr_reader :deliveries
+
+    def initialize
+      @deliveries = []
+    end
+
+    def push(**delivery)
+      @deliveries << delivery
+    end
+  end
+
+  class FailureRuntime
+    attr_reader :delivery_sink
+
+    def initialize
+      @delivery_sink = FailureDeliverySink.new
+    end
+
+    def occurrence_age_milliseconds(_thread_id) = 7
+    def child_task(_thread_id) = nil
+    def close_occurrence(_thread_id) = nil
+    def durably_fail_request(_thread_id, _request_id, reason:) = nil
+  end
+
   def worker
     @worker ||= Tamoz::Agent::Worker.new(runtime: nil, session_builder: nil, emitter: nil)
   end
@@ -78,5 +103,30 @@ class AgentWorkerFailureReasonTest < Minitest::Test
     reason = worker.send(:settled_failure_reason, view_with({ observations: [] }))
 
     assert_equal 'failed', reason
+  end
+
+  def test_checkpoint_conflict_crash_projects_a_safe_action_to_the_correspondent
+    runtime = FailureRuntime.new
+    events = []
+    worker = Tamoz::Agent::Worker.new(
+      runtime:,
+      session_builder: nil,
+      emitter: ->(event) { events << event }
+    )
+    entry = { thread_id: 'tg.t', head_request_id: 'occ-1', head_status: :queued }
+
+    worker.send(
+      :handle_thread_failure,
+      entry,
+      Tamoz::CheckpointConflictError.new('internal conflict details')
+    )
+
+    delivery = runtime.delivery_sink.deliveries.fetch(0)
+    assert_equal 'request.failed', delivery.fetch(:kind)
+    assert_equal 'That request stopped safely. Check its status before retrying.', delivery.fetch(:text)
+    refute_includes delivery.fetch(:text), 'CheckpointConflictError'
+    refute_includes delivery.fetch(:text), 'internal conflict details'
+    refute_includes delivery.fetch(:text), 'failed before it could finish'
+    assert_equal 'request.failed', events.fetch(0).fetch('event')
   end
 end
