@@ -192,3 +192,20 @@ OF-2 remains a separate latency workstream. The implementation pass adds no
 false claim that sequential real-provider model calls are now fast; the
 existing chat-side liveness and honest-ack fixes make that latency legible but
 do not change provider-call duration.
+
+## Final verification boundary (2026-08-28)
+
+- The final focused suites for the changed chat seams passed under pinned Ruby
+  3.3.11, including outbox cards (17/98), command parity (11/203), gateway
+  controls (42/266), Telegram normalization (10/28), durable CLI handling
+  (34/764), and chat-worker failure projection (6/14).
+- `enola generate_snapshot` and receipt comparison found equivalent inputs,
+  zero parse errors, zero coverage gaps, zero unresolved edges, and no
+  extraction-quality regression. The declared architecture scope matched
+  10/10 touched package groups. `enola check --fail-on=cycles,layers`
+  passed; two advisory high-fan-in notices are the intentional CLI/worker
+  error-boundary dependencies described above, not cycles or layer violations.
+- `rake ci` was attempted under pinned Ruby and stopped at the pre-existing
+  design validator mismatch: it expects ADRs `001..047` but finds `001..048`.
+  No design history was changed to mask that unrelated gate failure. RuboCop
+  was not run, per the sponsor directive; no manual style cleanup was added.
