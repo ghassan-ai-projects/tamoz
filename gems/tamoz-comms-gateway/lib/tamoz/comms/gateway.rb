@@ -8,6 +8,7 @@ require_relative 'delivery_drainer'
 require_relative 'gateway_admission'
 require_relative 'gateway_admission_acknowledgement'
 require_relative 'gateway_admission_binding'
+require_relative 'gateway_answers'
 require_relative 'gateway_callbacks'
 require_relative 'gateway_commands'
 require_relative 'gateway_conversation_commands'
@@ -34,17 +35,27 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
 
-      HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel, ' \
-                   '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
-                   '/reset, /compact, /usage, /context, /think <low|medium|high>, ' \
-                   '/verbose <quiet|normal|detailed>. Commands never become task text.'
+      HELP_REPLY = 'Example: send a task; use /status r<reference> to check it; use /cancel r<reference> ' \
+                   'to stop it. Primary: /help, /status, /cancel, /new. More: /help more.'
+      HELP_MORE_REPLY = 'Commands: /help [more], /status [r<reference>] [--diagnostic], /new, ' \
+                        '/cancel [r<reference>], /redirect r<reference> <new task>, /whoami, ' \
+                        '/start <pairing code>, /answer r<reference> <answer>, /reset, /compact, /usage, ' \
+                        '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>. ' \
+                        'Commands are controls, not task text.'
+      HELP_USAGE_REPLY = 'Usage: /help [more]'
       NO_WORK_REPLY = 'No work is admitted for this conversation.'
+      STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
       NEW_CONVERSATION_REPLY = 'New conversation started; earlier history stays in the audit record.'
       NEW_CONVERSATION_UNBOUND_REPLY =
         'No conversation is bound for this channel yet; send a message first.'
       REDIRECT_USAGE_REPLY = 'Usage: /redirect r<reference> <new task>'
+      ANSWER_USAGE_REPLY = 'Usage: /answer r<reference> <answer>'
+      ANSWER_QUEUED_REPLY = 'Answer received; resuming the paused request.'
+      ANSWER_STALE_REPLY = 'That request is no longer waiting for a clarification answer.'
+      ANSWER_WRONG_CORRESPONDENT_REPLY = 'That clarification answer cannot be used from this correspondent.'
+      ANSWER_UNQUEUED_REPLY = 'Answer could not be queued; try again while the request is paused.'
       START_USAGE_REPLY = 'Usage: /start <pairing code>'
       START_WAITING_REPLY =
         'That code matches a pending pairing request. Waiting for operator approval.'
@@ -56,6 +67,8 @@ module Tamoz
       REDIRECT_UNQUEUED_REPLY = 'Redirect could not be queued; no active checkpoint is available.'
       FINISHED_REQUEST_REPLY = 'That request has already finished.'
       CANCEL_NO_WORK_REPLY = 'No running request to cancel on this conversation.'
+      CANCEL_USAGE_REPLY = 'Usage: /cancel [r<reference>]'
+      CANCEL_STALE_REF_REPLY = 'That request is no longer open on this conversation.'
 
       CONTEXT_CONTROL_COMMANDS = %w[reset compact usage context think verbose].freeze
       CONTROLS_UNAVAILABLE_REPLY = 'Context controls are not available on this channel.'
@@ -77,6 +90,7 @@ module Tamoz
       }.freeze
 
       REFERENCE_PATTERN = /\Ar[0-9a-f]{#{Lifecycle::REQUEST_REF_WIDTH}}\z/
+      FULL_REFERENCE_PATTERN = /\Ar?[0-9a-f]{64}\z/i
 
       ADMISSION_REFUSALS = {
         integrity_conflict: ['quarantined',
@@ -90,6 +104,7 @@ module Tamoz
       include Admission
       include AdmissionAcknowledgement
       include AdmissionBinding
+      include Answers
       include Callbacks
       include Commands
       include ConversationCommands

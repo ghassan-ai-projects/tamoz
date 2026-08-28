@@ -87,7 +87,9 @@ module Tamoz
       # reference (v1 wire) still resolves as deny.
       def attach_markup(params, delivery)
         markup = JSON.parse(delivery.markup)
-        reference = markup.fetch('reference')
+        reference = markup['reference']
+        return unless reference
+
         actions = markup.fetch('actions', %w[deny])
         params['reply_markup'] = {
           'inline_keyboard' => [actions.map do |action|

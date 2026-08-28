@@ -36,7 +36,7 @@ module Tamoz
         message = update['message']
         callback = update['callback_query']
         member = update['my_chat_member'] || update['chat_member']
-        observed = Time.at(message&.dig('date').to_i).utc
+        observed = observed_time(update)
 
         if message
           message_envelope(update_id, message, observed)
@@ -50,6 +50,16 @@ module Tamoz
       end
 
       private
+
+      def observed_time(update)
+        timestamp = update.dig('message', 'date') ||
+                    update.dig('callback_query', 'message', 'date') ||
+                    update.dig('my_chat_member', 'date') ||
+                    update.dig('chat_member', 'date')
+        return Time.now.utc unless timestamp
+
+        Time.at(timestamp.to_i).utc
+      end
 
       def message_envelope(update_id, message, observed)
         chat = message.fetch('chat')

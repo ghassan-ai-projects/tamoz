@@ -22,42 +22,6 @@ module Tamoz
 
       GATEWAY_POLLER_PREFIX = 'gateway'
 
-      # The gateway's typed context-control seam: resolves one thread id to the
-      # profile-less Session over the runtime database — the same session-access
-      # seam the worker drives threads with (`WorkerRuntime#session_for`). The
-      # session is built lazily and at most once, so serving stays session-free
-      # until a control command actually arrives.
-      class ChannelControlsSource
-        def initialize(workspace_root:, adapter:, artifact_store:, model_builder:)
-          @workspace_root = workspace_root
-          @adapter = adapter
-          @artifact_store = artifact_store
-          @model_builder = model_builder
-          @monitor = Monitor.new
-        end
-
-        # A crashing builder (a missing model credential, a boot failure)
-        # answers nil — the gateway's bounded CONTROLS_UNAVAILABLE_REPLY —
-        # instead of taking the serve loop down.
-        def call(_thread_id)
-          @monitor.synchronize { @session ||= build }
-        rescue StandardError
-          nil
-        end
-
-        private
-
-        def build
-          Tamoz::Agent::Session.new(
-            model: @model_builder.call,
-            toolbox: Tamoz::Agent::Toolbox.new(root: @workspace_root, allow_changes: false),
-            checkpointer: @adapter,
-            artifact_store: @artifact_store,
-            artifact_tenant: @artifact_store.tenant
-          )
-        end
-      end
-
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- each helper
       #   is one sequence (runtime-open, config->descriptor defaults) and
       #   splitting it would scatter the ordering invariant.
@@ -185,21 +149,13 @@ module Tamoz
         ms_value && Time.at(ms_value / 1000.0).utc.iso8601(3)
       end
 
-      # Without a configured model there is no session the gateway could reach,
-      # so the source stays nil and the control commands answer with the
-      # bounded unavailable reply — the gateway never boots a model it was not
-      # given, and never fails silently either.
-      def comms_controls_source(directory, adapter, options)
-        return nil unless options[:model] || @env['TAMOZ_MODEL']
-
-        artifact_store = adapter.bind_artifact_store(tenant: 'channel:controls')
-        ChannelControlsSource.new(
-          workspace_root: directory.workspace_root,
-          adapter:,
-          artifact_store:,
-          model_builder: -> { build_model(options) }
-        )
+      # Context controls are worker-owned. The gateway stays a model-free
+      # connector process and answers with the bounded unavailable reply until
+      # a durable worker control request is available.
+      def comms_controls_source(_directory, _adapter, _options)
+        nil
       end
+
       # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
     end
   end

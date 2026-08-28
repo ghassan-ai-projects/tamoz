@@ -73,7 +73,7 @@ module Tamoz
         @processed = 0
         # Threads waiting on a human. Keyed by thread so a parked thread neither
         # spins the loop nor blocks its neighbours; the signature lets an arriving
-        # approval un-park it without the worker having to be told.
+        # response un-park it without the worker having to be told.
         @parked = {}
         @monitor = Mutex.new
       end
@@ -201,7 +201,7 @@ module Tamoz
       end
 
       def actionable_entries
-        work_list.reject { |entry| parked?(entry) }
+        work_list.reject { |entry| parked?(entry) && !resume_queued?(entry) }
       rescue WorkerRuntime::StoreUnavailableError => error
         # The work list could not be read. That is reported and retried on the
         # next pass — it is NOT an empty inbox, and the difference has to be
@@ -299,13 +299,37 @@ module Tamoz
       end
 
       def resume_paused_entry(entry, session, thread_id:, occurrence_id:, view:)
+        return run_queued_resume(session, thread_id:, occurrence_id:) if
+          queued_resume_request(thread_id, occurrence_id)
+
         digest = interrupt_digest(view)
         decision = @runtime.pending_decision(
           thread_id, occurrence_id, interrupt_digest: digest, now: Time.now.utc
         )
-        return park(entry, view) && PARKED if decision.nil?
+        return park(entry, view, reason: pause_reason(view)) && PARKED if decision.nil?
 
         apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
+      end
+
+      def queued_resume_request(thread_id, occurrence_id)
+        return unless @runtime.respond_to?(:checkpoints)
+
+        @runtime.checkpoints.request_history(thread_id:).find do |request|
+          request.status == :queued && request.operation == :resume &&
+            Tamoz::Comms::ClarificationAnswerRequest.target_id(request.request_id) == occurrence_id
+        end
+      end
+
+      def resume_queued?(entry)
+        entry.fetch(:head_status) == :open &&
+          queued_resume_request(entry.fetch(:thread_id), entry.fetch(:head_request_id))
+      end
+
+      def run_queued_resume(session, thread_id:, occurrence_id:)
+        unpark(thread_id)
+        request = session.app.durable_runner.run_next(thread: thread_id, owner_id: owner_id)
+        settle_schedule_occurrence(session, thread_id:, occurrence_id:, request:)
+        settle(session, thread_id:, occurrence_id:, request:)
       end
 
       def advance_open_occurrence(session, thread_id:, occurrence_id:, view:)
@@ -671,8 +695,8 @@ module Tamoz
 
       # Outbox row BEFORE close (design §11): a crash between the two still
       # leaves the terminal answer deliverable.
-      def settle_terminal_delivery(thread_id, kind, occurrence_id, text)
-        notify_sink(thread_id, kind, text, request_id: occurrence_id)
+      def settle_terminal_delivery(thread_id, kind, occurrence_id, text, phase: nil)
+        notify_sink(thread_id, kind, text, request_id: occurrence_id, phase:)
         close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
       end
@@ -681,9 +705,19 @@ module Tamoz
         SessionStatusProjection.document(view, request_id: occurrence_id, delivery_state: 'pending')
       end
 
+      # A verified completion is "Verified"; a direct chat response completes
+      # without proving anything, so its terminal card must not over-claim
+      # verification. The phase rides to the sink, which renders the class.
+      def completion_verification_phase(view)
+        return 'direct_response' if view.terminal&.fetch('reason', nil) == 'direct_response'
+
+        nil
+      end
+
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
         @monitor.synchronize { @processed += 1 }
-        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view))
+        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view),
+                                 phase: completion_verification_phase(view))
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
              duration_ms:,
@@ -718,20 +752,39 @@ module Tamoz
       end
 
       def settle_paused_view(view, thread_id, occurrence_id, duration_ms)
+        reason = pause_reason(view)
         if view.interrupts.empty?
           emit("request.paused",
                thread: thread_id, request_id: occurrence_id, reason: "paused",
                duration_ms:,
                status_projection: pending_status_projection(view, occurrence_id),
                observability: {execution_id: view.execution_id})
+        elsif reason == 'clarification_required'
+          delivery = notify_sink(thread_id, "request.clarification_request", nil,
+                                  request_id: occurrence_id, interrupts: interrupt_facts(view))
+          if delivery == :capacity_refused
+            emit('worker.error', reason: 'clarification delivery refused: outbox capacity')
+            return IDLE
+          end
+          emit_paused_request(thread_id, occurrence_id, view, reason:)
         else
           notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")
           notify_sink(thread_id, "request.approval_request", "Approval requested.",
                       request_id: occurrence_id, interrupts: interrupt_facts(view))
-          emit_approval_request(thread_id, occurrence_id, view)
+          emit_paused_request(thread_id, occurrence_id, view, reason:)
         end
-        park({thread_id:, head_request_id: occurrence_id}, view)
+        park({thread_id:, head_request_id: occurrence_id}, view, reason:)
         PARKED
+      end
+
+      def clarification_pause?(view)
+        view.interrupts.any? do |interrupt|
+          interrupt.descriptor&.fetch('kind', nil) == 'clarify'
+        end
+      end
+
+      def pause_reason(view)
+        clarification_pause?(view) ? 'clarification_required' : 'approval_required'
       end
 
       def settle_child_task(thread_id, view)
@@ -756,13 +809,13 @@ module Tamoz
         emit('worker.error', reason: "child settlement failed: #{transition_error.message}")
       end
 
-      def emit_approval_request(thread_id, occurrence_id, view)
+      def emit_paused_request(thread_id, occurrence_id, view, reason:)
         duration_ms = @runtime.occurrence_age_milliseconds(thread_id)
         emit("request.paused",
              thread: thread_id,
              request_id: occurrence_id,
              duration_ms:,
-             reason: "approval_required",
+             reason:,
              interrupts: view.interrupts.map { |interrupt| describe_interrupt(interrupt) },
              status_projection: pending_status_projection(view, occurrence_id),
              observability: {execution_id: view.execution_id})
@@ -770,9 +823,9 @@ module Tamoz
 
       # The channel projection: lifecycle events become outbox rows BEFORE the
       # occurrence closes (design §11), so a crash never loses the terminal
-      # answer. Nil-safe — an unconfigured worker delivers nothing. An
-      # approval pause carries the occurrence and its exact interrupt set so
-      # the rendered prompt answers THAT question (ADR-043).
+      # answer. Nil-safe — an unconfigured worker delivers nothing. A
+      # human-answer pause carries the occurrence and its exact interrupt set so
+      # the rendered question answers THAT question (ADR-043).
       def notify_sink(thread_id, kind, text, request_id: nil, interrupts: nil, sequence: nil, phase: nil)
         @runtime.delivery_sink&.push(thread_id:, kind:, text:, request_id:, interrupts:,
                                      sequence:, phase:)
@@ -870,6 +923,8 @@ module Tamoz
         if error.is_a?(PlanRejectedError)
           'I could not form a plan for that request that passed my own review. ' \
             'Try rephrasing it or adding more detail about what you want done.'
+        elsif error.is_a?(Tamoz::CheckpointConflictError)
+          'That request stopped safely. Check its status before retrying.'
         else
           'That request failed before it could finish. Please try sending it again.'
         end
@@ -994,7 +1049,7 @@ module Tamoz
       # ----------------------------------------------------------------- parking
 
       # A parked thread is one whose next move belongs to a human. It is skipped
-      # until its head request changes, so an approval delivered by another
+      # until its head request changes, so a human response delivered by another
       # process un-parks it on the next pass with no signalling between them.
       def park(entry, view, reason: "approval_required")
         meta = {

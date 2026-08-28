@@ -11,7 +11,7 @@ module Tamoz
       # monotonic-ordering assertions in test/sqlite_approval_stores_test.rb,
       # test/cancellation_visibility_test.rb, and test/memory_store_test.rb.
       # Each migration's own history is documented beside its constant.
-      CURRENT_VERSION = 21
+      CURRENT_VERSION = 22
 
       # The digest rule generation marker written by MIGRATION_11. Bumped by a
       # future forward migration whenever the canonical digest rule changes.
@@ -1319,6 +1319,16 @@ module Tamoz
 
       MIGRATION_21_CHECKSUM = migration_checksum(MIGRATION_21)
 
+      # Request-local status ownership: 21 -> 22 through MIGRATION_22. The
+      # associations are separate from delivery/effect identity and may be
+      # absent for rows that do not belong to a request.
+      MIGRATION_22 = [
+        "ALTER TABLE tamoz_comms_outbox ADD COLUMN request_id TEXT",
+        "ALTER TABLE tamoz_effects ADD COLUMN request_id TEXT"
+      ].freeze
+
+      MIGRATION_22_CHECKSUM = migration_checksum(MIGRATION_22)
+
       # Ordinal -> [statements, checksum]. The monotonic-ordering guard makes
       # ordinal reuse impossible; the set is exactly the contiguous 1..CURRENT_VERSION.
       MIGRATIONS = {
@@ -1342,7 +1352,8 @@ module Tamoz
         18 => [MIGRATION_18, MIGRATION_18_CHECKSUM],
         19 => [MIGRATION_19, MIGRATION_19_CHECKSUM],
         20 => [MIGRATION_20, MIGRATION_20_CHECKSUM],
-        21 => [MIGRATION_21, MIGRATION_21_CHECKSUM]
+        21 => [MIGRATION_21, MIGRATION_21_CHECKSUM],
+        22 => [MIGRATION_22, MIGRATION_22_CHECKSUM]
       }.freeze
 
       def self.verify_connection!(connection)
@@ -1508,6 +1519,7 @@ module Tamoz
                        :MIGRATION_19, :MIGRATION_19_CHECKSUM,
                        :MIGRATION_20, :MIGRATION_20_CHECKSUM,
                        :MIGRATION_21, :MIGRATION_21_CHECKSUM,
+                       :MIGRATION_22, :MIGRATION_22_CHECKSUM,
                        :MIGRATION_BOUNDARY, :BACKEND_TIME_SQL, :MIGRATIONS
     end
   end

@@ -9,7 +9,7 @@ module Tamoz
     # schedule. An unknown slash command gets a typed `unknown_command` control
     # reply and never becomes model input.
     module Commands
-      KNOWN = %w[help status new cancel redirect whoami start reset compact usage context think verbose].freeze
+      KNOWN = %w[help status new cancel redirect whoami start reset compact usage context think verbose answer].freeze
 
       # The typed command crossing admission into the gateway. It carries no
       # free-form task text and is never a model prompt.

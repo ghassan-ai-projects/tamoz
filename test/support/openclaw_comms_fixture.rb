@@ -209,10 +209,11 @@ module Tamoz
                                     verify: VERIFY_OK }.freeze
 
         def initialize(model_factory: self.class.model_factory(**DEFAULT_MODEL_RESPONSES),
-                       admission_mode: :allowlist, approval_ask: nil)
+                       admission_mode: :allowlist, approval_ask: nil, routing: :legacy)
           @now = Time.now.utc
           @directory = Dir.mktmpdir('tamoz-comms-b0')
           @model_factory = model_factory
+          @routing = routing
           runtime_dir = provision_runtime_directory(approval_ask)
           deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
           wire_delivery_pipeline(admission_mode)
@@ -382,7 +383,9 @@ module Tamoz
 
         def deploy_surface_and_bind_correspondent(runtime_dir, admission_mode)
           resolved = Tamoz::Agent::RuntimeDirectory.resolve(path: runtime_dir, env: {})
-          @runtime = Tamoz::Agent::WorkerRuntime.open(resolved, model_factory: @model_factory)
+          @runtime = Tamoz::Agent::WorkerRuntime.open(
+            resolved, model_factory: @model_factory, routing: @routing
+          )
           @store = @runtime.adapter.bind_comms_store(@runtime.checkpoints)
           @store.deploy_surface(descriptor(admission_mode).wire, now: @now)
           bind_correspondent(USER_BOUND, CONVERSATION_A)

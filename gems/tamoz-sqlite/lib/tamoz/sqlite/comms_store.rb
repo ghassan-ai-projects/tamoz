@@ -49,6 +49,10 @@ module Tamoz
       DEFAULT_NAMESPACE = '[]'
       HISTORY_LIMIT = 12
       HISTORY_TEXT_CHARACTERS = 500
+      CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]+/u
+      # A queued request is reported as unclaimed after one backend clock tick
+      # without an observed inbox claim; this is not a process-liveness claim.
+      WORKER_UNCLAIMED_WINDOW_MS = 1
       # The settle kinds a terminal delivery can carry (OutboxDeliverySink);
       # stamped into projection_state at complete_request so every later
       # reader derives the terminal task status from the SAME durable fact.
@@ -152,6 +156,32 @@ module Tamoz
         end
       end
 
+      # Admit one clarification answer and enqueue its resume without a crash
+      # window between the inbound anchor and the request inbox row.
+      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+        transaction('comms.admit.answer') do |txn|
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          if anchor
+            next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
+
+            record_inbound_conflict!(txn, envelope_wire, bot_id)
+            next :integrity_conflict
+          end
+
+          payload_bytes, payload_digest, input_digest = encode_request(
+            'resume', REQUEST_DELIVERY, payload
+          )
+          @checkpoints.enqueue_request_in_transaction!(
+            txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
+            operation_text: 'resume', delivery_text: REQUEST_DELIVERY,
+            payload_bytes:, payload_digest:, input_digest:
+          )
+          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
+                          reason: 'clarification_answer', now:, request_id:)
+          :enqueued
+        end
+      end
+
       # Record a non-request disposition (ignored/rejected/quarantined)
       # durably. The first observation for an identity INSERTs its anchor
       # row; a conflicting digest for a KNOWN identity UPDATES that anchor
@@ -194,9 +224,23 @@ module Tamoz
         Tamoz::Core::TurnContext.task(
           thread_id: thread,
           request_id:,
-          text:,
-          fragments: history
+          text: flatten_context_text(text),
+          fragments: history.filter_map do |fragment|
+            flattened = flatten_context_text(fragment.fetch('text'))
+            next nil if flattened.empty?
+
+            { 'role' => fragment.fetch('role'), 'text' => flattened }
+          end
         )
+      end
+
+      # TurnContext forbids control characters, but an inbound message or a
+      # multi-line terminal answer carried as a transcript fragment can contain
+      # a newline; flatten any control run to one space so admission and every
+      # later turn stay durable. This normalizes what the model sees, never what
+      # the correspondent already received.
+      def flatten_context_text(text)
+        String(text).gsub(CONTROL_CHARACTERS, " ").strip
       end
 
       # ===== poll state =====
@@ -287,15 +331,32 @@ module Tamoz
         end
       end
 
+      # The current-generation admitted requests available to a caller-bound
+      # cancellation command, in queue order.
+      def open_request_targets(surface_id:, conversation_id:, thread_id:)
+        read('comms.request.cancel.targets') do |txn|
+          rows = txn.rows('comms.request.cancel.targets', <<~SQL, [surface_id, conversation_id, thread_id])
+            SELECT request_id, thread_id FROM tamoz_comms_requests
+            WHERE surface_id = ? AND conversation_id = ? AND thread_id = ?
+              AND projection_state = 'admitted'
+            ORDER BY created_at_ms ASC, request_id ASC
+          SQL
+          rows.map do |row|
+            request_id, row_thread_id = row
+            { 'request_id' => request_id, 'request_ref' => request_ref(request_id), 'thread_id' => row_thread_id }
+          end
+        end
+      end
+
       # The durable `requested` point of the cancellation timeline (plan 03,
       # work item 4): the stamp and the :cancel enqueue commit in ONE
       # transaction, so a rollback (a replayed cancel id, a tombstoned thread)
-      # leaves neither. Every still-admitted request on the thread is stamped —
-      # the user asked to stop this conversation's open work.
-      def request_cancellation(thread_id:, request_id:, payload:, now:)
+      # leaves neither. Without a target, every still-admitted request on the
+      # thread is stamped for the existing direct-store contract.
+      def request_cancellation(thread_id:, request_id:, payload:, now:, target_request_id: nil)
         payload_bytes, payload_digest, input_digest = encode_request(CANCEL_OPERATION, CANCEL_DELIVERY, payload)
         transaction('comms.request.cancel') do |txn|
-          stamp_cancellation_requested!(txn, thread_id:, now:)
+          stamp_cancellation_requested!(txn, thread_id:, target_request_id:, now:)
           @checkpoints.enqueue_request_in_transaction!(
             txn, thread: thread_id, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
                  operation_text: CANCEL_OPERATION, delivery_text: CANCEL_DELIVERY,
@@ -343,8 +404,8 @@ module Tamoz
       # Read-only channel status derived from durable admission/projection
       # rows. Reference-addressed and queue-aware (plan 02, work item 3):
       # when anything is admitted the projection carries the active request's
-      # short reference (`request_ref`) and its queue facts (`queue_age_ms`,
-      # `queue_position`); with nothing admitted those keys are absent.
+      # short reference (`request_ref`), its queue facts, and all open short
+      # references; with nothing admitted only the open-reference list is empty.
       # `now:` binds the reader's clock for age arithmetic; without it the
       # connection's backend time answers.
       def conversation_status(surface_id:, conversation_id:, now: nil)
@@ -360,7 +421,11 @@ module Tamoz
           # /new rotates the generation, the route row's thread no longer names it.
           thread_id = active&.fetch(2) || route.fetch(0)
           request_id = active&.fetch(0)
-          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          conversation_status_projection(
+            txn, surface_id, conversation_id, thread_id, request_id, now:
+          ).merge(
+            'open_request_refs' => open_request_refs(txn, surface_id, conversation_id)
+          )
         end
       end
 
@@ -377,7 +442,9 @@ module Tamoz
           next resolved unless resolved.is_a?(Array)
 
           request_id, thread_id = resolved
-          status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          request_status_projection(
+            txn, surface_id, conversation_id, thread_id, request_id, now:
+          )
             .merge('terminal_reason' => terminal_reason_for(thread_id, request_id))
         end
       end
@@ -417,17 +484,28 @@ module Tamoz
         matches.first
       end
 
-      def status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+      def base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
         open_requests = open_requests_for(txn, surface_id, conversation_id)
-        base = {
+        {
           'thread_id' => thread_id,
           'state' => open_requests.positive? ? 'accepted' : 'idle',
           'open_requests' => open_requests,
           'request_id' => request_id
         }
-        base.merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
-            .merge(cancellation_document(txn, request_id, now))
-            .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
+          .merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
+          .merge(cancellation_document(txn, request_id, now))
+          .merge(worker_status(txn, thread_id, request_id, now))
+      end
+
+      def conversation_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+        base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
+          .merge('active_delivery_state' => active_delivery_state(surface_id, conversation_id, request_id))
+      end
+
+      def request_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+        base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
+          .merge(request_runtime_status(thread_id, request_id, surface_id, conversation_id))
       end
 
       # The durable cancellation timeline of one request (plan 03, work item
@@ -519,12 +597,50 @@ module Tamoz
         txn.scalar('comms.conversation.status.backend_time', BACKEND_TIME_SQL)
       end
 
+      def worker_status(txn, thread_id, request_id, now)
+        return {} unless request_id
+
+        row = txn.first('comms.request.status.worker', <<~SQL, [thread_id, DEFAULT_NAMESPACE, request_id])
+          SELECT status, created_at_ms FROM tamoz_requests
+          WHERE thread_id = ? AND namespace = ? AND request_id = ?
+        SQL
+        return {} unless row
+
+        state = worker_state(row, backend_now_ms(txn, now))
+        state ? { 'worker_state' => state } : {}
+      end
+
+      def worker_state(row, current_ms)
+        case row.fetch(0)
+        when 'queued'
+          age_ms = [current_ms - row.fetch(1), 0].max
+          age_ms >= WORKER_UNCLAIMED_WINDOW_MS ? 'queued-unclaimed' : 'accepted'
+        when 'claimed', 'running'
+          'working'
+        end
+      end
+
       def conversation_runtime_status(thread_id, request_id, surface_id, conversation_id)
         {
           'task_state' => task_state_for(thread_id, request_id),
-          'effect_state' => effect_state_for(thread_id, request_id),
+          'effect_state' => conversation_effect_state_for(thread_id, request_id),
           'capability_state' => capability_state_for(thread_id, request_id),
-          'delivery_state' => delivery_state_for(surface_id, conversation_id)
+          'delivery_state' => conversation_delivery_state_for(surface_id, conversation_id)
+        }.merge(lifecycle_status_for(thread_id, request_id))
+      end
+
+      def active_delivery_state(surface_id, conversation_id, request_id)
+        return 'none' unless request_id
+
+        request_delivery_state_for(surface_id, conversation_id, request_id)
+      end
+
+      def request_runtime_status(thread_id, request_id, surface_id, conversation_id)
+        {
+          'task_state' => task_state_for(thread_id, request_id),
+          'effect_state' => request_effect_state_for(thread_id, request_id),
+          'capability_state' => capability_state_for(thread_id, request_id),
+          'delivery_state' => request_delivery_state_for(surface_id, conversation_id, request_id)
         }.merge(lifecycle_status_for(thread_id, request_id))
       end
 
@@ -547,6 +663,7 @@ module Tamoz
           { 'role' => entry.fetch(:role), 'text' => entry.fetch(:text) }
         end
       end
+
 
       # The durable /new generation of one bound conversation (plan 02,
       # work item 4): monotonic, part of the thread identity
@@ -590,6 +707,15 @@ module Tamoz
         SQL
       end
 
+      def open_request_refs(txn, surface_id, conversation_id)
+        rows = txn.rows('comms.conversation.status.open_refs', <<~SQL, [surface_id, conversation_id])
+          SELECT request_id FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+          ORDER BY created_at_ms ASC, request_id ASC
+        SQL
+        rows.map { |row| request_ref(row.fetch(0)) }
+      end
+
       def active_request_row(txn, surface_id, conversation_id)
         txn.first('comms.conversation.status.active_request', <<~SQL, [surface_id, conversation_id])
           SELECT request_id, created_at_ms, thread_id FROM tamoz_comms_requests
@@ -608,17 +734,17 @@ module Tamoz
         request.status.to_s
       end
 
-      def effect_state_for(thread_id, request_id)
+      def conversation_effect_state_for(thread_id, request_id)
         return 'not_started' unless @checkpoints
         return 'not_started' unless request_id
 
         request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
         return 'not_started' unless request && %i[running completed failed].include?(request.status)
 
-        summarize_effect_statuses(effect_statuses(thread_id))
+        summarize_effect_statuses(conversation_effect_statuses(thread_id))
       end
 
-      def effect_statuses(thread_id)
+      def conversation_effect_statuses(thread_id)
         state = session_checkpoint(thread_id)&.state
         statuses = Array(state&.fetch(:effect_receipts, nil)).filter_map do |row|
           row.fetch('status', nil).to_s
@@ -627,6 +753,22 @@ module Tamoz
 
         @checkpoints.effect_census.filter_map do |row|
           row[:status].to_s if row[:thread_id] == thread_id
+        end
+      end
+
+      def request_effect_state_for(thread_id, request_id)
+        return 'not_started' unless @checkpoints
+        return 'not_started' unless request_id
+
+        request = @checkpoints.fetch_request(thread_id:, request_id:, namespace: [])
+        return 'not_started' unless request && %i[running completed failed].include?(request.status)
+
+        summarize_effect_statuses(request_effect_statuses(thread_id, request_id))
+      end
+
+      def request_effect_statuses(thread_id, request_id)
+        @checkpoints.effect_census.filter_map do |row|
+          row[:status].to_s if row[:thread_id] == thread_id && row[:request_id] == request_id
         end
       end
 
@@ -698,7 +840,7 @@ module Tamoz
         session&.key?('tool_catalog_digest') == true
       end
 
-      def delivery_state_for(surface_id, conversation_id)
+      def conversation_delivery_state_for(surface_id, conversation_id)
         statuses = @outbox.outbox_rows(
           surface_id:, statuses: %w[pending claimed succeeded failed unknown], limit: 500
         ).filter_map do |row|
@@ -712,8 +854,27 @@ module Tamoz
         'succeeded'
       end
 
+      def request_delivery_state_for(surface_id, conversation_id, request_id)
+        statuses = @outbox.outbox_rows(
+          surface_id:, statuses: %w[pending claimed succeeded failed unknown], limit: 500
+        ).filter_map do |row|
+          row.fetch('status') if row.fetch('conversation_id') == conversation_id &&
+                                 row.fetch('request_id') == request_id
+        end
+        return 'none' if statuses.empty?
+        return 'unknown' if statuses.include?('unknown')
+        return 'pending' if statuses.intersect?(%w[pending claimed])
+        return 'failed' if statuses.include?('failed')
+
+        'succeeded'
+      end
+
       def outbox_rows(surface_id:, statuses:, limit: 500)
         @outbox.outbox_rows(surface_id:, statuses:, limit:)
+      end
+
+      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
+        @outbox.outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
       end
 
       # Fenced result recording (invariant 4): only the current claim's
@@ -985,13 +1146,24 @@ module Tamoz
 
       private
 
-      def stamp_cancellation_requested!(txn, thread_id:, now:)
-        txn.execute('comms.request.cancel.stamp', <<~SQL, [now_ms(now), now_ms(now), thread_id])
+      def stamp_cancellation_requested!(txn, thread_id:, target_request_id:, now:)
+        binds = [now_ms(now), now_ms(now), thread_id]
+        target_clause = if target_request_id
+                          binds << target_request_id
+                          ' AND request_id = ?'
+                        else
+                          ''
+                        end
+        txn.execute('comms.request.cancel.stamp', <<~SQL, binds)
           UPDATE tamoz_comms_requests
           SET cancellation_requested_at_ms = ?, updated_at_ms = ?
           WHERE thread_id = ? AND projection_state = 'admitted'
             AND cancellation_requested_at_ms IS NULL
+            #{target_clause}
         SQL
+        return unless target_request_id
+
+        raise Tamoz::CheckpointConflictError, 'the cancellation target is no longer admitted' unless txn.changes == 1
       end
 
       def stamp_cancellation_observed!(txn, thread_id:, now:)

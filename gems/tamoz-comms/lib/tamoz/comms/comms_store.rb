@@ -44,6 +44,14 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Admit one clarification answer and enqueue its durable resume in the
+      # same transaction. The request id includes the exact target request,
+      # allowing the worker to reject a stale answer after the pause changes.
+      # @return [:enqueued, :duplicate, :integrity_conflict]
+      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+        raise NotImplementedError
+      end
+
       # Record a non-request disposition durably. A conflicting digest for a
       # KNOWN update identity updates that identity's single anchor row and
       # returns :conflict_recorded.
@@ -58,6 +66,14 @@ module Tamoz
       # signal — `complete_request` releases the reservation afterwards.
       # @return [:appended, :duplicate, :capacity_refused]
       def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
+        raise NotImplementedError
+      end
+
+      # Find a delivered outbox row by its platform receipt within one
+      # conversation. The store owns this lookup so reply binding does not
+      # depend on an arbitrary in-memory history window.
+      # @return [Hash, nil]
+      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
         raise NotImplementedError
       end
 

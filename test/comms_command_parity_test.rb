@@ -22,7 +22,7 @@ class CommsCommandParityTest < Minitest::Test
   AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
 
   def test_known_is_exactly_the_handled_command_set
-    assert_equal %w[help status new cancel redirect whoami start reset compact usage context think verbose],
+    assert_equal %w[help status new cancel redirect whoami start reset compact usage context think verbose answer],
                  Comms::Commands::KNOWN
 
     with_gateway do |gateway, transport, _store, _adapter, checkpoints|
@@ -73,10 +73,9 @@ class CommsCommandParityTest < Minitest::Test
       second_ref = derived_ref(second)
       accepted = capture.select { |wire| wire.fetch('kind') == 'accepted' }
 
-      assert_equal "Accepted #{first_ref}. I will report committed progress.",
+      assert_equal "Received #{first_ref}.",
                    accepted.fetch(0).fetch('text')
-      assert_equal "Accepted #{second_ref}; queued behind earlier work; " \
-                   'I will report committed progress when it runs.',
+      assert_equal "Received #{second_ref}.",
                    accepted.fetch(1).fetch('text')
 
       resolved = store.request_status(
@@ -88,7 +87,7 @@ class CommsCommandParityTest < Minitest::Test
     end
   end
 
-  def test_status_aggregate_renders_external_vocabulary_with_reference_and_queue_facts
+  def test_status_aggregate_renders_bounded_human_copy_with_all_refs_and_queue_facts
     with_gateway do |gateway, transport, _store, _adapter, checkpoints|
       admit_turn(gateway, transport, 101)
       admit_turn(gateway, transport, 102, now: NOW + 5)
@@ -97,11 +96,15 @@ class CommsCommandParityTest < Minitest::Test
       reply = drive_command(gateway, transport, '/status', id: 103)
 
       assert_leads_with reply, 'Work status: '
-      assert_includes reply, 'task=queued', 'the task axis renders the external word'
-      assert_includes reply, 'delivery=pending', 'the delivery axis renders the external word'
-      assert_includes reply, "Reference #{active_ref}."
+      assert_includes reply, 'State: queued'
+      assert_includes reply, 'Delivery: not sent yet'
+      assert_includes reply, 'Now: '
+      assert_includes reply, 'Next: '
+      refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
+      assert_includes reply, derived_ref(update(101)), 'the aggregate names every open request'
+      assert_includes reply, "Active request: #{active_ref}."
       assert_match(/Queue position 1\. Age \d+ ms\./, reply)
-      assert_includes reply, 'open requests=2'
+      assert_includes reply, 'Open requests: 2; refs: '
       assert_equal 2, all_request_rows(checkpoints).length, '/status admits no work of its own'
     end
   end
@@ -114,8 +117,9 @@ class CommsCommandParityTest < Minitest::Test
       reply = drive_command(gateway, transport, "/status #{first_ref}", id: 102)
 
       assert_leads_with reply, "Request #{first_ref}: "
-      assert_includes reply, 'task=queued'
-      assert_includes reply, 'delivery=pending'
+      assert_includes reply, 'State: queued'
+      assert_includes reply, 'Delivery: not sent yet', 'accepted controls are not request-local delivery'
+      refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
 
       assert_equal UNKNOWN_REF_REPLY,
                    drive_command(gateway, transport, '/status r0000000000', id: 103)
@@ -131,7 +135,7 @@ class CommsCommandParityTest < Minitest::Test
     end
   end
 
-  def test_status_by_reference_renders_a_failed_request_in_external_vocabulary
+  def test_status_by_reference_renders_a_failed_request_in_bounded_human_copy
     with_gateway do |gateway, transport, store|
       admit_turn(gateway, transport, 101)
       ref = "r#{'f' * 10}"
@@ -148,13 +152,34 @@ class CommsCommandParityTest < Minitest::Test
       reply = drive_command(gateway, transport, "/status #{ref}", id: 102)
 
       assert_leads_with reply, "Request #{ref}: "
-      assert_includes reply, 'task=failed', 'a failed request renders the external word'
-      assert_includes reply, 'delivery=delivered', "'succeeded' outbox rows render as delivered"
-      assert_includes reply, 'Reason: provider_failed.'
-      assert_includes reply, 'next=none'
-      refute_includes reply, 'task_state'
+      assert_includes reply, 'State: failed', 'a failed request renders the bounded state'
+      assert_includes reply, 'Delivery: delivered', "'succeeded' outbox rows render as delivered"
+      assert_includes reply, 'Now: The request ended with an error.'
+      assert_includes reply, 'Next: No further action.'
+      refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, reply)
+      refute_includes reply, 'provider_failed'
     ensure
       restore_request_status(store)
+    end
+  end
+
+  def test_status_diagnostics_require_an_explicit_flag_and_reject_extra_arguments
+    with_gateway do |gateway, transport, _store, _adapter, _checkpoints|
+      admit_turn(gateway, transport, 101)
+      reference = derived_ref(update(101))
+
+      aggregate = drive_command(gateway, transport, '/status --diagnostic', id: 102)
+      assert_includes aggregate, 'phase=unknown'
+      assert_includes aggregate, 'event=unknown#'
+      assert_includes aggregate, 'effect=not_started'
+      assert_includes aggregate, 'capability=not_inspected'
+      assert_includes aggregate, 'delivery=pending'
+
+      request = drive_command(gateway, transport, "/status #{reference} --diagnostic", id: 103)
+      assert_includes request, 'phase=unknown'
+      assert_includes request, 'event=unknown#'
+      assert_equal Tamoz::Comms::Gateway::STATUS_USAGE_REPLY,
+                   drive_command(gateway, transport, '/status --diagnostic extra', id: 104)
     end
   end
 
@@ -202,9 +227,11 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, "/redirect #{ref} invert the priority instead", id: 102)
 
-      assert_equal "Redirecting #{ref}; the replacement task is queued.", reply
-
       history = checkpoints.request_history(thread_id: thread)
+      replacement_ref = Tamoz::Comms::Lifecycle::RequestRef.for(history.last.request_id)
+
+      assert_equal "Replacement queued as #{replacement_ref}; #{ref} remains recorded; " \
+                   'committed work is not undone.', reply
 
       assert_equal %i[turn redirect], history.map(&:operation)
       assert_equal({ 'task' => 'invert the priority instead' }, history.last.payload)

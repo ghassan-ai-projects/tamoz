@@ -1,0 +1,341 @@
+# Implementation-plan review loop
+
+The plan in `01-plan.md` is scored against `00-plan-bar.md` from five lenses.
+Each loop records objections, their severity, and the revision that resolved
+them. The plan meets the bar only after a loop in which every lens records no
+unresolved high-severity objection, and only after at least one earlier loop
+forced a revision.
+
+Severity: **High** = blocks the bar; **Medium** = must fix before hand-off;
+**Low** = note.
+
+---
+
+## Loop 1 — challenge of plan v1 (draft)
+
+### Bar checklist
+
+| Criterion | v1 result |
+| --- | --- |
+| B1 finding coverage | Pass — all CF/EG/DG/MG IDs assigned; rescued findings placed. |
+| B2 dependency order | Pass — interruption + ownership precede projection; admissibility precedes readiness. |
+| B3 bounded briefs | **Fail** — Phase 1 bundles six findings including two (CF-5, CF-6) unrelated to the ownership cluster. |
+| B4 named tests | **Fail** — MG-4 (CLI streaming) has no named test in Phase 2. |
+| B5 hard-zero per phase | Pass. |
+| B6 evidence separation | Pass — "what this phase does not prove" present. |
+| B7 scope discipline | Pass — non-goals rejected in writing. |
+| B8 rollout/rollback/stop | Pass. |
+| B9 sequencing | Medium — EG-3 restart assertions depend on Phase 1 but the graph does not say so. |
+| B10 honest status | Medium — does not flag that Phases 0–1 produce no user-visible improvement. |
+
+### Lens objections
+
+**Architecture / security / reliability — High (B3).**
+Phase 1 closes CF-2, CF-3, CF-5, CF-6, DG-1, DG-2 in one phase. CF-5 (callback
+timestamp) and CF-6 (swallowed async exception) are independent reliability
+fixes with no coupling to request-ownership work. Bundling them violates
+"no phase bundles unrelated findings" and makes the ownership phase's review
+surface larger than it needs to be.
+→ Resolution required: split CF-5/CF-6 into a standalone item that gates
+nothing except CF-5→telemetry.
+
+**Implementation / evidence — High.**
+Phase 1's `test_worker_unavailable_state_is_distinct_from_working` presumes a
+durable worker heartbeat, but no such producer exists today (M-01, F7). The
+plan says "sourced from a worker heartbeat with a defined freshness window"
+without naming the producer, the persistence, or that this is new cross-gem
+interface work requiring approval.
+→ Resolution required: name the heartbeat producer/persistence/freshness as an
+explicit design sub-decision flagged for cross-gem approval, or descope DG-2 to
+"queued-without-observed-claim" derivable from existing claim facts.
+
+**Fourier / cross-scale — High.**
+Phase 3's attention budget says only "waiting and terminal always interrupt
+quiet mode." A worker-unavailable transition (the DG-2 signal introduced in
+Phase 1) would then be suppressible as a no-visible-change heartbeat — reversing
+the Phase 1 gain and re-creating the "is it alive?" silence the study targets.
+→ Resolution required: add worker-unavailable to the always-notify set.
+
+**Product / agent-vision — Medium (B10).**
+Every user-visible improvement is gated behind Phases 0–1 (invisible
+correctness) and only becomes perceptible at Phase 2, validated at Phase 4. The
+plan does not warn the sponsor that Phases 0–1 deliver correctness, not delight,
+so progress will look slow before Phase 2. Honest framing prevents pressure to
+ship a card early — the exact failure the study warns against.
+→ Resolution required: state this explicitly in the status framing.
+
+**Interaction / attention — Medium (B4).**
+MG-4 (human CLI streaming drops task/update parts) is assigned to Phase 2 but
+has no named test. Without one it can be quietly dropped.
+→ Resolution required: name a CLI streaming card test in Phase 2.
+
+**Sequencing — Medium (B9).**
+EG-3's C4 process-restart assertions depend on Phase 1's worker-restart
+semantics; the graph presents Phase 4 harness as fully parallel.
+→ Resolution required: note that EG-3 restart assertions can be built but not
+passed until Phase 1 lands.
+
+### Loop 1 verdict
+
+**Does not meet the bar.** Three High objections (B3 bundling, undefined
+heartbeat producer, worker-unavailable notification suppression) and three
+Medium objections. Revise to v2.
+
+---
+
+## Loop 2 — verification of plan v2
+
+### Objection resolution
+
+| Loop 1 objection | Severity | v2 resolution | Status |
+| --- | --- | --- | --- |
+| Phase 1 bundles CF-5/CF-6 (B3) | High | CF-5/CF-6 moved to a standalone **Phase 1b**; Phase 1 now closes only CF-2, CF-3, DG-1, DG-2. | Resolved |
+| Worker heartbeat producer undefined | High | Added the **DG-2 sub-decision**: default derives `queued-without-observed-claim` from existing claim facts with no new producer; the fuller heartbeat shape is gated on a named cross-gem contract and approval. | Resolved |
+| Worker-unavailable suppressible by budget (Fourier) | High | Phase 3 now lists worker-unavailable in the always-notify set, with an explicit anti-suppression note. | Resolved |
+| Phases 0–1 look like no progress (B10) | Medium | Added the sponsor honesty note to status framing. | Resolved |
+| MG-4 has no named test (B4) | Medium | Added `test_cli_human_stream_renders_task_and_update_parts` to Phase 2. | Resolved |
+| EG-3 depends on Phase 1 (B9) | Medium | Dependency graph now states EG-3 restart assertions cannot pass until Phase 1 lands. | Resolved |
+
+### Re-challenge from each lens (v2)
+
+- **Product / agent-vision** — Phase order still front-loads invisible
+  correctness, but the honesty note makes that a stated expectation rather than
+  a surprise. The first perceivable win (Phase 2) sits directly on
+  now-authoritative facts. No unresolved objection.
+- **Architecture / security / reliability** — Phase 1 is now the coherent
+  ownership/control/handle/health cluster; Phase 1b is genuinely independent.
+  The DG-2 default avoids inventing a supervision subsystem; the fuller shape is
+  correctly gated behind cross-gem approval. Hard-zeros are named per phase. No
+  unresolved objection.
+- **Implementation / evidence** — the DG-2 test now asserts the *chosen* shape,
+  not an undefined heartbeat. Subprocess, two-request, restart, and
+  independent-witness tests are named. Readiness is fail-closed (EG-1) and the
+  real run is a distinct gate (EG-5). No unresolved objection.
+- **Interaction / attention** — MG-4 is tested; the attention budget keeps
+  waiting/terminal/worker-unavailable non-suppressible; the budget is a measured
+  default (Phase 4), not an asserted good. No unresolved objection.
+- **Fourier / cross-scale** — the two reversals that v1 risked (worker-health
+  silence suppressed by the budget; CF-5 epoch corrupting latency telemetry) are
+  both now blocked by explicit sequencing/notification rules. No unresolved
+  objection.
+
+### Bar checklist (v2)
+
+| Criterion | v2 result |
+| --- | --- |
+| B1 finding coverage | Pass |
+| B2 dependency order | Pass |
+| B3 bounded briefs | Pass (Phase 1b split) |
+| B4 named tests | Pass (MG-4 test added) |
+| B5 hard-zero per phase | Pass |
+| B6 evidence separation | Pass |
+| B7 scope discipline | Pass |
+| B8 rollout/rollback/stop | Pass |
+| B9 sequencing | Pass (EG-3 dependency stated) |
+| B10 honest status | Pass (sponsor honesty note) |
+
+### Loop 2 verdict
+
+**Meets the bar.** All B1–B10 pass and every lens records no unresolved
+high-severity objection. The passing condition's requirement — at least one
+loop in which a lens objection forced a revision — is satisfied by Loop 1 → v2.
+
+The plan is ready to hand to an implementer. It remains a plan: the
+implementation-readiness verdict for the chat experience stays **NEEDS FIXES**
+until the phase gates and the evidence gate actually pass in code.
+
+---
+
+## Loop 3 — outcome / north-star lens (v2 → v3)
+
+**Reframe (from the sponsor):** the objective is the *actual chat experience
+meeting expectations*, not a well-formed study or plan. Three prior improvement
+rounds passed a discipline-style bar and still fell short. So the plan must be
+graded by outcome, not only discipline — a new outcome bar (O1–O3) was added to
+`00-plan-bar.md`.
+
+### Objections against v2 (outcome lens)
+
+**O1 — High. No target experience.** v2 has phase gates but never states the
+concrete moments a person will judge, or that the acceptance signal is a real
+try, not a passing test. A plan to improve an experience that never defines the
+experience can be executed perfectly and still miss — the observed pattern.
+→ Resolved: added "Target experience (north star)" with five judgable moments
+and a user-try acceptance signal.
+
+**O2 — High. Every felt change is deferred.** v2 gates all perceptible
+improvement behind Phases 0–1 (invisible correctness) and much of the proof
+behind Phase 4. That is precisely why prior rounds felt like no progress.
+→ Resolved: added "Round 0 — Experience spike," a guarded real-DeepSeek +
+private-Telegram walk done first, so a felt improvement or a clear diagnosis
+reaches the user within the first round.
+
+**O3 — High. The wrong gap may be targeted.** v2 (like the whole study) assumes
+the gap is lifecycle communication. If the real unmet expectation is *answer
+competence* — the agent isn't useful/smart enough — Phases 0–3 cannot fix it,
+and a fourth lifecycle round repeats the miss.
+→ Resolved: added the "Answer-competence fork," forcing an explicit decision,
+and made the experience spike the instrument that settles it with evidence.
+
+### What this loop deliberately did NOT do
+
+It did not keep polishing document structure. The three additions are all aimed
+at the outcome: define what "meets expectations" means, get something tryable in
+front of the user now, and refuse to spend another round on lifecycle work if
+the real gap is competence.
+
+### Loop 3 verdict
+
+**Meets the discipline bar (B1–B10) and the outcome bar (O1–O3).** But the
+outcome bar's O3 cannot be closed by me: which failure mode is real —
+lifecycle or competence — is the sponsor's call, and guessing it is what missed
+three times. The plan is therefore *aimed* correctly but not yet *pointed*: the
+next round must begin from the sponsor's answer / the spike's result, not from
+another assumption.
+
+---
+
+## Loop 4 — pointed at the interaction gap (v3 → v4)
+
+**Sponsor answer:** the gap is **broken/awkward interaction** — can't ask a
+question and take the answer inline; controls are confusing / hit the wrong
+request; returning later is disorienting. Not competence; noise secondary.
+Refine the plan before any code or real run.
+
+This closes O3 (right gap identified) and de-scopes the competence program for
+now. It also re-sequences O2: the experience spike is deferred until the sponsor
+chooses to validate, per their "plan before any real run."
+
+### What v4 added
+
+- **Interaction contract I1–I3**, the new spine, each written as a concrete
+  before/after transcript the sponsor judges against: I1 ask+answer inline, I2
+  controls hit the intended request (with disambiguation), I3 non-disorienting
+  return.
+- **I1 natural path**: prefer a Telegram reply-to-message binding over a
+  command+ref, with `/answer <ref>` as fallback. Threaded into Phase 0 with a
+  named test.
+- **I2 disambiguation**: a bare `/cancel` with multiple open requests lists refs
+  and acts on none, instead of stamping all. Threaded into Phase 1 with a named
+  test.
+- **Interaction spine** marks everything else (full attention budget, fuller
+  heartbeat, evidence breadth, channel decision) as secondary to I1–I3.
+
+### Lens objections against v3 → v4
+
+**Architecture / feasibility — High (forced a revision).** v3's answer ingress
+was `/answer <ref>` only, which is not the "inline/natural" the sponsor wants,
+and the natural reply path's feasibility was unverified. Source check:
+- the outbox row persists the delivered Telegram message-id in `receipt`
+  (`delivery_drainer.rb:139`) and inbound replies carry `reply_to`
+  (`normalizer.rb:64`), so reply-binding is feasible;
+- **but** resolving a reply to the occurrence needs the clarify row to carry
+  occurrence identity — the same change Phase 1 makes for CF-2.
+→ Resolved: added the natural reply path as preferred; documented the shared
+outbox-identity dependency; kept `/answer <ref>` fully within Phase 0 so I1 is
+not blocked, and noted Phase 0+1 are best executed together for full I1.
+
+**Security — Medium.** Reply-binding must not become an authority path (a reply
+from another correspondent to a copied message-id must not bind another's
+occurrence).
+→ Resolved: Phase 0 states reply-binding reuses the existing occurrence/
+correspondent/conversation/expiry fences and is only a ref-discovery convenience.
+
+**Interaction — Medium.** v3 controls were "exact-ref," but the sponsor's
+complaint is also the *ambiguous* case (bare `/cancel` with two open).
+→ Resolved: I2 disambiguation reply added to Phase 1 with a test.
+
+**Product — Low.** Return-after-gap relief should not wait for the full Phase 3
+card.
+→ Resolved: I3 split — minimal honest `/status <ref>` after reopen lands in
+Phase 1; polished "since you were away" card is Phase 3.
+
+### Loop 4 verdict
+
+**Meets the bar, pointed at the interaction gap.** The spine is I1–I3, each with
+a concrete acceptance transcript and named tests, and the one real feasibility
+dependency (reply-binding ↔ Phase 1 outbox identity) is stated rather than
+discovered mid-build. The plan is now both aimed and pointed.
+
+**Next decision (sponsor's):** the plan is ready to implement I1–I3. Remaining
+choice is when to start code and when to run the deferred validation spike —
+both held per the sponsor's "refine before any code or real run."
+
+---
+
+## Loop 5 — routing, no-whiplash, and the context contract (v4 → v5)
+
+**Sponsor input:** three specific interaction problems — (1) distinguish
+planning from normal chat; (2) define what each request sends and what the
+context has each round; (3) stop the "I got your request, then seconds later an
+error that the plan failed/was rejected."
+
+**Grounded in source before planning (not guessed):**
+- The whiplash is real: gateway sends "Accepted r… I will report committed
+  progress," the worker retries the plan up to `max_plan_attempts: 3`, then
+  `plan_rejected` raises `PlanRejectedError` and the user gets
+  `crashed_text` ("I could not form a plan…"). Verified at
+  `session_plan_outcomes.rb:54-77`, `worker.rb:313-336,818-876`, `session.rb:75`.
+- A routing lever already exists (`route`/`adaptive_read_only`/`deliberate`,
+  the `routing` option) — so I4 is largely "verify, name, and make correct,"
+  not "invent."
+- The context question is owned by the existing model-call-boundary review
+  (`docs/model-call-boundary-review-2026-08-26/`); the chat plan specifies only
+  the comms per-round context on top, rather than redefining that boundary.
+
+### What v5 added
+
+- **I4** — normal chat is answered directly, no accept-then-work, and a
+  directly-answered turn cannot reach `PlanRejectedError`.
+- **I5** — no "accepted, then failed" whiplash: prefer converting an
+  unplannable task into a bounded clarification (I1 path), fall through to one
+  honest bounded card only when it truly cannot proceed, and keep the acceptance
+  wording coherent with the outcome.
+- **Request/per-round context contract** — first turn, resumed/clarified turn,
+  and chat turn each specified, deferring the model-call budget to the existing
+  boundary work.
+- **Phase 0b** — a new first-tier phase (with Phase 0) owning I4/I5 at the
+  session/worker route and settle seams; named tests; ledger entries SD-1..SD-3.
+
+### Lens objections (v4 → v5)
+
+**Product — High (forced this loop).** v4's spine (I1–I3) did not cover the
+sponsor's #1 stated pain, the accept-then-fail whiplash. A plan aimed at the
+interaction gap that omits the flow they explicitly named is mis-aimed.
+→ Resolved: I5 + Phase 0b make it first-tier.
+
+**Architecture — Medium.** Routing and graceful-failure are session/worker
+concerns, not comms-sink concerns; folding them into Phase 0 (a comms/worker
+interruption phase) would blur ownership.
+→ Resolved: separate Phase 0b with its own owner seams; the comms sink is
+untouched by it.
+
+**Reliability — Medium.** Converting plan-failure into a clarification could
+loop (plan → question → plan → question) and never terminate.
+→ Resolved: I5 and Phase 0b cap the conversion so it cannot loop.
+
+**Scope — Medium.** The context question could balloon into redefining the
+model-call boundary (out of scope, and already owned elsewhere).
+→ Resolved: the plan defers the boundary to
+`docs/model-call-boundary-review-2026-08-26/` and specifies only the comms
+per-round context.
+
+### Open decisions surfaced for the sponsor (recommended defaults set)
+
+1. Chat-vs-task classifier: read-only/no-effect = chat; effect-proposing = task.
+2. Failed plan: always try a clarification before a terminal fail (capped).
+3. Acceptance timing: defer the richer ack until a plan passes review.
+4. Chat-turn history depth: pick one (last N confirmed answers / pinned summary
+   / full thread) against the model-call budget.
+
+These change behavior the user will feel, so they are the sponsor's call; the
+plan carries recommended defaults so it is executable if the sponsor does not
+override.
+
+### Loop 5 verdict
+
+**Meets the bar, now covering all three sponsor-named problems.** The whiplash
+is traced to its exact source and given a first-tier phase; routing and the
+context contract are specified without redefining the model-call boundary. Four
+behavior-shaping decisions are surfaced with defaults rather than silently
+chosen.

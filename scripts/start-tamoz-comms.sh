@@ -163,7 +163,7 @@ start_one "worker" "$WORKER_LOG" \
   "$RUBY_BIN" "$EXE" \
   --runtime-dir "$TAMOZ_RUNTIME_DIR" \
   --provider "$TAMOZ_PROVIDER" --model "$TAMOZ_MODEL" \
-  worker --concurrency 1
+  worker --concurrency 1 --experimental-routing
 
 echo
 echo "Waiting 8s to verify they stay up..."

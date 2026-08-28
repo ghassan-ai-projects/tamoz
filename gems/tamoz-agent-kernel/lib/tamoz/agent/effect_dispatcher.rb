@@ -56,6 +56,7 @@ module Tamoz
           operation:,
           safety: safety.to_s,
           request:,
+          request_id: context.request_id,
           logical_key:
         )
         resolve_decision(

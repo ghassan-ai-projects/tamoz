@@ -114,6 +114,15 @@ class CommsGatewayTest < Minitest::Test
     store.bind_correspondent(binding_wire, now:)
   end
 
+  def request_ref(update, transport)
+    Comms::Lifecycle::RequestRef.for(
+      Tamoz::Core::RequestIdentity.request_id(
+        surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
+        update_id: update.fetch('update_id'), raw_payload_hash: transport.digest_of(update)
+      )
+    )
+  end
+
   def inbound_dispositions(store, update_id)
     store.__send__(:read, 'test.gateway.inbound.read') do |txn|
       txn.rows('test.gateway.inbound.read', <<~SQL, [update_id])
@@ -158,20 +167,18 @@ class CommsGatewayTest < Minitest::Test
   end
 
   # A follow-up message is planned with the thread's transcript: the gateway
-  # reads the conversation history and it rides the second turn's payload
-  # (the first contact stays bare — there is nothing to recall yet). And the
-  # synchronous reply says what will actually happen: while the first
-  # request is still open the follow-up QUEUES behind it — "Accepted" alone
-  # would read as "starting now".
+  # reads the conversation history and it rides the second turn's payload.
   def test_a_follow_up_message_queues_and_carries_the_transcript
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       start = Time.utc(2026, 8, 10, 12, 0, 0)
-      transport.batch([update(101, text: 'make it blue')])
+      first = update(101, text: 'make it blue')
+      second = update(102, text: 'and the font?')
+      transport.batch([first])
 
       assert_equal :served, gateway.serve_once(now: start)
 
-      transport.batch([update(102, text: 'and the font?')])
+      transport.batch([second])
 
       assert_equal :served, gateway.serve_once(now: start + 2)
 
@@ -193,15 +200,10 @@ class CommsGatewayTest < Minitest::Test
         fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
       ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
-      first_ref = Comms::Lifecycle::RequestRef.for(
-        Tamoz::Core::RequestIdentity.request_id(
-          surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
-          update_id: 101, raw_payload_hash: transport.digest_of(update(101, text: 'make it blue'))
-        )
-      )
+      first_ref = request_ref(first, transport)
 
-      assert_equal "Accepted #{first_ref}. I will report committed progress.", replies.first
-      assert_match(/Accepted r\h{10}; queued behind earlier work/, replies.last)
+      assert_equal "Received #{first_ref}.", replies.first
+      assert_equal "Received #{request_ref(second, transport)}.", replies.last
     end
   end
 
@@ -224,6 +226,46 @@ class CommsGatewayTest < Minitest::Test
         surface_id: 'telegram-ops', statuses: %w[pending]
       ).select { |row| row.fetch('kind') == 'accepted' }
       assert_equal 2, accepted.length, 'one accepted control per admitted update'
+    end
+  end
+
+  def test_accepted_control_is_unowned_when_terminal_request_delivery_succeeds
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      now = Time.utc(2026, 8, 10, 12, 0, 0)
+      transport.batch([update(1, text: 'work')])
+
+      assert_equal :served, gateway.serve_once(now:, drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      request_id = checkpoints.request_history(thread_id: thread).first.request_id
+      accepted = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                       .find { |row| row.fetch('kind') == 'accepted' }
+      assert_nil accepted.fetch('request_id')
+
+      terminal = Comms::Delivery.build(
+        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'answer',
+        part_index: 0, part_count: 1, journaled: true, render_version: 1,
+        content_digest: 'd' * 64
+      ).wire
+      assert_equal :appended, store.append_delivery(
+        terminal, surface_id: 'telegram-ops', capacity: 500,
+        reserved_request_id: request_id, now:
+      )
+      assert_equal :claimed, store.claim_delivery(
+        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        claim_expires_at: now + 30, now:
+      )
+      assert_equal :marked, store.mark_delivery(
+        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        status: 'succeeded', receipt: { 'message_id' => 42 }, now:
+      )
+
+      status = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{request_id[0, 10]}", now:
+      )
+      assert_equal 'succeeded', status.fetch('delivery_state')
     end
   end
 
@@ -333,6 +375,38 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def test_clarification_reply_matching_requires_a_positive_integer_receipt_id
+    with_gateway do |gateway, transport, _store|
+      row = nil
+      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_row_for_receipt) do |
+        surface_id:, conversation_id:, message_id:|
+        row
+      end
+      envelope = transport.normalize(update(1, text: 'answer')).merge('reply_to' => 4242)
+      markup = JSON.generate(
+        'phase' => 'clarification_required', 'request_ref' => 'r0123456789', 'actions' => ['answer']
+      )
+
+      [
+        {},
+        { 'message_id' => 'not-a-number' },
+        { 'message_id' => '4242' },
+        { 'message_id' => {} },
+        { 'message_id' => [] }
+      ].each do |receipt|
+        row = { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+                'markup' => markup, 'receipt' => JSON.generate(receipt) }
+
+        assert_nil gateway.send(:clarification_reply_reference, envelope), receipt.inspect
+      end
+
+      row = { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+              'markup' => markup, 'receipt' => JSON.generate('message_id' => 4242) }
+
+      assert_equal 'r0123456789', gateway.send(:clarification_reply_reference, envelope)
+    end
+  end
+
   def test_cancel_is_a_typed_redirect_and_not_a_model_task
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
@@ -384,7 +458,9 @@ class CommsGatewayTest < Minitest::Test
       transport.batch([update(4, text: '/cancel')])
       assert_equal :served, gateway.serve_once(drain: false)
 
-      assert_equal 'Cancellation requested.', appended.last.fetch('text')
+      request = checkpoints.request_history(thread_id: new_thread).find { |entry| entry.operation == :turn }
+      expected_ref = Tamoz::Comms::Lifecycle::RequestRef.for(request.request_id)
+      assert_equal "Cancellation requested for #{expected_ref}.", appended.last.fetch('text')
       assert_equal 1, cancellation_stamped_count(store, new_thread),
                    'the live request on the CURRENT generation is stamped'
       assert_equal 0, cancellation_stamped_count(store, old_thread),
@@ -434,7 +510,7 @@ class CommsGatewayTest < Minitest::Test
                           .map { |row| row.fetch('text') }
                           .reverse.find { |text| text.start_with?('Work status:') }
 
-      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
 
       warn({ status_reply:, rows: store.outbox_rows(surface_id: 'telegram-ops',
                                                      statuses: %w[pending claimed succeeded failed unknown])
@@ -442,8 +518,8 @@ class CommsGatewayTest < Minitest::Test
       stx = store.conversation_status(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
       warn("agg=#{stx['task_state']} open=#{stx['open_requests']}")
 
-      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
-      refute_match(/task=accepted/, status_reply)
+      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      refute_match(/State: accepted/, status_reply)
     end
   end
 
@@ -768,6 +844,41 @@ class CommsGatewayTest < Minitest::Test
 
       assert_equal [%w[ignored command]], inbound_dispositions(store, 331)
       assert_equal Tamoz::Comms::Gateway::HELP_REPLY, appended.last.fetch('text')
+    end
+  end
+
+  def test_help_teaches_the_core_loop_and_keeps_default_controls_short
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(332, text: '/help')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+      assert_match(/Example:.*\/status.*\/cancel/i, reply)
+      assert_includes reply, 'More: /help more.'
+      refute_match(%r{/think|/verbose|/usage|/context}, reply)
+      assert_operator reply.scan(%r{/[a-z]+(?:\s|$)}i).uniq.length, :<=, 5
+    end
+  end
+
+  def test_help_more_expands_the_typed_command_reference_and_rejects_other_arguments
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(333, text: '/help more')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+      assert_equal Tamoz::Comms::Gateway::HELP_MORE_REPLY, reply
+      assert_includes reply, '/redirect r<reference> <new task>'
+      assert_includes reply, '/think <low|medium|high>'
+      assert_includes reply, '/verbose <quiet|normal|detailed>'
+
+      transport.batch([update(334, text: '/help unexpected')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::HELP_USAGE_REPLY, appended.last.fetch('text')
     end
   end
 

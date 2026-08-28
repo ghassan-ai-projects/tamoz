@@ -1,0 +1,165 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Reproduces the observed chat findings (OF-1..OF-15) from
+# docs/openclaw-chat-study-refresh/implementation-plan/06-observed-chat-findings.md
+# by driving Harness A. Prints a labeled transcript per finding so a fixing agent
+# can see the current behavior and re-run after a fix.
+#
+# Interaction findings use the DETERMINISTIC provider (no network, isolates the
+# chat UX). Run:
+#   bundle exec ruby bin/tamoz-chat-probe            # all interaction findings
+#   bundle exec ruby bin/tamoz-chat-probe OF-3       # one finding
+#
+# Model-dependent findings (OF-1 latency/CheckpointConflictError) need a real
+# provider — use bin/tamoz-chat-sim with TAMOZ_PROVIDER set (see the doc).
+
+require 'bundler/setup'
+$LOAD_PATH.unshift(File.expand_path('../test/support', __dir__))
+require 'json'
+require 'experience_harness'
+
+H = Tamoz::ExperienceSim::Harness
+F = Tamoz::Evals::Benchmark::OpenclawCommsFixture
+ACCEPT = F::ACCEPTED_REVIEW
+
+def show(cards)
+  return puts('   (no reply)') if cards.empty?
+
+  cards.each do |c|
+    puts "   [#{c[:kind]}] #{c[:text].to_s.gsub("\n", ' / ')}"
+    puts "      markup: #{c[:markup].inspect}" if c[:markup]
+  end
+end
+
+def events(harness)
+  Array(harness.events).each do |e|
+    next unless e.is_a?(Hash)
+
+    puts "   event: #{e['event']} #{e['reason']}".rstrip
+  end
+end
+
+def ref_of(cards)
+  accepted = cards.find { |c| c[:kind] == 'accepted' }
+  accepted && accepted[:text][/r[0-9a-f]{10}/]
+end
+
+def deterministic(routing: :legacy, **responses)
+  responses = F::DEFAULT_MODEL_RESPONSES if responses.empty?
+  H.new(model_factory: F.model_factory(**responses), routing:)
+end
+
+PROBES = {
+  'OF-4' => lambda {
+    puts '# OF-4 normal chat "hi" is routed to a direct answer (no plan/review)'
+    h = deterministic(routing: :experimental,
+                      route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.',
+                                'reason_class' => 'greeting' }])
+    puts '👤 hi'
+    show(h.say('hi'))
+    h.close
+  },
+  'OF-3' => lambda {
+    puts '# OF-3 a clarifying question crashes the turn (CF-1)'
+    review = [{ 'decision' => 'needs_input', 'layer' => 'semantic', 'review_id' => 'rv1',
+                'issues' => ['Which file did you mean — note.txt or other.txt?'],
+                'rationale' => 'ambiguous request' }]
+    h = deterministic(plan: F::DEFAULT_PLAN, review: review, verify: F::VERIFY_OK)
+    puts '👤 read the file and summarize it'
+    show(h.say('read the file and summarize it'))
+    events(h)
+    h.close
+  },
+  'OF-5' => lambda {
+    puts '# OF-5 milestone card uses human-safe progress copy'
+    h = deterministic
+    show(h.say('read note.txt'))
+    h.close
+  },
+  'OF-6' => lambda {
+    puts '# OF-6 /status uses bounded human vocabulary; diagnostics are explicit'
+    h = deterministic
+    h.admit('prepare the report')
+    h.admit('draft the email')
+    puts '👤 /status'
+    show(h.say('/status'))
+    h.close
+  },
+  'OF-7' => lambda {
+    puts '# OF-7 /cancel with several open names no target (CF-3)'
+    h = deterministic
+    h.admit('prepare the report')
+    h.admit('draft the email')
+    puts "   open_requests before: #{h.conversation_status['open_requests']}"
+    puts '👤 /cancel'
+    show(h.say('/cancel'))
+    h.close
+  },
+  'OF-8' => lambda {
+    puts '# OF-8 approval card names the bounded action and safe next step'
+    plan = [
+      { 'goal' => 'inspect', 'done_when' => ['read'],
+        'steps' => [{ 'id' => 'look', 'purpose' => 'read', 'tool' => 'read_file',
+                      'arguments' => { 'path' => 'note.txt' }, 'verification' => 'present' }] },
+      { 'goal' => 'fix', 'done_when' => ['fixed'],
+        'steps' => [{ 'id' => 'edit', 'purpose' => 'patch', 'tool' => 'apply_patch',
+                      'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
+                      'verification' => 'digest' }] }
+    ]
+    h = H.new(model_factory: F.model_factory(plan: plan, review: [ACCEPT, ACCEPT],
+                                             verify: [{ 'answer' => 'fixed', 'satisfied' => true,
+                                                        'evidence' => ['note.txt'] }]),
+              approval_ask: { timeout_s: 86_400, on_timeout: :park })
+    puts '👤 make note.txt say fixed'
+    show(h.say('make note.txt say fixed'))
+    h.close
+  },
+  'OF-11' => lambda {
+    puts '# OF-11 a reply is swallowed as a new task (CF-4)'
+    h = deterministic
+    h.say('what is in note.txt?')
+    puts '👤 (reply) thanks, also what about other.txt?'
+    show(h.reply('thanks, also what about other.txt?'))
+    h.close
+  },
+  'OF-14' => lambda {
+    puts '# OF-14 accepted does not mean anyone is working'
+    h = deterministic
+    puts '👤 prepare the report'
+    accepted = h.admit('prepare the report')
+    reference = ref_of(accepted)
+    puts "👤 /status #{reference} (worker stopped)"
+    show(h.status_only(reference))
+    puts '   worker pass'
+    show(h.work_off)
+    status = h.ref_status(reference)
+    puts "   status: task=#{status.fetch('task_state')}; delivery=#{status.fetch('delivery_state')}"
+    h.close
+  },
+  'OF-12' => lambda {
+    puts '# OF-12 redirect names the replacement ref and preserves the original'
+    h = deterministic
+    ref = ref_of(h.admit('prepare the report'))
+    puts "👤 /redirect #{ref} only compare the two candidates"
+    show(h.say("/redirect #{ref} only compare the two candidates"))
+    h.close
+  },
+  'OF-15' => lambda {
+    puts '# OF-15 /help teaches the core loop and expands explicitly'
+    h = deterministic
+    puts '👤 /help'
+    show(h.say('/help'))
+    puts '👤 /help more'
+    show(h.say('/help more'))
+    h.close
+  }
+}.freeze
+
+selected = ARGV.empty? ? PROBES.keys : ARGV
+selected.each do |key|
+  probe = PROBES[key] or (warn("unknown probe #{key} (have: #{PROBES.keys.join(', ')})")
+                          next)
+  puts "\n===== #{key} ====="
+  probe.call
+end

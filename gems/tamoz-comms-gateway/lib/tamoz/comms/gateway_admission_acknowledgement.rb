@@ -9,15 +9,7 @@ module Tamoz
 
         def accepted_reply(envelope)
           reference = Lifecycle::RequestRef.for(request_identity(envelope))
-          status = @store.conversation_status(
-            surface_id:, conversation_id: envelope.fetch('conversation_id')
-          )
-          if status && status.fetch('open_requests') > 1
-            "Accepted #{reference}; queued behind earlier work; " \
-              'I will report committed progress when it runs.'
-          else
-            "Accepted #{reference}. I will report committed progress."
-          end
+          "Received #{reference}."
         end
 
         def request_identity(envelope)

@@ -84,6 +84,12 @@ module Tamoz
         dispatch_task(task) { |event| yield event if block_given? }
       end
 
+      def respond(task)
+        task = normalize_task(task)
+        start_turn
+        routing_decision(task)
+      end
+
       private
 
       def dispatch_task(task)
@@ -229,12 +235,12 @@ module Tamoz
         )
         request = RequestRoute.parse(raw)
         if request.direct_response? && !RequestRoute.self_contained_task?(task)
-          emit(:route_fallback, "reason" => "unsafe_direct_route") { |event| yield event }
+          emit(:route_fallback, "reason" => "unsafe_direct_route") { |event| yield event if block_given? }
           return nil
         end
         RoutingDecision.from(request, toolbox:)
       rescue ProtocolError
-        emit(:route_fallback, "reason" => "invalid_route") { |event| yield event }
+        emit(:route_fallback, "reason" => "invalid_route") { |event| yield event if block_given? }
         nil
       end
 

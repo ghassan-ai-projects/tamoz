@@ -431,6 +431,34 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # TurnContext forbids control characters, but a newline reaches admission two
+  # ways: an inbound multi-line message, and a multi-line terminal answer carried
+  # as a history fragment. turn_payload flattens both so no turn crashes.
+  def test_turn_payload_flattens_control_characters_in_text_and_fragments
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      history = [{ 'role' => 'assistant',
+                   'text' => "done, it is blue\nResponse provided; no task completion was claimed." }]
+
+      store.admit_and_enqueue(
+        envelope(update_id: 1, text: "make it\nblue"), surface_id: 'telegram-ops',
+                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                       reservation: 1, now:, history:
+      )
+
+      task = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload.fetch('task')
+      control = /[\u0000-\u001f\u007f]/
+      assert_equal 'make it blue', task.fetch('text')
+      refute_match control, task.fetch('text')
+      task.fetch('context').fetch('fragments').each do |fragment|
+        refute_match control, fragment.fetch('text'),
+                     "a history fragment must not carry control characters: #{fragment.inspect}"
+      end
+      assert_equal 'done, it is blue Response provided; no task completion was claimed.',
+                   task.fetch('context').fetch('fragments').first.fetch('text')
+    end
+  end
+
   # The history rides inside the payload's task entry, so the worker — which
   # never sees the comms store — plans the turn with the thread's context.
   def test_admit_and_enqueue_carries_the_history_in_the_turn_payload
@@ -633,8 +661,9 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   # Plan 02 work item 3: the status projection is reference-addressed and
   # queue-aware from durable rows alone — the active request's short
-  # reference, its queue position, and the age of the oldest admitted
-  # request — and none of those keys exist when nothing is admitted.
+  # reference, its queue position, the age of the oldest admitted request, and
+  # every open reference. Queue facts and the active reference are absent when
+  # nothing is admitted; the open-reference list is empty.
   def test_conversation_status_is_reference_addressed_and_queue_aware
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
@@ -645,6 +674,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       )
 
       assert_equal 'idle', idle.fetch('state')
+      assert_empty idle.fetch('open_request_refs')
       refute idle.key?('request_ref')
       refute idle.key?('queue_position')
       refute idle.key?('queue_age_ms')
@@ -661,6 +691,8 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 2, status.fetch('open_requests')
       assert_equal active, status.fetch('request_id')
       assert_equal "r#{active[0, 10]}", status.fetch('request_ref')
+      assert_equal request_ids(checkpoints, 'tg.ops.abc').map { |id| "r#{id[0, 10]}" },
+                   status.fetch('open_request_refs')
       assert_equal 1, status.fetch('queue_position'), 'one admitted request is older than the active one'
       assert_equal 5_000, status.fetch('queue_age_ms')
     end
@@ -693,6 +725,78 @@ class SQLiteCommsStoreTest < Minitest::Test
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
         ref: 'half-a-ref', now:
       ), 'a malformed reference resolves to nothing'
+    end
+  end
+
+  def test_request_status_filters_delivery_by_request_and_aggregate_keeps_conversation_scope
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 52))
+      assert_equal :enqueued, admit(store, envelope(update_id: 53), now: now + 1)
+      first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
+
+      unknown = delivery.merge('delivery_id' => 'delivery-request-first')
+      delivered = delivery.merge('delivery_id' => 'delivery-request-second')
+      assert_equal :appended, store.append_delivery(
+        unknown, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: first_id, now:
+      )
+      assert_equal :appended, store.append_delivery(
+        delivered, surface_id: 'telegram-ops', capacity: 500, reserved_request_id: second_id,
+        now: now + 1
+      )
+      claim_and_mark!(store, unknown.fetch('delivery_id'), 'unknown')
+      claim_and_mark!(store, delivered.fetch('delivery_id'), 'succeeded')
+
+      assert_equal 'unknown', store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{first_id[0, 10]}", now:
+      ).fetch('delivery_state')
+      assert_equal 'succeeded', store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{second_id[0, 10]}", now:
+      ).fetch('delivery_state')
+      assert_equal 'unknown', store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      ).fetch('delivery_state')
+      assert_equal 'succeeded', store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      ).fetch('active_delivery_state')
+    end
+  end
+
+  def test_worker_status_uses_the_claim_window_then_claim_facts
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 54))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      reference = "r#{request_id[0, 10]}"
+      address = { surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref: reference }
+      created_at_ms = store.__send__(:read, 'test.request.created_at') do |txn|
+        txn.scalar('test.request.created_at',
+                   'SELECT created_at_ms FROM tamoz_requests WHERE request_id = ?', [request_id])
+      end
+      claim_window_ms = Tamoz::SQLite::CommsStore::WORKER_UNCLAIMED_WINDOW_MS
+      assert_equal 1, claim_window_ms
+      created_at = Time.at(
+        created_at_ms / 1000, (created_at_ms % 1000) * 1000, :microsecond
+      ).utc
+      at_claim_window = created_at_ms + claim_window_ms
+      claim_window_time = Time.at(
+        at_claim_window / 1000, (at_claim_window % 1000) * 1000, :microsecond
+      ).utc
+
+      assert_equal 'accepted', store.request_status(**address, now: created_at).fetch('worker_state')
+      assert_equal 'queued-unclaimed', store.request_status(**address, now: claim_window_time).fetch('worker_state')
+
+      checkpoints.open_writer(
+        thread_id: 'tg.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
+      ) do |writer|
+        assert_equal request_id, writer.claim_next_request(validator: nil).request_id
+      end
+
+      assert_equal 'working', store.request_status(**address, now: now + 501).fetch('worker_state')
     end
   end
 

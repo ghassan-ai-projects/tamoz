@@ -837,6 +837,41 @@ class AgentCLITest < Minitest::Test
     assert_match(/tamoz: conflict/, err.string)
   end
 
+  def test_durable_worker_checkpoint_conflict_is_a_bounded_failure
+    with_cli_workspace do |workspace, session_dir|
+      File.write(File.join(workspace, "note.txt"), "hello\n")
+      factory = conflict_after_effect_factory(
+        plan_for("read_file", {"path" => "note.txt"}, id: "read"),
+        accepted_review,
+        Tamoz::CheckpointConflictError.new("conflict")
+      )
+      out = StringIO.new
+      err = StringIO.new
+      background_error = StringIO.new
+      original_stderr = $stderr
+      $stderr = background_error
+      begin
+        status = run_cli(
+          ["ask", "read note.txt"],
+          session: "durable-conflict", workspace:, session_dir:, out:, err:, factory:
+        )
+      ensure
+        $stderr = original_stderr
+      end
+
+      assert_equal 1, status
+      assert_match(/tamoz: The session could not complete safely\./, err.string)
+      assert_match(/Please inspect it before retrying\./, err.string)
+      refute_match(/failed before it could finish/, err.string)
+      refute_match(/CheckpointConflictError|conflict|backtrace/, err.string + background_error.string)
+
+      database = SQLite3::Database.new(File.join(session_dir, "durable-conflict.sqlite3"))
+      assert_operator database.get_first_value("SELECT COUNT(*) FROM tamoz_effects"), :>, 0
+    ensure
+      database&.close
+    end
+  end
+
   def test_unexpected_error_propagates_instead_of_clean_exit
     out = StringIO.new
     err = StringIO.new
@@ -960,8 +995,25 @@ class AgentCLITest < Minitest::Test
     end
   end
 
+  class ConflictAfterEffectModel
+    def initialize(plan:, review:, error:)
+      @responses = {plan:, review:}
+      @error = error
+    end
+
+    def generate(stage:, system:, prompt:)
+      raise @error if stage == :verify
+
+      JSON.generate(@responses.fetch(stage))
+    end
+  end
+
   def raising_factory(error)
     ->(_options) { RaisingModel.new(error) }
+  end
+
+  def conflict_after_effect_factory(plan, review, error)
+    ->(_options) { ConflictAfterEffectModel.new(plan:, review:, error:) }
   end
 
   def repair_model(digest)

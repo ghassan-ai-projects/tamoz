@@ -40,35 +40,40 @@ module Tamoz
       # rather than rewritten onto delivered history.
       def append_delivery(delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
         transaction('comms.outbox.append') do |txn|
-          if (request_ref = milestone_request_ref(delivery_wire))
-            next :coalesced if coalesce_milestone!(txn, delivery_wire, surface_id, request_ref, now)
-            next :coalesced if milestone_bound_reached?(txn, surface_id,
-                                                        delivery_wire.fetch('conversation_id'), request_ref)
-          end
-
-          existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
-            SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
-          SQL
-          next :duplicate if existing
-
-          pending = pending_claimed_count(txn, surface_id)
-          reserved = if reserved_request_id
-                       [open_reservations(txn, surface_id) - reservation_of(txn, reserved_request_id), 0].max
-                     else
-                       open_reservations(txn, surface_id)
-                     end
-          next :capacity_refused if pending + reserved + 1 > capacity
-
-          txn.execute('comms.outbox.append', <<~SQL, outbox_binds(delivery_wire, surface_id, now))
-            INSERT INTO tamoz_comms_outbox (
-              delivery_id, surface_id, conversation_id, kind, operation, text,
-              part_index, part_count, markup, reply_to, journaled,
-              content_digest, render_version, expires_at_ms, status,
-              created_at_ms, updated_at_ms
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-          SQL
-          :appended
+          append_delivery_in_transaction!(txn, delivery_wire, surface_id:, capacity:, now:, reserved_request_id:)
         end
+      end
+
+      def append_delivery_in_transaction!(txn, delivery_wire, surface_id:, capacity:, now:, reserved_request_id: nil)
+        if (request_ref = milestone_request_ref(delivery_wire))
+          return :coalesced if coalesce_milestone!(txn, delivery_wire, surface_id, request_ref, now)
+          return :coalesced if milestone_bound_reached?(txn, surface_id,
+                                                        delivery_wire.fetch('conversation_id'), request_ref)
+        end
+
+        existing = txn.first('comms.outbox.append.existing', <<~SQL, [delivery_wire.fetch('delivery_id')])
+          SELECT 1 FROM tamoz_comms_outbox WHERE delivery_id = ?
+        SQL
+        return :duplicate if existing
+
+        pending = pending_claimed_count(txn, surface_id)
+        reserved = if reserved_request_id
+                     [open_reservations(txn, surface_id) - reservation_of(txn, reserved_request_id), 0].max
+                   else
+                     open_reservations(txn, surface_id)
+                   end
+        return :capacity_refused if pending + reserved + 1 > capacity
+
+        binds = outbox_binds(delivery_wire, surface_id, now, request_id: reserved_request_id)
+        txn.execute('comms.outbox.append', <<~SQL, binds)
+          INSERT INTO tamoz_comms_outbox (
+            delivery_id, surface_id, conversation_id, kind, operation, text,
+            part_index, part_count, markup, reply_to, journaled,
+            content_digest, render_version, expires_at_ms, status,
+            created_at_ms, updated_at_ms, request_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)
+        SQL
+        :appended
       end
 
       # Claim one row under a fenced lease for a transport attempt. A crashed
@@ -198,6 +203,27 @@ module Tamoz
             ORDER BY created_at_ms LIMIT ?
           SQL
           rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }
+        end
+      end
+
+      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
+        message_id = Integer(message_id, exception: false)
+        return nil unless message_id&.positive?
+
+        pattern = "%\"message_id\":#{message_id}%"
+        read('comms.outbox.receipt') do |txn|
+          rows = txn.rows('comms.outbox.receipt', <<~SQL, [surface_id, conversation_id, pattern])
+            SELECT #{OUTBOX_COLUMNS.join(', ')} FROM tamoz_comms_outbox
+            WHERE surface_id = ? AND conversation_id = ? AND status = 'succeeded'
+              AND receipt LIKE ?
+            ORDER BY created_at_ms DESC
+          SQL
+          rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }.find do |row|
+            receipt = JSON.parse(row.fetch('receipt'))
+            receipt.is_a?(Hash) && receipt['message_id'] == message_id
+          rescue JSON::ParserError
+            false
+          end
         end
       end
 

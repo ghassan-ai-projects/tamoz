@@ -5,6 +5,23 @@ require_relative "test_helper"
 # P6-C / P6-D2: the three-valued reconciliation of a filesystem effect and the
 # refusal to repeat a check or provider call whose outcome is unknown.
 class AgentSessionEffectTest < Minitest::Test
+  ToolDispatchConfiguration = Data.define(
+    :model, :model_call_safety, :profile, :toolbox, :mcp, :capabilities
+  )
+
+  class CountingCapabilities
+    attr_reader :calls
+
+    def initialize
+      @calls = 0
+    end
+
+    def execute(_context, _tool, _arguments)
+      @calls += 1
+      "file contents"
+    end
+  end
+
   def test_reconcilable_effect_completes_from_a_proven_after_state
     with_reconcilable_effect do |store, execution_id, key|
       record = with_writer(store, "owner.after") do |writer|
@@ -219,7 +236,7 @@ class AgentSessionEffectTest < Minitest::Test
           )
         )
 
-        with_writer(adapter, "owner.model") do |writer|
+        with_writer(app.checkpointer, "owner.model") do |writer|
           context = Tamoz::Context.new(
             run_id: "owner.model", execution_id: request.execution_id,
             request_id: "request.model", task_id: "task.model", effects: writer.effects
@@ -233,17 +250,64 @@ class AgentSessionEffectTest < Minitest::Test
             call_index: 0, iteration: 0, sub_operation: 0
           )
 
-          assert_equal "model answer", first
-          assert_equal first, second
+          assert_equal "model answer", first.value
+          assert_equal first.value, second.value
           assert_equal 1, model.calls
-          record = writer.effects.prepare(
-            execution_id: request.execution_id, task_id: "task.model", call_index: 0,
-            operation: "model.generate.plan", safety: "unsafe",
-            request: model_request_for(transport)
-          ).record
-          assert_equal :succeeded, record.status
-          assert_equal transport.provider_configuration_digest,
-                       record.attempts.last.result.fetch("provider_configuration_digest")
+        end
+        record = app.checkpointer.effect_census.find do |candidate|
+          candidate.fetch(:operation) == "model.generate.plan"
+        end
+        assert_equal :succeeded, record.fetch(:status)
+      ensure
+        adapter&.close
+      end
+    end
+  end
+
+  def test_replanned_identical_tool_dispatch_reuses_its_recorded_receipt
+    Dir.mktmpdir("tamoz-replanned-effect") do |directory|
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, "tamoz.db"))
+      begin
+        app = base_definition.compile(checkpointer: adapter)
+        request = app.durable_runner.deliver({}, thread: "thread.reconcile", request_id: "request.setup")
+        capabilities = CountingCapabilities.new
+        configuration = ToolDispatchConfiguration.new(
+          model: nil,
+          model_call_safety: :idempotent,
+          profile: nil,
+          toolbox: Tamoz::Agent::Toolbox.new(root: directory),
+          mcp: nil,
+          capabilities:
+        )
+        effects = Tamoz::Agent::SessionEffects.new(configuration:)
+        with_writer(app.checkpointer, "owner.replanned") do |writer|
+          context = Tamoz::Context.new(
+            run_id: "owner.replanned", execution_id: request.execution_id,
+            request_id: "request.replanned", task_id: "task.read", effects: writer.effects
+          )
+          step = { "tool" => "read_file", "arguments" => { "path" => "note.txt" } }
+          first = effects.dispatch(
+            context,
+            { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
+              "plan_digest" => "sha256:#{"a" * 64}"},
+            step,
+            iteration: 0,
+            sub_operation: 0
+          )
+          second = effects.dispatch(
+            context,
+            { "tool" => "read_file", "operation" => "tool.read_file", "safety" => "read_only",
+              "plan_digest" => "sha256:#{"b" * 64}"},
+            step,
+            iteration: 0,
+            sub_operation: 0
+          )
+
+          assert_equal :succeeded, first.status
+          assert_equal :succeeded, second.status
+          assert second.reused
+          assert_equal "file contents", second.value.fetch("output")
+          assert_equal 1, capabilities.calls
         end
       ensure
         adapter&.close
@@ -483,18 +547,6 @@ class AgentSessionEffectTest < Minitest::Test
         )
       end
     end.new
-  end
-
-  def model_request_for(transport)
-    {
-      "system" => "system",
-      "prompt" => "prompt",
-      "request_digest" => transport.request_digest(
-        transport.build_request(system: "system", prompt: "prompt")
-      ),
-      "stage" => "plan",
-      "provider_configuration_digest" => transport.provider_configuration_digest
-    }
   end
 
   def reconcile_fs(toolbox, intent)
