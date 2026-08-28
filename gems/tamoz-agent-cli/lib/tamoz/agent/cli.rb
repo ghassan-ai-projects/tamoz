@@ -13,6 +13,8 @@ module Tamoz
       EXIT_SIGINT = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigint")
       EXIT_SIGTERM = Tamoz::Cancellation::Trap::EXIT_CODES.fetch("sigterm")
       ENVELOPE_SCHEMA = 1
+      DURABLE_WORKER_FAILURE_MESSAGE =
+        "The session could not complete safely. Please inspect it before retrying."
 
       # The unattended surface (`init`, `queue`, `worker`, `status`) lives in its
       # own file; it is the same CLI object, split only so neither half becomes
@@ -403,9 +405,12 @@ module Tamoz
         # queued), and that empty poll must not erase the reason the operator just saw.
 
         outcome = nil
+        checkpoint_conflict = false
         worker = Thread.new do
           begin
             outcome = yield context
+          rescue Tamoz::CheckpointConflictError
+            checkpoint_conflict = true
           ensure
             sink.finish
           end
@@ -417,6 +422,8 @@ module Tamoz
           sink.finish unless sink.finished?
           worker.join
         end
+        worker.value
+        raise Tamoz::Agent::Error, DURABLE_WORKER_FAILURE_MESSAGE if checkpoint_conflict
 
         if prompts.any? && !options[:json]
           prompts.each { |part| render_interrupt_prompt(part, session:, thread_id:) }
