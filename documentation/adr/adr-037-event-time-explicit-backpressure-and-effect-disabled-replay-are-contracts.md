@@ -24,6 +24,10 @@ Event-time/watermark/late/idleness policy, bounded state, and effect-disabled re
 
 - rely on broker QoS and processing time — transport delivery does not define application dedup, temporal completeness, physical outcomes, or safe replay.
 
+## Verification
+
+Verified against code: 2026-08-29 — Per ADR-055 these contracts are owned by the external `agentic-stream` runtime; Tamoz consumes a sealed snapshot ([`../design/streaming.md`](../design/streaming.md)).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

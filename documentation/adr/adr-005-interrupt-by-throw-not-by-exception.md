@@ -18,6 +18,10 @@ thread.
 
 The most-violated rule of the reference framework becomes structurally impossible in Tamoz. **Cost:** each worker must wrap its node in the matching `catch`, and a throw cannot cross threads, so interrupt is scoped within a worker.
 
+## Verification
+
+Verified against code: 2026-08-29 — `Tamoz::Graph::Executor` (`gems/tamoz-graph/lib/tamoz/graph/executor.rb`) runs the super-step loop that wraps each node in the matching `catch`; interrupt semantics are covered by the invariant conformance suite.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

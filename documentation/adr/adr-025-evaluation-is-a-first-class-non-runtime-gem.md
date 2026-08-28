@@ -26,7 +26,10 @@ starts a new lineage.
 
 ## Verification
 
-Verified against code: 2026-08-29 — `tamoz-evals` present; no runtime gem depends on it. `tamoz-evals-runner` is a *packaging* split, not a second decision: it ships the `tamoz-eval-runner` executable — the isolated harness/benchmark/treatment runner this ADR calls the "isolated evaluation worker" — separately from the `tamoz-evals` library (resolves audit O3).
+Verified against code: 2026-08-29 — `tamoz-evals` present; no runtime gem depends on it. The
+`gems/tamoz-evals-runner` gem is a *packaging* split (it ships the tamoz-eval-runner executable
+— the isolated harness/benchmark/treatment runner this ADR calls the "isolated evaluation
+worker"), not a second decision (resolves audit O3).
 
 ## Next reads
 

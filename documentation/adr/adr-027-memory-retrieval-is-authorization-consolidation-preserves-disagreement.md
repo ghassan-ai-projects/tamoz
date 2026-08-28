@@ -24,6 +24,10 @@ Authority, scope, sensitivity, and validity filter candidates *before* ranking, 
 
 - relevance-first retrieval then model-side filtering — exposing an unauthorized or stale record to ranking has already crossed the boundary.
 
+## Verification
+
+Verified against code: 2026-08-29 — Retrieval authorization is owned by `gems/tamoz-agent-memory` (the `Memory::Engine` vertical).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

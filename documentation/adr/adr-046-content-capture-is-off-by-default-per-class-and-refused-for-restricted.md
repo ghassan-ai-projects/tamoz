@@ -23,6 +23,10 @@ Prompts, tool arguments/results, and plan/review text are excluded unless a name
 
 - capture-by-default and scrub-at-export — scrubbing after the fact cannot prove what never reached the journal, and default-on is one misconfiguration from invisible capture.
 
+## Verification
+
+Verified against code: 2026-08-29 — Content policy is in `gems/tamoz-observability` (`lib/tamoz/observability/producer.rb`).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

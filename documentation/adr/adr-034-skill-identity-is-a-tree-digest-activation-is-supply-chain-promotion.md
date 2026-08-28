@@ -24,6 +24,10 @@ Identity is a canonical tree digest; install/update stage in quarantine and acti
 
 - watching mutable skill directories and loading newest bytes on resume — makes behavior unreproducible and enables silent shadowing and same-version supply-chain swaps.
 
+## Verification
+
+Verified against code: 2026-08-29 — Skill tree-digest identity and staged activation are in `gems/tamoz-agent-capabilities`.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

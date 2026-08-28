@@ -21,6 +21,10 @@ State is inspectable and pattern-matchable with no framework-specific types, and
 
 - `Data`/`Struct`-typed state — partial updates against a fixed-shape value object are awkward and every node would construct one.
 
+## Verification
+
+Verified against code: 2026-08-29 — The reducer registry is `Tamoz::Reducers` (`gems/tamoz-graph/lib/tamoz/reducers.rb`); state is plain Hash plus named reducers.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

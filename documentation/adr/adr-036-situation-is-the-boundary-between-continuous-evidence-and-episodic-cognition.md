@@ -22,6 +22,10 @@ Deterministic operators reduce authenticated events into immutable versioned Sit
 
 - invoke the agent per event or drain raw windows into prompts — maximizes cost and staleness and moves deterministic semantics into probabilistic cognition.
 
+## Verification
+
+Verified against code: 2026-08-29 — Situations and `SituationSpec` are in `gems/tamoz-stream`; see [`../design/streaming.md`](../design/streaming.md).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

@@ -28,6 +28,10 @@ Telegram v1 can deny an exact pending interrupt but cannot grant approval, and e
 
 - reusing the worker's `(thread, occurrence, granted)` tuple for callbacks — it binds no actor, interrupt digest, expiry, or consumption.
 
+## Verification
+
+Verified against code: 2026-08-29 — The deny-only `chat_bound` path is in `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_callbacks.rb`; the evidence lattice is ADR-049 (`gems/tamoz-approval`).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

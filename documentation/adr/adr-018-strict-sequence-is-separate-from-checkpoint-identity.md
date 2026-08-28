@@ -20,6 +20,10 @@ Checkpoint ordering is a backend-assigned integer sequence per `(thread, ns)`, s
 
 - UUID lexical order as sequence — not a concurrency- or clock-safe append order.
 
+## Verification
+
+Verified against code: 2026-08-29 — Checkpoint sequencing is owned by `gems/tamoz-sqlite`; ordering is covered by the persistence conformance suite.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

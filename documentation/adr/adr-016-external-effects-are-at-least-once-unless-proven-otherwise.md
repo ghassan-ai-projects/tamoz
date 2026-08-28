@@ -21,6 +21,10 @@ Every effect carries a deterministic key and safety class: idempotent/transactio
 
 - blind retry after an ambiguous side effect — it can duplicate irreversible work.
 
+## Verification
+
+Verified against code: 2026-08-29 — Effect identity and the `:unknown` state live in the effect journal (`gems/tamoz-sqlite/lib/tamoz/sqlite/effect_journal.rb`).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

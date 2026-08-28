@@ -19,6 +19,10 @@ replay policy.
 
 A stable logical identity survives interrupt/retry/resume so recorded work is reused, while a new turn or fork gets a fresh execution id so nothing leaks across. **Cost:** a two-level identity model (logical activation plus attempt) to reason about, and effect-bearing forks need an explicit replay policy.
 
+## Verification
+
+Verified against code: 2026-08-29 — `execution_id` scopes a turn (e.g. `gems/tamoz-agent-healing/lib/tamoz/agent/healing/failure_record.rb`); execution-identity invariants cover resume versus fork.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

@@ -24,6 +24,10 @@ unnecessary actions, corrections, safety, latency, and cost.
 
 - "smart" as an unmeasured personality claim — it rewards confident prose over correct, efficient outcomes.
 
+## Verification
+
+Verified against code: 2026-08-29 — The dimensions are measured by `gems/tamoz-evals` (success, calibration, verification, unnecessary actions, safety, latency, cost).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

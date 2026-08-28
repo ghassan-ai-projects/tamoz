@@ -19,6 +19,10 @@ outside compaction — both correct anyway.
 
 Every cache invalidation is attributable to a turn via `cache_epoch` and machine-checked as invariant 16. **Cost:** toolsets cannot change freely mid-session and history cannot be rewritten outside compaction — both acceptable constraints.
 
+## Verification
+
+Verified against code: 2026-08-29 — Prompt-cache stability is INVARIANTS.md clause 16, enforced by the conformance suite in `gems/tamoz-evals`.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

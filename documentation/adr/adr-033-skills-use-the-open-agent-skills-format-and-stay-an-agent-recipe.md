@@ -26,6 +26,10 @@ Portable `SKILL.md` directories with progressive disclosure; loading a skill is 
 
 - a Tamoz-only skill DSL or plugin API — sacrifices portability and turns instruction packaging into a premature executable extension surface.
 
+## Verification
+
+Verified against code: 2026-08-29 — Portable `SKILL.md` sourcing is in `gems/tamoz-agent-capabilities`.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

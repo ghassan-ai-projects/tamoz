@@ -150,11 +150,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -182,12 +183,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -281,11 +283,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -408,11 +411,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -473,11 +477,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -505,12 +510,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -538,11 +544,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -570,12 +577,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -603,11 +611,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -669,11 +678,12 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -782,12 +792,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -883,12 +894,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1052,12 +1064,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1085,12 +1098,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1118,12 +1132,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1185,12 +1200,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1218,12 +1234,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1251,12 +1268,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1284,12 +1302,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1419,12 +1438,13 @@
       "amended_by": [
         "049"
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1486,12 +1506,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1519,12 +1540,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1552,12 +1574,13 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
         "Consequences",
         "Rejected alternatives",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [
@@ -1620,7 +1643,7 @@
       "amended_by": [
 
       ],
-      "verified": false,
+      "verified": true,
       "sections": [
         "Context",
         "Decision",
@@ -1631,6 +1654,7 @@
         "Consequences",
         "Rejected alternatives",
         "Adoption",
+        "Verification",
         "Next reads"
       ],
       "supersedes": [

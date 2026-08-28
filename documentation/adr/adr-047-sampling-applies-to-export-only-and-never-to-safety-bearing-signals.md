@@ -22,6 +22,10 @@ The journal records everything and the retention decision is taken at export tim
 
 - sampling at record time against an in-memory window — a paused/resumed turn outlives any such window, and dropping safety-bearing evidence would make the durable record lie.
 
+## Verification
+
+Verified against code: 2026-08-29 — Export-time sampling is in `gems/tamoz-observability`; safety-bearing signals are excluded from sampling.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

@@ -27,6 +27,10 @@ The model only proposes typed `ActionIntent`s; deterministic policy re-reads cur
 
 - expose actuator tools to the model with a confirmation prompt — leaves injection, stale state, duplicate effects, and approval fatigue uncontrolled.
 
+## Verification
+
+Verified against code: 2026-08-29 — Typed intents are proposed by the episode worker in `gems/tamoz-stream` and disposed by the runtime; the worker never actuates ([`../design/streaming.md`](../design/streaming.md), ADR-055).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

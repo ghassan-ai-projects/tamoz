@@ -24,6 +24,10 @@ History is the existing durable record plus a bounded rotating journal, with aut
 
 - a durable telemetry table alongside the runtime record — two writers of overlapping truth drift and contend with the fenced writer.
 
+## Verification
+
+Verified against code: 2026-08-29 — History is the runtime record plus a bounded journal in `gems/tamoz-observability`; no durable telemetry table exists.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

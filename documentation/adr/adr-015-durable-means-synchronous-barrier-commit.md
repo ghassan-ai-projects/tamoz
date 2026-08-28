@@ -16,6 +16,10 @@ durable" mode in v0.1; ephemeral execution is explicit and makes no resume guara
 
 A barrier return guarantees the checkpoint has committed, so resume is trustworthy. **Cost:** there is no async-durable throughput mode in v0.1; ephemeral execution is the explicit escape hatch and makes no resume promise.
 
+## Verification
+
+Verified against code: 2026-08-29 — Synchronous barrier commit is enforced by `Tamoz::Graph::Executor` (`gems/tamoz-graph/lib/tamoz/graph/executor.rb`) and the checkpoint conformance suite (INVARIANTS.md).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

@@ -17,6 +17,10 @@ checkpoint.
 
 Format version, graph name/version, and definition digest are persisted, so an incompatible resume fails before user code unless an explicit migration exists. **Cost:** changing a graph requires a migration to keep resuming its in-flight threads.
 
+## Verification
+
+Verified against code: 2026-08-29 — Graph-version-checked resume is owned by `gems/tamoz-graph`; the resume clauses of INVARIANTS.md cover it.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

@@ -24,6 +24,10 @@ A pinned IANA timezone with explicit bounded DST/misfire/overlap/backlog policie
 
 - host-timezone cron with "run missed jobs on startup" and inherited current permissions — DST surprises, restart storms, delayed privilege escalation.
 
+## Verification
+
+Verified against code: 2026-08-29 — Strict cron, DST, and misfire policy are owned by `gems/tamoz-scheduler`.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

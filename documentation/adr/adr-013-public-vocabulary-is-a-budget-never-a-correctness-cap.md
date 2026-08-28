@@ -17,6 +17,10 @@ concept needs justification, but no numeric cap may erase a necessary failure bo
 
 The introductory surface stays around twelve concepts, and operational concepts (leases, receipts, graph versions) appear only when their feature is used. **Cost:** this is a discipline requiring per-concept judgment, not an enforceable limit.
 
+## Verification
+
+Verified against code: 2026-08-29 — The public vocabulary surface is tracked in `documentation/reference/public-api.md` (and `docs/public-api.json`).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

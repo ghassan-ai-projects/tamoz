@@ -17,6 +17,10 @@ advancement and zombie commits.
 
 One writer per `(thread, ns)` with monotonic fencing, and every pending write and commit validates the fence and base checkpoint, preventing split-brain history. **Cost:** writes within a namespace are serialized through one owner.
 
+## Verification
+
+Verified against code: 2026-08-29 — Lease and fencing machinery is in `gems/tamoz-sqlite` (`lib/tamoz/sqlite.rb`); the fenced-writer conformance suite exercises it.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

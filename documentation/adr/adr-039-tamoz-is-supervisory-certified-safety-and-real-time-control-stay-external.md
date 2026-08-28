@@ -24,6 +24,10 @@ Tamoz observes, diagnoses, recommends, and may perform explicitly-granted bounde
 
 - marketing a general agent framework as a robot/safety controller — Tamoz has neither hard real-time semantics nor domain certification, and an LLM cannot be the final safety barrier.
 
+## Verification
+
+Verified against code: 2026-08-29 — The supervisory boundary is enforced by the episode worker's read-only capability host in `gems/tamoz-stream`; life-safety stays external ([`../design/streaming.md`](../design/streaming.md)).
+
 ## Next reads
 
 - [`README.md`](./README.md) — the ADR catalog

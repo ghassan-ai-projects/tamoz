@@ -251,6 +251,11 @@ namespace :adr do
   task :validate do
     ruby "script/adr_validate.rb"
   end
+
+  desc "Check every ADR's Verification evidence still exists in the tree (drift alarm)"
+  task :verify do
+    ruby "script/adr_verify.rb"
+  end
 end
 
 namespace :fixtures do
@@ -445,7 +450,7 @@ end
 # contended process table away from a false failure, and the gate that decides
 # whether something ships should not have that property.
 desc "The complete gate — nothing skipped (use before committing)"
-task ci_full: ["design:validate", "adr:validate", :syntax, :test, :test_slow,
+task ci_full: ["design:validate", "adr:validate", "adr:verify", :syntax, :test, :test_slow,
                "stream:proto:check", "quality:architecture"]
 
 desc "The complete gate with the test phase sharded across processes"
