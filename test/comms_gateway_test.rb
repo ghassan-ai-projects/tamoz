@@ -133,6 +133,15 @@ class CommsGatewayTest < Minitest::Test
     store.bind_correspondent(binding_wire, now:)
   end
 
+  def request_ref(update, transport)
+    Comms::Lifecycle::RequestRef.for(
+      Tamoz::Core::RequestIdentity.request_id(
+        surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
+        update_id: update.fetch('update_id'), raw_payload_hash: transport.digest_of(update)
+      )
+    )
+  end
+
   def inbound_dispositions(store, update_id)
     store.__send__(:read, 'test.gateway.inbound.read') do |txn|
       txn.rows('test.gateway.inbound.read', <<~SQL, [update_id])
@@ -235,20 +244,18 @@ class CommsGatewayTest < Minitest::Test
   end
 
   # A follow-up message is planned with the thread's transcript: the gateway
-  # reads the conversation history and it rides the second turn's payload
-  # (the first contact stays bare — there is nothing to recall yet). And the
-  # synchronous reply says what will actually happen: while the first
-  # request is still open the follow-up QUEUES behind it — "Accepted" alone
-  # would read as "starting now".
+  # reads the conversation history and it rides the second turn's payload.
   def test_a_follow_up_message_queues_and_carries_the_transcript
     with_gateway do |gateway, transport, store, _adapter, checkpoints|
       seed_binding(store)
       start = Time.utc(2026, 8, 10, 12, 0, 0)
-      transport.batch([update(101, text: 'make it blue')])
+      first = update(101, text: 'make it blue')
+      second = update(102, text: 'and the font?')
+      transport.batch([first])
 
       assert_equal :served, gateway.serve_once(now: start)
 
-      transport.batch([update(102, text: 'and the font?')])
+      transport.batch([second])
 
       assert_equal :served, gateway.serve_once(now: start + 2)
 
@@ -270,15 +277,10 @@ class CommsGatewayTest < Minitest::Test
         fragments: [{ 'role' => 'user', 'text' => 'make it blue' }]
       ), { 'task' => task }
       replies = transport.deliveries.map(&:text)
-      first_ref = Comms::Lifecycle::RequestRef.for(
-        Tamoz::Core::RequestIdentity.request_id(
-          surface_id: 'telegram-ops', surface_revision: 1, bot_id: 7_463_512_990,
-          update_id: 101, raw_payload_hash: transport.digest_of(update(101, text: 'make it blue'))
-        )
-      )
+      first_ref = request_ref(first, transport)
 
-      assert_equal "Accepted #{first_ref}. I will report committed progress.", replies.first
-      assert_match(/Accepted r\h{10}; queued behind earlier work/, replies.last)
+      assert_equal "Received #{first_ref}.", replies.first
+      assert_equal "Received #{request_ref(second, transport)}.", replies.last
     end
   end
 

@@ -73,10 +73,9 @@ class CommsCommandParityTest < Minitest::Test
       second_ref = derived_ref(second)
       accepted = capture.select { |wire| wire.fetch('kind') == 'accepted' }
 
-      assert_equal "Accepted #{first_ref}. I will report committed progress.",
+      assert_equal "Received #{first_ref}.",
                    accepted.fetch(0).fetch('text')
-      assert_equal "Accepted #{second_ref}; queued behind earlier work; " \
-                   'I will report committed progress when it runs.',
+      assert_equal "Received #{second_ref}.",
                    accepted.fetch(1).fetch('text')
 
       resolved = store.request_status(

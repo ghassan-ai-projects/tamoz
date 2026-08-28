@@ -132,7 +132,7 @@ class CommsPairingFirstContactTest < Minitest::Test
       thread = Comms::Admission.thread_id(SURFACE_ID, CONVERSATION_ID)
       assert_equal 1, checkpoints.request_history(thread_id: thread).length,
                    'the next message enqueues a real turn'
-      assert_match(/\AAccepted r[0-9a-f]{10}\./, last_reply)
+      assert_match(/\AReceived r[0-9a-f]{10}\./, last_reply)
       assert_empty store.pairing_challenges(status: 'pending', now: NOW + 20),
                    'approval consumed the challenge; nothing pends afterwards'
     end
