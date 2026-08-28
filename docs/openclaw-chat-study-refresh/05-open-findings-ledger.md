@@ -83,7 +83,7 @@ hold exactly:
 | ID | Finding | Reviewer IDs | Owner seam | Slice | Status |
 | --- | --- | --- | --- | --- | --- |
 | DG-1 | Request handles diverge across surfaces (Telegram `r<ref>`, CLI UUID/thread, `comms request` `R<ref>`); no portable operator handle | G4, G5, F6, H-04, P2 | Gateway admission ack; `CommsStore#requests_by_reference`; CLI queue/ask/status | 1 | Sourced; open |
-| DG-2 | Worker availability is not a durable fact; "accepted" cannot be distinguished from "queued, no worker" | F5, F7, G4 (arch), M-01, P3 | Gateway admission/status; worker claim/health; launcher | 1 | Sourced; open |
+| DG-2 | Worker availability is not a durable fact; "accepted" cannot be distinguished from "queued, no worker" | F5, F7, G4 (arch), M-01, P3 | Gateway admission/status; worker claim/health; launcher | 1 | Fixed in `f0ad6ba`; queue-age state covered; process liveness intentionally unclaimed |
 | DG-3 | The human projection (bounded card) has no frozen semantic payload; the "safe goal label" has no deterministic framework-owned producer or redaction contract | H-06, F8 (impl), consolidated correction 4 | `OutboxDeliverySink`; `Gateway::StatusProjection`; `SessionStatusProjection`; CLI rendering | 2 | Gap |
 | DG-4 | Core envelope validation and `SurfaceDescriptor` are Telegram-closed; `Comms::Transport` has no typed capability matrix | F7, G2/G3 (arch), scale-5 | `InboundEnvelope`; `SurfaceDescriptor`; `Comms::Transport` | 5 (prereq) | Sourced; deferred |
 

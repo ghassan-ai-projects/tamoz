@@ -438,6 +438,16 @@ unavailable always notifies (never a quiet heartbeat).
 same ref advances once, no duplicate effect; the worker-unavailable state
 notifies.
 
+**Fixed (`f0ad6ba`).** The existing status projection now exposes
+`worker=accepted`, `worker=queued-unclaimed`, and `worker=working`. The
+queued-unclaimed state is derived from the durable request inbox after a
+one-millisecond claim window; it is deliberately queue-age evidence, not a
+claim that the worker process is dead. The deterministic Harness A benchmark
+and `bin/tamoz-chat-probe OF-14` show the same reference progressing from
+queued-unclaimed through claim to completion exactly once. Focused gateway,
+SQLite, parity, and projection tests pass. This is plumbing/UX evidence only,
+not provider or human-usefulness evidence.
+
 ---
 
 ## OF-15 — `/help` is a 14-command wall
