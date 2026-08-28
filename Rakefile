@@ -256,6 +256,11 @@ namespace :adr do
   task :verify do
     ruby "script/adr_verify.rb"
   end
+
+  desc "Regenerate the ADR <-> gem <-> invariant <-> test traceability matrix"
+  task :trace do
+    ruby "script/adr_traceability.rb"
+  end
 end
 
 namespace :fixtures do
