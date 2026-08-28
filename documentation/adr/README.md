@@ -43,8 +43,8 @@ Status: **Accepted** in force · **Proposed** ratified before implementation ·
 | ADR | Title | Status |
 |---|---|---|
 | [001](./adr-001-framework-is-tamoz-the-reference-application-is-tamoz-agent.md) | The framework is Tamoz; the reference application is Tamoz Agent | Accepted |
-| [002](./RETIRED.md) | ~~Four v0.1 runtime gems~~ | Retired → 052 |
-| [003](./RETIRED.md) | ~~Reuse RubyLLM public values; durable codec~~ | Retired → 048+051 |
+| [002](./adr-002-four-v0-1-runtime-gems.md) | ~~Four v0.1 runtime gems~~ | Retired → 052 |
+| [003](./adr-003-reuse-rubyllm-public-values.md) | ~~Reuse RubyLLM public values; durable codec~~ | Retired → 048+051 |
 | [004](./adr-004-explicit-tamoz-seq-no-native-proc.md) | Explicit `Tamoz.seq`; no native `Proc#>>` | Accepted |
 | [005](./adr-005-interrupt-by-throw-not-by-exception.md) | Interrupt by `throw`, not by exception | Accepted |
 | [006](./adr-006-plain-hash-state-with-an-explicit-reducer-registry.md) | Plain Hash state with an explicit reducer registry | Accepted |
@@ -53,7 +53,7 @@ Status: **Accepted** in force · **Proposed** ratified before implementation ·
 | [009](./adr-009-prompt-cache-stability-is-invariant-16.md) | Prompt-cache stability is invariant 16 | Accepted |
 | [010](./adr-010-ruby-3-3-floor-3-4-and-4-0-primary-targets.md) | Ruby 3.3 floor; 3.4 and 4.0 primary targets | Accepted |
 | [011](./adr-011-sqlite-is-tamoz-agent-s-default-persistence.md) | SQLite is Tamoz Agent's default persistence | Accepted |
-| [012](./RETIRED.md) | ~~MCP is a deferred integration strategy~~ | Retired → 029 |
+| [012](./adr-012-mcp-deferred-integration.md) | ~~MCP is a deferred integration strategy~~ | Retired → 029 |
 | [013](./adr-013-public-vocabulary-is-a-budget-never-a-correctness-cap.md) | Public vocabulary is a budget, never a correctness cap | Accepted |
 | [014](./adr-014-no-plugin-api-in-v0-1.md) | No plugin API in v0.1 | Accepted |
 | [015](./adr-015-durable-means-synchronous-barrier-commit.md) | Durable means synchronous barrier commit | Accepted |

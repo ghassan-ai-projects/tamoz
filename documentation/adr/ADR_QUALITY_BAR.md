@@ -190,10 +190,12 @@ An ADR **meets the bar** when it has zero A failures and zero E failures at its 
     changed* and why.
   - **Superseded by ADR-M** — no longer in force; ADR-M must list this ADR as the one it
     supersedes.
-  - **Retired** — the decision is withdrawn and nothing replaces it, or it was never true
-    of the shipped system. Retired decisions do **not** keep a full page; they collapse to
-    one line in [`RETIRED.md`](./RETIRED.md) — *what it said, when it died, why* — so the
-    history is one grep away without cluttering the live catalog with dead pages.
+  - **Retired / Superseded** — the decision is withdrawn or replaced. It does **not** keep a
+    full page. It gets (a) one line in [`RETIRED.md`](./RETIRED.md) — *what it said, when it
+    died, why* — and (b) a short **tombstone stub** `adr-<NNN>-<slug>.md` that only states the
+    retirement and points to the successor + the ledger. The stub keeps the "find by number"
+    convention total (every number resolves to a file) without cluttering the catalog with a
+    live-looking page.
 - **No orphans.** A decision that was actually made and shipped but has no ADR is a
   **missing ADR** — a blocking gap, not an omission. It must be written or an existing ADR
   extended.
