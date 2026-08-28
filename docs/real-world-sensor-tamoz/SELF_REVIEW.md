@@ -74,3 +74,49 @@ pinned here. WP-T1 is the only package with a plausible structural footprint
 `ReceivedSnapshot` seam, so no new coupling is expected. The implementing agent
 should `set_baseline` before WP-T2/T3 code and `diff_snapshot` after, per the
 project's enola rule.
+
+---
+
+## Implementation review (delivered code vs the plan)
+
+The plan is now built (branch `docs/real-world-sensor-tamoz`, six commits, one per
+WP). This section reviews the **code** against the plan and the clean-code bar,
+and records where reality corrected the plan.
+
+### Held to the bar
+
+- **Extends, doesn't reinvent (bar #3).** The only production Ruby is two metrics
+  in `Metrics`; quality/capability/trials are all domain **data**; the decision,
+  tournament, adversarial and manifest work reuses `DecisionBuilder`, the fixed
+  episode graph, `Baselines`/`Comparison`, and the digest rules. Enola confirms
+  **0 structural regressions** (only fan-in on `Core` nudged).
+- **Data, not Ruby (B9) / risk is the catalog's (B10).** Verified by the decision
+  and adversarial suites: risk always equals the catalog's, and forged authority
+  in facts is ignored.
+- **Honesty (bar #7).** No fixture result is presented as intelligence. The
+  tournament labels the supervisor player a fixture; the manifest verdict for a
+  fixture run is `inconclusive_fixture_run`; the headline paired-win is the
+  owner's real-DeepSeek step.
+- **Green means green.** 34 runs / 100 assertions across the thermal slice, rubocop
+  0 offenses (no `.rubocop_todo.yml` growth), `rake syntax` clean.
+
+### Where reality corrected the plan (honest deltas)
+
+1. **Off-allowlist is fail-closed, not demote-to-watch.** The plan (WP-T2) assumed
+   an off-allowlist proposal demotes to watch. The frame gate
+   `validate_recommended_intent_types!` actually **fails the episode closed** —
+   strictly safer. PLAN.md and the test were corrected to the real behaviour.
+2. **Sensor-quality is not schema-gated.** The plan floated an optional quality
+   validator; it was deliberately **omitted** (simple over complex) and the
+   adversarial suite depends on a forged quality value flowing through opaquely.
+3. **Parity kept strictly local.** `thermal-lab` is proven absent from the frozen
+   `BENCHMARK_PROTOCOL.json`; the two `benchmark_protocol`/`benchmark_holdout`
+   pin-drift failures and the six `benchmark_comms_b0` failures are **pre-existing**
+   in this environment (reproduced with all work stashed), not introduced here.
+
+### Residual (unchanged from the plan's residual-risk list)
+
+The real-model variance (residual #2) and the `request_evidence`-vs-watch
+collapse question (residual #3) remain owner/real-run calls. `request_evidence`
+is currently a genuinely distinct R0 outcome in the decision suite; if a real run
+shows it behaving identically to the watch fallback, collapse the two.

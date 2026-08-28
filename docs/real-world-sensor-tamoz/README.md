@@ -1,6 +1,8 @@
 # Real-World Sensor — Tamoz implementation program
 
-Status: proposed, not started · Date: 2026-08-28 · Owner sign-off: **required at G-T0**
+Status: **implemented on branch `docs/real-world-sensor-tamoz`** (WP-T0…WP-T5 all
+gated green) · Date: 2026-08-28 · Owner sign-off: **still required** to ratify the
+vocabulary (Decision Log) and to run the real-DeepSeek headline tournament.
 
 This folder turns the `agent-research-lab/real-world-sensor` research (round 2)
 into a **tamoz-scoped, dependency-ordered, gated** implementation plan. It builds
@@ -12,7 +14,46 @@ and wire-level fault injection are **not** tamoz's job — see *Scope boundary*.
 | Document | What it is |
 |---|---|
 | [PLAN.md](PLAN.md) | The work: six gated packages (WP-T0…WP-T5), each with the seam it extends, deliverables, tests, gate, and the honest claim it licenses. |
-| [SELF_REVIEW.md](SELF_REVIEW.md) | The bar (below) applied to this plan, the loop that brought it to green, and the open decisions the owner must settle. |
+| [BAR.md](BAR.md) | The clean-code bar the implementation was held to, the per-phase loop log (one row per WP, how many iterations, the last red), and the final verdict. |
+| [SELF_REVIEW.md](SELF_REVIEW.md) | The bar applied to this plan, the loop that brought it to green, the open owner decisions, and (appended) the review of the delivered code. |
+
+## What shipped (branch `docs/real-world-sensor-tamoz`)
+
+14 files, +1147/−2. The **only** production Ruby change is
+[metrics.rb](../../gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/metrics.rb)
+(+44: two frozen metrics + helpers). Everything else is domain **data**
+([thermal-lab.json](../../test/fixtures/domains/thermal-lab.json)), test-support
+machinery, and tests — 34 runs / 100 assertions green, rubocop 0 offenses, enola 0
+structural regressions.
+
+## Real-model headline run
+
+The intelligence claim is not a fixture. [`script/thermal_real_run`](../../script/thermal_real_run)
+(a runner, **never** part of CI — the one place a real LLM is allowed) drives the
+same trial cells through the real episode graph against a real provider and emits
+the evidence manifest with the model bound in. It reaches the real provider through
+the single `profile_builder` seam added to `EpisodeComposition.build`.
+
+Verified against **GLM 5.3 Flash via OpenRouter** (`z-ai/glm-5.3-flash`):
+
+| | baseline (fixed-threshold) | GLM 5.3 Flash |
+|---|---|---|
+| abstention_quality | 0.50 | ~0.875 |
+| disconnected-sensor cell | **false-alarms R2** | **request_evidence R0** ✓ |
+| door-spike / conflicting-sensor | false-alarms R2 | abstains ✓ |
+| ambient-driven | false-alarms R2 | proposes cooling ✗ (real miss) |
+
+The real model **meets Exp 4's qualitative pass** (never worse than the baseline on
+any cell; strictly better on ≥3 conflict cells) and the harness honestly surfaced
+one genuine model weakness (ambient attribution) plus occasional transient
+provider failures (~1 cell/run). The emitted manifest's **statistical** verdict is
+`inconclusive` — the strict paired 95%-CI go-rule does not clear over just 8 cells
+with two families; a `go` needs the protocol's larger per-cell corpus. Both are
+true and both are recorded. Governance held throughout — every risk class was the
+catalog's; even the wrong call stays gated for approval.
+
+    export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+    ruby script/thermal_real_run   # scorecard on stderr, manifest JSON on stdout
 
 ## Scope boundary — read first
 

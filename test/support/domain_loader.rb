@@ -93,6 +93,11 @@ class DomainLoader
   def intent_types = @data.fetch("intent_types")
   def benchmark_family = @data.fetch("benchmark_family", {})
 
+  # The curated tournament trial corpus (real-world sensor WP-T3): named
+  # scenarios with fact overrides and the human-oracle labels (truth_code,
+  # abstain_expected). Ground-truth domain DATA, not machinery.
+  def trials = @data.fetch("trials", [])
+
   def intent_catalog_digest
     Tamoz::Core.digest(:intent_catalog, @intent_catalog)
   end
