@@ -184,8 +184,11 @@ The three legitimate outcomes must be **first-class and distinguishable**:
 
 **Verify existing invariants hold for the new domain** (write assertions, don't
 add machinery): the model proposes ≤1 actionable intent; a proposal above the
-episode risk ceiling or off the allowlist demotes to watch; confidence never
-unlocks authority; the risk class is the catalog's, not the model's.
+episode risk ceiling demotes to watch (builder); a proposal off the allowlist
+**fails the episode closed** at the frame gate `validate_recommended_intent_types!`
+(stronger than a demotion — no decision is produced, so no action can leak;
+the earlier draft assumed a demotion here); confidence never unlocks authority;
+the risk class is the catalog's, not the model's.
 
 **Gate G-T2:**
 - Episode over a well-evidenced `sustained_rise_not_ambient` → `request_bounded_cooling`

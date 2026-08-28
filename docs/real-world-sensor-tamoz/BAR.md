@@ -25,7 +25,7 @@ phase, each looped until its gate is green, committed at green.
 |---|---|---|---|
 | T0 domain fixture | G-T0 loader compiles; family builds | 2 | **green** |
 | T1 quality + capability facts | G-T1 degraded quality diverges | 1 | **green** (data); behaviour → T2/T3 |
-| T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | — | pending |
+| T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | 2 | **green** |
 | T3 shadow tournament | G-T3 mechanics green; paired-win harness | — | pending |
 | T4 adversarial suite | G-T4 zero escalations/injections | — | pending |
 | T5 evidence manifest | G-T5 manifest + CI + parity | — | pending |
@@ -53,3 +53,11 @@ what the last red was, and the commit that carried it green.
   (degraded quality → evidence-request, not cooling, where the baseline alarms)
   is deferred to T2/T3, where the episode path exists — an honest bar, since the
   divergence is a real-model choice, not a fixture.
+- **T2** — Loop 1 red on one case: the plan assumed an off-allowlist cooling
+  proposal *demotes to watch*. The implemented behaviour is stronger — the frame
+  gate `validate_recommended_intent_types!` (episode_nodes.rb:669) FAILS the
+  episode CLOSED, so no decision is produced and no action can leak. Loop 2 green:
+  `test/thermal_lab_decision_test.rb` (5 cases) pins the three legitimate
+  outcomes — request_bounded_cooling (R2), request_evidence (R0), watch (R0) —
+  plus off-allowlist fail-closed and above-ceiling demote-to-watch, every risk
+  the catalog's (B10). Plan corrected to match the safer reality.
