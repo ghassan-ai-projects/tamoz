@@ -160,6 +160,23 @@ lifecycle and no path to `PlanRejectedError`.
 **Benchmark:** a conversational turn produces a direct answer with no accepted
 card, no plan/review effects, and cannot reach a plan-failure state.
 
+**Fixed (2026-08-28, commit `4c786b1`):** deterministic candidate routing now
+keeps trivial, self-contained chat on a direct response path. The gateway owns
+one responder per surface, the responder uses the existing `EffectDispatcher`
+route call once, and the SQLite store atomically persists the answer with its
+inbound identity anchor. Replays are deduplicated, conflicting identities are
+quarantined, and capacity refusal does not create a partial answer or inbound
+claim. Direct turns create no request, reference, plan, review, worker, request
+status, or request history state. Malformed and unsafe route fallbacks are
+safe when no event block is present; they do not silently become durable work.
+
+**Evidence:** `test/experience_harness_test.rb` (11 runs, 70 assertions),
+`test/comms_gateway_test.rb` (40 runs, 242 assertions),
+`test/agent_request_routing_test.rb` (18 runs, 232 assertions),
+`test/comms_cli_test.rb` (13 runs, 61 assertions), and the deterministic
+`bin/tamoz-chat-probe OF-4` all pass. This is plumbing and routing evidence;
+it is not evidence of real-provider intelligence or human usefulness.
+
 ---
 
 ## OF-5 — Progress updates are machine gibberish
