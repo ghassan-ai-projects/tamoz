@@ -1,6 +1,7 @@
 # ADR-010 — Ruby 3.3 floor; 3.4 and 4.0 primary targets
 
 **Status:** Accepted (revised after support-status review).
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-08-12
 **Date:** 2026-08-29 (recording a shipped split; resolves audit open item O1)
 **Relates to:** ADR-035 (streaming is a distinct runtime — **revised**: the continuous plane moved out of the Ruby gem), ADR-037 (event time/backpressure/replay contracts — **revised**: now owned by the stream, not Tamoz), ADR-036 (Situation is the boundary — reinforced), ADR-038 (typed intent, never model effect — reinforced), ADR-039 (Tamoz is supervisory — reinforced), ADR-040 (one monorepo — this is the deliberate exception).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 The continuous, deterministic streaming plane is not a Ruby Tamoz gem. It is a separate
 runtime, **`agentic-stream`** (Go), which owns event time, watermarks, windows, channels, and

@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-08-22 (implemented)
 **Date:** 2026-08-29 (cataloged; adopts the previously uncataloged redesign ADR)
 **Relates to:** ADR-049 (approval is evidence-gated — this gem is where `required_evidence` now lives), ADR-022 (every task action requires a reviewed plan), ADR-043 (Telegram deny-only), ADR-030 (one capability catalog), ADR-052 (agent-gem decomposition).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 Approval is now one gem with one narrow interface over policy-as-data, instead of a rule
 smeared across six sites in four gems. This ADR adopts the redesign ADR authored at

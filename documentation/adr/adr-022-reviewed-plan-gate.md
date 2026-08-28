@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-07-30
 **Date:** 2026-07-30 (elevated to a full page 2026-08-29)
 **Relates to:** ADR-023 (self-improvement is candidate promotion), ADR-028 (self-healing is bounded remediation), ADR-030 (capability catalog), ADR-053 (approval policy), ADR-049 (evidence-gated approval).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 This is the load-bearing decision behind the product's central claim: *nothing acts without a
 reviewed plan bound to its exact digest.* It was previously recorded as a single terse

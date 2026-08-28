@@ -3,6 +3,7 @@
 **Status:** Proposed — observability phase 5
 **Date:** 2026-08-10 (design); renumbered from a mislabeled "ADR-048" on 2026-08-29
 **Relates to:** ADR-044 (observability is contract + adapters), ADR-045 (no durable telemetry table), ADR-047 (sampling never drops safety signals), ADR-022 (nothing acts without a reviewed plan), ADR-028 (self-healing is bounded remediation).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 This ADR governs *alerting and automated response* in the observability plane. It exists as
 its own number because it was originally written as "ADR-048" in

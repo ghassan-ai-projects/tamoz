@@ -2,6 +2,7 @@
 
 **Status:** Accepted 2026-07-30.
 **Date:** 2026-07-30
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

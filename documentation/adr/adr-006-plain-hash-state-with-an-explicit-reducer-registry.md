@@ -1,6 +1,7 @@
 # ADR-006 — Plain Hash state with an explicit reducer registry
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

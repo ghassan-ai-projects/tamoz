@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-08-26
 **Date:** 2026-08-29 (recording a change completed on 2026-08-26)
 **Relates to:** ADR-003 (reuse RubyLLM public values — this ADR completes its supersession), ADR-048 (one digest-bound OpenAI-compatible transport), ADR-002 (gem set), ADR-004 (`Tamoz.seq`).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 Tamoz no longer depends on `ruby_llm` in any runtime gem. The model boundary is
 Tamoz-owned end to end. This ADR records a decision the code already made but the ADR corpus

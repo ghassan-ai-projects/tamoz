@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-08-26
 **Date:** 2026-08-29 (recording a decomposition completed incrementally)
 **Relates to:** ADR-002 (four v0.1 gems — **superseded by this ADR**), ADR-040 (one monorepo, many independently publishable gems — this ADR is an instance of that rule), ADR-025 (evaluation is a non-runtime gem), ADR-053 (approval isolated into its own gem).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 The reference agent is no longer one `tamoz-agent` gem. It is a composition of focused
 verticals, each with its own gemspec and dependency boundary. This ADR records the real gem

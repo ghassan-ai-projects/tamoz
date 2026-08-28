@@ -1,6 +1,7 @@
 # ADR-013 — Public vocabulary is a budget, never a correctness cap
 
 **Status:** Accepted (revised after review).
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

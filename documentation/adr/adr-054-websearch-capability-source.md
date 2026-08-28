@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-08-26
 **Date:** 2026-08-29 (recording a shipped decision)
 **Relates to:** ADR-030 (one local capability catalog — **this ADR extends it from three named sources to four**), ADR-029 (MCP native at the edge), ADR-014 (no plugin API; the source set is closed), ADR-046/ADR-047 (egress and content governance).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 The capability catalog's closed source set is **four** named sources — local tools, skills,
 MCP, and **websearch** — not the three ADR-030 records. Websearch is not a new mechanism: it

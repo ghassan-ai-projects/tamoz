@@ -1,6 +1,7 @@
 # ADR-011 — SQLite is Tamoz Agent's default persistence
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

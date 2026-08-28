@@ -1,6 +1,7 @@
 # ADR-049 — Telegram approval is evidence-gated, not transport-gated
 
 **Status:** Accepted 2026-08-12
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 **Date:** 2026-08-12
 

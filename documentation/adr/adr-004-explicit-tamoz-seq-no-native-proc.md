@@ -1,6 +1,7 @@
 # ADR-004 — Explicit `Tamoz.seq`; no native `Proc#>>`
 
 **Status:** Accepted (revised after an executable counterexample).
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

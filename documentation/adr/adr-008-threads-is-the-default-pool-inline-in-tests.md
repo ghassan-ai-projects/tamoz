@@ -1,6 +1,7 @@
 # ADR-008 — `:threads` is the default pool; `:inline` in tests
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

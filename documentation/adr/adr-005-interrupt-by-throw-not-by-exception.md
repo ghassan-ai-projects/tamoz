@@ -1,6 +1,7 @@
 # ADR-005 — Interrupt by `throw`, not by exception
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

@@ -1,6 +1,7 @@
 # ADR-018 — Strict sequence is separate from checkpoint identity
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

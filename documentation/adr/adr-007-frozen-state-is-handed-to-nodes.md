@@ -1,6 +1,7 @@
 # ADR-007 — Frozen state is handed to nodes
 
 **Status:** Accepted.
+**Tier:** C (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 ## Context
 

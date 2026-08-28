@@ -3,6 +3,7 @@
 **Status:** Accepted 2026-07-30
 **Date:** 2026-07-30 (elevated to a full page 2026-08-29)
 **Relates to:** ADR-022 (reviewed-plan gate), ADR-025 (evaluation is a non-runtime gem), ADR-026/ADR-027 (memory layers and authorization), ADR-028 (self-healing), ADR-034 (skill identity and staged activation).
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 A learning agent that can rewrite its own prompt, evaluator, policy, or code can redefine what
 "success" means and hide its own regressions. This decision draws the boundary: improvement is
