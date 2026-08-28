@@ -311,11 +311,27 @@ request, then an error" whiplash.
 **Root cause / maps to:** acceptance coherence (**Decision 3 / I5 / SD-2**).
 Phase 0b.
 
-**Fix:** an immediate bare receipt that promises nothing; upgrade to "working"
-(by editing the same card) only once a plan passes review.
+**Fix:** an immediate bare receipt that promises nothing. A later working
+projection is optional; it must only be emitted from a committed post-review
+fact if the channel supports it.
 
 **Benchmark:** the first acknowledgement makes no progress promise; a fast
 review failure never contradicts an earlier promise.
+
+**Fixed (2026-08-28, commit `b433138`):** admitted requests now receive only
+`Received r<reference>.` The gateway no longer inspects queue depth to vary the
+acknowledgement or promises committed progress before a worker has run. Durable
+admission, request-reference derivation, and worker failure behavior are
+unchanged, so a fast plan/review failure produces the existing honest failure
+path without contradicting the receipt. No speculative edit-message protocol
+was added; removing the false promise is the smaller complete fix for this
+finding.
+
+**Evidence:** `test/comms_gateway_test.rb` (40 runs, 241 assertions),
+`test/comms_command_parity_test.rb` (10 runs, 173 assertions), and
+`test/comms_pairing_first_contact_test.rb` (7 runs, 40 assertions) pass. This
+is deterministic lifecycle-plumbing evidence, not real-provider or human-
+usefulness evidence.
 
 ---
 

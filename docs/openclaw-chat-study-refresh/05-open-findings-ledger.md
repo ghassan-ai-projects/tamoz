@@ -119,7 +119,7 @@ that were not in the original reviews.
 | ID | Finding | Owner seam | Phase | Status |
 | --- | --- | --- | --- | --- |
 | SD-1 | Every admitted message runs the task lifecycle; a conversational/read-only turn is not answered directly, so it can traverse deliberate planning | `RequestRoute#direct_chat_candidate?`; `Gateway::Admission#route_direct_chat`; `Runtime#respond` | 0b | Fixed; commit `4c786b1`; deterministic direct-chat benchmark and independent B1-B8 review pass |
-| SD-2 | An "Accepted … I will report progress" ack can be followed seconds later by `PlanRejectedError` → `crashed_text` after `max_plan_attempts` (3); a failed plan dead-ends instead of asking | `SessionPlanOutcomes#plan_rejected`/`plan_rejected_message` (`session_plan_outcomes.rb:54-77`); worker settle/`crashed_text` (`worker.rb:313-336,818-876`); admission ack | 0b | Verified; open |
+| SD-2 | An "Accepted … I will report progress" ack can be followed seconds later by `PlanRejectedError` → `crashed_text` after `max_plan_attempts` (3); a failed plan dead-ends instead of asking | `AdmissionAcknowledgement#accepted_reply`; existing worker plan-failure path | 0b | Fixed; commit `b433138`; bare receipt has no progress promise and impacted admission-path suites pass |
 | SD-3 | The comms per-round context contract (what each turn sends; what a resumed/clarified/chat turn sees) is not specified on top of the model-call boundary | `docs/model-call-boundary-review-2026-08-26/`; worker/session context assembly; history invariant | 0b→2 | Sourced; open |
 
 ## Hard-zero invariants (unchanged, carried forward)
