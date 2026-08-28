@@ -125,7 +125,7 @@ module Tamoz
           operation: intent.fetch('operation'),
           safety:,
           call_index: 0,
-          request: dispatch_request(intent, tool, arguments),
+          request: dispatch_request(tool, arguments),
           actor: 'tamoz.agent.session',
           after_start: -> { after_effect_started(intent.fetch('operation')) },
           reconcile: reconciler_for(intent, safety)
@@ -155,11 +155,13 @@ module Tamoz
         SessionRecords.digest(Tamoz::Agent::Deliberation.canonical(catalogs))
       end
 
-      def dispatch_request(intent, tool, arguments)
+      # Plan digests remain provenance on the intent and receipt. They are not
+      # part of the tool request semantics, so a repair re-plan can replay the
+      # same logical effect instead of colliding with its recorded receipt.
+      def dispatch_request(tool, arguments)
         {
           'tool' => tool,
-          'arguments' => Tamoz::Agent::Deliberation.canonical(arguments),
-          'plan_digest' => intent.fetch('plan_digest')
+          'arguments' => Tamoz::Agent::Deliberation.canonical(arguments)
         }
       end
 
