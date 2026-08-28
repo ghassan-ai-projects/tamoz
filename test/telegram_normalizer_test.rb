@@ -98,6 +98,32 @@ class TelegramNormalizerTest < Minitest::Test
     refute_equal digest, changed, 'a callback data change must change the digest'
   end
 
+  def test_callback_observes_the_originating_message_date
+    callback = { 'update_id' => 5008,
+                 'callback_query' => { 'id' => 'q-11', 'from' => { 'id' => 111_111_11 },
+                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                      'message_id' => 2003, 'date' => 1_752_700_812 },
+                                       'data' => 'deny:abc' } }
+
+    observed = normalizer.normalize(callback).wire.fetch('observed_time')
+
+    assert_equal Time.at(1_752_700_812).utc.iso8601(6), observed
+  end
+
+  def test_callback_without_a_source_date_uses_ingestion_time
+    callback = { 'update_id' => 5009,
+                 'callback_query' => { 'id' => 'q-12', 'from' => { 'id' => 111_111_11 },
+                                       'message' => { 'chat' => { 'id' => 222_222_22, 'type' => 'private' },
+                                                      'message_id' => 2004 },
+                                       'data' => 'deny:abc' } }
+    before = Time.now.utc
+    observed = Time.parse(normalizer.normalize(callback).wire.fetch('observed_time'))
+    after = Time.now.utc
+
+    assert_operator observed, :>=, before
+    assert_operator observed, :<=, after
+  end
+
   def test_membership_digests_deterministically_beyond_update_id
     member = lambda do |update_id|
       { 'update_id' => update_id,
