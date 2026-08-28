@@ -51,6 +51,25 @@ is listed honestly in [limitations.md](limitations.md). The page is bound to
 the measured release audit, so it cannot fall silently behind the product. Read
 it before building on Tamoz.
 
+## Open product questions
+
+These are not ADRs — they are unresolved product choices (migrated here when the v0.1
+`DECISIONS.md` archive's ADR record moved to the [ADR catalog](adr/README.md)).
+
+- **Q1 — What physical environment should Tamoz Agent supervise first?** The v0.1
+  durable-runtime proof assumes a coding agent; the first post-v0.1 milestone is
+  physical-world supervision through `tamoz-stream` (ADR-035/036/038/039), but the concrete
+  source and hazard model are open: home/environment monitoring, equipment health,
+  inventory/location, or another domain. Naming the environment, read-only source, desired
+  outcome, existing controller/interlocks, and accountable operator selects the first
+  connector, SituationSpec, protected evaluation set, and deployment safety review. This is
+  also entangled with the two-repo authority split (ADR audit open item O1 / candidate
+  ADR-055).
+- **Q2 — How finished should the research report be?** Chapters 5–8 of the source study were
+  never written as report prose; this repository delivers their content as design docs.
+  Producing a polished report/`.docx` is separate work, worth doing only if it has an
+  audience beyond the owner.
+
 ## Release posture
 
 Tamoz is pre-release. `0.1.0.alpha.1` is the first public line, and:

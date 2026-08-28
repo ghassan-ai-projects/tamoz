@@ -106,4 +106,4 @@ gated above what `chat_bound` can approve unless a future ADR invokes §4.
 - [`README.md`](./README.md) — the full ADR index
 - [`../design/comms.md`](../design/comms.md) — the channel design and the amended ADR-043 entry
 - [`../guides/telegram.md`](../guides/telegram.md) — operating the Telegram surface
-- [`../../docs/design-v0.1/DECISIONS.md`](../../docs/design-v0.1/DECISIONS.md) — the authoritative decision record
+- [`README.md`](./README.md) — the authoritative ADR catalog

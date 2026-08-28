@@ -77,6 +77,6 @@ Changing an invariant requires: (1) an ADR describing the user-visible break; (2
 ## Next reads
 
 - [../../docs/design-v0.1/INVARIANTS.md](../../docs/design-v0.1/INVARIANTS.md) — the authoritative full text
-- [../../docs/design-v0.1/DECISIONS.md](../../docs/design-v0.1/DECISIONS.md) — the ADRs that shaped the clauses
+- [../adr/README.md](../adr/README.md) — the authoritative ADR catalog (the decisions that shaped these clauses)
 - [security-model.md](security-model.md) — the boundary in prose
 - [../governance/quality.md](../governance/quality.md) — how the contract is graded

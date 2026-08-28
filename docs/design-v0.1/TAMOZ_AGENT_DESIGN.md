@@ -1,7 +1,7 @@
 # Tamoz Agent — the reference agent
 
 A Hermes/OpenClaw-class personal agent, in Ruby, on the Tamoz stack. Its product name and
-application namespace are fixed by [DECISIONS.md](DECISIONS.md) ADR-001.
+application namespace are fixed by the [ADR catalog](../../documentation/adr/README.md), ADR-001.
 
 Tamoz Agent exists for two reasons. It is the thing you actually want. And it is the only honest
 specification of the framework: every primitive in Tamoz is here because Tamoz Agent needs it, and
