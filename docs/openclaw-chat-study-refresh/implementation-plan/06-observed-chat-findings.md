@@ -205,6 +205,18 @@ over framework-owned phase templates; no raw lifecycle vocabulary.
 **Benchmark:** golden card per state names a human-safe phase and next action;
 no `claimed/running/waiting` literal and no internal facts in the default card.
 
+**Fixed (2026-08-28, commit `f50bd4c`):** milestone cards now use bounded,
+framework-owned copy with the request reference, a human-readable `Now:` line,
+and a `Next:` line. Unknown phases use a generic safe template; arbitrary phase
+values and lifecycle facts remain in machine markup only. Existing sequence,
+coalescing, receipt-bound edit, terminal-delivery, approval, clarification, and
+history-exclusion behavior is unchanged.
+
+**Evidence:** `test/progress_projection_test.rb` (13 runs, 223 assertions),
+`test/agent_outbox_delivery_sink_test.rb` (11 runs, 44 assertions), and the
+deterministic `bin/tamoz-chat-probe OF-5` pass. This is plumbing evidence, not
+live-provider or human-comprehension evidence.
+
 ---
 
 ## OF-6 — `/status` answers in diagnostic vocabulary
