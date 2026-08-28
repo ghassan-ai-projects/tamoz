@@ -227,9 +227,11 @@ class CommsCommandParityTest < Minitest::Test
 
       reply = drive_command(gateway, transport, "/redirect #{ref} invert the priority instead", id: 102)
 
-      assert_equal "Redirecting #{ref}; the replacement task is queued.", reply
-
       history = checkpoints.request_history(thread_id: thread)
+      replacement_ref = Tamoz::Comms::Lifecycle::RequestRef.for(history.last.request_id)
+
+      assert_equal "Replacement queued as #{replacement_ref}; #{ref} remains recorded; " \
+                   'committed work is not undone.', reply
 
       assert_equal %i[turn redirect], history.map(&:operation)
       assert_equal({ 'task' => 'invert the priority instead' }, history.last.payload)

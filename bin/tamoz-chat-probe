@@ -96,7 +96,7 @@ PROBES = {
     h.close
   },
   'OF-8' => lambda {
-    puts '# OF-8 approval card is opaque and deny-only'
+    puts '# OF-8 approval card names the bounded action and safe next step'
     plan = [
       { 'goal' => 'inspect', 'done_when' => ['read'],
         'steps' => [{ 'id' => 'look', 'purpose' => 'read', 'tool' => 'read_file',
@@ -137,7 +137,7 @@ PROBES = {
     h.close
   },
   'OF-12' => lambda {
-    puts '# OF-12 redirect does not name the replacement ref'
+    puts '# OF-12 redirect names the replacement ref and preserves the original'
     h = deterministic
     ref = ref_of(h.admit('prepare the report'))
     puts "👤 /redirect #{ref} only compare the two candidates"
@@ -145,9 +145,12 @@ PROBES = {
     h.close
   },
   'OF-15' => lambda {
-    puts '# OF-15 /help is a wall of commands'
+    puts '# OF-15 /help teaches the core loop and expands explicitly'
     h = deterministic
+    puts '👤 /help'
     show(h.say('/help'))
+    puts '👤 /help more'
+    show(h.say('/help more'))
     h.close
   }
 }.freeze

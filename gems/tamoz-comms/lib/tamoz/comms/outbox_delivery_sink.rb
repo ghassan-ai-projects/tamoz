@@ -53,6 +53,13 @@ module Tamoz
         'request.stopped' => 'Not verified',
         'request.blocked' => 'Not verified'
       }.freeze
+      APPROVAL_ACTIONS = {
+        'apply_patch' => 'apply a file change',
+        'create_file' => 'create a file',
+        'run_check' => 'run a local check',
+        'child_task' => 'start a child task'
+      }.freeze
+      GENERIC_APPROVAL_ACTION = 'complete requested work'
 
       # Non-terminal milestone kinds (plan 03, work items 1-2): each projects
       # one committed worker fact onto ONE coalesced control row whose markup
@@ -287,14 +294,17 @@ module Tamoz
           conversation_id: route.fetch('conversation_id'),
           prompt_ttl_s: surface.fetch('approvals').fetch('prompt_ttl_s')
         )
+        actions = offered_actions(evidence)
+        part = approval_part(event, actions, surface)
         @store.insert_prompt(prompt.wire)
-        markup = JSON.generate('reference' => reference, 'actions' => offered_actions(evidence))
+        markup = JSON.generate('reference' => reference, 'actions' => actions)
+        text = part.fetch('text')
         @store.append_delivery(
           Comms::Delivery.build(
             conversation_id: route.fetch('conversation_id'), kind: 'approval_request',
-            text: 'An action needs your approval.', part_index: 0, part_count: 1,
+            text:, part_index: 0, part_count: 1,
             journaled: true, render_version: @rendering::RENDER_VERSION,
-            content_digest: @rendering.content_digest('approval_request'),
+            content_digest: part.fetch('content_digest'),
             identity_key: event.fetch(:request_id),
             markup:
           ).wire,
@@ -302,6 +312,27 @@ module Tamoz
           reserved_request_id: event.fetch(:request_id), now: Time.now.utc
         )
         :accepted
+      end
+
+      def approval_part(event, actions, surface)
+        limits = surface.fetch('rendering')
+        @rendering.plain(
+          approval_text(event, actions), max_parts: 1,
+          part_characters: limits.fetch('part_characters'), overflow: limits.fetch('overflow')
+        ).fetch(0)
+      end
+
+      def approval_text(event, actions)
+        action = approval_action(event.fetch(:interrupts))
+        next_step = actions.include?('approve') ?
+          'Approve or Deny; Deny stops safely.' : 'ask an operator; Deny stops safely.'
+        request_reference = Lifecycle::RequestRef.for(event.fetch(:request_id))
+        "#{request_reference} · Approval required: #{action}. Next: #{next_step}"
+      end
+
+      def approval_action(interrupts)
+        descriptor = interrupts.first.fetch(:descriptor)
+        APPROVAL_ACTIONS.fetch(descriptor['tool'], GENERIC_APPROVAL_ACTION)
       end
 
       # The turn is parked on a human answer this channel cannot collect:

@@ -14,7 +14,7 @@ module Tamoz
           intent = decision.command_intent
           case intent.name
           when 'help'
-            append_control(HELP_REPLY, envelope, now:)
+            append_control(help_reply(intent.arguments), envelope, now:)
           when 'status'
             append_control(status_text(envelope, intent.arguments), envelope, now:)
           when 'new'
@@ -35,6 +35,13 @@ module Tamoz
         end
         # rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity
 
+        def help_reply(arguments)
+          return HELP_REPLY if arguments.nil?
+          return HELP_MORE_REPLY if arguments == 'more'
+
+          HELP_USAGE_REPLY
+        end
+
         # `/redirect r<ref> <task>` changes task text only and uses the durable
         # checkpoint inbox path shared with cancellation.
         def redirect_request(envelope, arguments)
@@ -45,8 +52,10 @@ module Tamoz
           return redirect_refusal(resolved) if resolved.is_a?(Symbol)
           return FINISHED_REQUEST_REPLY if finished_request?(resolved)
 
-          enqueue_redirect(envelope, resolved, task_text)
-          "Redirecting #{resolved.fetch('request_ref')}; the replacement task is queued."
+          replacement_id = enqueue_redirect(envelope, resolved, task_text)
+          replacement_ref = Lifecycle::RequestRef.for(replacement_id)
+          "Replacement queued as #{replacement_ref}; #{resolved.fetch('request_ref')} remains recorded; " \
+            'committed work is not undone.'
         rescue Tamoz::CheckpointConflictError
           REDIRECT_UNQUEUED_REPLY
         end
@@ -70,13 +79,15 @@ module Tamoz
         end
 
         def enqueue_redirect(envelope, resolved, task_text)
+          request_id = command_request_id(envelope, %w[redirect])
           @checkpoints.enqueue_request(
             thread_id: resolved.fetch('thread_id'),
-            request_id: command_request_id(envelope, %w[redirect]),
+            request_id:,
             operation: :redirect,
             payload: { 'task' => task_text },
             delivery: :redirect
           )
+          request_id
         end
 
         def valid_reference?(text) = text.match?(REFERENCE_PATTERN)

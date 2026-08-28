@@ -189,12 +189,54 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
-  def approval_event(request_id, required_evidence: 'filesystem_operator')
+  def approval_event(request_id, required_evidence: 'filesystem_operator', tool: 'apply_patch')
     { thread_id: 'tg.ops.abc', kind: 'request.approval_request', text: 'Approval requested.',
       request_id:,
       interrupts: [{ task_id: 'task', call_index: 0,
                      descriptor: { 'kind' => 'approve_tool',
-                                   'decision' => { 'required_evidence' => required_evidence } } }] }
+                                   'decision' => { 'required_evidence' => required_evidence },
+                                   'tool' => tool,
+                                   'arguments' => { 'path' => 'note.txt', 'before' => 'hello', 'after' => 'fixed' },
+                                   'preview' => '--- note.txt\n+++ note.txt' } }] }
+  end
+
+  def test_approval_card_explains_the_bounded_action_and_safe_next_step
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1'))
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
+      text = row.fetch('text')
+
+      assert_includes text, 'roccurrence'
+      assert_includes text, 'Approval required'
+      assert_includes text, 'apply a file change'
+      assert_includes text, 'Next:'
+      assert_includes text, 'ask an operator'
+      assert_match(/Deny .*stop/, text)
+      refute_match(/(?:note\.txt|hello|fixed|decision|arguments|preview)/i, text)
+      assert_operator text.bytesize, :<=, 100
+    end
+  end
+
+  def test_approval_card_obeys_a_small_surface_rendering_bound
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(
+        store, surface: descriptor(
+          rendering: { format: 'plain', max_parts: 5, part_characters: 20, overflow: 'truncate' }
+        )
+      )
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1'))
+      rows = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+      text = rows.first.fetch('text')
+
+      assert_equal 1, rows.length
+      assert_operator text.length, :<=, 20
+      assert_equal Comms::Rendering.content_digest(text), rows.first.fetch('content_digest')
+    end
   end
 
   # ADR-049 INV-C/INV-D (plan step 8): the pinned evidence is read from the
@@ -237,6 +279,20 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       assert_equal 'chat_bound', prompt.fetch('required_evidence')
       assert_equal %w[approve deny], markup.fetch('actions'),
                    'a chat_bound decision is approvable by the channel correspondent'
+      assert_includes row.fetch('text'), 'Next: Approve or Deny; Deny stops safely.'
+    end
+  end
+
+  def test_an_approval_card_uses_a_generic_action_for_an_unknown_tool
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      assert_equal :accepted, sink.push(approval_event('occurrence-1', tool: 'unrecognized_tool'))
+      text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
+
+      assert_includes text, 'complete requested work'
+      refute_includes text, 'unrecognized_tool'
     end
   end
 
