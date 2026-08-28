@@ -26,7 +26,7 @@ phase, each looped until its gate is green, committed at green.
 | T0 domain fixture | G-T0 loader compiles; family builds | 2 | **green** |
 | T1 quality + capability facts | G-T1 degraded quality diverges | 1 | **green** (data); behaviour → T2/T3 |
 | T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | 2 | **green** |
-| T3 shadow tournament | G-T3 mechanics green; paired-win harness | — | pending |
+| T3 shadow tournament | G-T3 mechanics green; paired-win harness | 1 | **green** (mechanics); real-model run = owner |
 | T4 adversarial suite | G-T4 zero escalations/injections | — | pending |
 | T5 evidence manifest | G-T5 manifest + CI + parity | — | pending |
 
@@ -61,3 +61,18 @@ what the last red was, and the commit that carried it green.
   outcomes — request_bounded_cooling (R2), request_evidence (R0), watch (R0) —
   plus off-allowlist fail-closed and above-ceiling demote-to-watch, every risk
   the catalog's (B10). Plan corrected to match the safer reality.
+- **T3** — Loop 1 green. Two frozen metrics added to `Metrics`
+  (`abstention_quality`, `counterfactual_regret`) reusing the action_utility
+  cost asymmetry; unit-proven in `benchmark_abstention_metrics_test.rb`. The
+  tournament (`thermal_tournament_test.rb`) scores the REAL fixed-threshold
+  baseline vs the Tamoz supervisor (governed by the REAL episode graph over a
+  **labelled fixture** proposal) vs the human oracle over the round-2 trial
+  corpus (`trials` in thermal-lab.json). Result: supervisor abstains on every
+  conflict cell incl. the disconnected-sensor cell the baseline false-alarms on;
+  abstention_quality 1.0 vs 0.5; regret 0 vs >0; paired comparison favours the
+  supervisor over ≥2 families. This is the harness + scoring proven — **not** an
+  intelligence result; the real-DeepSeek headline run is the owner's step (swap
+  the fixture player for the provider, same harness). Enola: 0 regressions.
+  Note: `benchmark_holdout_test` + `benchmark_protocol_test` each carry 1
+  **pre-existing** failure (committed `BENCHMARK_PROTOCOL.json` SHA drift vs the
+  in-repo pins) — reproduced identically with all my work stashed; not mine.

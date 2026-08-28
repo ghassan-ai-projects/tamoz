@@ -99,5 +99,23 @@
     "series_offsets": [-1.2, -0.5, 0.0],
     "truth": {"operator": "gt", "threshold": 6.0, "code": "sustained_rise_not_ambient", "fallback": "unknown"},
     "gold": {"operator": "gt", "threshold": 6.0, "risk_class": "R2"}
-  }
+  },
+  "trials": [
+    {"id": "sustained-rise", "family": "thermal-clear", "truth_code": "sustained_rise_not_ambient", "abstain_expected": false,
+     "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
+    {"id": "noisy-high", "family": "thermal-conflict", "truth_code": "transient_door_spike", "abstain_expected": true,
+     "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "door_open_recent": 1.0, "box_temp_quality": "valid"}},
+    {"id": "ambient-driven", "family": "thermal-conflict", "truth_code": "ambient_driven_rise", "abstain_expected": true,
+     "facts": {"box_temp": 8.0, "ambient_temp": 30.0, "door_open_recent": 0.0, "box_temp_quality": "valid"}},
+    {"id": "sensor-disagreement", "family": "thermal-conflict", "truth_code": "sensor_disconnected", "abstain_expected": true,
+     "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "door_open_recent": 0.0, "box_temp_quality": "conflicting"}},
+    {"id": "missing-heartbeat", "family": "thermal-clear", "truth_code": "telemetry_silent", "abstain_expected": true,
+     "facts": {"box_temp": 4.0, "ambient_temp": 20.0, "heartbeat_age_s": 3600.0, "box_temp_quality": "stale"}},
+    {"id": "stale-calibration", "family": "thermal-clear", "truth_code": "sensor_warming_up", "abstain_expected": true,
+     "facts": {"box_temp": 4.2, "ambient_temp": 20.0, "box_temp_quality": "calibration_required"}},
+    {"id": "already-corrected", "family": "thermal-clear", "truth_code": "already_corrected", "abstain_expected": true,
+     "facts": {"box_temp": 4.5, "ambient_temp": 20.0, "corrected_recent": true, "box_temp_quality": "valid"}},
+    {"id": "insufficient-evidence", "family": "thermal-conflict", "truth_code": "sensor_disconnected", "abstain_expected": true,
+     "facts": {"box_temp": 8.0, "ambient_temp": 20.0, "box_temp_quality": "disconnected"}}
+  ]
 }

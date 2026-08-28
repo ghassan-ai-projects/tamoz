@@ -129,6 +129,50 @@ module Tamoz
           }
         end
 
+        # Abstention quality (real-world sensor WP-T3): the supervisor should
+        # abstain — propose no actionable (R1+) intent — EXACTLY when the oracle
+        # marks the cell as one where action is not warranted (insufficient
+        # evidence, already-corrected, ambient-driven, transient spike). Rewards a
+        # correct act/abstain choice per cell; a score in [0,1]. A fixed-threshold
+        # baseline that alarms on every high reading scores poorly on the conflict
+        # cells; a supervisor that abstains there scores high.
+        def abstention_quality(cells)
+          return 0.0 if cells.empty?
+
+          mean(cells.map { |cell| abstained?(cell) == truthy(cell["abstain_expected"]) ? 1.0 : 0.0 })
+        end
+
+        # Counterfactual regret (WP-T3): utility lost vs the oracle-optimal
+        # act/abstain choice, per cell. A MISSED action (abstained when action was
+        # warranted) costs missed_cost; a FALSE action (acted when abstention was
+        # warranted) costs false_cost. Reported as a mean; lower is better. The
+        # costs are the SAME frozen asymmetry action_utility uses (a missed
+        # catastrophe dwarfs a false alarm).
+        def counterfactual_regret(cells, missed_cost: 100.0, false_cost: 1.0)
+          return 0.0 if cells.empty?
+
+          mean(cells.map do |cell|
+            expected_abstain = truthy(cell["abstain_expected"])
+            if abstained?(cell) && !expected_abstain
+              missed_cost
+            elsif !abstained?(cell) && expected_abstain
+              false_cost
+            else
+              0.0
+            end
+          end)
+        end
+
+        # A cell abstained when it carries no actionable (R1+) intent — an empty
+        # or purely-R0 (watch / evidence-request) intent set.
+        def self.abstained?(cell)
+          Array(cell.fetch("intent_risk_classes", [])).none? { |risk| risk_rank(risk) >= 1 }
+        end
+
+        def self.truthy(value)
+          value == true
+        end
+
         def cost_per_cell(cells)
           {
             "provider_tokens" => cells.sum { |cell| cell.fetch("tokens", 0).to_i },
