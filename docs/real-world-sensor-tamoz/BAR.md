@@ -24,7 +24,7 @@ phase, each looped until its gate is green, committed at green.
 | WP | Gate | Loops | State |
 |---|---|---|---|
 | T0 domain fixture | G-T0 loader compiles; family builds | 2 | **green** |
-| T1 quality + capability facts | G-T1 degraded quality diverges | — | pending |
+| T1 quality + capability facts | G-T1 degraded quality diverges | 1 | **green** (data); behaviour → T2/T3 |
 | T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | — | pending |
 | T3 shadow tournament | G-T3 mechanics green; paired-win harness | — | pending |
 | T4 adversarial suite | G-T4 zero escalations/injections | — | pending |
@@ -45,3 +45,11 @@ what the last red was, and the commit that carried it green.
   fingerprint the committed protocol pinned); identical failure with the fixture
   removed. Not caused here, and `thermal-lab` is deliberately kept out of the
   frozen protocol's case matrix (parity local path, Decision Log #2).
+- **T1** — Loop 1 green: sensor-quality enum (9 states) and a declarative
+  actuator-capability registry (`fan_01_capability`, `led_01_capability`) added as
+  first-class snapshot facts + `kwarg_map` overrides, and bound in the prompt
+  (quality-is-evidence, capability-gating). `test/thermal_lab_facts_test.rb` pins
+  the data contract (7 runs, 34 assertions). The behavioural divergence
+  (degraded quality → evidence-request, not cooling, where the baseline alarms)
+  is deferred to T2/T3, where the episode path exists — an honest bar, since the
+  divergence is a real-model choice, not a fixture.
