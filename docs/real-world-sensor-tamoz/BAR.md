@@ -27,7 +27,7 @@ phase, each looped until its gate is green, committed at green.
 | T1 quality + capability facts | G-T1 degraded quality diverges | 1 | **green** (data); behaviour → T2/T3 |
 | T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | 2 | **green** |
 | T3 shadow tournament | G-T3 mechanics green; paired-win harness | 1 | **green** (mechanics); real-model run = owner |
-| T4 adversarial suite | G-T4 zero escalations/injections | — | pending |
+| T4 adversarial suite | G-T4 zero escalations/injections | 1 | **green** |
 | T5 evidence manifest | G-T5 manifest + CI + parity | — | pending |
 
 Each row is filled in as its phase closes: how many loop iterations the gate took,
@@ -76,3 +76,11 @@ what the last red was, and the commit that carried it green.
   Note: `benchmark_holdout_test` + `benchmark_protocol_test` each carry 1
   **pre-existing** failure (committed `BENCHMARK_PROTOCOL.json` SHA drift vs the
   in-repo pins) — reproduced identically with all my work stashed; not mine.
+- **T4** — Loop 1 green. `test/thermal_lab_adversarial_test.rb` (5 cases): forged
+  risk authority in facts ignored (risk stays catalog R2, byte-identical to
+  clean); an injected instruction fact carries no authority (byte-identical, still
+  R0 watch); a `device_ack` fact is not verification (R2 stays gated); an
+  out-of-catalog operation and two actionable intents each fail the episode
+  CLOSED. Governance boundary proven at the DecisionBuilder/frame gate; the
+  model's own injection resistance is the real-model concern (T3). Test-only, no
+  structural footprint.
