@@ -34,14 +34,18 @@ module EpisodeComposition
     Tamoz::Core.parse_json_strict(catalog_json)
   end
 
-  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil)
+  def build(endpoint:, model: "local-model", tenant: "acme", artifact_store: nil, situation_recaller: nil, recall_caller: nil, tool_port: nil, gateway: nil, skills_source: nil, credential_ref: nil, profile_builder: nil)
     # Short prefix: the directory is used for UDS socket paths, which cap at
     # ~104 bytes — "tamoz-episode-composition..." alone would exceed it.
     directory = Dir.mktmpdir("tamoz-ep")
     root = File.join(directory, "root")
     Dir.mkdir(root)
     profile_path = File.join(directory, "profile.yml")
-    profile_document = AquacultureDomain.profile_document(endpoint:, root:, model:)
+    # Default: the fixture ollama profile pointing at `endpoint`. A real-model
+    # runner (script/thermal_real_run) injects a builder that returns a real
+    # provider profile instead — the ONLY seam a real run needs.
+    builder = profile_builder || AquacultureDomain.method(:profile_document)
+    profile_document = builder.call(endpoint:, root:, model:)
     profile_document.fetch("model_roles").fetch("fast")["credential_ref"] = credential_ref if credential_ref
     File.write(profile_path, Psych.dump(profile_document))
     File.chmod(0o600, profile_path)

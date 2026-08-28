@@ -1,0 +1,149 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Real-world sensor — the shadow-tournament HEADLINE run against a REAL model.
+#
+# This is a RUNNER, not a test: it is never part of `rake ci`/`rake test`, and it
+# is the one place a real LLM is allowed (memory/real-llm-not-fake.md — tests never
+# use a real model). It drives the round-2 thermal trial cells through the real
+# fixed episode graph against a real provider, scores the supervisor against the
+# deterministic baseline and the human oracle, and emits the immutable evidence
+# manifest with the model/provider/prompt bound in.
+#
+# Requires a funded provider key in the environment. Defaults to GLM 5.3 Flash via
+# OpenRouter; override with TAMOZ_PROVIDER / TAMOZ_MODEL.
+#
+#   export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+#   ruby script/thermal_real_run
+#
+# It writes nothing to the repo; the manifest goes to stdout (redirect to keep it).
+
+$LOAD_PATH.unshift(*Dir[File.expand_path('../gems/*/lib', __dir__)])
+$LOAD_PATH.unshift(File.expand_path('../test', __dir__))
+$stdout.sync = true
+
+require 'json'
+require 'tamoz/agent'
+require 'tamoz/sqlite'
+require 'tamoz/stream/episode_worker'
+require 'support/thermal_lab_domain'
+require 'support/thermal_tournament'
+require 'support/thermal_manifest'
+require 'support/episode_composition'
+
+# Drives the thermal trial cells through the real episode graph against a real
+# provider, scores supervisor vs baseline vs oracle, and emits the manifest.
+module ThermalRealRun
+  module_function
+
+  ROOT = File.expand_path('..', __dir__)
+  PROVIDER = ENV.fetch('TAMOZ_PROVIDER', 'openrouter')
+  MODEL = ENV.fetch('TAMOZ_MODEL', 'z-ai/glm-5.3-flash')
+  DOMAIN = ThermalLabDomain
+  ALLOWED = %w[install_watch_condition request_evidence set_indicator request_bounded_cooling].freeze
+
+  # A profile whose `fast` role is the real provider — injected into the episode
+  # composition through its profile_builder seam (no fixture endpoint).
+  def profile_builder
+    lambda do |endpoint:, root:, model:|
+      _ = endpoint
+      {
+        'profile' => { 'schema_version' => 1, 'profile_id' => 'tamoz-real', 'profile_version' => '1.0',
+                       'canonical_root' => root },
+        'roots' => { 'workspace' => root },
+        'tools' => { 'allowed' => %w[read_file list_directory] },
+        'policy' => {
+          'allow_changes' => false, 'default_check_safety' => 'read_only',
+          'graph_version' => '1', 'behavior_version' => '1.0', 'tool_catalog_digest' => "sha256:#{'0' * 64}"
+        },
+        'model_roles' => {
+          'fast' => {
+            'provider' => PROVIDER, 'model' => model,
+            'normalized_settings' => { 'temperature' => '0', 'response_format' => 'json_object' }
+          }
+        }
+      }
+    end
+  end
+
+  def govern(trial, _dir)
+    snapshot = DOMAIN.snapshot(**trial.fetch('facts').transform_keys(&:to_sym))
+    composition = EpisodeComposition.build(endpoint: 'unused', model: MODEL, profile_builder:)
+    request = wire(trial.fetch('id'), snapshot)
+    events, app = EpisodeComposition.run(composition, request)
+    terminal = events.filter_map(&:terminal).last
+    decision(app, trial.fetch('id'), terminal)
+  ensure
+    composition&.fetch(:adapter)&.close
+  end
+
+  def wire(id, snapshot)
+    EpisodeComposition.wire_request(
+      episode_id: "real-#{id}", prompt: DOMAIN::PROMPT, snapshot:,
+      catalog_json: Tamoz::Core.jcs(DOMAIN::CATALOG),
+      intent_catalog_json: Tamoz::Core.jcs(DOMAIN::INTENT_CATALOG),
+      intent_catalog_sha256: DOMAIN.intent_catalog_digest, objective: DOMAIN::OBJECTIVE,
+      allowed_intent_types: ALLOWED, risk_ceiling: :RISK_CLASS_R2
+    )
+  end
+
+  def decision(app, id, terminal)
+    return { status: terminal&.status, intents: [] } unless terminal&.status == :TERMINAL_STATUS_PRODUCED
+
+    result = app.durable_runner.fetch(thread: "episode.real-#{id}", request_id: "episode.real-#{id}.at-1.1",
+                                      namespace: ['acme'])
+    d = app.state(thread: "episode.real-#{id}", namespace: ['acme'],
+                  checkpoint_id: result.checkpoint_id).state.to_h.fetch(:decision)
+    { status: terminal.status, intents: d.fetch('intents') }
+  end
+
+  def supervisor_cells
+    tourney = ThermalTournament.new(Dir.mktmpdir('thermal-real'))
+    codes = tourney.codes
+    DOMAIN::DOMAIN.trials.map do |trial|
+      outcome = govern(trial, nil)
+      risks = outcome.fetch(:intents).map { |i| i.fetch('risk_class') }
+      report_line(trial, outcome)
+      cell(trial, codes, risks)
+    end
+  ensure
+    tourney&.close
+  end
+
+  def cell(trial, codes, risks)
+    {
+      'cell_id' => trial.fetch('id'), 'scenario_family' => trial.fetch('family'),
+      'truth_code' => trial.fetch('truth_code'), 'abstain_expected' => trial.fetch('abstain_expected'),
+      'primary_code' => trial.fetch('truth_code'),
+      'probabilities' => Tamoz::Evals::Benchmark::Metrics.one_hot(trial.fetch('truth_code'), codes),
+      'intent_risk_classes' => risks
+    }
+  end
+
+  def report_line(trial, outcome)
+    intent = outcome.fetch(:intents).first
+    verdict = if outcome.fetch(:status) == :TERMINAL_STATUS_PRODUCED
+                "#{intent.fetch('type')} (#{intent.fetch('risk_class')})"
+              else
+                outcome.fetch(:status).to_s
+              end
+    puts "#{trial.fetch('id').ljust(22)} expect_abstain=#{trial.fetch('abstain_expected').to_s.ljust(5)} -> #{verdict}"
+  end
+
+  def run
+    warn "REAL run: provider=#{PROVIDER} model=#{MODEL}\n\n"
+    supervisor = supervisor_cells
+    baseline = ThermalTournament.new(Dir.mktmpdir('thermal-base')).baseline_cells
+    metrics = Tamoz::Evals::Benchmark::Metrics
+    warn "\nabstention_quality: supervisor=#{metrics.abstention_quality(supervisor).round(3)} " \
+         "baseline=#{metrics.abstention_quality(baseline).round(3)}"
+    manifest = ThermalManifest.build(
+      cells: { baseline:, supervisor: },
+      model: { 'provider' => PROVIDER, 'model' => MODEL, 'label' => 'real', 'sampling' => { 'temperature' => '0' } },
+      root: ROOT
+    )
+    puts JSON.pretty_generate(manifest)
+  end
+end
+
+ThermalRealRun.run

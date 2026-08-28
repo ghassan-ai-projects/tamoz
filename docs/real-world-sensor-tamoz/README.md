@@ -24,9 +24,36 @@ and wire-level fault injection are **not** tamoz's job — see *Scope boundary*.
 (+44: two frozen metrics + helpers). Everything else is domain **data**
 ([thermal-lab.json](../../test/fixtures/domains/thermal-lab.json)), test-support
 machinery, and tests — 34 runs / 100 assertions green, rubocop 0 offenses, enola 0
-structural regressions. The two intelligence-dependent claims (the T3 headline
-paired-win and the T5 real-model manifest verdict) are honestly deferred to the
-owner's real-DeepSeek run; the harness scores that run unchanged.
+structural regressions.
+
+## Real-model headline run
+
+The intelligence claim is not a fixture. [`script/thermal_real_run`](../../script/thermal_real_run)
+(a runner, **never** part of CI — the one place a real LLM is allowed) drives the
+same trial cells through the real episode graph against a real provider and emits
+the evidence manifest with the model bound in. It reaches the real provider through
+the single `profile_builder` seam added to `EpisodeComposition.build`.
+
+Verified against **GLM 5.3 Flash via OpenRouter** (`z-ai/glm-5.3-flash`):
+
+| | baseline (fixed-threshold) | GLM 5.3 Flash |
+|---|---|---|
+| abstention_quality | 0.50 | ~0.875 |
+| disconnected-sensor cell | **false-alarms R2** | **request_evidence R0** ✓ |
+| door-spike / conflicting-sensor | false-alarms R2 | abstains ✓ |
+| ambient-driven | false-alarms R2 | proposes cooling ✗ (real miss) |
+
+The real model **meets Exp 4's qualitative pass** (never worse than the baseline on
+any cell; strictly better on ≥3 conflict cells) and the harness honestly surfaced
+one genuine model weakness (ambient attribution) plus occasional transient
+provider failures (~1 cell/run). The emitted manifest's **statistical** verdict is
+`inconclusive` — the strict paired 95%-CI go-rule does not clear over just 8 cells
+with two families; a `go` needs the protocol's larger per-cell corpus. Both are
+true and both are recorded. Governance held throughout — every risk class was the
+catalog's; even the wrong call stays gated for approval.
+
+    export OPENROUTER_API_KEY=... LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+    ruby script/thermal_real_run   # scorecard on stderr, manifest JSON on stdout
 
 ## Scope boundary — read first
 
