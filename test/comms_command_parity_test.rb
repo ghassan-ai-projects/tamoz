@@ -115,7 +115,7 @@ class CommsCommandParityTest < Minitest::Test
 
       assert_leads_with reply, "Request #{first_ref}: "
       assert_includes reply, 'task=queued'
-      assert_includes reply, 'delivery=pending'
+      assert_includes reply, 'delivery=none', 'accepted controls are not request-local delivery'
 
       assert_equal UNKNOWN_REF_REPLY,
                    drive_command(gateway, transport, '/status r0000000000', id: 103)

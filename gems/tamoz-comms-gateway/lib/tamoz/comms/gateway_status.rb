@@ -16,6 +16,7 @@ module Tamoz
           return NO_WORK_REPLY unless status
 
           "Work status: task=#{task_word(status)}; " \
+            "#{worker_axis(status)}" \
             "#{state_axes(status)}" \
             "delivery=#{delivery_word(status)}; " \
             "next=#{status.fetch('next_action', 'inspect')}; " \
@@ -32,6 +33,7 @@ module Tamoz
           return AMBIGUOUS_REF_REPLY if resolved == :ambiguous_ref
 
           "Request #{resolved.fetch('request_ref')}: task=#{task_word(resolved)}; " \
+            "#{worker_axis(resolved)}" \
             "delivery=#{delivery_word(resolved)}; " \
             "#{state_axes(resolved)}" \
             "next=#{resolved.fetch('next_action', 'inspect')}." \
@@ -51,6 +53,11 @@ module Tamoz
           return 'none' if internal == 'none'
 
           Lifecycle.delivery_state_for(internal)
+        end
+
+        def worker_axis(projection)
+          state = projection['worker_state']
+          state ? "worker=#{state}; " : ''
         end
 
         def state_axes(projection)

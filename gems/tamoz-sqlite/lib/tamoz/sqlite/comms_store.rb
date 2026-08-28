@@ -49,6 +49,9 @@ module Tamoz
       DEFAULT_NAMESPACE = '[]'
       HISTORY_LIMIT = 12
       HISTORY_TEXT_CHARACTERS = 500
+      # A queued request is reported as unclaimed after one backend clock tick
+      # without an observed inbox claim; this is not a process-liveness claim.
+      WORKER_UNCLAIMED_WINDOW_MS = 1
       # The settle kinds a terminal delivery can carry (OutboxDeliverySink);
       # stamped into projection_state at complete_request so every later
       # reader derives the terminal task status from the SAME durable fact.
@@ -448,6 +451,7 @@ module Tamoz
         }
           .merge(queue_facts(txn, surface_id, conversation_id, request_id, now))
           .merge(cancellation_document(txn, request_id, now))
+          .merge(worker_status(txn, thread_id, request_id, now))
       end
 
       def conversation_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
@@ -547,6 +551,29 @@ module Tamoz
         return now_ms(now) if now
 
         txn.scalar('comms.conversation.status.backend_time', BACKEND_TIME_SQL)
+      end
+
+      def worker_status(txn, thread_id, request_id, now)
+        return {} unless request_id
+
+        row = txn.first('comms.request.status.worker', <<~SQL, [thread_id, DEFAULT_NAMESPACE, request_id])
+          SELECT status, created_at_ms FROM tamoz_requests
+          WHERE thread_id = ? AND namespace = ? AND request_id = ?
+        SQL
+        return {} unless row
+
+        state = worker_state(row, backend_now_ms(txn, now))
+        state ? { 'worker_state' => state } : {}
+      end
+
+      def worker_state(row, current_ms)
+        case row.fetch(0)
+        when 'queued'
+          age_ms = [current_ms - row.fetch(1), 0].max
+          age_ms >= WORKER_UNCLAIMED_WINDOW_MS ? 'queued-unclaimed' : 'accepted'
+        when 'claimed', 'running'
+          'working'
+        end
       end
 
       def conversation_runtime_status(thread_id, request_id, surface_id, conversation_id)

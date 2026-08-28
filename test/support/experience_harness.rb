@@ -82,6 +82,14 @@ module Tamoz
         work_off
       end
 
+      # Render a command without advancing the worker, so status observations
+      # can distinguish an idle queue from a claimed request.
+      def status_only(reference)
+        enqueue_message("/status #{reference}", reply_to: nil)
+        serve
+        new_outbound
+      end
+
       # Admit a message WITHOUT running the worker (queues an open request); use
       # to set up multiple concurrent open requests before running.
       def admit(text)

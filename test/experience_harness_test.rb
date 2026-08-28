@@ -187,6 +187,24 @@ class ExperienceHarnessTest < Minitest::Test
     assert_match(/Request #{second_reference}:.*delivery=delivered/, second_status)
   end
 
+  def test_worker_unavailable_state_is_distinct_from_working
+    accepted = @harness.admit('prepare the report')
+    reference = accepted.first.fetch(:text)[/\br[0-9a-f]{10}\b/]
+    request_id = @harness.request_ids_for(Fixture::CONVERSATION_A).first
+
+    queued = @harness.status_only(reference)
+    queued_text = queued.find { |card| card[:kind] == 'control' }.fetch(:text)
+
+    assert_match(/worker=queued-unclaimed/, queued_text)
+
+    @harness.work_off
+
+    completed = @harness.ref_status(reference)
+    assert_equal 'completed', completed.fetch('task_state')
+    effects = @harness.effect_census.select { |row| row[:request_id] == request_id }
+    assert_equal effects.length, effects.map { |row| row.fetch(:effect_key) }.uniq.length
+  end
+
   private
 
   def request_status_text(reference)

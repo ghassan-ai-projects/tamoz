@@ -227,6 +227,46 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def test_accepted_control_is_unowned_when_terminal_request_delivery_succeeds
+    with_gateway do |gateway, transport, store, _adapter, checkpoints|
+      seed_binding(store)
+      now = Time.utc(2026, 8, 10, 12, 0, 0)
+      transport.batch([update(1, text: 'work')])
+
+      assert_equal :served, gateway.serve_once(now:, drain: false)
+
+      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
+      request_id = checkpoints.request_history(thread_id: thread).first.request_id
+      accepted = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+                       .find { |row| row.fetch('kind') == 'accepted' }
+      assert_nil accepted.fetch('request_id')
+
+      terminal = Comms::Delivery.build(
+        conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'answer',
+        part_index: 0, part_count: 1, journaled: true, render_version: 1,
+        content_digest: 'd' * 64
+      ).wire
+      assert_equal :appended, store.append_delivery(
+        terminal, surface_id: 'telegram-ops', capacity: 500,
+        reserved_request_id: request_id, now:
+      )
+      assert_equal :claimed, store.claim_delivery(
+        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        claim_expires_at: now + 30, now:
+      )
+      assert_equal :marked, store.mark_delivery(
+        delivery_id: terminal.fetch('delivery_id'), owner: 'status-test', fence: 1,
+        status: 'succeeded', receipt: { 'message_id' => 42 }, now:
+      )
+
+      status = store.request_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222',
+        ref: "r#{request_id[0, 10]}", now:
+      )
+      assert_equal 'succeeded', status.fetch('delivery_state')
+    end
+  end
+
   # A long poll that times out is the normal weather of long polling, not the
   # end of the gateway: nothing was observed, the durable offset is untouched,
   # and the very next pass still admits the message that was waiting.

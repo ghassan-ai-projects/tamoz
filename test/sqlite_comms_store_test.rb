@@ -730,6 +730,41 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  def test_worker_status_uses_the_claim_window_then_claim_facts
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      bind_route!(store)
+      assert_equal :enqueued, admit(store, envelope(update_id: 54))
+      request_id = request_ids(checkpoints, 'tg.ops.abc').first
+      reference = "r#{request_id[0, 10]}"
+      address = { surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', ref: reference }
+      created_at_ms = store.__send__(:read, 'test.request.created_at') do |txn|
+        txn.scalar('test.request.created_at',
+                   'SELECT created_at_ms FROM tamoz_requests WHERE request_id = ?', [request_id])
+      end
+      claim_window_ms = Tamoz::SQLite::CommsStore::WORKER_UNCLAIMED_WINDOW_MS
+      assert_equal 1, claim_window_ms
+      created_at = Time.at(
+        created_at_ms / 1000, (created_at_ms % 1000) * 1000, :microsecond
+      ).utc
+      at_claim_window = created_at_ms + claim_window_ms
+      claim_window_time = Time.at(
+        at_claim_window / 1000, (at_claim_window % 1000) * 1000, :microsecond
+      ).utc
+
+      assert_equal 'accepted', store.request_status(**address, now: created_at).fetch('worker_state')
+      assert_equal 'queued-unclaimed', store.request_status(**address, now: claim_window_time).fetch('worker_state')
+
+      checkpoints.open_writer(
+        thread_id: 'tg.ops.abc', namespace: [], owner_id: 'worker:test', ttl: checkpoints.writer_ttl
+      ) do |writer|
+        assert_equal request_id, writer.claim_next_request(validator: nil).request_id
+      end
+
+      assert_equal 'working', store.request_status(**address, now: now + 501).fetch('worker_state')
+    end
+  end
+
   def test_a_reference_never_resolves_across_conversations
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)

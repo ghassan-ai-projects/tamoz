@@ -121,6 +121,20 @@ PROBES = {
     show(h.reply('thanks, also what about other.txt?'))
     h.close
   },
+  'OF-14' => lambda {
+    puts '# OF-14 accepted does not mean anyone is working'
+    h = deterministic
+    puts '👤 prepare the report'
+    accepted = h.admit('prepare the report')
+    reference = ref_of(accepted)
+    puts "👤 /status #{reference} (worker stopped)"
+    show(h.status_only(reference))
+    puts '   worker pass'
+    show(h.work_off)
+    status = h.ref_status(reference)
+    puts "   status: task=#{status.fetch('task_state')}; delivery=#{status.fetch('delivery_state')}"
+    h.close
+  },
   'OF-12' => lambda {
     puts '# OF-12 redirect does not name the replacement ref'
     h = deterministic
