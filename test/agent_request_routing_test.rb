@@ -75,6 +75,46 @@ class AgentRequestRoutingTest < Minitest::Test
     assert_equal([:route], model.calls.map { |call| call.fetch(:stage) })
   end
 
+  def test_direct_chat_candidate_is_deterministic_and_excludes_work_shapes
+    assert Tamoz::Agent::RequestRoute.direct_chat_candidate?('hi')
+    assert Tamoz::Agent::RequestRoute.direct_chat_candidate?('What is two plus two?')
+    refute Tamoz::Agent::RequestRoute.direct_chat_candidate?('answer the task')
+    refute Tamoz::Agent::RequestRoute.direct_chat_candidate?('read note.txt')
+    refute Tamoz::Agent::RequestRoute.direct_chat_candidate?('make note.txt say fixed')
+  end
+
+  def test_respond_handles_malformed_route_without_an_event_block
+    model = ScriptedModel.new(route: ['not json'])
+
+    decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('hi')
+
+    assert_nil decision
+    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+  end
+
+  def test_respond_handles_an_unsafe_direct_route_without_an_event_block
+    model = ScriptedModel.new(route: [{
+      'route' => 'direct_response', 'answer' => 'done', 'reason_class' => 'writing'
+    }])
+
+    decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('Read note.txt')
+
+    assert_nil decision
+    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+  end
+
+  def test_respond_returns_an_explicit_non_direct_route
+    model = ScriptedModel.new(route: [{
+      'route' => 'read_only_work', 'reason_class' => 'workspace_evidence',
+      'discovery_plan' => plan_for('read_file', 'path' => 'note.txt')
+    }])
+
+    decision = Tamoz::Agent.build(model:, root: Dir.pwd, routing: :experimental).respond('hi')
+
+    assert_equal 'read_only_work', decision.route
+    assert_equal [:route], model.calls.map { |call| call.fetch(:stage) }
+  end
+
   def test_direct_response_corpus_is_one_call_and_evidence_free
     DIRECT_CORPUS.each_with_index do |task, index|
       model = ScriptedModel.new(route: [{

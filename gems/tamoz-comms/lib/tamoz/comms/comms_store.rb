@@ -52,6 +52,19 @@ module Tamoz
         raise NotImplementedError
       end
 
+      # Read the durable identity anchor before invoking a non-durable responder.
+      # @return [:missing, :duplicate, :conflict]
+      def inbound_identity_state(envelope_wire, bot_id:)
+        raise NotImplementedError
+      end
+
+      # Atomically record a direct-response inbound disposition and its unowned
+      # answer delivery. No request row is created.
+      # @return [:appended, :duplicate, :capacity_refused, :integrity_conflict]
+      def append_direct_response(envelope_wire, delivery_wire, surface_id:, bot_id:, capacity:, now:)
+        raise NotImplementedError
+      end
+
       # Append one delivery. `reserved_request_id` carries the request whose
       # admission reservation covers this terminal/prompt row (design §12);
       # control rows pass nil. Terminal projection is the caller's completion

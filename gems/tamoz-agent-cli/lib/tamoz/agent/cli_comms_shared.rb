@@ -58,6 +58,34 @@ module Tamoz
         end
       end
 
+      class ChannelChatSource
+        def initialize(workspace_root:, model_builder:)
+          @workspace_root = workspace_root
+          @model_builder = model_builder
+        end
+
+        def candidate?(envelope)
+          RequestRoute.direct_chat_candidate?(envelope.fetch('text'))
+        end
+
+        def call(envelope)
+          task = envelope.fetch('text')
+          decision = runtime(task).respond(task)
+          return Tamoz::Comms::ChatResponse.direct(decision.answer) if decision&.direct_response?
+
+          Tamoz::Comms::ChatResponse.non_direct
+        end
+
+        private
+
+        def runtime(task)
+          Tamoz::Agent.build(
+            model: @model_builder.call, root: @workspace_root, allow_changes: false,
+            routing: :experimental
+          )
+        end
+      end
+
       # rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- each helper
       #   is one sequence (runtime-open, config->descriptor defaults) and
       #   splitting it would scatter the ordering invariant.
@@ -197,6 +225,15 @@ module Tamoz
           workspace_root: directory.workspace_root,
           adapter:,
           artifact_store:,
+          model_builder: -> { build_model(options) }
+        )
+      end
+
+      def comms_chat_responder(directory, options)
+        return nil unless options[:model] || @env['TAMOZ_MODEL']
+
+        ChannelChatSource.new(
+          workspace_root: directory.workspace_root,
           model_builder: -> { build_model(options) }
         )
       end

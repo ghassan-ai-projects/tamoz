@@ -63,10 +63,11 @@ module Tamoz
             gateways = descriptors.zip(drainers).map do |descriptor, drainer|
               token = credential(descriptor)
               transport = build_transport(descriptor, token)
+              chat_responder = comms_chat_responder(directory, options)
               Tamoz::Comms::Gateway.new(
                 adapter:, checkpoints:, transport:, descriptor:,
                 poller_owner: "#{GATEWAY_POLLER_PREFIX}:#{Process.pid}", drainer:,
-                controls: controls_source, credential: token
+                controls: controls_source, chat_responder:, credential: token
               )
             end
             if once

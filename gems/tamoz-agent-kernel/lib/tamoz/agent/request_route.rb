@@ -47,6 +47,13 @@ module Tamoz
         UNSAFE_DIRECT_PATTERNS.none? { |pattern| pattern.match?(String(task)) }
       end
 
+      def self.direct_chat_candidate?(task)
+        text = String(task).strip
+        return false unless self_contained_task?(text)
+
+        text.split(/\s+/).length == 1 || text.end_with?('?')
+      end
+
       class << self
         private
 

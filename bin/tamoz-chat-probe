@@ -52,8 +52,9 @@ end
 
 PROBES = {
   'OF-4' => lambda {
-    puts '# OF-4 normal chat "hi" is run like a job'
-    h = deterministic
+    puts '# OF-4 normal chat "hi" is answered directly'
+    h = deterministic(route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.',
+                                'reason_class' => 'greeting' }])
     puts '👤 hi'
     show(h.say('hi'))
     h.close

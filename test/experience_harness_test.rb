@@ -205,6 +205,24 @@ class ExperienceHarnessTest < Minitest::Test
     assert_equal effects.length, effects.map { |row| row.fetch(:effect_key) }.uniq.length
   end
 
+  def test_conversational_turn_is_answered_directly_without_plan_lifecycle
+    scripted = Fixture.model_factory(
+      route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.',
+                'reason_class' => 'greeting' }]
+    )
+    harness = Tamoz::ExperienceSim::Harness.new(model_factory: scripted)
+
+    cards = harness.say('hi')
+    kinds = cards.map { |card| card[:kind] }
+
+    refute_includes kinds, 'accepted'
+    assert_includes kinds, 'answer'
+    assert_empty harness.request_ids_for(Fixture::CONVERSATION_A)
+    assert_empty harness.effect_census
+  ensure
+    harness&.close
+  end
+
   private
 
   def request_status_text(reference)

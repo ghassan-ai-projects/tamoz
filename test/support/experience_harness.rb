@@ -160,7 +160,8 @@ module Tamoz
         @gateway = Tamoz::Comms::Gateway.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
           descriptor: descriptor(admission_mode), poller_owner: 'sim:gateway',
-          controls: ->(thread_id) { @runtime.session_for(thread_id) }
+          controls: ->(thread_id) { @runtime.session_for(thread_id) },
+          chat_responder: direct_chat_responder
         )
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
@@ -176,6 +177,28 @@ module Tamoz
           session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
           emitter: ->(event) { @events << event }, once: true
         )
+      end
+
+      def direct_chat_responder
+        model_factory = @model_factory
+        workspace = @workspace
+        Object.new.tap do |responder|
+          responder.define_singleton_method(:candidate?) do |envelope|
+            Tamoz::Agent::RequestRoute.direct_chat_candidate?(envelope.fetch('text'))
+          end
+          responder.define_singleton_method(:call) do |envelope|
+            task = envelope.fetch('text')
+            decision = Tamoz::Agent.build(
+              model: model_factory.call(profile: nil), root: workspace,
+              allow_changes: false, routing: :experimental
+            ).respond(task)
+            if decision&.direct_response?
+              Tamoz::Comms::ChatResponse.direct(decision.answer)
+            else
+              Tamoz::Comms::ChatResponse.non_direct
+            end
+          end
+        end
       end
 
       def enqueue_message(text, reply_to:)

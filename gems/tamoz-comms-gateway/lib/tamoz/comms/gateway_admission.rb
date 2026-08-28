@@ -35,6 +35,8 @@ module Tamoz
             reference = clarification_reply_reference(envelope)
             if reference
               admit_answer(envelope, reference, envelope.fetch('text'), now:)
+            elsif direct_chat_candidate?(envelope)
+              route_direct_chat(envelope, now:)
             else
               admit_request(envelope, now:)
             end
@@ -50,6 +52,37 @@ module Tamoz
             record_disposition(envelope, disposition: 'ignored', reason: decision.reason.to_s, now:)
             handle_pairing_contact(envelope, now:) if decision.reason == :pairing_pending
           end
+        end
+
+        def direct_chat_candidate?(envelope)
+          envelope['reply_to'].nil? && @chat_responder&.respond_to?(:candidate?) &&
+            @chat_responder.candidate?(envelope)
+        end
+
+        def route_direct_chat(envelope, now:)
+          case @store.inbound_identity_state(envelope, bot_id:)
+          when :missing
+            admit_direct_response(envelope, now:)
+          when :duplicate
+            nil
+          when :conflict
+            record_disposition(envelope, disposition: 'quarantined', reason: 'integrity_conflict', now:)
+          else
+            raise Comms::DirectResponseError, 'direct chat identity state is invalid'
+          end
+        end
+
+        def admit_direct_response(envelope, now:)
+          decision = @chat_responder.call(envelope)
+          unless decision.is_a?(Comms::ChatResponse) && decision.direct? && decision.text.is_a?(String) &&
+                 !decision.text.strip.empty?
+            raise Comms::DirectResponseError, 'direct chat candidate did not produce a direct response'
+          end
+
+          outcome = append_direct_control(decision.text, envelope, now:)
+          return if %i[appended duplicate].include?(outcome)
+
+          raise Comms::DirectResponseError, "direct chat response was not persisted: #{outcome}"
         end
 
         def admit_request(envelope, now:)

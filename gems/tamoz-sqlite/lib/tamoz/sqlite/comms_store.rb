@@ -181,6 +181,36 @@ module Tamoz
       end
       # rubocop:enable Lint/UnusedMethodArgument
 
+      def inbound_identity_state(envelope_wire, bot_id:)
+        read('comms.admit.inbound.identity') do |txn|
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          next :missing unless anchor
+
+          anchor[0] == envelope_wire.fetch('raw_payload_hash') ? :duplicate : :conflict
+        end
+      end
+
+      def append_direct_response(envelope_wire, delivery_wire, surface_id:, bot_id:, capacity:, now:)
+        transaction('comms.admit.direct_response') do |txn|
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          if anchor
+            next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
+
+            record_inbound_conflict!(txn, envelope_wire, bot_id)
+            next :integrity_conflict
+          end
+
+          outcome = @outbox.append_delivery_in_transaction!(
+            txn, delivery_wire, surface_id:, capacity:, now:
+          )
+          next outcome unless %i[appended duplicate].include?(outcome)
+
+          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
+                         reason: 'direct_response', now:)
+          :appended
+        end
+      end
+
       # The admission capacity gate (invariant 57): the new reservation must
       # fit alongside pending+claimed deliveries and the other open
       # reservations.
