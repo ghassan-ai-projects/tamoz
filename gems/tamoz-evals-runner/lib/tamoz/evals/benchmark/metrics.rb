@@ -139,7 +139,7 @@ module Tamoz
         def abstention_quality(cells)
           return 0.0 if cells.empty?
 
-          mean(cells.map { |cell| abstained?(cell) == truthy(cell["abstain_expected"]) ? 1.0 : 0.0 })
+          mean(cells.map { |cell| abstained?(cell) == abstain_expected?(cell) ? 1.0 : 0.0 })
         end
 
         # Counterfactual regret (WP-T3): utility lost vs the oracle-optimal
@@ -152,7 +152,7 @@ module Tamoz
           return 0.0 if cells.empty?
 
           mean(cells.map do |cell|
-            expected_abstain = truthy(cell["abstain_expected"])
+            expected_abstain = abstain_expected?(cell)
             if abstained?(cell) && !expected_abstain
               missed_cost
             elsif !abstained?(cell) && expected_abstain
@@ -169,8 +169,8 @@ module Tamoz
           Array(cell.fetch("intent_risk_classes", [])).none? { |risk| risk_rank(risk) >= 1 }
         end
 
-        def self.truthy(value)
-          value == true
+        def self.abstain_expected?(cell)
+          cell["abstain_expected"] == true
         end
 
         def cost_per_cell(cells)

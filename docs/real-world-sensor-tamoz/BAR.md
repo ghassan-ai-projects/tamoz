@@ -28,7 +28,7 @@ phase, each looped until its gate is green, committed at green.
 | T2 decision discipline | G-T2 mode/evidence/abstain, risk-governed | 2 | **green** |
 | T3 shadow tournament | G-T3 mechanics green; paired-win harness | 1 | **green** (mechanics); real-model run = owner |
 | T4 adversarial suite | G-T4 zero escalations/injections | 1 | **green** |
-| T5 evidence manifest | G-T5 manifest + CI + parity | — | pending |
+| T5 evidence manifest | G-T5 manifest + CI + parity | 2 | **green** |
 
 Each row is filled in as its phase closes: how many loop iterations the gate took,
 what the last red was, and the commit that carried it green.
@@ -84,3 +84,26 @@ what the last red was, and the commit that carried it green.
   CLOSED. Governance boundary proven at the DecisionBuilder/frame gate; the
   model's own injection resistance is the real-model concern (T3). Test-only, no
   structural footprint.
+- **T5** — Loop 1 green on behaviour: `test/support/thermal_manifest.rb` +
+  `test/thermal_manifest_test.rb` bind one immutable JCS-digested manifest (git
+  commit+dirty, intent-catalog/snapshot/objective/prompt digests, decision
+  schema, provider+model+sampling+label, baseline set, tournament verdict),
+  reusing the frozen scoring functions (no parallel system); a fixture run is
+  never a `go`; parity verified — thermal-lab is absent from the frozen
+  `BENCHMARK_PROTOCOL.json` (local path). Loop 2: rubocop. The enforced style is
+  single-quotes with existing files grandfathered in `.rubocop_todo.yml`; new
+  files may not grow the todo, so all 11 touched files were brought to
+  zero-offense (single quotes, ≤3 assertions/test, ABC/param/length within the
+  Q6 ceilings) — including inlining a predicate helper in `metrics.rb`. Final:
+  rubocop 0 offenses, `rake syntax` clean, enola **0 regressions**. Pre-existing,
+  not-mine (reproduced with all work stashed): `benchmark_protocol_test`,
+  `benchmark_holdout_test` (protocol-SHA drift), `benchmark_comms_b0_test` (×6,
+  the comms area).
+
+## Verdict
+
+All six gates green under the clean-code bar; the two intelligence-dependent
+claims (T3 headline paired-win, T5 real-model manifest verdict) are honestly
+scoped to the owner's real-DeepSeek run — the harness scores it unchanged. No
+structural regression; zero new rubocop debt; domain knowledge stayed data (B9);
+risk stayed the catalog's (B10).

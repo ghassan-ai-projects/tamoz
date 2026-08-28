@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "tamoz/core"
-require "tamoz/agent"
-require_relative "domain_loader"
+require 'tamoz/core'
+require 'tamoz/agent'
+require_relative 'domain_loader'
 
 # Real-world sensor (docs/real-world-sensor-tamoz): the thermal-lab supervisory
 # domain authored as DATA in test/fixtures/domains/thermal-lab.json. ZERO
@@ -11,7 +11,7 @@ require_relative "domain_loader"
 # filing. Fixture responses are labeled `fixture` and never shown as evidence of
 # a real model path (B8).
 module ThermalLabDomain
-  DOMAIN = DomainLoader.load("thermal-lab")
+  DOMAIN = DomainLoader.load('thermal-lab')
 
   CATALOG = DOMAIN.catalog
   OBJECTIVE = DOMAIN.objective

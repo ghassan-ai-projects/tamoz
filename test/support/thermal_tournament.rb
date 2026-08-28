@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require "tamoz/core"
-require "tamoz/evals/runner"
-require_relative "thermal_lab_domain"
-require_relative "local_model_endpoint"
-require_relative "episode_composition"
+require 'tamoz/core'
+require 'tamoz/evals/runner'
+require_relative 'thermal_lab_domain'
+require_relative 'local_model_endpoint'
+require_relative 'episode_composition'
 
 # Real-world sensor WP-T3: the shadow tournament harness — a deterministic
 # baseline vs the Tamoz supervisor vs the human oracle, over the SAME immutable
@@ -23,7 +23,7 @@ class ThermalTournament
   Baselines = Tamoz::Evals::Benchmark::Baselines
   Domain = ThermalLabDomain
   THRESHOLD = 6.0
-  ALARM_CODE = "sustained_rise_not_ambient"
+  ALARM_CODE = 'sustained_rise_not_ambient'
 
   def initialize(dir)
     @dir = dir
@@ -31,7 +31,7 @@ class ThermalTournament
     @compositions = []
   end
 
-  def codes = Domain::CATALOG.map { |entry| entry.fetch("code") }
+  def codes = Domain::CATALOG.map { |entry| entry.fetch('code') }
 
   def trials = Domain::DOMAIN.trials
 
@@ -41,22 +41,22 @@ class ThermalTournament
   def baseline_cells
     scored = Baselines.fixed_threshold(
       trials.map { |trial| scaffold(trial) }, codes,
-      metric: "box_temp", threshold: THRESHOLD, alarm_code: ALARM_CODE, operator: "gt"
+      metric: 'box_temp', threshold: THRESHOLD, alarm_code: ALARM_CODE, operator: 'gt'
     )
     scored.map do |cell|
-      alarmed = cell.fetch("primary_code") == ALARM_CODE
-      cell.merge("intent_risk_classes" => alarmed ? ["R2"] : [])
+      alarmed = cell.fetch('primary_code') == ALARM_CODE
+      cell.merge('intent_risk_classes' => alarmed ? ['R2'] : [])
     end
   end
 
   # The Tamoz supervisor's governed decision per cell, through the real graph.
   def supervisor_cells
     trials.map do |trial|
-      risk_classes = govern(trial).map { |intent| intent.fetch("risk_class") }
+      risk_classes = govern(trial).map { |intent| intent.fetch('risk_class') }
       scaffold(trial).merge(
-        "primary_code" => trial.fetch("truth_code"),
-        "probabilities" => Metrics.one_hot(trial.fetch("truth_code"), codes),
-        "intent_risk_classes" => risk_classes
+        'primary_code' => trial.fetch('truth_code'),
+        'probabilities' => Metrics.one_hot(trial.fetch('truth_code'), codes),
+        'intent_risk_classes' => risk_classes
       )
     end
   end
@@ -72,33 +72,33 @@ class ThermalTournament
   # trial's overrides, plus the human-oracle labels.
   def scaffold(trial)
     {
-      "cell_id" => trial.fetch("id"),
-      "scenario_family" => trial.fetch("family"),
-      "truth_code" => trial.fetch("truth_code"),
-      "abstain_expected" => trial.fetch("abstain_expected"),
-      "facts" => Domain.snapshot.fetch("facts").merge(trial.fetch("facts"))
+      'cell_id' => trial.fetch('id'),
+      'scenario_family' => trial.fetch('family'),
+      'truth_code' => trial.fetch('truth_code'),
+      'abstain_expected' => trial.fetch('abstain_expected'),
+      'facts' => Domain.snapshot.fetch('facts').merge(trial.fetch('facts'))
     }
   end
 
   def govern(trial)
     document = Domain.document(
-      selected: trial.fetch("truth_code"), hypothesis: trial.fetch("id"), intent: fixture_intent(trial)
+      selected: trial.fetch('truth_code'), hypothesis: trial.fetch('id'), intent: fixture_intent(trial)
     )
-    snapshot = Domain.snapshot(**trial.fetch("facts").transform_keys(&:to_sym))
-    app, episode_id = run_episode(trial.fetch("id"), document, snapshot)
+    snapshot = Domain.snapshot(**trial.fetch('facts').transform_keys(&:to_sym))
+    app, episode_id = run_episode(trial.fetch('id'), document, snapshot)
     result = app.durable_runner.fetch(
-      thread: "episode.#{episode_id}", request_id: "episode.#{episode_id}.at-1.1", namespace: ["acme"]
+      thread: "episode.#{episode_id}", request_id: "episode.#{episode_id}.at-1.1", namespace: ['acme']
     )
-    app.state(thread: "episode.#{episode_id}", namespace: ["acme"], checkpoint_id: result.checkpoint_id)
-       .state.to_h.fetch(:decision).fetch("intents")
+    app.state(thread: "episode.#{episode_id}", namespace: ['acme'], checkpoint_id: result.checkpoint_id)
+       .state.to_h.fetch(:decision).fetch('intents')
   end
 
   # The labelled fixture stand-in for a competent supervisor's proposal.
   def fixture_intent(trial)
-    if trial.fetch("abstain_expected")
-      {type: "request_evidence", hypothesis: "need a valid reading before acting"}
+    if trial.fetch('abstain_expected')
+      { type: 'request_evidence', hypothesis: 'need a valid reading before acting' }
     else
-      {type: "request_bounded_cooling", hypothesis: "sustained excursion; bounded cooling"}
+      { type: 'request_bounded_cooling', hypothesis: 'sustained excursion; bounded cooling' }
     end
   end
 
@@ -119,7 +119,7 @@ class ThermalTournament
       risk_ceiling: :RISK_CLASS_R2
     )
     events, app = EpisodeComposition.run(composition, request)
-    terminal = events.map(&:terminal).compact.last
+    terminal = events.filter_map(&:terminal).last
     raise "tournament episode #{trial_id} did not produce: #{terminal&.status}" unless
       terminal&.status == :TERMINAL_STATUS_PRODUCED
 
