@@ -41,10 +41,14 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
 
-      HELP_REPLY = 'Commands: /help, /status [r<reference>] [--diagnostic], /new, /cancel [r<reference>], ' \
-                   '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
-                   '/answer r<reference> <answer>, /reset, /compact, /usage, /context, /think <low|medium|high>, ' \
-                   '/verbose <quiet|normal|detailed>. Commands never become task text.'
+      HELP_REPLY = 'Example: send a task; use /status r<reference> to check it; use /cancel r<reference> ' \
+                   'to stop it. Primary: /help, /status, /cancel, /new. More: /help more.'
+      HELP_MORE_REPLY = 'Commands: /help [more], /status [r<reference>] [--diagnostic], /new, ' \
+                        '/cancel [r<reference>], /redirect r<reference> <new task>, /whoami, ' \
+                        '/start <pairing code>, /answer r<reference> <answer>, /reset, /compact, /usage, ' \
+                        '/context, /think <low|medium|high>, /verbose <quiet|normal|detailed>. ' \
+                        'Commands are controls, not task text.'
+      HELP_USAGE_REPLY = 'Usage: /help [more]'
       NO_WORK_REPLY = 'No work is admitted for this conversation.'
       STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'

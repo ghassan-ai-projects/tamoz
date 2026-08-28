@@ -927,6 +927,41 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
+  def test_help_teaches_the_core_loop_and_keeps_default_controls_short
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(332, text: '/help')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+      assert_match(/Example:.*\/status.*\/cancel/i, reply)
+      assert_includes reply, 'More: /help more.'
+      refute_match(%r{/think|/verbose|/usage|/context}, reply)
+      assert_operator reply.scan(%r{/[a-z]+(?:\s|$)}i).uniq.length, :<=, 5
+    end
+  end
+
+  def test_help_more_expands_the_typed_command_reference_and_rejects_other_arguments
+    with_gateway do |gateway, transport, store, _adapter, _checkpoints, appended|
+      seed_binding(store)
+      transport.batch([update(333, text: '/help more')])
+
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      reply = appended.last.fetch('text')
+      assert_equal Tamoz::Comms::Gateway::HELP_MORE_REPLY, reply
+      assert_includes reply, '/redirect r<reference> <new task>'
+      assert_includes reply, '/think <low|medium|high>'
+      assert_includes reply, '/verbose <quiet|normal|detailed>'
+
+      transport.batch([update(334, text: '/help unexpected')])
+      assert_equal :served, gateway.serve_once(drain: false)
+
+      assert_equal Tamoz::Comms::Gateway::HELP_USAGE_REPLY, appended.last.fetch('text')
+    end
+  end
+
   # A replayed control update already has its disposition durable and its
   # command applied; re-running it would double /new generations. The replay
   # records nothing new and answers nothing new.
