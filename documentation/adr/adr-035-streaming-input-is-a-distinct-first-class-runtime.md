@@ -5,6 +5,10 @@
 **Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 **Relates to:** ADR-055 (see the [catalog](./README.md))
 
+## Context
+
+Unbounded, continuous evidence cannot safely enter a graph or a model directly — it has no temporal truth, bounded state, or deterministic recovery model on its own.
+
 ## Decision
 
 Unbounded evidence does not enter `tamoz-graph` or a model directly — the load-bearing rule,
@@ -13,6 +17,10 @@ temporal/keyed state, replay) is no longer the Ruby `tamoz-stream` gem — the P
 retired (MIGRATION_13) and that plane now lives in the separate Go `agentic-stream` runtime.
 `tamoz-stream` is now the **episode worker**: a gRPC server the stream dials to run one
 immutable episode against a sealed Situation snapshot.
+
+## Consequences
+
+Evidence becomes a bounded, immutable Situation before any cognition, and (per ADR-055) the continuous plane runs as a separate runtime that hands Tamoz a sealed snapshot. **Cost:** a cross-runtime boundary and a shared wire contract to coordinate.
 
 ## Rejected alternatives
 

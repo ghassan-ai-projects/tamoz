@@ -1,7 +1,12 @@
 # ADR-038 — Physical action is typed intent plus current-state policy, never model effect
 
-**Status:** Accepted 2026-07-30. *(Tier F — actuator boundary.)*
+**Status:** Accepted 2026-07-30.
 **Date:** 2026-07-30
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+
+## Context
+
+Exposing actuator tools to the model behind a confirmation prompt leaves prompt injection, stale state, duplicate effects, and human approval fatigue uncontrolled.
 
 ## Decision
 
@@ -13,6 +18,10 @@ fail closed on insufficient or contradictory evidence; approval does not bypass 
 **Threat note:** the asset is actuation. The adversary is prompt injection, stale state,
 duplicate effects, and approval fatigue; the mitigation is that authority is computed by
 deterministic policy over current state, never granted by model output or a bare confirmation.
+
+## Consequences
+
+The model only proposes typed `ActionIntent`s; deterministic policy re-reads current state and checks freshness, bounds, quorum, and interlocks before journaling a narrow Command, failing closed on insufficient evidence. **Cost:** an explicit intent-plus-policy layer sits between cognition and any physical effect.
 
 ## Rejected alternatives
 

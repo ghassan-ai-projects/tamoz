@@ -2,11 +2,19 @@
 
 **Status:** Accepted.
 
+## Context
+
+A single-operator durable agent needs persistence without running a server, and its workload is essentially one writer with short transactions.
+
 ## Decision
 
 Single file, no server, WAL, one operator. WAL permits one writer, so transactions stay short
 and busy retries are bounded. The adapter owns leases, fencing, connection lifecycle,
 backup/restore, and file-descriptor tests.
+
+## Consequences
+
+Zero-ops single-file durability with WAL, and the adapter owns leases, fencing, backup/restore, and file-descriptor behavior. **Cost:** WAL permits only one writer, so transactions must stay short and busy-retries bounded — this is not a multi-writer store.
 
 ## Verification
 

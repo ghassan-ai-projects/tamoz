@@ -2,10 +2,18 @@
 
 **Status:** Accepted.
 
+## Context
+
+Nodes run concurrently and durable values are checkpointed; a mutable value handed to a node can be aliased, mutated after commit, or fail to serialize cleanly.
+
 ## Decision
 
 Durable values are normalized, copied, and recursively frozen at commit; unsupported mutable
 objects fail before execution. Shallow freeze alone is insufficient.
+
+## Consequences
+
+Accidental shared mutation is impossible, and unsupported mutable objects fail before execution rather than at commit. **Cost:** nodes must return new values instead of mutating in place — a deliberate break from `ruby_llm`'s fluent mutable style.
 
 ## Verification
 

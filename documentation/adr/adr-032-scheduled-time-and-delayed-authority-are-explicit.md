@@ -1,7 +1,12 @@
 # ADR-032 — Scheduled time and delayed authority are explicit
 
-**Status:** Accepted 2026-07-30. *(Tier F.)*
+**Status:** Accepted 2026-07-30.
 **Date:** 2026-07-30
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+
+## Context
+
+Host-timezone cron with "run missed jobs on startup" and inherited current permissions creates DST surprises, restart storms, and delayed privilege escalation.
 
 ## Decision
 
@@ -10,6 +15,10 @@ backlog are stored bounded policies. Schedule revisions are immutable; occurrenc
 includes the revision and nominal UTC instant. A job pins maximum capabilities, budgets,
 behavior adoption, approval/escalation, and delivery; run-time authority intersects current
 policy so revocation always wins.
+
+## Consequences
+
+A pinned IANA timezone with explicit bounded DST/misfire/overlap/backlog policies, and run-time authority that intersects current policy so revocation always wins. **Cost:** schedules must declare these policies rather than inheriting implicit host behavior.
 
 ## Rejected alternatives
 

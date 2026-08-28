@@ -3,6 +3,10 @@
 **Status:** Accepted 2026-07-30.
 **Date:** 2026-07-30
 
+## Context
+
+A pre-release rename needed one canonical identity for the framework, CLI, gems, and namespaces — settled before any package shipped and any name became load-bearing.
+
 ## Decision
 
 Ruby namespace `Tamoz`, CLI `tamoz`, require paths `tamoz/*`, gems prefixed `tamoz-`.
@@ -11,6 +15,10 @@ The rename was intentionally breaking (no runtime package had shipped); no compa
 aliases preserve former names.
 **Open action:** reserve the exact RubyGems names and record a trademark/domain check before
 public release (audit item O2).
+
+## Consequences
+
+Every gem, require path, and public symbol is committed to the `Tamoz`/`tamoz-` shape; because nothing had shipped, the rename carries no compatibility aliases to maintain. **Cost:** a later rename would be breaking, and a pre-release action (RubyGems/trademark reservation) remains open.
 
 ## Verification
 

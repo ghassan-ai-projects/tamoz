@@ -1,7 +1,12 @@
 # ADR-045 — The observability gems add no durable table and no second source of truth
 
-**Status:** Accepted 2026-08-10. *(Tier F.)*
+**Status:** Accepted 2026-08-10.
 **Date:** 2026-08-10
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+
+## Context
+
+A durable telemetry table would be a second writer contending with the fenced writer that guards correctness, and a second source of truth that inevitably drifts.
 
 ## Decision
 
@@ -10,6 +15,10 @@ reconstructed. A telemetry writer would contend with the fenced writer that guar
 Model-usage capture is not an exception — it is a separately authorized persistence change
 (OBSERVABILITY_DESIGN §10) that observability consumes. Phase-5 operator-authority records
 (silences, rule revisions) are not telemetry and are out of scope (§18.4; ADR-050).
+
+## Consequences
+
+History is the existing durable record plus a bounded rotating journal, with authoritative traces reconstructed; model-usage capture is a separately-authorized exception observability merely consumes. **Cost:** some views are reconstructed rather than stored directly.
 
 ## Rejected alternatives
 

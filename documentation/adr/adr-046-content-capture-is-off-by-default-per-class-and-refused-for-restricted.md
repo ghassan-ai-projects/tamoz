@@ -1,7 +1,12 @@
 # ADR-046 — Content capture is off by default, per class, and refused for restricted classes
 
-**Status:** Accepted 2026-08-10. *(Tier F.)*
+**Status:** Accepted 2026-08-10.
 **Date:** 2026-08-10
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+
+## Context
+
+Capturing content by default and scrubbing at export cannot prove what never reached the journal, and a default-on surface makes invisible capture one misconfiguration away.
 
 ## Decision
 
@@ -9,6 +14,10 @@ Prompts, tool arguments, tool results, plan and review text are excluded from ev
 unless a named, digest-bound, classification-permitted policy admits them per class within byte
 bounds; omitted content is a digest plus size, and every signal records the governing policy
 digest.
+
+## Consequences
+
+Prompts, tool arguments/results, and plan/review text are excluded unless a named, digest-bound, classification-permitted policy admits them per class within byte bounds; omitted content is represented by a digest and size. **Cost:** seeing content in telemetry requires an explicit, auditable opt-in policy.
 
 ## Rejected alternatives
 

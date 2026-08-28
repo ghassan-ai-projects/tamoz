@@ -2,10 +2,18 @@
 
 **Status:** Accepted.
 
+## Context
+
+Opaque ids (UUIDv7/ULID) are convenient, but their lexical or timestamp order is not a safe append order under concurrency or clock skew.
+
 ## Decision
 
 Opaque ids may be UUIDv7/ULID, but a backend-assigned integer sequence orders checkpoints
 within `(thread_id, ns)`. Correctness never depends on wall-clock or lexical UUID ordering.
+
+## Consequences
+
+Checkpoint ordering is a backend-assigned integer sequence per `(thread, ns)`, so correctness never depends on wall-clock or UUID ordering. **Cost:** the backend must assign and store that sequence — a small extra contract.
 
 ## Rejected alternatives
 

@@ -1,13 +1,22 @@
 # ADR-029 — MCP is native at the edge and uses the official Ruby SDK
 
-**Status:** Accepted 2026-07-30; **shipped** (`tamoz-mcp`). *(Tier F.)*
+**Status:** Accepted 2026-07-30; **shipped** (`tamoz-mcp`).
 **Date:** 2026-07-30
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
+
+## Context
+
+Reimplementing MCP inside Tamoz would couple graph correctness to a fast-moving protocol, while the host's local policy, effect, and consent semantics are genuinely Tamoz's to own.
 
 ## Decision
 
 `tamoz-mcp` is an optional first-class host/server package using the official `mcp` gem for
 protocol, transports, OAuth, and schemas, while Tamoz owns local policy, effect identity,
 durable elicitation, content bounds, supervision, catalog epochs, and evaluation.
+
+## Consequences
+
+The official SDK owns wire compatibility and Tamoz owns policy, effect identity, durable consent, and catalog epochs. **Cost:** a dependency on the SDK's release cadence and explicit protocol-version compatibility windows.
 
 ## Rejected alternatives
 

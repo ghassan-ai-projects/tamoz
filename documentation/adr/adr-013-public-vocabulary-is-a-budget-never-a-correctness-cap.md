@@ -2,11 +2,19 @@
 
 **Status:** Accepted (revised after review).
 
+## Context
+
+The reference frameworks grew to dozens of user-facing concepts; Tamoz bets on a small learning surface — but a hard numeric cap could force hiding a genuinely necessary failure boundary.
+
 ## Decision
 
 The twelve introductory concepts are the learning surface; operational concepts (leases,
 effect receipts, graph versions, request ids) appear only when their feature is used. A
 concept needs justification, but no numeric cap may erase a necessary failure boundary.
+
+## Consequences
+
+The introductory surface stays around twelve concepts, and operational concepts (leases, receipts, graph versions) appear only when their feature is used. **Cost:** this is a discipline requiring per-concept judgment, not an enforceable limit.
 
 ## Next reads
 

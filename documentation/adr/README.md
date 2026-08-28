@@ -15,8 +15,9 @@ Current version: `0.1.0.alpha.1` (pre-release).
   `Status` / `Date` / `Tier` / `Relates to`, then `## Decision`, `## Consequences`
   (where relevant), `## Rejected alternatives`, `## Verification`, `## Next reads`.
   Safety/authority-bearing ADRs add `## Invariant linkage`, `## Threat model`, and a
-  change-bar. The `Verification` line names the gem/symbol/test that proves the decision
-  matches today's code.
+  change-bar, and number their sections (`## 1. Context`, `## 2. Decision`, …) so they can be
+  cross-referenced as "§N" — the section *names and order* are the same either way. The
+  `Verification` line names the gem/symbol/test that proves the decision matches today's code.
 - **Check status quickly:** `grep -H '^\*\*Status:\*\*' documentation/adr/adr-*.md`.
 - **Add a new ADR:** take the next free number (below), copy the template in
   [`ADR_QUALITY_BAR.md` §7](./ADR_QUALITY_BAR.md#7-authoring-template), write
