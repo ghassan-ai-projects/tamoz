@@ -590,7 +590,7 @@ class CommsGatewayTest < Minitest::Test
                           .map { |row| row.fetch('text') }
                           .reverse.find { |text| text.start_with?('Work status:') }
 
-      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
 
       warn({ status_reply:, rows: store.outbox_rows(surface_id: 'telegram-ops',
                                                      statuses: %w[pending claimed succeeded failed unknown])
@@ -598,8 +598,8 @@ class CommsGatewayTest < Minitest::Test
       stx = store.conversation_status(surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222')
       warn("agg=#{stx['task_state']} open=#{stx['open_requests']}")
 
-      assert_match(/task=queued/, status_reply, 'the aggregate names the live state of the rotated request')
-      refute_match(/task=accepted/, status_reply)
+      assert_match(/State: queued/, status_reply, 'the aggregate names the live state of the rotated request')
+      refute_match(/State: accepted/, status_reply)
     end
   end
 

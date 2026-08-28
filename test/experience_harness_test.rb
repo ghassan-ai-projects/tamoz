@@ -183,8 +183,8 @@ class ExperienceHarnessTest < Minitest::Test
     first_status = request_status_text(first_reference)
     second_status = request_status_text(second_reference)
 
-    assert_match(/Request #{first_reference}:.*delivery=unknown/, first_status)
-    assert_match(/Request #{second_reference}:.*delivery=delivered/, second_status)
+    assert_match(/Request #{first_reference}:.*Delivery: unknown/, first_status)
+    assert_match(/Request #{second_reference}:.*Delivery: delivered/, second_status)
   end
 
   def test_worker_unavailable_state_is_distinct_from_working
@@ -195,7 +195,8 @@ class ExperienceHarnessTest < Minitest::Test
     queued = @harness.status_only(reference)
     queued_text = queued.find { |card| card[:kind] == 'control' }.fetch(:text)
 
-    assert_match(/worker=queued-unclaimed/, queued_text)
+    assert_match(/Now: Waiting for a worker to pick up this request\./, queued_text)
+    refute_match(/(?:phase|event|effect|capability|worker|task|delivery)=/, queued_text)
 
     @harness.work_off
 

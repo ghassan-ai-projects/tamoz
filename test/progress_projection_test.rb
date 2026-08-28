@@ -396,7 +396,7 @@ class ProgressProjectionTest < Minitest::Test
       assert history.any? { |entry| entry.fetch('role') == 'assistant' &&
                                        entry.fetch('text').include?('the verified answer') },
              'the positive control proves the history query ran and terminal output enters'
-      refute history.any? { |entry| entry.fetch('text').include?(REQUEST_REF) },
+      refute history.any? { |entry| entry.fetch('text').include?("#{REQUEST_REF} · Now:") },
              'a succeeded milestone must never become model context'
       refute history.any? { |entry| entry.fetch('text').include?('claimed') }
     end

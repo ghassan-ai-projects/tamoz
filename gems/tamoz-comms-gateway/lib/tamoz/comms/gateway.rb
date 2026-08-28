@@ -41,11 +41,12 @@ module Tamoz
       TRANSIENT_BACKOFF_MAX_S = 30.0
       STOP_OUTCOMES = %i[auth_failed poller_lost].freeze
 
-      HELP_REPLY = 'Commands: /help, /status [r<reference>], /new, /cancel [r<reference>], ' \
+      HELP_REPLY = 'Commands: /help, /status [r<reference>] [--diagnostic], /new, /cancel [r<reference>], ' \
                    '/redirect r<reference> <new task>, /whoami, /start <pairing code>, ' \
                    '/answer r<reference> <answer>, /reset, /compact, /usage, /context, /think <low|medium|high>, ' \
                    '/verbose <quiet|normal|detailed>. Commands never become task text.'
       NO_WORK_REPLY = 'No work is admitted for this conversation.'
+      STATUS_USAGE_REPLY = 'Usage: /status [r<reference>] [--diagnostic]'
       UNKNOWN_REF_REPLY = 'No request with that reference is admitted for this conversation.'
       AMBIGUOUS_REF_REPLY = 'That reference matches more than one request; use the full reference.'
       NEW_CONVERSATION_REPLY = 'New conversation started; earlier history stays in the audit record.'

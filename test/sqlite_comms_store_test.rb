@@ -633,8 +633,9 @@ class SQLiteCommsStoreTest < Minitest::Test
 
   # Plan 02 work item 3: the status projection is reference-addressed and
   # queue-aware from durable rows alone — the active request's short
-  # reference, its queue position, and the age of the oldest admitted
-  # request — and none of those keys exist when nothing is admitted.
+  # reference, its queue position, the age of the oldest admitted request, and
+  # every open reference. Queue facts and the active reference are absent when
+  # nothing is admitted; the open-reference list is empty.
   def test_conversation_status_is_reference_addressed_and_queue_aware
     with_engine do |store, _adapter, checkpoints|
       store.deploy_surface(descriptor.wire, now:)
@@ -645,6 +646,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       )
 
       assert_equal 'idle', idle.fetch('state')
+      assert_empty idle.fetch('open_request_refs')
       refute idle.key?('request_ref')
       refute idle.key?('queue_position')
       refute idle.key?('queue_age_ms')
@@ -661,6 +663,8 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 2, status.fetch('open_requests')
       assert_equal active, status.fetch('request_id')
       assert_equal "r#{active[0, 10]}", status.fetch('request_ref')
+      assert_equal request_ids(checkpoints, 'tg.ops.abc').map { |id| "r#{id[0, 10]}" },
+                   status.fetch('open_request_refs')
       assert_equal 1, status.fetch('queue_position'), 'one admitted request is older than the active one'
       assert_equal 5_000, status.fetch('queue_age_ms')
     end
@@ -701,7 +705,7 @@ class SQLiteCommsStoreTest < Minitest::Test
       store.deploy_surface(descriptor.wire, now:)
       bind_route!(store)
       assert_equal :enqueued, admit(store, envelope(update_id: 52))
-      assert_equal :enqueued, admit(store, envelope(update_id: 53))
+      assert_equal :enqueued, admit(store, envelope(update_id: 53), now: now + 1)
       first_id, second_id = request_ids(checkpoints, 'tg.ops.abc')
 
       unknown = delivery.merge('delivery_id' => 'delivery-request-first')
@@ -727,6 +731,9 @@ class SQLiteCommsStoreTest < Minitest::Test
       assert_equal 'unknown', store.conversation_status(
         surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
       ).fetch('delivery_state')
+      assert_equal 'succeeded', store.conversation_status(
+        surface_id: 'telegram-ops', conversation_id: 'telegram:chat:22222222', now:
+      ).fetch('active_delivery_state')
     end
   end
 

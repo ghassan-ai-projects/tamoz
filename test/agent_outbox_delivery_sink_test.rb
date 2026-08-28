@@ -95,6 +95,59 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  def test_a_terminal_answer_carries_reference_and_verification_class
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+
+      sink.push(thread_id: 'tg.ops.abc', kind: 'request.completed', text: 'here is the answer',
+                request_id: 'occurrence-1')
+
+      text = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first.fetch('text')
+
+      assert_includes text, 'roccurrence'
+      assert_match(/\bVerified:/, text)
+      assert_includes text, 'here is the answer'
+    end
+  end
+
+  def test_a_non_terminal_accepted_delivery_with_request_id_keeps_plain_text
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      text = 'Received roccurrence-1.'
+
+      assert_equal :accepted, sink.push(
+        thread_id: 'tg.ops.abc', kind: 'request.accepted', text:, request_id: 'occurrence-1'
+      )
+
+      row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).first
+      assert_equal 'accepted', row.fetch('kind')
+      assert_equal text, row.fetch('text')
+    end
+  end
+
+  def test_terminal_delivery_uses_only_the_bounded_verification_classes
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store)
+      events = {
+        'request.completed' => 'Verified: result',
+        'request.approved' => 'Response only: result',
+        'request.denied' => 'Not verified: result',
+        'request.failed' => 'Not verified: result'
+      }
+
+      events.each_with_index do |(kind, label), index|
+        sink.push(thread_id: 'tg.ops.abc', kind:, text: 'result text', request_id: "terminal-#{index}")
+        row = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending]).last
+
+        assert_includes row.fetch('text'), label
+        refute_match(/(?:phase|event|effect|capability|session)=/, row.fetch('text'))
+      end
+    end
+  end
+
   def test_long_output_is_split_into_bounded_parts
     with_engine do |sink, adapter, checkpoints|
       store = store_for(adapter, checkpoints)
@@ -247,9 +300,10 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
       assert_equal 'answer', rows.first.fetch('kind')
       assert_equal rows.first.fetch('delivery_id'),
                    Comms::Delivery.build(
-                     conversation_id: 'telegram:chat:22222222', kind: 'answer', text: 'done',
+                     conversation_id: 'telegram:chat:22222222', kind: 'answer',
+                     text: 'roccurrence · Verified: result — done',
                      part_index: 0, part_count: 1, journaled: true, render_version: 1,
-                     content_digest: Comms::Rendering.content_digest('done'),
+                     content_digest: Comms::Rendering.content_digest('roccurrence · Verified: result — done'),
                      identity_key: 'occurrence-1'
                    ).delivery_id
     end

@@ -89,7 +89,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
 
-      assert_match(/task=failed/, text)
+      assert_match(/State: failed/, text)
       assert_match(/Terminal: failed before the cancellation took effect\./, text)
       refute_match(/completed/i, text, 'a failed settle never reads as a completion')
     end
@@ -108,7 +108,7 @@ class CancellationVisibilityTest < Minitest::Test
 
       text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, nil)
 
-      assert_match(%r{Work status: task=queued}, text)
+      assert_match(%r{Work status: State: queued}, text)
       assert_match(/Cancellation requested/, text)
       assert_match(/Queue position 0\./, text)
     end

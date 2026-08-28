@@ -393,8 +393,8 @@ module Tamoz
       # Read-only channel status derived from durable admission/projection
       # rows. Reference-addressed and queue-aware (plan 02, work item 3):
       # when anything is admitted the projection carries the active request's
-      # short reference (`request_ref`) and its queue facts (`queue_age_ms`,
-      # `queue_position`); with nothing admitted those keys are absent.
+      # short reference (`request_ref`), its queue facts, and all open short
+      # references; with nothing admitted only the open-reference list is empty.
       # `now:` binds the reader's clock for age arithmetic; without it the
       # connection's backend time answers.
       def conversation_status(surface_id:, conversation_id:, now: nil)
@@ -412,6 +412,8 @@ module Tamoz
           request_id = active&.fetch(0)
           conversation_status_projection(
             txn, surface_id, conversation_id, thread_id, request_id, now:
+          ).merge(
+            'open_request_refs' => open_request_refs(txn, surface_id, conversation_id)
           )
         end
       end
@@ -487,6 +489,7 @@ module Tamoz
       def conversation_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
         base_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
           .merge(conversation_runtime_status(thread_id, request_id, surface_id, conversation_id))
+          .merge('active_delivery_state' => active_delivery_state(surface_id, conversation_id, request_id))
       end
 
       def request_status_projection(txn, surface_id, conversation_id, thread_id, request_id, now:)
@@ -615,6 +618,12 @@ module Tamoz
         }.merge(lifecycle_status_for(thread_id, request_id))
       end
 
+      def active_delivery_state(surface_id, conversation_id, request_id)
+        return 'none' unless request_id
+
+        request_delivery_state_for(surface_id, conversation_id, request_id)
+      end
+
       def request_runtime_status(thread_id, request_id, surface_id, conversation_id)
         {
           'task_state' => task_state_for(thread_id, request_id),
@@ -684,6 +693,15 @@ module Tamoz
           SELECT COUNT(*) FROM tamoz_comms_requests
           WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
         SQL
+      end
+
+      def open_request_refs(txn, surface_id, conversation_id)
+        rows = txn.rows('comms.conversation.status.open_refs', <<~SQL, [surface_id, conversation_id])
+          SELECT request_id FROM tamoz_comms_requests
+          WHERE surface_id = ? AND conversation_id = ? AND projection_state = 'admitted'
+          ORDER BY created_at_ms ASC, request_id ASC
+        SQL
+        rows.map { |row| request_ref(row.fetch(0)) }
       end
 
       def active_request_row(txn, surface_id, conversation_id)

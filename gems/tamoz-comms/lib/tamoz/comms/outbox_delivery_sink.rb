@@ -45,6 +45,14 @@ module Tamoz
       # Kinds whose rows the admission reservation covers (design §12): the
       # request is finished once they are durable, so the reservation releases.
       TERMINAL_KINDS = %w[answer failed stopped blocked].freeze
+      VERIFICATION_CLASSES = {
+        'request.completed' => 'Verified',
+        'request.approved' => 'Response only',
+        'request.denied' => 'Not verified',
+        'request.failed' => 'Not verified',
+        'request.stopped' => 'Not verified',
+        'request.blocked' => 'Not verified'
+      }.freeze
 
       # Non-terminal milestone kinds (plan 03, work items 1-2): each projects
       # one committed worker fact onto ONE coalesced control row whose markup
@@ -98,7 +106,7 @@ module Tamoz
         end
 
         render_limits = surface.fetch('rendering')
-        parts = @rendering.plain(event.fetch(:text).to_s,
+        parts = @rendering.plain(terminal_text(event, kind),
                                  max_parts: render_limits.fetch('max_parts'),
                                  part_characters: render_limits.fetch('part_characters'),
                                  overflow: render_limits.fetch('overflow'))
@@ -133,6 +141,14 @@ module Tamoz
       end
 
       private
+
+      def terminal_text(event, kind)
+        text = event.fetch(:text).to_s
+        return text unless event[:request_id] && TERMINAL_KINDS.include?(kind)
+
+        reference = Lifecycle::RequestRef.for(event.fetch(:request_id))
+        "#{reference} · #{VERIFICATION_CLASSES.fetch(event.fetch(:kind))}: result — #{text}"
+      end
 
       # One committed worker fact -> ONE bounded control row whose markup is
       # the milestone projection (plan 03, behavior model 1/5). The row is

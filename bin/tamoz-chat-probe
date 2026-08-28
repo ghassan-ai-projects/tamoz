@@ -77,7 +77,7 @@ PROBES = {
     h.close
   },
   'OF-6' => lambda {
-    puts '# OF-6 /status is diagnostic vocabulary; OF-13 cross-request delivery'
+    puts '# OF-6 /status uses bounded human vocabulary; diagnostics are explicit'
     h = deterministic
     h.admit('prepare the report')
     h.admit('draft the email')
