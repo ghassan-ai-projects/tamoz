@@ -98,7 +98,8 @@ outside compaction — both correct anyway.
 Ruby 3.2 reached end-of-support before the design date. CI covers MRI 3.3, 3.4, 4.0; 3.3 may be
 dropped after its EOL while pre-1.0. JRuby enters CI only after the SQLite/concurrency adapters
 pass without conditional semantics.
-**Re-verify:** the CI matrix and `.ruby-version` currency (audit ⚠️).
+**Verified:** 2026-08-29 — `.ruby-version` = `3.3.11`; CI matrix = `["3.3", "3.4", "4.0"]`
+(`.github/workflows/ci.yml`), matching this ADR exactly.
 
 ### ADR-011 — SQLite is Tamoz Agent's default persistence
 **Status:** Accepted.
@@ -180,8 +181,10 @@ scores; model judges are fallible evidence after deterministic scorers; every ev
 starts a new lineage.
 *Rejected:* evaluation as scattered test files — cannot own versioned corpora, baselines, judge
 lineage, or release evidence, or stop a self-improving agent redefining success.
-**Verified:** 2026-08-29 — `tamoz-evals` present (with `tamoz-evals-runner`; see audit O3); no
-runtime gem depends on it.
+**Verified:** 2026-08-29 — `tamoz-evals` present; no runtime gem depends on it.
+`tamoz-evals-runner` is a *packaging* split, not a second decision: it ships the
+`tamoz-eval-runner` executable — the isolated harness/benchmark/treatment runner this ADR calls
+the "isolated evaluation worker" — separately from the `tamoz-evals` library (resolves audit O3).
 
 ### ADR-026 — Three durable memory layers: Experience, Knowledge, Wisdom
 **Status:** Accepted 2026-07-30. *(Tier F.)*
@@ -287,15 +290,19 @@ behavior unreproducible and enables silent shadowing and same-version supply-cha
 
 ## Streaming & physical world
 
-### ADR-035 — Streaming input is a distinct first-class `tamoz-stream` runtime
-**Status:** Accepted 2026-07-30; **shipped** (`tamoz-stream`). *(Tier F.)*
-Unbounded evidence does not enter `tamoz-graph` or a model directly. `tamoz-stream` owns channel
-admission, temporal/keyed state, immutable Situations, cognition admission, and replay. It
-depends on core contracts, not graph/agent; `tamoz-sqlite` implements its first StreamStore.
+### ADR-035 — Streaming input is a distinct first-class runtime
+**Status:** Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md).
+*(Tier F.)*
+Unbounded evidence does not enter `tamoz-graph` or a model directly — the load-bearing rule,
+still in force. **What changed (ADR-055):** the continuous plane (channel admission,
+temporal/keyed state, replay) is no longer the Ruby `tamoz-stream` gem — the P14 engine was
+retired (MIGRATION_13) and that plane now lives in the separate Go `agentic-stream` runtime.
+`tamoz-stream` is now the **episode worker**: a gRPC server the stream dials to run one
+immutable episode against a sealed Situation snapshot.
 *Rejected:* renaming token/tool streaming as bidirectional streaming and attaching sensor
 callbacks to a long-running chat — no temporal truth, bounded state, or deterministic recovery.
-**Verified:** 2026-08-29 — `tamoz-stream` present. *(See audit O1: the Ruby worker / Go
-authority two-repo split still needs its own ADR.)*
+**Verified:** 2026-08-29 — `tamoz-stream` present as the `EpisodeWorker`; see
+[`../design/streaming.md`](../design/streaming.md) and ADR-055.
 
 ### ADR-036 — Situation is the boundary between continuous evidence and episodic cognition
 **Status:** Accepted 2026-07-30. *(Tier F.)*
@@ -306,11 +313,12 @@ evidence may supersede it. Every non-admission is also durable and explainable.
 staleness and moves deterministic semantics into probabilistic cognition.
 
 ### ADR-037 — Event time, explicit backpressure, and effect-disabled replay are contracts
-**Status:** Accepted 2026-07-30. *(Tier F.)*
-Channel revisions declare event-time/watermark/late/idleness policy and bounded state/overflow
-semantics. At-least-once sources are acknowledged after durable admission using application
-event identity. Replay virtualizes time and has no production effector credentials; its four
-modes are deterministic, recorded-cognition, shadow, and counterfactual simulation.
+**Status:** Accepted 2026-07-30; **revised** by [ADR-055](./adr-055-two-repo-authority-split.md).
+*(Tier F.)*
+Event-time/watermark/late/idleness policy, bounded state/overflow, at-least-once acknowledgement,
+and effect-disabled replay remain contracts of the continuous plane — but that plane is now the
+Go `agentic-stream` runtime, **not** Tamoz. Tamoz computes no watermark, event time, lateness, or
+window membership; it consumes a sealed snapshot and proposes typed Decisions (ADR-055).
 *Rejected:* rely on broker QoS and processing time — transport delivery does not define
 application dedup, temporal completeness, physical outcomes, or safe replay.
 

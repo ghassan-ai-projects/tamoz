@@ -62,9 +62,9 @@ Status legend: **Accepted** in force · **Proposed** ratified before implementat
 | 032 | Scheduled time and delayed authority are explicit | Accepted | [log](./core-decisions.md) |
 | 033 | Skills use the open Agent Skills format and stay an agent recipe | Accepted | [log](./core-decisions.md) |
 | 034 | Skill identity is a tree digest; activation is supply-chain promotion | Accepted | [log](./core-decisions.md) |
-| 035 | Streaming input is a distinct first-class `tamoz-stream` runtime | Accepted (shipped) | [log](./core-decisions.md) |
+| 035 | Streaming input is a distinct first-class runtime | Accepted (revised → 055) | [log](./core-decisions.md#adr-035--streaming-input-is-a-distinct-first-class-runtime) |
 | 036 | Situation is the boundary between continuous evidence and episodic cognition | Accepted | [log](./core-decisions.md) |
-| 037 | Event time, explicit backpressure, and effect-disabled replay are contracts | Accepted | [log](./core-decisions.md) |
+| 037 | Event time, explicit backpressure, and effect-disabled replay are contracts | Accepted (revised → 055) | [log](./core-decisions.md) |
 | 038 | Physical action is typed intent plus current-state policy | Accepted | [log](./core-decisions.md) |
 | 039 | Tamoz is supervisory; certified safety and real-time control stay external | Accepted | [log](./core-decisions.md) |
 | 040 | One monorepo, multiple independently publishable gems | Accepted (→ 052) | [log](./core-decisions.md#adr-040--one-monorepo-multiple-independently-publishable-gems) |
@@ -82,9 +82,9 @@ Status legend: **Accepted** in force · **Proposed** ratified before implementat
 | **052** | **`tamoz-agent` is decomposed into focused gems** | Accepted | [page](./adr-052-agent-gem-decomposition.md) |
 | **053** | **Approval policy is isolated into `tamoz-approval`** | Accepted | [page](./adr-053-approval-gem.md) |
 | **054** | **Websearch is the fourth capability source** | Accepted | [page](./adr-054-websearch-capability-source.md) |
+| **055** | **Continuous plane is a separate Go authority (`agentic-stream`); Tamoz is its episode worker** | Accepted | [page](./adr-055-two-repo-authority-split.md) |
 
-Next number to assign: **055** (candidate: the `tamoz` / `agentic-stream` two-repo authority
-split — see the audit's open item O1).
+Next number to assign: **056**.
 
 ## Notes
 
@@ -93,7 +93,8 @@ split — see the audit's open item O1).
 - **The record is reality-checked.** Every implemented decision carries a dated Verification
   line (in its page or log entry) stating the gem/symbol/test that backs it. See the audit for
   the method.
-- **Amendment chains:** 002→052, 003→048+051, 012→029, 043→049, 040→052, 030→054, 048→051.
+- **Amendment chains:** 002→052, 003→048+051, 012→029, 043→049, 040→052, 030→054, 048→051,
+  035→055, 037→055, 040→055 (deliberate two-repo exception).
 
 ## Next reads
 
