@@ -49,6 +49,7 @@ module Tamoz
       DEFAULT_NAMESPACE = '[]'
       HISTORY_LIMIT = 12
       HISTORY_TEXT_CHARACTERS = 500
+      CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]+/u
       # A queued request is reported as unclaimed after one backend clock tick
       # without an observed inbox claim; this is not a process-liveness claim.
       WORKER_UNCLAIMED_WINDOW_MS = 1
@@ -155,6 +156,32 @@ module Tamoz
         end
       end
 
+      # Admit one clarification answer and enqueue its resume without a crash
+      # window between the inbound anchor and the request inbox row.
+      def admit_and_enqueue_answer(envelope_wire, surface_id:, bot_id:, thread:, request_id:, payload:, now:)
+        transaction('comms.admit.answer') do |txn|
+          anchor = inbound_anchor(txn, envelope_wire, bot_id)
+          if anchor
+            next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
+
+            record_inbound_conflict!(txn, envelope_wire, bot_id)
+            next :integrity_conflict
+          end
+
+          payload_bytes, payload_digest, input_digest = encode_request(
+            'resume', REQUEST_DELIVERY, payload
+          )
+          @checkpoints.enqueue_request_in_transaction!(
+            txn, thread:, encoded_namespace: DEFAULT_NAMESPACE, id: request_id,
+            operation_text: 'resume', delivery_text: REQUEST_DELIVERY,
+            payload_bytes:, payload_digest:, input_digest:
+          )
+          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
+                          reason: 'clarification_answer', now:, request_id:)
+          :enqueued
+        end
+      end
+
       # Record a non-request disposition (ignored/rejected/quarantined)
       # durably. The first observation for an identity INSERTs its anchor
       # row; a conflicting digest for a KNOWN identity UPDATES that anchor
@@ -181,36 +208,6 @@ module Tamoz
       end
       # rubocop:enable Lint/UnusedMethodArgument
 
-      def inbound_identity_state(envelope_wire, bot_id:)
-        read('comms.admit.inbound.identity') do |txn|
-          anchor = inbound_anchor(txn, envelope_wire, bot_id)
-          next :missing unless anchor
-
-          anchor[0] == envelope_wire.fetch('raw_payload_hash') ? :duplicate : :conflict
-        end
-      end
-
-      def append_direct_response(envelope_wire, delivery_wire, surface_id:, bot_id:, capacity:, now:)
-        transaction('comms.admit.direct_response') do |txn|
-          anchor = inbound_anchor(txn, envelope_wire, bot_id)
-          if anchor
-            next :duplicate if anchor[0] == envelope_wire.fetch('raw_payload_hash')
-
-            record_inbound_conflict!(txn, envelope_wire, bot_id)
-            next :integrity_conflict
-          end
-
-          outcome = @outbox.append_delivery_in_transaction!(
-            txn, delivery_wire, surface_id:, capacity:, now:
-          )
-          next outcome unless %i[appended duplicate].include?(outcome)
-
-          insert_inbound!(txn, envelope_wire, bot_id:, disposition: 'ignored',
-                         reason: 'direct_response', now:)
-          :appended
-        end
-      end
-
       # The admission capacity gate (invariant 57): the new reservation must
       # fit alongside pending+claimed deliveries and the other open
       # reservations.
@@ -227,9 +224,23 @@ module Tamoz
         Tamoz::Core::TurnContext.task(
           thread_id: thread,
           request_id:,
-          text:,
-          fragments: history
+          text: flatten_context_text(text),
+          fragments: history.filter_map do |fragment|
+            flattened = flatten_context_text(fragment.fetch('text'))
+            next nil if flattened.empty?
+
+            { 'role' => fragment.fetch('role'), 'text' => flattened }
+          end
         )
+      end
+
+      # TurnContext forbids control characters, but an inbound message or a
+      # multi-line terminal answer carried as a transcript fragment can contain
+      # a newline; flatten any control run to one space so admission and every
+      # later turn stay durable. This normalizes what the model sees, never what
+      # the correspondent already received.
+      def flatten_context_text(text)
+        String(text).gsub(CONTROL_CHARACTERS, " ").strip
       end
 
       # ===== poll state =====
@@ -653,6 +664,7 @@ module Tamoz
         end
       end
 
+
       # The durable /new generation of one bound conversation (plan 02,
       # work item 4): monotonic, part of the thread identity
       # `Admission.thread_id` folds into its digest.
@@ -859,6 +871,10 @@ module Tamoz
 
       def outbox_rows(surface_id:, statuses:, limit: 500)
         @outbox.outbox_rows(surface_id:, statuses:, limit:)
+      end
+
+      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
+        @outbox.outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
       end
 
       # Fenced result recording (invariant 4): only the current claim's

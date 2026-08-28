@@ -8,44 +8,49 @@ module Tamoz
       module Answers
         private
 
-        def answer_command(envelope, arguments)
+        def answer_command(envelope, arguments, now:)
           reference, text = answer_parts(arguments)
-          return ANSWER_USAGE_REPLY unless valid_answer_reference?(reference) && !text.empty?
+          unless valid_answer_reference?(reference) && !text.empty?
+            return answer_refusal_for(envelope, ANSWER_USAGE_REPLY, now:, reason: 'answer_usage')
+          end
 
-          enqueue_answer(envelope, reference, text)
+          answer_reply(envelope, reference, text, now:)
         end
 
         def admit_answer(envelope, reference, text, now:)
-          outcome = record_disposition(
-            envelope, disposition: 'ignored', reason: 'clarification_answer', now:
-          )
-          return if outcome == :duplicate
-
-          append_control(enqueue_answer(envelope, reference, text), envelope, now:)
+          reply = answer_reply(envelope, reference, text, now:)
+          append_control(reply, envelope, now:) if reply
         end
 
-        def enqueue_answer(envelope, reference, text)
+        def answer_reply(envelope, reference, text, now:)
           resolved = answer_target(envelope, reference)
-          return answer_refusal(resolved) if resolved.is_a?(Symbol)
+          return answer_refusal_for(envelope, answer_refusal(resolved), now:, reason: 'answer_refusal') if
+            resolved.is_a?(Symbol)
 
-          return ANSWER_WRONG_CORRESPONDENT_REPLY unless answer_correspondent?(envelope)
+          return answer_refusal_for(envelope, ANSWER_WRONG_CORRESPONDENT_REPLY, now:,
+                                    reason: 'wrong_correspondent') unless answer_correspondent?(envelope)
 
-          session = @controls&.call(resolved.fetch('thread_id'))
-          return ANSWER_STALE_REPLY unless session
-
-          view = session.view(thread: resolved.fetch('thread_id'))
-          return ANSWER_STALE_REPLY unless clarification_view?(view)
-
-          @checkpoints.enqueue_request(
-            thread_id: resolved.fetch('thread_id'),
-            request_id: command_request_id(envelope, %w[answer]),
-            operation: :resume,
-            payload: clarification_answers(view.interrupts, text),
-            delivery: :queue
+          interrupts = clarification_interrupts(
+            resolved.fetch('thread_id'), resolved.fetch('request_id')
           )
+          return answer_refusal_for(envelope, ANSWER_STALE_REPLY, now:, reason: 'answer_stale') unless interrupts
+
+          outcome = @store.admit_and_enqueue_answer(
+            envelope, surface_id:, bot_id:, thread: resolved.fetch('thread_id'),
+            request_id: Comms::ClarificationAnswerRequest.id_for(resolved.fetch('request_id')),
+            payload: clarification_answers(interrupts, text), now:
+          )
+          return nil if outcome == :duplicate
+          return ANSWER_UNQUEUED_REPLY if outcome == :integrity_conflict
+
           ANSWER_QUEUED_REPLY
         rescue Tamoz::CheckpointConflictError
-          ANSWER_UNQUEUED_REPLY
+          answer_refusal_for(envelope, ANSWER_UNQUEUED_REPLY, now:, reason: 'answer_enqueue_conflict')
+        end
+
+        def answer_refusal_for(envelope, reply, now:, reason:)
+          outcome = record_disposition(envelope, disposition: 'ignored', reason:, now:)
+          outcome == :duplicate ? nil : reply
         end
 
         def answer_parts(arguments)
@@ -95,9 +100,24 @@ module Tamoz
           binding && binding.fetch('correspondent_id') == envelope.fetch('correspondent_id')
         end
 
-        def clarification_view?(view)
-          view && view.status == :paused && !view.interrupts.empty? &&
-            view.interrupts.all? { |interrupt| interrupt.descriptor['kind'] == 'clarify' }
+        def clarification_interrupts(thread_id, request_id)
+          checkpoint = @checkpoints.latest(thread_id:, namespace: [])
+          return unless checkpoint&.status == :paused
+          return unless checkpoint_request_id(thread_id, checkpoint) == request_id
+
+          interrupts = checkpoint.interrupts
+          return unless interrupts.any? && interrupts.all? do |interrupt|
+            interrupt.descriptor['kind'] == 'clarify'
+          end
+
+          interrupts
+        end
+
+        def checkpoint_request_id(thread_id, checkpoint)
+          @checkpoints.request_history(thread_id:, namespace: []).reverse_each do |request|
+            return request.request_id if request.execution_id == checkpoint.execution_id
+          end
+          nil
         end
 
         def clarification_answers(interrupts, text)
@@ -109,27 +129,25 @@ module Tamoz
         def clarification_reply_reference(envelope)
           return unless envelope.fetch('kind') == 'text' && envelope['reply_to']
 
-          clarification_question_rows(envelope).reverse_each do |row|
-            markup = parsed_hash(row['markup'])
-            next unless markup['phase'] == 'clarification_required' &&
+          row = @store.outbox_row_for_receipt(
+            surface_id:, conversation_id: envelope.fetch('conversation_id'),
+            message_id: envelope['reply_to']
+          )
+          return unless clarification_receipt?(row, envelope['reply_to'])
+
+          markup = parsed_hash(row['markup'])
+          return unless markup['phase'] == 'clarification_required' &&
                         markup['actions'] == ['answer'] && markup['request_ref']
 
-            receipt = parsed_hash(row['receipt'])
-            return markup['request_ref'] if receipt_message_matches_reply?(receipt, envelope['reply_to'])
-          end
-          nil
+          markup['request_ref']
         end
 
-        def receipt_message_matches_reply?(receipt, reply_to)
-          message_id = receipt['message_id']
-          message_id.is_a?(Integer) && message_id.positive? &&
-            reply_to.is_a?(Integer) && message_id == reply_to
-        end
+        def clarification_receipt?(row, message_id)
+          return false unless row && row['kind'] == 'control'
 
-        def clarification_question_rows(envelope)
-          @store.outbox_rows(surface_id:, statuses: %w[succeeded]).select do |row|
-            row['conversation_id'] == envelope.fetch('conversation_id') && row['kind'] == 'control'
-          end
+          receipt = parsed_hash(row['receipt'])
+          receipt['message_id'].is_a?(Integer) && receipt['message_id'].positive? &&
+            receipt['message_id'] == message_id
         end
 
         def parsed_hash(value)

@@ -237,17 +237,6 @@ class CommsCliTest < Minitest::Test
     assert_equal Tamoz::Telegram::Client::DEFAULT_MAX_RESPONSE_BYTES, undeclared.max_response_bytes
   end
 
-  def test_each_surface_gets_a_distinct_chat_responder
-    seam = Object.new.extend(Tamoz::Agent::CLICommsShared)
-    seam.instance_variable_set(:@env, { 'TAMOZ_MODEL' => 'test-model' })
-    directory = Struct.new(:workspace_root).new('/tmp/tamoz-chat-test')
-
-    first = seam.comms_chat_responder(directory, {})
-    second = seam.comms_chat_responder(directory, {})
-
-    refute_same first, second
-  end
-
   private
 
   def telegram_descriptor(max_response_bytes)

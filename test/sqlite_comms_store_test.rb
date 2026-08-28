@@ -431,6 +431,34 @@ class SQLiteCommsStoreTest < Minitest::Test
     end
   end
 
+  # TurnContext forbids control characters, but a newline reaches admission two
+  # ways: an inbound multi-line message, and a multi-line terminal answer carried
+  # as a history fragment. turn_payload flattens both so no turn crashes.
+  def test_turn_payload_flattens_control_characters_in_text_and_fragments
+    with_engine do |store, _adapter, checkpoints|
+      store.deploy_surface(descriptor.wire, now:)
+      history = [{ 'role' => 'assistant',
+                   'text' => "done, it is blue\nResponse provided; no task completion was claimed." }]
+
+      store.admit_and_enqueue(
+        envelope(update_id: 1, text: "make it\nblue"), surface_id: 'telegram-ops',
+                                                       bot_id: 7_463_512_990, thread: 'tg.ops.abc', profile_id: 'ops',
+                                                       reservation: 1, now:, history:
+      )
+
+      task = checkpoints.request_history(thread_id: 'tg.ops.abc').first.payload.fetch('task')
+      control = /[\u0000-\u001f\u007f]/
+      assert_equal 'make it blue', task.fetch('text')
+      refute_match control, task.fetch('text')
+      task.fetch('context').fetch('fragments').each do |fragment|
+        refute_match control, fragment.fetch('text'),
+                     "a history fragment must not carry control characters: #{fragment.inspect}"
+      end
+      assert_equal 'done, it is blue Response provided; no task completion was claimed.',
+                   task.fetch('context').fetch('fragments').first.fetch('text')
+    end
+  end
+
   # The history rides inside the payload's task entry, so the worker — which
   # never sees the comms store — plans the turn with the thread's context.
   def test_admit_and_enqueue_carries_the_history_in_the_turn_payload

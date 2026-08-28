@@ -154,7 +154,16 @@ module Tamoz
         return text unless event[:request_id] && TERMINAL_KINDS.include?(kind)
 
         reference = Lifecycle::RequestRef.for(event.fetch(:request_id))
-        "#{reference} · #{VERIFICATION_CLASSES.fetch(event.fetch(:kind))}: result — #{text}"
+        "#{reference} · #{verification_class(event)}: result — #{text}"
+      end
+
+      # A completed turn is "Verified"; a direct chat response completes without
+      # proving anything, so it is "Response only" — the worker marks it with a
+      # direct_response phase so the card does not over-claim verification.
+      def verification_class(event)
+        return 'Response only' if event[:phase] == 'direct_response'
+
+        VERIFICATION_CLASSES.fetch(event.fetch(:kind))
       end
 
       # One committed worker fact -> ONE bounded control row whose markup is
@@ -230,11 +239,13 @@ module Tamoz
         return nil unless request_id
 
         part = clarification_part(event, surface)
-        @store.append_delivery(
+        outcome = @store.append_delivery(
           clarification_delivery(event, route, part).wire,
           surface_id: route.fetch('surface_id'), capacity: outbox_capacity(surface), now: Time.now.utc
         )
-        :accepted
+        return :capacity_refused if outcome == :capacity_refused
+
+        %i[appended duplicate].include?(outcome) ? :accepted : outcome
       end
 
       def clarification_part(event, surface)

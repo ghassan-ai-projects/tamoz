@@ -177,22 +177,41 @@ lifecycle and no path to `PlanRejectedError`.
 **Benchmark:** a conversational turn produces a direct answer with no accepted
 card, no plan/review effects, and cannot reach a plan-failure state.
 
-**Fixed (2026-08-28, commit `4c786b1`):** deterministic candidate routing now
-keeps trivial, self-contained chat on a direct response path. The gateway owns
-one responder per surface, the responder uses the existing `EffectDispatcher`
-route call once, and the SQLite store atomically persists the answer with its
-inbound identity anchor. Replays are deduplicated, conflicting identities are
-quarantined, and capacity refusal does not create a partial answer or inbound
-claim. Direct turns create no request, reference, plan, review, worker, request
-status, or request history state. Malformed and unsafe route fallbacks are
-safe when no event block is present; they do not silently become durable work.
+**Fixed (2026-08-28; superseded 2026-08-28 by the worker-routing migration).**
+The first fix routed chat at the gateway via a per-surface `chat_responder` that
+created no request. That gateway responder was removed and the classification
+moved into the worker's `:experimental` route seam, so chat-vs-task is one
+journaled, replayable model decision alongside the plan/review it may replace —
+routing now lives with the model call, not the transport. Under the migrated
+contract a conversational turn IS admitted as a durable request (it receives
+`Received r<reference>`), but the worker routes it to a `direct_response`
+terminal: no plan, no review, and no path to `PlanRejectedError`. Its terminal
+card is honestly `Response only`, never `Verified`, because a direct answer
+proves nothing. `:experimental` routing is enabled for the chat worker
+(`bin/tamoz-chat-sim`, `scripts/start-tamoz-comms.sh --experimental-routing`);
+the deterministic fixture must script a `route` response for a chat turn.
 
-**Evidence:** `test/experience_harness_test.rb` (11 runs, 70 assertions),
-`test/comms_gateway_test.rb` (40 runs, 242 assertions),
-`test/agent_request_routing_test.rb` (18 runs, 232 assertions),
-`test/comms_cli_test.rb` (13 runs, 61 assertions), and the deterministic
-`bin/tamoz-chat-probe OF-4` all pass. This is plumbing and routing evidence;
-it is not evidence of real-provider intelligence or human usefulness.
+Enabling `:experimental` for the chat worker surfaced a real defect (fixed the
+same day): a direct answer is multi-line (`<answer>\nResponse provided…`) and
+the confirmed transcript feeds the next turn's context, but `Core::TurnContext`
+forbids control characters — so a second chat turn crashed its admission on the
+stored newline. The same boundary rejects a newline in an inbound message.
+`CommsStore#turn_payload` — the single point that builds the `TurnContext` for
+an admitted turn — now flattens control characters in both the inbound task
+text and every history fragment to a single space (dropping fragments that
+flatten to empty), so admission and every later turn stay durable. This is
+independent of the model.
+
+**Evidence:** `test/experience_harness_test.rb`
+(`test_conversational_turn_is_routed_to_a_direct_answer_without_planning`
+asserts a `Response only` answer with no plan/review effects and no failure;
+`test_second_chat_turn_does_not_crash_on_a_multiline_answer_in_history` guards
+the transcript-fragment fix), `test/agent_request_routing_test.rb`
+(session-level route decisions), and the deterministic `bin/tamoz-chat-probe
+OF-4` all pass. A real two-turn OpenRouter (`z-ai/glm-5.3-flash`) run (`hi` →
+direct greeting; `what is 2 + 2?` → `2 + 2 = 4`, both `Response only`)
+confirmed the routed path end-to-end on a live model. This is plumbing,
+routing, and one live-path observation; it is not a human-usefulness result.
 
 ---
 

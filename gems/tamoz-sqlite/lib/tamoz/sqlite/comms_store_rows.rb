@@ -152,9 +152,10 @@ module Tamoz
                   SQL
       end
 
-      def insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:)
+      def insert_inbound!(txn, envelope_wire, bot_id:, disposition:, reason:, now:,
+                          request_id: envelope_wire['request_id'])
         txn.execute('comms.admit.inbound.insert',
-                    <<~SQL, inbound_binds(envelope_wire, bot_id, disposition, reason, now))
+                    <<~SQL, inbound_binds(envelope_wire, bot_id, disposition, reason, now, request_id))
                       INSERT INTO tamoz_comms_inbound (
                         surface_id, surface_revision, bot_id, update_id, raw_payload_hash,
                         parser_version, kind, correspondent_id, conversation_id,
@@ -182,14 +183,14 @@ module Tamoz
         SQL
       end
 
-      def inbound_binds(envelope_wire, bot_id, disposition, reason, now)
+      def inbound_binds(envelope_wire, bot_id, disposition, reason, now, request_id)
         [
           envelope_wire.fetch('surface_id'), envelope_wire.fetch('surface_revision'),
           bot_id, envelope_wire.fetch('update_id'),
           envelope_wire.fetch('raw_payload_hash'), envelope_wire.fetch('parser_version'),
           envelope_wire.fetch('kind'), envelope_wire.fetch('correspondent_id'),
           envelope_wire.fetch('conversation_id'), disposition, reason,
-          envelope_wire['request_id'], envelope_wire['decision_id'],
+          request_id, envelope_wire['decision_id'],
           wire_time_ms(envelope_wire['observed_time']), now_ms(now)
         ]
       end

@@ -20,6 +20,8 @@ module Tamoz
     class HarnessTransport
       attr_reader :outbound, :signals
 
+      def sends = @outbound
+
       def initialize(surface_id:, surface_revision:)
         @normalizer = Tamoz::Telegram::Normalizer.new(
           surface_id: surface_id, surface_revision: surface_revision
@@ -63,7 +65,7 @@ module Tamoz
       # explicit model_factory (e.g. the fixture's scripted one) ONLY for a
       # deterministic plumbing test — such a run is never intelligence evidence.
       def initialize(provider: nil, model: nil, model_factory: nil,
-                     admission_mode: :allowlist, approval_ask: nil)
+                     admission_mode: :allowlist, approval_ask: nil, routing: :legacy)
         @provider = provider || ENV.fetch('TAMOZ_PROVIDER', 'deepseek')
         @model = model || ENV.fetch('TAMOZ_MODEL', 'deepseek-chat')
         @update_seq = 1_000
@@ -71,7 +73,8 @@ module Tamoz
         @seen_out = 0
         @last_bot_message_id = nil
         super(model_factory: model_factory || real_model_factory,
-              admission_mode: admission_mode, approval_ask: approval_ask)
+              admission_mode: admission_mode, approval_ask: approval_ask,
+              routing:)
         bind_thread(Fixture::CONVERSATION_A) if admission_mode == :allowlist
       end
 
@@ -157,16 +160,16 @@ module Tamoz
         @transport = HarnessTransport.new(
           surface_id: Fixture::SURFACE_ID, surface_revision: Fixture::SURFACE_REVISION
         )
-        @gateway = Tamoz::Comms::Gateway.new(
-          adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
-          descriptor: descriptor(admission_mode), poller_owner: 'sim:gateway',
-          controls: ->(thread_id) { @runtime.session_for(thread_id) },
-          chat_responder: direct_chat_responder
+          @gateway = Tamoz::Comms::Gateway.new(
+            adapter: @runtime.adapter, checkpoints: @runtime.checkpoints, transport: @transport,
+            descriptor: descriptor(admission_mode), poller_owner: 'sim:gateway',
+            controls: ->(thread_id) { @runtime.session_for(thread_id) }
         )
         sink = Tamoz::Comms::OutboxDeliverySink.new(
           adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
         )
-        @runtime.instance_variable_set(:@delivery_sink, sink)
+        @recording_sink = Fixture::RecordingSink.new(sink)
+        @runtime.instance_variable_set(:@delivery_sink, @recording_sink)
         @worker = capturing_worker
       end
 
@@ -177,28 +180,6 @@ module Tamoz
           session_builder: ->(thread_id) { @runtime.session_for(thread_id) },
           emitter: ->(event) { @events << event }, once: true
         )
-      end
-
-      def direct_chat_responder
-        model_factory = @model_factory
-        workspace = @workspace
-        Object.new.tap do |responder|
-          responder.define_singleton_method(:candidate?) do |envelope|
-            Tamoz::Agent::RequestRoute.direct_chat_candidate?(envelope.fetch('text'))
-          end
-          responder.define_singleton_method(:call) do |envelope|
-            task = envelope.fetch('text')
-            decision = Tamoz::Agent.build(
-              model: model_factory.call(profile: nil), root: workspace,
-              allow_changes: false, routing: :experimental
-            ).respond(task)
-            if decision&.direct_response?
-              Tamoz::Comms::ChatResponse.direct(decision.answer)
-            else
-              Tamoz::Comms::ChatResponse.non_direct
-            end
-          end
-        end
       end
 
       def enqueue_message(text, reply_to:)

@@ -13,15 +13,6 @@ module Tamoz
           @store.append_delivery(delivery.wire, surface_id:, capacity: control_capacity, now:)
         end
 
-        def append_direct_control(reply_text, envelope, now:)
-          delivery = build_control_delivery(
-            reply_text, envelope, kind: 'answer', identity_key: envelope.fetch('raw_payload_hash')
-          )
-          @store.append_direct_response(
-            envelope, delivery.wire, surface_id:, bot_id:, capacity: control_capacity, now:
-          )
-        end
-
         def build_control_delivery(reply_text, envelope, kind:, identity_key: nil)
           text = String(reply_text).scrub.byteslice(0, Comms::Delivery::MAX_TEXT_BYTES)
           Comms::Delivery.build(

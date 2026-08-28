@@ -11,25 +11,6 @@ require_relative 'test_helper'
 class CommsGatewayTest < Minitest::Test
   Comms = Tamoz::Comms
 
-  class DirectChatResponder
-    attr_reader :calls
-
-    def initialize(response: Comms::ChatResponse.direct('Hello.'), error: nil)
-      @response = response
-      @error = error
-      @calls = 0
-    end
-
-    def candidate?(_envelope) = true
-
-    def call(_envelope)
-      @calls += 1
-      raise @error if @error
-
-      @response
-    end
-  end
-
   def test_start_authenticates_the_transport_before_polling
     with_gateway do |gateway, transport, *|
       assert_equal :started, gateway.start
@@ -50,7 +31,7 @@ class CommsGatewayTest < Minitest::Test
     end
   end
 
-  def with_gateway(limits: {}, controls: nil, chat_responder: nil)
+  def with_gateway(limits: {}, controls: nil)
     Dir.mktmpdir('tamoz-gateway') do |directory|
       path = File.join(directory, 'runtime.sqlite3')
       adapter = Tamoz::SQLite::Adapter.new(path:)
@@ -78,7 +59,7 @@ class CommsGatewayTest < Minitest::Test
         transport = ScriptedTransport.new
         gateway = Tamoz::Comms::Gateway.new(
           adapter:, checkpoints:, transport:, descriptor: descriptor(limits:),
-          poller_owner: 'gateway:test', controls:, chat_responder:
+          poller_owner: 'gateway:test', controls:
         )
         yield gateway, transport, store, adapter, checkpoints, appended
       ensure
@@ -182,64 +163,6 @@ class CommsGatewayTest < Minitest::Test
 
       refute_nil route, 'the first request must bind the conversation route'
       assert_equal 'telegram:chat:22222222', route.fetch('conversation_id')
-    end
-  end
-
-  def test_direct_chat_replay_and_conflict_are_deduplicated_before_the_responder
-    responder = DirectChatResponder.new
-    with_gateway(chat_responder: responder) do |gateway, transport, store, _adapter, checkpoints|
-      seed_binding(store)
-      transport.batch([update(101, text: 'hi')])
-      assert_equal :served, gateway.serve_once(drain: false)
-
-      transport.batch([update(101, text: 'hi')])
-      assert_equal :served, gateway.serve_once(drain: false)
-
-      transport.batch([update(101, text: 'changed')])
-      assert_equal :served, gateway.serve_once(drain: false)
-
-      answers = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
-                       .select { |row| row.fetch('kind') == 'answer' }
-      controls = store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
-                       .select { |row| row.fetch('kind') == 'control' }
-
-      assert_equal 1, responder.calls
-      assert_equal 1, answers.length
-      assert_empty controls
-      assert_equal 0, request_row_count(store)
-      thread = Comms::Admission.thread_id('telegram-ops', 'telegram:chat:22222222')
-      assert_empty checkpoints.request_history(thread_id: thread)
-      assert_equal [%w[quarantined integrity_conflict]], inbound_dispositions(store, 101)
-    end
-  end
-
-  def test_direct_chat_provider_failure_is_typed_and_never_falls_back_to_a_request
-    responder = DirectChatResponder.new(
-      error: Tamoz::Agent::ModelCallError.new(code: 'endpoint_unavailable')
-    )
-    with_gateway(chat_responder: responder) do |gateway, transport, store|
-      seed_binding(store)
-      transport.batch([update(102, text: 'hi')])
-
-      assert_raises(Tamoz::Agent::ModelCallError) { gateway.serve_once(drain: false) }
-
-      assert_equal 1, responder.calls
-      assert_equal 0, request_row_count(store)
-      assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
-      assert_nil store.poll_offset(bot_id: 7_463_512_990)
-    end
-  end
-
-  def test_direct_chat_non_direct_result_is_a_typed_light_path_failure
-    responder = DirectChatResponder.new(response: Comms::ChatResponse.non_direct)
-    with_gateway(chat_responder: responder) do |gateway, transport, store|
-      seed_binding(store)
-      transport.batch([update(103, text: 'hi')])
-
-      assert_equal :transient, gateway.serve_once(drain: false)
-      assert_equal 1, responder.calls
-      assert_equal 0, request_row_count(store)
-      assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
     end
   end
 
@@ -454,9 +377,10 @@ class CommsGatewayTest < Minitest::Test
 
   def test_clarification_reply_matching_requires_a_positive_integer_receipt_id
     with_gateway do |gateway, transport, _store|
-      rows = []
-      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_rows) do |surface_id:, statuses:, limit: 500|
-        rows
+      row = nil
+      gateway.instance_variable_get(:@store).define_singleton_method(:outbox_row_for_receipt) do |
+        surface_id:, conversation_id:, message_id:|
+        row
       end
       envelope = transport.normalize(update(1, text: 'answer')).merge('reply_to' => 4242)
       markup = JSON.generate(
@@ -470,18 +394,14 @@ class CommsGatewayTest < Minitest::Test
         { 'message_id' => {} },
         { 'message_id' => [] }
       ].each do |receipt|
-        rows.replace([
-          { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
-            'markup' => markup, 'receipt' => JSON.generate(receipt) }
-        ])
+        row = { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+                'markup' => markup, 'receipt' => JSON.generate(receipt) }
 
         assert_nil gateway.send(:clarification_reply_reference, envelope), receipt.inspect
       end
 
-      rows.replace([
-        { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
-          'markup' => markup, 'receipt' => JSON.generate('message_id' => 4242) }
-      ])
+      row = { 'conversation_id' => envelope.fetch('conversation_id'), 'kind' => 'control',
+              'markup' => markup, 'receipt' => JSON.generate('message_id' => 4242) }
 
       assert_equal 'r0123456789', gateway.send(:clarification_reply_reference, envelope)
     end

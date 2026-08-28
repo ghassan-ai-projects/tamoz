@@ -19,12 +19,6 @@ require_relative 'gateway_delivery'
 
 module Tamoz
   module Comms
-    ChatResponse = Data.define(:route, :text) do
-      def self.direct(text) = new(route: :direct, text:)
-      def self.non_direct = new(route: :non_direct, text: nil)
-      def direct? = route == :direct
-    end
-
     # The channel gateway (design §5/§10, ADR-042): the only long-running
     # process that talks to the transport. It holds the credential, admits and
     # normalizes inbound updates, records durable disposition, drains the
@@ -123,7 +117,7 @@ module Tamoz
       # list while the lifecycle is split into intent-specific modules.
       # rubocop:disable Metrics/ParameterLists
       def initialize(adapter:, checkpoints:, transport:, descriptor:, poller_owner:, batch_size: 50, drainer: nil,
-                     controls: nil, credential: nil, chat_responder: nil)
+                     controls: nil, credential: nil)
         @adapter = adapter
         @checkpoints = checkpoints
         @store = adapter.bind_comms_store(checkpoints)
@@ -133,7 +127,6 @@ module Tamoz
         @batch_size = batch_size
         @controls = controls
         @credential = credential
-        @chat_responder = chat_responder
         @fence = 0
         @stopping = false
         # The store keeps only challenge digests; plaintext codes live here so

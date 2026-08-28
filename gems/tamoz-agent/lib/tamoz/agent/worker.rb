@@ -299,7 +299,8 @@ module Tamoz
       end
 
       def resume_paused_entry(entry, session, thread_id:, occurrence_id:, view:)
-        return run_queued_resume(session, thread_id:, occurrence_id:) if queued_resume_request(thread_id)
+        return run_queued_resume(session, thread_id:, occurrence_id:) if
+          queued_resume_request(thread_id, occurrence_id)
 
         digest = interrupt_digest(view)
         decision = @runtime.pending_decision(
@@ -310,16 +311,18 @@ module Tamoz
         apply_decision(session, thread_id:, occurrence_id:, view:, decision:)
       end
 
-      def queued_resume_request(thread_id)
+      def queued_resume_request(thread_id, occurrence_id)
         return unless @runtime.respond_to?(:checkpoints)
 
         @runtime.checkpoints.request_history(thread_id:).find do |request|
-          request.status == :queued && request.operation == :resume
+          request.status == :queued && request.operation == :resume &&
+            Tamoz::Comms::ClarificationAnswerRequest.target_id(request.request_id) == occurrence_id
         end
       end
 
       def resume_queued?(entry)
-        entry.fetch(:head_status) == :open && queued_resume_request(entry.fetch(:thread_id))
+        entry.fetch(:head_status) == :open &&
+          queued_resume_request(entry.fetch(:thread_id), entry.fetch(:head_request_id))
       end
 
       def run_queued_resume(session, thread_id:, occurrence_id:)
@@ -692,8 +695,8 @@ module Tamoz
 
       # Outbox row BEFORE close (design §11): a crash between the two still
       # leaves the terminal answer deliverable.
-      def settle_terminal_delivery(thread_id, kind, occurrence_id, text)
-        notify_sink(thread_id, kind, text, request_id: occurrence_id)
+      def settle_terminal_delivery(thread_id, kind, occurrence_id, text, phase: nil)
+        notify_sink(thread_id, kind, text, request_id: occurrence_id, phase:)
         close_occurrence(thread_id, occurrence_id)
         unpark(thread_id)
       end
@@ -702,9 +705,19 @@ module Tamoz
         SessionStatusProjection.document(view, request_id: occurrence_id, delivery_state: 'pending')
       end
 
+      # A verified completion is "Verified"; a direct chat response completes
+      # without proving anything, so its terminal card must not over-claim
+      # verification. The phase rides to the sink, which renders the class.
+      def completion_verification_phase(view)
+        return 'direct_response' if view.terminal&.fetch('reason', nil) == 'direct_response'
+
+        nil
+      end
+
       def settle_completed_view(view, thread_id, occurrence_id, duration_ms)
         @monitor.synchronize { @processed += 1 }
-        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view))
+        settle_terminal_delivery(thread_id, "request.completed", occurrence_id, completion_text(view),
+                                 phase: completion_verification_phase(view))
         emit("request.completed",
              thread: thread_id, request_id: occurrence_id, status: "completed",
              duration_ms:,
@@ -747,8 +760,12 @@ module Tamoz
                status_projection: pending_status_projection(view, occurrence_id),
                observability: {execution_id: view.execution_id})
         elsif reason == 'clarification_required'
-          notify_sink(thread_id, "request.clarification_request", nil,
-                      request_id: occurrence_id, interrupts: interrupt_facts(view))
+          delivery = notify_sink(thread_id, "request.clarification_request", nil,
+                                  request_id: occurrence_id, interrupts: interrupt_facts(view))
+          if delivery == :capacity_refused
+            emit('worker.error', reason: 'clarification delivery refused: outbox capacity')
+            return IDLE
+          end
           emit_paused_request(thread_id, occurrence_id, view, reason:)
         else
           notify_milestone(thread_id, "request.waiting", occurrence_id, phase: "waiting")

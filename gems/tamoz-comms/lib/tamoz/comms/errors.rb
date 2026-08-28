@@ -39,11 +39,6 @@ module Tamoz
       SAFE_MESSAGE = "The communications response exceeded its configured limit."
     end
 
-    class DirectResponseError < CommsError
-      CATEGORY = "comms_direct_response"
-      SAFE_MESSAGE = "The direct chat response could not be completed."
-    end
-
     # An IDEMPOTENT read did not complete — a long poll that timed out, a
     # dropped connection. Nothing was observed and nothing was persisted, so
     # the caller retries from unchanged durable state. This is the normal

@@ -45,15 +45,16 @@ def ref_of(cards)
   accepted && accepted[:text][/r[0-9a-f]{10}/]
 end
 
-def deterministic(**responses)
+def deterministic(routing: :legacy, **responses)
   responses = F::DEFAULT_MODEL_RESPONSES if responses.empty?
-  H.new(model_factory: F.model_factory(**responses))
+  H.new(model_factory: F.model_factory(**responses), routing:)
 end
 
 PROBES = {
   'OF-4' => lambda {
-    puts '# OF-4 normal chat "hi" is answered directly'
-    h = deterministic(route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.',
+    puts '# OF-4 normal chat "hi" is routed to a direct answer (no plan/review)'
+    h = deterministic(routing: :experimental,
+                      route: [{ 'route' => 'direct_response', 'answer' => 'Hello there.',
                                 'reason_class' => 'greeting' }])
     puts '👤 hi'
     show(h.say('hi'))

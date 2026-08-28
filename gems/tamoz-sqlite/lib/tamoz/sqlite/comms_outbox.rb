@@ -206,6 +206,27 @@ module Tamoz
         end
       end
 
+      def outbox_row_for_receipt(surface_id:, conversation_id:, message_id:)
+        message_id = Integer(message_id, exception: false)
+        return nil unless message_id&.positive?
+
+        pattern = "%\"message_id\":#{message_id}%"
+        read('comms.outbox.receipt') do |txn|
+          rows = txn.rows('comms.outbox.receipt', <<~SQL, [surface_id, conversation_id, pattern])
+            SELECT #{OUTBOX_COLUMNS.join(', ')} FROM tamoz_comms_outbox
+            WHERE surface_id = ? AND conversation_id = ? AND status = 'succeeded'
+              AND receipt LIKE ?
+            ORDER BY created_at_ms DESC
+          SQL
+          rows.map { |row| OUTBOX_COLUMNS.zip(row).to_h }.find do |row|
+            receipt = JSON.parse(row.fetch('receipt'))
+            receipt.is_a?(Hash) && receipt['message_id'] == message_id
+          rescue JSON::ParserError
+            false
+          end
+        end
+      end
+
       # Record a transport outcome for a CLAIMED row — fenced (invariant 4):
       # the UPDATE must match the claim's owner AND fence, so a stale drainer
       # records nothing. `succeeded` carries the receipt, `unknown` is the

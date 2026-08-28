@@ -24,7 +24,8 @@ module Tamoz
           when 'redirect'
             append_control(redirect_request(envelope, intent.arguments), envelope, now:)
           when 'answer'
-            append_control(answer_command(envelope, intent.arguments), envelope, now:)
+            reply = answer_command(envelope, intent.arguments, now:)
+            append_control(reply, envelope, now:) if reply
           when 'whoami'
             append_control(whoami_text(envelope), envelope, now:)
           when 'start'

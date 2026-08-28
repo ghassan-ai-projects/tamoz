@@ -322,6 +322,27 @@ class AgentOutboxDeliverySinkTest < Minitest::Test
     end
   end
 
+  def test_clarification_delivery_reports_capacity_refusal
+    with_engine do |sink, adapter, checkpoints|
+      store = store_for(adapter, checkpoints)
+      bind_thread_to_conversation(store, surface: descriptor(limits: {
+        max_inbound_bytes: 8192, max_open_requests: 50, max_denial_prompts_per_request: 4,
+        outbox_capacity: 1, control_capacity: 50, per_chat_messages_per_s: 1.0,
+        global_messages_per_s: 25.0
+      }))
+      interrupts = [{ task_id: 'task', call_index: 0,
+                      descriptor: { 'kind' => 'clarify', 'question' => 'Which file?' } }]
+
+      result = sink.push(
+        thread_id: 'tg.ops.abc', kind: 'request.clarification_request', request_id: 'occurrence-1',
+        interrupts:
+      )
+
+      assert_equal :capacity_refused, result
+      assert_empty store.outbox_rows(surface_id: 'telegram-ops', statuses: %w[pending])
+    end
+  end
+
   # Two occurrences that honestly produce the same answer text must BOTH
   # deliver: content-addressed dedup covers the crash re-push of ONE
   # occurrence, never two different requests that said the same thing.

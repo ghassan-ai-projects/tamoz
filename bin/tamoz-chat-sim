@@ -57,7 +57,10 @@ def button_labels(markup)
 end
 
 preflight!
-harness = Tamoz::ExperienceSim::Harness.new
+# The finished chat migration routes chat-vs-task in the worker, so the sim
+# runs :experimental by default; override with TAMOZ_ROUTING for a legacy run.
+routing = ENV.fetch('TAMOZ_ROUTING', 'experimental').to_sym
+harness = Tamoz::ExperienceSim::Harness.new(routing:)
 puts "tamoz-chat-sim — mock Telegram, real runtime, provider=#{harness.provider_label}"
 puts 'Type a message. /reply <text>, /tap <data>, /status, /quit.'
 puts
