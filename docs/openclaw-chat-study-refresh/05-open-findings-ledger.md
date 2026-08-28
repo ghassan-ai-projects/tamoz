@@ -63,8 +63,8 @@ hold exactly:
 | CF-2 | Request-scoped runtime status aggregates delivery/effect state across the whole conversation/thread | F2, H-03, HZ-2 | `CommsStore#conversation_runtime_status`, `delivery_state_for`, `effect_state_for`; outbox row schema lacks `request_id` | 1 | Fixed in `69c4a4d`; deterministic comms/effect coverage passes |
 | CF-3 | `/cancel` and CLI cancel are thread-wide; no exact-reference target | F3 | `gateway_commands#cancel_request`; `CommsStore#stamp_cancellation_requested!`; `CLISessionCommands` cancel | 1 | Chat `/cancel` fixed in `7aaea8c`; CLI cancel remains open |
 | CF-4 | No durable ingress for a clarification answer; plain text is admitted as a new request and callbacks resolve approval only | H-02, consolidated correction 3 | `Comms::Commands`; `Comms::Admission`; `Gateway::Callbacks` | 0→1 | Fixed in `7e2df9d`; receipt-bound replies and `/answer` resume the same occurrence |
-| CF-5 | Callback `observed_at` is derived from top-level `message.date`, which is absent on callback-only updates, yielding epoch timestamps | F8 | `Telegram::Normalizer#normalize` | 1 | Sourced; open; **was not in consolidated study/index/roadmap** |
-| CF-6 | CLI test exits 0 while an unhandled background `CheckpointConflictError` is raised from a worker thread; the CLI rescue only covers the calling path | G16, F9 (impl) | `CLI#run` rescue scope; `CheckpointStore#open_writer`/`lease_operations` | 1 | Sourced; open; **was not in consolidated study/index/roadmap** |
+| CF-5 | Callback `observed_at` is derived from top-level `message.date`, which is absent on callback-only updates, yielding epoch timestamps | F8 | `Telegram::Normalizer#normalize` | 1 | Fixed in `5fc2875`; callback source date and explicit ingestion fallback pass focused coverage |
+| CF-6 | CLI test exits 0 while an unhandled background `CheckpointConflictError` is raised from a worker thread; the CLI rescue only covers the calling path | G16, F9 (impl) | `CLI#run` rescue scope; `CheckpointStore#open_writer`/`lease_operations` | 1 | Fixed in `3a833c1`; durable worker-thread conflict is observed, nonzero, and bounded; chat projection hardened in `0c9a057` |
 
 ### Evidence and governance gaps
 
@@ -99,13 +99,15 @@ hold exactly:
 ## Findings this ledger rescued
 
 Three findings were confirmed by reviewers but never carried into the
-consolidated study, evidence index, or roadmap. They are now tracked above and
-added to the evidence index and correction log:
+consolidated study, evidence index, or roadmap. They are tracked above and
+were added to the evidence index and correction log. Two are now closed by the
+implementation pass; EG-7 remains open:
 
-1. **CF-5** callback timestamp defect — must be fixed before any callback-ack
-   or latency telemetry is trusted (Slice 1, gates EG-3/EG-5 timing claims).
-2. **CF-6** swallowed async `CheckpointConflictError` — a reliability defect
-   that lets the CLI report success while a worker thread failed (Slice 1).
+1. **CF-5** callback timestamp defect — fixed before any callback-ack or
+   latency telemetry is trusted (Slice 1, gates EG-3/EG-5 timing claims).
+2. **CF-6** swallowed async `CheckpointConflictError` — fixed at the CLI
+   worker-thread boundary; the chat worker's correspondent projection is also
+   bounded (Slice 1).
 3. **EG-7** stale benchmark implementation paths and the un-named existing
    `OpenclawDurableCliAdapter` owner — reconcile before Slice 4 to avoid
    building a duplicate CLI harness.

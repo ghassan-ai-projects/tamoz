@@ -168,3 +168,27 @@ current source and hardened the record:
   files were changed.
 - Focused product/comms plumbing tests used by the reports passed under the
   pinned Ruby executable; those results remain plumbing evidence only.
+
+## Implementation correction pass (2026-08-28)
+
+The sponsor-directed chat findings were implemented one at a time with a
+red benchmark, focused regression, independent review, and a separate commit
+for each correction wave. The implementation evidence is deterministic
+plumbing; it does not replace real-provider, real-Telegram, or human-usefulness
+evidence.
+
+- `c69b55e`: approval cards explain a fixed bounded action and safe next step;
+  redirect cards name replacement and preserved original work.
+- `3b50397`: default `/help` teaches the core loop and moves the full command
+  reference behind `/help more`.
+- `5fc2875`: callback timestamps use the originating Telegram message date,
+  with an explicit ingestion-time fallback when no source timestamp exists.
+- `3a833c1`: durable CLI worker-thread checkpoint conflicts are observed and
+  returned as bounded failures without an unhandled background backtrace.
+- `0c9a057`: the chat worker's raised checkpoint-conflict projection uses the
+  same bounded status-oriented failure language.
+
+OF-2 remains a separate latency workstream. The implementation pass adds no
+false claim that sequential real-provider model calls are now fast; the
+existing chat-side liveness and honest-ack fixes make that latency legible but
+do not change provider-call duration.

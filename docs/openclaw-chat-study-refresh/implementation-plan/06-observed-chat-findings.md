@@ -66,6 +66,23 @@ provider; assert the turn reaches a terminal `answer`/`completed` OR a bounded,
 user-safe failure card — never `CheckpointConflictError` reaching the user, and
 never "failed before it could finish" after a successful tool effect.
 
+**Fixed (2026-08-28, commits `3a833c1` and `0c9a057`).** The durable CLI now
+observes exceptions from its worker thread instead of allowing a background
+failure to look like success or leak an unhandled backtrace. The CLI and chat
+worker project checkpoint conflicts as bounded status-oriented failure cards;
+neither surface exposes the exception class, internal message, or the old
+"failed before it could finish" wording. A focused durable regression also
+proves that a successful read effect remains journaled before the safe failure
+is returned. The current effect-identity tests do not establish a new real-
+provider repair run, so this closes the exposed failure-card and async-error
+boundary without claiming model quality or latency evidence.
+
+**Evidence:** `test/agent_cli_test.rb` (34 runs, 764 assertions),
+`test/agent_worker_failure_reason_test.rb` (6 runs, 14 assertions), and the
+existing effect-identity/session suites pass under pinned Ruby. This is
+deterministic runtime/error-boundary evidence; it is not a current real-provider
+reproduction or human-usefulness result.
+
 ---
 
 ## OF-2 — A trivial task takes ~100 seconds
@@ -324,6 +341,18 @@ UI button.
 action; still no approve button unless policy evidence permits; no secrets/raw
 args.
 
+**Fixed (2026-08-28, commit `c69b55e`).** Approval cards now name a fixed,
+bounded action vocabulary and explain the next safe step. Unknown tools use a
+generic action label; raw arguments, previews, paths, and model text stay out
+of the human card. The final stored part still passes through the configured
+renderer and its actual content digest, so small channel bounds remain
+authoritative.
+
+**Evidence:** `test/agent_outbox_delivery_sink_test.rb` (17 runs, 98
+assertions) and `bin/tamoz-chat-probe OF-8` pass. This is deterministic,
+policy/rendering plumbing evidence, not approval comprehension or human-
+usefulness evidence.
+
 ---
 
 ## OF-9 — The acceptance over-promises, then the turn can fail or go silent
@@ -457,6 +486,15 @@ is not undone."
 **Benchmark:** redirect names both the superseded and the replacement ref and
 states preservation.
 
+**Fixed (2026-08-28, commit `c69b55e`).** Redirect responses now name the new
+replacement reference, retain the original reference, and state that committed
+work is not undone. The durable redirect payload and idempotency path are
+unchanged.
+
+**Evidence:** `test/comms_command_parity_test.rb` (11 runs, 203 assertions)
+and `bin/tamoz-chat-probe OF-12` pass. This is deterministic control-plane
+evidence, not a real Telegram or human-usefulness result.
+
 ---
 
 ## OF-13 — Status for one request reports the conversation's delivery state
@@ -547,6 +585,16 @@ of the basic loop (ask → get answer → check status → cancel).
 controls; move the full list behind "more".
 
 **Benchmark:** `/help` shows a worked example and ≤4 primary controls by default.
+
+**Fixed (2026-08-28, commit `3b50397`).** Default `/help` now teaches the core
+loop with `/status` and `/cancel`, exposes four primary controls, and points to
+`/help more` for the full typed command reference. Unexpected arguments return
+bounded usage text; help remains a control response and never becomes task text.
+
+**Evidence:** `test/comms_gateway_test.rb` (42 runs, 266 assertions),
+`test/comms_command_parity_test.rb` (11 runs, 203 assertions), and
+`bin/tamoz-chat-probe OF-15` pass. This is deterministic onboarding plumbing
+evidence, not a human comprehension result.
 
 ---
 
