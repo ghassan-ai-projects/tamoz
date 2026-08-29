@@ -17,7 +17,7 @@ require "fileutils"
 require "optparse"
 require "support/benchmark_families"
 
-# P7 (docs/new-design/PHASE_P7_BENCHMARK.md): holdout isolation. Generates the
+# The frozen benchmark protocol in documentation/benchmark/: holdout isolation. Generates the
 # holdout case manifest AFTER the protocol freeze: opaque identifiers, a
 # temporal cutoff on every input (no event may be dated after the cutoff), and
 # a truth-leak scan over the model-visible bytes (the frame the worker will

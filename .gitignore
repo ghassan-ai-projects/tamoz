@@ -80,7 +80,7 @@ agenteval/
 *.sqlite3-shm
 *.sqlite3-wal
 # benchmark_holdout always writes a leak scan; the holdout-pin keeps only
-# manifest + truth (regenerated deliberately, see docs/new-design/impl/DOMAIN_LEAK_FIX.md)
+# manifest + truth.
 documentation/benchmark/holdout-pin/leak-scan.json
 
 # benchmark scenario driver runtime fixture

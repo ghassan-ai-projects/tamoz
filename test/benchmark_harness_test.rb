@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 
-# P7 (docs/new-design/PHASE_P7_BENCHMARK.md): the frozen metric functions, the
+# The frozen benchmark protocol in documentation/benchmark/: the metric functions, the
 # preregistered baselines, and the paired comparison. Pure + deterministic —
 # the same cells re-scored anywhere yield the same numbers (offline
 # reproducibility is a go-rule input). These tests pin the DEFINITIONS, not a

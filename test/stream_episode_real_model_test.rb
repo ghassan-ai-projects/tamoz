@@ -27,7 +27,7 @@ class StreamEpisodeRealModelTest < Minitest::Test
   # Overridable for a hosted provider (e.g. TAMOZ_REAL_MODEL=deepseek-chat
   # with a compatible OpenAI endpoint).
   DEFAULT_MODEL = ENV.fetch("TAMOZ_REAL_MODEL", "gemma4:26b")
-  EVIDENCE_ROOT = File.expand_path("../docs/new-design/evidence/p1-real-run", __dir__)
+  EVIDENCE_ROOT = File.expand_path("../documentation/benchmark/evidence/p1-real-run", __dir__)
 
   def test_one_real_call_through_the_fixed_graph
     skip "set RUN_REAL_E2E=1 for the real model run" unless ENV["RUN_REAL_E2E"] == "1"

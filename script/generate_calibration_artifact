@@ -10,7 +10,7 @@ require "tamoz/agent"
 
 PROTOCOL_PATH = File.expand_path("../documentation/benchmark/BENCHMARK_PROTOCOL.json", __dir__)
 
-# P8 (docs/new-design/PHASE_P8_ROLLOUT.md): the calibration artifact. One
+# The controlled-rollout rule in documentation/benchmark/: the calibration artifact. One
 # domain's exact bound document — model revision + profile digest + prompt +
 # diagnosis catalog + domain + policy digest — that unlocks automatic
 # consequential intents (R2+) on the Go side. Missing or mismatched =

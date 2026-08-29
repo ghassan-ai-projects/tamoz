@@ -52,6 +52,7 @@ root is the entry point; this folder contains the detailed reference material.
 - [guides/agent-operator.md](guides/agent-operator.md): runbook for operating an agent over Tamoz
 - [guides/telegram.md](guides/telegram.md): talking to Tamoz over Telegram
 - [guides/evaluation.md](guides/evaluation.md): how evaluation, scorecards and release evidence work
+- [benchmark/README.md](benchmark/README.md): the frozen benchmark and rollout evidence contract
 
 ## Operations
 

@@ -5,9 +5,9 @@ require_relative "domain_loader"
 require_relative "aquaculture_domain"
 require_relative "climate_domain"
 
-# P7: the benchmark's scenario families, driven by the DOMAIN DATA in
-# test/fixtures/domains/*.json (domain-knowledge extraction —
-# docs/new-design/impl/DOMAIN_DATA_EXTRACTION.md). The truth and gold rules
+# The benchmark's scenario families are driven by the domain data in
+# test/fixtures/domains/*.json. The repository's data-only policy is in AGENTS.md.
+# The truth and gold rules
 # are the preregistered facts→label mapping derived from each family's JSON
 # config — the SAME rule derives pilot truth and holdout truth, so the
 # holdout is learnable by exactly the mechanism the pilot calibrates (never a
