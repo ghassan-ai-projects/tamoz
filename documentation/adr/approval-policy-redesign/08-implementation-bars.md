@@ -1,6 +1,7 @@
 # 08 — Implementation bars (operational)
 
-**Status:** working — derived from `00-acceptance-bar.md` and `05-implementation-plan.md`.
+**Status:** historical implementation bar — phases 1–12 landed; current behavior
+must be re-verified against source and tests.
 **Purpose:** concrete per-phase finish line for the coding pass. Each phase is graded
 against the global invariants (`00` §4), hard-zeros (`00` §5), and the scenarios mapped
 to it in `06-acceptance-scenarios.md`.
@@ -15,7 +16,7 @@ The redesign is done when:
    `tamoz-core` / `tamoz-agent`.
 3. Every mapped acceptance scenario in `06-acceptance-scenarios.md` passes.
 4. The grep sweep in step 12 returns zero live references to deleted symbols outside
-   this `docs/` folder and `CHANGELOG.md`.
+   this historical package and `CHANGELOG.md`.
 5. The `enola` delta against the step-1 baseline is exactly: one new gem, expected
    edges added, tools→agent classification coupling gone, no new cycle.
 6. Every step has a one-line evidence note (date, commands, files, plumbing vs real).

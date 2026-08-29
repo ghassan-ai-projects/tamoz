@@ -1,7 +1,7 @@
 # 05 — Implementation plan: `tamoz-approval` extraction
 
-**Status:** ready for execution — rev 3 (2026-08-22): adds step 7B (mid-session mode
-switch, ADR §2.6). Rev 2 incorporated a code-verification pass
+**Status:** historical execution plan — phases 1–12 were implemented; rev 3
+(2026-08-22) added step 7B (mid-session mode switch, ADR §2.6). Rev 2 incorporated a code-verification pass
 (`07-evidence-index.md`); the `approval_required?` deletion inventory in step 7 is the
 complete nine-method chain, and two omitted deletion sites were added.
 **Date:** 2026-08-22
@@ -737,13 +737,13 @@ conventions files name the new gem.
 - `README.md` (component map) and `AGENTS.md` — `tamoz-approval` added to the gem
   list; the "approval policy is data in `gems/tamoz-approval/policy/*.yaml`" rule
   stated next to the existing domain-data rule.
-- `docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md` — status flipped to
+- `documentation/adr/approval-policy-redesign/03-redesign-adr.md` — status flipped to
   **implemented** with the final commit reference.
 
 **Final consistency sweep (no earlier step may leave these behind):**
 - Grep sweep: `approval_required`, `ApprovalDeniedError`, `ApprovalPolicy`,
   `--i-understand-approve-all`, `unattended_approval_required`, `tools.approval_required`
-  — zero hits outside this `docs/` folder and `CHANGELOG.md`.
+  — zero hits outside this historical package and `CHANGELOG.md`.
 - `test/public_api_test.rb`, `docs/public-api.json`,
   `documentation/reference/public-api.md` consistent with the final surface.
 - `test/packaging_test.rb` green with the new gem, including the `plan`/`auto`

@@ -132,7 +132,7 @@ approval profile, live.
 |---|---|---|---|
 | M-1 **HZ** | at no commit between steps 6 and 7 does the tree contain **two policy owners**: the engine deciding while the old `approval_required?` chain still fires. Convergence and the chain deletion land together. | contract 1 | 7 |
 | M-2 **HZ** | an operator profile file still carrying `tools.approval_required` or `unattended.*` → **fails validation loudly at load**; it is never accepted-but-ignored. | contract 1 | 2, 7 |
-| M-3 | after step 12 the grep sweep returns zero live references to `approval_required`, `ApprovalDeniedError`, `ApprovalPolicy`, `--i-understand-approve-all`, `tools.approval_required` outside this `docs/` folder and `CHANGELOG.md`. | — | 12 |
+| M-3 | after step 12 the grep sweep returns zero live references to `approval_required`, `ApprovalDeniedError`, `ApprovalPolicy`, `--i-understand-approve-all`, `tools.approval_required` outside this historical package and `CHANGELOG.md`. | — | 12 |
 | M-4 **HZ** | migration 17 applies on a fresh database and its checksum verifies; migrations 1–16 and their checksums are **untouched**; no old-row handling exists. | — | 5 |
 
 ---

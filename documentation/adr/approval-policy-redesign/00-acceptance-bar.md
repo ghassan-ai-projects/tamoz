@@ -198,7 +198,7 @@ The redesign is done when every step in `05-implementation-plan.md` meets §6, t
 grep sweep in step 12 returns zero live references to the deleted surface
 (`approval_required`, `ApprovalDeniedError`, `ApprovalPolicy`,
 `--i-understand-approve-all`, `tools.approval_required`, `unattended_approval_required`)
-outside this `docs/` folder and `CHANGELOG.md`, every acceptance scenario in
+outside this historical package and `CHANGELOG.md`, every acceptance scenario in
 `06-acceptance-scenarios.md` passes, the `enola` delta is exactly the expected one gem
 + three edges with the tools→agent classification coupling gone and no new cycle, and
 the final completion note states plainly which claims are proven by plumbing tests and

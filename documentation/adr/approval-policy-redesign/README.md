@@ -1,7 +1,8 @@
 # Approval / permission policy redesign
 
-Status: design complete and reviewed; implementation not started. The
-implementation plan (`05`) is ready for a coding agent to execute.
+Status: implemented and reviewed; this package is retained as historical design
+and implementation evidence. The canonical decision is
+[`ADR-053`](../adr-053-approval-gem.md).
 
 This folder isolates every *policy* decision in tamoz — "does this action need
 approval, and under what evidence?" — into one dedicated gem, `tamoz-approval`,
@@ -45,13 +46,18 @@ hash are deleted outright.
    [04-review-simplicity.md](04-review-simplicity.md),
    [04-review-api.md](04-review-api.md) — three independent staff reviews; every
    finding is mapped and resolved in `03` §10.
-6. [05-implementation-plan.md](05-implementation-plan.md) — the executable plan: 12
-   ordered steps, each a single green commit, mapped back to the ADR and forward to
-   the acceptance scenarios.
+6. [05-implementation-plan.md](05-implementation-plan.md) — the historical execution
+   plan: 12 ordered steps mapped back to the ADR and forward to the acceptance scenarios.
 7. [06-acceptance-scenarios.md](06-acceptance-scenarios.md) — the end-to-end approval
    journeys the finished system must pass, each an acceptance test with a hard-zero tag.
 8. [07-evidence-index.md](07-evidence-index.md) — every load-bearing `file:line` claim,
    its confidence, and its re-verify-at-implementation status.
+9. [08-implementation-bars.md](08-implementation-bars.md) — the historical phase
+   bars and recorded completion evidence.
+10. [09-handbook-human-in-the-loop-alignment.md](09-handbook-human-in-the-loop-alignment.md)
+    — alignment analysis for the human-in-the-loop handbook chapter.
+11. [10-implementation-audit.md](10-implementation-audit.md) — the code-level audit
+    of the implemented approval gem and its consumers.
 
 ## Owner directives (binding on every document here)
 
