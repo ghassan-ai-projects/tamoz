@@ -20,6 +20,7 @@ the source, tests, and the curated documentation before acting on them.
 | Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md`, `WORKING_SLICE_*.md` |
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
 | Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `GAUNTLET_PROGRESS.md`; latency evidence is in `documentation/operations/ux-latency-investigation/` |
+| Canonical benchmark contracts | `documentation/benchmark/` (migrated because scripts and tests consume these protocols and scenario indices) |
 | Gem-boundary audits | `gem-boundary-audit-2026-08-25/` |
 | Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
@@ -31,6 +32,8 @@ the source, tests, and the curated documentation before acting on them.
 - **New public documentation goes in `documentation/`**, organized by topic and
   reachable from its index. Do not add user-facing pages here.
 - **Working artifacts stay here.** Plans, reviews, audits and evidence are the
-  project's history; they are not rewritten for a public audience.
+  project's history; they are not rewritten for a public audience. Canonical
+  contracts consumed by scripts or tests belong in `documentation/` and are
+  linked from its index.
 - Cross-gem interfaces and behavioral contracts are governed by
   `design-v0.1/INVARIANTS.md` and `design-v0.1/DECISIONS.md`.
