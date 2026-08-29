@@ -65,7 +65,7 @@ reconciliation; it is never retried blindly.
 | 13 | [SCHEDULER_DESIGN.md](SCHEDULER_DESIGN.md) | Durable occurrences, time/DST, misfire, overlap, and delayed authority |
 | 14 | [SKILLS_DESIGN.md](SKILLS_DESIGN.md) | Portable Agent Skills, snapshots, loading, scripts, and supply-chain promotion |
 | 15 | [STREAMING_INPUT_DESIGN.md](STREAMING_INPUT_DESIGN.md) | Unbounded evidence, Situations, physical action boundary, and replay |
-| 16 | [INVARIANTS.md](INVARIANTS.md) | The 55-clause executable contract |
+| 16 | [INVARIANTS.md](INVARIANTS.md) | The 61-clause executable contract |
 | 17 | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) | Risk-first milestones and kill criteria |
 | 18 | [EVALUATION_DESIGN.md](EVALUATION_DESIGN.md) | Conformance, fault injection, benchmarks, security |
 | 19 | [EVALS_DESIGN.md](EVALS_DESIGN.md) | The evaluation gem, artifacts, corpora, scoring, and release gates |

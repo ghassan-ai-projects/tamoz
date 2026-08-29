@@ -17,7 +17,7 @@ the source, tests, and the curated documentation before acting on them.
 
 | Area | Examples |
 |---|---|
-| Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md`, `WORKING_SLICE_*.md` |
+| Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md` |
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
 | Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `GAUNTLET_PROGRESS.md`; latency evidence is in `documentation/operations/ux-latency-investigation/` |
 | Canonical benchmark contracts | `documentation/benchmark/` (migrated because scripts and tests consume these protocols and scenario indices) |
@@ -36,4 +36,5 @@ the source, tests, and the curated documentation before acting on them.
   contracts consumed by scripts or tests belong in `documentation/` and are
   linked from its index.
 - Cross-gem interfaces and behavioral contracts are governed by
-  `design-v0.1/INVARIANTS.md` and `design-v0.1/DECISIONS.md`.
+  `design-v0.1/INVARIANTS.md` and the authoritative ADR catalog in
+  `documentation/adr/`.

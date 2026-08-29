@@ -44,7 +44,7 @@ root is the entry point; this folder contains the detailed reference material.
 
 ## Decisions
 
-- [adr/README.md](adr/README.md): the ADR index — every decision record 001–049
+- [adr/README.md](adr/README.md): the ADR index — every decision record 001–055
 - [adr/adr-049-telegram-approval.md](adr/adr-049-telegram-approval.md): evidence-gated Telegram approval
 - [adr/approval-policy-redesign/README.md](adr/approval-policy-redesign/README.md): the implemented approval-policy design and evidence package
 
