@@ -9,6 +9,10 @@ The curated public documentation lives in
 [`documentation/`](../documentation/README.md). Start there for anything
 user-facing — installing, running, operating, or understanding Tamoz.
 
+This archive is not a current status board. Dated plans, reviews, and audits
+record decisions at the time they were written; verify present behavior against
+the source, tests, and the curated documentation before acting on them.
+
 ## What stays here
 
 | Area | Examples |
@@ -16,7 +20,6 @@ user-facing — installing, running, operating, or understanding Tamoz.
 | Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md`, `WORKING_SLICE_*.md` |
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
 | Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `ux-latency-investigation/`, `GAUNTLET_PROGRESS.md` |
-| Gem-boundary scans | `gem-boundary-scan-2026-08-25/` |
 | Gem-boundary audits | `gem-boundary-audit-2026-08-25/` |
 | Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
