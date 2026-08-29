@@ -28,8 +28,10 @@ required_files = %w[
   IMPLEMENTATION_PLAN.md
   EVALUATION_DESIGN.md
   EVALS_DESIGN.md
-  DECISIONS.md
 ].freeze
+# NOTE: the ADR record (formerly DECISIONS.md) was migrated out of this frozen v0.1 archive to
+# the authoritative catalog under documentation/adr/ on 2026-08-29. ADR numbering, statuses, and
+# supersessions are now validated there, not here.
 
 required_files.each do |name|
   path = File.join(root, name)
@@ -127,11 +129,6 @@ unless agent_design.start_with?("# Tamoz Agent ")
   failures << "TAMOZ_AGENT_DESIGN.md: canonical reference-agent title is missing"
 end
 
-decisions = File.read(File.join(root, "DECISIONS.md"), encoding: Encoding::UTF_8)
-adr_numbers = decisions.scan(/^### ADR-(\d{3}) /).flatten.map(&:to_i)
-expected_adrs = (1..47).to_a
-failures << "ADRs must be numbered 001..047; found #{adr_numbers.inspect}" unless adr_numbers == expected_adrs
-
 required_terms = {
   "ARCHITECTURE.md" => %w[effect fence definition_digest tamoz-evals production],
   "PERSISTENCE_DESIGN.md" => %w[
@@ -162,7 +159,7 @@ required_terms.each do |name, terms|
 end
 
 if failures.empty?
-  puts "design validation passed (#{markdown_files.length} documents, 61 invariants, 47 ADRs)"
+  puts "design validation passed (#{markdown_files.length} documents, 61 invariants; ADRs live in documentation/adr/)"
   exit 0
 end
 

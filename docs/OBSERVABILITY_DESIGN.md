@@ -1095,9 +1095,11 @@ Conformance rows for the `INVARIANTS.md` table:
   records everything; the export retention decision is taken when the exporter reads the
   journal, so a turn that pauses for days cannot be lost to an in-memory window.
 
-Phase 5 adds **clause 62** and **ADR-048**, stated in revision 1's §18.7 and unchanged: an
-automated response is triggered only by durable evidence over a non-degraded window and executed
-only by a subsystem that governs it.
+Phase 5 adds **clause 62** and **ADR-050** (renumbered 2026-08-29 from a mislabeled "ADR-048"
+that collided with the model-transport ADR-048; see
+[`documentation/adr/adr-050-automated-response-durable-evidence.md`](../documentation/adr/adr-050-automated-response-durable-evidence.md)),
+stated in revision 1's §18.7 and unchanged: an automated response is triggered only by durable
+evidence over a non-degraded window and executed only by a subsystem that governs it.
 
 ## 22. Grading against the bar
 

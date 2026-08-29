@@ -2,7 +2,7 @@
 
 Status: correction-reviewed candidate — physical deployment profile still open
 Date: 2026-07-30
-Names: framework **Tamoz**, reference application **Tamoz Agent** (see [DECISIONS.md](DECISIONS.md) ADR-001)
+Names: framework **Tamoz**, reference application **Tamoz Agent** (see the [ADR catalog](../../documentation/adr/README.md), ADR-001)
 
 ## The one-sentence goal
 

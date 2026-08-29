@@ -160,5 +160,5 @@ one versioned evidence system. No production dependency points to it.
 The implementation still needs owner input on standalone-first versus Rails-first and Tamoz
 Agent's first interactive product shape. The first physical deployment also needs a named
 environment, source, hazard analysis, external controller/interlocks, and qualified owner.
-Those change packaging and sequencing, not the corrected runtime semantics. They remain in
-[DECISIONS.md](DECISIONS.md).
+Those change packaging and sequencing, not the corrected runtime semantics. They are the open
+product questions now tracked in the [roadmap](../../documentation/roadmap.md#open-product-questions).

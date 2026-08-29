@@ -70,7 +70,7 @@ reconciliation; it is never retried blindly.
 | 18 | [EVALUATION_DESIGN.md](EVALUATION_DESIGN.md) | Conformance, fault injection, benchmarks, security |
 | 19 | [EVALS_DESIGN.md](EVALS_DESIGN.md) | The evaluation gem, artifacts, corpora, scoring, and release gates |
 | 20 | [CHAIN_DESIGN.md](CHAIN_DESIGN.md) | Deferred composition proposal and promotion gate |
-| 21 | [DECISIONS.md](DECISIONS.md) | ADRs and product decisions still needing owner input |
+| 21 | [ADR catalog](../../documentation/adr/README.md) | The authoritative decision records (migrated out of this archive) |
 
 If you have twenty minutes: GOAL → REVIEW → INVARIANTS → IMPLEMENTATION_PLAN.
 
@@ -92,7 +92,7 @@ than report prose.
 | Ch 5 Comparative synthesis | never written | [RUBY_TRANSLATION.md](RUBY_TRANSLATION.md) |
 | Ch 6 The Ruby blueprint | never written | [ARCHITECTURE.md](ARCHITECTURE.md), [CORE_DESIGN.md](CORE_DESIGN.md), [GRAPH_DESIGN.md](GRAPH_DESIGN.md), [CHAIN_DESIGN.md](CHAIN_DESIGN.md), [PERSISTENCE_DESIGN.md](PERSISTENCE_DESIGN.md) |
 | Ch 7 Hermes application blueprint | never written | [AGENT_DESIGN.md](AGENT_DESIGN.md), [TAMOZ_AGENT_DESIGN.md](TAMOZ_AGENT_DESIGN.md) |
-| Ch 8 Roadmap and risks | never written | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), [DECISIONS.md](DECISIONS.md) |
+| Ch 8 Roadmap and risks | never written | [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md), the [ADR catalog](../../documentation/adr/README.md) |
 
 One correction to the research: chapter 4 and the Hermes brief treat "Hermes" as the user's
 own unpublished agent, reconstructed from articles because no repository was found. A local

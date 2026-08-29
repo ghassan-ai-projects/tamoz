@@ -1,6 +1,7 @@
 # ADR-049 — Telegram approval is evidence-gated, not transport-gated
 
 **Status:** Accepted 2026-08-12
+**Tier:** F (see [ADR_QUALITY_BAR.md §3](./ADR_QUALITY_BAR.md))
 
 **Date:** 2026-08-12
 
@@ -101,9 +102,13 @@ gated above what `chat_bound` can approve unless a future ADR invokes §4.
 2. Land the conformance tests: a weak approve is refused while the equivalent deny succeeds; the requirement is offline-reproducible and not model-settable; unknown/expired evidence never approves.
 3. On acceptance, record the decision in the channel design's decision list and cross-link ADR-043.
 
+## Verification
+
+Verified against code: 2026-08-29 — The evidence lattice `chat_bound < filesystem_operator` and required-evidence policy live in `gems/tamoz-approval/policy` (base.yaml + profiles); the gateway `chat_bound` path is `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_callbacks.rb`.
+
 ## Next reads
 
 - [`README.md`](./README.md) — the full ADR index
 - [`../design/comms.md`](../design/comms.md) — the channel design and the amended ADR-043 entry
 - [`../guides/telegram.md`](../guides/telegram.md) — operating the Telegram surface
-- [`../../docs/design-v0.1/DECISIONS.md`](../../docs/design-v0.1/DECISIONS.md) — the authoritative decision record
+- [`README.md`](./README.md) — the authoritative ADR catalog
