@@ -6,7 +6,7 @@ require_relative 'test_helper'
 # splitting each invariant into a one-assertion helper would hide the contract.
 # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Minitest/MultipleAssertions
 class OpenclawScenarioCorpusTest < Minitest::Test
-  INDEX_PATH = ROOT.join('docs', 'openclaw-intelligence-study', 'benchmark-protocol', 'scenarios',
+  INDEX_PATH = ROOT.join('documentation', 'benchmark', 'openclaw-intelligence-study', 'scenarios',
                          'SCENARIO_INDEX.json')
   SCENARIO_ROOT = INDEX_PATH.dirname
   CATALOG_PATH = ROOT.join('documentation', 'benchmark', 'OPENCLAW_MISSIONS.json')
@@ -48,7 +48,7 @@ class OpenclawScenarioCorpusTest < Minitest::Test
 
   def test_index_has_the_declared_schema_and_exact_corpus
     assert_equal 'openclaw.scenario-index.v1', index.fetch('schema_version')
-    assert_equal 'docs/openclaw-intelligence-study/benchmark-protocol/scenarios', index.fetch('scenario_directory')
+    assert_equal 'documentation/benchmark/openclaw-intelligence-study/scenarios', index.fetch('scenario_directory')
     assert_equal 'documentation/benchmark/OPENCLAW_MISSIONS.json', index.fetch('catalog')
     assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/stop_rules', index.fetch('global_hard_zero_ref')
     assert_equal 'documentation/benchmark/BENCHMARK_PROTOCOL.json#/budgets', index.fetch('budget_ref')

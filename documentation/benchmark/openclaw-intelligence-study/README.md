@@ -35,7 +35,7 @@ standing up a parallel benchmark stack.
 - **Measurement replaces perception.** No "more intelligent" claim exists until
   a matched benchmark reports it. A scripted-model result is never intelligence
   evidence — it is a plumbing regression gate (inherited from
-  [06-phase-5-measured-intelligence.md](../implementation-plan/06-phase-5-measured-intelligence.md)).
+  [06-phase-5-measured-intelligence.md](../../../docs/openclaw-intelligence-study/implementation-plan/06-phase-5-measured-intelligence.md)).
 - **Real runs use a real provider.** Intelligence missions run against a real
   model (DeepSeek by default; see the local-run note). The provider identity is
   recorded in every artifact and the readiness gate refuses to publish a

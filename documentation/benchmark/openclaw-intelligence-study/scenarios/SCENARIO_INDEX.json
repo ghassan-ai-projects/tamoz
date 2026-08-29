@@ -1,6 +1,6 @@
 {
   "schema_version": "openclaw.scenario-index.v1",
-  "scenario_directory": "docs/openclaw-intelligence-study/benchmark-protocol/scenarios",
+  "scenario_directory": "documentation/benchmark/openclaw-intelligence-study/scenarios",
   "catalog": "documentation/benchmark/OPENCLAW_MISSIONS.json",
   "global_hard_zero_ref": "documentation/benchmark/BENCHMARK_PROTOCOL.json#/stop_rules",
   "budget_ref": "documentation/benchmark/BENCHMARK_PROTOCOL.json#/budgets",

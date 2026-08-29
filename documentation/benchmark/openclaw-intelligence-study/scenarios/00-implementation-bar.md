@@ -111,7 +111,7 @@ The directory extends, and must not contradict:
 - [protocol design](../01-protocol-design.md);
 - [mission catalog and scoring](../02-mission-catalog-and-scoring.md);
 - [implementation plan](../03-implementation-plan.md);
-- [implementation-plan implementation bar](../../implementation-plan/00-implementation-bar.md).
+- [implementation-plan implementation bar](../../../../docs/openclaw-intelligence-study/implementation-plan/00-implementation-bar.md).
 
 The implementation-plan bar governs runtime safety. This bar governs whether a
 scenario is precise enough to measure that safety and intelligence honestly.

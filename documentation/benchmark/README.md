@@ -12,6 +12,8 @@ baselines, scoring rules, or stop rules creates a new benchmark version.
   harness.
 - [openclaw-chat-study/README.md](openclaw-chat-study/README.md) is the communication
   benchmark protocol and C1–C9 scenario contract.
+- [openclaw-intelligence-study/README.md](openclaw-intelligence-study/README.md) is the
+  intelligence benchmark protocol and T1–T11 scenario contract.
 - `holdout-pin/` contains the committed holdout manifest and truth needed to
   reproduce a pinned evaluation. The leak scan is generated during a holdout run
   and is intentionally not committed.

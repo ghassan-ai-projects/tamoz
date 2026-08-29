@@ -3,7 +3,8 @@
 Phased, buildable, and mapped to real `tamoz-evals` seams. Each phase names the
 seam it extends, the durable fields it adds, the plumbing test plus the
 real-provider proof, and the committed evidence with the command that produced
-it. This mirrors the change protocol in `../implementation-plan/README.md`.
+it. This mirrors the change protocol in
+`../../../docs/openclaw-intelligence-study/implementation-plan/README.md`.
 
 Sequencing rule: fixtures and oracles first (B0), then a real executor (B1),
 then breadth (B2–B3), then the trend (B4), then the claim (B5). Do not build a
