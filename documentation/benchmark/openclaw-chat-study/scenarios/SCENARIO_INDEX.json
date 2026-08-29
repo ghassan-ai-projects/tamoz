@@ -1,9 +1,9 @@
 {
   "schema_version": "openclaw.comms-scenario-index.v1",
-  "scenario_directory": "docs/openclaw-chat-study/benchmark-protocol/scenarios",
-  "catalog": "docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md",
-  "protocol_ref": "docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md",
-  "global_hard_zero_ref": "docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md#7-hard-zero-gates",
+  "scenario_directory": "documentation/benchmark/openclaw-chat-study/scenarios",
+  "catalog": "documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md",
+  "protocol_ref": "documentation/benchmark/openclaw-chat-study/01-protocol-design.md",
+  "global_hard_zero_ref": "documentation/benchmark/openclaw-chat-study/01-protocol-design.md#7-hard-zero-gates",
   "seed_policy": "paired_scenario_seed",
   "real_run_policy": {
     "provider": "openrouter",

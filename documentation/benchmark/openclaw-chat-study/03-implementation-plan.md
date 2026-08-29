@@ -8,7 +8,7 @@ Phased, buildable, and mapped to real comms/agent seams. Each phase names the se
 it extends, the durable facts it asserts on, the plumbing test plus the
 real-provider/real-transport proof, and the committed evidence with the command
 that produced it. This mirrors the change protocol in
-`../implementation-plan/README.md`.
+`../../../docs/openclaw-chat-study/implementation-plan/README.md`.
 
 Sequencing rule: composition harness and deterministic oracles first (B0), then a
 real-transport executor (B1), then both surfaces and parity (B2), then the
@@ -53,7 +53,7 @@ parallel harness.
   claim needs a real send boundary (or a faithfully recorded live session), with
   the transport class recorded in every artifact.
 - The Phase 1 **lifecycle vocabulary and request references** must already exist
-  (`../implementation-plan/02-phase-1-truthful-status-and-commands.md`); the
+  (`../../../docs/openclaw-chat-study/implementation-plan/02-phase-1-truthful-status-and-commands.md`); the
   benchmark scores against that closed vocabulary and cannot start before it.
 
 ## Phase B0 — Composition harness and deterministic oracles

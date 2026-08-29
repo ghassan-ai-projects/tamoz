@@ -10,6 +10,8 @@ baselines, scoring rules, or stop rules creates a new benchmark version.
   hard-zero safety rules, and provider/run-kind boundaries.
 - `OPENCLAW_MISSIONS.json` is the scenario catalog consumed by the benchmark
   harness.
+- [openclaw-chat-study/README.md](openclaw-chat-study/README.md) is the communication
+  benchmark protocol and C1–C9 scenario contract.
 - `holdout-pin/` contains the committed holdout manifest and truth needed to
   reproduce a pinned evaluation. The leak scan is generated during a holdout run
   and is intentionally not committed.

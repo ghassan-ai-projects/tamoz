@@ -3,7 +3,7 @@
 The scenario set is the committed catalog this document specifies: what each
 scenario proves, how it is scored, the verdict rule, and the scoreboard that
 tracks improvement over time. The catalog derives directly from the study's
-required composition tests (`../06-scenario-matrix.md`).
+required composition tests (`../../../docs/openclaw-chat-study/06-scenario-matrix.md`).
 
 Every scenario runs on **both** surfaces — durable CLI and Telegram — and must
 show semantic parity between them. CLI/Telegram drift is itself a measured metric

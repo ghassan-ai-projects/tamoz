@@ -13,7 +13,8 @@ the *experience* — every composition test to date runs a deterministic provide
 and a fake transport, so it measures machinery, not what a correspondent feels.
 
 These documents turn the study's required composition tests
-(`../06-scenario-matrix.md`) and the implementation plan's Phase 3 exit bar into
+(`../../../docs/openclaw-chat-study/06-scenario-matrix.md`) and the implementation
+plan's Phase 3 exit bar into
 something buildable: a measurement model, a scenario catalog with scoring, and a
 phased plan that extends the existing comms/eval seams rather than standing up a
 parallel benchmark stack.

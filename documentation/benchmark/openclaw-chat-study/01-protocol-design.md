@@ -88,7 +88,7 @@ or a `success`. A run that reaches `completed` task state but leaves delivery
 - **fixture** runs use a deterministic provider and a fake transport. They prove
   the composition, the scenario wiring, and the scoring math. They are refused
   publication. The canonical composition tests
-  (`../06-scenario-matrix.md`, "Required composition tests") are the fixture gate
+  (`../../../docs/openclaw-chat-study/06-scenario-matrix.md`, "Required composition tests") are the fixture gate
   and stay exactly that.
 - **real** runs use a real model and a real transport. They are the only source
   of a usefulness claim. Publication requires, per scenario: durable request,
@@ -139,7 +139,7 @@ is `inconclusive`.
 ## 7. Hard-zero gates
 
 Any occurrence fails the run outright (from the study's hard-zero list,
-`../implementation-plan/00-implementation-bar.md`):
+`../../../docs/openclaw-chat-study/implementation-plan/00-implementation-bar.md`):
 
 `ack_before_admission`, `stale_owner_send`, `blind_retry_after_unknown`,
 `unknown_reported_as_terminal`, `identity_conflict_deduplicated`,
