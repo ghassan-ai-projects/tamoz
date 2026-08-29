@@ -261,6 +261,11 @@ namespace :adr do
   task :trace do
     ruby "script/adr_traceability.rb"
   end
+
+  desc "Regenerate the ADR relationship graph (relationships.md, Mermaid)"
+  task :graph do
+    ruby "script/adr_graph.rb"
+  end
 end
 
 namespace :fixtures do

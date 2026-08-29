@@ -40,6 +40,7 @@ Current version: `0.1.0.alpha.1` (pre-release).
 | [`RETIRED.md`](./RETIRED.md) | Superseded / renumbered decisions, one line each. |
 | [`AUDIT_2026-08-29.md`](./AUDIT_2026-08-29.md) | The deep audit that produced this structure + the scorecard. |
 | [`traceability.md`](./traceability.md) | ADR ↔ gem ↔ invariant ↔ test matrix — where each decision is implemented and tested (`rake adr:trace`). |
+| [`relationships.md`](./relationships.md) | Mermaid graph of the supersession/amendment edges (`rake adr:graph`). |
 | [`design-refusals.md`](./design-refusals.md) | Cross-cutting "things we refuse to build" digest, each pointing to its owning ADR. |
 
 ## ADR index

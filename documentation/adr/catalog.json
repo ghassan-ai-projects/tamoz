@@ -83,7 +83,8 @@
 
       ],
       "superseded_by": [
-        "048"
+        "048",
+        "051"
       ],
       "amended_by": [
 
@@ -1164,7 +1165,7 @@
 
       ],
       "amended_by": [
-
+        "055"
       ],
       "verified": true,
       "sections": [
@@ -1232,7 +1233,7 @@
 
       ],
       "amended_by": [
-
+        "055"
       ],
       "verified": true,
       "sections": [
@@ -1334,7 +1335,7 @@
 
       ],
       "amended_by": [
-
+        "052"
       ],
       "verified": true,
       "sections": [
@@ -1737,7 +1738,7 @@
         "Next reads"
       ],
       "supersedes": [
-
+        "003"
       ],
       "amends": [
         "048"
@@ -1778,7 +1779,7 @@
         "002"
       ],
       "amends": [
-
+        "040"
       ]
     },
     {
@@ -1899,7 +1900,8 @@
 
       ],
       "amends": [
-
+        "035",
+        "037"
       ]
     }
   ]

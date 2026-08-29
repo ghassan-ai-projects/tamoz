@@ -29,9 +29,14 @@ def parse_adr(path)
     else "accepted"
     end
 
-  # amendment / supersession targets named in the status line
-  superseded_by = status_line.scan(/superseded by \[ADR-(\d{3})/i).flatten
-  amended_by = status_line.scan(/(?:revised|amended|extended|completed) by \[ADR-(\d{3})/i).flatten
+  # amendment / supersession targets named in the status line — tolerate markdown emphasis
+  # ("**revised** by") and multi-target lists ("superseded by [A] and [B]").
+  rel = lambda do |verbs|
+    m = status_line.match(/\b(?:#{verbs})\b\*{0,2}\s+by\b/i)
+    m ? status_line[m.end(0)..].scan(/ADR-(\d{3})/).flatten : []
+  end
+  superseded_by = rel.call("superseded")
+  amended_by = (rel.call("revised|amended|extended|completed|instantiated") - superseded_by)
 
   sections = text.scan(/^\#\#\s+(?:\d+\.\s+)?(.+)$/).flatten.map(&:strip)
   ver = text[/^\#\#\s+(?:\d+\.\s+)?Verification\s*\n+(.+?)(?:\n\#\#\s|\z)/m, 1].to_s.strip
