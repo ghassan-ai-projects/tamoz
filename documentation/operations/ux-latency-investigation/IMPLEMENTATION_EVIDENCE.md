@@ -7,7 +7,7 @@ provider-dependent release measurements.
 
 | Area | Implemented behavior | Primary proof |
 |---|---|---|
-| Ephemeral routing | Fused route/response call; direct responses are `responded`, not verified completion; unsafe routes fall back | `test/agent_request_routing_test.rb`, `docs/ux-latency-investigation/latency-smoke.json` |
+| Ephemeral routing | Fused route/response call; direct responses are `responded`, not verified completion; unsafe routes fall back | `test/agent_request_routing_test.rb`, `latency-smoke.json` |
 | Durable routing | v1 checkpoints keep the v1 graph; new experimental sessions use v2 route selection and read-only discovery | `test/agent_durable_routing_test.rb`, `test/agent_worker_test.rb` |
 | Feedback | CLI and worker terminal output derive bounded progress and next actions from committed receipts | `test/agent_terminal_progress_test.rb`, `test/agent_cli_test.rb` |
 | Delivery | Outbound claims and sends run in `DeliveryDrainer`; throttling is deferred, post-send ambiguity is `unknown`, and unknown rows are not retried | `test/delivery_drainer_test.rb`, `test/comms_gateway_test.rb`, autonomy case 15 |

@@ -41,7 +41,7 @@ frequency / confidence. Every conclusion is labeled:
 - Live CLI runs against DeepSeek (`deepseek-chat`), 2026-08-11, raw logs in `tmp/ux-probe/`
   (`run1.jsonl`, `run2.out`, `run3.jsonl`, `run4.out`, `run5.jsonl`, `*.time`).
 - Committed evaluation artifacts: `docs/autonomy-scorecard.json`, `docs/benchmark.json`,
-  `docs/ux-latency-investigation/latency-smoke.json`,
+  `latency-smoke.json`,
   `agenteval/reports/baseline-20260805.json`.
 - Source traces over `gems/tamoz-agent`, `gems/tamoz-comms`, `gems/tamoz-telegram`,
   `gems/tamoz-sqlite`, `gems/tamoz-observability` (file:line citations inline).

@@ -58,6 +58,8 @@ root is the entry point; this folder contains the detailed reference material.
 
 - [operations/operations.md](operations/operations.md): backup, restore and crash recovery
 - [operations/observability-ops.md](operations/observability-ops.md): status, journal, metrics and tracing
+- [operations/ux-latency-investigation/README.md](operations/ux-latency-investigation/README.md): latency investigation, implementation evidence, and operator guidance
+- [operations/ux-latency-investigation/durable-compatibility-spike.md](operations/ux-latency-investigation/durable-compatibility-spike.md): durable routing compatibility evidence
 
 ## Reference
 

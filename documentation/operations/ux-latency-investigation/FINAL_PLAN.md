@@ -646,7 +646,7 @@ For every slice:
    durability, recovery, privacy, performance, API growth, and generated artifacts.
 6. Run focused tests, then the everyday gate:
    `rake ci`, `rubocop`, and
-   `/Users/ghassan/.local/bin/enola check --fail-on=cycles,layers --min-confidence=0.8 .`.
+   `enola check --fail-on=cycles,layers --min-confidence=0.8 .`.
 7. Run `rake ci_full` under both required locales for slices 4, 6, 7, 8, and 9 because
    they touch durability, comms, packaging, or evidence.
 8. Run `rake autonomy_strict` for slices changing worker, planning, actions, budgets,

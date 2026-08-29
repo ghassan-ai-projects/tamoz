@@ -19,7 +19,7 @@ the source, tests, and the curated documentation before acting on them.
 |---|---|
 | Phase plans and working slices | `P*_PLAN.md`, `M*_PLAN.md`, `DR*_PLAN.md`, `WORKING_SLICE_*.md` |
 | Reviews and corrections | `reviews/`, `reviews/codebase-review-2026-08/` |
-| Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `ux-latency-investigation/`, `GAUNTLET_PROGRESS.md` |
+| Audits and investigation logs | `REQUIREMENTS_AUDIT.md`, `GRAPH_SURFACE_AUDIT.md`, `GAUNTLET_PROGRESS.md`; latency evidence is in `documentation/operations/ux-latency-investigation/` |
 | Gem-boundary audits | `gem-boundary-audit-2026-08-25/` |
 | Gem-boundary implementation | `gem-boundary-implementation-2026-08-26/` |
 | Machine evidence | `requirements-manifest.json`, `requirements-audit.json`, `public-api.json`, `autonomy-scorecard.json`, `benchmark.json`, `code-quality-baseline.json`, `dependency-review.json`, `release-*.json` |
