@@ -109,7 +109,7 @@ covered, and ambiguous sends remain durable `unknown` and are never blindly retr
 The remaining release evidence is a real-provider end-to-end qualification, broader
 surface-revision/coalescing proof, and aggregate subprocess/locale gate stability.
 See [`../docs/COMMS_TELEGRAM_PLAN.md`](../docs/COMMS_TELEGRAM_PLAN.md) and
-[`../docs/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md`](../docs/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md)
+[`operations/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md`](operations/ux-latency-investigation/IMPLEMENTATION_EVIDENCE.md)
 (repository-internal archive) for the current boundary.
 
 ### Observability remains partial (invariants 59–61, ADR-044–047)

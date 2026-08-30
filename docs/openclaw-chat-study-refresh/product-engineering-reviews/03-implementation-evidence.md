@@ -80,7 +80,7 @@ The following are unresolved high-severity findings. Count: **7**.
 | F2 | High / confirmed evidence-governance defect | Missing required surfaces/metrics must never score ready | **Fact:** `SURFACES_DRIVEN` lists CLI only for C1, C5, C6, and C9, with other scenarios defaulting to Telegram at `test/support/openclaw_comms_runner.rb:41-48,133-135`; `metrics_ready?` filters unavailable values at `test/support/openclaw_comms_runner.rb:161-168`; B0 asserts the reduced matrix and `ready` status at `test/benchmark_comms_b0_test.rb:198-227`. **Gate:** a missing required cell yields blocked/inconclusive and no publishable axis. |
 | F3 | High / confirmed harness defect | A benchmark CLI leg must execute the actual CLI | **Fact:** `OpenclawCommsFixture#submit_cli_task` calls `submit_cli_request`, which directly calls `durable_runner.submit` at `test/support/openclaw_comms_fixture.rb:145-163,419-427`; the canonical test invokes that helper at `test/canonical_cross_surface_composition_test.rb:209-216`. No argv parser, process, stdout, stderr, exit status, or database reopen is covered by that leg. **Gate:** use the actual queue/worker/status command path for CLI parity. |
 | F4 | High / confirmed contract gap | One caller-bound handle and exact target must span surfaces | **Fact:** `queue add` generates a UUID and prints it at `gems/tamoz-agent-cli/lib/tamoz/agent/cli_worker_commands.rb:220-241`; `ask` creates a UUID and drives `run_durable` immediately at `gems/tamoz-agent-cli/lib/tamoz/agent/cli_session_commands.rb:29-40`; `comms request` resolves `R<reference>` through `requests_by_reference` at `gems/tamoz-agent-cli/lib/tamoz/agent/cli_comms_ops.rb:230-258`. **Inference:** a user cannot currently assume that a CLI handle resolves through the Telegram request/status path. **Gate:** choose one current-schema contract, then test exact-target status/cancel/redirect with two open requests. |
-| F5 | High / confirmed evidence gap | Declared restart/cancellation moments must be executed, not represented | **Fact:** C4 declares M1–M6 at `docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:34-47`, while the runner records only inbound persistence, worker-claim crash, terminal enqueue, and repeated drain at `test/support/openclaw_comms_runner.rb:542-567`. **Fact:** C8 manually calls `mark_cancellation_observed` at `test/support/openclaw_comms_runner.rb:810-835`, and its oracle explicitly marks `engine_observed_before_settle` unavailable at `gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb:597-629`. **Gate:** process-level M1–M6 and runner-observed C8 evidence or a narrowed claim. |
+| F5 | High / confirmed evidence gap | Declared restart/cancellation moments must be executed, not represented | **Fact:** C4 declares M1–M6 at `documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:34-47`, while the runner records only inbound persistence, worker-claim crash, terminal enqueue, and repeated drain at `test/support/openclaw_comms_runner.rb:542-567`. **Fact:** C8 manually calls `mark_cancellation_observed` at `test/support/openclaw_comms_runner.rb:810-835`, and its oracle explicitly marks `engine_observed_before_settle` unavailable at `gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb:597-629`. **Gate:** process-level M1–M6 and runner-observed C8 evidence or a narrowed claim. |
 | F6 | High / confirmed evidence gap | A real artifact requires an independent witness and real transport/provider provenance | **Fact:** B0 hardcodes fixture provider/transport at `test/support/openclaw_comms_runner.rb:26-32`, and its artifact contains fixture metadata at `test/support/openclaw_comms_runner.rb:187-205` but no independent trace binding. **Fact:** `Telegram::Transport` makes real Bot API operations at `gems/tamoz-telegram/lib/tamoz/telegram/transport.rb:37-79`, but current transport tests use `TelegramFixtureServer` at `test/tamoz_telegram_transport_test.rb:16-27`. **Gate:** guarded private real Telegram/provider run, durable receipts, callback/send/edit receipts, and independent trace agreement. |
 | F7 | High / unresolved operational contract | Accepted must not imply a healthy worker or active execution | **Fact:** the guide states gateway and worker are separate foreground processes and that the gateway can admit work while no worker answers at `documentation/guides/telegram.md:84-117`; the launcher only starts/checks processes at `scripts/start-tamoz-comms.sh:150-183`; gateway admission persists accepted work at `gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_admission.rb:49-70`. **Inference:** the current acknowledgement can be truthful about persistence while being interpreted as active execution. **Gate:** choose and test queue-versus-refuse behavior, with a bounded worker-availability fact. |
 
@@ -88,7 +88,7 @@ The following are unresolved high-severity findings. Count: **7**.
 actionability, annoyance, recovery experience, and real answer usefulness have
 no current participant instrument or real transcript. The executable catalog
 metrics cover plumbing axes at
-`docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md:39-60`.
+`documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md:39-60`.
 This blocks experience claims, even after the seven high-severity gates above
 are closed.
 
@@ -146,8 +146,8 @@ enough to prove the projection plumbing.
 **Classification: Fact (confirmed evidence-governance defect).**
 
 The scenario contract declares both CLI and Telegram at, for example,
-`docs/openclaw-chat-study/benchmark-protocol/scenarios/C2-slow-liveness.md:1-8`
-and `docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:1-8`.
+`documentation/benchmark/openclaw-chat-study/scenarios/C2-slow-liveness.md:1-8`
+and `documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:1-8`.
 The B0 runner only drives both for C1, C5, C6, and C9 at
 `test/support/openclaw_comms_runner.rb:41-48`; the fallback is Telegram at
 `test/support/openclaw_comms_runner.rb:133-135`. Its readiness function
@@ -265,7 +265,7 @@ hard-zero.
 incorrect).**
 
 C4 requires six restart boundaries at
-`docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:34-47`.
+`documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:34-47`.
 The B0 driver executes only three labels and a second drain at
 `test/support/openclaw_comms_runner.rb:542-567`. C8's clean-stop driver writes
 the observation through `fixture.store.mark_cancellation_observed` at
@@ -304,7 +304,7 @@ terminal wording matches the durable settle kind without a store-side stamp.
 B0 hardcodes `RUN_KIND = 'fixture'`, deterministic provider, and no-egress
 transport at `test/support/openclaw_comms_runner.rb:26-32`. The protocol requires
 durable receipts plus an independent trace at
-`docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md:83-120`.
+`documentation/benchmark/openclaw-chat-study/01-protocol-design.md:83-120`.
 The fixture artifact records store/fixture output at
 `test/support/openclaw_comms_runner.rb:187-205`; its fixture transport's
 `signal` is a no-op at `test/support/openclaw_comms_fixture.rb:104-119`.
@@ -426,8 +426,8 @@ command sequence and independent trace at
 and implementation plan point at nonexistent paths such as
 `gems/tamoz-evals/lib/tamoz/evals/harness/sqlite_scenario_runtime.rb` and
 `gems/tamoz-evals/lib/tamoz/evals/benchmark/openclaw_mission_runner.rb`
-at `docs/openclaw-chat-study/benchmark-protocol/README.md:45-47` and
-`docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md:27-33`.
+at `documentation/benchmark/openclaw-chat-study/README.md:45-47` and
+`documentation/benchmark/openclaw-chat-study/03-implementation-plan.md:27-33`.
 
 **Affected slice/seam:** Roadmap Slice 4 and the evidence index/benchmark
 documentation.
@@ -479,23 +479,23 @@ implementation-ready slice.
 | Crash/restart/replay | **Fact:** worker recovery tests exercise committed recovery milestones at `test/progress_projection_test.rb:468-509`; durable CLI adapter has subprocess plumbing at `gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:318-362`. **Fact:** B0 C4 runs a reduced fixture path at `test/support/openclaw_comms_runner.rb:542-567`. | **Proposal:** process-level gateway/worker M1–M6, effect receipt replay, terminal enqueue/send ambiguity, persisted DB reopen, and exact-ref recovery. |
 | Concurrency/order/dedup | **Fact:** drainer fencing and unknown status are covered by `gems/tamoz-comms-gateway/lib/tamoz/comms/delivery_drainer.rb:61-151` and `test/delivery_drainer_test.rb:100-118` (`test_crashed_send_boundary_becomes_unknown_without_a_retry`); callback binding/CAS tests exist in `test/callback_ack_crash_test.rb:192-245` (`test_callback_ack_precedes_the_turn_and_the_decision_survives_a_worker_restart`). | **Proposal:** two-ref cross-surface target races, clarification answer dedup/expiry, callback ack ordering receipt, concurrent gateway/worker admission, and no cross-conversation projection. |
 | Real Telegram transport | **Fact:** production maps poll/send/edit/ack at `gems/tamoz-telegram/lib/tamoz/telegram/transport.rb:37-79`; tests use `TelegramFixtureServer` at `test/tamoz_telegram_transport_test.rb:16-27`. | **Evidence gap:** private real `getMe`, long poll, send/edit, callback ack, rate/timeout, actual receipt, and cleanup observation. |
-| Real provider/model | **Fact:** B0 provider is deterministic at `test/support/openclaw_comms_runner.rb:26-32`; protocol reserves Track B for real provider at `docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md:60-68`. | **Evidence gap:** real-provider task answer, model/provider provenance, cost, failure handling, effect receipts, and separate answer-quality rubric. |
-| Operator/perceived quality | **Fact:** current catalog metrics are plumbing-oriented at `docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md:39-60`. | **Evidence gap:** predeclared comprehension, correct next action, target accuracy, trust calibration, annoyance, recovery, abandonment/resend, and answer usefulness samples. |
+| Real provider/model | **Fact:** B0 provider is deterministic at `test/support/openclaw_comms_runner.rb:26-32`; protocol reserves Track B for real provider at `documentation/benchmark/openclaw-chat-study/01-protocol-design.md:60-68`. | **Evidence gap:** real-provider task answer, model/provider provenance, cost, failure handling, effect receipts, and separate answer-quality rubric. |
+| Operator/perceived quality | **Fact:** current catalog metrics are plumbing-oriented at `documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md:39-60`. | **Evidence gap:** predeclared comprehension, correct next action, target accuracy, trust calibration, annoyance, recovery, abandonment/resend, and answer usefulness samples. |
 | Observability | **Fact:** existing durable CLI adapter joins a trace at `gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:152-199`; B0 artifacts lack a trace field at `test/support/openclaw_comms_runner.rb:187-205`. | **Proposal:** independent witness digest, source/receipt join, required-field validation, forced mismatch hard zero, and no same-fixture “second witness.” |
 | Rollback/stop conditions | **Proposal:** roadmap says render rollback and stop admission if clarification projection fails at `docs/openclaw-chat-study-refresh/02-decision-roadmap.md:158-168` (Rollout and rollback). | **Evidence gap:** no exact renderer version/config owner, rollback command, persisted-row behavior, operator alert, or stop/resume procedure. **Proposal:** freeze one current-schema version, name the reversible configuration, and test failed serialization/delivery without replaying unknown unsafe sends. |
 
 ## 6. Cross-document contradictions, stale references, and unsupported claims
 
 1. **Fact — scenario state contradiction.**
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/SCENARIO_INDEX.json:19-31`
+   `documentation/benchmark/openclaw-chat-study/scenarios/SCENARIO_INDEX.json:19-31`
    marks C1–C9 `READY`.
    Scenario front matter still says `INCOMPLETE`, for example
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/C2-slow-liveness.md:7-8`
+   `documentation/benchmark/openclaw-chat-study/scenarios/C2-slow-liveness.md:7-8`
    and
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:7-8`.
+   `documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:7-8`.
    The scenarios README says the
    index is not consumed at
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/README.md:84-116`,
+   `documentation/benchmark/openclaw-chat-study/scenarios/README.md:84-116`,
    while B0 consumes it at `test/support/openclaw_comms_runner.rb:62-83`.
    **Smallest correction:** one authoritative state vocabulary must distinguish
    fixture-ready, real-ready, inconclusive, and blocked, with a consistency test.
@@ -507,14 +507,14 @@ implementation-ready slice.
    while the existing durable CLI adapter is
    `gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:15-25`.
    Evidence is the stale references at
-   `docs/openclaw-chat-study/benchmark-protocol/README.md:45-47` and
-   `docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md:27-33`.
+   `documentation/benchmark/openclaw-chat-study/README.md:45-47` and
+   `documentation/benchmark/openclaw-chat-study/03-implementation-plan.md:27-33`.
 
 3. **Fact — stale scenario filename.** The interaction review refers to
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-recovery-matrix.md`
+   `documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-recovery-matrix.md`
    at `docs/openclaw-chat-study-refresh/specialist-reviews/02-interaction-product.md:29`;
    the current file is
-   `docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:1-8`.
+   `documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:1-8`.
    **Impact:** a closure
    test or reviewer can follow a nonexistent artifact.
 

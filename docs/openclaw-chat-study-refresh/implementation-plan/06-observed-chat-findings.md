@@ -99,7 +99,7 @@ with OF-4 (silence), the user cannot tell it is alive.
 
 **Root cause / maps to:** multiple sequential model calls (plan, review, repair
 plan, review, verify) each at provider latency, with no interim liveness the
-user can read. Latency has its own workstream (`docs/ux-latency-investigation/`);
+user can read. Latency has its own workstream (`documentation/operations/ux-latency-investigation/`);
 the chat-side mitigations are Decision 3 (two-stage receipt) and honest liveness
 (DG-2 / Phase 3).
 

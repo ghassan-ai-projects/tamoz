@@ -7,7 +7,7 @@
 
 Approval is now one gem with one narrow interface over policy-as-data, instead of a rule
 smeared across six sites in four gems. This ADR adopts the redesign ADR authored at
-`docs/approval-policy-redesign-2026-08-22/03-redesign-adr.md`, which was fully implemented
+`approval-policy-redesign/03-redesign-adr.md`, which was fully implemented
 but never given a number or a place in the catalog.
 
 Current version: `0.1.0.alpha.1` (pre-release).
@@ -97,10 +97,10 @@ Verified against code: 2026-08-29 — `gems/tamoz-approval/lib/tamoz/approval.rb
 `gems/tamoz-approval/policy/{base.yaml,profiles/}` exist; ADR-049's standalone page (§5)
 already references the digest-pinned YAML documents of `gems/tamoz-approval` as the live home
 of `required_evidence`. Implementation evidence: `05-implementation-plan.md` phases 1–12 and
-`08-implementation-bars.md` in `docs/approval-policy-redesign-2026-08-22/`.
+`approval-policy-redesign/08-implementation-bars.md`.
 
 ## Next reads
 
 - [`adr-049-telegram-approval.md`](./adr-049-telegram-approval.md) — the evidence lattice this gem serves
 - [`README.md`](./README.md) — the ADR index
-- [`../../docs/approval-policy-redesign-2026-08-22/`](../../docs/approval-policy-redesign-2026-08-22/) — the full redesign package (study, audit, reviews, implementation)
+- [`./approval-policy-redesign/`](./approval-policy-redesign/) — the full redesign package (study, audit, reviews, implementation)

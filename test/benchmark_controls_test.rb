@@ -14,7 +14,7 @@ require "support/aquaculture_domain"
 require "support/climate_domain"
 require "support/episode_composition"
 
-# P7 (docs/new-design/PHASE_P7_BENCHMARK.md): the mandatory adversarial
+# The frozen benchmark protocol in documentation/benchmark/: the mandatory adversarial
 # controls, consolidated through the composed graph. Each control is a named
 # test; the ones with dedicated P1–P6 gate suites call those mechanisms (the
 # gate is the consolidation, not a rewrite), and the seven that had no test

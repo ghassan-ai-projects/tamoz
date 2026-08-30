@@ -5,8 +5,7 @@ require "tamoz/agent"
 require_relative "domain_loader"
 
 # P4 exit gate 4: a NOVEL domain authored as DATA in
-# test/fixtures/domains/climate.json (domain-knowledge extraction —
-# docs/new-design/impl/DOMAIN_DATA_EXTRACTION.md). ZERO production Ruby: the
+# test/fixtures/domains/climate.json. ZERO production Ruby: the
 # fixed graph is domain-agnostic (B9) and this module is a thin loader over
 # the JSON. The climate domain covers a greenhouse temperature/humidity cell.
 module ClimateDomain

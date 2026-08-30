@@ -63,10 +63,10 @@ perceived-usefulness, real-provider, or live-Telegram evidence.
 | --- | --- | --- |
 | L1 | The Phase 3 log says the canonical test composes “CLI and Telegram projections” and the whole story is complete (docs/openclaw-chat-study/08-review-log.md:205-236; docs/openclaw-chat-study/implementation-plan/evidence/phase-3/implementation-review.md:41-49). | Narrowed. The story composes durable rows through a fixture helper, not the CLI command/parser/output path. It is strong plumbing evidence, not operator-surface parity. |
 | L2 | All nine B0 scenarios are “ready with empty pending seams” (docs/openclaw-chat-study/08-review-log.md:233-236). | Technically true only for the fixture runner’s local status. C2, C3, C4, C7, and C8 are explicitly Telegram-only, and their parity values are unavailable; metrics_ready? ignores unavailable values. This is contradictory with the protocol’s requirement that every scenario run on both surfaces. |
-| L3 | Every scenario runs on both durable CLI and Telegram (docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md:8-10; docs/openclaw-chat-study/benchmark-protocol/scenarios/00-implementation-bar.md:22-28). | False at current B0. The runner’s SURFACES_DRIVEN has CLI only for C1, C5, C6, and C9 (test/support/openclaw_comms_runner.rb:41-48,133-135); B0 asserts this reduced matrix (test/benchmark_comms_b0_test.rb:test_all_nine_catalog_scenarios_score_with_an_empty_pending_seam). |
+| L3 | Every scenario runs on both durable CLI and Telegram (documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md:8-10; documentation/benchmark/openclaw-chat-study/scenarios/00-implementation-bar.md:22-28). | False at current B0. The runner’s SURFACES_DRIVEN has CLI only for C1, C5, C6, and C9 (test/support/openclaw_comms_runner.rb:41-48,133-135); B0 asserts this reduced matrix (test/benchmark_comms_b0_test.rb:test_all_nine_catalog_scenarios_score_with_an_empty_pending_seam). |
 | L4 | Callback queries are acknowledged immediately after durable admission and before processing (docs/openclaw-chat-study/implementation-plan/evidence/phase-2/implementation-review.md:40-43; 08-review-log.md:207-216). | Timing claim unproved and wording is imprecise. Gateway::Admission#route_admission resolves and durably consumes the callback decision before calling acknowledge_callback (gems/tamoz-comms-gateway/lib/tamoz/comms/gateway_admission.rb:31-38; gateway_callbacks.rb:10-16,21-63). No live acknowledgement latency is measured. |
-| L5 | The scenario README says the index is not consumed and scenarios remain incomplete (docs/openclaw-chat-study/benchmark-protocol/scenarios/README.md:84-116). | Stale. B0 now consumes SCENARIO_INDEX.json and produces artifacts (test/support/openclaw_comms_runner.rb:62-83); the index marks C1–C9 READY (SCENARIO_INDEX.json:19-31 and corresponding entries). The README, scenario front matter, index, and B0 tests disagree. |
-| L6 | The benchmark plan expected comms oracles/runner work in the existing eval path and a later real executor (docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md:36-39,59-107). | Partially landed, structurally different. Oracles are in gems/tamoz-evals-runner, but the comms runner is caller-owned test support (test/support/openclaw_comms_runner.rb:26; test/test_helper.rb:44-46). The shipped script/benchmark_comms_run is hardwired to fixture output (script/benchmark_comms_run:38-53,74-94). |
+| L5 | The scenario README says the index is not consumed and scenarios remain incomplete (documentation/benchmark/openclaw-chat-study/scenarios/README.md:84-116). | Stale. B0 now consumes SCENARIO_INDEX.json and produces artifacts (test/support/openclaw_comms_runner.rb:62-83); the index marks C1–C9 READY (SCENARIO_INDEX.json:19-31 and corresponding entries). The README, scenario front matter, index, and B0 tests disagree. |
+| L6 | The benchmark plan expected comms oracles/runner work in the existing eval path and a later real executor (documentation/benchmark/openclaw-chat-study/03-implementation-plan.md:36-39,59-107). | Partially landed, structurally different. Oracles are in gems/tamoz-evals-runner, but the comms runner is caller-owned test support (test/support/openclaw_comms_runner.rb:26; test/test_helper.rb:44-46). The shipped script/benchmark_comms_run is hardwired to fixture output (script/benchmark_comms_run:38-53,74-94). |
 | L7 | Phase 3 records C8 cancellation as complete while naming the engine-observed-before-settle edge and missing failed-settle leg (docs/openclaw-chat-study/implementation-plan/evidence/phase-3/implementation-review.md:94-108). | Still open, not a closed operator proof. The oracle itself records engine_observed_before_settle as unavailable (gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_comms_oracles.rb:597-629), and the runner stamps the clean-stop observation through a store seam (test/support/openclaw_comms_runner.rb:787-835). |
 | L8 | The earlier study correctly says no live Telegram, real provider, or usefulness claim exists (docs/openclaw-chat-study/08-review-log.md:201-203; docs/openclaw-chat-study/implementation-plan/evidence/phase-3/implementation-review.md:99-108). | Confirmed, but now a delivery blocker rather than a future footnote. No current command or artifact provides a Track-B comms run with real provider, real Telegram delivery/ack receipts, and two agreeing witnesses. |
 
@@ -81,7 +81,7 @@ and a no-egress transport (test/support/openclaw_comms_runner.rb:26-32).
 script/benchmark_comms_run loads an external fixture factory and always prints
 fixture: true (script/benchmark_comms_run:38-53,85-94). The planned B1
 real executor remains a plan, not an implementation
-(docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md:87-107).
+(documentation/benchmark/openclaw-chat-study/03-implementation-plan.md:87-107).
 
 Impact: There is no evidence that an actual model answer can complete the
 turn, that a real Telegram user sees the lifecycle, or that a provider/API
@@ -231,7 +231,7 @@ Class: Fact; evidence gap.
 
 The scenario requires a several-phase slow run, a silence bound, coalescing
 pressure, and both surfaces
-(docs/openclaw-chat-study/benchmark-protocol/scenarios/C2-slow-liveness.md:20-43).
+(documentation/benchmark/openclaw-chat-study/scenarios/C2-slow-liveness.md:20-43).
 The B0 driver instead uses crashing_factory(:c2_recovery), crashes after
 plan, and recovers a worker
 (test/support/openclaw_comms_runner.rb:425-439;
@@ -254,7 +254,7 @@ Class: Fact; evidence gap.
 
 The C4 contract names six boundaries, including acknowledgement enqueue,
 effect receipt, terminal enqueue, and send ambiguity
-(docs/openclaw-chat-study/benchmark-protocol/scenarios/C4-restart-boundary-matrix.md:34-47).
+(documentation/benchmark/openclaw-chat-study/scenarios/C4-restart-boundary-matrix.md:34-47).
 The current driver only records inbound persistence, a worker-claim crash, and
 terminal enqueue, then drains twice
 (test/support/openclaw_comms_runner.rb:542-567). The oracle treats three
@@ -363,7 +363,7 @@ Class: Fact; evidence gap.
 
 The protocol requires durable receipts plus an independent observability trace
 and treats divergence as a hard zero
-(docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md:105-120).
+(documentation/benchmark/openclaw-chat-study/01-protocol-design.md:105-120).
 B0’s artifact contains a durable snapshot and fixture metadata, but no trace
 field (test/support/openclaw_comms_runner.rb:187-205,220-239). The
 pushed_milestones recording is another fixture-side view of the same execution
@@ -381,10 +381,10 @@ collected without advancing the turn. Add an artifact-mismatch hard-zero test.
 Class: Evidence gap; hypothesis about user impact.
 
 The protocol’s Track B says it will record answer quality and visible lifecycle
-updates (docs/openclaw-chat-study/benchmark-protocol/01-protocol-design.md:60-65),
+updates (documentation/benchmark/openclaw-chat-study/01-protocol-design.md:60-65),
 but the catalog’s executable metrics are completion, liveness, delivery,
 recovery, parity, commands, context, identity, and cost
-(docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md:39-60).
+(documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md:39-60).
 There is no operator rating, comprehension check, actionability measure, or
 answer-quality rubric in the comms runner/oracles. B0’s scripted verify
 responses prove fixture state transitions only
@@ -427,10 +427,10 @@ reproduction and document the boundary.
 Class: Fact.
 
 Scenario prose still says C1–C9 are INCOMPLETE until B0
-(docs/openclaw-chat-study/benchmark-protocol/scenarios/C1-happy-path.md:7-8,
+(documentation/benchmark/openclaw-chat-study/scenarios/C1-happy-path.md:7-8,
 and the analogous front matter for C2–C9), while SCENARIO_INDEX.json says
 READY and B0 asserts all nine ready
-(docs/openclaw-chat-study/benchmark-protocol/scenarios/SCENARIO_INDEX.json:19-31,
+(documentation/benchmark/openclaw-chat-study/scenarios/SCENARIO_INDEX.json:19-31,
 test/benchmark_comms_b0_test.rb:198-227). The README still says no runner
 consumes the index (scenarios/README.md:88-90).
 
@@ -646,7 +646,7 @@ inferences, not measured user studies:
 * Do not create a second chat runtime, event bus, or in-memory status cache.
   Existing Gateway, DurableRunner, Session, effect journal, outbox, and store
   seams are sufficient; this preserves the implementation plan’s reuse rule
-  (docs/openclaw-chat-study/benchmark-protocol/README.md:69-71).
+  (documentation/benchmark/openclaw-chat-study/README.md:69-71).
 * Do not add token streaming or raw plan/tool output as a substitute for
   liveness. The scenario contract explicitly rejects it
   (C2-slow-liveness.md:12-18,58-63).

@@ -35,7 +35,7 @@ or usefulness observation.
 | Safe goal label has deterministic owner and redaction rules | Evidence gap | gems/tamoz-agent-session/lib/tamoz/agent/session_status_projection.rb:5-8,19-37,76-105 | Must be defined before human projection |
 | Callback observed_at is derived from top-level message.date, absent on callback-only updates | Fact | gems/tamoz-telegram/lib/tamoz/telegram/normalizer.rb:34-48,54-65,69-80; test/telegram_normalizer_test.rb:80-125 | Fixed in `5fc2875`; callback source date and explicit ingestion fallback pass |
 | CLI test exits 0 despite an unhandled background CheckpointConflictError | Runtime observation | gems/tamoz-agent-cli/lib/tamoz/agent/cli.rb:105-123,387-426; test/agent_cli_test.rb:840-872 | Fixed in `3a833c1`; durable worker-thread conflict is bounded and nonzero |
-| Benchmark impl-plan cites nonexistent tamoz-evals paths; OpenclawDurableCliAdapter is the real owner | Fact | docs/openclaw-chat-study/benchmark-protocol/README.md:45-47; gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:15-25 | Confirmed doc/governance defect (EG-7); reconcile before Slice 4 |
+| Benchmark impl-plan cites nonexistent tamoz-evals paths; OpenclawDurableCliAdapter is the real owner | Fact | documentation/benchmark/openclaw-chat-study/README.md:45-47; gems/tamoz-evals-runner/lib/tamoz/evals/benchmark/openclaw_durable_cli_adapter.rb:15-25 | Confirmed doc/governance defect (EG-7); reconcile before Slice 4 |
 | Future channel should be deferred | Proposal | Consolidated study and facilitator/Fourier synthesis | Decision recommendation |
 | A local web or TUI is the candidate after gates | Proposal | Architecture report, Fourier challenge, roadmap Slice 5 | Candidate only; no implementation authorization |
 

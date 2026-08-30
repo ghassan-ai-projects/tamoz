@@ -4,7 +4,7 @@ require "json"
 require "tamoz/core"
 require "tamoz/agent"
 
-# Domain-knowledge extraction (docs/new-design/impl/DOMAIN_DATA_EXTRACTION.md):
+# Domain-knowledge extraction follows the data-only policy in AGENTS.md:
 # the domain content (catalogs, prompts, intents, watch-property rules,
 # compensation maps, presets, snapshots, fixtures, benchmark-family config)
 # lives in test/fixtures/domains/*.json — ZERO domain knowledge in Ruby code.

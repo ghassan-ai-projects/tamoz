@@ -5,8 +5,7 @@ require "tamoz/agent"
 require_relative "domain_loader"
 
 # P1/§"One real domain": the aquaculture DO-crash cell, authored as DATA in
-# test/fixtures/domains/aquaculture.json (domain-knowledge extraction —
-# docs/new-design/impl/DOMAIN_DATA_EXTRACTION.md). This module is a thin
+# test/fixtures/domains/aquaculture.json. This module is a thin loader;
 # loader exposing the domain's constants and builders; ZERO domain knowledge
 # lives in Ruby code here (B9). Fixture responses are labeled `fixture` and
 # are never shown as evidence of a real model path (B8).

@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 
-# P7 (docs/new-design/PHASE_P7_BENCHMARK.md): holdout mechanics. Cases are
+# The frozen benchmark protocol in documentation/benchmark/: holdout mechanics. Cases are
 # generated AFTER the protocol freeze with opaque ids and a temporal cutoff on
 # every input; the model-visible bytes are scanned for truth leaks; the truth
 # lives in a separate file (scorer credentials) from the manifest (worker

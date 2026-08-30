@@ -111,7 +111,7 @@ safety gates are met.
 
 - **Fact:** Existing executable metrics cover lifecycle plumbing, not operator
   comprehension, actionability, interruption burden, or answer usefulness
-  (`docs/openclaw-chat-study/benchmark-protocol/02-scenario-catalog-and-scoring.md:39-60`).
+  (`documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md:39-60`).
 - **Evidence gap:** The repository cannot currently say whether a person
   understands the state, chooses the right control, trusts completion and
   delivery correctly, or finds a real model answer useful.

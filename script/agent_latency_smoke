@@ -24,8 +24,8 @@ end
 require "tamoz/sqlite"
 require "tamoz/agent"
 
-DEFAULT_OUTPUT = File.join(ROOT, "docs", "ux-latency-investigation", "latency-smoke.json")
-DEFAULT_MARKDOWN = File.join(ROOT, "docs", "ux-latency-investigation", "latency-smoke.md")
+DEFAULT_OUTPUT = File.join(ROOT, "documentation", "operations", "ux-latency-investigation", "latency-smoke.json")
+DEFAULT_MARKDOWN = File.join(ROOT, "documentation", "operations", "ux-latency-investigation", "latency-smoke.md")
 
 DIRECT_PROMPTS = [
   "Hello",

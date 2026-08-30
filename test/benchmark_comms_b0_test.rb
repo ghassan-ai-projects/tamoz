@@ -3,7 +3,7 @@
 require_relative 'test_helper'
 require 'digest'
 
-# Phase B0 (docs/openclaw-chat-study/benchmark-protocol/03-implementation-plan.md):
+# Phase B0 (documentation/benchmark/openclaw-chat-study/03-implementation-plan.md):
 # the nine canonical comms scenarios run through the composition harness as a
 # fixture run — real Normalizer → Gateway admit → SQLite store → Worker drain →
 # DeliveryDrainer receipts over a fake scripted transport and a deterministic
@@ -12,7 +12,7 @@ require 'digest'
 class BenchmarkCommsB0Test < Minitest::Test
   Runner = Tamoz::Evals::Benchmark::OpenclawCommsRunner
   Adapter = Tamoz::Evals::Benchmark::OpenclawCommsAdapter
-  IndexPath = Pathname.new(ROOT).join('docs/openclaw-chat-study/benchmark-protocol/scenarios/SCENARIO_INDEX.json')
+  IndexPath = Pathname.new(ROOT).join('documentation/benchmark/openclaw-chat-study/scenarios/SCENARIO_INDEX.json')
 
   def with_runner(**options)
     Dir.mktmpdir('tamoz-comms-b0') do |directory|

@@ -5,8 +5,8 @@ require "time"
 module Tamoz
   module Evals
     module Benchmark
-      # P7 (docs/new-design/PHASE_P7_BENCHMARK.md): the frozen metric
-      # functions. Pure and deterministic — the same cells re-scored anywhere
+      # The frozen metric functions are documented in documentation/benchmark/.
+      # They are pure and deterministic — the same cells re-scored anywhere
       # yield the same numbers, which is what makes the go rule's "offline
       # reproducibility" check meaningful. The definitions are the protocol's
       # (BENCHMARK_PROTOCOL.json scoring section); a change here is a NEW

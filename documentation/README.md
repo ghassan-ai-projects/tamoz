@@ -44,19 +44,23 @@ root is the entry point; this folder contains the detailed reference material.
 
 ## Decisions
 
-- [adr/README.md](adr/README.md): the ADR index — every decision record 001–049
+- [adr/README.md](adr/README.md): the ADR index — every decision record 001–055
 - [adr/adr-049-telegram-approval.md](adr/adr-049-telegram-approval.md): evidence-gated Telegram approval
+- [adr/approval-policy-redesign/README.md](adr/approval-policy-redesign/README.md): the implemented approval-policy design and evidence package
 
 ## Guides
 
 - [guides/agent-operator.md](guides/agent-operator.md): runbook for operating an agent over Tamoz
 - [guides/telegram.md](guides/telegram.md): talking to Tamoz over Telegram
 - [guides/evaluation.md](guides/evaluation.md): how evaluation, scorecards and release evidence work
+- [benchmark/README.md](benchmark/README.md): the frozen benchmark and rollout evidence contract
 
 ## Operations
 
 - [operations/operations.md](operations/operations.md): backup, restore and crash recovery
 - [operations/observability-ops.md](operations/observability-ops.md): status, journal, metrics and tracing
+- [operations/ux-latency-investigation/README.md](operations/ux-latency-investigation/README.md): latency investigation, implementation evidence, and operator guidance
+- [operations/ux-latency-investigation/durable-compatibility-spike.md](operations/ux-latency-investigation/durable-compatibility-spike.md): durable routing compatibility evidence
 
 ## Reference
 

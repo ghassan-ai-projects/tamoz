@@ -5,7 +5,7 @@ require "json"
 require "tamoz/stream/episode_worker"
 require "support/aquaculture_domain"
 
-# P8 (docs/new-design/PHASE_P8_ROLLOUT.md): the Ruby side of the mode matrix.
+# The controlled-rollout contract in documentation/benchmark/: the Ruby side of the mode matrix.
 # (1) The calibration artifact generator is deterministic — the same domains
 # and build produce the same artifacts, so the SHA is a stable binding.
 # (2) The no-hidden-fallback gate: a FIXTURE-provider worker refuses a

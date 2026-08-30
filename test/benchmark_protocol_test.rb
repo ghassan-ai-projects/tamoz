@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 
-# P7 (docs/new-design/PHASE_P7_BENCHMARK.md) — the benchmark protocol is the
+# The benchmark protocol in documentation/benchmark/ is the
 # freeze. The gates protect it exactly like the requirements manifest:
 #
 # - it regenerates byte-identically from the authoritative sources, so no

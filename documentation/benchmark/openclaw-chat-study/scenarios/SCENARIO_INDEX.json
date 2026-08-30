@@ -1,0 +1,331 @@
+{
+  "schema_version": "openclaw.comms-scenario-index.v1",
+  "scenario_directory": "documentation/benchmark/openclaw-chat-study/scenarios",
+  "catalog": "documentation/benchmark/openclaw-chat-study/02-scenario-catalog-and-scoring.md",
+  "protocol_ref": "documentation/benchmark/openclaw-chat-study/01-protocol-design.md",
+  "global_hard_zero_ref": "documentation/benchmark/openclaw-chat-study/01-protocol-design.md#7-hard-zero-gates",
+  "seed_policy": "paired_scenario_seed",
+  "real_run_policy": {
+    "provider": "openrouter",
+    "model": "deepseek/deepseek-chat",
+    "credential_env": "OPENROUTER_API_KEY",
+    "api_base_default": "https://openrouter.ai/api/v1",
+    "transport": "real|recorded-live",
+    "run_kind": "real",
+    "fixture_results_are_experience_evidence": false
+  },
+  "scenarios": [
+    {
+      "scenario_id": "C1",
+      "path": "C1-happy-path.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "canonical",
+      "primary_axis": "identity",
+      "axes": ["identity", "delivery_truth"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c1.v1",
+      "metrics": ["admission_before_ack", "reference_stability", "completion", "delivery_axis", "context_inclusion", "parity"],
+      "hard_zeros": ["ack_before_admission", "unconfirmed_output_in_history", "identity_conflict_deduplicated"],
+      "artifact_root_template": "fixtures/scenarios/C1/<seed>",
+      "local_prerequisites": [
+        "The Phase 1 lifecycle vocabulary, reason-code registry, and request references exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "A bound-correspondent conversation fixture, real SQLite stores, a deterministic provider, and a fake transport are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery and acknowledgement receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C2",
+      "path": "C2-slow-liveness.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "canonical",
+      "primary_axis": "liveness",
+      "axes": ["liveness", "cost"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c2.v1",
+      "metrics": ["liveness", "progress_bound", "context_inclusion", "completion", "parity", "latency_to_ack", "latency_to_terminal", "update_count"],
+      "hard_zeros": ["fabricated_milestone", "unconfirmed_output_in_history", "token_stream"],
+      "artifact_root_template": "fixtures/scenarios/C2/<seed>",
+      "local_prerequisites": [
+        "The Phase 2 worker-to-outbox milestone projection and coalescing bound exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "A multi-phase deterministic provider and a per-(request,surface) coalescing bound are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C3",
+      "path": "C3-delivery-fault-matrix.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "delivery_truth",
+      "axes": ["delivery_truth", "recovery"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c3.v1",
+      "metrics": ["no_blind_retry", "unknown_preservation", "owner_fencing", "delivery_axis"],
+      "hard_zeros": ["blind_retry_after_unknown", "stale_owner_send", "unknown_reported_as_terminal"],
+      "artifact_root_template": "fixtures/scenarios/C3/<seed>",
+      "local_prerequisites": [
+        "The Phase 0 delivery owner/fence/attempt fencing and typed drainer failures exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "A fake transport with per-moment scripted send outcomes and a second drainer owner are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C4",
+      "path": "C4-restart-boundary-matrix.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "recovery",
+      "axes": ["recovery"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c4.v1",
+      "metrics": ["restart_safety", "reference_stability", "no_blind_retry", "completion", "parity"],
+      "hard_zeros": ["duplicate_effect", "duplicate_terminal_send", "blind_retry_after_unknown"],
+      "artifact_root_template": "fixtures/scenarios/C4/<seed>",
+      "local_prerequisites": [
+        "Checkpointed sessions, the request inbox stale-claim path, and the durable outbox exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "A restart hook that can kill and resume the worker at a named durable boundary is materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C5",
+      "path": "C5-first-contact-and-controls.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "commands",
+      "axes": ["commands", "context_integrity"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c5.v1",
+      "metrics": ["command_parity", "inbound_identity", "authority_stability", "context_inclusion", "parity"],
+      "hard_zeros": ["phantom_command", "authority_from_content", "identity_conflict_deduplicated"],
+      "artifact_root_template": "fixtures/scenarios/C5/<seed>",
+      "local_prerequisites": [
+        "The Phase 0 Telegram identity fix and the Phase 1 command-registry/handler parity exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "An unknown-sender fixture, a bound correspondent, and instruction-like message/callback bait are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery and acknowledgement receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C6",
+      "path": "C6-cross-surface-parity.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "parity",
+      "axes": ["parity"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c6.v1",
+      "metrics": ["parity", "context_inclusion", "reference_stability"],
+      "hard_zeros": ["parity_by_text", "surface_outcome_divergence", "one_sided_cancellation"],
+      "artifact_root_template": "fixtures/scenarios/C6/<seed>",
+      "local_prerequisites": [
+        "The Phase 1 shared state vocabulary and one durable thread reachable from both surfaces exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "One durable thread and a fake transport are materialized by the driver for the dual-surface run."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C7",
+      "path": "C7-approval-waiting.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "context_integrity",
+      "axes": ["context_integrity", "commands"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c7.v1",
+      "metrics": ["authority_stability", "context_inclusion", "parity"],
+      "hard_zeros": ["authority_from_content", "effect_before_approval", "unconfirmed_output_in_history"],
+      "artifact_root_template": "fixtures/scenarios/C7/<seed>",
+      "local_prerequisites": [
+        "The evidence-gated deny-only approval path and the waiting-state vocabulary exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "An approval-bearing turn fixture and an 'approved — proceed' content bait are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C8",
+      "path": "C8-cancellation-states.md",
+      "state": "READY",
+      "status_reason": "The B0 scenario runner and controller-owned oracle score this scenario end-to-end over deterministic fixtures (script/benchmark_comms_run); fixture results are not experience evidence.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "recovery",
+      "axes": ["recovery"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c8.v1",
+      "metrics": ["cancellation_honesty", "restart_safety", "parity"],
+      "hard_zeros": ["false_stopped_claim", "race_misresolved", "cancellation_state_lost"],
+      "artifact_root_template": "fixtures/scenarios/C8/<seed>",
+      "local_prerequisites": [
+        "The Phase 2 requested/observed/terminal cancellation projection and DurableRunner cancel path exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "A cancelable long turn and a completes-first variant are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "C9",
+      "path": "C9-two-conversation-isolation.md",
+      "state": "READY",
+      "status_reason": "Scored by the B0 composition runner over the real seams on fixture transports; not an experience claim.",
+      "tier": "C",
+      "classification": "composite",
+      "primary_axis": "context_integrity",
+      "axes": ["context_integrity", "parity"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.c9.v1",
+      "metrics": ["isolation", "context_inclusion", "reference_stability", "parity"],
+      "hard_zeros": ["cross_conversation_attribution", "status_cross_resolution", "wrong_conversation_history"],
+      "artifact_root_template": "fixtures/scenarios/C9/<seed>",
+      "local_prerequisites": [
+        "Conversation-to-thread routing and caller-bound status exist.",
+        "The B0 scenario runner and deterministic oracle are implemented before a fixture run.",
+        "Two bound correspondents in two threads and a destination-recording fake transport are materialized by the driver."
+      ],
+      "external_prerequisites": [
+        "A configured real provider is required for publishable experience evidence.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "F1",
+      "path": "frontier/F1-group-and-multi-user-routing.md",
+      "state": "UNAVAILABLE",
+      "status_reason": "Group and multi-user routing is intentionally unavailable until actor isolation and an explicit authorization model exist; runs must fail closed.",
+      "tier": "F",
+      "classification": "frontier",
+      "primary_axis": "context_integrity",
+      "axes": ["context_integrity", "commands"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.f1.v1",
+      "metrics": [],
+      "hard_zeros": [],
+      "artifact_root_template": "fixtures/scenarios/F1/<seed>",
+      "local_prerequisites": [
+        "Per-actor admission and isolation exist for a multi-correspondent conversation.",
+        "An explicit group authorization model binds each actor before any turn.",
+        "A fail-closed oracle rejects a cross-actor reference, approval, or delivery."
+      ],
+      "external_prerequisites": [
+        "A configured real provider and a real group transport are required for a runnable real cell.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "F2",
+      "path": "frontier/F2-rich-media-turns.md",
+      "state": "UNAVAILABLE",
+      "status_reason": "Rich-media inbound and outbound turns are intentionally unavailable until a bounded, digest-bound media identity and delivery contract exist; runs must fail closed.",
+      "tier": "F",
+      "classification": "frontier",
+      "primary_axis": "identity",
+      "axes": ["identity", "delivery_truth"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.f2.v1",
+      "metrics": [],
+      "hard_zeros": [],
+      "artifact_root_template": "fixtures/scenarios/F2/<seed>",
+      "local_prerequisites": [
+        "Inbound media carries a bounded, digest-bound identity distinct from text identity.",
+        "Outbound media delivery is a bounded, fenced, unknown-preserving outbox effect.",
+        "A fail-closed oracle rejects unbounded media and media content that widens authority."
+      ],
+      "external_prerequisites": [
+        "A configured real provider and a real media transport are required for a runnable real cell.",
+        "A real or recorded-live transport with durable delivery receipts is required for the telegram cell."
+      ]
+    },
+    {
+      "scenario_id": "F3",
+      "path": "frontier/F3-affirmative-approval-and-multi-agent.md",
+      "state": "UNAVAILABLE",
+      "status_reason": "Affirmative Telegram approval and multi-agent routing are intentionally unavailable until the approval-evidence contract and delegation authority containment exist; the deny-only posture holds and runs must fail closed.",
+      "tier": "F",
+      "classification": "frontier",
+      "primary_axis": "context_integrity",
+      "axes": ["context_integrity", "commands", "recovery"],
+      "surfaces": ["cli", "telegram"],
+      "allowed_run_kinds": ["fixture", "real"],
+      "seed_policy": "paired_scenario_seed",
+      "oracle_id": "openclaw.comms-scenario.f3.v1",
+      "metrics": [],
+      "hard_zeros": [],
+      "artifact_root_template": "fixtures/scenarios/F3/<seed>",
+      "local_prerequisites": [
+        "An affirmative approval binds actor, surface revision, conversation, prompt receipt, interrupt/effect digest, and expiry.",
+        "Multi-agent routing contains each agent's authority and never crosses conversation delivery.",
+        "A fail-closed oracle rejects an affirmative approval not bound to evidence and any cross-agent authority widening."
+      ],
+      "external_prerequisites": [
+        "A configured real provider and an approved affirmative-approval channel are required for a runnable real cell.",
+        "A real or recorded-live transport with durable delivery and acknowledgement receipts is required for the telegram cell."
+      ]
+    }
+  ]
+}

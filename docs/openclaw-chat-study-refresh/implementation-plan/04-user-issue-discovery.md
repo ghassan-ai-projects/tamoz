@@ -29,7 +29,7 @@ trust or wastes time), **Medium** (friction/annoyance).
 ## Also tracked (beyond the 15, real but secondary)
 
 - **"It's slow to even acknowledge me."** Latency of acceptance/first update.
-  There is an existing investigation (`docs/ux-latency-investigation/`); this
+  There is an existing investigation (`documentation/operations/ux-latency-investigation/`); this
   program's Decision 3 (two-stage receipt) and Decision 4 (small N) help, but
   latency has its own workstream. → cross-reference, don't duplicate.
 - **"The CLI is silent while durable work runs."** Human CLI stream drops
