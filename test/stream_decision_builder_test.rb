@@ -19,6 +19,28 @@ class StreamDecisionBuilderTest < Minitest::Test
     @catalog ||= Catalog.from_list(AquacultureDomain::INTENT_CATALOG)
   end
 
+  def strict_non_watch_catalog
+    strict_schema = {
+      "type" => "object",
+      "additionalProperties" => false,
+      "properties" => {
+        "entity_id" => {"type" => "string"},
+        "state" => {"type" => "string", "enum" => %w[off alert]}
+      }
+    }
+    entries = AquacultureDomain::INTENT_CATALOG.map do |entry|
+      next entry unless entry["type"] == "recommend_operating_limit"
+
+      entry.merge(
+        "parameter_schema" => strict_schema,
+        "parameter_schema_digest" => "sha256:#{Digest::SHA256.hexdigest(Tamoz::Core.jcs(strict_schema))}",
+        "model_writable_fields" => ["state"],
+        "presets" => {"default" => {}}
+      )
+    end
+    Catalog.from_list(entries)
+  end
+
   def worker
     Stream::EpisodeWorker.new(
       worker_version: "0.1.0.alpha.1",
@@ -297,6 +319,44 @@ class StreamDecisionBuilderTest < Minitest::Test
     intent = decision.fetch("intents").fetch(0)
     assert_equal "start_aerator", intent.fetch("type")
     assert_equal "c-01", intent.fetch("parameters").fetch("entity_id")
+  end
+
+  def test_non_watch_parameters_do_not_receive_watch_only_situation_bindings
+    strict_catalog = strict_non_watch_catalog
+    decision, = Stream::DecisionBuilder.new(
+      envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+      outcome: {
+        primary_hypothesis: "bearing wear", confidence: 0.9,
+        recommended_intents: [proposal("recommend_operating_limit", parameters: {"state" => "alert"})]
+      },
+      catalog: strict_catalog
+    ).build
+
+    intent = decision.fetch("intents").fetch(0)
+    assert_equal "recommend_operating_limit", intent.fetch("type")
+    parameters = intent.fetch("parameters")
+    assert_equal({"entity_id" => "c-01", "state" => "alert"}, parameters)
+    schema = JSONSchemer.schema(strict_catalog.entry("recommend_operating_limit").parameter_schema)
+    assert schema.valid?(parameters), "the built non-watch parameters must satisfy its closed schema"
+    refute schema.valid?(parameters.merge("situation_id" => "forged")),
+           "the closed non-watch schema must reject watch-only bindings"
+    refute parameters.key?("situation_id")
+    refute parameters.key?("situation_version")
+  end
+
+  def test_non_watch_schema_rejects_watch_only_fields
+    error = assert_raises(Stream::StreamError) do
+      Stream::DecisionBuilder.new(
+        envelope:, snapshot:, snapshot_digest: "sha256:#{"0" * 64}",
+        outcome: {
+          primary_hypothesis: "bearing wear", confidence: 0.9,
+          recommended_intents: [proposal("recommend_operating_limit", parameters: {"situation_id" => "forged"})]
+        },
+        catalog: strict_non_watch_catalog
+      ).build
+    end
+
+    assert_match(/not model-writable/, error.message)
   end
 
   def test_a_compensation_target_must_be_a_catalog_member

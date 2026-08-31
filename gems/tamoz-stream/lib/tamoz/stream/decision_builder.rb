@@ -222,9 +222,11 @@ module Tamoz
 
       def apply_episode_bindings!(entry, parameters)
         parameters["entity_id"] = @snapshot.fetch("entity").fetch("id")
-        parameters["situation_id"] = @snapshot.fetch("situation_id")
-        parameters["situation_version"] = @snapshot.fetch("situation_version")
-        apply_watch_bindings!(parameters) if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+        if entry.type == Tamoz::Core::INTENT_WATCH_TYPE
+          parameters["situation_id"] = @snapshot.fetch("situation_id")
+          parameters["situation_version"] = @snapshot.fetch("situation_version")
+          apply_watch_bindings!(parameters)
+        end
       end
 
       # The watch condition's target IS the entity — per-episode bound,
