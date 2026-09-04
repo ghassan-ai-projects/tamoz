@@ -44,6 +44,21 @@ class AgentToolboxTest < Minitest::Test
     end
   end
 
+  def test_directory_listing_preserves_order_and_marks_only_overflow_as_truncated
+    Dir.mktmpdir('tamoz-toolbox') do |root|
+      toolbox = Tamoz::Agent::Toolbox.new(root:)
+      assert_empty toolbox.execute('list_directory', {})
+
+      names = Array.new(Tamoz::Tools::Toolbox::MAX_DIRECTORY_ENTRIES) { |index| format('%03d.txt', index) }
+      names.reverse_each { |name| File.write(File.join(root, name), '') }
+      assert_equal names.join("\n"), toolbox.execute('list_directory', {})
+
+      Dir.mkdir(File.join(root, '000-dir'))
+      expected = ['000-dir/', *names.take(names.length - 1), '... truncated']
+      assert_equal expected.join("\n"), toolbox.execute('list_directory', {})
+    end
+  end
+
   def test_read_file_returns_content_and_a_trusted_digest
     Dir.mktmpdir("tamoz-toolbox") do |root|
       File.write(File.join(root, "note.txt"), "evidence\n")

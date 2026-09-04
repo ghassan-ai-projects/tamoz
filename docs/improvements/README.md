@@ -35,6 +35,22 @@ transport. Changed-file RuboCop remains at its 162 existing offenses; Reek falls
 from 28 to 27 with no new contexts. Enola check passes with no new findings.
 The everyday CI command still reaches the previously recorded wider failures.
 
+### Increment 4: list a directory once and select only its visible entries
+
+`ReadOperations#list_directory` enumerated the directory twice and sorted every
+child before retaining 200. Enumerate once, use `min_by(200)`, and derive the
+truncation marker from the same snapshot. Existing Toolbox resolution and
+rendering stay in place. The added boundary test covers empty, exactly full,
+and overflowing directories, sorted file names, and the directory suffix. A
+`max_by` mutation is rejected.
+
+Toolbox and tools-gem suites pass: 78 tests, 453 assertions. Changed files have
+zero RuboCop offenses and zero Reek smells. Enola check passes with no new
+findings. A local 5,000-file benchmark (20 listings, identical output digest)
+went from 0.444s / 1,730,118 allocations to 0.264s / 1,129,938 allocations;
+these are one-machine measurements, not general throughput guarantees.
+Everyday CI still fails in the known unrelated suites.
+
 ## 2026-09-05: simpler capability registry construction
 
 Status: implemented; focused validation passed. Repository-wide gates remain red.
