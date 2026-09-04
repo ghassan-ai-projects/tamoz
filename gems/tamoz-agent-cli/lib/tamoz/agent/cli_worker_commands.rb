@@ -419,7 +419,7 @@ module Tamoz
 
         request_id = SecureRandom.uuid
         with_worker_runtime(options) do |runtime|
-          submit_mode_switch(runtime.session_for_profile(nil), thread_id, request_id, mode)
+          submit_mode_switch(runtime.checkpoints, thread_id, request_id, mode)
           if options[:json]
             @out.puts JSON.generate("thread" => thread_id, "mode" => mode, "request_id" => request_id)
           else

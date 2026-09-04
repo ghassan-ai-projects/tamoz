@@ -51,6 +51,24 @@ went from 0.444s / 1,730,118 allocations to 0.264s / 1,129,938 allocations;
 these are one-machine measurements, not general throughput guarantees.
 Everyday CI still fails in the known unrelated suites.
 
+### Increment 5: queue mode switches without constructing a model
+
+`approve --mode` built a complete default session just to reach its durable
+runner, so a control-only command failed without model configuration. Its
+private submission helper now calls the existing `runtime.checkpoints` inbox,
+the same `enqueue_request` operation `DurableRunner#submit` delegates to.
+Payload, namespace default, operation, delivery, and request identity are
+unchanged. No new public API or storage format is introduced.
+
+The regression uses a model factory that fails if called; submission now passes
+and records a queued mode-switch request without applying it. The unknown-mode
+worker test also passes (2 tests / 8 assertions together). The inbox suite
+passes (8 / 46). The remaining mode-switch and worker failures reveal a separate
+problem: inspecting a paused session still eagerly builds its model.
+Changed files pass RuboCop; Reek stays at 63 with no new contexts. Enola check
+passes with no new findings. `rake ci` and `ci_full` under both UTF-8 and C
+locales were run; the full gates reach the broad existing test failures.
+
 ## 2026-09-05: simpler capability registry construction
 
 Status: implemented; focused validation passed. Repository-wide gates remain red.

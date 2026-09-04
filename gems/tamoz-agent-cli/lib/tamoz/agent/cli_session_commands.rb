@@ -221,10 +221,10 @@ module Tamoz
       # worker applies at its next durable boundary. Delivery waits in the
       # request inbox like any other message, so it can never jump ahead of an
       # unsettled turn.
-      def submit_mode_switch(session, thread_id, request_id, mode)
-        session.app.durable_runner.submit(
-          { 'mode' => mode },
-          thread: thread_id,
+      def submit_mode_switch(checkpoints, thread_id, request_id, mode)
+        checkpoints.enqueue_request(
+          payload: { 'mode' => mode },
+          thread_id:,
           request_id:,
           operation: :mode_switch,
           delivery: :queue
