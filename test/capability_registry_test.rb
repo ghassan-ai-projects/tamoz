@@ -127,6 +127,49 @@ class CapabilityRegistryTest < Minitest::Test
     end
   end
 
+  def test_admission_preserves_descriptor_order_and_normalizes_ids
+    [%i[list_directory read_file read_file unknown],
+     { list_directory: false, read_file: nil, unknown: true }].each do |admission_set|
+      host = registry(admission_set:)
+
+      assert_equal %w[read_file list_directory], host.names
+      assert_equal host.declared_descriptors, host.descriptors
+      assert host.declared_descriptors.frozen?
+      host.descriptors.each do |id, entry|
+        assert_same entry, host.declared_descriptors.fetch(id)
+        assert_same host.sources.first, host.source_for(id)
+      end
+    end
+  end
+
+  def test_declared_descriptors_include_disabled_and_unadmitted_capabilities
+    enabled = descriptor
+    disabled = descriptor(id: "list_directory", availability: :disabled)
+    source = Capability::Source.new(source_id: "local", descriptors: [enabled, disabled])
+    host = registry(sources: [source], admission_set: %w[list_directory unknown])
+
+    assert_empty host.descriptors
+    assert_empty host.names
+    assert_equal({ "read_file" => enabled, "list_directory" => disabled }, host.declared_descriptors)
+    assert_same source, host.source_for("list_directory")
+    assert_nil host.source_for("unknown")
+  end
+
+  def test_empty_admission_exposes_no_descriptors
+    [[], {}].each do |admission_set|
+      host = registry(admission_set:)
+
+      assert_empty host.descriptors
+      assert_equal %w[read_file list_directory], host.declared_descriptors.keys
+    end
+  end
+
+  def test_invalid_admission_has_a_configuration_error
+    error = assert_raises(Tamoz::ConfigurationError) { registry(admission_set: nil) }
+
+    assert_equal "admission_set must be a hash or array of capability ids", error.message
+  end
+
   # H2e: source ids are the four built-ins; anything else at construction is a
   # registry-content mismatch (the closed set is enforced by the host, which
   # only builds the four).
