@@ -16,6 +16,25 @@ catalog used the older multiline spelling. Regenerated with the existing
 now pass. `rake ci` gets past ADR validation and into the existing test failures.
 This is documentation metadata, with no runtime or protocol changes.
 
+### Increment 3: report the actual missing profile credential
+
+`ModelClientFactory.build` selected a profile-specific credential correctly but
+its missing-key diagnostic reconstructed the provider's default name. It also
+omitted the role. Reuse `credential_name_for` in the existing guard and include
+the role in the existing `ProfileRoleUnavailableError` message. Both public
+entrypoints now identify the same missing reference; no secret values appear.
+The error type and `model_role/credential_unavailable` prefix are unchanged.
+Diagnostic text now ends with `(role: primary)` (or the selected role); callers
+should use the typed error rather than match the complete human-readable message.
+
+The new regression failed before the fix. All 24 profile-machinery tests now
+pass (230 assertions), including no generic-key fallback and no partial session.
+The factory suite improves from 3 failures / 1 error to 2 failures / 1 error;
+its remaining failures concern stale test expectations and stubbing a frozen
+transport. Changed-file RuboCop remains at its 162 existing offenses; Reek falls
+from 28 to 27 with no new contexts. Enola check passes with no new findings.
+The everyday CI command still reaches the previously recorded wider failures.
+
 ## 2026-09-05: simpler capability registry construction
 
 Status: implemented; focused validation passed. Repository-wide gates remain red.
