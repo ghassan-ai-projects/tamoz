@@ -7,6 +7,15 @@ completed change. Started 2026-09-04 23:03:50 UTC; target end 2026-09-05 00:03:5
 Each increment follows trace → test → simplify/fix → review → validate → commit.
 Keep cross-gem interfaces unchanged and do not weaken existing gates.
 
+### Increment 2: regenerate the ADR catalog
+
+The locked JSON 2.21.2 formatter emits empty arrays as `[]`; the committed
+catalog used the older multiline spelling. Regenerated with the existing
+`script/adr_catalog.rb`, with parsed JSON equality against HEAD proving that all
+55 ADR records are unchanged. `rake adr:validate` and the generator's `--check`
+now pass. `rake ci` gets past ADR validation and into the existing test failures.
+This is documentation metadata, with no runtime or protocol changes.
+
 ## 2026-09-05: simpler capability registry construction
 
 Status: implemented; focused validation passed. Repository-wide gates remain red.
