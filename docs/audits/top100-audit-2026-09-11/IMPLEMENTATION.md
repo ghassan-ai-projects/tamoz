@@ -53,6 +53,6 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 082 | autonomy_case.rb | partial | vacuous hard-counter gate fixed; shared ScriptedModel deferred |
 | 084 | agent_session_test.rb | todo | DUP/TEST/SIZE |
 | 085 | server_config.rb | rejected | SIZE rubocop-clean; STATE fix blocked by Style/DataInheritance |
-| 092 | comms_evidence_gated_approval_test.rb | todo | TEST |
+| 092 | comms_evidence_gated_approval_test.rb | partial | Harness returns transport (0 ivar probes); PressBinding value; store __send__ deferred to 006 seam |
 | 094 | dependency_isolation_test.rb | done | declared_features + capture_json helpers; dead regex alternative removed |
 | 100 | failure_record.rb | partial | DEAD+ERR fixed; SIZE rejected (rubocop clean, Max 20) |
