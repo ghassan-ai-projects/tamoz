@@ -40,7 +40,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 039 | record.rb | todo | SIZE/DUP |
 | 040 | sqlite_scenario_runtime.rb | todo | DEAD/SIZE |
 | 051 | subprocess_runner.rb | todo | SIZE |
-| 061 | sqlite_trace_recorder.rb | todo | DUP |
+| 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
 | 063 | sqlite_convergence_probe.rb | todo | FX/ERR/DEAD |
 | 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
