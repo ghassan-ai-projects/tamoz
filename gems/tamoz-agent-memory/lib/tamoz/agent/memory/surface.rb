@@ -16,7 +16,7 @@ module Tamoz
         # (CheckpointVersionError from StateCodec). The adapter that hosts the
         # memory Store must be constructed with this codec.
         def codec
-          @codec ||= Tamoz::StateCodec.new.with_registration(
+          @codec ||= Tamoz::StateCodec.new.add_registration(
             tag: "tamoz.agent.memory_record",
             version: MemoryRecord::FORMAT_VERSION,
             klass: MemoryRecord,

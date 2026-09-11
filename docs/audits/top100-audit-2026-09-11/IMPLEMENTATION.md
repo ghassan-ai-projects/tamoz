@@ -17,7 +17,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 008 | worker_runtime.rb | todo | ERR bypass durable + SIZE |
 | 095 | approval_engine_test.rb | done | uses resolve return + grant_store.size |
 | 055 | verifier.rb | todo | DUP status policy |
-| 087 | state_codec.rb | todo | SIZE/NAME/DUP |
+| 087 | state_codec.rb | done | scalar/array handlers; add_registration; merged counter |
 | 004 | agent_toolbox_test.rb | todo | TEST |
 | 005 | sqlite_comms_store_test.rb | todo | TEST |
 | 007 | sqlite_stale_request_test.rb | todo | TEST |

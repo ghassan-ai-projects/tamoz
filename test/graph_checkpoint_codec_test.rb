@@ -60,7 +60,7 @@ class GraphCheckpointCodecTest < Minitest::Test
         freeze
       end
     end
-    codec = Tamoz::StateCodec.new.with_registration(
+    codec = Tamoz::StateCodec.new.add_registration(
       tag: "test.identity_guard",
       version: 1,
       klass: value_class,
