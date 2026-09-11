@@ -24,7 +24,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 009 | packaging_test.rb | todo | DUP/TEST/SIZE |
 | 010 | agent_cli_test.rb | todo | TEST |
 | 011 | agent_profile_machinery_test.rb | todo | TEST/SIZE/DUP |
-| 012 | comms_gateway_test.rb | todo | DEAD/TEST/DUP |
+| 012 | comms_gateway_test.rb | partial | debug removed; gateway_graph dedup; raw-SQL probes deferred to 006 seam |
 | 013 | openclaw_comms_runner.rb | todo | SIZE/DUP/DEAD/B9 |
 | 014 | openclaw_durable_cli_adapter.rb | todo | PLACE/SIZE/NAME |
 | 015 | memory_engine_test.rb | partial | dead probe removed; promote_wisdom helper; private-read deferred |
