@@ -24,7 +24,6 @@ class SchedulerContractTest < Minitest::Test
       []
     end
 
-    def renew_occurrence_lease(id, fence:, lease_for:) = nil
     def complete_occurrence(id, execution_id:, status:, evidence:) = nil
     def list_occurrences(schedule_id:, cursor: nil, limit: 100) = []
   end
