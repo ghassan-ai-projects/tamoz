@@ -385,14 +385,9 @@ class MemoryEngineTest < Minitest::Test
   end
 
   def test_no_model_call_decides_admission
-    # P11-13: all three gate paths admit with no provider loaded (no model
-    # constant is even consulted on the admission path).
-    probe = Class.new do
-      def generate(*)
-        raise "admission must never call a model"
-      end
-    end.new
-
+    # P11-13: all three gate paths admit with no provider loaded. The engine is
+    # built with no model at all (see setup), so every admission below deciding
+    # correctly IS the proof that the path consults no model.
     episode_result = @engine.admission.admit_episode(episode: episode(statement: "Gate a"), owner: "alice")
     assert episode_result.accepted?
 
@@ -413,7 +408,6 @@ class MemoryEngineTest < Minitest::Test
     stray_result = @engine.admission.admit_consolidation_candidate(record: stray, gates: [])
     assert stray_result.rejected?
     assert_equal "consolidation gates missing", stray_result.reason.split(": ").first
-    probe # referenced so the model is never invoked
   end
 
   def test_owner_fast_path_three_negatives
@@ -903,62 +897,45 @@ class MemoryEngineTest < Minitest::Test
 
     # No human gate for a capability-affecting promotion -> refused.
     assert_raises(Memory::MemoryPolicyError) do
-      @engine.wisdom.promote(
-        candidate: candidate.with(klass: :policy),
-        development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
-        holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => true} }},
-        human_gate: {required: false, evidence: nil},
-        behavior_snapshot: {"wisdom" => "two green checks"},
-        behavior_version_after: "tamoz.agent.session/2"
-      )
+      promote_wisdom(candidate: candidate.with(klass: :policy), human_evidence: nil)
     end
 
     # Human gate evidence missing -> UnverifiedTransitionError.
     assert_raises(Memory::UnverifiedTransitionError) do
-      @engine.wisdom.promote(
-        candidate:,
-        development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
-        holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => true} }},
-        human_gate: {required: false, evidence: "self-approved"},
-        behavior_snapshot: {"wisdom" => "two green checks"},
-        behavior_version_after: "tamoz.agent.session/2"
-      )
+      promote_wisdom(candidate:, human_evidence: "self-approved")
     end
 
     # Holdout failing -> refused.
     assert_raises(Memory::UnverifiedTransitionError) do
-      @engine.wisdom.promote(
-        candidate:,
-        development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
-        holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => false} }},
-        human_gate: {required: false, evidence: "human:operator-1"},
-        behavior_snapshot: {"wisdom" => "two green checks"},
-        behavior_version_after: "tamoz.agent.session/2"
-      )
+      promote_wisdom(candidate:, holdout_passed: false)
     end
 
-    promoted = @engine.wisdom.promote(
-      candidate:,
-      development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
-      holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => true} }},
-      human_gate: {required: false, evidence: "human:operator-1"},
-      behavior_snapshot: {"wisdom" => "two green checks"},
-      behavior_version_after: "tamoz.agent.session/2"
-    )
+    promoted = promote_wisdom(candidate:)
     assert_equal true, promoted.fetch("recommendation_only")
     assert_equal :recorded, promoted.fetch("transition").status
 
     # One-candidate bound: a second promotion while one is pending is refused.
     assert_raises(Memory::MemoryPolicyError) do
-      @engine.wisdom.promote(
+      promote_wisdom(
         candidate: candidate.with(memory_id: "wis.other"),
-        development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
-        holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => true} }},
-        human_gate: {required: false, evidence: "human:operator-1"},
-        behavior_snapshot: {"wisdom" => "other"},
-        behavior_version_after: "tamoz.agent.session/3"
+        snapshot: {"wisdom" => "other"}, version: "tamoz.agent.session/3"
       )
     end
+  end
+
+  # The shared promote skeleton for test_wisdom_promotion_gates: the development
+  # evaluation is constant; each case varies only the candidate, the holdout
+  # verdict, the human evidence, or the behaviour snapshot/version.
+  def promote_wisdom(candidate:, holdout_passed: true, human_evidence: "human:operator-1",
+                     snapshot: {"wisdom" => "two green checks"}, version: "tamoz.agent.session/2")
+    @engine.wisdom.promote(
+      candidate:,
+      development_evaluation: {evidence_digest: "sha256:dev", passed: true, outcomes_digest: "sha256:o"},
+      holdout: {path: "/outside", verifier: ->(_path, _digest) { {"passed" => holdout_passed} }},
+      human_gate: {required: false, evidence: human_evidence},
+      behavior_snapshot: snapshot,
+      behavior_version_after: version
+    )
   end
 
   def test_content_addressed_snapshot_rewrite_is_idempotent

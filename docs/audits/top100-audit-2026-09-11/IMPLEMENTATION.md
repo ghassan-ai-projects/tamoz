@@ -27,7 +27,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 012 | comms_gateway_test.rb | todo | DEAD/TEST/DUP |
 | 013 | openclaw_comms_runner.rb | todo | SIZE/DUP/DEAD/B9 |
 | 014 | openclaw_durable_cli_adapter.rb | todo | PLACE/SIZE/NAME |
-| 015 | memory_engine_test.rb | todo | DEAD/DUP/TEST |
+| 015 | memory_engine_test.rb | partial | dead probe removed; promote_wisdom helper; private-read deferred |
 | 021 | session.rb | todo | SIZE/DEAD/DUP/STATE |
 | 022 | agent_session_kill_matrix_test.rb | todo | DEAD/DUP |
 | 023 | invocation.rb | todo | SIZE/DEAD/FX |
