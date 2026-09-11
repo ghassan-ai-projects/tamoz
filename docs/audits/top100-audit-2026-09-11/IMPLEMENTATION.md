@@ -38,7 +38,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 037 | openclaw_comms_fixture.rb | partial | install_delivery_sink seam; read_rows deferred to 006 seam |
 | 038 | readiness.rb | todo | SIZE/DUP |
 | 039 | record.rb | todo | SIZE/DUP |
-| 040 | sqlite_scenario_runtime.rb | todo | DEAD/SIZE |
+| 040 | sqlite_scenario_runtime.rb | partial | dispatch fail-fast; append_checkpoint DEAD rejected (has defaults) |
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
