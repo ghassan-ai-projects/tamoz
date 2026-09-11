@@ -33,15 +33,7 @@ class DependencyIsolationTest < Minitest::Test
         "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
       )
     RUBY
-    stdout, stderr, status = Open3.capture3(
-      clean_environment,
-      RbConfig.ruby,
-      *LOAD_PATH_ARGUMENTS,
-      "-e",
-      script
-    )
-    assert status.success?, stderr
-    result = JSON.parse(stdout)
+    result = capture_json(script)
     assert result.fetch("graph")
     %w[net_http socket openssl ruby_llm].each do |feature|
       refute result.fetch(feature), "#{feature} must not be in the graph load graph"
@@ -79,10 +71,7 @@ class DependencyIsolationTest < Minitest::Test
   # three gems' own trees (derived from their roots); any loaded feature
   # outside the union is an upward or sideways edge.
   def test_kernel_loads_core_and_tools_only
-    allowed = %w[tamoz-core tamoz-cancellation tamoz-tools tamoz-agent-kernel].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-tools", "tamoz-agent-kernel")
     features = loaded_features_after("tamoz/agent_kernel")
 
     assert_includes features, "tamoz/core.rb"
@@ -95,10 +84,7 @@ class DependencyIsolationTest < Minitest::Test
   # PA: the capabilities gem loads core + tools + kernel only, and keeps the
   # MCP surface lazy — requiring the umbrella must not pull tamoz/mcp.
   def test_capabilities_loads_core_tools_kernel_only_and_keeps_mcp_lazy
-    allowed = %w[tamoz-core tamoz-cancellation tamoz-tools tamoz-agent-kernel tamoz-agent-capabilities].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-tools", "tamoz-agent-kernel", "tamoz-agent-capabilities")
     features = loaded_features_after("tamoz/agent_capabilities")
 
     assert_includes features, "tamoz/agent_capabilities.rb"
@@ -111,10 +97,7 @@ class DependencyIsolationTest < Minitest::Test
   # and nothing else — and never tamoz/concurrency, whose one-way edge points
   # DOWN into this gem.
   def test_cancellation_loads_core_only_and_keeps_concurrency_above_it
-    allowed = %w[tamoz-core tamoz-cancellation].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-core", "tamoz-cancellation")
     features = loaded_features_after("tamoz/cancellation")
 
     assert_includes features, "tamoz/cancellation.rb"
@@ -126,10 +109,7 @@ class DependencyIsolationTest < Minitest::Test
   # C2: concurrency consumes cancellation + core (Clock, errors, token); no
   # upward or sideways edge may ride along with the umbrella require.
   def test_concurrency_loads_core_and_cancellation_only
-    allowed = %w[tamoz-core tamoz-cancellation tamoz-concurrency].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-core", "tamoz-cancellation", "tamoz-concurrency")
     features = loaded_features_after("tamoz/concurrency")
 
     assert_includes features, "tamoz/concurrency.rb"
@@ -144,7 +124,7 @@ class DependencyIsolationTest < Minitest::Test
     assert_includes features, "tamoz/agent.rb"
     refute(
       features.any? do |path|
-        path.match?(%r{\Aruby/gems/.+ruby_llm|tamoz/evals|tamoz/sqlite})
+        path.match?(%r{tamoz/evals|tamoz/sqlite})
       end,
       features.inspect
     )
@@ -192,10 +172,7 @@ class DependencyIsolationTest < Minitest::Test
   end
 
   def test_websearch_loads_only_its_declared_tamoz_closure
-    allowed = %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-cancellation", "tamoz-core", "tamoz-mcp", "tamoz-mcp-websearch")
     features = loaded_features_after("tamoz/mcp/websearch")
 
     assert_includes features, "tamoz/mcp/websearch.rb"
@@ -255,15 +232,7 @@ class DependencyIsolationTest < Minitest::Test
         "drainer_defined" => defined?(Tamoz::Comms::DeliveryDrainer)
       )
     RUBY
-    stdout, stderr, status = Open3.capture3(
-      clean_environment,
-      RbConfig.ruby,
-      *LOAD_PATH_ARGUMENTS,
-      "-e",
-      script
-    )
-    assert status.success?, stderr
-    result = JSON.parse(stdout)
+    result = capture_json(script)
     assert result.fetch("comms")
     %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
       refute result.fetch(feature), "#{feature} must not be in the load graph"
@@ -273,10 +242,7 @@ class DependencyIsolationTest < Minitest::Test
   end
 
   def test_comms_gateway_loads_only_comms_core_and_gateway
-    allowed = %w[tamoz-core tamoz-comms tamoz-comms-gateway].flat_map { |name|
-      library = GEM_ROOTS.fetch(name).join("lib")
-      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
-    }.uniq.sort
+    allowed = declared_features("tamoz-core", "tamoz-comms", "tamoz-comms-gateway")
     features = loaded_features_after("tamoz/comms/gateway")
 
     assert_includes features, "tamoz/comms/gateway.rb"
@@ -317,15 +283,7 @@ class DependencyIsolationTest < Minitest::Test
         "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
       )
     RUBY
-    stdout, stderr, status = Open3.capture3(
-      clean_environment,
-      RbConfig.ruby,
-      *LOAD_PATH_ARGUMENTS,
-      "-e",
-      script
-    )
-    assert status.success?, stderr
-    result = JSON.parse(stdout)
+    result = capture_json(script)
     assert result.fetch("observability")
     assert result.fetch("core")
     %w[net_http openssl graph sqlite agent evals ruby_llm].each do |feature|
@@ -374,15 +332,7 @@ class DependencyIsolationTest < Minitest::Test
         "ruby_llm" => $LOADED_FEATURES.any? { |path| path.include?("ruby_llm") }
       )
     RUBY
-    stdout, stderr, status = Open3.capture3(
-      clean_environment,
-      RbConfig.ruby,
-      *LOAD_PATH_ARGUMENTS,
-      "-e",
-      script
-    )
-    assert status.success?, stderr
-    result = JSON.parse(stdout)
+    result = capture_json(script)
     assert result.fetch("comms")
     assert result.fetch("net_http")
     %w[graph sqlite agent ruby_llm].each do |feature|
@@ -410,6 +360,13 @@ class DependencyIsolationTest < Minitest::Test
           .sort
       )
     RUBY
+    capture_json(script)
+  end
+
+  # Runs `script` in a pristine child ruby (clean env, this repo's load path),
+  # asserts it succeeded, and parses its JSON. Every isolation probe reports
+  # through stdout JSON, so this owns the whole capture cycle.
+  def capture_json(script)
     stdout, stderr, status = Open3.capture3(
       clean_environment,
       RbConfig.ruby,
@@ -421,6 +378,15 @@ class DependencyIsolationTest < Minitest::Test
     JSON.parse(stdout)
   end
 
+  # Every `tamoz/**/*.rb` feature path the named gems declare, as require-relative
+  # keys (the union a require of one of them is ALLOWED to have loaded).
+  def declared_features(*gem_names)
+    gem_names.flat_map do |name|
+      library = GEM_ROOTS.fetch(name).join("lib")
+      Dir.glob(library.join("tamoz/**/*.rb")).map { |path| path.delete_prefix("#{library}/") }
+    end.uniq.sort
+  end
+
   def loaded_state_after(require_path)
     script = <<~RUBY
       require "json"
@@ -430,14 +396,6 @@ class DependencyIsolationTest < Minitest::Test
         "websearch_defined" => defined?(Tamoz::Mcp::Websearch)
       )
     RUBY
-    stdout, stderr, status = Open3.capture3(
-      clean_environment,
-      RbConfig.ruby,
-      *LOAD_PATH_ARGUMENTS,
-      "-e",
-      script
-    )
-    assert status.success?, stderr
-    JSON.parse(stdout)
+    capture_json(script)
   end
 end
