@@ -193,8 +193,6 @@ module Tamoz
           Tamoz::Core.digest("#{DIGEST_DOMAIN}.v1\n", to_h)
         end
 
-        def pre_dispatch? = retryability["pre_dispatch"] == true
-        def effect_safety = retryability["effect_safety"]
         def effect_unknown? = effect_state == :unknown
 
         def to_h
@@ -274,10 +272,13 @@ module Tamoz
 
         private
 
+        # One spelling of the version invariant across both entry paths: from_h's
+        # version-first gate and direct construction raise the same
+        # CheckpointVersionError (a version/serialization concern, not a policy).
         def validate_format_version!(format_version)
           return if format_version == FORMAT_VERSION
 
-          raise HealingPolicyError,
+          raise CheckpointVersionError,
                 "FailureRecord format_version #{format_version.inspect} is not supported"
         end
 

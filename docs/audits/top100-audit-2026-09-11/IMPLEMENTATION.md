@@ -55,4 +55,4 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 085 | server_config.rb | todo | SIZE/STATE |
 | 092 | comms_evidence_gated_approval_test.rb | todo | TEST |
 | 094 | dependency_isolation_test.rb | todo | DUP/DEAD |
-| 100 | failure_record.rb | todo | SIZE/DEAD/ERR |
+| 100 | failure_record.rb | partial | DEAD+ERR fixed; SIZE rejected (rubocop clean, Max 20) |
