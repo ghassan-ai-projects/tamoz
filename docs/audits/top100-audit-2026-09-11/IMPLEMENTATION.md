@@ -44,7 +44,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
 | 063 | sqlite_convergence_probe.rb | partial | explicit PROBE_METHODS table + probes guard; FX pair deferred (needs adapter API decision) |
 | 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
-| 068 | session_adaptive.rb | todo | SIZE |
+| 068 | session_adaptive.rb | partial | lifecycle_event 12->5 params (allowlisted splat); node-method split declined (documented justification) |
 | 069 | stream_episode_skills_memory_test.rb | done | run_episode lifecycle helper; projection factory; -159 lines |
 | 070 | scoreboard.rb | todo | SIZE/PLACE/DUP |
 | 073 | comms_command_parity_test.rb | todo | TEST/DUP |
