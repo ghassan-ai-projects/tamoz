@@ -10,7 +10,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 
 | Doc | File | Status | Notes |
 |---|---|---|---|
-| 076 | recorders.rb | todo | critical Fanout#flush bug |
+| 076 | recorders.rb | done | flush crash fixed + regression test; DropLedger mixin; Journal split out |
 | 031 | cli_worker_commands.rb | todo | ERR swallowed approval |
 | 058 | profile.rb | todo | ERR fail-open containment |
 | 089 | admission.rb | todo | ERR silent swallow |
