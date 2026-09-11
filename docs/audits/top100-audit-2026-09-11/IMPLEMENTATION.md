@@ -50,7 +50,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 073 | comms_command_parity_test.rb | todo | TEST/DUP |
 | 078 | context_control_exposure_test.rb | todo | DUP/TEST |
 | 081 | session_context_controls.rb | todo | DEAD/DUP |
-| 082 | autonomy_case.rb | todo | TEST/DUP |
+| 082 | autonomy_case.rb | partial | vacuous hard-counter gate fixed; shared ScriptedModel deferred |
 | 084 | agent_session_test.rb | todo | DUP/TEST/SIZE |
 | 085 | server_config.rb | rejected | SIZE rubocop-clean; STATE fix blocked by Style/DataInheritance |
 | 092 | comms_evidence_gated_approval_test.rb | todo | TEST |

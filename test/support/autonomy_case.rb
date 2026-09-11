@@ -131,8 +131,11 @@ module AutonomyCase
     def status_document
       cli(%w[status --json])
       JSON.parse(@out)
-    rescue JSON::ParserError
-      {}
+    rescue JSON::ParserError => e
+      # A gate that cannot fail is not a gate: unparseable status output is a
+      # real failure (a crashed/garbled status command), never empty data that
+      # would let assert_hard_counters_zero pass vacuously.
+      raise "`status --json` did not return parseable JSON (#{e.message}): #{@out.inspect}"
     end
 
     def counter(name)
@@ -142,8 +145,8 @@ module AutonomyCase
     def occurrences(schedule_id)
       cli(%W[schedule occurrences #{schedule_id} --json])
       JSON.parse(@out).fetch("occurrences", [])
-    rescue JSON::ParserError
-      []
+    rescue JSON::ParserError => e
+      raise "`schedule occurrences --json` did not return parseable JSON (#{e.message}): #{@out.inspect}"
     end
 
     def pending_approvals = status_document.fetch("paused_approvals", [])
