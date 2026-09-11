@@ -402,7 +402,7 @@ module Tamoz
             adapter: @runtime.adapter, checkpoints: @runtime.checkpoints
           )
           @recording_sink = RecordingSink.new(sink)
-          @runtime.instance_variable_set(:@delivery_sink, @recording_sink)
+          @runtime.install_delivery_sink(@recording_sink)
           @worker = new_worker
         end
 

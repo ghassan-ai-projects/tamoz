@@ -35,7 +35,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 026 | schedule_store.rb | todo | SIZE/DEAD/DUP |
 | 033 | episode_nodes.rb | todo | SIZE/DUP |
 | 034 | memory_store.rb | todo | DUP/STATE |
-| 037 | openclaw_comms_fixture.rb | todo | TEST |
+| 037 | openclaw_comms_fixture.rb | partial | install_delivery_sink seam; read_rows deferred to 006 seam |
 | 038 | readiness.rb | todo | SIZE/DUP |
 | 039 | record.rb | todo | SIZE/DUP |
 | 040 | sqlite_scenario_runtime.rb | todo | DEAD/SIZE |
@@ -43,7 +43,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 061 | sqlite_trace_recorder.rb | todo | DUP |
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
 | 063 | sqlite_convergence_probe.rb | todo | FX/ERR/DEAD |
-| 064 | progress_projection_test.rb | todo | TEST/NAME/DUP |
+| 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
 | 068 | session_adaptive.rb | todo | SIZE |
 | 069 | stream_episode_skills_memory_test.rb | todo | DUP |
 | 070 | scoreboard.rb | todo | SIZE/PLACE/DUP |

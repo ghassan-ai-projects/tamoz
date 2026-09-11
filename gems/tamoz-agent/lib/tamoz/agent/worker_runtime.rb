@@ -71,7 +71,15 @@ module Tamoz
       def install_channel_delivery_sink
         return if @directory.channels.empty?
 
-        @delivery_sink = Tamoz::Comms::OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints)
+        install_delivery_sink(Tamoz::Comms::OutboxDeliverySink.new(adapter: @adapter, checkpoints: checkpoints))
+      end
+
+      # Install the delivery sink after construction. `open` uses this for the
+      # channel projection; embedders and fixtures use it to install or wrap a
+      # sink built from this runtime's own adapter/checkpoints — the public seam
+      # that replaces reaching into @delivery_sink.
+      def install_delivery_sink(sink)
+        @delivery_sink = sink
       end
 
       def close
