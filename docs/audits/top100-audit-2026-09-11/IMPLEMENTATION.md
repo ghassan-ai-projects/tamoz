@@ -45,7 +45,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 063 | sqlite_convergence_probe.rb | todo | FX/ERR/DEAD |
 | 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
 | 068 | session_adaptive.rb | todo | SIZE |
-| 069 | stream_episode_skills_memory_test.rb | todo | DUP |
+| 069 | stream_episode_skills_memory_test.rb | done | run_episode lifecycle helper; projection factory; -159 lines |
 | 070 | scoreboard.rb | todo | SIZE/PLACE/DUP |
 | 073 | comms_command_parity_test.rb | todo | TEST/DUP |
 | 078 | context_control_exposure_test.rb | todo | DUP/TEST |
