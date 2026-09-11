@@ -52,7 +52,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 081 | session_context_controls.rb | todo | DEAD/DUP |
 | 082 | autonomy_case.rb | todo | TEST/DUP |
 | 084 | agent_session_test.rb | todo | DUP/TEST/SIZE |
-| 085 | server_config.rb | todo | SIZE/STATE |
+| 085 | server_config.rb | rejected | SIZE rubocop-clean; STATE fix blocked by Style/DataInheritance |
 | 092 | comms_evidence_gated_approval_test.rb | todo | TEST |
 | 094 | dependency_isolation_test.rb | todo | DUP/DEAD |
 | 100 | failure_record.rb | partial | DEAD+ERR fixed; SIZE rejected (rubocop clean, Max 20) |
