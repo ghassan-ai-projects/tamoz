@@ -22,7 +22,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 005 | sqlite_comms_store_test.rb | todo | TEST |
 | 007 | sqlite_stale_request_test.rb | todo | TEST |
 | 009 | packaging_test.rb | todo | DUP/TEST/SIZE |
-| 010 | agent_cli_test.rb | todo | TEST |
+| 010 | agent_cli_test.rb | partial | raw SQL + fabricated record replaced by public request_history; cancellation/map_answer probes deferred |
 | 011 | agent_profile_machinery_test.rb | partial | over-claim fixed + refusal proven (+2 asserts); ProfileFixture value; doc/stub dedup; CLI-private probes deferred |
 | 012 | comms_gateway_test.rb | partial | debug removed; gateway_graph dedup; raw-SQL probes deferred to 006 seam |
 | 013 | openclaw_comms_runner.rb | todo | SIZE/DUP/DEAD/B9 |

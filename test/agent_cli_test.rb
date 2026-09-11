@@ -221,7 +221,7 @@ class AgentCLITest < Minitest::Test
         ["ask", "set value to 2"],
         session: "th", workspace:, session_dir:, input: StringIO.new, factory:, checks:
       )
-      paused = latest_request_record(session_dir, "th")
+      paused = latest_request_record(session_dir, "th", workspace)
 
       err = StringIO.new
       status = run_cli(
@@ -233,7 +233,7 @@ class AgentCLITest < Minitest::Test
       # answers, so the thread stays paused rather than acting unreviewed.
       assert_equal Tamoz::Agent::CLI::EXIT_PAUSED, status, err.string
       assert_equal "value = 1\n", File.read(File.join(workspace, "app.rb"))
-      continued = latest_request_record(session_dir, "th")
+      continued = latest_request_record(session_dir, "th", workspace)
       refute_equal paused.request_id, continued.request_id,
                    "continue must enqueue its own request, not reuse the paused one"
     end
@@ -411,7 +411,7 @@ class AgentCLITest < Minitest::Test
         session: "th", workspace:, session_dir:, input: StringIO.new, factory:, checks:
       )
 
-      original = latest_request_record(session_dir, "th")
+      original = latest_request_record(session_dir, "th", workspace)
       adapter = Tamoz::SQLite::Adapter.new(
         path: File.join(session_dir, "th.sqlite3"),
         limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0)
@@ -1033,43 +1033,15 @@ class AgentCLITest < Minitest::Test
     )
   end
 
-  def latest_request_record(session_dir, thread_id)
+  # The durable inbox read goes through the public request history, ordered by
+  # enqueue sequence, so the last entry is the newest request.
+  def latest_request_record(session_dir, thread_id, root)
     path = File.join(session_dir, "#{thread_id}.sqlite3")
     adapter = Tamoz::SQLite::Adapter.new(path:, limits: Tamoz::SQLite::Limits.new(lease_ttl: 5.0))
     begin
-      row = adapter.__send__(:read, operation: "test.requests") do |tx|
-        tx.first(
-          "test.requests",
-          <<~SQL,
-            SELECT request_id, status
-            FROM tamoz_requests
-            WHERE thread_id = ?
-            ORDER BY enqueue_sequence DESC
-            LIMIT 1
-          SQL
-          [thread_id]
-        )
-      end
-      Tamoz::Graph::RequestRecord.new(
-        thread_id: thread_id,
-        namespace: [],
-        request_id: row.fetch(0),
-        enqueue_sequence: 0,
-        input_digest: "",
-        operation: :turn,
-        delivery_mode: :queue,
-        status: row.fetch(1).to_sym,
-        payload: {},
-        execution_id: nil,
-        target_execution_id: nil,
-        cancellation_generation: nil,
-        checkpoint_id: nil,
-        response: nil,
-        terminal_error: nil,
-        retryable: nil,
-        created_at_ms: 0,
-        updated_at_ms: 0
-      )
+      # Reading the inbox never calls the model; an unscripted one raises if it does.
+      session = build_session(model: ScriptedModel.new, root:, adapter:)
+      session.app.durable_runner.history(thread: thread_id).last
     ensure
       adapter.close
     end
