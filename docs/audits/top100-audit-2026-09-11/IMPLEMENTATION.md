@@ -42,7 +42,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
-| 063 | sqlite_convergence_probe.rb | todo | FX/ERR/DEAD |
+| 063 | sqlite_convergence_probe.rb | partial | explicit PROBE_METHODS table + probes guard; FX pair deferred (needs adapter API decision) |
 | 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
 | 068 | session_adaptive.rb | todo | SIZE |
 | 069 | stream_episode_skills_memory_test.rb | done | run_episode lifecycle helper; projection factory; -159 lines |

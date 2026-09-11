@@ -8,6 +8,20 @@ module Tamoz
         MAX_PATH_BYTES = 4_096
         MAX_DATABASE_BYTES = 256 * 1024 * 1024
         MAX_LEDGER_BYTES = 1024 * 1024
+        # The complete probe surface, declared here rather than derived from the
+        # manifest string, so an unknown probe name is refused at construction
+        # instead of reaching a missing method at dispatch.
+        PROBE_METHODS = {
+          "lease-fencing" => :probe_lease_fencing,
+          "inbox-reopen" => :probe_inbox_reopen,
+          "duplicate-delivery" => :probe_duplicate_delivery,
+          "request-recovery" => :probe_request_recovery,
+          "stale-request-fail" => :probe_stale_request_fail,
+          "pending-write-replay" => :probe_pending_write_replay,
+          "checkpoint-reopen" => :probe_checkpoint_reopen,
+          "request-checkpoint-reopen" => :probe_request_checkpoint_reopen
+        }.freeze
+
         def initialize(scenario_registry:, definition:, inputs:)
           @definition = DeepFreeze.call(definition)
           @inputs = DeepFreeze.call(inputs)
@@ -17,6 +31,13 @@ module Tamoz
           @graph_factory = @inputs.fetch(:graph_factory)
           unless @graph_factory.respond_to?(:call)
             raise ExecutionError, "SQLite convergence graph factory is invalid"
+          end
+          # Guard the probe table BEFORE reading it below: a malformed or absent
+          # :probes must fail with this file's ExecutionError, not a bare
+          # NoMethodError/KeyError from `probes.keys`.
+          unless @inputs[:probes].is_a?(Hash) &&
+                 @inputs[:probes].values.all? { |probe| PROBE_METHODS.key?(probe) }
+            raise ExecutionError, "SQLite convergence probes are invalid"
           end
           unless scenario_registry.instance_of?(SQLiteScenarioRegistry) &&
                  scenario_registry.document.fetch("scenarios").map do |scenario|
@@ -163,14 +184,10 @@ module Tamoz
 
         def execute_probe(app:, adapter:, scenario_id:, classification:, ledger:)
           probe = probes.fetch(scenario_id)
-          send(
-            "probe_#{probe.tr("-", "_")}",
-            app,
-            adapter,
-            scenario_id,
-            classification,
-            ledger
-          )
+          method_name = PROBE_METHODS.fetch(probe) do
+            raise ExecutionError, "SQLite convergence probe #{probe.inspect} is not implemented"
+          end
+          send(method_name, app, adapter, scenario_id, classification, ledger)
         end
 
         def probe_lease_fencing(_app, adapter, _scenario, _classification, _ledger)
