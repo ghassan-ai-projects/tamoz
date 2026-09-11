@@ -122,9 +122,10 @@ module Tamoz
         record = cas do |current|
           current.with_failure(
             owner_id: @owner_id,
-            kind:,
-            context_digest: Tamoz::Circuit.context_digest(context),
-            now_ms: now_ms
+            now_ms: now_ms,
+            event: Tamoz::Circuit::Record::FailureEvent.new(
+              kind:, context_digest: Tamoz::Circuit.context_digest(context)
+            )
           )
         end
         record.health(now_ms: now_ms)

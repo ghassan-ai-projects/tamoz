@@ -59,7 +59,10 @@ class CircuitRecordTest < Minitest::Test
   end
 
   def fail(record, at:, kind: :budget, **rest)
-    record.with_failure(owner_id: OWNER, kind:, now_ms: at, **rest)
+    record.with_failure(
+      owner_id: OWNER, now_ms: at,
+      event: Record::FailureEvent.new(kind:, **rest)
+    )
   end
 
   def succeed(record, at:)

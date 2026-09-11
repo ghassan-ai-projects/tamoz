@@ -249,7 +249,7 @@ module Tamoz
       def preset_for(entry, proposal)
         requested_preset = proposal_preset(proposal)
         ensure_default_preset!(entry, requested_preset) if requested_preset
-        deep_dup(entry.presets.fetch("default", {}))
+        Tamoz::Core.deep_dup(entry.presets.fetch("default", {}))
       end
 
       def ensure_default_preset!(entry, requested)
@@ -273,14 +273,6 @@ module Tamoz
 
       def proposal_parameters(proposal)
         proposal.is_a?(Hash) ? proposal["parameters"] : proposal.parameters
-      end
-
-      def deep_dup(value)
-        case value
-        when Hash then value.to_h { |key, entry| [key, deep_dup(entry)] }
-        when Array then value.map { |entry| deep_dup(entry) }
-        else value
-        end
       end
 
       def allowed_intent_types

@@ -27,6 +27,16 @@ module Tamoz
         reset_authority scope_id scope_type state threshold
       ].freeze
 
+      # One failure occurrence: what failed and the evidence identifying it.
+      # Grouped so `with_failure` names only the actor (owner) and the clock
+      # alongside it, rather than spreading four occurrence fields across its
+      # signature.
+      FailureEvent = Data.define(:kind, :context_digest, :run_id, :fingerprint) do
+        def initialize(kind: :transport, context_digest: nil, run_id: nil, fingerprint: nil)
+          super
+        end
+      end
+
       attr_reader :scope, :payload
 
       class << self
@@ -255,7 +265,7 @@ module Tamoz
 
       # A fresh, mutable copy for persistence.
       def to_payload
-        deep_copy(payload)
+        Tamoz::Core.deep_dup(payload)
       end
 
       def owner_failures(owner_id)
@@ -333,17 +343,16 @@ module Tamoz
 
       # ONE atomic read-modify-write body (DR-2 C1). Every predicate is
       # evaluated here, inside the same value that the caller then appends.
-      def with_failure(owner_id:, kind: :transport, context_digest: nil, now_ms:,
-                       run_id: nil, fingerprint: nil)
+      def with_failure(owner_id:, now_ms:, event: FailureEvent.new)
         owner = Circuit.owner_id!(owner_id)
         enforce_admission!(owner)
-        failure_kind = Circuit.identity!(kind, name: "circuit failure kind")
+        failure_kind = Circuit.identity!(event.kind, name: "circuit failure kind")
+        context_digest = event.context_digest
 
-        next_owners = deep_copy(owners)
+        next_owners = Tamoz::Core.deep_dup(owners)
         entry = next_owners[owner] ||= {"failures" => 0, "conditions" => {}}
         scope.conditions_for(failure_kind).each do |condition|
-          apply_failure_condition(entry, condition,
-                                  context_digest:, now_ms:, run_id:, fingerprint:)
+          apply_failure_condition(entry, condition, event, now_ms:)
         end
 
         candidate = failed_candidate(owner, failure_kind, next_owners,
@@ -362,7 +371,7 @@ module Tamoz
         owner = Circuit.owner_id!(owner_id)
         enforce_admission!(owner)
 
-        next_owners = deep_copy(owners)
+        next_owners = Tamoz::Core.deep_dup(owners)
         entry = next_owners[owner] ||= {"failures" => 0, "conditions" => {}}
         entry["failures"] = 0
         scope.conditions.select(&:observes_every_outcome?).each do |condition|
@@ -412,7 +421,7 @@ module Tamoz
         end
         validated = Evidence.validate!(evidence, scope: scope)
 
-        next_owners = deep_copy(owners)
+        next_owners = Tamoz::Core.deep_dup(owners)
         next_owners.delete(owner)
         replace(
           "owners" => next_owners,
@@ -556,13 +565,12 @@ module Tamoz
               "owner with the scope's reset evidence before admitting another"
       end
 
-      def apply_failure_condition(entry, condition, context_digest:, now_ms:,
-                                  run_id:, fingerprint:)
+      def apply_failure_condition(entry, condition, event, now_ms:)
         case condition.kind
         when "consecutive" then count_consecutive_failure(entry)
         when "immediate" then count_immediate_failure(entry, condition, now_ms)
-        when "window" then append_window_event(entry, condition, context_digest, now_ms)
-        when "run" then count_run_failure(entry, condition, run_id, fingerprint)
+        when "window" then append_window_event(entry, condition, event.context_digest, now_ms)
+        when "run" then count_run_failure(entry, condition, event.run_id, event.fingerprint)
         when "rate" then append_rate_event(entry, condition, now_ms)
         end
       end
@@ -664,15 +672,6 @@ module Tamoz
           payload: to_payload.merge(changes.transform_keys(&:to_s)),
           now_ms: @created_now_ms
         )
-      end
-
-      def deep_copy(value)
-        case value
-        when Hash then value.to_h { |key, entry| [key.dup, deep_copy(entry)] }
-        when Array then value.map { |entry| deep_copy(entry) }
-        when String then value.dup
-        else value
-        end
       end
     end
   end

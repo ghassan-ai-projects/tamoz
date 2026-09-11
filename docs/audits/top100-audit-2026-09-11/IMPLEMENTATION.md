@@ -37,7 +37,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 034 | memory_store.rb | partial | security-lockstep DUP fixed; STATE deferred (retrieval ripple) |
 | 037 | openclaw_comms_fixture.rb | partial | install_delivery_sink seam; read_rows deferred to 006 seam |
 | 038 | readiness.rb | partial | artifacts verified once per evaluate; three-seam SIZE split pending |
-| 039 | record.rb | todo | SIZE/DUP |
+| 039 | record.rb | partial | Core.deep_dup shared (deep_freeze remedy rejected); FailureEvent value, 0 ParameterLists; engine split pending |
 | 040 | sqlite_scenario_runtime.rb | partial | dispatch fail-fast; append_checkpoint DEAD rejected (has defaults) |
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
