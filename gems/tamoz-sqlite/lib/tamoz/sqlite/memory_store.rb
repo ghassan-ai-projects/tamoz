@@ -235,23 +235,8 @@ module Tamoz
                      i.sensitivity, i.valid_until_ms, i.compatibility_graph,
                      i.compatibility_behavior, i.searchable,
                      i.scopes_situation_type, i.scopes_entity_type, i.scopes_entity_id
-              FROM tamoz_memory_index i
-              JOIN tamoz_store_heads h
-                ON h.namespace = i.store_namespace
-               AND h.key = i.layer || '/' || i.memory_id
-               AND h.current_version = i.record_version
-               AND h.deleted = 0
-              WHERE i.store_namespace = ?
-                AND i.state IN ('active', 'consolidated')
-                AND i.scopes_tenant = ?
-                AND i.scopes_user = ?
-                AND i.scopes_project = ?
-                AND i.sensitivity IN (#{sensitivity_placeholders(allowed_sensitivities)})
-                AND i.compatibility_graph = ?
-                AND i.compatibility_behavior = ?
-                AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
-                #{situation_filter}
-                #{matches_sql}
+              #{authorized_scan_body("i.sensitivity IN (#{sensitivity_placeholders(allowed_sensitivities)})",
+                                     situation_filter, matches_sql)}
               ORDER BY i.layer, i.memory_id, i.record_version DESC
               LIMIT ?
             SQL
@@ -413,6 +398,37 @@ module Tamoz
       # same caller authority as `search` applies: the signal must not cross
       # the situation boundary, the user/project scope, or the eligible-state
       # set (otherwise it becomes an existence oracle for the far side).
+      # INVARIANT 30 (existence-oracle guard): the caller-authority filter — head
+      # eligibility, namespace, eligible-state set, tenant/user/project scope,
+      # compatibility, validity, situation boundary and match terms — is
+      # single-sourced here so #search and #scan_matched_restricted cannot drift.
+      # They differ ONLY in the sensitivity predicate passed in; any other
+      # divergence would let the restricted existence signal leak rows the caller
+      # could not otherwise see. Binds (in placeholder order): namespace, tenant,
+      # user, project, [sensitivity binds, if the clause carries any], graph,
+      # behavior, validity, *situation_binds, *match_binds.
+      def authorized_scan_body(sensitivity_clause, situation_filter, matches_sql)
+        <<~SQL
+          FROM tamoz_memory_index i
+          JOIN tamoz_store_heads h
+            ON h.namespace = i.store_namespace
+           AND h.key = i.layer || '/' || i.memory_id
+           AND h.current_version = i.record_version
+           AND h.deleted = 0
+          WHERE i.store_namespace = ?
+            AND i.state IN ('active', 'consolidated')
+            AND i.scopes_tenant = ?
+            AND i.scopes_user = ?
+            AND i.scopes_project = ?
+            AND #{sensitivity_clause}
+            AND i.compatibility_graph = ?
+            AND i.compatibility_behavior = ?
+            AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
+            #{situation_filter}
+            #{matches_sql}
+        SQL
+      end
+
       def scan_matched_restricted(namespace, caller_values, terms, layer, klass, now_ms)
         matches_sql, match_binds = match_clause(terms, layer, klass)
         situation_filter, situation_binds =
@@ -425,23 +441,7 @@ module Tamoz
               SELECT i.memory_id, i.record_version, i.layer, i.class, i.state,
                      i.scopes_tenant, i.scopes_user, i.scopes_project,
                      i.sensitivity, i.valid_until_ms
-              FROM tamoz_memory_index i
-              JOIN tamoz_store_heads h
-                ON h.namespace = i.store_namespace
-               AND h.key = i.layer || '/' || i.memory_id
-               AND h.current_version = i.record_version
-               AND h.deleted = 0
-              WHERE i.store_namespace = ?
-                AND i.state IN ('active', 'consolidated')
-                AND i.scopes_tenant = ?
-                AND i.scopes_user = ?
-                AND i.scopes_project = ?
-                AND i.sensitivity = 'sensitive'
-                AND i.compatibility_graph = ?
-                AND i.compatibility_behavior = ?
-                AND (i.valid_until_ms IS NULL OR i.valid_until_ms >= ?)
-                #{situation_filter}
-                #{matches_sql}
+              #{authorized_scan_body("i.sensitivity = 'sensitive'", situation_filter, matches_sql)}
               ORDER BY i.layer, i.memory_id, i.record_version DESC
             SQL
             [

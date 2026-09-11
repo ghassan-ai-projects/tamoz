@@ -34,7 +34,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 024 | runtime.rb | todo | SIZE/STATE/DUP |
 | 026 | schedule_store.rb | todo | SIZE/DEAD/DUP |
 | 033 | episode_nodes.rb | todo | SIZE/DUP |
-| 034 | memory_store.rb | todo | DUP/STATE |
+| 034 | memory_store.rb | partial | security-lockstep DUP fixed; STATE deferred (retrieval ripple) |
 | 037 | openclaw_comms_fixture.rb | partial | install_delivery_sink seam; read_rows deferred to 006 seam |
 | 038 | readiness.rb | todo | SIZE/DUP |
 | 039 | record.rb | todo | SIZE/DUP |
