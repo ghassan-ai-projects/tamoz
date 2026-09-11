@@ -16,7 +16,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 089 | admission.rb | done | ERR surfaced via AdmissionResult stored?; OwnerRequest value |
 | 008 | worker_runtime.rb | todo | ERR bypass durable + SIZE |
 | 095 | approval_engine_test.rb | done | uses resolve return + grant_store.size |
-| 055 | verifier.rb | todo | DUP status policy |
+| 055 | verifier.rb | done | shared verify_terminal_diagnostic_status! table |
 | 087 | state_codec.rb | done | scalar/array handlers; add_registration; merged counter |
 | 004 | agent_toolbox_test.rb | todo | TEST |
 | 005 | sqlite_comms_store_test.rb | todo | TEST |

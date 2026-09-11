@@ -349,50 +349,51 @@ module Tamoz
 
         case document.fetch("status")
         when "passed"
-          if document.fetch("processes").any? do |process|
-               process.fetch("termination_reason") == "cleanup"
-             end
-            raise InvalidArtifactError,
-                  "passed evidence cannot rely on cleanup termination"
+          if document.fetch("processes").any? { |process| process.fetch("termination_reason") == "cleanup" }
+            raise InvalidArtifactError, "passed evidence cannot rely on cleanup termination"
           end
           unless claims.all? { |claim| claim.fetch("status") == "pass" }
-            raise InvalidArtifactError,
-                  "passed evidence requires every claim to pass"
+            raise InvalidArtifactError, "passed evidence requires every claim to pass"
           end
           validate_no_diagnostic_errors!("passed evidence", invalid, gaps, infrastructure)
         when "failed"
           unless claims.any? { |claim| claim.fetch("status") == "fail" }
-            raise InvalidArtifactError,
-                  "failed evidence requires at least one failed claim"
+            raise InvalidArtifactError, "failed evidence requires at least one failed claim"
           end
           validate_no_diagnostic_errors!("failed evidence", invalid, gaps, infrastructure)
+        else
+          verify_terminal_diagnostic_status!(
+            document.fetch("status"), "evidence",
+            invalid:, gaps:, infrastructure:,
+            unknown: claims.any? { |claim| claim.fetch("status") == "unknown" }
+          )
+        end
+      end
+
+      # The three terminal diagnostic statuses obey one invariant across both the
+      # evidence and the result document: the status's own diagnostic family must
+      # be populated and no other may be, with insufficient additionally admitting
+      # an unknown outcome. `noun` names the document in the message.
+      def verify_terminal_diagnostic_status!(status, noun, invalid:, gaps:, infrastructure:, unknown:)
+        case status
         when "invalid"
-          if invalid.empty?
-            raise InvalidArtifactError,
-                  "invalid evidence must identify invalid material"
-          end
+          raise InvalidArtifactError, "invalid #{noun} must identify invalid material" if invalid.empty?
           unless gaps.empty? && infrastructure.empty?
-            raise InvalidArtifactError,
-                  "invalid evidence cannot mix gaps or infrastructure errors"
+            raise InvalidArtifactError, "invalid #{noun} cannot mix gaps or infrastructure errors"
           end
         when "infrastructure_error"
           if infrastructure.empty?
-            raise InvalidArtifactError,
-                  "infrastructure evidence must identify an infrastructure error"
+            raise InvalidArtifactError, "infrastructure #{noun} must identify an infrastructure error"
           end
           unless invalid.empty? && gaps.empty?
-            raise InvalidArtifactError,
-                  "infrastructure evidence cannot mix invalid material or gaps"
+            raise InvalidArtifactError, "infrastructure #{noun} cannot mix invalid material or gaps"
           end
         when "insufficient_evidence"
-          unless claims.any? { |claim| claim.fetch("status") == "unknown" } ||
-                 !gaps.empty?
-            raise InvalidArtifactError,
-                  "insufficient evidence requires an unknown claim or evidence gap"
+          unless unknown || !gaps.empty?
+            raise InvalidArtifactError, "insufficient #{noun} requires an unknown outcome or evidence gap"
           end
           unless invalid.empty? && infrastructure.empty?
-            raise InvalidArtifactError,
-                  "insufficient evidence cannot mix invalid or infrastructure material"
+            raise InvalidArtifactError, "insufficient #{noun} cannot mix invalid or infrastructure material"
           end
         end
       end
@@ -533,29 +534,12 @@ module Tamoz
             evidence_gaps,
             infrastructure_errors
           )
-        when "invalid"
-          if invalid_evidence.empty?
-            raise InvalidArtifactError, "invalid result must identify invalid evidence"
-          end
-          unless evidence_gaps.empty? && infrastructure_errors.empty?
-            raise InvalidArtifactError, "invalid result cannot mix evidence gaps or infrastructure errors"
-          end
-        when "infrastructure_error"
-          if infrastructure_errors.empty?
-            raise InvalidArtifactError, "infrastructure result must identify an infrastructure error"
-          end
-          unless invalid_evidence.empty? && evidence_gaps.empty?
-            raise InvalidArtifactError, "infrastructure result cannot mix evidence errors or gaps"
-          end
-        when "insufficient_evidence"
-          unless hard_gates.any? { |gate| gate.fetch("status") == "unknown" } ||
-                 !evidence_gaps.empty?
-            raise InvalidArtifactError,
-                  "insufficient result requires an unknown gate or identified evidence gap"
-          end
-          unless invalid_evidence.empty? && infrastructure_errors.empty?
-            raise InvalidArtifactError, "insufficient result cannot mix invalid or infrastructure evidence"
-          end
+        else
+          verify_terminal_diagnostic_status!(
+            status, "result",
+            invalid: invalid_evidence, gaps: evidence_gaps, infrastructure: infrastructure_errors,
+            unknown: hard_gates.any? { |gate| gate.fetch("status") == "unknown" }
+          )
         end
       end
 
