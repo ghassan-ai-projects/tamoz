@@ -56,11 +56,15 @@ module Tamoz
           def evaluate(protocol:, manifest:, expected_mission_ids: nil, mission_catalog: nil, artifact_root_base: nil)
             validate_manifest!(manifest)
             validate_mission_catalog!(mission_catalog) if mission_catalog
+            # Every mission artifact is read, digested and secret-scanned exactly
+            # ONCE here; both the blocking reasons and the verified flag derive
+            # from this single pass.
+            artifact = artifact_reasons(manifest, artifact_root_base, mission_catalog)
             reasons = evidence_reasons(
-              protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base
+              protocol, manifest, expected_mission_ids, mission_catalog, artifact
             )
             evaluated_manifest = manifest.merge(
-              'artifacts_verified' => artifacts_verified?(manifest, artifact_root_base, mission_catalog)
+              'artifacts_verified' => artifact_root_base && artifact.empty?
             )
             Result.new(
               status: reasons.empty? ? 'ready' : 'blocked',
@@ -100,9 +104,9 @@ module Tamoz
 
           private
 
-          def evidence_reasons(protocol, manifest, expected_mission_ids, mission_catalog, artifact_root_base)
+          def evidence_reasons(protocol, manifest, expected_mission_ids, mission_catalog, artifact_reasons)
             structural_reasons(protocol, manifest, expected_mission_ids, mission_catalog) +
-              control_reasons(manifest, artifact_root_base, mission_catalog)
+              control_reasons(manifest, artifact_reasons)
           end
 
           # rubocop:disable Metrics/AbcSize
@@ -121,10 +125,10 @@ module Tamoz
           end
           # rubocop:enable Metrics/AbcSize
 
-          def control_reasons(manifest, artifact_root_base, mission_catalog)
+          def control_reasons(manifest, artifact_reasons)
             reasons = []
             reasons << 'fixture_or_fake_provider' if manifest.fetch('run_kind') == 'fixture'
-            reasons.concat(artifact_reasons(manifest, artifact_root_base, mission_catalog))
+            reasons.concat(artifact_reasons)
             reasons << 'controls_not_passed' unless manifest.fetch('controls_passed') == true
             reasons
           end
@@ -494,10 +498,6 @@ module Tamoz
             return [nil, "artifact_outside_root:#{id}"] unless path == root.to_s || path.start_with?("#{root}/")
 
             [path, nil]
-          end
-
-          def artifacts_verified?(manifest, artifact_root_base, mission_catalog = nil)
-            artifact_root_base && artifact_reasons(manifest, artifact_root_base, mission_catalog).empty?
           end
 
           def artifact_document_reasons(path, mission, manifest, mission_catalog)
