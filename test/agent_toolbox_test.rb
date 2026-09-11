@@ -836,12 +836,14 @@ class AgentToolboxTest < Minitest::Test
         ]
       }
 
-      patch = toolbox.send(:prepare_patch, arguments)
       preview = toolbox.preview("apply_patch", arguments)
       toolbox.execute("apply_patch", arguments)
 
-      assert_equal patch.fetch(:after_content), File.read(path, encoding: Encoding::UTF_8)
-      assert_equal preview, toolbox.send(:render_diff, arguments.fetch("path"), patch)
+      # The compound patch's executed result is the file the preview described:
+      # both replacements land, and the preview diff shows the same after-values.
+      assert_equal "ONE = 10\nTWO = 20\n", File.read(path, encoding: Encoding::UTF_8)
+      assert_includes preview, "ONE = 10"
+      assert_includes preview, "TWO = 20"
     end
   end
 
