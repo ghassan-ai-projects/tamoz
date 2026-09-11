@@ -28,9 +28,14 @@ which carries two dead convenience readers and a split error vocabulary for one 
   is not a healing-policy violation. from_h's pre-check is kept — it must run before the
   field reads to honour Invariant 18 (version fails before any field is read). No test
   expected `HealingPolicyError` from a bad-version construction.
-- **[major][SIZE] rejected — not an enforced violation.** The repo's own linter
-  (`Metrics/MethodLength Max: 20`) reports **no offenses** on this file; the audit's "47/35
-  lines" counts the multi-line keyword *signatures*, which RuboCop does not count toward
-  method length. Bodies are within the ceiling. The proposed field-spec table would also
-  erase the explicit keyword-argument contract that guards this security-critical typed
-  record (`new(unknown:)` would stop raising), a net regression. No restructuring warranted.
+- **[major][SIZE] declined (corrected note).** These ARE real violations, silenced as
+  repo-wide debt in `.rubocop_todo.yml` (the file is Exclude-listed for MethodLength and
+  ParameterLists, like 300+ others), so a plain `rubocop` run is green but not compliant.
+  Measured against the ceiling directly: `initialize` 24/20, `from_h` 31/20, `to_h` 21/20
+  MethodLength, and `initialize` 19/5 ParameterLists. The overages are INTRINSIC to a
+  19-field validated Data type: every method that enumerates the fields (the `super`, `to_h`,
+  `from_h`'s `new`) is ~19-24 lines, and the 19-param count is the field count. The audit's
+  field-spec-table remedy is the only way under 20 but replaces the explicit keyword-argument
+  contract (which makes `new(bogus:)` raise) with `**attributes` on a security-critical typed
+  record. Given the pervasive accepted debt and the safety cost, the restructuring is not
+  warranted; the earlier "rubocop clean" wording was wrong and is corrected here.

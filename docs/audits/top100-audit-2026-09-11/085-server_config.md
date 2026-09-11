@@ -15,12 +15,16 @@ Data.define block leaks twelve pattern constants into the `Tamoz::Mcp` namespace
 
 ## Resolution — 2026-09-11 — both findings rejected with evidence
 
-- **[major][SIZE] rejected.** The repo's own `Metrics/MethodLength` (Max: 20) passes
-  `initialize` with **no offense and no inline disable** (`rubocop` clean). The audit's "~39
-  body lines" counts the multi-line keyword *signature* (lines 113-129), which RuboCop does
-  not count toward method length. The body is a flat, readable sequence of validations
-  feeding `super`; there is no transport-specific sub-builder to extract (the validations
-  apply to every transport). No change warranted.
+- **[major][SIZE] declined (corrected note).** `initialize` IS over the ceiling
+  (MethodLength 22/20, ParameterLists 15/5), silenced as repo-wide debt in
+  `.rubocop_todo.yml` (Exclude-listed like 300+ files), so a plain `rubocop` run is green but
+  not compliant — the earlier "rubocop clean" wording was wrong. The audit's "~39 lines"
+  overcounts (it includes the multi-line signature), but the body is genuinely 2 lines over.
+  The 15-param count is the field count of a 14-field Data type plus workspace_root; it is
+  intrinsic. The body is a flat, readable sequence of per-field validators feeding `super`
+  with no transport-specific sub-builder to extract (every validator applies to all
+  transports). Shaving two lines by folding two validators onto one line would not improve
+  it; consistent with the accepted repo debt, left as is.
 - **[minor][STATE] rejected — the fix conflicts with the repo's enforced style.** The leak
   is real (the pattern constants lexically resolve to `Tamoz::Mcp`), but the only clean
   relocation onto `ServerConfig` is `class ServerConfig < Data.define(...)`, which:
