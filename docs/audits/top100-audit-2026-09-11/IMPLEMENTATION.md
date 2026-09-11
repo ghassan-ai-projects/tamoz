@@ -11,7 +11,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | Doc | File | Status | Notes |
 |---|---|---|---|
 | 076 | recorders.rb | done | flush crash fixed + regression test; DropLedger mixin; Journal split out |
-| 031 | cli_worker_commands.rb | todo | ERR swallowed approval |
+| 031 | cli_worker_commands.rb | partial | ERR: unavailable_approval surfaced + cmd_approve refuses; observability_status reports unavailable; doctor PLACE deferred (manifest regen blocked) |
 | 058 | profile.rb | partial | ERR fail-closed fixed; DUP rejected (Core.deep_freeze stringifies keys, breaks **spread) |
 | 089 | admission.rb | done | ERR surfaced via AdmissionResult stored?; OwnerRequest value |
 | 008 | worker_runtime.rb | todo | ERR bypass durable + SIZE |
