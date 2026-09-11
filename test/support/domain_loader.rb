@@ -36,15 +36,18 @@ class DomainLoader
   # Reproduces the exact schema/digest/presets/compensation shape the wire
   # binds (description interpolation, parameter_schema_digest, watch
   # properties from JSON, compensation note/priority, policy, rate limit).
-  def self.intent_entry(type:, risk:, compensation_map:, watch_preset:, watch_properties:)
-    writable = type == "install_watch_condition" ? [] : %w[hypothesis]
+  def self.intent_entry(type:, risk:, compensation_map:, watch_preset:, watch_properties:, parameter_schemas: {})
+    configured_schema = parameter_schemas.fetch(type, {})
+    writable = configured_schema.empty? ? (type == "install_watch_condition" ? [] : %w[hypothesis]) : configured_schema.keys
     compensation_target = compensation_map.values.any? { |mapping| mapping.values.include?(type) }
     properties = {
       "entity_id" => {"type" => "string"},
       "situation_id" => {"type" => "string"},
       "situation_version" => {"type" => "integer"}
     }
-    writable.each { |field| properties[field] = {"type" => "string", "maxLength" => 512} }
+    writable.each do |field|
+      properties[field] = configured_schema.fetch(field, {"type" => "string", "maxLength" => 512})
+    end
     if compensation_target
       properties["note"] = {"type" => "string", "maxLength" => 512}
       properties["priority"] = {"type" => "string", "maxLength" => 16}
@@ -53,6 +56,7 @@ class DomainLoader
       watch_properties.each { |field, property| properties[field] = property }
     end
     schema = {"type" => "object", "additionalProperties" => false, "properties" => properties}
+    schema["required"] = writable unless configured_schema.empty?
     entry = {
       "type" => type,
       "risk_class" => risk,
@@ -74,7 +78,8 @@ class DomainLoader
       DomainLoader.intent_entry(
         type:, risk:, compensation_map: @data.fetch("compensation_map", {}),
         watch_preset: @data.fetch("watch_preset", {}),
-        watch_properties: @data.fetch("watch_properties", {})
+        watch_properties: @data.fetch("watch_properties", {}),
+        parameter_schemas: @data.fetch("intent_parameter_schemas", {})
       )
     end.freeze
     # Precomputed fixture responses (JCS strings) — order is load-bearing for
@@ -127,11 +132,20 @@ class DomainLoader
       document["recommended_intents"] = [
         {
           "type" => type,
-          "parameters" => {"hypothesis" => String(intent&.fetch(:hypothesis, nil) || hypothesis)}
+          "parameters" => intent_parameters(type, intent, hypothesis)
         }
       ]
     end
     document
+  end
+
+  def intent_parameters(type, intent, hypothesis)
+    fields = @data.fetch("intent_parameter_schemas", {}).fetch(type, {}).keys
+    fields = ["hypothesis"] if fields.empty?
+    fields.to_h do |field|
+      supplied = intent&.fetch(field.to_sym, nil) || intent&.fetch(:hypothesis, nil) || hypothesis
+      [field, String(supplied)]
+    end
   end
 
   def fixture_responses
