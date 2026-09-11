@@ -13,7 +13,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 076 | recorders.rb | done | flush crash fixed + regression test; DropLedger mixin; Journal split out |
 | 031 | cli_worker_commands.rb | todo | ERR swallowed approval |
 | 058 | profile.rb | partial | ERR fail-closed fixed; DUP rejected (Core.deep_freeze stringifies keys, breaks **spread) |
-| 089 | admission.rb | todo | ERR silent swallow |
+| 089 | admission.rb | done | ERR surfaced via AdmissionResult stored?; OwnerRequest value |
 | 008 | worker_runtime.rb | todo | ERR bypass durable + SIZE |
 | 095 | approval_engine_test.rb | todo | TEST private probe |
 | 055 | verifier.rb | todo | DUP status policy |

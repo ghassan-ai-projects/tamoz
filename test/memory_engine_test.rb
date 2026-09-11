@@ -374,6 +374,16 @@ class MemoryEngineTest < Minitest::Test
     assert_equal "speculation_as_fact", stored.fetch(:entry).value.rejection_reason
   end
 
+  def test_rejected_storage_failure_is_reported_through_stored_flag
+    # The rejection verdict still stands and never raises, but a durable-write
+    # failure on the audit record is surfaced (stored? == false), not swallowed.
+    # Closing the adapter makes the durable append fail for real.
+    @adapter.close
+    result = @engine.admission.admit_episode(episode: episode(statement: "x" * 5_000), owner: "alice")
+    assert result.rejected?
+    refute result.stored?
+  end
+
   def test_no_model_call_decides_admission
     # P11-13: all three gate paths admit with no provider loaded (no model
     # constant is even consulted on the admission path).
