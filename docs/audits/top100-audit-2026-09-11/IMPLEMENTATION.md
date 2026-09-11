@@ -51,7 +51,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 078 | context_control_exposure_test.rb | todo | DUP/TEST |
 | 081 | session_context_controls.rb | done | dead /new generation pair deleted; conversation_history_for helper |
 | 082 | autonomy_case.rb | partial | vacuous hard-counter gate fixed; shared ScriptedModel deferred |
-| 084 | agent_session_test.rb | todo | DUP/TEST/SIZE |
+| 084 | agent_session_test.rb | partial | __send__ dropped (seam was already public); ToolPolicy value; shared-double DUP deferred |
 | 085 | server_config.rb | rejected | SIZE rubocop-clean; STATE fix blocked by Style/DataInheritance |
 | 092 | comms_evidence_gated_approval_test.rb | partial | Harness returns transport (0 ivar probes); PressBinding value; store __send__ deferred to 006 seam |
 | 094 | dependency_isolation_test.rb | done | declared_features + capture_json helpers; dead regex alternative removed |
