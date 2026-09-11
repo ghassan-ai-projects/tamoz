@@ -15,7 +15,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 058 | profile.rb | partial | ERR fail-closed fixed; DUP rejected (Core.deep_freeze stringifies keys, breaks **spread) |
 | 089 | admission.rb | done | ERR surfaced via AdmissionResult stored?; OwnerRequest value |
 | 008 | worker_runtime.rb | todo | ERR bypass durable + SIZE |
-| 095 | approval_engine_test.rb | todo | TEST private probe |
+| 095 | approval_engine_test.rb | done | uses resolve return + grant_store.size |
 | 055 | verifier.rb | todo | DUP status policy |
 | 087 | state_codec.rb | todo | SIZE/NAME/DUP |
 | 004 | agent_toolbox_test.rb | todo | TEST |
