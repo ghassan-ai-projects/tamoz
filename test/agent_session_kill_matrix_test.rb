@@ -279,11 +279,6 @@ class AgentSessionKillMatrixTest < Minitest::Test
           end
           break unless request_id
 
-          request_id = (1..9).find do |candidate|
-            session.app.durable_runner.fetch(thread:, request_id: "r#{candidate}").nil?
-          end
-          break unless request_id
-
           # DR-4 (5c16bed): a stale continue fails as a typed terminal request
           # value, never as a raised error — and never re-runs resolved work.
           # Any invented work here crashes the child loudly instead.
@@ -650,11 +645,15 @@ class AgentSessionKillMatrixTest < Minitest::Test
     problems << "#{name}: missing run_check receipt" unless
       receipts.count("tool.run_check") == 1
 
-    surviving = Dir.children(workspace) - %w[app.rb]
-    unexpected = surviving.reject { |entry| entry.start_with?(".tamoz-") }
+    unexpected = unexpected_workspace_entries(workspace, %w[app.rb])
     problems << "#{name}: unexpected workspace entries: #{unexpected.inspect}" unless
       unexpected.empty?
     problems
+  end
+
+  # Public entries the run never declared; staging orphans are accounted for separately.
+  def unexpected_workspace_entries(workspace, expected)
+    (Dir.children(workspace) - expected).reject { |entry| entry.start_with?(".tamoz-") }
   end
 
   # A killed process can orphan its *private* temporary file: `atomic_replace` and
@@ -671,11 +670,9 @@ class AgentSessionKillMatrixTest < Minitest::Test
   # `test/toolbox_staging_reaper_test.rb` proves directly.
   def assert_no_public_partial(context, expected, label)
     workspace = context.fetch(:workspace)
-    surviving = Dir.children(workspace) - expected
-    unexpected = surviving.reject { |entry| entry.start_with?(".tamoz-") }
-
-    assert_empty unexpected, "#{label}: unexpected public workspace entries"
-    orphans = surviving.grep(/\A\.tamoz-/)
+    assert_empty unexpected_workspace_entries(workspace, expected),
+                 "#{label}: unexpected public workspace entries"
+    orphans = Dir.children(workspace).grep(/\A\.tamoz-/)
     orphans.each do |orphan|
       path = File.join(workspace, orphan)
       assert File.file?(path), "#{label}: orphan #{orphan} is not a regular file"
@@ -698,7 +695,9 @@ class AgentSessionKillMatrixTest < Minitest::Test
     end
   end
 
-  def with_scenario
+  # `reference:` is false for the clean reference run itself, which produces the digest
+  # every other scenario carries.
+  def with_scenario(reference: true)
     Dir.mktmpdir("tamoz-kill-matrix") do |directory|
       workspace = File.join(directory, "workspace")
       FileUtils.mkdir_p(workspace)
@@ -709,9 +708,9 @@ class AgentSessionKillMatrixTest < Minitest::Test
         database: File.join(directory, "tamoz.sqlite3"),
         log: File.join(directory, "events.log"),
         result: File.join(directory, "result.json"),
-        digest: Digest::SHA256.hexdigest("value = 1\n"),
-        reference_plan_digest: reference_plan_digest
+        digest: Digest::SHA256.hexdigest("value = 1\n")
       }
+      context[:reference_plan_digest] = reference_plan_digest if reference
       yield context
     end
   end
@@ -728,32 +727,19 @@ class AgentSessionKillMatrixTest < Minitest::Test
   # run must resume, and its model-call count is the baseline against which an
   # ambiguous provider repeat is measured.
   def reference
-    @reference ||= begin
-      Dir.mktmpdir("tamoz-kill-reference") do |directory|
-        workspace = File.join(directory, "workspace")
-        FileUtils.mkdir_p(workspace)
-        File.write(File.join(workspace, "app.rb"), "value = 1\n")
-        context = {
-          directory:,
-          workspace: File.realpath(workspace),
-          database: File.join(directory, "tamoz.sqlite3"),
-          log: File.join(directory, "events.log"),
-          result: File.join(directory, "result.json"),
-          digest: Digest::SHA256.hexdigest("value = 1\n")
-        }
-        status = run_child(context, mode: "run", seam: {})
-        raise "reference run failed: #{status.inspect}" unless status.success?
+    @reference ||= with_scenario(reference: false) do |context|
+      status = run_child(context, mode: "run", seam: {})
+      raise "reference run failed: #{status.inspect}" unless status.success?
 
-        result = JSON.parse(File.read(context.fetch(:result)))
-        raise "reference run did not complete: #{result}" unless
-          result.fetch("status") == "completed"
+      result = JSON.parse(File.read(context.fetch(:result)))
+      raise "reference run did not complete: #{result}" unless
+        result.fetch("status") == "completed"
 
-        {
-          plan_digest: result.fetch("accepted_plan_digest"),
-          model_calls: File.readlines(context.fetch(:log), chomp: true)
-                           .count { |entry| entry.start_with?("model:") }
-        }
-      end
+      {
+        plan_digest: result.fetch("accepted_plan_digest"),
+        model_calls: File.readlines(context.fetch(:log), chomp: true)
+                         .count { |entry| entry.start_with?("model:") }
+      }
     end
   end
 

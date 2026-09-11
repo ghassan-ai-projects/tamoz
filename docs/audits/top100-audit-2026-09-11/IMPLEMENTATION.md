@@ -29,14 +29,14 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 014 | openclaw_durable_cli_adapter.rb | todo | PLACE/SIZE/NAME |
 | 015 | memory_engine_test.rb | partial | dead probe removed; promote_wisdom helper; private-read deferred |
 | 021 | session.rb | todo | SIZE/DEAD/DUP/STATE |
-| 022 | agent_session_kill_matrix_test.rb | todo | DEAD/DUP |
+| 022 | agent_session_kill_matrix_test.rb | done | dup child scan removed; reference yields with_scenario; workspace-entries helper |
 | 023 | invocation.rb | todo | SIZE/DEAD/FX |
 | 024 | runtime.rb | todo | SIZE/STATE/DUP |
 | 026 | schedule_store.rb | partial | JOIN DUP + dead renew removed; lease_for/SIZE declined |
 | 033 | episode_nodes.rb | partial | frame assembler DUP; dead snapshot param; decision_builder declined |
 | 034 | memory_store.rb | partial | security-lockstep DUP fixed; STATE deferred (retrieval ripple) |
 | 037 | openclaw_comms_fixture.rb | partial | install_delivery_sink seam; read_rows deferred to 006 seam |
-| 038 | readiness.rb | todo | SIZE/DUP |
+| 038 | readiness.rb | partial | artifacts verified once per evaluate; three-seam SIZE split pending |
 | 039 | record.rb | todo | SIZE/DUP |
 | 040 | sqlite_scenario_runtime.rb | partial | dispatch fail-fast; append_checkpoint DEAD rejected (has defaults) |
 | 051 | subprocess_runner.rb | todo | SIZE |
