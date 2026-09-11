@@ -49,7 +49,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 070 | scoreboard.rb | todo | SIZE/PLACE/DUP |
 | 073 | comms_command_parity_test.rb | todo | TEST/DUP |
 | 078 | context_control_exposure_test.rb | todo | DUP/TEST |
-| 081 | session_context_controls.rb | todo | DEAD/DUP |
+| 081 | session_context_controls.rb | done | dead /new generation pair deleted; conversation_history_for helper |
 | 082 | autonomy_case.rb | partial | vacuous hard-counter gate fixed; shared ScriptedModel deferred |
 | 084 | agent_session_test.rb | todo | DUP/TEST/SIZE |
 | 085 | server_config.rb | rejected | SIZE rubocop-clean; STATE fix blocked by Style/DataInheritance |

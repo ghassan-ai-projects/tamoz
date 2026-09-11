@@ -95,15 +95,12 @@ class SessionContextControlsTest < Minitest::Test
 
       session.set_answer_verbosity(thread: THREAD, request_id: "r.verbose", verbosity: "quiet")
       reset = session.reset_episode(thread: THREAD, request_id: "r.reset")
-      fresh = session.new_generation(thread: THREAD, request_id: "r.new")
 
       assert_equal "reset", reset.document.fetch("control")
-      assert_equal "#{THREAD}.g2", fresh.document.fetch("successor_thread_id")
-      assert_equal "#{THREAD}.g2", fresh.record.fetch("successor_thread")
 
       controls = Array(latest_state(session)[:context_controls])
-      assert_equal %w[think verbose reset new], controls.map { |record| record.fetch("control") }
-      assert_equal 4, controls.length
+      assert_equal %w[think verbose reset], controls.map { |record| record.fetch("control") }
+      assert_equal 3, controls.length
       controls.each { |record| RECORDS.load!(record) }
     end
   end
@@ -178,33 +175,6 @@ class SessionContextControlsTest < Minitest::Test
     end
   end
 
-  def test_new_addresses_the_successor_generation_without_touching_the_old_thread
-    with_session do |session, workspace|
-      complete_turn(session)
-      history_before = session.app.history(thread: THREAD, limit: 100).length
-      tip_before = session.app.checkpointer.latest(thread_id: THREAD, namespace: [])
-      observations_before = latest_state(session).fetch(:observations)
-
-      projection = session.new_generation(thread: THREAD, request_id: "r.new")
-      successor = projection.document.fetch("successor_thread_id")
-
-      assert_equal "#{THREAD}.g2", successor
-      assert_equal 1, projection.document.fetch("generation")
-
-      history = session.app.history(thread: THREAD, limit: 100)
-      assert_equal history_before + 1, history.length
-      preserved = session.app.state(thread: THREAD, checkpoint_id: tip_before.id).state
-      assert_equal observations_before, preserved.fetch(:observations)
-      assert_equal :completed, session.view(thread: THREAD).status
-      assert_nil projection.document["preferences"]
-
-      # The successor address is the natural target of every later control:
-      # it parses to generation 2 and starts its own fresh chain on first use.
-      assert_equal 2, CONTROLS.generation_of(successor)
-      assert_equal "#{THREAD}.g3", CONTROLS.next_generation_thread(successor)
-    end
-  end
-
   # ONE durable stream serves both sides of the truncation contract. After
   # more than the admission window of prior turns, /reset declares exactly
   # the prefix it removed and the next composed frame keeps the newest
@@ -276,9 +246,6 @@ class SessionContextControlsTest < Minitest::Test
   end
 
   def test_generation_addressing_helpers_are_pure_and_total
-    assert_equal "t.g2", CONTROLS.next_generation_thread("t")
-    assert_equal "t.g3", CONTROLS.next_generation_thread("t.g2")
-    assert_equal "t.g11", CONTROLS.next_generation_thread("t.g10")
     assert_equal 1, CONTROLS.generation_of("plain")
     assert_equal 7, CONTROLS.generation_of("plain.g7")
   end
