@@ -7,10 +7,10 @@ module Tamoz
       # projection only when the caller explicitly requests diagnostics.
       module StatusProjection
         HUMAN_TASK_STATES = {
-          'not_started' => 'accepted', 'admitted' => 'accepted', 'queued' => 'queued',
-          'claimed' => 'working', 'running' => 'working', 'redirecting' => 'waiting',
-          'completed' => 'completed', 'failed' => 'failed', 'blocked' => 'blocked',
-          'stopped' => 'stopped'
+          'idle' => 'idle', 'not_started' => 'accepted', 'admitted' => 'accepted',
+          'queued' => 'queued', 'claimed' => 'working', 'running' => 'working',
+          'redirecting' => 'waiting', 'completed' => 'completed', 'failed' => 'failed',
+          'blocked' => 'blocked', 'stopped' => 'stopped'
         }.freeze
         WORKER_NOW = {
           'accepted' => 'Waiting for a worker to begin.',
@@ -18,6 +18,7 @@ module Tamoz
           'working' => 'A worker is handling this request.'
         }.freeze
         TASK_NOW = {
+          'idle' => 'No request is in progress.',
           'accepted' => 'The request is accepted.',
           'queued' => 'The request is queued.',
           'working' => 'The request is in progress.',
