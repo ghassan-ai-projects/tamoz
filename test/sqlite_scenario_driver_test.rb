@@ -504,6 +504,7 @@ class SQLiteScenarioDriverTest < Minitest::Test
         )
         result = SQLiteHarnessInputs.subprocess_runner.capture(
           SQLiteHarnessInputs.child_command(
+            suite: 'scenario driver',
             layout:,
             scenario_id: scenario.fetch("id"),
             scenario_reference:,

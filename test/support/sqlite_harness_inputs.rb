@@ -120,7 +120,8 @@ module SQLiteHarnessInputs
     )
   end
 
-  def child_command(layout:, scenario_id:, scenario_reference:, selector:, database_path:)
+  def child_command(layout:, scenario_id:, scenario_reference:, selector:, database_path:,
+                    suite: 'SQLite scenario')
     descriptor = layout.descriptor
     script = <<~RUBY
       require 'tamoz/evals/runner'
@@ -136,7 +137,7 @@ module SQLiteHarnessInputs
         scenario_id: #{scenario_id.inspect}, path: #{database_path.inspect},
         observer: stopper
       )
-      abort 'SQLite scenario selector returned'
+      abort "#{suite} selector returned"
     RUBY
     [RbConfig.ruby, *SUBPROCESS_LIB_ARGS, '-e', script]
   end

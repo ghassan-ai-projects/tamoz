@@ -634,6 +634,7 @@ class SQLiteRawOracleTest < Minitest::Test
     )
     result = SQLiteHarnessInputs.subprocess_runner.capture(
       SQLiteHarnessInputs.child_command(
+        suite: 'oracle',
         layout:,
         scenario_id:,
         scenario_reference:,
