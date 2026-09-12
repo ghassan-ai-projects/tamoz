@@ -114,6 +114,19 @@ class CancellationVisibilityTest < Minitest::Test
     end
   end
 
+  # A bound conversation with nothing admitted has a real projection whose
+  # state is idle; the card must say so, not fall back to "active".
+  def test_an_idle_conversation_is_reported_as_idle
+    with_engine do |store, adapter, checkpoints|
+      bind_route!(store)
+
+      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, nil)
+
+      assert_match(%r{Work status: State: idle}, text)
+      refute_match(/active/i, text)
+    end
+  end
+
   # The observed stamp sits with the turn runner: when the runner has consumed
   # the cancel redirect the worker marks it durably; any other request leaves
   # the timeline untouched. The stamp is first-write-wins.

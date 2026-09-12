@@ -158,7 +158,7 @@ class AgentRuntimeEffectsTest < Minitest::Test
       end
 
       assert_equal 'provider outcome is unknown', error.message
-      assert_equal :unknown, runtime.effects.instance_variable_get(:@records).values.last.status
+      assert_equal :unknown, runtime.effects.records.last.status
     end
   end
 
@@ -283,7 +283,7 @@ class AgentRuntimeEffectsTest < Minitest::Test
   end
 
   def recorded_operations(journal)
-    journal.instance_variable_get(:@records).values.map do |record|
+    journal.records.map do |record|
       {
         'operation' => record.operation,
         'status' => record.attempts.last.status.to_s,
@@ -293,6 +293,6 @@ class AgentRuntimeEffectsTest < Minitest::Test
   end
 
   def recorded_keys(journal)
-    journal.instance_variable_get(:@records).values.map(&:key)
+    journal.records.map(&:key)
   end
 end
