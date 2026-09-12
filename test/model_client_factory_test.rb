@@ -26,11 +26,8 @@ class ModelClientFactoryTest < Minitest::Test
 
       assert_includes names, credential
       assert_includes names, "#{provider.upcase}_API_BASE"
-      if endpoint
-        assert_equal endpoint, Factory::DESCRIPTORS.fetch(provider).fetch(:default_base)
-      else
-        assert_nil Factory::DESCRIPTORS.fetch(provider).fetch(:default_base)
-      end
+      base = Factory::DESCRIPTORS.fetch(provider).fetch(:default_base)
+      endpoint ? assert_equal(endpoint, base) : assert_nil(base)
     end
   end
 
@@ -94,31 +91,23 @@ class ModelClientFactoryTest < Minitest::Test
   end
 
   def test_factory_uses_the_profile_credential_at_the_http_boundary
-    secret = 'profile-credential-sentinel'
-    observed_headers = nil
-    response = Net::HTTPOK.new('1.1', '200', 'OK')
-    response.instance_variable_set(
-      :@body,
-      JSON.generate(
-        'choices' => [{'message' => {'content' => '{"ok":true}'}}]
+    Dir.mktmpdir('tamoz-factory') do |dir|
+      endpoint = LocalModelEndpoint.new(
+        mode: :fixture, responses: ['{"ok":true}'], log_path: File.join(dir, 'boundary.jsonl')
+      ).start
+      transport = Factory.build(
+        provider: 'openai', model: 'gpt-test',
+        profile_role: role(credential_ref: {"kind" => "env", "name" => "TAMOZ_MODEL_SECRET"}),
+        explicit_api_base: endpoint.base_url,
+        environment: {'TAMOZ_MODEL_SECRET' => 'profile-credential-sentinel'}
       )
-    )
-    # The transport freezes at construction, so the HTTP boundary is
-    # overridden on an anonymous subclass; a hand-built response is marked
-    # pre-read because it has no socket to stream from.
-    response.instance_variable_set(:@read, true)
-    transport = Class.new(Tamoz::Agent::EpisodeModelTransport) do
-      define_method(:post_completion_request) do |_body, headers:|
-        observed_headers = headers
-        response
-      end
-    end.new(
-      endpoint: 'https://example.test/v1', model: 'gpt-test', provider: 'openai',
-      api_key: secret, safety: :unsafe
-    )
-    transport.generate(stage: :plan, system: 'system', prompt: 'prompt')
 
-    assert_equal "Bearer #{secret}", observed_headers['Authorization']
+      transport.generate(stage: :plan, system: 'system', prompt: 'prompt')
+
+      assert_equal 'Bearer profile-credential-sentinel', endpoint.observed.last.fetch('authorization')
+    ensure
+      endpoint&.stop
+    end
   end
 
   def test_factory_built_transport_crosses_the_real_http_boundary
