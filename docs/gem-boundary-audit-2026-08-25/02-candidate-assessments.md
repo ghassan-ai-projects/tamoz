@@ -107,8 +107,9 @@ the real adapter path; a fixture is plumbing evidence, not provider evidence.
 
 ### What moves
 
-Move [`RubyLLMModel`](../../gems/tamoz-agent/lib/tamoz/agent/ruby_llm_model.rb)
-(113 lines) into an optional `tamoz-agent-ruby-llm` gem.
+Move `RubyLLMModel` (113 lines at audit time; since removed — the model seam now
+lives in tamoz-agent-kernel's `ModelClientFactory`/`EpisodeModelTransport`) into an
+optional `tamoz-agent-ruby-llm` gem.
 
 ### Source evidence
 

@@ -4,20 +4,22 @@ require_relative "test_helper"
 require "yaml"
 
 class CIConfigurationTest < Minitest::Test
-  def test_ci_matrix_and_permissions_match_m0_contract
+  def test_ci_workflow_and_permissions_match_the_m0_gate
     workflow = YAML.safe_load(
       ROOT.join(".github", "workflows", "ci.yml").read(encoding: Encoding::UTF_8),
       aliases: false
     )
     job = workflow.fetch("jobs").fetch("test")
 
-    assert_equal ["3.3", "3.4", "4.0"], job.dig("strategy", "matrix", "ruby")
-    assert_equal false, job.dig("strategy", "fail-fast")
+    # 57ca1d1 pinned CI to a single precompiled-gem Ruby; the workflow no
+    # longer carries a version matrix.
+    setup = job.fetch("steps").find { |step| step.fetch("uses", "").start_with?("ruby/setup-ruby@") }
+    assert_equal "3.3", setup.dig("with", "ruby-version")
+    assert_nil job["strategy"]
     assert_equal 15, job.fetch("timeout-minutes")
     assert_equal({"contents" => "read"}, workflow.fetch("permissions"))
     assert_equal true, workflow.dig("concurrency", "cancel-in-progress")
     checkout = job.fetch("steps").find { |step| step.fetch("uses", "").start_with?("actions/checkout@") }
-    setup = job.fetch("steps").find { |step| step.fetch("uses", "").start_with?("ruby/setup-ruby@") }
     assert_match(/actions\/checkout@[0-9a-f]{40}\z/, checkout.fetch("uses"))
     assert_equal false, checkout.dig("with", "persist-credentials")
     assert_match(/ruby\/setup-ruby@[0-9a-f]{40}\z/, setup.fetch("uses"))

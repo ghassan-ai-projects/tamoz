@@ -21,9 +21,9 @@ the per-phase review convention in [implementation-plan/evidence/](implementatio
 
 The communication benchmark — the measurement that turns "feels responsive" into a
 verifiable, longitudinal claim — is designed in
-[benchmark-protocol/](benchmark-protocol/README.md): protocol, scenario catalog,
-scoring, and an agent-drivable scenario ladder (C1–C9, plus the F1–F3 frontier
-round) built on the existing comms/eval seams.
+[documentation/benchmark/openclaw-chat-study/](../../documentation/benchmark/openclaw-chat-study/README.md):
+protocol, scenario catalog, scoring, and an agent-drivable scenario ladder (C1–C9,
+plus the F1–F3 frontier round) built on the existing comms/eval seams.
 
 ## Executive summary
 
