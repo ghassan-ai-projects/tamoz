@@ -359,6 +359,14 @@ module Tamoz
       end
     end
 
+    # A SERVER-side terminal-state inconsistency (a produced episode whose
+    # checkpoint carries no decision, or whose memory digests do not cohere) —
+    # distinct from the request-validation error, which is a client fault.
+    class EpisodeStreamStateError < StreamError
+      CATEGORY = "stream_state_invalid"
+      SAFE_MESSAGE = "The episode stream state is inconsistent."
+    end
+
     # T1.4: runs one episode as a durable request through the durable runner —
     # enqueued under the fenced id, executed inside the non-interactive
     # containment context, so a crash mid-episode resumes from a checkpoint
@@ -367,13 +375,6 @@ module Tamoz
     # RequestRecord.
     class EpisodeRunner
       include BlankToNil
-
-      # Audit F3: the B8-stated proof "provider: test anywhere in a stream
-      # artifact invalidates the run" — literal markers no real provider path
-      # ever emits. Real fixture receipts carry provider "ollama" + model
-      # "local-model" (fixture discrimination is structural, via test wiring);
-      # a forged marker is rejected at emit even with matching digests.
-      FORGED_PROVIDER_MARKERS = %w[test fixture local-model-fixture].freeze
 
       def initialize(durable_runner:, worker:, verification_store: nil, artifact_store: nil,
                      configured_tenant: nil, episode_tools: nil)
@@ -581,7 +582,7 @@ module Tamoz
         decision = terminal_state[:decision]
         digest = terminal_state[:decision_digest]
         if decision.nil? || digest.to_s.empty?
-          raise EpisodeRequestInvalidError,
+          raise EpisodeStreamStateError,
                 "produced episode has no terminal decision state"
         end
 
@@ -646,112 +647,13 @@ module Tamoz
         )
       end
 
-      # P1/B4: the RUNNER turns receipts into wire model events, AFTER
-      # verifying each projection against its durable journal record (fetch by
-      # effect_key; the head must be :succeeded and the request digest must
-      # match). Node-authored state alone is never trusted, so "a model event
-      # without a completed receipt never reaches the wire" holds
-      # categorically. Emitted on fresh AND replayed runs from the same stored
-      # projections, so replay is ordinal- and digest-identical.
+      # P1/B4: the RUNNER turns receipts into wire model events only through
+      # the wire projection, which verifies each against its durable journal
+      # record before anything is emitted.
       def emit_model_events(adapter, terminal_state, envelope)
-        receipts = Array(terminal_state[:model_receipts])
-        return if receipts.empty?
-
-        checkpointer = @durable_runner.compiled.checkpointer
-        checkpointer.open_writer(
-          thread_id: envelope.thread_id, namespace: envelope.namespace,
-          owner_id: "tamoz.episode.wire", ttl: checkpointer.writer_ttl
-        ) do |writer|
-          receipts.each do |receipt|
-            record = writer.effects.fetch(receipt.fetch("effect_key"))
-            verify_receipt_against_journal!(receipt, record)
-            enforce_genuine_provider!(receipt)
-            emit_model_started(adapter, receipt)
-            emit_model_completed(adapter, receipt)
-          end
-        end
-      end
-
-      def verify_receipt_against_journal!(receipt, record)
-        stored_response = journal_attempt_digest(record, key: "response_digest")
-        stored_request = journal_attempt_digest(record, key: "request_digest")
-        stored_configuration = journal_attempt_digest(
-          record, key: "provider_configuration_digest"
-        )
-        if record.nil? || record.status != :succeeded ||
-           stored_response != receipt.fetch("response_digest") ||
-           stored_request != receipt.fetch("request_digest") ||
-           stored_configuration != receipt.fetch("provider_configuration_digest")
-          raise StreamError,
-                "wire_refused_model_event/receipt_not_journal_verified"
-        end
-      end
-
-      def enforce_genuine_provider!(receipt)
-        provider = receipt.fetch("provider", "").to_s
-        # Audit F3 (B8's stated proof, literal): a receipt carrying a
-        # FORGED provider marker invalidates the stream artifact even with
-        # matching digests — the design's "provider: test anywhere in a
-        # stream artifact invalidates the run" is enforced here, before
-        # the event reaches the wire. Real fixture receipts carry
-        # provider "ollama" + model "local-model" (structural separation
-        # is the fixture discrimination); this guard rejects only markers
-        # no real path ever produces. A MISSING provider is equally a
-        # refusal — a genuine journaled call always carries one.
-        if FORGED_PROVIDER_MARKERS.include?(provider)
-          raise StreamError,
-                "wire_refused_model_event/forged_provider_marker"
-        end
-        if provider.empty?
-          raise StreamError,
-                "wire_refused_model_event/missing_provider"
-        end
-      end
-
-      def emit_model_started(adapter, receipt)
-        emit_model_part(
-          adapter, receipt, :model_started,
-          "provider" => receipt.fetch("provider"),
-          "model_id" => receipt.fetch("model"),
-          "request_sha256" => receipt.fetch("request_digest")
-        )
-      end
-
-      def emit_model_completed(adapter, receipt)
-        emit_model_part(
-          adapter, receipt, :model_completed,
-          "response_sha256" => receipt.fetch("response_digest"),
-          "usage" => receipt["usage"]
-        )
-      end
-
-      def emit_model_part(adapter, receipt, type, data)
-        adapter.emit_stream_part(
-          Tamoz::StreamPart.new(
-            type:,
-            namespace: [],
-            run_id: receipt.fetch("episode_id", ""),
-            task_id: "reason",
-            sequence: 0,
-            data: {"ordinal" => receipt.fetch("ordinal")}.merge(data),
-            emitted_at: Process.clock_gettime(Process::CLOCK_MONOTONIC)
-          )
-        )
-      end
-
-      # The response/request digest stored on the journaled attempt — the
-      # codec projection's digest. Only a real completed attempt carries
-      # one; a forged projection cannot reproduce it.
-      def journal_attempt_digest(record, key:)
-        return nil unless record&.respond_to?(:attempts)
-
-        record.attempts.each do |attempt|
-          next unless attempt.status == :succeeded
-
-          result = attempt.respond_to?(:result) ? attempt.result : nil
-          return result[key] if result.is_a?(Hash) && result[key]
-        end
-        nil
+        EpisodeModelEventProjection.new(@durable_runner).parts(
+          envelope:, receipts: Array(terminal_state[:model_receipts])
+        ).each { |part| adapter.emit_stream_part(part) }
       end
 
       # T2.3/P3: the per-episode artifact manifest on EVERY terminal — the
@@ -785,7 +687,7 @@ module Tamoz
         terminal_memory = Array(terminal_state.fetch(:situation_memory, []))
         return if terminal_memory.map { |projection| projection.fetch("digest") } == terminal_digests
 
-        raise EpisodeRequestInvalidError,
+        raise EpisodeStreamStateError,
               "terminal memory digests do not match the recalled projections"
       end
 
@@ -970,6 +872,136 @@ module Tamoz
           context.cancellation.cancel!("rpc cancelled") unless
             context.cancellation.cancelled?
         end
+      end
+    end
+
+    # P1/B4: the wire projection for model events — the only path a model
+    # event crosses to the wire. Each terminal-state receipt is verified
+    # against its durable journal record first (fetch by effect_key; the head
+    # must be :succeeded and the request digests must match), so "a model
+    # event without a completed receipt never reaches the wire" holds
+    # categorically. Fresh AND replayed runs project from the same stored
+    # rows, and `emitted_at` is the journal attempt's own completed_at_ms —
+    # never a live clock read — so replay is ordinal- and digest-identical.
+    class EpisodeModelEventProjection
+      # Audit F3: the B8-stated proof "provider: test anywhere in a stream
+      # artifact invalidates the run" — literal markers no real provider path
+      # ever emits. Real fixture receipts carry provider "ollama" + model
+      # "local-model" (fixture discrimination is structural, via test wiring);
+      # a forged marker is rejected at emit even with matching digests.
+      FORGED_PROVIDER_MARKERS = %w[test fixture local-model-fixture].freeze
+
+      def initialize(durable_runner)
+        @durable_runner = durable_runner
+      end
+
+      def parts(envelope:, receipts:)
+        return [] if receipts.empty?
+
+        parts = []
+        checkpointer = @durable_runner.compiled.checkpointer
+        checkpointer.open_writer(
+          thread_id: envelope.thread_id, namespace: envelope.namespace,
+          owner_id: "tamoz.episode.wire", ttl: checkpointer.writer_ttl
+        ) do |writer|
+          receipts.each do |receipt|
+            record = writer.effects.fetch(receipt.fetch("effect_key"))
+            verify_receipt_against_journal!(receipt, record)
+            enforce_genuine_provider!(receipt)
+            emitted_at = journal_completed_at(record)
+            parts << model_started_part(receipt, emitted_at)
+            parts << model_completed_part(receipt, emitted_at)
+          end
+        end
+        parts
+      end
+
+      private
+
+      def verify_receipt_against_journal!(receipt, record)
+        stored_response = journal_attempt_digest(record, key: "response_digest")
+        stored_request = journal_attempt_digest(record, key: "request_digest")
+        stored_configuration = journal_attempt_digest(
+          record, key: "provider_configuration_digest"
+        )
+        if record.nil? || record.status != :succeeded ||
+           stored_response != receipt.fetch("response_digest") ||
+           stored_request != receipt.fetch("request_digest") ||
+           stored_configuration != receipt.fetch("provider_configuration_digest")
+          raise StreamError,
+                "wire_refused_model_event/receipt_not_journal_verified"
+        end
+      end
+
+      def enforce_genuine_provider!(receipt)
+        provider = receipt.fetch("provider", "").to_s
+        if FORGED_PROVIDER_MARKERS.include?(provider)
+          raise StreamError,
+                "wire_refused_model_event/forged_provider_marker"
+        end
+        if provider.empty?
+          raise StreamError,
+                "wire_refused_model_event/missing_provider"
+        end
+      end
+
+      # The response/request digest stored on the journaled attempt — the
+      # codec projection's digest. Only a real completed attempt carries
+      # one; a forged projection cannot reproduce it.
+      def journal_attempt_digest(record, key:)
+        return nil unless record&.respond_to?(:attempts)
+
+        record.attempts.each do |attempt|
+          next unless attempt.status == :succeeded
+
+          result = attempt.respond_to?(:result) ? attempt.result : nil
+          return result[key] if result.is_a?(Hash) && result[key]
+        end
+        nil
+      end
+
+      # The wire stamp: the journaled completion time of the succeeded
+      # attempt. Durable state a replay already holds — a succeeded journal
+      # write always carries it, so its absence fails closed at the
+      # StreamPart's numeric contract.
+      def journal_completed_at(record)
+        attempt = Array(record&.attempts).find do |candidate|
+          candidate.status == :succeeded
+        end
+        return unless attempt&.completed_at_ms
+
+        attempt.completed_at_ms / 1000.0
+      end
+
+      def model_started_part(receipt, emitted_at)
+        part(
+          receipt, emitted_at, :model_started,
+          "ordinal" => receipt.fetch("ordinal"),
+          "provider" => receipt.fetch("provider"),
+          "model_id" => receipt.fetch("model"),
+          "request_sha256" => receipt.fetch("request_digest")
+        )
+      end
+
+      def model_completed_part(receipt, emitted_at)
+        part(
+          receipt, emitted_at, :model_completed,
+          "ordinal" => receipt.fetch("ordinal"),
+          "response_sha256" => receipt.fetch("response_digest"),
+          "usage" => receipt["usage"]
+        )
+      end
+
+      def part(receipt, emitted_at, type, data)
+        Tamoz::StreamPart.new(
+          type:,
+          namespace: [],
+          run_id: receipt.fetch("episode_id", ""),
+          task_id: "reason",
+          sequence: 0,
+          data:,
+          emitted_at:
+        )
       end
     end
   end
