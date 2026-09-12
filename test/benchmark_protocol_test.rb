@@ -17,8 +17,9 @@ class BenchmarkProtocolTest < Minitest::Test
 
   # SHA-256 of the committed documentation/benchmark/BENCHMARK_PROTOCOL.json. Bump only
   # when a protocol change is deliberate: this is the freeze. (2026-09-12 bump:
-  # sealed_build_digest follows the Gemfile.lock change from the gem extractions.)
-  COMMITTED_SHA256 = "4228219d387feef7aa0c90c018919d530352583a613819275abd1417996968d7"
+  # sealed_build_digest follows the Gemfile.lock change from the gem extractions
+  # and the tamoz-agent-kernel net-http requirement tightening to ~> 0.5.)
+  COMMITTED_SHA256 = "3c52f188d7abc419af0f414d47f7329accf932b586a4fd59ae645f3803dda45e"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider

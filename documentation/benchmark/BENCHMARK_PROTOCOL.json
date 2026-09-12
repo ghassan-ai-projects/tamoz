@@ -1,6 +1,6 @@
 {
   "benchmark_protocol_version": "1.1.0",
-  "sealed_build_digest": "sha256:42f1d8cd7d389c0ca6f746094e0376eb4ba8c5190b6099208b735c848506a764",
+  "sealed_build_digest": "sha256:656375f8a7d0dbac690ce42b0d086c34def35ad3e6a249066c864907d4dcb2d4",
   "graph": {
     "name": "tamoz.agent.episode",
     "version": "4"

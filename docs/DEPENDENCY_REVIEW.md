@@ -18,7 +18,7 @@ until this file is regenerated.
 | `json_schemer` | 2.5.0 | MIT | transitive |  | https://github.com/davishmcclurg/json_schemer |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
 | `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
-| `net-http` | 0.9.1 | Ruby, BSD-2-Clause | yes | tamoz-agent-kernel >= 0.5 | https://github.com/ruby/net-http |
+| `net-http` | 0.9.1 | Ruby, BSD-2-Clause | yes | tamoz-agent-kernel ~> 0.5 | https://github.com/ruby/net-http |
 | `rake` | 13.4.2 | MIT | transitive |  | https://github.com/ruby/rake |
 | `regexp_parser` | 2.12.0 | MIT | transitive |  | https://github.com/ammar/regexp_parser |
 | `simpleidn` | 0.2.3 | MIT | transitive |  | https://github.com/mmriis/simpleidn |

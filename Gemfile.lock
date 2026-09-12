@@ -37,7 +37,7 @@ PATH
   remote: gems/tamoz-agent-kernel
   specs:
     tamoz-agent-kernel (0.1.0.alpha.1)
-      net-http (>= 0.5)
+      net-http (~> 0.5)
       tamoz-core (= 0.1.0.alpha.1)
       tamoz-tools (= 0.1.0.alpha.1)
 

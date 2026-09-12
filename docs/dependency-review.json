@@ -147,7 +147,7 @@
       ],
       "homepage": "https://github.com/ruby/net-http",
       "required_by": [
-        "tamoz-agent-kernel >= 0.5"
+        "tamoz-agent-kernel ~> 0.5"
       ],
       "direct": true,
       "exception": null
