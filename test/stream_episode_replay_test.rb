@@ -185,8 +185,15 @@ class StreamEpisodeReplayTest < Minitest::Test
       snapshot:, prompt: AquacultureDomain::PROMPT,
       prompt_version: "1.0", tool_results:
     )
-    transport = Tamoz::Agent::EpisodeModelTransport.new(
-      endpoint: @endpoint.base_url, model: "local-model", provider: "ollama"
+    # The logical key binds the factory-computed provider configuration
+    # digest, so the seed transport must be built exactly like the live one.
+    profile = Tamoz::Agent::Profile.preview_source(
+      File.join(@composition.fetch(:directory), "profile.yml")
+    ).document
+    resolved = Tamoz::Agent::ModelCall.resolve_role(profile, "fast")
+    transport = Tamoz::Agent::ModelClientFactory.build(
+      provider: resolved.provider, model: resolved.model, profile_role: resolved,
+      environment: ENV, explicit_api_base: @endpoint.base_url
     )
     request_bytes = transport.build_request(system: frame.system, prompt: frame.user)
     Tamoz::Agent::ModelCall::LogicalCallKey.new(

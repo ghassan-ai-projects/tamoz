@@ -156,20 +156,14 @@ class ContextControlExposureTest < Minitest::Test
     end
   end
 
-  # A controls builder that crashes (a missing credential, a boot failure)
-  # costs one bounded unavailable reply — the serve loop answers again on
-  # the next pass instead of dying.
-  def test_a_crashing_controls_builder_answers_unavailable_and_the_loop_survives
+  # The CLI wires no controls source (controls are worker-owned), so control
+  # commands cost one bounded unavailable reply — the serve loop answers
+  # again on the next pass instead of dying.
+  def test_a_missing_controls_source_answers_unavailable_and_the_loop_survives
     with_dual_surface do |surface|
-      crashing = Tamoz::Agent::CLICommsShared::ChannelControlsSource.new(
-        workspace_root: surface.workspace,
-        adapter: surface.adapter,
-        artifact_store: surface.adapter.bind_artifact_store(tenant: 'channel:controls'),
-        model_builder: -> { raise StandardError, 'model boot failed' }
-      )
       gateway = Comms::Gateway.new(
         adapter: surface.adapter, checkpoints: surface.checkpoints, transport: surface.transport,
-        descriptor:, poller_owner: 'exposure:crash', controls: crashing
+        descriptor:, poller_owner: 'exposure:crash', controls: nil
       )
       surface.admit(101, TURN_TEXT)
 
