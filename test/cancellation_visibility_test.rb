@@ -2,6 +2,7 @@
 
 require_relative 'test_helper'
 require_relative 'support/autonomy_case'
+require_relative 'support/comms_gateway_harness'
 
 # Plan 03 work items 4-5 — visible cancellation and the reconnectable CLI
 # status view. The timeline is durable (`requested` stamped inside the /cancel
@@ -13,12 +14,14 @@ require_relative 'support/autonomy_case'
 # rubocop:disable Metrics/BlockLength, Metrics/ClassLength
 class CancellationVisibilityTest < Minitest::Test
   include AutonomyCase
+  include CommsGatewayHarness
 
   Comms = Tamoz::Comms
 
-  BOT_ID = 7_463_512_990
   CONVERSATION = 'telegram:chat:22222222'
-  THREAD = 'tg.ops.abc'
+  # The thread the gateway itself derives for this conversation (design §5):
+  # admissions land on the deterministic thread, never on a caller-chosen one.
+  THREAD = Comms::Admission.thread_id(CommsGatewayHarness::SURFACE_ID, CONVERSATION).freeze
   CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => 'cancelled_by_user' } }.freeze
 
   def test_migration_pins_schema_version_22
@@ -29,9 +32,9 @@ class CancellationVisibilityTest < Minitest::Test
   # Clean cancel: requested -> observed -> terminal stopped, all three points
   # rendered distinctly by `/status r<ref>`.
   def test_a_clean_cancel_renders_requested_observed_and_stopped_distinctly
-    with_engine do |store, adapter, checkpoints|
+    with_engine do |store, checkpoints, gateway, transport|
       bind_route!(store)
-      assert_equal :enqueued, admit(store, envelope(update_id: 301))
+      serve_admission(gateway, transport, 301)
       request_id = request_ids(checkpoints).first
 
       assert_equal :requested, store.request_cancellation(
@@ -39,7 +42,7 @@ class CancellationVisibilityTest < Minitest::Test
       )
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
+      text = drive_status(gateway, transport, store, 310, "/status #{ref(request_id)}")
 
       assert_match(/Cancellation requested \d+[smh] ago\./, text)
       assert_match(/Observed by the runner \d+[smh] ago\./, text)
@@ -51,9 +54,9 @@ class CancellationVisibilityTest < Minitest::Test
   # effect. The terminal wording says exactly that and NEVER claims issued
   # external work stopped (invariant 9).
   def test_a_raced_completion_says_completed_before_effect_and_never_stopped
-    with_engine do |store, adapter, checkpoints|
+    with_engine do |store, checkpoints, gateway, transport|
       bind_route!(store)
-      assert_equal :enqueued, admit(store, envelope(update_id: 302))
+      serve_admission(gateway, transport, 302)
       request_id = request_ids(checkpoints).first
 
       assert_equal :requested, store.request_cancellation(
@@ -63,7 +66,7 @@ class CancellationVisibilityTest < Minitest::Test
                    store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'answer')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
+      text = drive_status(gateway, transport, store, 311, "/status #{ref(request_id)}")
 
       assert_match(/Terminal: completed before the cancellation took effect\./, text)
       refute_match(/stopped/i, text, 'a raced completion must not be rendered as a stop')
@@ -74,9 +77,9 @@ class CancellationVisibilityTest < Minitest::Test
   # task=failed — the settle word follows the recorded settle kind, never a
   # success claim for work that did not succeed.
   def test_a_failed_settle_renders_failed_wording_on_the_task_axis
-    with_engine do |store, adapter, checkpoints|
+    with_engine do |store, checkpoints, gateway, transport|
       bind_route!(store)
-      assert_equal :enqueued, admit(store, envelope(update_id: 304))
+      serve_admission(gateway, transport, 304)
       request_id = request_ids(checkpoints).first
       fail_inbox_request!(checkpoints, request_id)
 
@@ -87,7 +90,7 @@ class CancellationVisibilityTest < Minitest::Test
                    store.complete_request(thread_id: THREAD, request_id:, settle_kind: 'failed')
       assert_equal :observed, store.mark_cancellation_observed(thread_id: THREAD, now: NOW + 6)
 
-      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, ref(request_id))
+      text = drive_status(gateway, transport, store, 312, "/status #{ref(request_id)}")
 
       assert_match(/State: failed/, text)
       assert_match(/Terminal: failed before the cancellation took effect\./, text)
@@ -98,15 +101,15 @@ class CancellationVisibilityTest < Minitest::Test
   # The aggregate `/status` (no argument) exposes the newest live timeline of
   # the active request alongside the usual queue facts.
   def test_the_aggregate_status_carries_the_newest_live_timeline
-    with_engine do |store, adapter, checkpoints|
+    with_engine do |store, _checkpoints, gateway, transport|
       bind_route!(store)
-      assert_equal :enqueued, admit(store, envelope(update_id: 303))
+      serve_admission(gateway, transport, 303)
 
       assert_equal :requested, store.request_cancellation(
         thread_id: THREAD, request_id: 'cancel-303', payload: CANCEL_PAYLOAD, now: NOW + 2
       )
 
-      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, nil)
+      text = drive_status(gateway, transport, store, 313, '/status')
 
       assert_match(%r{Work status: State: queued}, text)
       assert_match(/Cancellation requested/, text)
@@ -117,57 +120,21 @@ class CancellationVisibilityTest < Minitest::Test
   # A bound conversation with nothing admitted has a real projection whose
   # state is idle; the card must say so, not fall back to "active".
   def test_an_idle_conversation_is_reported_as_idle
-    with_engine do |store, adapter, checkpoints|
+    with_engine do |store, _checkpoints, gateway, transport|
       bind_route!(store)
 
-      text = gateway(adapter, store, checkpoints).send(:status_text, status_envelope, nil)
+      text = drive_status(gateway, transport, store, 314, '/status')
 
       assert_match(%r{Work status: State: idle}, text)
       refute_match(/active/i, text)
     end
   end
 
-  # The observed stamp sits with the turn runner: when the runner has consumed
-  # the cancel redirect the worker marks it durably; any other request leaves
-  # the timeline untouched. The stamp is first-write-wins.
-  def test_the_worker_marks_observation_when_the_runner_consumes_the_cancel
-    with_engine do |store, adapter, checkpoints|
-      bind_route!(store)
-      insert_request!(store, request_id: 'b' * 63 + '1')
-      assert_equal :requested, store.request_cancellation(
-        thread_id: THREAD, request_id: 'cancel-worker', payload: CANCEL_PAYLOAD, now: NOW + 2
-      )
-
-      worker = Tamoz::Agent::Worker.new(
-        runtime: RuntimeStub.new(adapter, checkpoints),
-        session_builder: ->(_thread) { nil },
-        emitter: ->(_document) {}
-      )
-
-      worker.send(:observe_cancellation, record(operation: :turn), thread_id: THREAD)
-      assert_nil cancellation_stamps(store, 'b' * 63 + '1').fetch('observed_at_ms'),
-                'an ordinary turn consumption is not an observation'
-
-      worker.send(:observe_cancellation, record(operation: :redirect, plain_task: true), thread_id: THREAD)
-      assert_nil cancellation_stamps(store, 'b' * 63 + '1').fetch('observed_at_ms'),
-                'a redirect without a cancel task is not an observation'
-
-      worker.send(:observe_cancellation, record(operation: :redirect), thread_id: THREAD)
-      first_observed = cancellation_stamps(store, 'b' * 63 + '1').fetch('observed_at_ms')
-      refute_nil first_observed
-
-      worker.send(:observe_cancellation, record(operation: :redirect), thread_id: THREAD)
-      replayed = cancellation_stamps(store, 'b' * 63 + '1').fetch('observed_at_ms')
-
-      assert_equal first_observed, replayed, 'a replayed observation never moves the stamp'
-    end
-  end
-
   # Black-box drive (the way agent_worker_test drives real workers): a real
   # WorkerRuntime/Worker whose pass consumes a queued cancel redirect through
   # claim_and_run alone — no private poke — must carry the timeline from
-  # `requested` to `observed`, and must never stamp while an ordinary turn or
-  # a plain redirect runs.
+  # `requested` to `observed`, must never stamp while an ordinary turn or a
+  # plain redirect runs, and must never move the stamp once it is written.
   def test_a_real_worker_claim_consumes_a_cancel_redirect_and_stamps_observation
     with_runtime do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")
@@ -210,7 +177,8 @@ class CancellationVisibilityTest < Minitest::Test
 
         stamps = cancellation_stamps(store, 'c' * 63 + '1')
         refute_nil stamps.fetch('observed_at_ms'), 'consuming the cancel stamps observed'
-        assert_operator stamps.fetch('observed_at_ms'), :>=, stamps.fetch('requested_at_ms')
+        observed = stamps.fetch('observed_at_ms')
+        assert_operator observed, :>=, stamps.fetch('requested_at_ms')
 
         history = runtime.checkpoints.request_history(thread_id: THREAD)
         assert_equal 1, history.count { |request| request.operation == :turn },
@@ -220,6 +188,26 @@ class CancellationVisibilityTest < Minitest::Test
 
         view = runtime.session_for(THREAD).view(thread: THREAD)
         assert_equal 'cancelled_by_user', view.terminal.fetch('reason')
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'g' * 63 + '1', operation: :redirect,
+          payload: { 'task' => 'Read note.txt' }, delivery: :redirect
+        )
+        assert worker.poll_once
+
+        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        assert_equal observed, stamps.fetch('observed_at_ms'),
+                     'a redirect without a cancel task is not an observation'
+
+        runtime.checkpoints.enqueue_request(
+          thread_id: THREAD, request_id: 'h' * 63 + '1', operation: :redirect,
+          payload: { 'task' => { 'cancel' => true } }, delivery: :redirect
+        )
+        assert worker.poll_once
+
+        stamps = cancellation_stamps(store, 'c' * 63 + '1')
+        assert_equal observed, stamps.fetch('observed_at_ms'),
+                     'a replayed observation never moves the stamp'
       ensure
         runtime&.close
       end
@@ -413,9 +401,6 @@ class CancellationVisibilityTest < Minitest::Test
 
   # ----------------------------------------------------------------- helpers
 
-  RuntimeStub = Struct.new(:adapter, :checkpoints)
-  CancelProbe = Struct.new(:operation, :payload)
-
   def read_only_responses
     {
       plan: [plan_step('read_file', { 'path' => 'note.txt' })],
@@ -424,75 +409,47 @@ class CancellationVisibilityTest < Minitest::Test
     }
   end
 
-  def record(operation:, plain_task: false)
-    task = plain_task ? { 'task' => 'plain' } : { 'task' => { 'cancel' => true } }
-    CancelProbe.new(operation, task)
+  # One gateway pass per inbound update: the admission lands through the
+  # transport, the way the channel really receives it.
+  def serve_admission(gateway, transport, id)
+    transport.batch([update(id)])
+    assert_equal :served, gateway.serve_once(now: NOW + id, drain: false)
+  end
+
+  def drive_status(gateway, transport, store, id, text)
+    transport.batch([update(id, text:)])
+    assert_equal :served, gateway.serve_once(now: NOW + id, drain: false)
+    row = store.outbox_rows(surface_id: SURFACE_ID, statuses: %w[pending claimed succeeded])
+               .find { |candidate| candidate.fetch('reply_to') == id + 10_000 }
+    row && row.fetch('text')
   end
 
   def with_engine
     Dir.mktmpdir('tamoz-cancel') do |directory|
-      path = File.join(directory, 'runtime.sqlite3')
-      adapter = Tamoz::SQLite::Adapter.new(path:)
+      adapter = Tamoz::SQLite::Adapter.new(path: File.join(directory, 'runtime.sqlite3'))
       begin
-        definition = Tamoz.graph(name: 'cancel', version: '1') do
-          state :ready, default: true
-          node(:finish, implementation_name: 'cancel.finish', version: '1') { |_s, _c| { ready: true } }
-          edge Tamoz::START, :finish
-          edge :finish, Tamoz::END
-        end
-        checkpoints = definition.compile(checkpointer: adapter).checkpointer
+        checkpoints = graph_definition('cancel').compile(checkpointer: adapter).checkpointer
         store = adapter.bind_comms_store(checkpoints)
-        yield store, adapter, checkpoints
+        store.deploy_surface(descriptor.wire, now: NOW)
+        transport = CommsGatewayHarness::ScriptedTransport.new
+        gateway = Comms::Gateway.new(
+          adapter:, checkpoints:, transport:, descriptor:, poller_owner: 'gateway:test'
+        )
+        yield store, checkpoints, gateway, transport
       ensure
         adapter&.close
       end
     end
   end
 
-  NOW = Time.utc(2026, 8, 10, 12, 0, 0)
-
-  def descriptor
-    Comms::SurfaceDescriptor.build(
-      surface_id: 'telegram-ops', revision: 1,
-      transport: { mode: 'long_poll',
-                   credential_ref: { kind: 'env', name: 'TAMOZ_TELEGRAM_BOT_TOKEN' },
-                   poll_timeout_s: 30, batch: 50, max_response_bytes: 262_144 },
-      identity: { expected_bot_id: BOT_ID, bot_username: 'ops_bot' },
-      admission: { direct: 'allowlist', correspondents: ['telegram:user:11111111'] },
-      threading: 'conversation', profile_id: 'ops',
-      approvals: { mode: 'deny_only', prompt_ttl_s: 900 },
-      rendering: { format: 'plain', max_parts: 5, part_characters: 3500, overflow: 'truncate' },
-      limits: { max_inbound_bytes: 8192, max_open_requests: 50,
-                max_denial_prompts_per_request: 4, outbox_capacity: 500,
-                control_capacity: 50, per_chat_messages_per_s: 1.0,
-                global_messages_per_s: 25.0 }
-    )
-  end
-
-  def envelope(update_id:)
-    Comms::InboundEnvelope.new(
-      surface_id: 'telegram-ops', surface_revision: 1, update_id:,
-      raw_payload_hash: format('%064x', update_id), parser_version: 1, kind: 'text',
-      correspondent_id: 'telegram:user:11111111', conversation_id: CONVERSATION,
-      message_id: update_id + 10_000, text: 'hello', observed_time: NOW
-    ).wire
-  end
-
   def bind_route!(store)
     store.deploy_surface(descriptor.wire, now: NOW)
     store.bind_conversation(
       Comms::Conversation.new(
-        surface_id: 'telegram-ops', surface_revision: 1,
+        surface_id: SURFACE_ID, surface_revision: 1,
         conversation_id: CONVERSATION, thread_id: THREAD,
         profile_id: 'ops', bound_at: NOW
       ).wire, now: NOW
-    )
-  end
-
-  def admit(store, wire)
-    store.admit_and_enqueue(
-      wire, surface_id: 'telegram-ops', bot_id: BOT_ID, thread: THREAD,
-            profile_id: 'ops', reservation: 1, now: NOW
     )
   end
 
@@ -527,19 +484,6 @@ class CancellationVisibilityTest < Minitest::Test
   end
 
   def ref(request_id) = "r#{request_id[0, 10]}"
-
-  def status_envelope
-    { 'conversation_id' => CONVERSATION, 'correspondent_id' => 'telegram:user:11111111' }
-  end
-
-  def gateway(adapter, store, checkpoints)
-    Tamoz::Comms::Gateway.new(
-      adapter:, checkpoints:, transport: Object.new, descriptor: descriptor,
-      poller_owner: 'gateway:test'
-    ).tap do |instance|
-      instance.instance_variable_set(:@store, store)
-    end
-  end
 
   def cancellation_stamps(store, request_id)
     row = store.__send__(:read, 'test.cancel.stamps') do |txn|
