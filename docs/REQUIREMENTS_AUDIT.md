@@ -7,29 +7,27 @@ generating run.
 
 | Requirements | Named cases run | Release-blocking gaps | DoD met |
 |---|---:|---:|---|
-| 525 | 277 | 19 | **no** |
+| 529 | 284 | 15 | **no** |
 
 ## Status counts
 
 | Status | Rows |
 |---|---:|
 | deferred-by-contract | 11 |
-| failing | 4 |
 | indirect | 4 |
 | missing | 15 |
-| pass | 491 |
+| pass | 499 |
 
 ## Release-blocking gaps (the DoD list)
 
 | Requirement | Status | Why |
 |---|---|---|
-| `ADR-039` — Tamoz is supervisory; certified safety and real-time control stay external | failing | no direct evidence names this requirement |
 | `ADR-041` — Communication channels are a contract gem plus per-transport adapter gems | missing | Channel gem split (COMMS_TELEGRAM_PLAN slices A/B). The packaging and dependency-isolation proof for tamoz-comms/tamoz-telegram lands with the gems themselves. |
 | `ADR-042` — The channel gateway is a separate process in the connector zone | missing | Connector-zone gateway (COMMS_TELEGRAM_PLAN slices E/G). The clean-subprocess proof that the gateway never loads a model lands with the gateway slice. |
 | `ADR-043` — Telegram v1 is deny-only and reference-bound | missing | Deny-only callback policy (COMMS_TELEGRAM_PLAN slices A/H). The adversarial approval suite in slice H converts this row to direct evidence. |
 | `ADR-044` — Observability is a contract gem plus per-exporter adapter gems | missing | Observability gem split (OBSERVABILITY_PLAN slices A/I). The packaging and dependency-isolation proof for tamoz-observability/tamoz-otel lands with the gems themselves. |
 | `ADR-045` — The observability gems add no durable table and no second source of truth | missing | No durable telemetry table (OBSERVABILITY_PLAN slices B/E). The migration-count proof and the separately authorized model usage persistence land with slice E. |
-| `ADR-046` — Content capture is off by default, per class, and refused for restricted classifications | missing | Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice. |
+| `ADR-046` — Content capture is off by default, per class, and refused for restricted classes | missing | Content capture policy (OBSERVABILITY_PLAN slice D). The off-by-default and classification-refusal suite lands with the content policy slice. |
 | `ADR-047` — Sampling applies to export only and never to safety-bearing signals | missing | Export-only sampling (OBSERVABILITY_PLAN slice H). The journal-first retention proof lands with the sampling slice. |
 | `INV-39` — Civil time, misfire, overlap, and backlog semantics are explicit and bounded | missing | Cron/IANA civil time is not implemented (P13 plan §12 deferral). The misfire/overlap/backlog/jitter half is directly evidenced; the civil-time half is unavailable, so the clause cannot be claimed as a whole. The owner must either sign the residual or exclude tamoz-scheduler from the v0.1 release surface (P15-I). |
 | `INV-56` — A user channel is identified, bound, and grants nothing | missing | Telegram channel admission (COMMS_TELEGRAM_PLAN slices B/D). No test exists before the channel gems are built; the admission suite in the telegram slices converts this row to direct evidence. |
@@ -38,34 +36,21 @@ generating run.
 | `INV-59` — Observation cannot change execution, and its surface is bounded and versioned | missing | The bounded catalog, recorder isolation, and drop accounting are implemented and covered by observability tests, but the full four-way byte-identity, hanging-collector, and end-to-end latency proof from OBSERVABILITY_PLAN slices A/B/C remains outstanding. The slice-B conformance suite closes this residual. |
 | `INV-60` — Telemetry is redacted by construction and content capture is an explicit named policy | missing | Default omission, digest/size metadata, Secret rejection, and classification-gated bounded capture are implemented and covered. The all-surface property test for journal and exporter payloads from OBSERVABILITY_PLAN slice D remains outstanding and closes this residual. |
 | `INV-61` — Safety-bearing observability is derived from durable evidence, correlated by durable identity, and never overstates what it measured | missing | Deterministic trace identity, ordering-only spans, derived local metrics, and usage-cost basis are implemented and covered. The authoritative SQLite reconstruction, resume/fork/backup proof, divergence accounting, and durable usage prerequisite from OBSERVABILITY_PLAN slices F/G remain outstanding. |
-| `MIG-15` — MIGRATION_15 | failing | no direct evidence names this requirement |
-| `NG-real-actuator` — No real physical actuator; the simulator is the only effector | failing | no direct evidence names this requirement |
 | `OBJ-7` — the public gems, reference agent, documentation, migration/backup path, and release evidence are ready for an independently reproducible release candidate | missing | Reproducibility and documentation are both evidenced now: the P15-H clean-clone rehearsal passes on a pinned toolchain outside the development checkout, and INSTALL/OPERATIONS/LIMITATIONS are bound to the real CLI surface, the real gem list and the MEASURED audit gaps. What remains is not documentation: the P15-I owner decision on INV-39 and INV-48, plus the P15-E benchmark and the P15-F pinned evaluation manifest. This row closes when the owner gate is recorded — a candidate is not a release. |
-| `PHASE-P14` — Streaming physical-world input — tamoz-stream gem; atomic process_partition + injected clock; durable admission/dedup/quarantine; action boundary + interlock; replay credential isolation; scorecard case 22; critic PASS-WITH-GAPS, all findings closed; simulated source only (real-adapter gate deferred to owner approval) | failing | no direct evidence names this requirement |
-
-## Failing evidence (release stopper)
-
-- `ADR-039` — test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only
-- `MIG-15` — test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store
-- `NG-real-actuator` — test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only
-- `PHASE-P14` — test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal
 
 ## Full audit
 
 | Requirement | Category | Blocking | Status | Direct evidence |
 |---|---|---|---|---|
 | `ADR-001` | adr | yes | pass | `test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice` |
-| `ADR-002` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
-| `ADR-003` | adr | yes | pass | `test/core_state_codec_test.rb#test_registered_value_round_trip_and_legacy_decoder` |
 | `ADR-004` | adr | no | indirect | `test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order` |
 | `ADR-005` | adr | yes | pass | `test/graph_identity_test.rb#test_interrupt_cursor_is_explicit_positional_and_uses_throw` |
 | `ADR-006` | adr | yes | pass | `test/graph_reducer_test.rb#test_append_merge_union_min_and_max_contracts` |
 | `ADR-007` | adr | yes | pass | `test/graph_state_manager_test.rb#test_unknown_unsupported_and_sensitive_updates_fail_before_candidate` |
 | `ADR-008` | adr | yes | pass | `test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories` |
 | `ADR-009` | adr | yes | pass | `test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it` |
-| `ADR-010` | adr | yes | pass | `test/ci_configuration_test.rb#test_ci_matrix_and_permissions_match_m0_contract` |
+| `ADR-010` | adr | yes | pass | `test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate` |
 | `ADR-011` | adr | yes | pass | `test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection` |
-| `ADR-012` | adr | yes | pass | `test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk` |
 | `ADR-013` | adr | no | indirect | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `ADR-014` | adr | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
 | `ADR-015` | adr | yes | pass | `test/sqlite_crash_recovery_test.rb#test_process_kill_before_and_after_checkpoint_commit_recovers_one_execution` |
@@ -92,7 +77,7 @@ generating run.
 | `ADR-036` | adr | yes | pass | `test/stream_situation_snapshot_test.rb#test_a_wrong_digest_for_the_same_payload_is_refused` |
 | `ADR-037` | adr | yes | pass | `test/stream_invariants_test.rb#test_invariant_1_the_episode_path_computes_no_stream_plane_concepts` |
 | `ADR-038` | adr | yes | pass | `test/stream_decision_builder_test.rb#test_a_proposal_outside_the_allowlist_degrades_to_watch` |
-| `ADR-039` | adr | yes | failing | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
+| `ADR-039` | adr | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `ADR-040` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
 | `ADR-041` | adr | yes | missing | `—` |
 | `ADR-042` | adr | yes | missing | `—` |
@@ -101,6 +86,13 @@ generating run.
 | `ADR-045` | adr | yes | missing | `—` |
 | `ADR-046` | adr | yes | missing | `—` |
 | `ADR-047` | adr | yes | missing | `—` |
+| `ADR-048` | adr | yes | pass | `test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix` |
+| `ADR-049` | adr | yes | pass | `test/comms_evidence_gated_approval_test.rb#test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence` |
+| `ADR-051` | adr | yes | pass | `test/dependency_isolation_test.rb#test_graph_loads_no_model_eval_or_adapter_package` |
+| `ADR-052` | adr | yes | pass | `test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files` |
+| `ADR-053` | adr | yes | pass | `test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates` |
+| `ADR-054` | adr | yes | pass | `test/capability_host_test.rb#test_websearch_registers_under_the_websearch_built_in_source` |
+| `ADR-055` | adr | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
 | `API-tamoz-agent-Tamoz::Agent.build` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CLI.run` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::CheckReceipt` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -113,7 +105,6 @@ generating run.
 | `API-tamoz-agent-Tamoz::Agent::PlanRejectedError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::ProtocolError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Result` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
-| `API-tamoz-agent-Tamoz::Agent::RubyLLMModel` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Runtime` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::SkillSnapshotUnavailableError` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
 | `API-tamoz-agent-Tamoz::Agent::Skills` | public_api | yes | pass | `test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface` |
@@ -529,14 +520,15 @@ generating run.
 | `MIG-12` | migration | yes | pass | `test/memory_store_test.rb#test_situation_scoped_records_are_bound_by_entity_type` |
 | `MIG-13` | migration | yes | pass | `test/memory_store_test.rb#test_migration_11_registers_the_digest_epoch_and_clears_pre_jcs_rows` |
 | `MIG-14` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
-| `MIG-15` | migration | yes | failing | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
+| `MIG-15` | migration | yes | pass | `test/stream_episode_witness_test.rb#test_gate4_tampered_retained_byte_fails_the_verified_store` |
 | `MIG-16` | migration | yes | pass | `test/effect_identity_test.rb#test_attempt_identity_is_derived_from_logical_identity_without_replacing_it` |
 | `MIG-17` | migration | yes | pass | `test/sqlite_approval_stores_test.rb#test_migration_applies_on_fresh_database_and_checksum_verifies` |
 | `MIG-18` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
 | `MIG-19` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise` |
 | `MIG-2` | migration | yes | pass | `test/memory_store_test.rb#test_migration_2_creates_the_index_table_and_ordinals_are_monotonic` |
 | `MIG-20` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters` |
-| `MIG-21` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21` |
+| `MIG-21` | migration | yes | pass | `test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows` |
+| `MIG-22` | migration | yes | pass | `test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22` |
 | `MIG-3` | migration | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
 | `MIG-4` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
 | `MIG-5` | migration | yes | pass | `test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place` |
@@ -547,7 +539,7 @@ generating run.
 | `NG-arbitrary-shell` | non_goal | yes | pass | `test/agent_toolbox_test.rb#test_runs_only_a_configured_check_name_without_model_supplied_arguments` |
 | `NG-content-authority` | non_goal | yes | pass | `test/agent_skills_adversarial_test.rb#test_a20_injection_payload_in_a_body_grants_nothing` |
 | `NG-plugin-api` | non_goal | yes | pass | `test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set` |
-| `NG-real-actuator` | non_goal | yes | failing | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
+| `NG-real-actuator` | non_goal | yes | pass | `test/stream_evidence_client_test.rb#test_the_host_binds_the_evidence_adapter_read_only` |
 | `NG-second-ui` | non_goal | no | indirect | `—` |
 | `NG-self-promotion` | non_goal | yes | pass | `test/improvement_candidate_test.rb#test_a_candidate_cannot_evaluate_or_promote_itself` |
 | `OBJ-1` | objective | no | indirect | `—` |
@@ -567,7 +559,7 @@ generating run.
 | `PHASE-P11` | phase_exit_criterion | yes | pass | `test/memory_session_integration_test.rb#test_memory_enabled_session_records_epoch_and_writes_episode_memory` |
 | `PHASE-P12` | phase_exit_criterion | yes | pass | `test/healing_remediation_test.rb#test_full_lifecycle_recovers_only_through_the_oracle` |
 | `PHASE-P13` | phase_exit_criterion | yes | pass | `test/sqlite_schedule_store_test.rb#test_put_schedule_cas_on_revision_and_materialize_due_is_atomic` |
-| `PHASE-P14` | phase_exit_criterion | yes | failing | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
+| `PHASE-P14` | phase_exit_criterion | yes | pass | `test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal` |
 | `PHASE-P16` | phase_exit_criterion | yes | pass | `test/p16_tools_gem_test.rb#test_t2_clean_env_runs_the_full_toolbox_surface_without_agent` |
 | `PHASE-P17` | phase_exit_criterion | yes | pass | `test/websearch_invocation_test.rb#test_search_success_is_attributed_bounded_and_deterministic` |
 | `PHASE-P18` | phase_exit_criterion | yes | pass | `test/capability_host_test.rb#test_host_surface_is_byte_identical_to_the_p18_start_fixture` |

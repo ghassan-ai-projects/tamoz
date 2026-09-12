@@ -9,7 +9,7 @@
 # that defines it:
 #
 #   invariants   docs/design-v0.1/INVARIANTS.md         (all 61 clauses)
-#   ADRs         docs/design-v0.1/DECISIONS.md          (accepted ADRs only)
+#   ADRs         documentation/adr/adr-*.md             (accepted ADRs only)
 #   phases       docs/PRODUCT_EXECUTION_ROADMAP.md §2   (exit criteria)
 #   public API   docs/public-api.json                   (every documented entry)
 #   CLI          gems/tamoz-agent/.../cli.rb            (SUBCOMMANDS)
@@ -494,10 +494,6 @@ EVIDENCE = {
 
   # ---- ADRs ---------------------------------------------------------------
   "ADR-001" => {test: "test/public_api_test.rb#test_reference_application_manifest_identifies_the_bounded_repair_slice"},
-  "ADR-002" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
-                supporting: ["test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_evals"]},
-  "ADR-003" => {test: "test/core_state_codec_test.rb#test_registered_value_round_trip_and_legacy_decoder",
-                supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]},
   "ADR-004" => {test: "test/graph_definition_test.rb#test_definition_compiles_to_a_stable_digest_independent_of_declaration_order",
                 classification: "indirect",
                 rationale: "Composition style decision. No `Proc#>>` surface exists to " \
@@ -511,10 +507,9 @@ EVIDENCE = {
   "ADR-008" => {test: "test/graph_execution_test.rb#test_inline_and_threads_commit_byte_identical_histories",
                 supporting: ["test/core_pool_test.rb#test_inline_and_threaded_results_preserve_submission_order"]},
   "ADR-009" => {test: "test/agent_profile_transition_test.rb#test_prompt_prefix_is_stable_within_a_profile_epoch_and_changes_with_it"},
-  "ADR-010" => {test: "test/ci_configuration_test.rb#test_ci_matrix_and_permissions_match_m0_contract",
+  "ADR-010" => {test: "test/ci_configuration_test.rb#test_ci_workflow_and_permissions_match_the_m0_gate",
                 supporting: ["test/ci_configuration_test.rb#test_lockfile_has_a_portable_platform"]},
   "ADR-011" => {test: "test/sqlite_kernel_test.rb#test_creates_secure_migrated_database_and_closes_every_connection"},
-  "ADR-012" => {test: "test/dependency_isolation_test.rb#test_mcp_loads_only_core_and_the_official_sdk"},
   "ADR-013" => {test: "test/public_api_test.rb#test_documented_inventory_matches_loaded_public_surface",
                 classification: "indirect",
                 rationale: "A vocabulary budget is a review policy, not a runtime " \
@@ -617,6 +612,17 @@ EVIDENCE = {
     test: "test/model_client_factory_test.rb#test_provider_descriptor_exposes_the_closed_phase_three_matrix",
     supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]
   },
+  "ADR-049" => {test: "test/comms_evidence_gated_approval_test.rb#test_a_chat_bound_approve_is_refused_when_the_decision_requires_operator_evidence"},
+  "ADR-051" => {test: "test/dependency_isolation_test.rb#test_graph_loads_no_model_eval_or_adapter_package",
+                supporting: ["test/model_transport_parity_test.rb#test_generate_returns_the_complete_digest_bound_projection"]},
+  "ADR-052" => {test: "test/packaging_test.rb#test_every_gem_is_strict_valid_and_contains_only_release_files",
+                supporting: ["test/dependency_isolation_test.rb#test_no_production_gemspec_depends_on_agent_except_agents_own_dependents"]},
+  "ADR-053" => {test: "test/approval_policy_document_test.rb#test_bundled_base_loads_and_validates",
+                supporting: ["test/approval_policy_document_test.rb#test_digest_changes_on_content_edit"]},
+  "ADR-054" => {test: "test/capability_host_test.rb#test_websearch_registers_under_the_websearch_built_in_source",
+                supporting: ["test/capability_closed_world_test.rb#test_four_built_ins_dispatch_through_one_protocol"]},
+  "ADR-055" => {test: "test/stream_episode_end_to_end_test.rb#test_a_full_diagnose_episode_streams_a_decision_and_one_terminal",
+                supporting: ["test/benchmark_protocol_test.rb#test_domain_data_binds_the_frozen_wire_digests"]},
 
   # ---- Product objectives (roadmap §6, "finalize Tamoz" means …) ---------
   "OBJ-1" => {
@@ -771,10 +777,13 @@ EVIDENCE = {
   "MIG-19" => {test: "test/sqlite_comms_store_test.rb#test_generation_bumps_are_durable_and_absent_rows_raise",
                supporting: ["test/sqlite_comms_store_test.rb#test_reply_to_round_trips_from_append_to_transport_wire"]},
   "MIG-20" => {test: "test/sqlite_comms_store_test.rb#test_three_conflicting_digests_share_one_anchor_row_with_counters"},
-  "MIG-21" => {test: "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_21",
+  "MIG-21" => {test: "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows",
                supporting: ["test/sqlite_comms_store_test.rb#test_cancellation_requested_stamp_commits_and_rolls_back_with_the_enqueue",
                             "test/sqlite_comms_store_test.rb#test_cancellation_observed_stamp_lands_once_and_requires_a_request",
-                            "test/sqlite_comms_store_test.rb#test_cancellation_timeline_states_derive_from_durable_rows"]},
+                            "test/sqlite_kernel_test.rb#test_every_shipped_schema_version_migrates_forward_in_place"]},
+  "MIG-22" => {test: "test/cancellation_visibility_test.rb#test_migration_pins_schema_version_22",
+               supporting: ["test/sqlite_effect_journal_test.rb#test_effect_census_preserves_request_association_separately_from_effect_identity",
+                            "test/experience_harness_test.rb#test_request_status_is_request_local_for_two_delivery_outcomes"]},
 
   # ---- Binding non-goals (a requirement that something must NOT exist) ----
   "NG-plugin-api" => {test: "test/capability_registry_test.rb#test_built_in_sources_are_the_closed_set",
@@ -844,16 +853,17 @@ def parse_invariants
 end
 
 def parse_adrs
-  text = read_utf8(File.join(ROOT, "docs", "design-v0.1", "DECISIONS.md"))
   rows = []
-  current = nil
-  text.each_line(chomp: true) do |line|
-    if (match = line.match(/\A### (ADR-\d+) — (.+)\z/))
-      current = {id: match[1], title: match[2].strip, status: nil}
-      rows << current
-    elsif current && (match = line.match(/\A\*\*Status:\*\*\s*(.+?)\.?\s*\z/))
-      current[:status] ||= match[1].strip
-    end
+  Dir.glob(File.join(ROOT, "documentation", "adr", "adr-*.md")).sort.each do |path|
+    text = read_utf8(path)
+    header = text.match(/\A# (ADR-\d+) — (.+)$/)
+    next unless header
+
+    status = text.match(/^\*\*Status:\*\*\s*(.+?)\.?\s*$/)&.[](1)
+    # Retired and Proposed ADRs decide nothing; only accepted ADRs become rows.
+    next unless status&.start_with?("Accepted")
+
+    rows << {id: header[1], title: header[2].strip, status:}
   end
   rows
 end
@@ -921,7 +931,7 @@ end
 
 NON_GOALS = [
   ["NG-plugin-api", "No plugin API, marketplace, or caller-supplied capability source",
-   "docs/design-v0.1/DECISIONS.md ADR-014; docs/P18_CAPABILITY_HOST_PLAN.md §1"],
+   "documentation/adr/adr-014-no-plugin-api-in-v0-1.md; docs/P18_CAPABILITY_HOST_PLAN.md §1"],
   ["NG-arbitrary-shell", "No arbitrary shell: only operator-configured named checks run",
    "docs/PRODUCT_EXECUTION_ROADMAP.md §1; docs/P15_RELEASE_PLAN.md scope"],
   ["NG-real-actuator", "No real physical actuator; the simulator is the only effector",
@@ -1048,7 +1058,7 @@ parse_adrs.each do |adr|
   extra["not_release_blocking_because"] = policy_only if policy_only
   requirements << row(
     id: adr[:id],
-    source: "docs/design-v0.1/DECISIONS.md",
+    source: "documentation/adr",
     title: adr[:title],
     category: "adr",
     release_blocking: policy_only.nil?,
