@@ -94,8 +94,6 @@ module TamozSQLiteOracle
     "82e37eac8f412d313a7bf25269bdb1491e9d17756f2fe96130a90a84c0938da5"
   MIGRATION_21_CHECKSUM =
     "4e707e99afae10d1d28cf47b3bef6194299b7f75e344ad8b0b99ff3f9ed1471c"
-  # MIGRATION_22 adds the request-local ownership columns (request_id) to
-  # tamoz_comms_outbox and tamoz_effects.
   MIGRATION_22_CHECKSUM =
     "d1880639971be7acc487bebdebfde4b4d527accfed71fa2953a7e67fe4971386"
   MAX_PATH_BYTES = 4_096
