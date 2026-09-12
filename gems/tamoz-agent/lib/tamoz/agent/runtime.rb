@@ -28,6 +28,68 @@ module Tamoz
       end
     end
 
+    # The action repair loop's state — one named object instead of a
+    # symbol-keyed hash threaded through the loop methods. Mutation is the
+    # point (the loop is inherently sequential); the object makes the fields
+    # and their transitions explicit.
+    class ActionLoopState
+      attr_reader :all_observations, :prior_plans, :prior_reviews,
+                  :seen_actions, :seen_failures, :repair_attempt
+      attr_accessor :plan, :review, :check_receipt, :tool_failure, :check_passed, :terminal_reason
+
+      def initialize(discovery_observations)
+        @all_observations = discovery_observations.dup
+        @prior_plans = []
+        @prior_reviews = []
+        @seen_actions = {}
+        @seen_failures = {}
+        @repair_attempt = 0
+        @plan = nil
+        @review = nil
+        @check_receipt = nil
+        @tool_failure = nil
+        @check_passed = false
+        @terminal_reason = "no_check"
+      end
+
+      def iteration_context
+        {
+          phase: repair_attempt.zero? ? :action : :repair,
+          metadata: {"repair_attempt" => repair_attempt},
+          planning_context: {
+            "prior_action_plans" => prior_plans.map(&:to_h),
+            "prior_action_reviews" => prior_reviews,
+            "prior_action_signatures" => seen_actions.keys.sort,
+            "prior_failure_signatures" => seen_failures.keys.sort
+          }
+        }
+      end
+
+      def repeated_action?(signature) = seen_actions.key?(signature)
+
+      def record_plan!(plan, review, signature)
+        seen_actions[signature] = true
+        @plan = plan
+        @review = review
+        prior_plans << plan
+        prior_reviews << review
+      end
+
+      def repeated_failure?(failure_signature) = seen_failures.key?(failure_signature)
+
+      def record_failure!(failure_signature)
+        seen_failures[failure_signature] = true
+      end
+
+      def attempts_exhausted? = repair_attempt >= SessionNodes::MAX_REPAIR_ATTEMPTS
+
+      def enter_repair! = @repair_attempt += 1
+
+      def observations_add!(observations)
+        all_observations.concat(observations)
+      end
+    end
+
     class Runtime
       PLAN_SYSTEM = Deliberation::PLAN_SYSTEM
       REVIEW_SYSTEM = Deliberation::REVIEW_SYSTEM
@@ -167,9 +229,7 @@ module Tamoz
           metadata: {},
           planning_context: {}
         ) { |event| yield event if block_given? }
-        observations, = execute(plan, phase: :read_only, metadata: {}) do |event|
-          yield event if block_given?
-        end
+        observations = execute_observations(plan, phase: :read_only) { |event| yield event }
         {plan:, review:, observations:, verification_context: {}}
       end
 
@@ -307,22 +367,16 @@ module Tamoz
       end
 
       def routed_discovery_observations(discovery_plan)
-        observations, = execute(
-          discovery_plan,
-          phase: :discovery,
-          metadata: {}
-        ) { |event| yield event }
-        observations
+        execute_observations(discovery_plan, phase: :discovery) { |event| yield event }
       end
 
       def routed_read_only_observations(plan, discovery_observations)
-        observations, = execute(
+        execute_observations(
           plan,
           phase: :read_only,
           metadata: {"discovery_pass" => 0},
           initial_bytes: observation_bytes(discovery_observations)
         ) { |event| yield event }
-        observations
       end
 
       def routed_discovery_plan(task, decision)
@@ -397,7 +451,7 @@ module Tamoz
         discovery_observations = discover_action_observations(task, discovery:) do |event|
           yield event
         end
-        state = action_state(discovery_observations)
+        state = ActionLoopState.new(discovery_observations)
         run_action_repair_loop(task, state) { |event| yield event }
         action_result(state)
       end
@@ -411,32 +465,18 @@ module Tamoz
           metadata: {},
           planning_context: {}
         ) { |event| yield event }
-        observations, = execute(
-          discovery_plan,
-          phase: :discovery,
-          metadata: {}
-        ) { |event| yield event }
-        observations
+        execute_observations(discovery_plan, phase: :discovery) { |event| yield event }
       end
 
-      def action_state(discovery_observations)
-        {
-          all_observations: discovery_observations.dup,
-          prior_plans: [],
-          prior_reviews: [],
-          seen_actions: {},
-          seen_failures: {},
-          repair_attempt: 0,
-          plan: nil,
-          review: nil,
-          check_passed: false,
-          terminal_reason: "no_check"
-        }
+      # The one plan→observation executor every routing variant rides.
+      def execute_observations(plan, phase:, metadata: {}, initial_bytes: 0)
+        observations, = execute(plan, phase:, metadata:, initial_bytes:) { |event| yield event }
+        observations
       end
 
       def run_action_repair_loop(task, state)
         loop do
-          context = action_iteration_context(state)
+          context = state.iteration_context
           emit_repair_started(state, context) { |event| yield event }
           candidate_plan, candidate_review = draft_action_plan(task, state, context) do |event|
             yield event
@@ -444,7 +484,7 @@ module Tamoz
           break unless candidate_plan
 
           signature = action_signature(candidate_plan)
-          if repeated_action?(state, signature)
+          if state.repeated_action?(signature)
             stop_repair(
               state,
               context:,
@@ -453,37 +493,24 @@ module Tamoz
             ) { |event| yield event }
             break
           end
-          record_action_plan(state, candidate_plan, candidate_review, signature)
+          state.record_plan!(candidate_plan, candidate_review, signature)
 
           execute_action_plan(state, context) { |event| yield event }
           break unless resolve_action_outcome(state, context) { |event| yield event }
         end
       end
 
-      def action_iteration_context(state)
-        {
-          phase: state.fetch(:repair_attempt).zero? ? :action : :repair,
-          metadata: {"repair_attempt" => state.fetch(:repair_attempt)},
-          planning_context: {
-            "prior_action_plans" => state.fetch(:prior_plans).map(&:to_h),
-            "prior_action_reviews" => state.fetch(:prior_reviews),
-            "prior_action_signatures" => state.fetch(:seen_actions).keys.sort,
-            "prior_failure_signatures" => state.fetch(:seen_failures).keys.sort
-          }
-        }
-      end
-
       def emit_repair_started(state, context)
-        return unless state.fetch(:repair_attempt).positive?
+        return unless state.repair_attempt.positive?
 
         emit(
           :repair_started,
-          context.fetch(:metadata).merge("observations" => state.fetch(:all_observations).length)
+          context.fetch(:metadata).merge("observations" => state.all_observations.length)
         ) { |event| yield event }
       end
 
       def stop_repair(state, context:, reason:, detail: nil)
-        state[:terminal_reason] = reason
+        state.terminal_reason = reason
         data = context.fetch(:metadata).merge("reason" => reason)
         data.merge!(detail) if detail
         emit(:repair_stopped, data) { |event| yield event }
@@ -494,55 +521,45 @@ module Tamoz
           task,
           phase: context.fetch(:phase),
           allowed_tools: toolbox.names,
-          evidence: state.fetch(:all_observations),
+          evidence: state.all_observations,
           metadata: context.fetch(:metadata),
           planning_context: context.fetch(:planning_context)
         ) { |event| yield event }
       rescue PlanRejectedError
-        raise if state.fetch(:repair_attempt).zero?
+        raise if state.repair_attempt.zero?
 
         stop_repair(state, context:, reason: "repair_plan_rejected") { |event| yield event }
         nil
       end
 
-      def repeated_action?(state, signature) = state.fetch(:seen_actions).key?(signature)
-
-      def record_action_plan(state, plan, review, signature)
-        state.fetch(:seen_actions)[signature] = true
-        state[:plan] = plan
-        state[:review] = review
-        state.fetch(:prior_plans) << plan
-        state.fetch(:prior_reviews) << review
-      end
-
       def execute_action_plan(state, context)
         observations, check_receipt, tool_failure = execute(
-          state.fetch(:plan),
+          state.plan,
           phase: context.fetch(:phase),
           metadata: context.fetch(:metadata),
-          initial_bytes: observation_bytes(state.fetch(:all_observations))
+          initial_bytes: observation_bytes(state.all_observations)
         ) { |event| yield event }
-        state.fetch(:all_observations).concat(observations)
-        state[:check_receipt] = check_receipt
-        state[:tool_failure] = tool_failure
+        state.observations_add!(observations)
+        state.check_receipt = check_receipt
+        state.tool_failure = tool_failure
       end
 
       def resolve_action_outcome(state, context)
         # A repairable tool rejection short-circuits the plan and enters the same
         # bounded repair loop a failed configured check uses: one shared
         # `repair_attempt` counter, one shared failure-signature set.
-        if state[:tool_failure]
-          failure_signature = state.fetch(:tool_failure).fetch("failure_signature")
+        if state.tool_failure
+          failure_signature = state.tool_failure.fetch("failure_signature")
           repeated_reason = "repeated_tool_failure"
-        elsif state[:check_receipt].nil?
-          state[:terminal_reason] = "completed_without_check"
+        elsif state.check_receipt.nil?
+          state.terminal_reason = "completed_without_check"
           return false
-        elsif state.fetch(:check_receipt).passed?
-          state[:check_passed] = true
-          state[:terminal_reason] = "check_passed"
+        elsif state.check_receipt.passed?
+          state.check_passed = true
+          state.terminal_reason = "check_passed"
           return false
         else
-          failure_signature = state.fetch(:check_receipt).failure_signature
+          failure_signature = state.check_receipt.failure_signature
           repeated_reason = "repeated_failure"
         end
 
@@ -552,7 +569,7 @@ module Tamoz
       end
 
       def continue_repair?(state, failure_signature:, repeated_reason:, context:)
-        if state.fetch(:seen_failures).key?(failure_signature)
+        if state.repeated_failure?(failure_signature)
           stop_repair(
             state,
             context:,
@@ -561,23 +578,23 @@ module Tamoz
           ) { |event| yield event }
           return false
         end
-        state.fetch(:seen_failures)[failure_signature] = true
+        state.record_failure!(failure_signature)
 
-        if state.fetch(:repair_attempt) >= SessionNodes::MAX_REPAIR_ATTEMPTS
+        if state.attempts_exhausted?
           stop_repair(state, context:, reason: "repair_attempts_exhausted") { |event| yield event }
           return false
         end
-        state[:repair_attempt] += 1
+        state.enter_repair!
         true
       end
 
       def action_result(state)
         {
-          plan: state.fetch(:plan),
-          review: state.fetch(:review),
-          observations: Tamoz::Core.deep_freeze(state.fetch(:all_observations)),
-          check_passed: state.fetch(:check_passed),
-          terminal_reason: state.fetch(:terminal_reason)
+          plan: state.plan,
+          review: state.review,
+          observations: Tamoz::Core.deep_freeze(state.all_observations),
+          check_passed: state.check_passed,
+          terminal_reason: state.terminal_reason
         }.freeze
       end
 
@@ -632,48 +649,56 @@ module Tamoz
           correlation: @correlation,
           attributes: {provider: model_identity(:provider), model: model_identity(:model)}
         ) do
-          outcome = EffectDispatcher.run(
-            context: effect_context,
+          outcome = dispatch_model_call(
+            stage:, ordinal:, system:, prompt:, request:, configuration_digest:
+          )
+          model_outcome_value(outcome, request:, configuration_digest:)
+        end
+      end
+
+      def dispatch_model_call(stage:, ordinal:, system:, prompt:, request:, configuration_digest:)
+        stage_request = request.merge(
+          "stage" => stage.to_s,
+          "provider_configuration_digest" => configuration_digest
+        )
+        EffectDispatcher.run(
+          context: effect_context,
+          operation: "model.generate.#{stage}",
+          safety: model_safety,
+          call_index: ordinal,
+          request: stage_request,
+          actor: "tamoz.agent.runtime",
+          logical_identity: {
             operation: "model.generate.#{stage}",
-            safety: model_safety,
-            call_index: ordinal,
-            request: request.merge(
-              "stage" => stage.to_s,
-              "provider_configuration_digest" => configuration_digest
-            ),
-            actor: "tamoz.agent.runtime",
-            logical_identity: {
-              operation: "model.generate.#{stage}",
-              capability_id: "model:#{stage}",
-              arguments: request.merge(
-                "stage" => stage.to_s,
-                "provider_configuration_digest" => configuration_digest
-              ),
-              authority_revision: toolbox.catalog_digest,
-              catalog_revision: EMPTY_CATALOG_REVISION,
-              iteration: ordinal,
-              sub_operation: 0
-            }
-          ) do
-            response = model.generate(stage:, system:, prompt:)
-            if response.respond_to?(:content)
-              ModelCallProjection.from_response(
-                response,
-                request_digest: request["request_digest"],
-                settings_digest: model_settings_digest,
-                provider_configuration_digest: configuration_digest
-              )
-            else
-              response
-            end
+            capability_id: "model:#{stage}",
+            arguments: stage_request,
+            authority_revision: toolbox.catalog_digest,
+            catalog_revision: EMPTY_CATALOG_REVISION,
+            iteration: ordinal,
+            sub_operation: 0
+          }
+        ) do
+          response = model.generate(stage:, system:, prompt:)
+          if response.respond_to?(:content)
+            ModelCallProjection.from_response(
+              response,
+              request_digest: request["request_digest"],
+              settings_digest: model_settings_digest,
+              provider_configuration_digest: configuration_digest
+            )
+          else
+            response
           end
-          case outcome.status
-          when :succeeded
-            model_content(outcome.value, request:, configuration_digest:)
-          when :failed then raise journaled_model_failure(outcome)
-          when :unknown then raise EffectUnknownError, unknown_model_message(outcome)
-          else raise ProtocolError, "model receipt #{outcome.status}"
-          end
+        end
+      end
+
+      def model_outcome_value(outcome, request:, configuration_digest:)
+        case outcome.status
+        when :succeeded
+          model_content(outcome.value, request:, configuration_digest:)
+        when :failed then raise journaled_model_failure(outcome)
+        when :unknown then raise EffectUnknownError, unknown_model_message(outcome)
+        else raise ProtocolError, "model receipt #{outcome.status}"
         end
       end
 
