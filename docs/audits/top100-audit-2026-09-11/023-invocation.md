@@ -21,8 +21,9 @@ no-op strictifier branch, and a private-SDK `send` need tightening.
 
 - **[minor][DEAD] fixed.** The root `additionalProperties` re-merge in `strict_schema` is
   deleted — `deep_strictify` already injects the default-deny at the root under the same
-  `strictable_object?` predicate. The root deny stays pinned by `test/mcp_invocation_test.rb`
-  (`additionalProperties` assertions at :615, :644).
+  `strictable_object?` predicate. The root deny stays pinned by
+  `test_unknown_property_is_rejected_with_no_io` (test/mcp_invocation_test.rb:210); the
+  `output_schema:` literals at :615/:644 do not route through `strict_schema`.
 - **[minor][SIZE] open.** Per-invocation channel/context value for `call`/`reissue`/
   `round_trip` still to do.
 - **[minor][FX] open.** Versioned adapter over the SDK's private `request` still to do.

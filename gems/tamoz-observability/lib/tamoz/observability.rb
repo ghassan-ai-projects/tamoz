@@ -25,8 +25,9 @@ require_relative 'observability/notifier'
 module Tamoz
   # The observability signal plane: a closed, versioned signal catalog,
   # correlation identity derived from durable state, one immutable Signal
-  # value, and the Recorder contract every producer talks to. Depends only
-  # on tamoz-core, and signals must never change a committed byte.
+  # value, and the Recorder contract every producer talks to. Depends on
+  # tamoz-core and the tamoz-concurrency substrate, and signals must never
+  # change a committed byte.
   module Observability
     SCHEMA_VERSION = 1
   end
