@@ -237,12 +237,7 @@ module Tamoz
         # `patternProperties`. A bare `{ "type": "object" }` subschema is left
         # open: JSON Schema treats it as an arbitrary map.
         def strict_schema(schema)
-          candidate = schema.is_a?(Hash) ? schema : {}
-          root = deep_strictify(candidate)
-          if strictable_object?(candidate)
-            root = root.merge("additionalProperties" => false)
-          end
-          root
+          deep_strictify(schema.is_a?(Hash) ? schema : {})
         end
 
         def deep_strictify(node)
