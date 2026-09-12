@@ -16,8 +16,9 @@ class BenchmarkProtocolTest < Minitest::Test
   PROTOCOL_PATH = ROOT.join("documentation", "benchmark", "BENCHMARK_PROTOCOL.json")
 
   # SHA-256 of the committed documentation/benchmark/BENCHMARK_PROTOCOL.json. Bump only
-  # when a protocol change is deliberate: this is the freeze.
-  COMMITTED_SHA256 = "46a8b95dfa22c2e821806652e03a5934517d15033735a5aa2ff871ffbaa97e79"
+  # when a protocol change is deliberate: this is the freeze. (2026-09-12 bump:
+  # sealed_build_digest follows the Gemfile.lock change from the gem extractions.)
+  COMMITTED_SHA256 = "4228219d387feef7aa0c90c018919d530352583a613819275abd1417996968d7"
 
   STOP_RULES = %w[
     truth_leak holdout_access fixture_or_fake_provider

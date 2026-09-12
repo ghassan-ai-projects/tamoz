@@ -150,7 +150,7 @@ module Tamoz
         # so two runs enqueue byte-identical work.
         CLI_REQUEST_DOMAIN = 'tamoz.evals.benchmark.cli.v1'
         CANCEL_REASON = 'cancelled_by_user'
-        CANCEL_REPLY = 'Cancellation requested.'
+        CANCEL_REPLY = 'Cancellation requested for '
         CLI_CANCEL_PAYLOAD = { 'task' => { 'cancel' => true, 'reason' => CANCEL_REASON } }.freeze
 
         def cli_request_id(thread_id, purpose)
@@ -502,10 +502,12 @@ module Tamoz
         def outbox_snapshot
           outbox.map do |row|
             facts = row['markup'] ? safe_parse(row['markup']) : nil
+            # The stored text is what history is compared against, so the
+            # snapshot must not truncate it.
             row.except('expires_at_ms', 'claim_expires_at_ms', 'created_at_ms', 'updated_at_ms',
                        'send_started_at_ms')
-               .merge('text' => row['text'].to_s.byteslice(0, 160).to_s,
-                      'milestone_facts' => facts.is_a?(Hash) && facts['request_ref'].is_a?(String) ? facts : nil)
+               .merge('milestone_facts' =>
+                        facts.is_a?(Hash) && facts['request_ref'].is_a?(String) ? facts : nil)
           end
         end
 
