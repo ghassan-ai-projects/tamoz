@@ -19,8 +19,8 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 055 | verifier.rb | done | shared verify_terminal_diagnostic_status! table |
 | 087 | state_codec.rb | done | scalar/array handlers; add_registration; merged counter |
 | 004 | agent_toolbox_test.rb | done | public preview/execute/bytes contract |
-| 005 | sqlite_comms_store_test.rb | todo | TEST |
-| 007 | sqlite_stale_request_test.rb | todo | TEST |
+| 005 | sqlite_comms_store_test.rb | partial | public insert_prompt/cancellation_outcome + dead helpers gone; raw-row readers stopped at the store's private read/transaction (named in doc) |
+| 007 | sqlite_stale_request_test.rb | partial | findings stop at missing gem seams (owner-B advance primitive, injectable CLI session, private Wire); named in doc |
 | 009 | packaging_test.rb | todo | DUP/TEST/SIZE |
 | 010 | agent_cli_test.rb | partial | raw SQL + fabricated record replaced by public request_history; cancellation/map_answer probes deferred |
 | 011 | agent_profile_machinery_test.rb | partial | over-claim fixed + refusal proven (+2 asserts); ProfileFixture value; doc/stub dedup; CLI-private probes deferred |
@@ -28,6 +28,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 013 | openclaw_comms_runner.rb | todo | SIZE/DUP/DEAD/B9 |
 | 014 | openclaw_durable_cli_adapter.rb | todo | PLACE/SIZE/NAME |
 | 015 | memory_engine_test.rb | partial | dead probe removed; promote_wisdom helper; private-read deferred |
+| 019 | sqlite_selector_control_test.rb | partial | duplicate stderr assertion removed; control seam + private-constant items stopped at gem seams |
 | 021 | session.rb | todo | SIZE/DEAD/DUP/STATE |
 | 022 | agent_session_kill_matrix_test.rb | done | dup child scan removed; reference yields with_scenario; workspace-entries helper |
 | 023 | invocation.rb | partial | DEAD fixed (no-op root re-merge dropped); SIZE/FX open |
@@ -39,6 +40,8 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 038 | readiness.rb | partial | artifacts verified once per evaluate; three-seam SIZE split pending |
 | 039 | record.rb | partial | Core.deep_dup shared (deep_freeze remedy rejected); FailureEvent value, 0 ParameterLists; engine split pending |
 | 040 | sqlite_scenario_runtime.rb | partial | dispatch fail-fast; append_checkpoint DEAD rejected (has defaults) |
+| 041 | sqlite_raw_oracle_test.rb | done | shared child harness; 2 stuffed tests split into 12; production Wire.digest; wire_digest finding rejected (different digest contract) |
+| 049 | approval_policy_document_test.rb | done | MINIMAL_POLICY + deep-merge builder replaces 13 heredocs; digest test renamed to say what it proves |
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
 | 062 | openclaw_mission_runner.rb | todo | SIZE/DUP/DEAD |
