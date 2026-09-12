@@ -17,6 +17,10 @@ require 'support/episode_composition'
 class ThermalLabAdversarialTest < Minitest::Test
   Domain = ThermalLabDomain
   ALLOWED = %w[install_watch_condition request_evidence set_indicator request_bounded_cooling].freeze
+  # The builder stamps a wall-clock validity horizon (now + 86_400s, second
+  # precision); two episodes issued across a second boundary otherwise differ
+  # in expires_at alone.
+  DECISION_TIME = Time.utc(2026, 9, 12, 3, 14, 54).freeze
 
   def setup
     @dir = Dir.mktmpdir('tamoz-adv')
@@ -33,8 +37,19 @@ class ThermalLabAdversarialTest < Minitest::Test
   # Governs one episode; `inject` are extra raw facts merged into the snapshot.
   # Returns [terminal, normalized_intents_or_nil].
   def govern(episode_id:, document:, inject: {}, allowed: ALLOWED, risk_ceiling: :RISK_CLASS_R2)
-    app, terminal = produce(episode_id, document, snapshot_with(inject), allowed, risk_ceiling)
-    [terminal, normalized_intents(app, episode_id, terminal)]
+    with_frozen_clock do
+      app, terminal = produce(episode_id, document, snapshot_with(inject), allowed, risk_ceiling)
+      [terminal, normalized_intents(app, episode_id, terminal)]
+    end
+  end
+
+  def with_frozen_clock
+    Time.singleton_class.send(:alias_method, :wall_now, :now)
+    Time.define_singleton_method(:now) { DECISION_TIME }
+    yield
+  ensure
+    Time.singleton_class.send(:alias_method, :now, :wall_now)
+    Time.singleton_class.send(:remove_method, :wall_now)
   end
 
   def snapshot_with(inject)
