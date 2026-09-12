@@ -498,7 +498,7 @@ module Tamoz
             DEFAULT_COST_BUDGET).to_f
           raise Error, 'cost budget must be positive' unless budget.positive?
 
-          normalize_lower_score(value.to_f / budget)
+          normalize_lower_score([value.to_f / budget, 1.0].min)
         end
 
         def entry_date

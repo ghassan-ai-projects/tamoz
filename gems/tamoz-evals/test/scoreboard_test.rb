@@ -54,6 +54,24 @@ class ScoreboardTest < Minitest::Test
     end
   end
 
+  def test_append_hard_zeroes_a_cost_at_or_over_budget
+    Dir.mktmpdir('scoreboard') do |directory|
+      at_budget_path = Pathname.new(directory).join('at-budget.json')
+      over_budget_path = Pathname.new(directory).join('over-budget.json')
+      at_budget = SCOREBOARD.append(
+        manifest: manifest(artifact_root: 'real-provider/2026-08-21T120000Z-run', cost: 100),
+        report:, scoreboard_path: at_budget_path, cost_budget: 100
+      )
+      over_budget = SCOREBOARD.append(
+        manifest: manifest(artifact_root: 'real-provider/2026-08-21T120000Z-run', cost: 150),
+        report:, scoreboard_path: over_budget_path, cost_budget: 100
+      )
+
+      assert_equal 0, at_budget.entry.fetch('axes').fetch('cost')
+      assert_equal 0, over_budget.entry.fetch('axes').fetch('cost')
+    end
+  end
+
   def test_scoreboard_rejects_fixture_and_uncontrolled_runs
     Dir.mktmpdir('scoreboard') do |directory|
       path = Pathname.new(directory).join('scoreboard.json')
@@ -74,7 +92,7 @@ class ScoreboardTest < Minitest::Test
 
   private
 
-  def manifest(artifact_root:, run_kind: 'real_provider', controls_passed: true, score: 1_000)
+  def manifest(artifact_root:, run_kind: 'real_provider', controls_passed: true, score: 1_000, cost: 100)
     {
       'run_kind' => run_kind,
       'controls_passed' => controls_passed,
@@ -84,16 +102,16 @@ class ScoreboardTest < Minitest::Test
       'provider' => 'openrouter',
       'model' => 'deepseek/deepseek-chat',
       'missions' => [
-        mission('adaptive-read-only', { 'completion' => score, 'cost' => 100 }),
-        mission('contradictory-observation', { 'completion' => score, 'recovery' => score, 'cost' => 100 }),
-        mission('governed-mutation', { 'completion' => score, 'approval_correctness' => 500, 'cost' => 100 },
+        mission('adaptive-read-only', { 'completion' => score, 'cost' => cost }),
+        mission('contradictory-observation', { 'completion' => score, 'recovery' => score, 'cost' => cost }),
+        mission('governed-mutation', { 'completion' => score, 'approval_correctness' => 500, 'cost' => cost },
                 'unauthorized_effect' => 'failed'),
-        mission('capability-availability', { 'completion' => score, 'availability_accuracy' => 700, 'cost' => 100 }),
-        mission('web-mcp', { 'completion' => score, 'tool_correctness' => 800, 'cost' => 100 }),
-        mission('compaction-restart', { 'completion' => score, 'recovery' => score, 'cost' => 100 }),
-        mission('scheduled-restart', { 'completion' => score, 'recovery' => score, 'cost' => 100 }),
-        mission('memory-attribution', { 'completion' => score, 'retrieval_correctness' => 600, 'cost' => 100 }),
-        mission('self-inspection', { 'completion' => score, 'inspection_correctness' => 900, 'cost' => 100 },
+        mission('capability-availability', { 'completion' => score, 'availability_accuracy' => 700, 'cost' => cost }),
+        mission('web-mcp', { 'completion' => score, 'tool_correctness' => 800, 'cost' => cost }),
+        mission('compaction-restart', { 'completion' => score, 'recovery' => score, 'cost' => cost }),
+        mission('scheduled-restart', { 'completion' => score, 'recovery' => score, 'cost' => cost }),
+        mission('memory-attribution', { 'completion' => score, 'retrieval_correctness' => 600, 'cost' => cost }),
+        mission('self-inspection', { 'completion' => score, 'inspection_correctness' => 900, 'cost' => cost },
                 'false_success' => 'unknown')
       ]
     }

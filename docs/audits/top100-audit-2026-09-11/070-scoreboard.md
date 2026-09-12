@@ -38,4 +38,6 @@ into its own private class methods four times.
   and tests keep passing `date:`/`notes:`/`track:`/… unchanged. ParameterLists disable
   removed.
 - **[minor][DUP] fixed.** `cost_score` defers to `normalize_lower_score` for 0..1 floats and
-  feeds it `value.to_f / budget` otherwise — one formula.
+  feeds it `value.to_f / budget` clamped at 1.0 — one formula, with the over-budget hard
+  zero pinned by a new test (`test_append_hard_zeroes_a_cost_at_or_over_budget`). A first
+  cut without the clamp silently rescored over-budget costs to ~999; caught in review.
