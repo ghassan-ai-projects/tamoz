@@ -166,7 +166,7 @@ module Tamoz
         # Reads an entry's performance intervals out of the report documents
         # in its artifact directory, tolerating the shapes prior runs wrote.
         module Intervals
-          include EntryPolicy
+          extend EntryPolicy
 
           module_function
 
