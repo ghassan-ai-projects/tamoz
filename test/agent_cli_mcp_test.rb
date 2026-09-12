@@ -101,6 +101,21 @@ class AgentCliMcpTest < Minitest::Test
       ensure
         Tamoz::Mcp::Invocation.define_singleton_method(:call, original_call)
       end
+
+      # An ambiguous send is the one row that must NOT become a repairable
+      # ToolError: the dispatcher maps it to the terminal EffectUnknownError,
+      # which is what routes the effect to terminal :unknown in the journal.
+      Tamoz::Mcp::Invocation.define_singleton_method(:call) do |*_args, **_kwargs|
+        raise Tamoz::Mcp::AmbiguousOutcomeError, 'sent before transport failure'
+      end
+      begin
+        error = assert_raises(Tamoz::EffectUnknownError) do
+          source.execute({}, 'mcp:probe/echo_constant', { 'value' => 'ok' })
+        end
+        refute_kind_of Tamoz::Agent::ToolError, error
+      ensure
+        Tamoz::Mcp::Invocation.define_singleton_method(:call, original_call)
+      end
     ensure
       source&.close
     end
