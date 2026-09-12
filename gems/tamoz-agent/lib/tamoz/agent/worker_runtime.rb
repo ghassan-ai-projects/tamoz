@@ -134,7 +134,9 @@ module Tamoz
                 "thread #{thread_id.inspect} is already bound to profile #{existing.fetch('profile').inspect}"
         end
 
-        upsert(THREAD_BINDINGS, thread_id, {"profile" => profile_id})
+        durable("thread profile binding for #{thread_id.inspect}") do
+          upsert(THREAD_BINDINGS, thread_id, {"profile" => profile_id})
+        end
       end
 
       # A schedule's task text, addressed by the digest its `payload_ref` records.
@@ -146,7 +148,9 @@ module Tamoz
       def store_schedule_payload(schedule_id, task)
         text = String(task)
         digest = "sha256:#{Digest::SHA256.hexdigest("tamoz.scheduler.payload.v1\n#{text}")}"
-        upsert(SCHEDULE_PAYLOADS, schedule_id, {"task" => text, "digest" => digest})
+        durable("schedule payload #{schedule_id.inspect}") do
+          upsert(SCHEDULE_PAYLOADS, schedule_id, {"task" => text, "digest" => digest})
+        end
         digest
       end
 
@@ -325,8 +329,10 @@ module Tamoz
       end
 
       def open_occurrence(thread_id, occurrence_id)
-        upsert(OPEN_OCCURRENCES, thread_id,
-               {"occurrence_id" => occurrence_id, "opened_at" => Time.now.utc.iso8601})
+        durable("open occurrence for #{thread_id.inspect}") do
+          upsert(OPEN_OCCURRENCES, thread_id,
+                 {"occurrence_id" => occurrence_id, "opened_at" => Time.now.utc.iso8601})
+        end
       end
 
       def close_occurrence(thread_id)
@@ -427,10 +433,12 @@ module Tamoz
       BUDGET_EXHAUSTIONS = %w[tamoz worker budget_exhaustion].freeze
 
       def record_budget_exhaustion(thread_id, occurrence_id, budget:, detail:)
-        upsert(BUDGET_EXHAUSTIONS, "#{thread_id}/#{occurrence_id}",
-               {"thread_id" => thread_id, "occurrence_id" => occurrence_id,
-                "budget" => budget, "detail" => String(detail)[0, 500],
-                "stopped_at" => Time.now.utc.iso8601})
+        durable("budget exhaustion for #{thread_id.inspect}/#{occurrence_id.inspect}") do
+          upsert(BUDGET_EXHAUSTIONS, "#{thread_id}/#{occurrence_id}",
+                 {"thread_id" => thread_id, "occurrence_id" => occurrence_id,
+                  "budget" => budget, "detail" => String(detail)[0, 500],
+                  "stopped_at" => Time.now.utc.iso8601})
+        end
       end
 
       def budget_exhaustions(limit: 500)
