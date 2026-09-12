@@ -46,36 +46,39 @@ class M2EvidenceTest < Minitest::Test
     skip "this host denies sandbox profile application (sandbox_apply EPERM)" unless seatbelt_profiles_apply?
 
     Dir.mktmpdir(corpus.fetch(:tmpdir_prefix)) do |directory|
-      stdout, stderr, status = Open3.capture3(
-        {"TAMOZ_ALLOW_DIRTY_EVIDENCE" => "1"},
-        RbConfig.ruby,
-        ROOT.join("script", corpus.fetch(:script)).to_s,
-        directory
-      )
-      assert status.success?, "#{stdout}\n#{stderr}"
+      RunnerInputs.with_manifest do |manifest_path|
+        stdout, stderr, status = Open3.capture3(
+          {"TAMOZ_ALLOW_DIRTY_EVIDENCE" => "1"},
+          RbConfig.ruby,
+          ROOT.join("script", corpus.fetch(:script)).to_s,
+          directory,
+          "--input-manifest", manifest_path
+        )
+        assert status.success?, "#{stdout}\n#{stderr}"
 
-      summary = JSON.parse(stdout)
-      assert_empty summary.fetch("failures")
-      assert_equal "macos-seatbelt", summary.fetch("sandbox")
-      expected_behavior = summary.fetch("dirty") ? corpus.fetch(:dirty_behavior) : corpus.fetch(:clean_behavior)
-      results = Pathname.new(directory).glob("*.result.json").sort
-      assert_equal corpus.fetch(:result_count), results.length
+        summary = JSON.parse(stdout)
+        assert_empty summary.fetch("failures")
+        assert_equal "macos-seatbelt", summary.fetch("sandbox")
+        expected_behavior = summary.fetch("dirty") ? corpus.fetch(:dirty_behavior) : corpus.fetch(:clean_behavior)
+        results = Pathname.new(directory).glob("*.result.json").sort
+        assert_equal corpus.fetch(:result_count), results.length
 
-      results.each do |path|
-        verification = Tamoz::Evals.verify(path)
-        document = verification.document
-        assert_equal "pass", verification.decision
-        assert_equal "sandbox", document.dig("environment", "isolation")
-        assert_equal "denied", document.dig("environment", "network")
-        assert_equal expected_behavior, document.dig("subject", "behavior_version")
-        if (subject_id = corpus[:subject_id])
-          assert_equal subject_id, document.dig("subject", "id")
+        results.each do |path|
+          verification = Tamoz::Evals.verify(path)
+          document = verification.document
+          assert_equal "pass", verification.decision
+          assert_equal "sandbox", document.dig("environment", "isolation")
+          assert_equal "denied", document.dig("environment", "network")
+          assert_equal expected_behavior, document.dig("subject", "behavior_version")
+          if (subject_id = corpus[:subject_id])
+            assert_equal subject_id, document.dig("subject", "id")
+          end
+          assert_equal 0, document.dig("provenance", "seed")
+          assert_equal ["evaluator", "scorer", "gate"],
+                       document.dig("provenance", "components").map { |entry| entry.fetch("role") }
+          assert_equal 1, verification.references.length
+          assert_equal "passed", document.dig("provenance", "attempts", 0, "status")
         end
-        assert_equal 0, document.dig("provenance", "seed")
-        assert_equal ["evaluator", "scorer", "gate"],
-                     document.dig("provenance", "components").map { |entry| entry.fetch("role") }
-        assert_equal 1, verification.references.length
-        assert_equal "passed", document.dig("provenance", "attempts", 0, "status")
       end
     end
   end

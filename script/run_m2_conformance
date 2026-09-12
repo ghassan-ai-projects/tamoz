@@ -9,7 +9,9 @@ require "time"
 
 $LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals-runner/lib", __dir__))
 $LOAD_PATH.unshift(File.expand_path("../gems/tamoz-evals/lib", __dir__))
-require "tamoz/graph"
+# The runner reads the graph subject's version only; pulling the full gem in
+# would need the whole runtime closure on the load path.
+require_relative "../gems/tamoz-graph/lib/tamoz/graph/version"
 require "tamoz/evals/runner"
 
 ROOT = File.expand_path("..", __dir__).freeze
