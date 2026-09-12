@@ -21,7 +21,7 @@ resolve constants via `const_get`, and carry a duplicated assertion.
 
 - [minor][TEST] `stopper.send(:write_control!)` and `CONTROL.send(:build_expectation, ...)`:
   STOPPED at the named seam — both are private on Tamoz::Evals::Harness::SQLiteSelectorControl /
-  Stopper (gems/tamoz-evals-runner/.../sqlite_selector_control.rb:136-138,
+  Stopper (gems/tamoz-evals-runner/.../sqlite_selector_control.rb:195-197,
   sqlite_selector_control_stopper.rb:105,144), so a test-visible seam is a gem change; frozen this
   round. Driving `write_control!` through the public `stopper.call` instead was rejected: it also
   consumes the selector's occurrence bookkeeping, so the second write would fail as an occurrence

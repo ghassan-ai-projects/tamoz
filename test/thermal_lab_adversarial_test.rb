@@ -43,6 +43,8 @@ class ThermalLabAdversarialTest < Minitest::Test
     end
   end
 
+  # Not reentrant: a nested call would alias :wall_now to the frozen :now and
+  # leak the freeze on the inner ensure.
   def with_frozen_clock
     Time.singleton_class.send(:alias_method, :wall_now, :now)
     Time.define_singleton_method(:now) { DECISION_TIME }
