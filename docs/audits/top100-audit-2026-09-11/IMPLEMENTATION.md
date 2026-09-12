@@ -30,7 +30,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 015 | memory_engine_test.rb | partial | dead probe removed; promote_wisdom helper; private-read deferred |
 | 021 | session.rb | todo | SIZE/DEAD/DUP/STATE |
 | 022 | agent_session_kill_matrix_test.rb | done | dup child scan removed; reference yields with_scenario; workspace-entries helper |
-| 023 | invocation.rb | todo | SIZE/DEAD/FX |
+| 023 | invocation.rb | partial | DEAD fixed (no-op root re-merge dropped); SIZE/FX open |
 | 024 | runtime.rb | todo | SIZE/STATE/DUP |
 | 026 | schedule_store.rb | partial | JOIN DUP + dead renew removed; lease_for/SIZE declined |
 | 033 | episode_nodes.rb | partial | frame assembler DUP; dead snapshot param; decision_builder declined |
@@ -46,7 +46,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 064 | progress_projection_test.rb | done | install_delivery_sink; names; drain_row merged |
 | 068 | session_adaptive.rb | partial | lifecycle_event 12->5 params (allowlisted splat); node-method split declined (documented justification) |
 | 069 | stream_episode_skills_memory_test.rb | done | run_episode lifecycle helper; projection factory; -159 lines |
-| 070 | scoreboard.rb | todo | SIZE/PLACE/DUP |
+| 070 | scoreboard.rb | done | EntryPolicy + Intervals seams; EntryFields value (ctor 10→5); cost_score dedup; send-bypasses gone |
 | 073 | comms_command_parity_test.rb | todo | TEST/DUP |
 | 078 | context_control_exposure_test.rb | todo | DUP/TEST |
 | 081 | session_context_controls.rb | done | dead /new generation pair deleted; conversation_history_for helper |

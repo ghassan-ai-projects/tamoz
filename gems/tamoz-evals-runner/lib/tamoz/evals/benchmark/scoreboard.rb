@@ -60,64 +60,15 @@ module Tamoz
 
         Result = Data.define(:entry, :document, :appended?)
 
-        class << self
-          def append(manifest:, report:, scoreboard_path:, artifact_base: nil, **)
-            new(
-              manifest:, report:, scoreboard_path:, artifact_base:, **
-            ).append
-          end
+        ENTRY_FIELD_KEYS = %i[date notes track provider_model_version sealed_build_digest cost_budget].freeze
+        EntryFields = Data.define(*ENTRY_FIELD_KEYS) do
+          def self.build(**overrides) = new(**ENTRY_FIELD_KEYS.to_h { |key| [key, nil] }, **overrides)
+        end
 
-          def read(path)
-            return { 'entries' => [] } unless File.file?(path)
-
-            document = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
-            normalize_document(document)
-          rescue JSON::ParserError => e
-            raise Error, "scoreboard JSON is invalid: #{e.message}"
-          end
-
-          def regression_check(scoreboard_path:, manifest:, artifact_base:)
-            document = read(scoreboard_path)
-            entries = document.fetch('entries')
-            raise Error, 'scoreboard has no accepted entries' if entries.empty?
-
-            current = entries.fetch(-1)
-            validate_current_manifest!(current, manifest)
-            return passed_regression(current) if entries.length == 1
-
-            result = evaluate_regression(current, entries.fetch(-2), artifact_base)
-            return result if result.fetch('status') == 'passed'
-
-            failed_axes = result.fetch('regressions').map { |row| row.fetch('axis') }.join(', ')
-            raise RegressionError, "unacknowledged scoreboard regression: #{failed_axes}"
-          end
-
-          def intervals_for_entry(entry, artifact_base)
-            root = artifact_directory(entry.fetch('artifact_root'), artifact_base)
-            documents = interval_documents(root)
-            AXES.filter_map do |axis|
-              interval = documents.lazy.map { |document| find_interval(document, axis) }.find(&:itself)
-              [axis, interval] if interval
-            end.to_h
-          end
-
-          def acknowledged_note?(notes)
-            notes.is_a?(String) && notes.start_with?(ACKNOWLEDGED_NOTE_MARKER)
-          end
-
-          private
-
-          def normalize_document(document)
-            entries = if document.is_a?(Array)
-                        document
-                      elsif document.is_a?(Hash) && document.keys == ['entries']
-                        document.fetch('entries')
-                      else
-                        raise Error, 'scoreboard must be an object with an entries array'
-                      end
-            validate_entries!(entries)
-            { 'entries' => entries }
-          end
+        # Validates the stored-entry schema and derives verdict and hard-zero
+        # fields from a run report; shared by the class and its instances.
+        module EntryPolicy
+          module_function
 
           def validate_entries!(entries)
             raise Error, 'scoreboard entries must be an array' unless entries.is_a?(Array)
@@ -179,72 +130,62 @@ module Tamoz
             !pathname.absolute? && pathname.each_filename.none?('..')
           end
 
-          def validate_current_manifest!(entry, manifest)
-            unless manifest.is_a?(Hash) && manifest.fetch('run_kind') == 'real_provider' &&
-                   manifest.fetch('controls_passed') == true
-              raise Error, 'current manifest is not an accepted real_provider run'
+          def build_axis_verdicts(report)
+            source, scalar = axis_verdict_source(report)
+            AXES.to_h do |axis|
+              value = source[axis] || scalar || 'inconclusive'
+              value = 'inconclusive' unless VERDICTS.include?(value)
+              [axis, value]
             end
-            return if entry.fetch('artifact_root') == manifest.fetch('artifact_root')
-
-            raise Error, 'newest scoreboard entry does not match the manifest artifact_root'
           end
 
-          def passed_regression(current)
-            regression_result(current, prior_root: nil, acknowledged: false, regressions: [])
+          def axis_verdict_source(report)
+            sources = [report['axis_verdicts'], report['verdicts']].grep(Hash)
+            if report['axes'].is_a?(Hash)
+              sources << report['axes'].to_h do |axis, value|
+                [axis, value.is_a?(Hash) ? value['verdict'] : value]
+              end
+            end
+            source = sources.find { |candidate| candidate.keys.any? { |key| AXES.include?(key) } } || {}
+            scalar = report['verdict'] if VERDICTS.include?(report['verdict'])
+            [source, scalar]
           end
 
-          def regression_result(current, prior_root:, acknowledged:, regressions:)
-            status = regressions.empty? || acknowledged ? 'passed' : 'failed'
-            {
-              'status' => status,
-              'artifact_root' => current.fetch('artifact_root'),
-              'prior_artifact_root' => prior_root,
-              'acknowledged' => acknowledged,
-              'regressions' => regressions
-            }
+          def hard_zero_names(manifest, report)
+            rows = Array(manifest['missions'])
+            names = rows.flat_map do |mission|
+              mission.fetch('hard_zero', {}).filter_map do |name, status|
+                name if status != 'passed'
+              end
+            end
+            names.concat(Array(report['hard_zero_fired']))
+            names.grep(String).uniq.sort
           end
+        end
 
-          def evaluate_regression(current, prior, artifact_base)
-            drops = regression_drops(current, prior_intervals!(prior, artifact_base))
-            acknowledged = acknowledged_note?(current.fetch('notes'))
-            regression_result(
-              current,
-              prior_root: prior.fetch('artifact_root'),
-              acknowledged: acknowledged,
-              regressions: drops
-            )
-          end
+        # Reads an entry's performance intervals out of the report documents
+        # in its artifact directory, tolerating the shapes prior runs wrote.
+        module Intervals
+          include EntryPolicy
 
-          def regression_drops(current, intervals)
+          module_function
+
+          def for_entry(entry, artifact_base)
+            root = directory(entry.fetch('artifact_root'), artifact_base)
+            candidates = documents(root)
             AXES.filter_map do |axis|
-              current_value = current.fetch('axes').fetch(axis)
-              prior_low = intervals.fetch(axis).fetch('low')
-              next unless current_value < prior_low
-
-              {
-                'axis' => axis,
-                'current' => current_value,
-                'prior_interval_low' => prior_low,
-                'prior_interval_high' => intervals.fetch(axis).fetch('high')
-              }
-            end
+              interval = candidates.lazy.map { |document| find_interval(document, axis) }.find(&:itself)
+              [axis, interval] if interval
+            end.to_h
           end
 
-          def prior_intervals!(prior, artifact_base)
-            intervals = intervals_for_entry(prior, artifact_base)
-            missing = AXES.reject { |axis| intervals.key?(axis) }
-            return intervals if missing.empty?
-
-            raise RegressionError, "prior artifact intervals are incomplete: #{missing.join(', ')}"
-          end
-
-          def artifact_directory(artifact_root, artifact_base)
+          def directory(artifact_root, artifact_base)
             raise Error, 'artifact_root is unsafe' unless safe_artifact_root?(artifact_root)
 
             Pathname.new(artifact_base).expand_path.join(artifact_root)
           end
 
-          def interval_documents(root)
+          def documents(root)
             paths = REPORT_FILENAMES.map { |name| root.join(name) }
             paths.concat(manifest_referenced_paths(root))
             paths.concat(root.glob('**/*report*.json')).concat(root.glob('**/*interval*.json'))
@@ -306,76 +247,152 @@ module Tamoz
           end
 
           def normalized_value(value)
-            case value
-            when Float
-              return nil unless value.finite?
+            number = case value
+                     when Float
+                       return nil unless value.finite?
 
-              value.between?(0.0, 1.0) ? (value * METRIC_SCALE).round : value.round
-            when Integer
-              value
-            end.then { |number| number if number.is_a?(Integer) && number.between?(0, METRIC_SCALE) }
-          end
-
-          def build_axis_verdicts(report)
-            source, scalar = axis_verdict_source(report)
-            AXES.to_h do |axis|
-              value = source[axis] || scalar || 'inconclusive'
-              value = 'inconclusive' unless VERDICTS.include?(value)
-              [axis, value]
-            end
-          end
-
-          def axis_verdict_source(report)
-            sources = [report['axis_verdicts'], report['verdicts']].grep(Hash)
-            if report['axes'].is_a?(Hash)
-              sources << report['axes'].to_h do |axis, value|
-                [axis, value.is_a?(Hash) ? value['verdict'] : value]
-              end
-            end
-            source = sources.find { |candidate| candidate.keys.any? { |key| AXES.include?(key) } } || {}
-            scalar = report['verdict'] if VERDICTS.include?(report['verdict'])
-            [source, scalar]
-          end
-
-          def hard_zero_names(manifest, report)
-            rows = Array(manifest['missions'])
-            names = rows.flat_map do |mission|
-              mission.fetch('hard_zero', {}).filter_map do |name, status|
-                name if status != 'passed'
-              end
-            end
-            names.concat(Array(report['hard_zero_fired']))
-            names.grep(String).uniq.sort
+                       (value.between?(0.0, 1.0) ? value * METRIC_SCALE : value).round
+                     when Integer
+                       value
+                     end
+            number if number.is_a?(Integer) && number.between?(0, METRIC_SCALE)
           end
         end
 
-        # rubocop:disable Metrics/ParameterLists
-        def initialize(manifest:, report:, scoreboard_path:, artifact_base: nil, date: nil, notes: nil,
-                       track: nil, provider_model_version: nil, sealed_build_digest: nil,
-                       cost_budget: nil)
+        include EntryPolicy
+
+        class << self
+          include EntryPolicy
+
+          def append(manifest:, report:, scoreboard_path:, artifact_base: nil, **fields)
+            new(
+              manifest:, report:, scoreboard_path:, artifact_base:,
+              fields: EntryFields.build(**fields)
+            ).append
+          end
+
+          def read(path)
+            return { 'entries' => [] } unless File.file?(path)
+
+            document = JSON.parse(File.read(path, encoding: Encoding::UTF_8))
+            normalize_document(document)
+          rescue JSON::ParserError => e
+            raise Error, "scoreboard JSON is invalid: #{e.message}"
+          end
+
+          def regression_check(scoreboard_path:, manifest:, artifact_base:)
+            document = read(scoreboard_path)
+            entries = document.fetch('entries')
+            raise Error, 'scoreboard has no accepted entries' if entries.empty?
+
+            current = entries.fetch(-1)
+            validate_current_manifest!(current, manifest)
+            return passed_regression(current) if entries.length == 1
+
+            result = evaluate_regression(current, entries.fetch(-2), artifact_base)
+            return result if result.fetch('status') == 'passed'
+
+            failed_axes = result.fetch('regressions').map { |row| row.fetch('axis') }.join(', ')
+            raise RegressionError, "unacknowledged scoreboard regression: #{failed_axes}"
+          end
+
+          def acknowledged_note?(notes)
+            notes.is_a?(String) && notes.start_with?(ACKNOWLEDGED_NOTE_MARKER)
+          end
+
+          private
+
+          def normalize_document(document)
+            entries = if document.is_a?(Array)
+                        document
+                      elsif document.is_a?(Hash) && document.keys == ['entries']
+                        document.fetch('entries')
+                      else
+                        raise Error, 'scoreboard must be an object with an entries array'
+                      end
+            validate_entries!(entries)
+            { 'entries' => entries }
+          end
+
+          def validate_current_manifest!(entry, manifest)
+            unless manifest.is_a?(Hash) && manifest.fetch('run_kind') == 'real_provider' &&
+                   manifest.fetch('controls_passed') == true
+              raise Error, 'current manifest is not an accepted real_provider run'
+            end
+            return if entry.fetch('artifact_root') == manifest.fetch('artifact_root')
+
+            raise Error, 'newest scoreboard entry does not match the manifest artifact_root'
+          end
+
+          def passed_regression(current)
+            regression_result(current, prior_root: nil, acknowledged: false, regressions: [])
+          end
+
+          def regression_result(current, prior_root:, acknowledged:, regressions:)
+            status = regressions.empty? || acknowledged ? 'passed' : 'failed'
+            {
+              'status' => status,
+              'artifact_root' => current.fetch('artifact_root'),
+              'prior_artifact_root' => prior_root,
+              'acknowledged' => acknowledged,
+              'regressions' => regressions
+            }
+          end
+
+          def evaluate_regression(current, prior, artifact_base)
+            drops = regression_drops(current, prior_intervals!(prior, artifact_base))
+            acknowledged = acknowledged_note?(current.fetch('notes'))
+            regression_result(
+              current,
+              prior_root: prior.fetch('artifact_root'),
+              acknowledged: acknowledged,
+              regressions: drops
+            )
+          end
+
+          def regression_drops(current, intervals)
+            AXES.filter_map do |axis|
+              current_value = current.fetch('axes').fetch(axis)
+              prior_low = intervals.fetch(axis).fetch('low')
+              next unless current_value < prior_low
+
+              {
+                'axis' => axis,
+                'current' => current_value,
+                'prior_interval_low' => prior_low,
+                'prior_interval_high' => intervals.fetch(axis).fetch('high')
+              }
+            end
+          end
+
+          def prior_intervals!(prior, artifact_base)
+            intervals = Intervals.for_entry(prior, artifact_base)
+            missing = AXES.reject { |axis| intervals.key?(axis) }
+            return intervals if missing.empty?
+
+            raise RegressionError, "prior artifact intervals are incomplete: #{missing.join(', ')}"
+          end
+        end
+
+        def initialize(manifest:, report:, scoreboard_path:, artifact_base: nil,
+                       fields: EntryFields.build)
           @manifest = manifest
           @report = report
           @scoreboard_path = Pathname.new(scoreboard_path)
           @artifact_base = artifact_base
-          @date = date
-          @notes = notes
-          @track = track
-          @provider_model_version = provider_model_version
-          @sealed_build_digest = sealed_build_digest
-          @cost_budget = cost_budget
+          @fields = fields
         end
-        # rubocop:enable Metrics/ParameterLists
 
         def append
           validate_run!
-          document = self.class.read(@scoreboard_path)
+          document = Scoreboard.read(@scoreboard_path)
           existing = document.fetch('entries')
           duplicate = existing.find { |entry| entry.fetch('artifact_root') == @manifest.fetch('artifact_root') }
           return Result.new(entry: duplicate, document:, appended?: false) if duplicate
 
           entry = build_entry
           output = { 'entries' => existing + [entry] }
-          self.class.send(:validate_entries!, output.fetch('entries'))
+          validate_entries!(output.fetch('entries'))
           write(output)
           Result.new(entry:, document: output, appended?: true)
         end
@@ -388,9 +405,9 @@ module Tamoz
           end
           raise Error, 'scoreboard accepts runs with controls_passed=true only' unless
             @manifest.fetch('controls_passed') == true
-          unless self.class.send(:safe_artifact_root?, @manifest.fetch('artifact_root'))
-            raise Error, 'manifest artifact_root is unsafe'
-          end
+
+          root = @manifest.fetch('artifact_root')
+          raise Error, 'manifest artifact_root is unsafe' unless safe_artifact_root?(root)
           raise Error, 'scoreboard report must be an object' unless @report.is_a?(Hash)
         end
 
@@ -399,19 +416,19 @@ module Tamoz
           {
             'date' => entry_date,
             'git_revision' => @manifest.fetch('git_revision'),
-            'sealed_build_digest' => @sealed_build_digest || @manifest['sealed_build_digest'] ||
+            'sealed_build_digest' => @fields.sealed_build_digest || @manifest['sealed_build_digest'] ||
               @report['sealed_build_digest'],
             'protocol_sha256' => @manifest.fetch('protocol_sha256'),
             'provider' => @manifest.fetch('provider'),
             'model' => @manifest.fetch('model'),
-            'provider_model_version' => @provider_model_version || @manifest['provider_model_version'] ||
+            'provider_model_version' => @fields.provider_model_version || @manifest['provider_model_version'] ||
               @report['provider_model_version'],
             'run_kind' => @manifest.fetch('run_kind'),
-            'track' => @track || @manifest['track'] || @report['track'] || 'common-subset',
+            'track' => @fields.track || @manifest['track'] || @report['track'] || 'common-subset',
             'artifact_root' => @manifest.fetch('artifact_root'),
             'axes' => build_axes,
-            'axis_verdicts' => self.class.send(:build_axis_verdicts, @report),
-            'hard_zero_fired' => self.class.send(:hard_zero_names, @manifest, @report),
+            'axis_verdicts' => build_axis_verdicts(@report),
+            'hard_zero_fired' => hard_zero_names(@manifest, @report),
             'notes' => entry_notes
           }
         end
@@ -425,7 +442,7 @@ module Tamoz
         end
 
         def axis_score(axis, missions)
-          spec = self.class::AXIS_MISSION_METRICS.fetch(axis)
+          spec = AXIS_MISSION_METRICS.fetch(axis)
           selected = if spec[:mission_ids]
                        missions.select { |mission| spec[:mission_ids].include?(mission['id']) }
                      else
@@ -449,7 +466,7 @@ module Tamoz
           return nil unless numeric.is_a?(Numeric)
 
           return cost_score(numeric) if metric_name == 'cost'
-          return normalize_lower_score(numeric) if Scoreboard::LOWER_IS_BETTER.include?(metric_name)
+          return normalize_lower_score(numeric) if LOWER_IS_BETTER.include?(metric_name)
 
           normalize_higher_score(numeric)
         end
@@ -475,19 +492,17 @@ module Tamoz
         end
 
         def cost_score(value)
-          if value.is_a?(Float) && value.between?(0.0, 1.0)
-            return (METRIC_SCALE * (1.0 - value)).round.clamp(0, METRIC_SCALE)
-          end
+          return normalize_lower_score(value) if value.is_a?(Float) && value.between?(0.0, 1.0)
 
-          budget = (@cost_budget || @manifest['cost_budget'] || @report['cost_budget'] ||
+          budget = (@fields.cost_budget || @manifest['cost_budget'] || @report['cost_budget'] ||
             DEFAULT_COST_BUDGET).to_f
           raise Error, 'cost budget must be positive' unless budget.positive?
 
-          (METRIC_SCALE * (1.0 - (value.to_f / budget))).round.clamp(0, METRIC_SCALE)
+          normalize_lower_score(value.to_f / budget)
         end
 
         def entry_date
-          candidate = @date || @manifest['date'] || @report['date'] || date_from_artifact_root
+          candidate = @fields.date || @manifest['date'] || @report['date'] || date_from_artifact_root
           return candidate if candidate.is_a?(String) && candidate.match?(/\A\d{4}-\d{2}-\d{2}\z/)
 
           raise Error, 'scoreboard entry date is missing; pass --date or use a dated artifact_root'
@@ -500,7 +515,7 @@ module Tamoz
         end
 
         def entry_notes
-          value = @notes || @manifest['notes'] || @report['notes'] || ''
+          value = @fields.notes || @manifest['notes'] || @report['notes'] || ''
           raise Error, 'scoreboard notes must be one bounded sentence' unless
             value.is_a?(String) && !value.include?("\n") && value.length <= 240
 
