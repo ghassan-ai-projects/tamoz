@@ -671,7 +671,7 @@ module Tamoz
           when :succeeded
             model_content(outcome.value, request:, configuration_digest:)
           when :failed then raise journaled_model_failure(outcome)
-          when :unknown then raise EffectUnknownError, "model call outcome is unknown"
+          when :unknown then raise EffectUnknownError, unknown_model_message(outcome)
           else raise ProtocolError, "model receipt #{outcome.status}"
           end
         end
@@ -700,7 +700,15 @@ module Tamoz
           provider_configuration_digest: configuration_digest
         ).fetch("content") if value.is_a?(Hash) && value.key?("content")
 
-        value.is_a?(Hash) ? value.fetch("output") : String(value)
+        value
+      end
+
+      # The live :unknown attempt journals the disclosable provider message; a
+      # replayed :unknown decision carries no attempt detail and falls back to
+      # the generic phrase.
+      def unknown_model_message(outcome)
+        detail = outcome.error
+        detail.is_a?(Hash) ? String(detail["message"]) : "model call outcome is unknown"
       end
 
       def model_safety

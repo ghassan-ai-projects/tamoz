@@ -158,7 +158,7 @@ class AgentRuntimeEffectsTest < Minitest::Test
       end
 
       assert_equal 'provider outcome is unknown', error.message
-      assert_equal :unknown, runtime.effects.records.last.status
+      assert_equal :unknown, runtime.effects.instance_variable_get(:@records).values.last.status
     end
   end
 

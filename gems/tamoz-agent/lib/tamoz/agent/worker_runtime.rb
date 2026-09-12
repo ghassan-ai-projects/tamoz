@@ -1025,11 +1025,12 @@ module Tamoz
         session_key = bind_approval_session(profile_id)
 
         engine = memory_engine
-        model = @model_factory.call(profile: resolved)
         Session.new(
           approval_engine: @approval_engine,
           approval_session_id: session_key,
-          model:,
+          # Deferred like metadata_session: status/queue projections must not
+          # require a provider on the machine they inspect.
+          model: DeferredModel.new { @model_factory.call(profile: resolved) },
           toolbox:,
           checkpointer: @adapter,
           profile: resolved,
