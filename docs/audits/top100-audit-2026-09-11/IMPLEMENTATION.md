@@ -21,7 +21,7 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 004 | agent_toolbox_test.rb | done | public preview/execute/bytes contract |
 | 005 | sqlite_comms_store_test.rb | partial | public insert_prompt/cancellation_outcome + dead helpers gone; raw-row readers stopped at the store's private read/transaction (named in doc) |
 | 007 | sqlite_stale_request_test.rb | partial | findings stop at missing gem seams (owner-B advance primitive, injectable CLI session, private Wire); named in doc |
-| 009 | packaging_test.rb | todo | DUP/TEST/SIZE |
+| 009 | packaging_test.rb | done | hermetic with_isolated_install for dependency-free families; family-rule split; RunnerInputs reuse replaces scripted-model twin |
 | 010 | agent_cli_test.rb | partial | raw SQL + fabricated record replaced by public request_history; cancellation/map_answer probes deferred |
 | 011 | agent_profile_machinery_test.rb | partial | over-claim fixed + refusal proven (+2 asserts); ProfileFixture value; doc/stub dedup; CLI-private probes deferred |
 | 012 | comms_gateway_test.rb | partial | debug removed; gateway_graph dedup; raw-SQL probes deferred to 006 seam |
@@ -41,6 +41,10 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 039 | record.rb | partial | Core.deep_dup shared (deep_freeze remedy rejected); FailureEvent value, 0 ParameterLists; engine split pending |
 | 040 | sqlite_scenario_runtime.rb | partial | dispatch fail-fast; append_checkpoint DEAD rejected (has defaults) |
 | 041 | sqlite_raw_oracle_test.rb | done | shared child harness; 2 stuffed tests split into 12; production Wire.digest; wire_digest finding rejected (different digest contract) |
+| 042 | agent_session_effect_test.rb | done | public SessionEffects#dispatch probes; ambiguous-MCP mapping asserted via McpSourceBuilder in the CLI suite; redaction asserted on persisted detail |
+| 044 | agent_skills_adversarial_test.rb | done | A-20 compiles clean vs hostile skills trees (epoch asserted unequal first); tautologies + dead fetch removed |
+| 045 | cancellation_visibility_test.rb | done | real Gateway over the shared harness; /status via serve_once, replies from outbox_rows; white-box observe_cancellation folded black-box |
+| 047 | agent_worker_test.rb | done | repark via worker --once stop report; idle sleep via public run + scripted clock; TAMOZ_DEBUG gone |
 | 049 | approval_policy_document_test.rb | done | MINIMAL_POLICY + deep-merge builder replaces 13 heredocs; digest test renamed to say what it proves |
 | 051 | subprocess_runner.rb | todo | SIZE |
 | 061 | sqlite_trace_recorder.rb | done | ShapeValidation shared module; siblings noted for 043 |
@@ -50,8 +54,8 @@ findings implemented, others rejected with reason) / `rejected` (finding not uph
 | 068 | session_adaptive.rb | partial | lifecycle_event 12->5 params (allowlisted splat); node-method split declined (documented justification) |
 | 069 | stream_episode_skills_memory_test.rb | done | run_episode lifecycle helper; projection factory; -159 lines |
 | 070 | scoreboard.rb | done | EntryPolicy + Intervals seams; EntryFields value (ctor 10→5); cost_score dedup; send-bypasses gone |
-| 073 | comms_command_parity_test.rb | todo | TEST/DUP |
-| 078 | context_control_exposure_test.rb | todo | DUP/TEST |
+| 073 | comms_command_parity_test.rb | done | shared CommsGatewayHarness; public adapter.path reads; ivar probe + unreachable rescue gone; status stubs merged |
+| 078 | context_control_exposure_test.rb | done | harness hoisted to CommsGatewayHarness; store via the Surface's public accessor |
 | 081 | session_context_controls.rb | done | dead /new generation pair deleted; conversation_history_for helper |
 | 082 | autonomy_case.rb | partial | vacuous hard-counter gate fixed; shared ScriptedModel deferred |
 | 084 | agent_session_test.rb | partial | __send__ dropped (seam was already public); ToolPolicy value; shared-double DUP deferred |
