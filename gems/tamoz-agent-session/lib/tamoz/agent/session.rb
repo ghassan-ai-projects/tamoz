@@ -52,7 +52,6 @@ module Tamoz
     class Session
       include SessionContextControls
 
-      GRAPH_NAME = "tamoz.agent.session"
       MODEL_CALL_SAFETIES = %i[idempotent unsafe].freeze
       ROUTINGS = %i[legacy experimental adaptive].freeze
       GRAPH_VERSION_BY_ROUTING = {
@@ -68,182 +67,67 @@ module Tamoz
       # exact surface a thread is bound to without reaching into the nodes.
       def capabilities = nodes_for_default_graph.capabilities
 
-      def initialize(
-        model:,
-        toolbox:,
-        checkpointer:,
-        max_plan_attempts: 3,
-        max_repair_attempts: SessionNodes::MAX_REPAIR_ATTEMPTS,
-        approval_engine: nil,
-        approval_session_id: nil,
-        model_call_safety: :idempotent,
-        profile: nil,
-        mcp: nil,
-        profile_roles: nil,
-        profile_budgets: nil,
-        profile_narrowed: false,
-        memory: nil,
-        memory_owner: nil,
-        artifact_store: nil,
-        artifact_tenant: nil,
-        child_task_runtime: nil,
-        routing: :legacy
-      )
-        validate_session_options!(
-          model:,
-          max_plan_attempts:,
-          max_repair_attempts:,
-          model_call_safety:,
-          routing:
-        )
-        unless checkpointer.respond_to?(:durable?) && checkpointer.durable?
-          raise ConfigurationError,
-                "Tamoz::Agent::Session requires a durable checkpointer; use " \
-                "Tamoz::Agent::Runtime for ephemeral work"
+      def initialize(**arguments)
+        options = Options.build(**arguments)
+        @toolbox = options.toolbox
+        @model = options.model
+        @mcp = options.mcp
+        # P11: the optional memory surface. Nil keeps every memory branch
+        # inert (pre-P11 sessions resume byte-identically).
+        @memory = options.memory
+        @profile = options.profile
+        @approval_engine = options.approval_engine
+        @approval_session_id = options.approval_session_id
+        # Shared state of the included SessionContextControls module.
+        @artifact_store = options.artifact_store
+        @artifact_tenant = options.artifact_tenant
+        @default_graph_version = options.default_graph_version
+        transcript_reader = lambda do |thread_id:, request_id:|
+          conversation_transcript(thread_id:, request_id:)
         end
-
-        validate_mcp_source!(mcp)
-        # Pipeline A: every durable session has exactly one policy owner. A
-        # caller that supplies none gets the driver's bundled default (the
-        # implement profile over memory stores) — gating is never skipped,
-        # only defaulted; a bare consumer of this gem fails loudly instead.
-        approval_engine ||= SessionApprovalWiring.default_engine
-        @toolbox = toolbox
-        @model = model
-        @mcp = mcp
-        # P11: the optional memory surface and its per-session owner. Nil keeps
-        # every memory branch inert (pre-P11 sessions resume byte-identically).
-        @memory = memory
-        @memory_owner = memory_owner
-        @profile_narrowed = profile_narrowed == true
-        @default_graph_version = GRAPH_VERSION_BY_ROUTING.fetch(routing.to_sym)
-        verify_profile_binding!(profile)
-        node_arguments = {
-          model:,
-          toolbox:,
-          max_plan_attempts:,
-          max_repair_attempts:,
-          approval_engine:,
-          approval_session_id:,
-          model_call_safety:,
-          profile:,
-          mcp:,
-          profile_roles:,
-          profile_budgets:,
-          profile_narrowed:,
-          memory:,
-          memory_owner:,
-          artifact_store:,
-          artifact_tenant:,
-          child_task_runtime:,
-          transcript_reader: ->(thread_id:, request_id:) { conversation_transcript(thread_id:, request_id:) }
-        }
-        @approval_engine = approval_engine
-        @approval_session_id = approval_session_id
-        @artifact_store = artifact_store
-        @artifact_tenant = artifact_tenant
-        @definitions = build_definitions(node_arguments)
-        @apps = @definitions.transform_values { |definition| definition.compile(checkpointer:) }.freeze
+        @nodes_by_version = build_nodes(options.node_arguments(transcript_reader:))
+        @definitions = build_definitions(@nodes_by_version)
+        @apps = @definitions.transform_values do |definition|
+          definition.compile(checkpointer: options.checkpointer)
+        end.freeze
         @definition = @definitions.fetch(@default_graph_version)
         @app = @apps.fetch(@default_graph_version)
         @runner = @app.durable_runner
         freeze
       end
 
-      def validate_session_options!(model:, max_plan_attempts:, max_repair_attempts:, model_call_safety:, routing:)
-        raise ArgumentError, "model must respond to generate" unless model.respond_to?(:generate)
-        unless max_plan_attempts.is_a?(Integer) && max_plan_attempts.between?(1, 10)
-          raise ArgumentError, "max_plan_attempts must be between 1 and 10"
-        end
-        unless max_repair_attempts.is_a?(Integer) && max_repair_attempts.between?(0, 10)
-          raise ArgumentError, "max_repair_attempts must be between 0 and 10"
-        end
-        unless MODEL_CALL_SAFETIES.include?(model_call_safety)
-          raise ArgumentError,
-                "model_call_safety must be one of #{MODEL_CALL_SAFETIES.join(", ")}"
-        end
-        raise ArgumentError, "routing must be one of #{ROUTINGS.join(", ")}" unless ROUTINGS.include?(routing.to_sym)
-      end
-      private :validate_session_options!
-
-      def build_definitions(node_arguments)
-        @nodes_v1 = SessionNodes.new(**node_arguments, graph_version: GraphVersions::GRAPH_VERSION)
-        @nodes = SessionNodes.new(**node_arguments, graph_version: GraphVersions::CURRENT_GRAPH_VERSION)
-        @nodes_adaptive = SessionNodes.new(**node_arguments, graph_version: GraphVersions::ADAPTIVE_GRAPH_VERSION)
-        @nodes_compaction = SessionNodes.new(**node_arguments, graph_version: GraphVersions::COMPACTION_GRAPH_VERSION)
+      # One SessionNodes collaborator set per declared graph variant.
+      def build_nodes(node_arguments)
         {
-          GraphVersions::GRAPH_VERSION => Session.build_definition(
-            @nodes_v1,
-            version: GraphVersions::GRAPH_VERSION
+          GraphVersions::GRAPH_VERSION => SessionNodes.new(
+            **node_arguments, graph_version: GraphVersions::GRAPH_VERSION
           ),
-          GraphVersions::CURRENT_GRAPH_VERSION => Session.build_definition(
-            @nodes,
-            version: GraphVersions::CURRENT_GRAPH_VERSION
+          GraphVersions::CURRENT_GRAPH_VERSION => SessionNodes.new(
+            **node_arguments, graph_version: GraphVersions::CURRENT_GRAPH_VERSION
           ),
-          GraphVersions::ADAPTIVE_GRAPH_VERSION => Session.build_definition(
-            @nodes_adaptive,
-            version: GraphVersions::ADAPTIVE_GRAPH_VERSION
+          GraphVersions::ADAPTIVE_GRAPH_VERSION => SessionNodes.new(
+            **node_arguments, graph_version: GraphVersions::ADAPTIVE_GRAPH_VERSION
           ),
-          GraphVersions::COMPACTION_GRAPH_VERSION => Session.build_definition(
-            @nodes_compaction,
-            version: GraphVersions::COMPACTION_GRAPH_VERSION
+          GraphVersions::COMPACTION_GRAPH_VERSION => SessionNodes.new(
+            **node_arguments, graph_version: GraphVersions::COMPACTION_GRAPH_VERSION
           )
         }.freeze
       end
+      private :build_nodes
+
+      def build_definitions(nodes_by_version)
+        nodes_by_version.to_h do |version, nodes|
+          [version, SessionGraph.definition_for(nodes, version)]
+        end.freeze
+      end
       private :build_definitions
 
-      # P10 §3 boundary: the agent never depends on tamoz-mcp; the caller-supplied
-      # source is duck-typed, and every MCP-specific behaviour is its own method.
-      def validate_mcp_source!(mcp)
-        return unless mcp
-
-        required = %i[
-          mcp_catalogs catalogs names read_only_names name? read_only?
-          maximum_effect_output_bytes validate effect_intent
-          preview execute descriptors descriptor_for
-        ]
-        missing = required.reject { |method| mcp.respond_to?(method) }
-        unless missing.empty?
-          raise ArgumentError,
-                "mcp source must respond to #{missing.join(", ")}"
-        end
-      end
-      private :validate_mcp_source!
-
       def nodes_for_default_graph
-        case @default_graph_version
-        when GraphVersions::ADAPTIVE_GRAPH_VERSION then @nodes_adaptive
-        when GraphVersions::COMPACTION_GRAPH_VERSION then @nodes_compaction
-        else @nodes
-        end
+        @nodes_by_version.fetch(@default_graph_version)
       end
 
-      # P8 §5.2: the toolbox must expose exactly the capability surface the
-      # profile pins; a mismatch fails here, before any model I/O.
-      def verify_profile_binding!(profile)
-        return unless profile
-
-        # The profile pins its catalog explicitly, so it cannot be reached by
-        # mutating another one, and a session that matches nothing is refused.
-        expected = profile.policy.fetch("tool_catalog_digest")
-        legacy_digest = profile.policy["unattended_catalog_digest"]
-        catalog_matches = toolbox.catalog_digest == expected ||
-                          (legacy_digest && toolbox.catalog_digest == legacy_digest)
-        catalog_matches ||= @profile_narrowed &&
-                            (toolbox.allowed_tools - profile.tools_allowed).empty?
-        unless catalog_matches
-          pinned = [expected, legacy_digest].compact.join(" or ")
-          raise Profile::ValidationError,
-                "toolbox catalog digest #{toolbox.catalog_digest} does not match " \
-                "profile #{profile.profile_id.inspect} policy.tool_catalog_digest #{pinned}"
-        end
-        unless toolbox.root.to_s == File.expand_path(profile.canonical_root)
-          raise Profile::ValidationError,
-                "toolbox root #{toolbox.root} does not match profile canonical_root " \
-                "#{profile.canonical_root.inspect}"
-        end
-      end
-      private :verify_profile_binding!
+      # P8 §5.2 note: the toolbox/profile surface check itself lives on
+      # Session::Options — construction validation is in one place.
 
       # P9 §7, invariant 41: a resumed session must bind the exact skill tree it was
       # planned against. Any epoch difference stops; there is no degraded read-only
@@ -257,15 +141,7 @@ module Tamoz
       # `resume`, `continue`, and `recover` enforce the same rule through
       # `guard_state!`, so no programmatic caller can bypass it by not calling this.
       def verify_skill_binding!(thread:)
-        stored = stored_state(thread)
-        enforce_skill_binding!(thread, stored) if stored
-        nil
-      end
-
-      def verify_graph_binding!(thread:)
-        stored = stored_state(thread)
-        enforce_graph_binding!(thread, stored) if stored
-        nil
+        verify_binding!(thread) { |stored| enforce_skill_binding!(thread, stored) }
       end
 
       # P10 §5 epoch rules: a resumed session must bind the exact MCP catalog
@@ -276,9 +152,7 @@ module Tamoz
       # pre-P10 session and a session built without an MCP source resume
       # identically, and every mismatch fails closed.
       def verify_mcp_binding!(thread:)
-        stored = stored_state(thread)
-        enforce_mcp_binding!(thread, stored) if stored
-        nil
+        verify_binding!(thread) { |stored| enforce_mcp_binding!(thread, stored) }
       end
 
       # P17 (correction 5): a resumed session must bind the exact egress
@@ -289,9 +163,7 @@ module Tamoz
       # session and the "profile has no egress section" state, so sessions that
       # never declared egress resume identically.
       def verify_egress_binding!(thread:)
-        stored = stored_state(thread)
-        enforce_egress_binding!(thread, stored) if stored
-        nil
+        verify_binding!(thread) { |stored| enforce_egress_binding!(thread, stored) }
       end
 
       # P11-W / DR-1: a resumed session must bind the exact behavior version it
@@ -306,15 +178,22 @@ module Tamoz
       def verify_behavior_binding!(thread:)
         return unless @memory
 
-        stored = stored_state(thread)
-        enforce_behavior_binding!(thread, stored) if stored
-        nil
+        verify_binding!(thread) { |stored| enforce_behavior_binding!(thread, stored) }
       end
 
-      # A thread with no checkpoint has nothing to protect: intake will write the
-      # current epoch. Every other failure — corruption, an unsupported record
-      # version — propagates, because a guard that swallows an unreadable record
-      # fails *open*, which is the opposite of what invariant 41 asks for.
+      # The one guard wrapper every `verify_*_binding!` entry point rides: load
+      # the stored state, run the specific enforcement, and treat a thread with
+      # no checkpoint as nothing to protect (intake will write the current
+      # epoch). Every other failure — corruption, an unsupported record
+      # version — propagates, because a guard that swallows an unreadable
+      # record fails *open*, the opposite of what invariant 41 asks for.
+      def verify_binding!(thread)
+        stored = stored_state(thread)
+        yield(stored) if stored
+        nil
+      end
+      private :verify_binding!
+
       def stored_state(thread)
         app = app_for_thread(thread)
         snapshot = app.checkpointer.latest(thread_id: thread, namespace: [])
@@ -412,9 +291,9 @@ module Tamoz
       # egress declaration" — the state a profile-less session and a session
       # whose profile has no egress section share.
       def current_egress_pin
-        return {} unless @nodes.profile && @nodes.profile.egress
+        return {} unless @profile&.egress
 
-        Tamoz::Agent::Deliberation.canonical(@nodes.profile.egress)
+        Tamoz::Agent::Deliberation.canonical(@profile.egress)
       end
       private :current_egress_pin
 
@@ -433,163 +312,6 @@ module Tamoz
         offset ? fragments.drop(offset) : fragments
       end
       private :conversation_transcript
-
-      def self.build_definition(nodes, version: GraphVersions::GRAPH_VERSION)
-        routed = String(version) == GraphVersions::CURRENT_GRAPH_VERSION
-        adaptive = String(version) == GraphVersions::ADAPTIVE_GRAPH_VERSION
-        Tamoz.graph(name: GRAPH_NAME, version: String(version)) do
-          state :task, default: ""
-          state :phase, default: ""
-          state :next_node, default: "intake"
-          state :terminal_reason, default: "no_check"
-          state :repair_attempt, default: 0
-          state :step_cursor, default: 0
-          state :provider_ambiguity, default: 0
-          state :check_passed, default: false
-          state :session
-          state :route if routed || adaptive
-          state :accepted_plan
-          state :verification
-          state :blocked
-          state :terminal
-          state :plan_versions, reduce: :append, default: []
-          state :plan_reviews, reduce: :append, default: []
-          state :approvals, reduce: :append, default: []
-          state :effect_intents, reduce: :append, default: []
-          state :effect_receipts, reduce: :append, default: []
-          state :compactions, reduce: :append, default: [] unless String(version) == GraphVersions::GRAPH_VERSION
-          state :context_controls, reduce: :append, default: []
-          state :observations, reduce: :append, default: []
-          state :seen_action_signatures, reduce: :append, default: []
-          state :seen_failure_signatures, reduce: :append, default: []
-          if adaptive
-            state :adaptive_iteration, default: 0
-            state :adaptive_action
-            state :adaptive_pending_observation
-            state :adaptive_decisions, reduce: :append, default: []
-            state :adaptive_seen_actions, reduce: :append, default: []
-            state :adaptive_terminal_detail, default: nil
-            state :lifecycle_events, reduce: :append, default: []
-          end
-          # P11-W / DR-1: the intake's BehaviorTransition claim ids, finalized
-          # by the deliberate node after the apply (checkpoint commit).
-          state :behavior_transition_claim, reduce: :append, default: []
-
-          node(:intake, implementation_name: "tamoz.agent.session.intake", version: "1") do |state, context|
-            nodes.intake(state, context)
-          end
-          if routed
-            node(:route, implementation_name: "tamoz.agent.session.route", version: "1") do |state, context|
-              nodes.route(state, context)
-            end
-          end
-          if adaptive
-            node(:adaptive_decide, implementation_name: "tamoz.agent.session.adaptive_decide",
-                                   version: "1") do |state, context|
-              nodes.adaptive_decide(state, context)
-            end
-            node(:adaptive_validate, implementation_name: "tamoz.agent.session.adaptive_validate",
-                                     version: "1") do |state, context|
-              nodes.adaptive_validate(state, context)
-            end
-            node(:adaptive_dispatch, implementation_name: "tamoz.agent.session.adaptive_dispatch",
-                                     version: "1") do |state, context|
-              nodes.adaptive_dispatch(state, context)
-            end
-            node(:adaptive_observe, implementation_name: "tamoz.agent.session.adaptive_observe",
-                                    version: "1") do |state, context|
-              nodes.adaptive_observe(state, context)
-            end
-          end
-          node(:deliberate, implementation_name: "tamoz.agent.session.deliberate", version: "1") do |state, context|
-            nodes.deliberate(state, context)
-          end
-          node(:step_gate, implementation_name: "tamoz.agent.session.step_gate", version: "1") do |state, context|
-            nodes.step_gate(state, context)
-          end
-          node(:step_execute, implementation_name: "tamoz.agent.session.step_execute", version: "1") do |state, context|
-            nodes.step_execute(state, context)
-          end
-          node(:evaluate, implementation_name: "tamoz.agent.session.evaluate", version: "1") do |state, context|
-            nodes.evaluate(state, context)
-          end
-          node(:verify, implementation_name: "tamoz.agent.session.verify", version: "1") do |state, context|
-            nodes.verify(state, context)
-          end
-          node(:terminal, implementation_name: "tamoz.agent.session.terminal", version: "1") do |state, context|
-            nodes.terminal(state, context)
-          end
-
-          edge Tamoz::START, :intake
-          edge :intake, if adaptive
-                          :adaptive_decide
-                        else
-                          (routed ? :route : :deliberate)
-                        end
-          edge :verify, :terminal
-          edge :terminal, Tamoz::END
-
-          if routed
-            branch :route,
-                   name: :route_route,
-                   version: "1",
-                   targets: %i[step_gate deliberate terminal] do |state|
-              state.fetch(:next_node).to_sym
-            end
-          end
-          if adaptive
-            branch :adaptive_decide,
-                   name: :adaptive_decide_route,
-                   version: "1",
-                   targets: %i[adaptive_validate terminal deliberate] do |state|
-              state.fetch(:next_node).to_sym
-            end
-            branch :adaptive_validate,
-                   name: :adaptive_validate_route,
-                   version: "1",
-                   targets: %i[adaptive_dispatch terminal deliberate] do |state|
-              state.fetch(:next_node).to_sym
-            end
-            branch :adaptive_dispatch,
-                   name: :adaptive_dispatch_route,
-                   version: "1",
-                   targets: %i[adaptive_observe terminal] do |state|
-              state.fetch(:next_node).to_sym
-            end
-            branch :adaptive_observe,
-                   name: :adaptive_observe_route,
-                   version: "1",
-                   targets: %i[adaptive_decide terminal] do |state|
-              state.fetch(:next_node).to_sym
-            end
-          end
-
-          branch :deliberate,
-                 name: :deliberate_route,
-                 version: "1",
-                 targets: %i[step_gate verify terminal] do |state|
-            state.fetch(:next_node).to_sym
-          end
-          branch :step_gate,
-                 name: :step_gate_route,
-                 version: "1",
-                 targets: %i[step_execute evaluate terminal] do |state|
-            state.fetch(:next_node).to_sym
-          end
-          branch :step_execute,
-                 name: :step_execute_route,
-                 version: "1",
-                 targets: %i[evaluate terminal] do |state|
-            state.fetch(:next_node).to_sym
-          end
-          branch :evaluate,
-                 name: :evaluate_route,
-                 version: "1",
-                 targets: %i[step_gate deliberate verify] do |state|
-            state.fetch(:next_node).to_sym
-          end
-        end
-      end
 
       def start(task, thread:, request_id:, owner_id: nil, emitter: nil, context: nil)
         deliver_turn({"task" => String(task)}, thread:, request_id:, owner_id:, emitter:, context:)
