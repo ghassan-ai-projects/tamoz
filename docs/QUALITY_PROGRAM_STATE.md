@@ -6,6 +6,14 @@ every slice and whenever the phase table changes.
 
 ---
 
+## Focused improvement — 2026-09-05
+
+Capability registry construction now stores descriptors directly and indexes
+admission IDs once. Public contracts are preserved. The bounded change, tests,
+and repository-wide gate blockers are recorded in
+[`improvements/README.md`](improvements/README.md). The historical program
+checkpoint below is unchanged; this is not a claim that its wider gates passed.
+
 ## Checkpoint
 
 - **Date:** 2026-08-26

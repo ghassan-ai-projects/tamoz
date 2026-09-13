@@ -30,7 +30,7 @@ module Tamoz
             sources: sources.freeze,
             surface: surface.freeze,
             names: surface.keys.freeze,
-            declared: registry.transform_values { |entry| entry.fetch(:descriptor) }.freeze
+            declared: registry.freeze
           )
         end
 
@@ -106,18 +106,15 @@ module Tamoz
                   raise DescriptorConflictError,
                         "descriptor id #{descriptor.id.inspect} collides across sources"
                 end
-                registry[descriptor.id] = {source:, descriptor:}
+                registry[descriptor.id] = descriptor
               end
             end
           end
 
           def compute_surface(registry, admission_set)
-            admitted = normalize_admission(admission_set)
-            registry.each_with_object({}) do |(descriptor_id, entry), surface|
-              next unless entry.fetch(:descriptor).availability == :enabled
-              next unless admitted.include?(descriptor_id)
-
-              surface[descriptor_id] = entry.fetch(:descriptor)
+            admitted = normalize_admission(admission_set).to_h { |id| [id, true] }
+            registry.select do |descriptor_id, descriptor|
+              descriptor.availability == :enabled && admitted.key?(descriptor_id)
             end
           end
 

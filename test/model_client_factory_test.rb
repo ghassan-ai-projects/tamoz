@@ -43,6 +43,20 @@ class ModelClientFactoryTest < Minitest::Test
     assert_includes error.message, 'TAMOZ_MODEL_SECRET'
   end
 
+  def test_missing_profile_credential_reports_the_same_role_and_reference_at_both_entrypoints
+    profile_role = role(credential_ref: { 'kind' => 'env', 'name' => 'TAMOZ_MODEL_SECRET' })
+    options = { provider: 'openai', profile_role:, environment: {} }
+    build_error = assert_raises(Tamoz::Agent::ProfileRoleUnavailableError) do
+      Factory.build(**options, model: 'gpt-test')
+    end
+    reference_error = assert_raises(Tamoz::Agent::ProfileRoleUnavailableError) do
+      Factory.credential_reference(**options)
+    end
+
+    expected = 'model_role/credential_unavailable: TAMOZ_MODEL_SECRET (role: primary)'
+    assert_equal [expected, expected], [build_error.message, reference_error.message]
+  end
+
   def test_ollama_without_a_key_does_not_treat_its_endpoint_as_a_credential
     assert_nil Factory.credential_reference(
       provider: 'ollama', profile_role: nil, environment: {'OLLAMA_API_BASE' => 'http://localhost:11434/v1'}

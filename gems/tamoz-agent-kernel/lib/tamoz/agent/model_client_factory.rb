@@ -147,12 +147,12 @@ module Tamoz
         def ensure_credential!(value, provider, profile_role:)
           return if !value.to_s.empty? || provider == "ollama"
 
-          raise_credential_unavailable(profile_role, credential_env_key(provider))
+          raise_credential_unavailable(profile_role, credential_name_for(profile_role, provider))
         end
 
         def raise_credential_unavailable(profile_role, name)
           if profile_role
-            raise ProfileRoleUnavailableError, "model_role/credential_unavailable: #{name}"
+            raise ProfileRoleUnavailableError, "model_role/credential_unavailable: #{name} (role: #{profile_role.name})"
           end
 
           raise ModelCallError.new(code: "credential_unavailable")

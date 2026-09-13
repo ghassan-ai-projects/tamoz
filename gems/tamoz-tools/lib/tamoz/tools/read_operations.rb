@@ -34,9 +34,10 @@ module Tamoz
 
       def list_directory(arguments)
         path = resolve(arguments.fetch('path', '.'), type: :directory)
-        entries = path.children.sort_by { |entry| entry.basename.to_s }.first(Toolbox::MAX_DIRECTORY_ENTRIES)
+        children = path.children
+        entries = children.min_by(Toolbox::MAX_DIRECTORY_ENTRIES) { |entry| entry.basename.to_s }
         rendered = entries.map { |entry| "#{entry.basename}#{'/' if entry.directory?}" }
-        rendered << '... truncated' if path.children.length > Toolbox::MAX_DIRECTORY_ENTRIES
+        rendered << '... truncated' if children.length > Toolbox::MAX_DIRECTORY_ENTRIES
         rendered.join("\n")
       end
 

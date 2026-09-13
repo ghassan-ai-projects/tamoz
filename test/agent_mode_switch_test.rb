@@ -13,6 +13,17 @@ require 'sqlite3'
 class AgentModeSwitchTest < Minitest::Test
   include AutonomyCase
 
+  def test_mode_switch_is_queued_without_building_a_model
+    with_runtime do |rt|
+      factory = ->(_options) { flunk 'queuing a mode switch must not build a model' }
+      status = rt.cli(%w[approve --mode auto --thread t1 --json], factory:)
+
+      assert_equal 0, status, rt.err
+      assert_equal({ 'operation' => 'mode_switch', 'status' => 'queued' }, fetch_request_row(rt))
+      assert_empty switch_rows(rt)
+    end
+  end
+
   def test_a_mode_switch_governs_the_next_turn_without_prompting
     with_runtime do |rt|
       File.write(File.join(rt.workspace, 'note.txt'), "hello\n")

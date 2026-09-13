@@ -1,0 +1,148 @@
+# Small improvements
+
+## One-hour improvement loop
+
+Owner request: keep making incremental improvements for one hour and commit each
+completed change. Started 2026-09-04 23:03:50 UTC; target end 2026-09-05 00:03:50 UTC.
+Each increment follows trace → test → simplify/fix → review → validate → commit.
+Keep cross-gem interfaces unchanged and do not weaken existing gates.
+
+### Increment 2: regenerate the ADR catalog
+
+The locked JSON 2.21.2 formatter emits empty arrays as `[]`; the committed
+catalog used the older multiline spelling. Regenerated with the existing
+`script/adr_catalog.rb`, with parsed JSON equality against HEAD proving that all
+55 ADR records are unchanged. `rake adr:validate` and the generator's `--check`
+now pass. `rake ci` gets past ADR validation and into the existing test failures.
+This is documentation metadata, with no runtime or protocol changes.
+
+### Increment 3: report the actual missing profile credential
+
+`ModelClientFactory.build` selected a profile-specific credential correctly but
+its missing-key diagnostic reconstructed the provider's default name. It also
+omitted the role. Reuse `credential_name_for` in the existing guard and include
+the role in the existing `ProfileRoleUnavailableError` message. Both public
+entrypoints now identify the same missing reference; no secret values appear.
+The error type and `model_role/credential_unavailable` prefix are unchanged.
+Diagnostic text now ends with `(role: primary)` (or the selected role); callers
+should use the typed error rather than match the complete human-readable message.
+
+The new regression failed before the fix. All 24 profile-machinery tests now
+pass (230 assertions), including no generic-key fallback and no partial session.
+The factory suite improves from 3 failures / 1 error to 2 failures / 1 error;
+its remaining failures concern stale test expectations and stubbing a frozen
+transport. Changed-file RuboCop remains at its 162 existing offenses; Reek falls
+from 28 to 27 with no new contexts. Enola check passes with no new findings.
+The everyday CI command still reaches the previously recorded wider failures.
+
+### Increment 4: list a directory once and select only its visible entries
+
+`ReadOperations#list_directory` enumerated the directory twice and sorted every
+child before retaining 200. Enumerate once, use `min_by(200)`, and derive the
+truncation marker from the same snapshot. Existing Toolbox resolution and
+rendering stay in place. The added boundary test covers empty, exactly full,
+and overflowing directories, sorted file names, and the directory suffix. A
+`max_by` mutation is rejected.
+
+Toolbox and tools-gem suites pass: 78 tests, 453 assertions. Changed files have
+zero RuboCop offenses and zero Reek smells. Enola check passes with no new
+findings. A local 5,000-file benchmark (20 listings, identical output digest)
+went from 0.444s / 1,730,118 allocations to 0.264s / 1,129,938 allocations;
+these are one-machine measurements, not general throughput guarantees.
+Everyday CI still fails in the known unrelated suites.
+
+### Increment 5: queue mode switches without constructing a model
+
+`approve --mode` built a complete default session just to reach its durable
+runner, so a control-only command failed without model configuration. Its
+private submission helper now calls the existing `runtime.checkpoints` inbox,
+the same `enqueue_request` operation `DurableRunner#submit` delegates to.
+Payload, namespace default, operation, delivery, and request identity are
+unchanged. No new public API or storage format is introduced.
+
+The regression uses a model factory that fails if called; submission now passes
+and records a queued mode-switch request without applying it. The unknown-mode
+worker test also passes (2 tests / 8 assertions together). The inbox suite
+passes (8 / 46). The remaining mode-switch and worker failures reveal a separate
+problem: inspecting a paused session still eagerly builds its model.
+Changed files pass RuboCop; Reek stays at 63 with no new contexts. Enola check
+passes with no new findings. `rake ci` and `ci_full` under both UTF-8 and C
+locales were run; the full gates reach the broad existing test failures.
+
+## 2026-09-05: simpler capability registry construction
+
+Status: implemented; focused validation passed. Repository-wide gates remain red.
+
+The existing seam is `Tamoz::Core::Capability::Registry.build` in
+`gems/tamoz-core/lib/tamoz/core/capability/registry.rb`. Its consumer is
+`gems/tamoz-tools/lib/tamoz/tools/capability_host.rb`: construction, inventory,
+and dispatch. Public methods and cross-gem interfaces stay identical.
+
+### Problem and change
+
+Construction wrapped each descriptor in `{source:, descriptor:}`. The source
+entry was never consumed; routing already uses the registry's sources. Building
+the declared inventory then allocated another hash just to unwrap descriptors.
+Store descriptors directly and select the admitted, enabled surface from that
+map. Index normalized admission IDs once with a hash, removing an array scan
+for each descriptor. Expected membership work becomes O(A + D), instead of
+O(A * D), for A admission IDs and D descriptors. No new dependencies or classes.
+
+### Acceptance bar
+
+- Preserve source/descriptor validation, collision refusal, sealing, descriptor
+  identity, insertion order, frozen maps, and source routing.
+- Hash admission uses keys, regardless of values; arrays accept duplicate IDs;
+  both normalize symbols to strings. Unknown IDs never add descriptors.
+- Disabled and unadmitted descriptors remain in the declared inventory only.
+- Add behavior tests before implementation; run registry and consumer tests,
+  `rake ci`, RuboCop, changed-file Reek parity, and Enola checks.
+
+### Evidence
+
+- Clean starting working tree; Ruby 3.3.11 via `rbenv exec bundle exec`.
+- Existing registry tests: 9 runs, 28 assertions, passing.
+- Four added characterization tests pass before implementation: 13 runs,
+  57 assertions in total.
+- Enola baseline pinned before implementation. Its extractor does not expose
+  methods inside this `Data.define` block, so direct caller/source reading
+  supplements the architecture map.
+- Baseline changed-file Reek: 8 smells.
+- After implementation: 74 tests / 1,547 assertions pass across
+  `capability_registry`, `capability_host`, `capability_inventory`,
+  `capability_closed_world`, `public_api`, `dependency_isolation`, and
+  `documentation_surface` test files. Each file ran separately.
+- Four in-memory mutations were rejected by the tests: sorting the surface,
+  admitting disabled descriptors, treating empty admission as unrestricted,
+  and accepting invalid admission. No mutation was written to production files.
+- Both changed Ruby files pass RuboCop. Changed-file Reek falls from 8 to 6
+  smells, with no new contexts. Production implementation is three lines shorter.
+- `rake syntax stream:proto:check` and `git diff --check` pass.
+- Enola check passes; snapshot comparison reports zero new findings. Its 19
+  added call edges belong to the expanded registry tests.
+
+### Repository-wide gate blockers
+
+- `rake ci` stops at ADR validation because `documentation/adr/catalog.json`
+  is stale. The same stale-catalog failure reproduces at unchanged HEAD in a
+  detached temporary worktree.
+- Full RuboCop reports 3,894 offenses across 902 files in both unchanged HEAD
+  and this working tree; the edited Ruby files have none.
+- `rake test_fast`: unchanged HEAD has 2,365 runs, 39 failures, 30 errors;
+  this tree has 2,369 runs, 38 failures, 30 errors. Of 68 failing/erroring test
+  names in this tree, 66 also fail in the baseline. This is not a green gate.
+  The other two were investigated: the thermal adversarial test passes alone
+  in both trees; the broken roadmap link exists unchanged at HEAD. The baseline
+  documentation test excludes all paths containing `tmp`, so its passing result
+  there performs zero assertions and cannot establish link correctness.
+- The added tests account for the four additional fast-suite runs. Timing and
+  checkout-location differences prevent claiming exact full-suite parity.
+- Leave the generated global quality baseline unchanged while the wider test
+  gate is red, consistent with the live state's existing regeneration blocker.
+  Do not absorb unrelated lint debt into a newly generated baseline.
+
+### Follow-up ideas
+
+Only investigate another optimization when a real caller or measurement justifies
+it. In particular, keep the existing source routing rather than adding a second
+index for the small built-in source list.
