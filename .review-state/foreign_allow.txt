@@ -1,2 +1,0 @@
-docs/README.md
-docs/gem-boundary-scan-2026-08-25/

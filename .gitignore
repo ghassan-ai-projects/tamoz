@@ -71,6 +71,7 @@ build-iPhoneSimulator/
 # repository content. `.qwen/` and `.enola/` above are the same category.
 .claude/
 .cursor/
+.review-state/
 
 # User-owned evaluation workspace. Not repository content; kept out of git so a
 # clean checkout and `git status` stay meaningful.
