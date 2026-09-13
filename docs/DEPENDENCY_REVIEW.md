@@ -10,12 +10,17 @@ until this file is regenerated.
 
 | Gem | Version | Licence | Direct | Required by | Provenance |
 |---|---|---|---|---|---|
+| `base64` | 0.3.0 | Ruby, BSD-2-Clause | yes | tamoz-evals-runner ~> 0.2 | https://github.com/ruby/base64 |
 | `bigdecimal` | 4.1.2 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/bigdecimal |
+| `faraday` | 2.14.3 | MIT | yes | tamoz-mcp ~> 2.0 | https://lostisland.github.io/faraday |
+| `faraday-net_http` | 3.4.4 | MIT | transitive |  | https://github.com/lostisland/faraday-net_http |
 | `google-protobuf` | 4.35.1 | BSD-3-Clause | yes | tamoz-stream ~> 4.35 | https://developers.google.com/protocol-buffers |
 | `googleapis-common-protos-types` | 1.23.0 | Apache-2.0 | transitive |  | https://github.com/googleapis/common-protos-ruby |
 | `grpc` | 1.83.0 | Apache-2.0 | yes | tamoz-stream ~> 1.83 | https://github.com/google/grpc/tree/master/src/ruby |
 | `hana` | 1.3.7 | MIT | transitive |  | http://github.com/tenderlove/hana |
+| `json` | 2.21.2 | Ruby | transitive |  | https://github.com/ruby/json |
 | `json_schemer` | 2.5.0 | MIT | transitive |  | https://github.com/davishmcclurg/json_schemer |
+| `logger` | 1.7.0 | Ruby, BSD-2-Clause | transitive |  | https://github.com/ruby/logger |
 | `mcp` | 1.1.0 | Apache-2.0 | yes | tamoz-mcp ~> 1.1 | https://ruby.sdk.modelcontextprotocol.io |
 | `mini_portile2` | 2.8.9 | MIT | transitive |  | https://github.com/flavorjones/mini_portile |
 | `net-http` | 0.9.1 | Ruby, BSD-2-Clause | yes | tamoz-agent-kernel ~> 0.5 | https://github.com/ruby/net-http |
@@ -49,10 +54,8 @@ arriving silently.
 | `dry-schema` | 1.16.0 | MIT |
 | `dry-types` | 1.9.1 | MIT |
 | `grpc-tools` | 1.83.0 | Apache-2.0 |
-| `json` | 2.21.2 | Ruby |
 | `language_server-protocol` | 3.17.0.5 | MIT |
 | `lint_roller` | 1.1.0 | MIT |
-| `logger` | 1.7.0 | Ruby, BSD-2-Clause |
 | `minitest` | 6.0.6 | MIT |
 | `parallel` | 2.1.0 | MIT |
 | `parser` | 3.3.11.1 | MIT |

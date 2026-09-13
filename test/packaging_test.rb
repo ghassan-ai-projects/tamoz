@@ -932,7 +932,10 @@ class PackagingTest < Minitest::Test
   end
 
   def with_hermetic_websearch_install(label, tamoz_names: %w[tamoz-cancellation tamoz-core tamoz-mcp tamoz-mcp-websearch])
-    external_names = %w[mcp json_schemer bigdecimal hana regexp_parser simpleidn zeitwerk]
+    external_names = %w[
+      mcp json_schemer bigdecimal hana regexp_parser simpleidn zeitwerk
+      faraday faraday-net_http net-http
+    ]
 
     Dir.mktmpdir("tamoz-hermetic-#{label}") do |directory|
       install_root = File.join(directory, "install")

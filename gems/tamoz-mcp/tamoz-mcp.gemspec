@@ -12,6 +12,8 @@ TamozGemspec.build(
   dependencies: [
     ["tamoz-cancellation", "= #{Tamoz::Core::VERSION}"],
     ["tamoz-core", "= #{Tamoz::Core::VERSION}"],
-    ["mcp", "~> 1.1"]
+    ["mcp", "~> 1.1"],
+    # The mcp gem's HTTP transport loads faraday lazily without declaring it.
+    ["faraday", "~> 2.0"]
   ]
 )
